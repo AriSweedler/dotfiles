@@ -1,11 +1,7 @@
-DIR=dotfiles
-
 .PHONY: all
 all:
-	cp Makefile $(DIR)/Makefile
-	cp ~/.bashrc $(DIR)/bashrc
-	cp ~/.inputrc $(DIR)/inputrc
-	cp ~/.vimrc $(DIR)/vimrc
-	cp ~/.gitconfig $(DIR)/gitconfig
-	cp ~/.ssh/config $(DIR)/ssh-config
-	cp ~/bin/* .
+	cp ~/.bashrc bashrc
+	cp ~/.inputrc inputrc
+	cp ~/.vimrc vimrc
+	cp ~/.gitconfig gitconfig
+	cp ~/.ssh/config ssh-config

@@ -1,3 +1,5 @@
+echo "in ~/.bashrc"
+
 #######################################################################
 #                                                                     #
 #   .bashrc file                                                      #
@@ -30,4 +32,4 @@ fi
 MONGOD_CONF="/etc/mongodb.conf"
 
 # Sourcing PS1 script for that dank pwd
-. "$HOME/bin/PS1_custom.sh"
+. "$HOME/bin/.bash_prompt"

@@ -1,9 +1,12 @@
-colorscheme elflord
+syntax on
+colorscheme desert
 set number
 set display=lastline
 
-" turn highlighting on. Remove highlights with <C-_>
 set hlsearch
+set incsearch
+" Remap control+underscore to clear the the register '/'.
+" This is the register that controls highlighting
 noremap <silent> <c-_> :let @/ = ""<CR> 
 
 " The default is a measly 40!
@@ -13,8 +16,11 @@ set history=1000
 set wildmenu
 set wildmode=full
 
-" expandtab, tabstop, softtabstop, shiftwidth (look at http://vimcasts.org/transcripts/2/en/)
-set sts=4 sw=4 tabstop=4 expandtab
+
+" Tab stuff. For more info, look to 'http://vimcasts.org/transcripts/2/en/'
+filetype on
+"autocmd FileType ?akefile setlocal tabstop=8 softtabstop=0 shiftwidth=8 noexpandtab
+"autocmd FileType *.c setlocal sts=2 sw=2 ts=2 et
 
 " easily switch between buffers (tabs)
 nnoremap <silent> [b :bprevious<CR>
