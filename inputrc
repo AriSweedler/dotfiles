@@ -1,0 +1,14 @@
+#https://www.topbug.net/blog/2017/07/31/inputrc-for-humans/
+#variables
+set show-all-if-unmodified On
+set completion-ignore-case On
+set visible-stats On
+set skip-completed-text On
+
+#Custom commands
+#"\C-[???]": unix-word-rubout
+#? _ \d \b \177 \xFF \127 rubout
+Control-p: unix-filename-rubout
+Control-b: backward-word
+Control-f: forward-word
+Control-[: character-search-backward

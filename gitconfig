@@ -1,0 +1,29 @@
+# This is Git's per-user configuration file.
+[user]
+	name = Ari Sweedler
+	email = ari@sweedler.com
+	username = arisweedler
+
+[core]
+	excludesfile = ~/.gitignore
+	editor = vim
+
+[color "diff"]
+	meta = yellow black bold
+	frag = magenta black bold
+	old = red bold
+	new = green bold
+
+[color "status"]
+	added = green black bold
+	changed = yellow black bold
+	untracked = red reverse bold
+
+[alias]
+	l = log --pretty=oneline --abbrev-commit
+	s = status
+	ls = ls-tree --full-tree -r --abbrev HEAD
+	# Show the diff between the latest commit and the current state
+    # d = !"git diff-index --quiet HEAD -- || clear; git --no-pager diff --patch-with-stat"
+    amend = commit --amend --reuse-message=HEAD
+	alias=!git config -l | grep ^alias | cut -c 7- | sort

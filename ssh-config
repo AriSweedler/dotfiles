@@ -1,0 +1,29 @@
+Host *
+	AddKeysToAgent yes
+	UseKeychain yes
+
+Host ucla2
+	Hostname lnxsrv02.seas.ucla.edu
+
+Host ucla6
+	Hostname lnxsrv06.seas.ucla.edu
+
+Host ucla7
+	Hostname lnxsrv07.seas.ucla.edu
+
+Host ucla9
+	Hostname lnxsrv09.seas.ucla.edu
+
+Host ucla*
+	user ari
+	Hostname lnxsrv09.seas.ucla.edu
+
+
+#Begin BeagleBone for CS 111 – Project 4A
+Host bbu
+	user ari
+
+Host bb*
+	user root
+	Hostname 192.168.6.2
+#End beaglebone ssh config
