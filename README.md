@@ -42,8 +42,8 @@ tools.
 The GNU Readline library is seriously powerful. I highly recommend
 checking it out and getting used to the keystrokes. Some of my favorites
 include
- * "beginning-of-line" (<C-a>)
- * "unix-word-rubout" (<C-w>) (deletes the bold *text*)
+ * "beginning-of-line" (Control-a)
+ * "unix-word-rubout" (Control-w) (deletes the bold *text*)
  * "unix-filename-rubout" (unbound - you decide!) (deletes/the/bold/*text*)
  * "backward-word" (unbound)
  * and much much more.
