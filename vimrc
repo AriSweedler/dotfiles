@@ -22,17 +22,18 @@ set wildmode=full
 " shiftwidth - amount of whitespace to insert or remove using the indentation commands
 " tabstop - specifies the width of a tab character
 filetype on
-autocmd FileType c** setlocal tabstop=4 shiftwidth=4 softtabstop=4 expandtab 
-	\ foldmethod=syntax cindent
+autocmd FileType c** setlocal tabstop=2 shiftwidth=2 softtabstop=2 expandtab
+autocmd Filetype c** setlocal textwidth=119 "the VEN team
+autocmd FileType c** setlocal foldmethod=syntax cindent
+autocmd FileType c** match trailing_whitespace /\s\+$/
 autocmd FileType make* setlocal tabstop=8 shiftwidth=8 noexpandtab
+
+" highlight all trailing whitespace
+highlight trailing_whitespace ctermbg=red
 
 " easily switch between buffers (tabs)
 nnoremap <silent> [b :bprevious<CR>
 nnoremap <silent> ]b :bnext<CR>
-
-" fold commands
-noremap <C-m> zfiB
-noremap zz za
 
 " Nicer file traversing
 noremap <up> <C-y>k
