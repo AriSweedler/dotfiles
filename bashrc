@@ -1,5 +1,3 @@
-echo "in ~/.bashrc"
-
 #######################################################################
 #                                                                     #
 #   .bashrc file                                                      #
@@ -12,11 +10,10 @@ echo "in ~/.bashrc"
 echo "Today's date is `date`"
 HOME_INODE=`ls -ali ~/ | sed -n 2p | sed -E 's/ ([0-9]+).*/\1/'`
 echo "	Hello, user number $HOME_INODE"
+echo ""
 
 #Setting PATH
 export PATH="$PATH:$HOME/bin"
-export PATH="$PATH:$HOME/Applications/apache-maven-3.5.3/bin"
-export PATH="$PATH:/mongodb/bin"
 
 export EDITOR=vim
 
@@ -25,11 +22,10 @@ HISTIGNORE="&:[ \t]*:ls:cat:less"
 HISTSIZE=5000
 
 #If I have an alias file, then source it here
-if [ -f ~/.bash_aliases ]; then
-  . ~/.bash_aliases
+FILE="$HOME/.bash_aliases"
+if [ -f $FILE ]; then;
+  source $FILE
 fi
 
-MONGOD_CONF="/etc/mongodb.conf"
-
 # Sourcing PS1 script for that dank pwd
-. "$HOME/bin/.bash_prompt"
+source "$HOME/bin/.bash_prompt"
