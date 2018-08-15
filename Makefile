@@ -19,12 +19,20 @@ save:
 	cp ~/.ssh/config ssh-config
 	cp ~/.vimrc vimrc
 
+diff:
+	-diff bash_aliases ~/.bash_aliases
+	-diff bashrc ~/.bashrc
+	-diff gitconfig ~/.gitconfig
+	-diff inputrc ~/.inputrc
+	-diff ssh-config ~/.ssh/config
+	-diff vimrc ~/.vimrc
+
 restore:
-	cp bash_aliases ~/.bash_aliases 
-	cp bashrc ~/.bashrc 
-	cp gitconfig ~/.gitconfig 
-	cp inputrc ~/.inputrc 
-	cp -r iterm ~/.iterm 
+	cp bash_aliases ~/.bash_aliases
+	cp bashrc ~/.bashrc
+	cp gitconfig ~/.gitconfig
+	cp inputrc ~/.inputrc
+	cp -r iterm ~/.iterm
 	cp ssh-config ~/.ssh/config
 	cp vimrc ~/.vimrc
 

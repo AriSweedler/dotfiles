@@ -20,15 +20,16 @@
 	untracked = red reverse bold
 
 [alias]
-    l = log --pretty=format:"%C(yellow)%h\\ %C(green)%ar\\ %C(red)%D\\ %Creset%s\\ %C(blue)[%cN]"
+	l = log --pretty=format:"%C(yellow)%h\\ %C(green)%ar\\ %C(red)%D\\ %Creset%s\\ %C(blue)[%cN]"
 	ll = log --pretty=oneline --abbrev-commit
 	s = status
 	ls = ls-tree --full-tree -r --abbrev HEAD
-	# Show the diff between the latest commit and the current state
-    # d = !"git diff-index --quiet HEAD -- || clear; git --no-pager diff --patch-with-stat"
-    amend = commit --amend --reuse-message=HEAD
-	alias=!git config -l | grep ^alias | cut -c 7- | sort
-    u = remote update
-	up = "~git remote update -p; git merge --ff-only @{u}"
+	d = diff --cached
+	amend = commit --amend --reuse-message=HEAD
+	alias=!"git config -l | grep ^alias | cut -c 7- | sort #"
+	showme=!"git config -l | grep $1 | cut -c $(( ${#1} + 2 ))- | sort #"
+	u = remote update
+	up = !"git remote update -p; git merge --ff-only @{u}"
+
 [push]
 	default = simple
