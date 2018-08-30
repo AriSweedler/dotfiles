@@ -25,7 +25,11 @@ set listchars=tab:▸\ ,space:·,eol:¬,
 """""""""""""""""""""""""""""""""""" other """"""""""""""""""""""""""""""""""""
 
 " write file upon leaving a buffer
-autocmd BufLeave,FocusLost * w
+" autocmd BufLeave,FocusLost * w
+
+" allow writing to remote files
+autocmd BufRead scp://* :set buftype=acwrite
+nnoremap <Leader>WQ :set buftype=acwrite<CR>:wq<CR>
 
 " Tab stuff. For more info, look to
 " https://medium.com/@arisweedler/tab-settings-in-vim-1ea0863c5990
@@ -60,7 +64,7 @@ highlight ColorColumn ctermbg=233
 noremap <C-_> :nohlsearch<CR>
 
 " Save a file as root (\W)
-noremap <Leader>WW :w !sudo tee % > /dev/null<CR>
+nnoremap <Leader>WR :w !sudo tee % > /dev/null<CR>
 
 " highlight most recently pasted code
 nnoremap <Leader>= `[=`]
@@ -74,7 +78,10 @@ nnoremap <Leader>ev :vsp $MYVIMRC<CR>
 " use star in visual mode to search for the selected text
 " yank into register s --> forward search for the contents of register s
 " (Very nomagic, escape contents of s register before pasting)
-vnoremap * "sy/\V<C-R>=escape(@s, '/\')<CR><CR>N
+vnoremap * "sy/\V<C-r>=escape(@s, '/\')<CR><CR>N
+
+" Insert the date in normal mode
+nnoremap <Leader>da :pu=strftime('%c')<CR>
 
 """"""""""""" buffers/tabs """""""""""""
 " Delete buffer without closing window
@@ -102,3 +109,42 @@ map <Right> <Nop>
 " exit insert mode with 'jj'
 inoremap jj <ESC>
 
+"""""""" macros """"""""""
+function! Enter()
+  let str = strcharpart(getline('.')[col('.') - 2:], 0, 2)
+  if l:str == '{}'
+    return "\<CR>\<C-o>O"
+  else
+    return "\<CR>"
+endfunction
+inoremap <CR> <C-r>=Enter()<CR>
+
+
+""""""""""""""""""curly""""""""""""'
+function! Eat(arg)
+  let str = strcharpart(getline('.')[col('.') - 1:], 0, 1)
+  if l:str == a:arg
+    return "\<Right>"
+  else
+    return a:arg
+endfunction
+inoremap ) <C-r>=Eat(')')<CR>
+inoremap } <C-r>=Eat('}')<CR>
+
+function! Dup(arg)
+  return a:arg . "\<Left>"
+endfunction
+inoremap ( <C-r>=Dup('()')<CR>
+inoremap { <C-r>=Dup('{}')<CR>
+
+"""""" What to do when we type a quote? Probably more involved... """"""""
+function! Quote()
+  let str = strcharpart(getline('.')[col('.') - 1:], 0, 1)
+  if l:str == '"'
+    return "\<Right>"
+  else
+    return "\"\"\<Left>"
+endfunction
+inoremap " <C-r>=Quote()<CR>
+
+nnoremap <Leader>so :source ~/.vimrc<CR>
