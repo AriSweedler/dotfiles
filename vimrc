@@ -24,10 +24,7 @@ set listchars=tab:▸\ ,space:·,eol:¬,
 
 """""""""""""""""""""""""""""""""""" other """"""""""""""""""""""""""""""""""""
 
-" write file upon leaving a buffer
-" autocmd BufLeave,FocusLost * w
-
-" allow writing to remote files
+" allow writing to remote files TODO
 autocmd BufRead scp://* :set buftype=acwrite
 nnoremap <Leader>WQ :set buftype=acwrite<CR>:wq<CR>
 
@@ -36,6 +33,7 @@ nnoremap <Leader>WQ :set buftype=acwrite<CR>:wq<CR>
 autocmd FileType c**,python setlocal tabstop=4 shiftwidth=4 softtabstop=4 expandtab
 autocmd Filetype c** setlocal cindent foldmethod=syntax textwidth=80
 autocmd FileType make* setlocal tabstop=8 shiftwidth=8 noexpandtab
+autocmd FileType vim setlocal tabstop=2 shiftwidth=2 expandtab
 
 """""""""""""""""""""""""""""""" pretty colors """"""""""""""""""""""""""""""""
 " Look at colors: http://vim.wikia.com/wiki/Xterm256_color_names_for_console_Vim
@@ -51,7 +49,7 @@ set showmatch matchtime=1 	"briefly show the matching {/[/( when typing )/]/}
 autocmd FileType c**,python,make* match trailing_whitespace /\s\+$/
 highlight trailing_whitespace ctermbg=red
 
-" highlight columns. This makes it look like the screen is broken lol. but it's nice
+" highlight columns
 let &colorcolumn="80,".join(range(120,125),",")
 highlight ColorColumn ctermbg=233
 
@@ -60,8 +58,9 @@ highlight ColorColumn ctermbg=233
 " http://vim.wikia.com/wiki/Mapping_keys_in_Vim_-_Tutorial_(Part_1)
 
 """""""""""""""" macros """"""""""""""""
-" Control+underscore clears highlighting (doesn't turn off, just clears!)
-noremap <C-_> :nohlsearch<CR>
+" clear highlighting
+noremap <silent> <Leader>/ :let @/ = ""<CR>
+noremap <silent> <C-_> :nohlsearch<CR>
 
 " Save a file as root (\W)
 nnoremap <Leader>WR :w !sudo tee % > /dev/null<CR>
@@ -80,7 +79,11 @@ nnoremap <Leader>ev :vsp $MYVIMRC<CR>
 " (Very nomagic, escape contents of s register before pasting)
 vnoremap * "sy/\V<C-r>=escape(@s, '/\')<CR><CR>N
 
-" Insert the date in normal mode
+" source my vimrc or the current buffer - useful for testing
+nnoremap <Leader>sv :source ~/.vimrc<CR>
+nnoremap <Leader>sb :%y"b<CR>:@"b<CR>
+
+" Insert the date in normal mode. Kiiiinda useless
 nnoremap <Leader>da :pu=strftime('%c')<CR>
 
 """"""""""""" buffers/tabs """""""""""""
@@ -101,50 +104,27 @@ vnoremap <Tab> %
 nnoremap <Up> <C-y>k
 nnoremap <Down> <C-e>j
 
-" no need to use these
+" To get myself over the learning curve
 map <Left> <Nop>
 map <Right> <Nop>
+
+"""""""""""""""" source """"""""""""""""
+" returns the char that your cursor is over
+" optional argument allows you to look at a char forward or backwards
+function! CurChar(...)
+  let a:offset = get(a:, 1, 0)
+  return getline('.')[col('.') - 1 + a:offset]
+endfunction
+
+source $HOME/.vim/pair.vim
 
 """""""""""""""" other """"""""""""""""
 " exit insert mode with 'jj'
 inoremap jj <ESC>
-
-"""""""" macros """"""""""
-function! Enter()
-  let str = strcharpart(getline('.')[col('.') - 2:], 0, 2)
-  if l:str == '{}'
-    return "\<CR>\<C-o>O"
-  else
-    return "\<CR>"
-endfunction
-inoremap <CR> <C-r>=Enter()<CR>
-
-
-""""""""""""""""""curly""""""""""""'
-function! Eat(arg)
-  let str = strcharpart(getline('.')[col('.') - 1:], 0, 1)
-  if l:str == a:arg
-    return "\<Right>"
-  else
-    return a:arg
-endfunction
-inoremap ) <C-r>=Eat(')')<CR>
-inoremap } <C-r>=Eat('}')<CR>
-
-function! Dup(arg)
-  return a:arg . "\<Left>"
-endfunction
-inoremap ( <C-r>=Dup('()')<CR>
-inoremap { <C-r>=Dup('{}')<CR>
-
-"""""" What to do when we type a quote? Probably more involved... """"""""
-function! Quote()
-  let str = strcharpart(getline('.')[col('.') - 1:], 0, 1)
-  if l:str == '"'
-    return "\<Right>"
-  else
-    return "\"\"\<Left>"
-endfunction
-inoremap " <C-r>=Quote()<CR>
+echo "~/.vim sourced"
 
 nnoremap <Leader>so :source ~/.vimrc<CR>
+
+""" sessions """
+nmap SSA :wa<CR>:mksession! ~/.vim/sessions/
+nmap SO :wa<CR>:so ~/.vim/sessions/
