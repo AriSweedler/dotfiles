@@ -15,9 +15,10 @@ save:
 	cp ~/.bashrc bashrc
 	cp ~/.gitconfig gitconfig
 	cp ~/.inputrc inputrc
-	cp -r ~/.iterm/* iterm/
+	cp -r ~/.iterm iterm
 	cp ~/.ssh/config ssh-config
 	cp ~/.vimrc vimrc
+	cp -r ~/.vim vim
 
 diff:
 	-diff bash_aliases ~/.bash_aliases
@@ -26,6 +27,7 @@ diff:
 	-diff inputrc ~/.inputrc
 	-diff ssh-config ~/.ssh/config
 	-diff vimrc ~/.vimrc
+	-diff vim ~/.vim
 
 restore:
 	cp bash_aliases ~/.bash_aliases
@@ -35,4 +37,5 @@ restore:
 	cp -r iterm ~/.iterm
 	cp ssh-config ~/.ssh/config
 	cp vimrc ~/.vimrc
+	cp -r vim ~/.vim
 

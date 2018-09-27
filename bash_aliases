@@ -31,7 +31,8 @@ alias ..="cd .."
 alias ...="cd ../.."
 alias ....="cd ../../.."
 alias .....="cd ../../../.."
-alias gr="cd $(git rev-parse --show-toplevel)"
+alias ~="cd ~" # `cd` is probably faster to type though
+alias -- -="cd -"
 
 alias mongod="echo \"   running mongod with config file: $MONGOD_CONF\";sudo mongod -f \"$MONGOD_CONF\""
 alias scheme="echo '        rlwrap enabled';rlwrap scheme"

@@ -23,7 +23,7 @@ HISTSIZE=5000
 
 #If I have an alias file, then source it here
 FILE="$HOME/.bash_aliases"
-if [ -f $FILE ]; then;
+if [ -f $FILE ]; then
   source $FILE
 fi
 

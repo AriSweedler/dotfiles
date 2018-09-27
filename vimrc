@@ -50,8 +50,12 @@ autocmd FileType c**,python,make* match trailing_whitespace /\s\+$/
 highlight trailing_whitespace ctermbg=red
 
 " highlight columns
-let &colorcolumn="80,".join(range(120,125),",")
+let &colorcolumn="80"
 highlight ColorColumn ctermbg=233
+augroup vimrc_autocmds
+  autocmd BufEnter * highlight OverLength ctermbg=darkgrey
+  autocmd BufEnter * match OverLength /\%79v.*/
+augroup END
 
 
 """""""""""""""""""""""""""""""""""" remap """"""""""""""""""""""""""""""""""""
@@ -65,25 +69,23 @@ noremap <silent> <C-_> :nohlsearch<CR>
 " Save a file as root (\W)
 nnoremap <Leader>WR :w !sudo tee % > /dev/null<CR>
 
-" highlight most recently pasted code
+" indent/highlight most recently pasted code
 nnoremap <Leader>= `[=`]
+nnoremap <Leader>v `[v`]
 
-" sort CSS properties
-nnoremap <Leader>S viB:sort<CR>
-
-" quickly make an edit to my ~/.vimrc
-nnoremap <Leader>ev :vsp $MYVIMRC<CR>
+" edit ~/.vimrc
+nnoremap <Leader>ev :tabe $MYVIMRC<CR>
 
 " use star in visual mode to search for the selected text
 " yank into register s --> forward search for the contents of register s
 " (Very nomagic, escape contents of s register before pasting)
 vnoremap * "sy/\V<C-r>=escape(@s, '/\')<CR><CR>N
 
-" source my vimrc or the current buffer - useful for testing
+" source my vimrc/current file - useful for testing
 nnoremap <Leader>sv :source ~/.vimrc<CR>
-nnoremap <Leader>sb :%y"b<CR>:@"b<CR>
+nnoremap <Leader>so :source %<CR>
 
-" Insert the date in normal mode. Kiiiinda useless
+" Insert the date in normal mode. Kiiiinda useless. But fun?
 nnoremap <Leader>da :pu=strftime('%c')<CR>
 
 """"""""""""" buffers/tabs """""""""""""
@@ -96,19 +98,13 @@ nnoremap ]b :bnext<CR>
 nnoremap gr gT
 
 """"""""""""""" movement """""""""""""""
-" Go to matching bracket with tab in visual/normal mode using <Tab>
-nnoremap <Tab> %
-vnoremap <Tab> %
-
-" Nicer file traversing
 nnoremap <Up> <C-y>k
 nnoremap <Down> <C-e>j
-
-" To get myself over the learning curve
 map <Left> <Nop>
 map <Right> <Nop>
 
 """""""""""""""" source """"""""""""""""
+""""""" (library functions) """"""""
 " returns the char that your cursor is over
 " optional argument allows you to look at a char forward or backwards
 function! CurChar(...)
@@ -116,15 +112,13 @@ function! CurChar(...)
   return getline('.')[col('.') - 1 + a:offset]
 endfunction
 
+"""""""""" other files """""""""
 source $HOME/.vim/pair.vim
 
 """""""""""""""" other """"""""""""""""
 " exit insert mode with 'jj'
 inoremap jj <ESC>
-echo "~/.vim sourced"
 
-nnoremap <Leader>so :source ~/.vimrc<CR>
-
-""" sessions """
-nmap SSA :wa<CR>:mksession! ~/.vim/sessions/
-nmap SO :wa<CR>:so ~/.vim/sessions/
+" sessions
+nmap <Leader>ss :wa<CR>:mksession! ~/.vim/sessions/
+nmap <Leader>sess :wa<CR>:so ~/.vim/sessions/
