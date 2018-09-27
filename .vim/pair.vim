@@ -9,8 +9,9 @@ let s:pair = {
 
 " make keymappings
 for [opener, closer] in items(s:pair)
-  execute "inoremap " . opener . " <C-r>=InsertPair('" . opener . "', '" . closer . "')<CR>"
-  execute "inoremap " . closer . " <C-r>=StepOver('" . closer . "')<CR>"
+  execute printf("inoremap %s <C-r>=InsertPair('%s', '%s')<CR>", opener,
+\      opener, closer)
+  execute printf("inoremap %s <C-r>=StepOver('%s')<CR>", closer, closer)
 endfor
 
 " Typing the opener will also insert the closer
@@ -42,6 +43,4 @@ function! DeletePair()
 
   return "\<BS>"
 endfunction
-
-echo "pair.vim sourced"
 

@@ -1,4 +1,4 @@
-# Dotfiles
+# Hi! Welcome to my Dotfiles
 
 Here're some useful files that I might want on other machines. Every
 program ever has some sort of configuration associated with it, so don't
@@ -7,6 +7,8 @@ be surprised.
 It's good practice to place a dotfile in your home directory to save
 information about a program, it's a standard filesystem location that's
 guaranteed to be unique for a user.
+
+Make sure you use `-a` when using `ls` in this folder ahaha. Also check out my [bin](https://github.com/AriSweedler/bin/blob/master/README.md)
 
 ## ssh-config
 Read about all the options [here](https://www.ssh.com/ssh/config/)

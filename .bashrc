@@ -28,4 +28,4 @@ if [ -f $FILE ]; then
 fi
 
 # Sourcing PS1 script for that dank pwd
-source "$HOME/bin/.bash_prompt"
+source "$HOME/bin/bash_prompt.sh"
