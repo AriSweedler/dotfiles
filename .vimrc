@@ -8,6 +8,9 @@ set nocompatible 		"don't do weird stuff for backwards compatibility with vim
 set number 			"turn on line numbers
 set showcmd 			"multi-keystroke commands will be shown in bottom right.
 set showmode 			"show vim mode in bottom left
+set noerrorbells  "disable error bells
+set title         "show the filename in the title bar
+set ruler         "display the cursor positiont
 
 " for more information, run `:help 'backspace'` (With `'`s - NOT `:help backspace`)
 set backspace=indent,eol,start 	"allow backspacing over more things
@@ -16,7 +19,7 @@ set backspace=indent,eol,start 	"allow backspacing over more things
 set wildmenu
 set wildmode=full
 
-" ctags is so helpful! And easy, too. 
+" ctags is so helpful! And easy, too.
 set tags+=tags;
 
 " Toggle 'list' to show whitespace characters
@@ -30,10 +33,10 @@ nnoremap <Leader>WQ :set buftype=acwrite<CR>:wq<CR>
 
 " Tab stuff. For more info, look to
 " https://medium.com/@arisweedler/tab-settings-in-vim-1ea0863c5990
-autocmd FileType c**,python setlocal tabstop=4 shiftwidth=4 softtabstop=4 expandtab
-autocmd Filetype c** setlocal cindent foldmethod=syntax textwidth=80
-autocmd FileType make* setlocal tabstop=8 shiftwidth=8 noexpandtab
-autocmd FileType vim setlocal tabstop=2 shiftwidth=2 expandtab
+autocmd FileType c**,python,java setlocal tabstop=4 shiftwidth=4 softtabstop=4 expandtab
+autocmd Filetype c**,java setlocal cindent foldmethod=syntax textwidth=80
+autocmd FileType make* setlocal tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab
+autocmd FileType vim,asm,javascript setlocal tabstop=2 softtabstop=2 shiftwidth=2 expandtab
 
 """""""""""""""""""""""""""""""" pretty colors """"""""""""""""""""""""""""""""
 " Look at colors: http://vim.wikia.com/wiki/Xterm256_color_names_for_console_Vim
@@ -46,7 +49,7 @@ set showmatch matchtime=1 	"briefly show the matching {/[/( when typing )/]/}
 
 """""""""""" color commands """"""""""""
 " highlight all trailing whitespace in C, python, or make
-autocmd FileType c**,python,make* match trailing_whitespace /\s\+$/
+autocmd FileType c**,python,make*,javascript match trailing_whitespace /\s\+$/
 highlight trailing_whitespace ctermbg=red
 
 " highlight columns
@@ -54,7 +57,7 @@ let &colorcolumn="80"
 highlight ColorColumn ctermbg=233
 augroup vimrc_autocmds
   autocmd BufEnter * highlight OverLength ctermbg=darkgrey
-  autocmd BufEnter * match OverLength /\%79v.*/
+  autocmd BufEnter c**,python,java match OverLength /\%80v.*/
 augroup END
 
 
@@ -68,6 +71,9 @@ noremap <silent> <C-_> :nohlsearch<CR>
 
 " Save a file as root (\W)
 nnoremap <Leader>WR :w !sudo tee % > /dev/null<CR>
+
+" replace current word with most recently yanked text, preserving buffer
+nnoremap <Leader>r viwpyiw
 
 " indent/highlight most recently pasted code
 nnoremap <Leader>= `[=`]
@@ -84,6 +90,10 @@ vnoremap * "sy/\V<C-r>=escape(@s, '/\')<CR><CR>N
 " source my vimrc/current file - useful for testing
 nnoremap <Leader>sv :source ~/.vimrc<CR>
 nnoremap <Leader>so :source %<CR>
+
+" go to the next/prev item in the quickfix list
+nnoremap <Leader>q :cnext<CR>
+nnoremap <Leader>Q :cprev<CR>
 
 " Insert the date in normal mode. Kiiiinda useless. But fun?
 nnoremap <Leader>da :pu=strftime('%c')<CR>
@@ -114,6 +124,8 @@ endfunction
 
 """""""""" other files """""""""
 source $HOME/.vim/pair.vim
+source $HOME/.vim/tabs.vim
+source $HOME/.vim/quickfix.vim
 
 """""""""""""""" other """"""""""""""""
 " exit insert mode with 'jj'
