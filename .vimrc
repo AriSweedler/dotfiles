@@ -38,6 +38,13 @@ autocmd Filetype c**,java setlocal cindent foldmethod=syntax textwidth=80
 autocmd FileType make* setlocal tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab
 autocmd FileType vim,asm,javascript setlocal tabstop=2 softtabstop=2 shiftwidth=2 expandtab
 
+" remove trailing whitespace upon saving or upon hitting <Leader>w
+function! RemoveTrailingWhitespace()
+  %substitute/\s\+$//e
+endfunction
+nnoremap <silent> <Leader>w :call RemoveTrailingWhitespace()<CR>
+autocmd FileType vim,verilog,c*,java*,python,make* autocmd BufWritePre call RemoveTrailingWhitespace()
+
 """""""""""""""""""""""""""""""" pretty colors """"""""""""""""""""""""""""""""
 " Look at colors: http://vim.wikia.com/wiki/Xterm256_color_names_for_console_Vim
 
@@ -49,7 +56,7 @@ set showmatch matchtime=1 	"briefly show the matching {/[/( when typing )/]/}
 
 """""""""""" color commands """"""""""""
 " highlight all trailing whitespace in C, python, or make
-autocmd FileType c**,python,make*,javascript match trailing_whitespace /\s\+$/
+autocmd FileType c**,python,make*,java* match trailing_whitespace /\s\+$/
 highlight trailing_whitespace ctermbg=red
 
 " highlight columns
@@ -60,6 +67,16 @@ augroup vimrc_autocmds
   autocmd BufEnter c**,python,java match OverLength /\%80v.*/
 augroup END
 
+
+
+"""""""""""""""""""""""""""""""" abbreviations """"""""""""""""""""""""""""""""
+" easy hashbangs
+iabbrev #!b #!/usr/bin/env bash
+iabbrev #!p #!/usr/bin/env python
+iabbrev #!s #!/usr/bin/env sh
+
+" easy printing in java
+iabbr sop System.out.println("");<esc>2hi
 
 """""""""""""""""""""""""""""""""""" remap """"""""""""""""""""""""""""""""""""
 " http://vim.wikia.com/wiki/Mapping_keys_in_Vim_-_Tutorial_(Part_1)
@@ -86,6 +103,12 @@ nnoremap <Leader>ev :tabe $MYVIMRC<CR>
 " yank into register s --> forward search for the contents of register s
 " (Very nomagic, escape contents of s register before pasting)
 vnoremap * "sy/\V<C-r>=escape(@s, '/\')<CR><CR>N
+
+" use forward slash + c in visual mode to comment out the selected text
+vnoremap /c :norm 0i//<CR>
+
+" use forward slash + u in visual mode to uncomment the selected text
+vnoremap /u :norm 2x<CR>
 
 " source my vimrc/current file - useful for testing
 nnoremap <Leader>sv :source ~/.vimrc<CR>
@@ -128,7 +151,7 @@ source $HOME/.vim/tabs.vim
 source $HOME/.vim/quickfix.vim
 
 """""""""""""""" other """"""""""""""""
-" exit insert mode with 'jj'
+" exit insert mode with 'jj<Space>'
 inoremap jj <ESC>
 
 " sessions

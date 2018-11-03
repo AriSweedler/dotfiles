@@ -1,7 +1,7 @@
 #https://www.topbug.net/blog/2017/07/31/inputrc-for-humans/
 
 # List all matches in case multiple possible completions are possible
-set show-all-if-ambiguous on
+set show-all-if-ambiguous off
 
 # Make Tab autocomplete regardless of filename case
 set completion-ignore-case on
@@ -26,7 +26,7 @@ set match-hidden-files off
 set page-completions off
 
 # If there are more than 20 possible completions for a word, ask to show them all
-set completion-query-items 20
+set completion-query-items 30
 
 # Allow UTF-8 input and output, instead of showing stuff like $'\0123\0456'
 set input-meta on

@@ -20,14 +20,16 @@
 	untracked = red reverse bold
 
 [alias]
-	l = log --pretty=format:"%C(yellow)%h\\ %C(green)%ar\\ %C(red)%D\\ %Creset%s\\ %C(blue)[%cN]"
-	ll = log --pretty=oneline --abbrev-commit
+	l = log --pretty=format:"%C(yellow)%h\\ %C(green)%ar\\ %C(red)%D\\ %Creset%s\\ %C(blue)[%cN]" --graph
+	lg = log --pretty=format:"%C(yellow)%h\\ %C(green)%ar\\ %C(red)%D\\ %Creset%s\\ %C(blue)[%cN]"
 	s = status
 	ls = ls-tree --full-tree -r --abbrev HEAD
 	d = diff --cached
 	amend = commit --amend --reuse-message=HEAD
 	alias=!"git config -l | grep ^alias | cut -c 7- | sort #"
+	cconfig=!"vim ~/.gitconfig"
 	showme=!"git config -l | grep $1 | cut -c $(( ${#1} + 2 ))- | sort #"
+	pushf=push --set-upstream origin master
 	u = remote update
 	up = !"git remote update -p; git merge --ff-only @{u}"
 
