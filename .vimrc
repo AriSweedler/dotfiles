@@ -1,21 +1,22 @@
 """"""""""""""""""""""""""""""""""" settings """"""""""""""""""""""""""""""""""
-filetype on 			"allow for autocmds to be run based on filetype
-colorscheme desert 		"pretty colors
-set display=lastline 		"as much as possible of the last line will be displayed
-set gdefault 			"turn global flag on by default for :substitute
-set history=1000 		"the default is only 40.
-set nocompatible 		"don't do weird stuff for backwards compatibility with vim
-set number 			"turn on line numbers
-set showcmd 			"multi-keystroke commands will be shown in bottom right.
-set showmode 			"show vim mode in bottom left
-set noerrorbells  "disable error bells
-set title         "show the filename in the title bar
-set ruler         "display the cursor positiont
+filetype on           "allow for autocmds to be run based on filetype
+colorscheme desert    "pretty colors
+set display=lastline  "as much as possible of the last line will be displayed
+set gdefault          "turn global flag on by default for :substitute
+set history=1000      "the default is only 40.
+set nocompatible      "don't do weird stuff for backwards compatibility with vim
+set number            "turn on line numbers
+set showcmd           "multi-keystroke commands will be shown in bottom right.
+set showmode          "show vim mode in bottom left
+set noerrorbells      "disable error bells
+set belloff=all       "disable bell for non-errors, too
+set title             "show the filename in the title bar
+set ruler             "display the cursor positiont
 
-" for more information, run `:help 'backspace'` (With `'`s - NOT `:help backspace`)
-set backspace=indent,eol,start 	"allow backspacing over more things
+"allow backspacing over more things
+set backspace=indent,eol,start
 
-" Nicer <Tab>'ing
+" Nicer <Tab>'ing in command mode
 set wildmenu
 set wildmode=full
 
@@ -25,12 +26,14 @@ set tags+=tags;
 " Toggle 'list' to show whitespace characters
 set listchars=tab:▸\ ,space:·,eol:¬,
 
-"""""""""""""""""""""""""""""""""""" other """"""""""""""""""""""""""""""""""""
+"""""""""""""""""""""""""""""""""" popup menu """"""""""""""""""""""""""""""""""
+" show a popup menu for completion even if there's only 1 option
+" Only insert the longest common text for a list of matches
+set completeopt=menuone,longest
+" max popup menu height is 8
+set pumheight=8
 
-" allow writing to remote files TODO
-autocmd BufRead scp://* :set buftype=acwrite
-nnoremap <Leader>WQ :set buftype=acwrite<CR>:wq<CR>
-
+"""""""""""""""""""""""""""""""""" whitespace """"""""""""""""""""""""""""""""""
 " Tab stuff. For more info, look to
 " https://medium.com/@arisweedler/tab-settings-in-vim-1ea0863c5990
 autocmd FileType c**,python,java setlocal tabstop=4 shiftwidth=4 softtabstop=4 expandtab
@@ -43,31 +46,35 @@ function! RemoveTrailingWhitespace()
   %substitute/\s\+$//e
 endfunction
 nnoremap <silent> <Leader>w :call RemoveTrailingWhitespace()<CR>
-autocmd FileType vim,verilog,c*,java*,python,make* autocmd BufWritePre call RemoveTrailingWhitespace()
 
 """""""""""""""""""""""""""""""" pretty colors """"""""""""""""""""""""""""""""
 " Look at colors: http://vim.wikia.com/wiki/Xterm256_color_names_for_console_Vim
 
 """""""""""" color settings """"""""""""
-syntax on 			"allow for syntax highlighting and indenting
-set hlsearch 			"highlight search
-set incsearch 			"incremental search - show where hitting enter WOULD place you
-set showmatch matchtime=1 	"briefly show the matching {/[/( when typing )/]/}
+"allow for syntax highlighting and indenting
+syntax on
+
+"highlight search
+set hlsearch
+
+"incremental search - show where hitting enter WOULD place you
+set incsearch
+
+"briefly show the matching bracket {[( when typing )]}
+set showmatch matchtime=1
 
 """""""""""" color commands """"""""""""
-" highlight all trailing whitespace in C, python, or make
-autocmd FileType c**,python,make*,java* match trailing_whitespace /\s\+$/
+" highlight trailing whitespace
+match trailing_whitespace /\s\+$/
 highlight trailing_whitespace ctermbg=red
 
-" highlight columns
+" highlight columns - highlight the 80th  column
 let &colorcolumn="80"
 highlight ColorColumn ctermbg=233
 augroup vimrc_autocmds
   autocmd BufEnter * highlight OverLength ctermbg=darkgrey
   autocmd BufEnter c**,python,java match OverLength /\%80v.*/
 augroup END
-
-
 
 """""""""""""""""""""""""""""""" abbreviations """"""""""""""""""""""""""""""""
 " easy hashbangs
@@ -82,7 +89,10 @@ iabbr sop System.out.println("");<esc>2hi
 " http://vim.wikia.com/wiki/Mapping_keys_in_Vim_-_Tutorial_(Part_1)
 
 """""""""""""""" macros """"""""""""""""
-" clear highlighting
+" easy folds around braces
+noremap <Leader>z %zfaB
+
+" clear highlighting (clear the buffer, or just stop highlighting)
 noremap <silent> <Leader>/ :let @/ = ""<CR>
 noremap <silent> <C-_> :nohlsearch<CR>
 
@@ -104,10 +114,8 @@ nnoremap <Leader>ev :tabe $MYVIMRC<CR>
 " (Very nomagic, escape contents of s register before pasting)
 vnoremap * "sy/\V<C-r>=escape(@s, '/\')<CR><CR>N
 
-" use forward slash + c in visual mode to comment out the selected text
+" in visual mode, use forward slash + <U> or <C> to <Un>Comment selection
 vnoremap /c :norm 0i//<CR>
-
-" use forward slash + u in visual mode to uncomment the selected text
 vnoremap /u :norm 2x<CR>
 
 " source my vimrc/current file - useful for testing
@@ -122,10 +130,10 @@ nnoremap <Leader>Q :cprev<CR>
 nnoremap <Leader>da :pu=strftime('%c')<CR>
 
 """"""""""""" buffers/tabs """""""""""""
-" Delete buffer without closing window
+" Remove buffer from memory without closing window
 nnoremap <Leader>bd :bnext\|bdelete #<CR>
 
-" easily switch between buffers (and also tabs)
+" easily switch between buffers and tabs
 nnoremap [b :bprevious<CR>
 nnoremap ]b :bnext<CR>
 nnoremap gr gT
@@ -157,3 +165,7 @@ inoremap jj <ESC>
 " sessions
 nmap <Leader>ss :wa<CR>:mksession! ~/.vim/sessions/
 nmap <Leader>sess :wa<CR>:so ~/.vim/sessions/
+
+" enable omnicompletion
+set omnifunc=syntaxcomplete#Complete
+
