@@ -27,11 +27,15 @@
 	d = diff --cached
 	amend = commit --amend --reuse-message=HEAD
 	alias=!"git config -l | grep ^alias | cut -c 7- | sort #"
+	a = !"git add .; git s"
 	cconfig=!"vim ~/.gitconfig"
 	showme=!"git config -l | grep $1 | cut -c $(( ${#1} + 2 ))- | sort #"
 	pushf=push --set-upstream origin master
 	u = remote update
 	up = !"git remote update -p; git merge --ff-only @{u}"
+	hubd = !"fxn(){ git remote add origin git@github.com:AriSweedler/${1}.git; git push -u origin master; }; fxn"
+	hub = !"hub $(basename $(pwd))"
+	repo = !"basename $(git remote get-url origin) '.git'"
 
 [push]
 	default = simple
