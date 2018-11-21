@@ -18,8 +18,9 @@ export PATH="$PATH:$HOME/bin"
 export EDITOR=vim
 
 #Surprisingly this is actually v useful
-HISTIGNORE="&:[ \t]*:ls:cat:less"
-HISTSIZE=5000
+export HISTIGNORE="[ \t]*"
+export HISTSIZE=5000
+export HISTCONTROL=ignoreboth:erasedups
 
 #If I have an alias file, then source it here
 FILE="$HOME/.bash_aliases"
@@ -29,3 +30,9 @@ fi
 
 # Sourcing PS1 script for that dank pwd
 source "$HOME/.bash_prompt"
+
+# If I have an npm completion script, source it
+FILE="$HOME/.npm/completion.sh"
+if [ -f $FILE ]; then
+  source $FILE
+fi

@@ -10,7 +10,7 @@ alias league="open -jF /Applications/League\ of\ Legends.app"
 alias music="open -jF /Applications/Spotify.app"
 
 #my aliases to help me cd around
-alias work='cd $(cat ~/.config/work)'
+alias work='( DIR=$(cat ~/.config/work); set -o xtrace; cd $DIR ); cd $(cat ~/.config/work)'
 
 # Easier navigation: .., ..., ...., and -
 alias ..="cd .."
@@ -18,6 +18,7 @@ alias ...="cd ../.."
 alias ....="cd ../../.."
 alias -- -="cd -"
 
+# os boot sector tutorial
 alias qemu="qemu-system-x86_64"
 
 # start a webserver

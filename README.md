@@ -1,4 +1,5 @@
 # Hi! Welcome to my Dotfiles
+#TODO update this to include description of update script
 
 Here're some useful files that I might want on other machines. Every
 program ever has some sort of configuration associated with it, so don't

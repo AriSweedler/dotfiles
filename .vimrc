@@ -39,7 +39,7 @@ set pumheight=8
 autocmd FileType c**,python,java setlocal tabstop=4 shiftwidth=4 softtabstop=4 expandtab
 autocmd Filetype c**,java setlocal cindent foldmethod=syntax textwidth=80
 autocmd FileType make* setlocal tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab
-autocmd FileType vim,asm,javascript setlocal tabstop=2 softtabstop=2 shiftwidth=2 expandtab
+autocmd FileType vim,asm,javascript,sh setlocal tabstop=2 softtabstop=2 shiftwidth=2 expandtab
 
 " remove trailing whitespace upon saving or upon hitting <Leader>w
 function! RemoveTrailingWhitespace()
@@ -65,8 +65,13 @@ set showmatch matchtime=1
 
 """""""""""" color commands """"""""""""
 " highlight trailing whitespace
-match trailing_whitespace /\s\+$/
 highlight trailing_whitespace ctermbg=red
+match trailing_whitespace /\s\+$/
+
+" highlight the tilde when it's used as a path name in shell scripts
+highlight bad_tilde ctermbg=red
+autocmd BufEnter FileType sh match bad_tilde /^[^#].*\zs\~/
+"for now, that's whenever it isn't in a comment. This isn't quite right yet though...
 
 " highlight columns - highlight the 80th  column
 let &colorcolumn="80"
