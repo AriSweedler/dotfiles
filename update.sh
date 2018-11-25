@@ -24,17 +24,18 @@ function backup() {
 }
 
 ######## if we don't have the repo, then there's no point in continuing ########
-# TODO git pull if needed
 if [ ! -d "$REPO/.git" ]; then
   REPO="$HOME/GitHub/machine/dotfiles"
   if [ ! -d "$REPO/.git" ]; then
     echo "No repo found. Please git clone git@github.com:AriSweedler/dotfiles.git"
     exit 1
   fi
+else
+  cd $REPO
+  git pull
 fi
 
-# TODO populate FILES array from files in the REPO instead of a static array.
-for FILE in ${FILES[*]}; do
+for FILE in $(find .* -maxdepth 0 -type f); do
   REPO_FILE="$REPO/$FILE"
   MACHINE_FILE="$HOME/$FILE"
 
@@ -46,13 +47,13 @@ for FILE in ${FILES[*]}; do
   if [ $REPO_FILE -nt $MACHINE_FILE ]; then
     # if the REPO_FILE is newer, than MACHINE_FILE is outta date. Backup
     # machine file then overwrite machine file
-    echo "machine's $FILE is outta date. Making a backup and updating machine's file"
+    echo "  machine's $FILE is outta date. Making a backup and updating machine's file"
     backup $MACHINE_FILE
     cp $REPO_FILE $MACHINE_FILE
   else
     # if the MACHINE_FILE is newer, than REPO_FILE is outta date. Overwrite
     # repo file. Don't need to backup repo file, cuz that's what git is for!
-    echo "repo's $FILE is outta date - updating it. (Make sure you've pulled all changed. Commit these ones)"
+    echo "  repo's $FILE is outta date - updating it. (Make sure you've pulled all changed. Commit these ones)"
     cp $MACHINE_FILE $REPO_FILE
   fi
 done

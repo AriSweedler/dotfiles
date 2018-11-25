@@ -24,7 +24,7 @@ set wildmode=full
 set tags+=tags;
 
 " Toggle 'list' to show whitespace characters
-set listchars=tab:▸\ ,space:·,eol:¬,
+set listchars=tab:>\ ,space:_,eol:$,
 
 """""""""""""""""""""""""""""""""" popup menu """"""""""""""""""""""""""""""""""
 " show a popup menu for completion even if there's only 1 option
@@ -157,11 +157,6 @@ function! CurChar(...)
   let a:offset = get(a:, 1, 0)
   return getline('.')[col('.') - 1 + a:offset]
 endfunction
-
-"""""""""" other files """""""""
-source $HOME/.vim/pair.vim
-source $HOME/.vim/tabs.vim
-source $HOME/.vim/quickfix.vim
 
 """""""""""""""" other """"""""""""""""
 " exit insert mode with 'jj<Space>'
