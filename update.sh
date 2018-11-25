@@ -13,6 +13,10 @@ FILES=(.bash_aliases .bash_prompt .bashrc .gitconfig .inputrc .vimrc)
 
 ############################### backup function ################################
 function backup() {
+  if [ ! -f $1 ]; then
+    echo "file $1 cannot be backed up because it doesn't exist"
+    return 1
+  fi
   TIME=$(stat -lt "%Y%m%d%H%M%S" $1 | awk '{print $6}')
   BACKUP=/tmp/${TIME}-$(basename ${1})
   cp $1 $BACKUP
