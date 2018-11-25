@@ -14,10 +14,10 @@ FILES=(.bash_aliases .bash_prompt .bashrc .gitconfig .inputrc .vimrc)
 ############################### backup function ################################
 function backup() {
   if [ ! -f $1 ]; then
-    echo "file $1 cannot be backed up because it doesn't exist"
+    echo "  file $1 cannot be backed up because it doesn't exist"
     return 1
   fi
-  TIME=$(stat -lt "%Y%m%d%H%M%S" $1 | awk '{print $6}')
+  TIME=$(date +"%Y%m%d%H%M%S")
   BACKUP=/tmp/${TIME}-$(basename ${1})
   cp $1 $BACKUP
   echo "  backup stored at $BACKUP"
@@ -39,7 +39,7 @@ for FILE in ${FILES[*]}; do
   MACHINE_FILE="$HOME/$FILE"
 
   # if the files aren't different, continue
-  if diff -q "$REPO_FILE" "$MACHINE_FILE"; then
+  if diff "$REPO_FILE" "$MACHINE_FILE" &>/dev/null; then
     continue
   fi
 
