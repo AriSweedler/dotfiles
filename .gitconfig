@@ -28,14 +28,20 @@
 	amend = commit --amend --reuse-message=HEAD
 	alias=!"git config -l | grep ^alias | cut -c 7- | sort #"
 	a = !"git add .; git s"
-	cconfig=!"vim ~/.gitconfig"
+	cconfig=config --edit --global
 	showme=!"git config -l | grep $1 | cut -c $(( ${#1} + 2 ))- | sort #"
 	pushf=push --set-upstream origin master
 	u = remote update
 	up = !"git remote update -p; git merge --ff-only @{u}"
 	hubd = !"fxn(){ git remote add origin git@github.com:AriSweedler/${1}.git; git push -u origin master; }; fxn"
-	hub = !"hub $(basename $(pwd))"
+	hub = !"hubd $(basename $(pwd))"
 	repo = !"basename $(git remote get-url origin) '.git'"
+	ctags = !.git/hooks/ctags
 
 [push]
 	default = simple
+
+[init]
+	templatedir = ~/.git_template
+[commit]
+	template = /Users/ari/.git_template/commit_template.txt

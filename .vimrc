@@ -1,3 +1,5 @@
+"TODO I need to also include my ~/.vim folder for these..
+
 """"""""""""""""""""""""""""""""""" settings """"""""""""""""""""""""""""""""""
 filetype on           "allow for autocmds to be run based on filetype
 colorscheme desert    "pretty colors
@@ -38,8 +40,8 @@ set pumheight=8
 " https://medium.com/@arisweedler/tab-settings-in-vim-1ea0863c5990
 autocmd FileType c**,python,java setlocal tabstop=4 shiftwidth=4 softtabstop=4 expandtab
 autocmd Filetype c**,java setlocal cindent foldmethod=syntax textwidth=80
-autocmd FileType make* setlocal tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab
-autocmd FileType vim,asm,javascript,sh setlocal tabstop=2 softtabstop=2 shiftwidth=2 expandtab
+"TODO aucmd groups? https://vimways.org/2018/from-vimrc-to-vim/
+autocmd FileType vim,asm,javascript,sh,verilog setlocal tabstop=2 softtabstop=2 shiftwidth=2 expandtab
 
 " remove trailing whitespace upon saving or upon hitting <Leader>w
 function! RemoveTrailingWhitespace()
@@ -138,6 +140,9 @@ nnoremap <Leader>da :pu=strftime('%c')<CR>
 " Remove buffer from memory without closing window
 nnoremap <Leader>bd :bnext\|bdelete #<CR>
 
+" "relative" edit. Edit a file without having to cd by using `% (filename) :p (full path) :h (dirname)`
+map <leader>ew :edit <C-R>=expand("%:p:h") . "/" <CR>
+
 " easily switch between buffers and tabs
 nnoremap [b :bprevious<CR>
 nnoremap ]b :bnext<CR>
@@ -159,6 +164,12 @@ function! CurChar(...)
 endfunction
 
 """""""""""""""" other """"""""""""""""
+" Config for netrw: https://shapeshed.com/vim-netrw/
+" Remove the banner
+let g:netrw_banner = 0
+" open files in a new tab
+let g:netrw_browse_split = 3
+
 " exit insert mode with 'jj<Space>'
 inoremap jj <ESC>
 

@@ -21,6 +21,10 @@ export EDITOR=vim
 export HISTIGNORE="[ \t]*"
 export HISTSIZE=5000
 export HISTCONTROL=ignoreboth:erasedups
+shopt -s cmdhist
+
+# hah HAAAAAH
+trap 'echo lol oops' ERR
 
 #If I have an alias file, then source it here
 FILE="$HOME/.bash_aliases"
