@@ -26,7 +26,10 @@ set wildmode=full
 set tags+=tags;
 
 " Toggle 'list' to show whitespace characters
-set listchars=tab:>\ ,space:_,eol:$,
+set listchars=tab:X-,space:.,eol:$,
+if (toupper(substitute(system('uname'), '\n', '', '')) =~# 'DARWIN')
+  set listchars=tab:▶\ ,trail:~,space:·,eol:¬
+endif
 
 """""""""""""""""""""""""""""""""" popup menu """"""""""""""""""""""""""""""""""
 " show a popup menu for completion even if there's only 1 option
@@ -36,13 +39,6 @@ set completeopt=menuone,longest
 set pumheight=8
 
 """""""""""""""""""""""""""""""""" whitespace """"""""""""""""""""""""""""""""""
-" Tab stuff. For more info, look to
-" https://medium.com/@arisweedler/tab-settings-in-vim-1ea0863c5990
-autocmd FileType c**,python,java setlocal tabstop=4 shiftwidth=4 softtabstop=4 expandtab
-autocmd Filetype c**,java setlocal cindent foldmethod=syntax textwidth=80
-"TODO aucmd groups? https://vimways.org/2018/from-vimrc-to-vim/
-autocmd FileType vim,asm,javascript,sh,verilog setlocal tabstop=2 softtabstop=2 shiftwidth=2 expandtab
-
 " remove trailing whitespace upon saving or upon hitting <Leader>w
 function! RemoveTrailingWhitespace()
   %substitute/\s\+$//e
@@ -52,7 +48,6 @@ nnoremap <silent> <Leader>w :call RemoveTrailingWhitespace()<CR>
 """""""""""""""""""""""""""""""" pretty colors """"""""""""""""""""""""""""""""
 " Look at colors: http://vim.wikia.com/wiki/Xterm256_color_names_for_console_Vim
 
-"""""""""""" color settings """"""""""""
 "allow for syntax highlighting and indenting
 syntax on
 
@@ -65,23 +60,13 @@ set incsearch
 "briefly show the matching bracket {[( when typing )]}
 set showmatch matchtime=1
 
-"""""""""""" color commands """"""""""""
 " highlight trailing whitespace
 highlight trailing_whitespace ctermbg=red
 match trailing_whitespace /\s\+$/
 
-" highlight the tilde when it's used as a path name in shell scripts
-highlight bad_tilde ctermbg=red
-autocmd BufEnter FileType sh match bad_tilde /^[^#].*\zs\~/
-"for now, that's whenever it isn't in a comment. This isn't quite right yet though...
-
-" highlight columns - highlight the 80th  column
+" highlight columns - highlight the 80th column
 let &colorcolumn="80"
 highlight ColorColumn ctermbg=233
-augroup vimrc_autocmds
-  autocmd BufEnter * highlight OverLength ctermbg=darkgrey
-  autocmd BufEnter c**,python,java match OverLength /\%80v.*/
-augroup END
 
 """""""""""""""""""""""""""""""" abbreviations """"""""""""""""""""""""""""""""
 " easy hashbangs
@@ -89,12 +74,7 @@ iabbrev #!b #!/usr/bin/env bash
 iabbrev #!p #!/usr/bin/env python
 iabbrev #!s #!/usr/bin/env sh
 
-" easy printing in java
-iabbr sop System.out.println("");<esc>2hi
-
 """""""""""""""""""""""""""""""""""" remap """"""""""""""""""""""""""""""""""""
-" http://vim.wikia.com/wiki/Mapping_keys_in_Vim_-_Tutorial_(Part_1)
-
 """""""""""""""" macros """"""""""""""""
 " easy folds around braces
 noremap <Leader>z %zfaB
@@ -120,10 +100,7 @@ nnoremap <Leader>ev :tabe $MYVIMRC<CR>
 " yank into register s --> forward search for the contents of register s
 " (Very nomagic, escape contents of s register before pasting)
 vnoremap * "sy/\V<C-r>=escape(@s, '/\')<CR><CR>N
-
-" in visual mode, use forward slash + <U> or <C> to <Un>Comment selection
-vnoremap /c :norm 0i//<CR>
-vnoremap /u :norm 2x<CR>
+nnoremap * *N
 
 " source my vimrc/current file - useful for testing
 nnoremap <Leader>sv :source ~/.vimrc<CR>
@@ -132,9 +109,6 @@ nnoremap <Leader>so :source %<CR>
 " go to the next/prev item in the quickfix list
 nnoremap <Leader>q :cnext<CR>
 nnoremap <Leader>Q :cprev<CR>
-
-" Insert the date in normal mode. Kiiiinda useless. But fun?
-nnoremap <Leader>da :pu=strftime('%c')<CR>
 
 """"""""""""" buffers/tabs """""""""""""
 " Remove buffer from memory without closing window
@@ -151,17 +125,6 @@ nnoremap gr gT
 """"""""""""""" movement """""""""""""""
 nnoremap <Up> <C-y>k
 nnoremap <Down> <C-e>j
-map <Left> <Nop>
-map <Right> <Nop>
-
-"""""""""""""""" source """"""""""""""""
-""""""" (library functions) """"""""
-" returns the char that your cursor is over
-" optional argument allows you to look at a char forward or backwards
-function! CurChar(...)
-  let a:offset = get(a:, 1, 0)
-  return getline('.')[col('.') - 1 + a:offset]
-endfunction
 
 """""""""""""""" other """"""""""""""""
 " Config for netrw: https://shapeshed.com/vim-netrw/
