@@ -49,9 +49,9 @@ display_branch() {
 
 PS1=''
 
-PS1+="\[\033]0" # Start terminal title and prompt.
-PS1+="\w \$(display_branch)"
-PS1+="\007\]\n" # end terminal title and prompt.
+#PS1+="\[\033]0" # Start terminal title and prompt.
+#PS1+="\w \$(display_branch)"
+#PS1+="\007\]\n" # end terminal title and prompt.
 
 # Highlight the user name when logged in as root.
 if [ $EUID == 0 ]; then

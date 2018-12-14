@@ -43,5 +43,6 @@
 
 [init]
 	templatedir = ~/.git_template
+
 [commit]
 	template = /Users/ari/.git_template/commit_template.txt

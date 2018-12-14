@@ -1,61 +1,55 @@
 #!/usr/bin/env bash
 
-# script to check all the dotfiles in this directory with all the dotfiles on
-# my machine. If these files are newer, then update the files on this machine.
-
-################################### settings ###################################
-# this is where the repo should be. I'm standardizing it across all machines -
-# but I could also execute `find ~ -name "dotfiles"` or something like that
+# Place the most up-to-date version of a dotfile into this repo. Make a backup
+# if needed.
 REPO="$HOME/dotfiles"
-# Here're the dotfiles I care about
-FILES=(.bash_aliases .bash_prompt .bashrc .gitconfig .inputrc .vimrc)
-#FOLDERS=(.vim .ssh)
 
 ############################### backup function ################################
 function backup() {
-  if [ ! -f $1 ]; then
-    echo "  file $1 cannot be backed up because it doesn't exist"
+  ORIGINAL="$1"
+  NEW="$2"
+  if [ ! -f $ORIGINAL ]; then
+    echo "  file $ORIGINAL cannot be backed up because it doesn't exist"
     return 1
   fi
   TIME=$(date +"%Y%m%d%H%M%S")
-  BACKUP=/tmp/${TIME}-$(basename ${1})
-  cp $1 $BACKUP
-  echo "  backup stored at $BACKUP"
+  FILE=$(basename ${ORIGINAL})
+  BACKUP="/tmp/${TIME}-${FILE}"
+  diff $ORIGINAL $NEW > $BACKUP
+  echo "  machine's $FILE is outta date. Making a backup at $BACKUP"
 }
 
 ######## if we don't have the repo, then there's no point in continuing ########
 if [ ! -d "$REPO/.git" ]; then
-  REPO="$HOME/GitHub/machine/dotfiles"
-  if [ ! -d "$REPO/.git" ]; then
-    echo "No repo found. Please git clone git@github.com:AriSweedler/dotfiles.git"
-    exit 1
-  fi
-else
-  cd $REPO
-  git pull
+  echo "No repo found. Please git clone git@github.com:AriSweedler/dotfiles.git"
+  exit 1
 fi
 
-for FILE in $(find .* -maxdepth 0 -type f); do
+
+############################### Begin script body ##############################
+cd $REPO
+echo "pulling latest version of the repo... "
+git pull
+
+####### for every dotfile in the repo (including stuff like '.vim/file') #######
+printf "Updating each dotfile... "
+for FILE in $(git ls-files | grep "^\."); do
   REPO_FILE="$REPO/$FILE"
   MACHINE_FILE="$HOME/$FILE"
 
   # if the files aren't different, continue
-  if diff "$REPO_FILE" "$MACHINE_FILE" &>/dev/null; then
+  if diff "$REPO_FILE" "$MACHINE_FILE" &> /dev/null; then
     continue
   fi
 
+  # '-nt' means "newer than". Don't backup the repo file manually cuz we use git
   if [ $REPO_FILE -nt $MACHINE_FILE ]; then
-    # if the REPO_FILE is newer, than MACHINE_FILE is outta date. Backup
-    # machine file then overwrite machine file
-    echo "  machine's $FILE is outta date. Making a backup and updating machine's file"
-    backup $MACHINE_FILE
+    backup $MACHINE_FILE $REPO_FILE
     cp $REPO_FILE $MACHINE_FILE
   else
-    # if the MACHINE_FILE is newer, than REPO_FILE is outta date. Overwrite
-    # repo file. Don't need to backup repo file, cuz that's what git is for!
-    echo "  repo's $FILE is outta date - updating it. (Make sure you've pulled all changed. Commit these ones)"
+    echo "  repo's  $FILE is outta date"
     cp $MACHINE_FILE $REPO_FILE
   fi
 done
 
-echo "dotfiles are up to date"
+echo "done."
