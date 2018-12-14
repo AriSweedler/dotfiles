@@ -19,30 +19,35 @@
 	changed = yellow black bold
 	untracked = red reverse bold
 
+[pretty]
+	# '%h': abbreviated commit hash
+	# '%ar': author date, relative
+	# '%D': ref names without the " (", ")" wrapping.
+	# '%s': subject
+	# '%cN': committer name (respecting .mailmap, see git-shortlog[1] or git-blame[1])
+	mylog = "format:%C(yellow)%h %C(green)%ar %C(red)%D %C(reset)%s %C(blue)[%cN]"
+
 [alias]
-	l = log --pretty=format:"%C(yellow)%h\\ %C(green)%ar\\ %C(red)%D\\ %Creset%s\\ %C(blue)[%cN]" --graph
-	lg = log --pretty=format:"%C(yellow)%h\\ %C(green)%ar\\ %C(red)%D\\ %Creset%s\\ %C(blue)[%cN]"
-	s = status
-	ls = ls-tree --full-tree -r --abbrev HEAD
-	d = diff --cached
-	amend = commit --amend --reuse-message=HEAD
-	alias=!"git config -l | grep ^alias | cut -c 7- | sort #"
 	a = !"git add .; git s"
+	alias=!"git config -l | grep ^alias | cut -c 7- | sort #"
+	amend = commit --amend --reuse-message=HEAD
 	cconfig=config --edit --global
-	showme=!"git config -l | grep $1 | cut -c $(( ${#1} + 2 ))- | sort #"
+	ctags = !.git/hooks/ctags
+	d = diff --cached
+	hub = !"hubd $(basename $(pwd))"
+	hubd = !"fxn(){ git remote add origin git@github.com:AriSweedler/${1}.git; git push -u origin master; }; fxn"
+	l = log --pretty=mylog --graph
+	lg = log --pretty=mylog
+	ls = ls-tree --full-tree -r --abbrev HEAD
 	pushf=push --set-upstream origin master
+	repo = !"basename $(git remote get-url origin) '.git'"
+	s = status
+	showme=!"git config -l | grep $1 | cut -c $(( ${#1} + 2 ))- | sort #"
 	u = remote update
 	up = !"git remote update -p; git merge --ff-only @{u}"
-	hubd = !"fxn(){ git remote add origin git@github.com:AriSweedler/${1}.git; git push -u origin master; }; fxn"
-	hub = !"hubd $(basename $(pwd))"
-	repo = !"basename $(git remote get-url origin) '.git'"
-	ctags = !.git/hooks/ctags
 
 [push]
 	default = simple
 
 [init]
 	templatedir = ~/.git_template
-
-[commit]
-	template = /Users/ari/.git_template/commit_template.txt
