@@ -44,14 +44,13 @@ for FILE in $(git ls-files | grep "^\."); do
 
   # '-nt' means "newer than". Don't backup the repo file manually cuz we use git
   if [ $REPO_FILE -nt $MACHINE_FILE ]; then
-    CHANGED=1
+    [ -z "$CHANGED" ] && printf "\n"; CHANGED=1
     backup $MACHINE_FILE $REPO_FILE
     cp $REPO_FILE $MACHINE_FILE
   else
-    printf "\n  repo's  $FILE is outta date"
+    printf "  repo's $FILE has been updated\n"
     cp $MACHINE_FILE $REPO_FILE
   fi
 done
 
-[ -z "$CHANGED" ] || printf "\n"
 echo "done."

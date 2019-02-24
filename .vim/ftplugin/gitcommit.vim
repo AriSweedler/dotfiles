@@ -4,4 +4,5 @@ setlocal textwidth=72 autoindent
 setlocal comments=fb:*
 
 let &colorcolumn="3,50,72"
+"TODO is this what I want?
 
