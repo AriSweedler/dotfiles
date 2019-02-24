@@ -37,7 +37,7 @@
 	grepp = grep --break --heading --line-number
 	hub = !"git hubd $(basename $(pwd))"
 	hubd = !"git remote add origin git@github.com:AriSweedler/${1}.git; git pushu"
-	l = lg --graph
+	l = !"git lg --graph"
 	lg = log --pretty=mylog
 	ls = ls-tree --full-tree -r --abbrev HEAD
 	pushu = push --set-upstream origin master

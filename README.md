@@ -1,5 +1,4 @@
 # Hi! Welcome to my Dotfiles
-#TODO update this to include description of update script
 
 Here're some useful files that I might want on other machines. Every
 program ever has some sort of configuration associated with it, so don't
@@ -9,7 +8,20 @@ It's good practice to place a dotfile in your home directory to save
 information about a program, it's a standard filesystem location that's
 guaranteed to be unique for a user.
 
-Make sure you use `-a` when using `ls` in this folder ahaha. Also check out my [bin](https://github.com/AriSweedler/bin/blob/master/README.md)
+Make sure you use `-a` when using `ls` in this folder ahaha. To start off, I'll talk about the only two NON-dotfiles here.
+
+## update.sh
+This script allows me to edit literal dotfiles and run this command to place
+them in this repo. Or, update the repo and update my dotfiles! Neat. There're
+a few TODOs for this script.
+    * Make a machine-specific folder (.local/<machine> for stuff where I want a
+    different PS1
+    * Figure out what else would be neat!
+
+## fresh.sh
+A script to curl and pipe into bash, it helps set up a fresh new machine for
+me. To be invoked with bash <(curl --silent
+https://raw.githubusercontent.com/AriSweedler/dotfiles/master/fresh.sh)
 
 ## ssh-config
 Read about all the options [here](https://www.ssh.com/ssh/config/)
@@ -60,7 +72,7 @@ more beginner-friendly read. (Note, they talk about `/etc/inputrc`,
 which will affect all users - it is system wide. But I use `~/.inputrc`,
 because I don't have administrative permissions on all machines I use.)
 
-## bash\_prompt
+## PS1.sh
 
 Here's a script that'll help you create a custom-made PS1. You can have a fun prompt script really easily! [Source](https://stackoverflow.com/questions/45761508/whats-the-difference-between-script-or-source-script-bash-script) the shell script upon startup. You can use your ~/.bashrc for this. [Here](https://unix.stackexchange.com/questions/129143/what-is-the-purpose-of-bashrc-and-how-does-it-work) is more info on the different run command files.
 
@@ -71,3 +83,4 @@ Check out the following links for more details:
 1. Check out the [bash man page](https://linux.die.net/man/1/bash), the section titled "Prompting" (What does '\W' do?)
 
 1. Learn more about escape codes for pretty colors in bash [here](https://misc.flogisoft.com/bash/tip_colors_and_formatting)
+

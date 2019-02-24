@@ -28,7 +28,7 @@ fi
 
 ############################### Begin script body ##############################
 cd $REPO
-echo "pulling latest version of the repo... "
+printf "pulling latest version of the repo... "
 git pull
 
 ####### for every dotfile in the repo (including stuff like '.vim/file') #######
@@ -44,6 +44,7 @@ for FILE in $(git ls-files | grep "^\."); do
 
   # '-nt' means "newer than". Don't backup the repo file manually cuz we use git
   if [ $REPO_FILE -nt $MACHINE_FILE ]; then
+    CHANGED=1
     backup $MACHINE_FILE $REPO_FILE
     cp $REPO_FILE $MACHINE_FILE
   else
@@ -52,4 +53,5 @@ for FILE in $(git ls-files | grep "^\."); do
   fi
 done
 
+[ -z "$CHANGED" ] || printf "\n"
 echo "done."

@@ -1,6 +1,0 @@
-#!/bin/bash
-echo "........................................................................."
-echo "Setting workhome to	`pwd`"
-echo "Before, it was.....	`cat $HOME/.config/work`"
-echo "`pwd`" > "$HOME/.config/work"
-echo "........................................................................."

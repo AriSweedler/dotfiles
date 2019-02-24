@@ -43,10 +43,6 @@ function! RemoveTrailingWhitespace()
 endfunction
 nnoremap <silent> <Leader>w :call RemoveTrailingWhitespace()<CR>
 
-" some useful defaults for writing notes - probably wanna put this in the
-" ftplugin file for the .txt extension?
-nnoremap <silent> <Leader>n :set sts=2 ts=2 sw=2 tw=80 comments="" et ai<CR>
-
 """""""""""""""""""""""""""""""" pretty colors """"""""""""""""""""""""""""""""
 " Look at colors: http://vim.wikia.com/wiki/Xterm256_color_names_for_console_Vim
 
