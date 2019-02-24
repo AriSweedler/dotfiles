@@ -13,7 +13,7 @@ echo "	Hello, user number $HOME_INODE"
 echo ""
 
 #Setting PATH
-export PATH="$PATH:$HOME/bin"
+export PATH="$PATH:$HOME/.local/bin"
 
 export EDITOR=vim
 
@@ -33,7 +33,7 @@ if [ -f $FILE ]; then
 fi
 
 # Sourcing PS1 script for that dank pwd
-source "$HOME/.bash_prompt"
+source "$HOME/.local/bin/PS1.sh"
 
 # If I have an npm completion script, source it
 FILE="$HOME/.npm/completion.sh"

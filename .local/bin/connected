@@ -1,0 +1,3 @@
+#!/bin/bash
+
+ping -W 100 -c 1 $1 &> /dev/null

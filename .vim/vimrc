@@ -150,14 +150,11 @@ set omnifunc=syntaxcomplete#Complete
 vnoremap ' <esc>`<i'<esc>`>a'<esc>
 
 " exit insert or visual mode with 'jk'
-inoremap :wq <ESC>:wq<CR>
-inoremap :w <ESC>:w<CR>
 inoremap jk <ESC>
 vnoremap jk <ESC>
-inoremap <esc> <nop>
 
 " configure airline plugin
 let g:airline#extensions#tabline#enabled = 1
 " which one do I like more?
-" let g:airline_theme='dark'
-let g:airline_theme='minimalist'
+let g:airline_theme='dark'
+" let g:airline_theme='minimalist'

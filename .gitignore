@@ -1,1 +1,21 @@
+# vim
+#################
+.*.swp
+
+# npm
+node_modules
+
+# OS generated files #
+######################
+.DS_Store*
+
+# Other
+notes.txt
+
+# FS files that I don't wanna see or commit#
+############################################
+.fuse_hidden*
+.nfs*
+
+# no need to back this up
 .vim/.netrwhist

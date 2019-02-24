@@ -47,7 +47,7 @@ for FILE in $(git ls-files | grep "^\."); do
     backup $MACHINE_FILE $REPO_FILE
     cp $REPO_FILE $MACHINE_FILE
   else
-    echo "  repo's  $FILE is outta date"
+    printf "\n  repo's  $FILE is outta date"
     cp $MACHINE_FILE $REPO_FILE
   fi
 done

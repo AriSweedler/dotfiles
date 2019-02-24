@@ -1,0 +1,22 @@
+#!/usr/bin/env python
+
+def getInput():
+    totalState = list()
+    while True:    # infinite loop
+        st = raw_input("What's your next state?: ")
+        if st == "": break  # stops the loop
+        else: totalState.append(st)
+    return totalState;
+
+def verilogPrint(states):
+    print
+    for i, st in enumerate(states):
+        print("parameter st_{} = {};".format(st, i))
+    print("\nDone")
+
+def main():
+    states = getInput()
+    verilogPrint(states)
+
+if __name__== "__main__":
+    main()

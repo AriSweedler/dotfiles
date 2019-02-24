@@ -1,0 +1,83 @@
+#!/usr/bin/env python
+
+import argparse, sys
+
+def myParse():
+    # initialize parser object
+    parser = argparse.ArgumentParser(description='Make a pretty divider for code')
+
+    # generic arguments
+    parser.add_argument('-w', '--width', type=int, metavar='COLUMNS')
+    parser.add_argument('string', nargs='?')
+
+    # relevant syntaxes
+    group = parser.add_mutually_exclusive_group(required=False)
+    group.add_argument('-c', '--cpp', action='store_true', help='set comment style to C: /* * */')
+    group.add_argument('-*', '--star', action='store_true', help='set comment style to C: /* * */')
+    #
+    group.add_argument('-p', '--python', action='store_true', help='set comment style to python: #')
+    group.add_argument('-s', '--shell', action='store_true', help='set comment style to python: #')
+    group.add_argument('-b', '--bash', action='store_true', help='set comment style to python: #')
+    group.add_argument('-#', '--hash', action='store_true', help='set comment style to python: #')
+    #
+    group.add_argument('-v', '--vim', action='store_true', help='set comment style to vim: "')
+    group.add_argument('-"', '--quote', action='store_true', help='set comment style to vim: "')
+    #
+    group.add_argument('-d', '--dashes', action='store_true', help='set comment style to dashes: -')
+
+    # set defaults
+    parser.set_defaults(width=80, string='', indent=0)
+
+    # return parsed arguments
+    return parser.parse_args(sys.argv[1:])
+
+# figure what the commend start/middle/end are
+def get_comment_strings(args):
+    start, middle, end = "", "", ""
+    if args.cpp:
+        start, middle, end = "/*", "*", "*/"
+    elif args.python:
+        middle = "#"
+    elif args.vim:
+        middle = "\""
+    elif args.dashes:
+        middle = "-"
+        args.width = 67
+    else:
+        start, middle, end = "/*", "*", "*/"
+
+    return {"start": start, "middle": middle, "end": end}
+
+def figure_str(args, com):
+    # calculate
+    totalLen = args.width - len(args.string)
+    sideLen = totalLen / 2
+
+    # pad string with space if we have one
+    joiner = ''
+    if args.string:
+        sideLen -= 1
+        joiner = ' '
+
+    # calculate
+    leftLen = sideLen - len(com['start'])
+    rightLen = sideLen - len(com['end'])
+    strlen = len(args.string) + 2*len(joiner) + len(com['start']) + len(com['end'])
+    if leftLen + rightLen + strlen <= args.width:
+        rightLen += 1
+
+    # generate our comment
+    mid = sideLen*com['middle']
+    left = com['start'] + mid[:leftLen] + joiner
+    right = joiner + mid[:rightLen] + com['end']
+
+    return left, right
+
+def main():
+    args = myParse()
+    com = get_comment_strings(args)
+    left, right = figure_str(args, com)
+    print(left + args.string + right)
+
+if __name__== "__main__":
+    main()

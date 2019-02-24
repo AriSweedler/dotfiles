@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+# function to check authentication to GitHub
+function github-authenticated() {
+  echo "in func"
+  # Attempt to ssh to GitHub
+  ssh -T git@github.com &>/dev/null
+  RET=$?
+  if [ $RET == 1 ]; then
+    return 0
+  elif [ $RET == 255 ]; then
+    return 1
+  else
+    echo "unknown exit code to attempt to ssh into git@github.com"
+  fi
+  return 2
+}
+
+echo "starting loop"
+while [ 1 ]; do
+  if github-authenticated; then
+    exit 0
+  fi
+  read -p "Put your pubkey on GitHub. Press any key to continue... " -n 1
+done
+echo "finishing loop"
+
+# sample output:
+###################### authenticated ######################
+#    [02:25 AM] ise > ssh -T git@github.com
+#    Permission denied (publickey).
+#    [02:25 AM] ise > echo $?
+#    255
+############################################################
+#################### not authenticated #####################
+#    [06:27 PM]  🚀 > ssh -T git@github.com
+#    Hi AriSweedler! You've successfully authenticated, but GitHub does not provide shell access.
+#    [06:27 PM]  🚀 > echo $?
+#    1
+############################################################
+
