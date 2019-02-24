@@ -20,7 +20,7 @@
 	untracked = red reverse bold
 
 [pretty]
-	# '%h': abbreviated commit hash
+        # '%h': abbreviated commit hash
 	# '%ar': author date, relative
 	# '%D': ref names without the " (", ")" wrapping.
 	# '%s': subject
@@ -34,7 +34,8 @@
 	cconfig=config --edit --global
 	ctags = !.git/hooks/ctags
 	d = diff --cached
-	hub = !"hubd $(basename $(pwd))"
+	grepp = grep --break --heading --line-number
+	hub = !"git hubd $(basename $(pwd))"
 	hubd = !"fxn(){ git remote add origin git@github.com:AriSweedler/${1}.git; git push -u origin master; }; fxn"
 	l = log --pretty=mylog --graph
 	lg = log --pretty=mylog
