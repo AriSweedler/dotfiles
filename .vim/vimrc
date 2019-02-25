@@ -10,8 +10,7 @@ set showcmd           "multi-keystroke commands will be shown in bottom right.
 set noshowmode        "don't show the mode (we use airline now!)
 set noerrorbells      "disable error bells
 set belloff=all       "disable bell for non-errors, too
-set title             "show the filename in the title bar
-set ruler             "display the cursor positiont
+set undofile          "persist undo files past buffer cloes
 
 "allow backspacing over more things
 set backspace=indent,eol,start
@@ -104,12 +103,8 @@ nnoremap * *N
 nnoremap <Leader>ev :tabe $MYVIMRC<CR>
 
 " source my vimrc/current file - useful for testing
-nnoremap <Leader>sv :source $MYVIMRC<CR>
-nnoremap <Leader>so :source %<CR>
-
-" go to the next/prev item in the quickfix list
-nnoremap <Leader>q :cnext<CR>
-nnoremap <Leader>Q :cprev<CR>
+nnoremap <silent> <Leader>sv :source $MYVIMRC<CR>
+nnoremap <silent> <Leader>so :source %<CR>
 
 """"""""""""" buffers/tabs """""""""""""
 " Remove buffer from memory without closing window
