@@ -33,6 +33,7 @@ git pull
 
 ####### for every dotfile in the repo (including stuff like '.vim/file') #######
 printf "Updating each dotfile... "
+# TODO submodules don't play well with ls-files? I want each file, not the submodule, to be inspected...
 for FILE in $(git ls-files | grep "^\."); do
   REPO_FILE="$REPO/$FILE"
   MACHINE_FILE="$HOME/$FILE"
@@ -46,6 +47,7 @@ for FILE in $(git ls-files | grep "^\."); do
   if [ $REPO_FILE -nt $MACHINE_FILE ]; then
     [ -z "$CHANGED" ] && printf "\n"; CHANGED=1
     backup $MACHINE_FILE $REPO_FILE
+    # TODO maybe I should be using rsync here..
     cp $REPO_FILE $MACHINE_FILE
   else
     printf "  repo's $FILE has been updated\n"
