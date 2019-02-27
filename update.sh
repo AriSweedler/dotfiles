@@ -37,41 +37,58 @@ while [[ $# -gt 0 ]]; do
 done
 
 ############################### Begin script body ##############################
-####### for every dotfile in the repo (including stuff like '.vim/file') #######
 echo "Updating each dotfile"
-for file in $(git ls-files); do
-  echo  "~~"
-  # Don't place the script or the readme into our home dir
-  if [[ $file == $SCRIPT ]] ; then
+######### For every dotfile in the repo (do not recurse into folders) ##########
+for file in $(ls -A1 | grep "^\."); do
+  if [[ $file == *.sw[klmnop] ]] || [[ $file == .git ]]; then
     continue
   fi
 
-  # If interactive, ask for user input along the way
   OLD_FILE="$HOME"/"$file"
   NEW_FILE="$(pwd)"/"$file"
 
+  ############################## special cases ################################
+  if  [[ $file == .local ]]; then
+    NEW_FILE="$NEW_FILE"/bin
+    OLD_FILE="$HOME"/"$file"/bin
+  fi
+
+  if  [[ $file == .ssh ]]; then
+    NEW_FILE="$NEW_FILE"/config
+    OLD_FILE="$HOME"/"$file"/config
+  fi
+  ############################## special cases ################################
+
+  if [ -L "$OLD_FILE" ]; then
+    echo "$OLD_FILE is a symlink, updating it"
+    rm "$OLD_FILE"
+    ln -s "$NEW_FILE" "$OLD_FILE"
+    continue
+  fi
+
   if [ $INTERACTIVE = true ] ; then
-    #interactive
-    if [ -f $OLD_FILE ]; then
+    # If interactive, ask for user input along the way
+    if [ -f "$OLD_FILE" || -d "$OLD_FILE" ]; then
+      echo ""
       echo "$OLD_FILE already exists."
       read -p "Move it to /tmp and symlink in $file? [y/n] > " -n 1 CONFIRM
-      if [[ $CONFIRM == [Yy] ]]; then
-        backup $OLD_FILE
-        echo "ln -s $NEW_FILE $OLD_FILE"
+      if [[ "$CONFIRM" == [Yy] ]]; then
+        backup "$OLD_FILE"
+        ln -s "$NEW_FILE" "$OLD_FILE"
       fi
     else
       echo "$OLD_FILE doesn't exist."
       read -p "Create link to $file? [y/n] > " -n 1 CONFIRM
-      if [[ $CONFIRM == [Yy] ]]; then
-        echo "ln -s $NEW_FILE $OLD_FILE"
+      if [[ "$CONFIRM" == [Yy] ]]; then
+        ln -s "$NEW_FILE" "$OLD_FILE"
       fi
     fi
   else
     #non-interactive
-    if [ -f $OLD_FILE ]; then
-      backup $OLD_FILE
+    if [ -f "$OLD_FILE" || -d "$OLD_FILE" ]; then
+      backup "$OLD_FILE"
     fi
-    echo "ln -s $NEW_FILE $OLD_FILE"
+    ln -s "$NEW_FILE" "$OLD_FILE"
   fi
 done
 

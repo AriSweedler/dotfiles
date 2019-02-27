@@ -31,4 +31,3 @@ augroup quickfix
   nnoremap <leader>qq :call QuickfixToggle()<cr>
 augroup END
 
-echo "sourced"

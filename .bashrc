@@ -23,6 +23,10 @@ export HISTSIZE=5000
 export HISTCONTROL=ignoreboth:erasedups
 shopt -s cmdhist
 
+#when invoking 'ls', I'll get colors.
+export LSCOLORS='exGxFxDacxDxDxHbaDacec'
+export CLICOLOR=1
+
 # hah HAAAAAH
 trap 'echo lol oops' ERR
 
