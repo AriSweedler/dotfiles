@@ -1,3 +1,7 @@
+" My plugin manager of choice - if vim's new builtin package was this easy
+" I'd switch over to that. But it doesn't seem to be as easy.
+execute pathogen#infect()
+
 """"""""""""""""""""""""""""""""""" settings """"""""""""""""""""""""""""""""""
 filetype plugin on    "allow for autocmds to be run based on filetype
 colorscheme desert    "pretty colors
@@ -10,7 +14,7 @@ set showcmd           "multi-keystroke commands will be shown in bottom right.
 set noshowmode        "don't show the mode (we use airline now!)
 set noerrorbells      "disable error bells
 set belloff=all       "disable bell for non-errors, too
-set undofile          "persist undo files past buffer cloes
+"set undofile          "persist undo files past buffer cloes
 
 "allow backspacing over more things
 set backspace=indent,eol,start
@@ -72,10 +76,11 @@ iabbrev #!p #!/usr/bin/env python
 
 """""""""""""""""""""""""""""""""""" remap """"""""""""""""""""""""""""""""""""
 """""""""""""""" macros """"""""""""""""
-" easy folds around braces
+" easy folds around braces or comments
 noremap <Leader>z %zfaB
+noremap <Leader>* [*zf]*
 
-" Make Shift-Tab remove one layer of indent
+" Have Shift-Tab remove one layer of indent in insert or normal
 inoremap <S-Tab> <C-d>
 nnoremap <S-Tab> <<
 

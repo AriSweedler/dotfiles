@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 
-# Place the most up-to-date version of a dotfile into this repo. Make a backup
-# if needed.
-REPO="$HOME/dotfiles"
+SCRIPT=$(basename "$0")
 
 ############################### backup function ################################
+#TODO make a tmpdir for each invocation
 function backup() {
   ORIGINAL="$1"
   NEW="$2"
@@ -15,43 +14,64 @@ function backup() {
   TIME=$(date +"%Y%m%d%H%M%S")
   FILE=$(basename ${ORIGINAL})
   BACKUP="/tmp/${TIME}-${FILE}"
-  diff $ORIGINAL $NEW > $BACKUP
-  echo "  machine's $FILE is outta date. Making a backup at $BACKUP"
+  mv $ORIGINAL $BACKUP
 }
 
-######## if we don't have the repo, then there's no point in continuing ########
-if [ ! -d "$REPO/.git" ]; then
-  echo "No repo found. Please git clone git@github.com:AriSweedler/dotfiles.git"
+################################ usage function ################################
+function usage() {
+  echo "Usage: $SCRIPT [--interactive]"
+  echo "   symlinks all dotfiles in this repo to your home directory."
+  echo "   saves current dotfiles to /tmp"
   exit 1
-fi
+}
 
+################################ parse options ################################
+INTERACTIVE=false
+FORCE=false
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    "-i"|"--interactive") INTERACTIVE=true;;
+    *) echo "unknown argument, $1"; usage;;
+  esac
+  shift
+done
 
 ############################### Begin script body ##############################
-cd $REPO
-printf "pulling latest version of the repo... "
-git pull
-
 ####### for every dotfile in the repo (including stuff like '.vim/file') #######
-printf "Updating each dotfile... "
-# TODO submodules don't play well with ls-files? I want each file, not the submodule, to be inspected...
-for FILE in $(git ls-files | grep "^\."); do
-  REPO_FILE="$REPO/$FILE"
-  MACHINE_FILE="$HOME/$FILE"
-
-  # if the files aren't different, continue
-  if diff "$REPO_FILE" "$MACHINE_FILE" &> /dev/null; then
+echo "Updating each dotfile"
+for file in $(git ls-files); do
+  echo  "~~"
+  # Don't place the script or the readme into our home dir
+  if [[ $file == $SCRIPT ]] ; then
     continue
   fi
 
-  # '-nt' means "newer than". Don't backup the repo file manually cuz we use git
-  if [ $REPO_FILE -nt $MACHINE_FILE ]; then
-    [ -z "$CHANGED" ] && printf "\n"; CHANGED=1
-    backup $MACHINE_FILE $REPO_FILE
-    # TODO maybe I should be using rsync here..
-    cp $REPO_FILE $MACHINE_FILE
+  # If interactive, ask for user input along the way
+  OLD_FILE="$HOME"/"$file"
+  NEW_FILE="$(pwd)"/"$file"
+
+  if [ $INTERACTIVE = true ] ; then
+    #interactive
+    if [ -f $OLD_FILE ]; then
+      echo "$OLD_FILE already exists."
+      read -p "Move it to /tmp and symlink in $file? [y/n] > " -n 1 CONFIRM
+      if [[ $CONFIRM == [Yy] ]]; then
+        backup $OLD_FILE
+        echo "ln -s $NEW_FILE $OLD_FILE"
+      fi
+    else
+      echo "$OLD_FILE doesn't exist."
+      read -p "Create link to $file? [y/n] > " -n 1 CONFIRM
+      if [[ $CONFIRM == [Yy] ]]; then
+        echo "ln -s $NEW_FILE $OLD_FILE"
+      fi
+    fi
   else
-    printf "  repo's $FILE has been updated\n"
-    cp $MACHINE_FILE $REPO_FILE
+    #non-interactive
+    if [ -f $OLD_FILE ]; then
+      backup $OLD_FILE
+    fi
+    echo "ln -s $NEW_FILE $OLD_FILE"
   fi
 done
 
