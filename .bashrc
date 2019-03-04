@@ -30,6 +30,10 @@ export CLICOLOR=1
 # hah HAAAAAH
 trap 'echo lol oops' ERR
 
+# support 256 colors in tmux
+# TODO this isn't working yet
+alias tmux="tmux -2"
+
 #If I have an alias file, then source it here
 FILE="$HOME/.bash_aliases"
 if [ -f $FILE ]; then

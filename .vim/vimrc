@@ -46,6 +46,10 @@ function! RemoveTrailingWhitespace()
 endfunction
 nnoremap <silent> <Leader>w :call RemoveTrailingWhitespace()<CR>
 
+" highlight trailing whitespace
+highlight trailing_whitespace ctermbg=red
+match trailing_whitespace /\s\+$/
+
 """""""""""""""""""""""""""""""" pretty colors """"""""""""""""""""""""""""""""
 " Look at colors: http://vim.wikia.com/wiki/Xterm256_color_names_for_console_Vim
 
@@ -60,10 +64,6 @@ set incsearch
 
 "briefly show the matching bracket {[( when typing )]}
 set showmatch matchtime=3
-
-" highlight trailing whitespace
-highlight trailing_whitespace ctermbg=red
-match trailing_whitespace /\s\+$/
 
 " highlight columns - highlight the 80th column
 let &colorcolumn="80"

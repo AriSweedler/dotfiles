@@ -24,8 +24,10 @@
 	# '%ar': author date, relative
 	# '%D': ref names without the " (", ")" wrapping.
 	# '%s': subject
-	# '%cN': committer name (respecting .mailmap, see git-shortlog[1] or git-blame[1])
-	mylog = "format:%C(yellow)%h %C(green)%ar %C(red)%D %C(reset)%s %C(blue)[%cN]"
+	# '%an': author name
+	mylog = "format:%C(yellow)%h %C(green)%ar %C(auto)%D %C(reset)%s %C(blue)[%aN]"
+	chrislog = "format:%C(bold yellow)%d %C(reset)%C(cyan)%h %C(dim white)- %C(reset)%s %C(dim blue)(%cr) %C(dim white)<%an>%C(reset)"
+	newlog = "format:%C(cyan)%h %C(green)%<(12,trunc)%ar %C(dim white)%<(12,trunc)[%an] %C(reset)%s %w(0,0,8)%C(bold red)%+d%C(reset)"
 
 [alias]
 	a = !"git add .; git s"
@@ -33,12 +35,12 @@
 	amend = commit --amend --reuse-message=HEAD
 	cconfig=config --edit --global
 	ctags = !.git/hooks/ctags
-	d = diff --cached
+	d = diff --cached --diff-algorithm=minimal
 	grepp = grep --break --heading --line-number
 	hub = !"git hubd $(basename $(pwd))"
 	hubd = !"git remote add origin git@github.com:AriSweedler/${1}.git; git pushu"
 	l = !"git lg --graph"
-	lg = log --pretty=mylog
+	lg = log --pretty=newlog
 	ls = ls-tree --full-tree -r --abbrev HEAD
 	pushu = push --set-upstream origin master
 	p = !"script -q /dev/null git l | head -3; git push; stty sane; echo ''"

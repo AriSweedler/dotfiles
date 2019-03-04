@@ -2,6 +2,8 @@
 alias ..="cd .."
 alias ...="cd ../.."
 alias cdt="cd ~/Desktop"
+alias cdot="cd ~/dotfiles"
+alias cdev="cd ~/dev"
 
 # start a webserver
 alias www='python -m SimpleHTTPServer 8000'
