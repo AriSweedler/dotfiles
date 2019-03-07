@@ -2,8 +2,12 @@
 alias ..="cd .."
 alias ...="cd ../.."
 alias cdt="cd ~/Desktop"
+alias cdesk="cd ~/Desktop"
 alias cdot="cd ~/dotfiles"
 alias cdev="cd ~/dev"
+function bashcurl() {
+  bash <(curl --silent $1)
+}
 
 # start a webserver
 alias www='python -m SimpleHTTPServer 8000'
@@ -17,6 +21,9 @@ alias path='echo -e ${PATH//:/\\n}'
 
 # If I'm too lazy to hit <Ctrl-Command-Q>
 alias lock='/System/Library/CoreServices/Menu\ Extras/User.menu/Contents/Resources/CGSession -suspend'
+
+# make tmux support colors
+alias tmux="tmux -2"
 
 # open man page in Preview
 function pman { man -t "$1" | open -f -a Preview; }

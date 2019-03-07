@@ -12,16 +12,23 @@ HOME_INODE=`ls -ali ~/ | sed -n 2p | sed -E 's/ ([0-9]+).*/\1/'`
 echo "	Hello, user number $HOME_INODE"
 echo ""
 
-#Setting PATH
+# Add to PATH
 export PATH="$PATH:$HOME/.local/bin"
 
 export EDITOR=vim
 
-#Surprisingly this is actually v useful
-export HISTIGNORE="[ \t]*"
-export HISTSIZE=5000
-export HISTCONTROL=ignoreboth:erasedups
+################################ History hacks ################################
+# If you type a command, erase duplicates of it from history before recording it
+# https://unix.stackexchange.com/questions/18212/bash-history-ignoredups-and-erasedups-setting-conflict-with-common-history
+HISTCONTROL=ignoredups:erasedups
+# Run these commands before evaluating $PS1. Don't cache history lines
+# https://www.gnu.org/software/bash/manual/html_node/Bash-History-Builtins.html
+PROMPT_COMMAND="history -n; history -w; history -c; history -r; $PROMPT_COMMAND"
+export HISTSIZE=10000
+# multi-line commands are saved to the history with embedded semicolons
 shopt -s cmdhist
+# Append, don't overwrite
+shopt -s histappend
 
 #when invoking 'ls', I'll get colors.
 export LSCOLORS='exGxFxDacxDxDxHbaDacec'
@@ -29,10 +36,6 @@ export CLICOLOR=1
 
 # hah HAAAAAH
 trap 'echo lol oops' ERR
-
-# support 256 colors in tmux
-# TODO this isn't working yet
-alias tmux="tmux -2"
 
 #If I have an alias file, then source it here
 FILE="$HOME/.bash_aliases"
