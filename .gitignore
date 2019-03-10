@@ -1,6 +1,7 @@
 # vim
 #################
 .*.swp
+.vim/spell
 
 # npm
 node_modules
