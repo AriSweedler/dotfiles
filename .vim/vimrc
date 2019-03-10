@@ -15,6 +15,7 @@ set noshowmode        "don't show the mode (we use airline now!)
 set noerrorbells      "disable error bells
 set belloff=all       "disable bell for non-errors, too
 set lazyredraw        "don't update the screen when doing macros
+set updatetime=100    "let vim-gitgutter update faster
 "set undofile          "persist undo files past buffer cloes
 
 "allow backspacing over more things
@@ -142,16 +143,16 @@ nmap <Leader>sess :wa<CR>:so ~/.vim/sessions/
 " enable omnicompletion
 set omnifunc=syntaxcomplete#Complete
 
-"""
-"TODO make this a fxn for '"{([
-vnoremap ' <esc>`<i'<esc>`>a'<esc>
-
 " exit insert or visual mode with 'jk'
 inoremap jk <ESC>
 vnoremap jk <ESC>
 
-" configure airline plugin
+"""""""""""""""""""""""""""""""" plugin config """"""""""""""""""""""""""""""""
+""""""""""""""""""""""""""""""" airline """""""""""""""""""""""""""""""
 let g:airline#extensions#tabline#enabled = 1
-" which one do I like more?
 let g:airline_theme='dark'
-" let g:airline_theme='minimalist'
+
+"""""""""""""""""""""""""""""" git gutter """"""""""""""""""""""""""""""
+highlight DiffDelete term=bold ctermfg=1
+highlight DiffAdd term=bold ctermfg=2
+highlight DiffChange term=bold ctermfg=3
