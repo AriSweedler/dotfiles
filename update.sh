@@ -68,7 +68,7 @@ for file in $(ls -A1 | grep "^\."); do
 
   if [ $INTERACTIVE = true ] ; then
     # If interactive, ask for user input along the way
-    if [ -f "$OLD_FILE" || -d "$OLD_FILE" ]; then
+    if [ -f "$OLD_FILE" ] || [ -d "$OLD_FILE" ]; then
       echo ""
       echo "$OLD_FILE already exists."
       read -p "Move it to /tmp and symlink in $file? [y/n] > " -n 1 CONFIRM
@@ -85,7 +85,7 @@ for file in $(ls -A1 | grep "^\."); do
     fi
   else
     #non-interactive
-    if [ -f "$OLD_FILE" || -d "$OLD_FILE" ]; then
+    if [ -f "$OLD_FILE" ] || [ -d "$OLD_FILE" ]; then
       backup "$OLD_FILE"
     fi
     ln -s "$NEW_FILE" "$OLD_FILE"
