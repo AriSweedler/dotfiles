@@ -78,6 +78,9 @@ iabbrev #!p #!/usr/bin/env python
 
 """""""""""""""""""""""""""""""""""" remap """"""""""""""""""""""""""""""""""""
 """""""""""""""" macros """"""""""""""""
+" Cute lil macro to insert dividers (TODO maybe this goes in ftplugin)
+noremap <Leader>d :read !divider --width 
+
 " easy folds around braces or comments
 noremap <Leader>z %zfaB
 noremap <Leader>* [*zf]*

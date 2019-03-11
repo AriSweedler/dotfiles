@@ -62,17 +62,18 @@ function check-github-auth() {
     fi
 
     PS3="Select an option: "
-    select OPTION in "Quit" "Check again" "Generate key" do
-    case $OPTION in
-      "Quit")
-        echo "Quitting";
-        return 1;;
-      "Check again")
-        echo "Checking again";;
-      "Generate key")
-        echo "Generating key, then checking again";
-        make-key;;
-    esac done
+    select OPTION in "Quit" "Check again" "Generate key"; do
+      case $OPTION in
+        "Quit")
+          echo "Quitting";
+          return 1;;
+        "Check again")
+          echo "Checking again";;
+        "Generate key")
+          echo "Generating key, then checking again";
+          make-key;;
+      esac done
+    done
   done
 }
 

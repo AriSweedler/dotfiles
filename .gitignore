@@ -10,9 +10,6 @@ node_modules
 ######################
 .DS_Store*
 
-# Other
-notes.txt
-
 # FS files that I don't wanna see or commit#
 ############################################
 .fuse_hidden*
