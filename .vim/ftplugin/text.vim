@@ -1,8 +1,8 @@
 setlocal tabstop=2 softtabstop=2 shiftwidth=2 expandtab
 setlocal foldmethod=syntax textwidth=80
-setlocal spell autoindent
+setlocal spell autoindent virtualedit
 
-setlocal comments=""
+setlocal comments="bf:*"
 
 highlight DoubleSpace ctermbg=6
 match DoubleSpace /[^ ]\zs  \ze[^ *]/

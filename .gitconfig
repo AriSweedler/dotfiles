@@ -8,6 +8,16 @@
 	excludesfile = ~/.gitignore
 	editor = vim
 
+[push]
+	default = simple
+
+[init]
+	templatedir = ~/.git_template
+
+[diff]
+	tool = vimdiff
+
+################################## aesthetics ##################################
 [color "diff"]
 	meta = yellow black bold
 	frag = magenta black bold
@@ -29,29 +39,30 @@
 	chrislog = "format:%C(bold yellow)%d %C(reset)%C(cyan)%h %C(dim white)- %C(reset)%s %C(dim blue)(%cr) %C(dim white)<%an>%C(reset)"
 	newlog = "format:%C(cyan)%h %C(green)%<(12,trunc)%ar %C(dim white)%<(12,trunc)[%an] %C(reset)%s %w(0,0,8)%C(bold red)%+d%C(reset)"
 
+################################## shortcuts ##################################
 [alias]
 	a = !"git add .; git s"
-	alias=!"git config -l | grep ^alias | cut -c 7- | sort #"
+	alias = !"git config -l | grep ^alias | cut -c 7- | sort #"
+	showme = !"printf \"The alias '$1' is: \"; git config -l | sed /alias.$1=/!d | sed s/.*=// #"
+	echo = !"echo you said $1 #"
 	amend = commit --amend --reuse-message=HEAD
-	cconfig=config --edit --global
+	cm = commit -m 'first commit'
+	cconfig = config --edit --global
 	ctags = !.git/hooks/ctags
 	d = diff --cached --diff-algorithm=minimal
 	grepp = grep --break --heading --line-number
 	hub = !"git hubd $(basename $(pwd))"
 	hubd = !"git remote add origin git@github.com:AriSweedler/${1}.git; git pushu"
-	l = !"git lg --graph"
+	l = log --pretty=newlog --graph
 	lg = log --pretty=newlog
 	ls = ls-tree --full-tree -r --abbrev HEAD
 	pushu = push --set-upstream origin master
 	p = !"script -q /dev/null git l | head -3; git push; stty sane; echo ''"
 	repo = !"basename $(git remote get-url origin) '.git'"
-	s = status
-	showme=!"git config -l | grep $1 | cut -c $(( ${#1} + 2 ))- | sort #"
+	s = status --short --branch
+	ss = status
 	u = remote update
 	up = !"git remote update -p; git merge --ff-only @{u}"
 
-[push]
-	default = simple
+# TODO craft a push alias that kindly does an asynch push in the background - so it doesn't clog up my terminal or bother me at all
 
-[init]
-	templatedir = ~/.git_template
