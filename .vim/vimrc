@@ -72,14 +72,18 @@ let &colorcolumn="80"
 highlight ColorColumn ctermbg=233
 
 """""""""""""""""""""""""""""""" abbreviations """"""""""""""""""""""""""""""""
-" easy hashbangs
+"""""""""""" easy hashbangs """"""""""""
 iabbrev #!b #!/bin/bash
 iabbrev #!p #!/usr/bin/env python
 
 """""""""""""""""""""""""""""""""""" remap """"""""""""""""""""""""""""""""""""
 """""""""""""""" macros """"""""""""""""
-" Cute lil macro to insert dividers (TODO maybe this goes in ftplugin)
-noremap <Leader>d :read !divider --width 
+" Cute lil macro to insert dividers based on the python script I wrote
+function! DoDivider(width)
+  let l:widthstr = a:width > 0 ? "--width " . a:width : ""
+  execute printf("read !divider --%s %s '%s'", &filetype, l:widthstr, @")
+endfunction
+nnoremap <Leader>d :<C-u>call DoDivider(v:count)<CR>
 
 " easy folds around braces or comments
 noremap <Leader>z %zfaB
@@ -121,7 +125,7 @@ nnoremap <silent> <Leader>so :source %<CR>
 nnoremap <Leader>bd :bnext\|bdelete #<CR>
 
 " "relative" edit. Edit a file without having to cd by using `% (filename) :p (full path) :h (dirname)`
-map <leader>ew :edit <C-r>=expand("%:p:h") . "/" <CR>
+map <Leader>ew :edit <C-r>=expand("%:p:h") . "/" <CR>
 
 " easily switch between buffers and tabs
 nnoremap [b :bprevious<CR>

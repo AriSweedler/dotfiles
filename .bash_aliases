@@ -9,6 +9,11 @@ function bashcurl() {
   bash <(curl --silent $1)
 }
 
+# read vim help pages straight from terminal. Allow exiting with 'c'
+function vimhelp() {
+  vim -c "help $1" -c "only" -c "nnoremap c :q!<CR>"
+}
+
 # start a webserver
 alias www='python -m SimpleHTTPServer 8000'
 
