@@ -1,6 +1,6 @@
 setlocal tabstop=2 softtabstop=2 shiftwidth=2 expandtab
 setlocal foldmethod=syntax textwidth=80
-setlocal spell autoindent virtualedit
+setlocal spell autoindent virtualedit=all
 
 setlocal comments="bf:*"
 

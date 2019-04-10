@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-import argparse, sys
+import argparse, sys, math
 
 def myParse():
     # initialize parser object
@@ -8,15 +8,16 @@ def myParse():
 
     # generic arguments
     parser.add_argument('-w', '--width', type=int, metavar='COLUMNS')
-    parser.add_argument('string', nargs='?')
+    parser.add_argument('string', nargs='*')
 
     # relevant syntaxes
     group = parser.add_mutually_exclusive_group(required=False)
-    group.add_argument('-c', '--cpp', action='store_true', help='set comment style to C: /* * */')
+    group.add_argument('-c', '--cpp', action='store_true', help='set comment style to C: /* * */ (this is the default)')
     #
     group.add_argument('-p', '--python', action='store_true', help='set comment style to python: #')
-    group.add_argument('-s', '--shell', action='store_true', help='set comment style to python: #')
-    group.add_argument('-b', '--bash', action='store_true', help='set comment style to python: #')
+    group.add_argument('-t', '--text', action='store_true', help='set comment style to text: #')
+    group.add_argument('-s', '--shell', action='store_true', help='set comment style to shell: #')
+    group.add_argument('-b', '--bash', action='store_true', help='set comment style to bash: #')
     #
     group.add_argument('-v', '--vim', action='store_true', help='set comment style to vim: "')
     #
@@ -29,11 +30,11 @@ def myParse():
     return parser.parse_args(sys.argv[1:])
 
 # figure what the commend start/middle/end are
-def get_comment_strings(args):
+def get_comment_template(args):
     start, middle, end = "", "", ""
     if args.cpp:
         start, middle, end = "/*", "*", "*/"
-    elif args.python or args.shell or args.bash:
+    elif args.python or args.shell or args.bash or args.text:
         middle = "#"
     elif args.vim:
         middle = "\""
@@ -43,38 +44,29 @@ def get_comment_strings(args):
     else:
         start, middle, end = "/*", "*", "*/"
 
-    return {"start": start, "middle": middle, "end": end}
-
-def figure_str(args, com):
-    # calculate
-    totalLen = args.width - len(args.string)
-    sideLen = totalLen / 2
-
-    # pad string with space if we have one
-    joiner = ''
-    if args.string:
-        sideLen -= 1
-        joiner = ' '
-
-    # calculate
-    leftLen = sideLen - len(com['start'])
-    rightLen = sideLen - len(com['end'])
-    strlen = len(args.string) + 2*len(joiner) + len(com['start']) + len(com['end'])
-    if leftLen + rightLen + strlen <= args.width:
-        rightLen += 1
-
-    # generate our comment
-    mid = sideLen*com['middle']
-    left = com['start'] + mid[:leftLen] + joiner
-    right = joiner + mid[:rightLen] + com['end']
-
-    return left, right
+    length = args.width - (len(start)+len(end))
+    return start, middle*length, end
 
 def main():
     args = myParse()
-    com = get_comment_strings(args)
-    left, right = figure_str(args, com)
-    print(left + args.string + right)
+    start, middle, end = get_comment_template(args)
+
+    if args.string:
+        args.string = ' ' + ' '.join(args.string) + ' '
+
+    # Figure where to emplace the user string into the comment
+    pad = len(middle) - len(args.string)
+    if (pad < 0):
+        print("String is longer than comment. TODO support multiline (box) comments")
+        sys.exit(1)
+    elif (pad == 0):
+        middle = args.string
+    else:
+        lpad = math.floor(pad/2)
+        rpad = pad - lpad
+        middle = middle[0:lpad] + args.string + middle[-1*rpad:]
+
+    print(start + middle + end)
 
 if __name__== "__main__":
     main()

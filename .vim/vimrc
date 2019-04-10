@@ -81,9 +81,12 @@ iabbrev #!p #!/usr/bin/env python
 " Cute lil macro to insert dividers based on the python script I wrote
 function! DoDivider(width)
   let l:widthstr = a:width > 0 ? "--width " . a:width : ""
-  execute printf("read !divider --%s %s '%s'", &filetype, l:widthstr, @")
+  let l:filetype = &filetype ? &filetype : "text"
+  echom printf("read !divider --%s %s %s", l:filetype, l:widthstr, shellescape(@", 1))
+  execute printf("read !divider --%s %s %s", l:filetype, l:widthstr, shellescape(@", 1))
 endfunction
 nnoremap <Leader>d :<C-u>call DoDivider(v:count)<CR>
+vnoremap <Leader>d y:<C-u>call DoDivider(v:count)<CR>
 
 " easy folds around braces or comments
 noremap <Leader>z %zfaB
@@ -112,6 +115,12 @@ nnoremap <Leader>v `[v`]
 " (Very nomagic, escape contents of s register before pasting)
 vnoremap * "sy/\V<C-r>=escape(@s, '/\')<CR><CR>N
 nnoremap * *N
+
+" Place whole file in Mac's clipboard
+nnoremap <Leader>c mq:%!pbcopy<CR>u`q
+
+" Place highlighted text in Mac's clipboard
+vnoremap <Leader>c :!pbcopy<CR>u
 
 " edit ~/.vimrc
 nnoremap <Leader>ev :tabe $MYVIMRC<CR>
@@ -150,9 +159,11 @@ nmap <Leader>sess :wa<CR>:so ~/.vim/sessions/
 " enable omnicompletion
 set omnifunc=syntaxcomplete#Complete
 
-" exit insert or visual mode with 'jk'
+" Entering a newline in insert mode adds a break in the undo sequence
+inoremap <CR> <C-]><C-G>u<CR>
+
+" exit insert mode with 'jk'
 inoremap jk <ESC>
-vnoremap jk <ESC>
 
 """""""""""""""""""""""""""""""" plugin config """"""""""""""""""""""""""""""""
 """"""""""""""""""""""""""""""" airline """""""""""""""""""""""""""""""
