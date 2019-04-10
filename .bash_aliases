@@ -1,4 +1,4 @@
-# Easier navigation: .., ..., ...., and -
+# Easier navigation
 alias ..="cd .."
 alias ...="cd ../.."
 alias cdt="cd ~/Desktop"
@@ -11,7 +11,31 @@ function bashcurl() {
 
 # read vim help pages straight from terminal. Allow exiting with 'c'
 function vimhelp() {
-  vim -c "help $1" -c "only" -c "nnoremap c :q!<CR>"
+  vim -c "help $1" -c "only" -c "nnoremap <C-w>c :q!<CR>"
+}
+
+# TODO do I want a new folder each invocation?
+# TODO do I want a new file each invocation?
+# Should TMPDIR be in /tmp?
+# What arguments will I wanna add?
+  # File name
+  # File extension (.txt as $1 ==> scratch.txt)
+function vimtmp()  {
+  TMPDIR="$HOME/vim-tmp"
+  mkdir -p $TMPDIR
+  pushd $TMPDIR
+  vim "$TMPDIR/scratch${1}"
+  popd
+}
+alias vimtxt='vimtmp .txt'
+
+# Run a job in a new terminal window - useful for stuff like git push
+function newWindow() {
+  osascript -e '
+  tell application "Terminal"
+    do script "cd '$PWD'; '"$*"'"
+  end tell
+  '
 }
 
 # start a webserver
