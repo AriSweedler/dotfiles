@@ -1,72 +1,87 @@
 #!/usr/bin/env python3
 
-import argparse, sys, math
+import argparse, math
+
+# Supported languages/filetypes and their start/middle/end comment syntaxes
+myLanguages = {
+    'c':        {'s': '/*', 'm': '*', 'e': '*/'},
+    'cpp':      {'s': '/*', 'm': '*', 'e': '*/'},
+    'cute':     {'s': '//', 'm': '~', 'e': '//'},
+    'python':   {'m': '#'},
+    'conf':     {'m': '#'},
+    'text':     {'m': '#'},
+    'shell':    {'m': '#'},
+    'bash':     {'m': '#'},
+    'vim':      {'m': '"'},
+    'dashes':   {'m': '-'},
+}
 
 def myParse():
     # initialize parser object
-    parser = argparse.ArgumentParser(description='Make a pretty divider for code')
+    myParser = argparse.ArgumentParser(
+        description='Make a pretty divider for code',
+        epilog='Cheers for flying'
+    )
 
-    # generic arguments
-    parser.add_argument('-w', '--width', type=int, metavar='COLUMNS')
-    parser.add_argument('string', nargs='*')
+    # Sane defaults
+    myParser.set_defaults(width=80, text='', language='c')
 
-    # relevant syntaxes
-    group = parser.add_mutually_exclusive_group(required=False)
-    group.add_argument('-c', '--cpp', action='store_true', help='set comment style to C: /* * */ (this is the default)')
-    #
-    group.add_argument('-p', '--python', action='store_true', help='set comment style to python: #')
-    group.add_argument('-t', '--text', action='store_true', help='set comment style to text: #')
-    group.add_argument('-s', '--shell', action='store_true', help='set comment style to shell: #')
-    group.add_argument('-b', '--bash', action='store_true', help='set comment style to bash: #')
-    #
-    group.add_argument('-v', '--vim', action='store_true', help='set comment style to vim: "')
-    #
-    group.add_argument('-d', '--dashes', action='store_true', help='set comment style to dashes: -')
+    # add arguments to the parser object
+    myParser.add_argument('-w', '--width', type=int, metavar='COLUMNS')
+    myParser.add_argument('text', nargs='*')
+    myParser.add_argument(
+        '-l', '--language', '-f', '--filetype',
+        metavar='LANGUAGE',
+        help=f'Choose from {myLanguages}',
+        nargs='?',
+        const='bash',
+        choices=myLanguages
+    )
+    myParser.add_argument(
+        '--comment-format',
+        nargs=3,
+        metavar=('START', 'MIDDLE', 'END'),
+        dest='comment_format'
+    )
 
-    # set defaults
-    parser.set_defaults(width=80, string='', indent=0)
+    # Parse the arguments, so we can lookup the comment_format before returning
+    result = myParser.parse_args()
 
-    # return parsed arguments
-    return parser.parse_args(sys.argv[1:])
+    # If we didn't manually specify a format, then look it up from the language
+    if not result.comment_format:
+        result.comment_format = myLanguages[result.language]
 
-# figure what the commend start/middle/end are
-def get_comment_template(args):
-    start, middle, end = "", "", ""
-    if args.cpp:
-        start, middle, end = "/*", "*", "*/"
-    elif args.python or args.shell or args.bash or args.text:
-        middle = "#"
-    elif args.vim:
-        middle = "\""
-    elif args.dashes:
-        middle = "-"
-        args.width = 67
-    else:
-        start, middle, end = "/*", "*", "*/"
+    return result
 
-    length = args.width - (len(start)+len(end))
-    return start, middle*length, end
+def formComment(args):
+    s = args.comment_format.get('s', '')
+    m = args.comment_format.get('m', '')
+    e = args.comment_format.get('e', '')
+    pad = args.width - (len(s) + len(e))
+
+    # Simple case, there's no text. Just make a brick
+    if not args.text:
+        return s + m*pad + e
+
+    # Figure out what the text should be
+    text = ' ' + ' '.join(args.text) + ' '
+    # Ensure that single-piece comments start properly
+    if not s: text = m + text
+    pad -= len(text)
+
+    # Format comment
+    if pad < 0:
+        return "Comment is too big for width. TODO multiline block"
+
+    lpad = math.floor(pad/2)
+    rpad = pad - lpad
+
+    return s + m*lpad + text + m*rpad + e
 
 def main():
     args = myParse()
-    start, middle, end = get_comment_template(args)
-
-    if args.string:
-        args.string = ' ' + ' '.join(args.string) + ' '
-
-    # Figure where to emplace the user string into the comment
-    pad = len(middle) - len(args.string)
-    if (pad < 0):
-        print("String is longer than comment. TODO support multiline (box) comments")
-        sys.exit(1)
-    elif (pad == 0):
-        middle = args.string
-    else:
-        lpad = math.floor(pad/2)
-        rpad = pad - lpad
-        middle = middle[0:lpad] + args.string + middle[-1*rpad:]
-
-    print(start + middle + end)
+    comment = formComment(args)
+    print(comment)
 
 if __name__== "__main__":
     main()
