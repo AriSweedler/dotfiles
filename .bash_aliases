@@ -5,6 +5,11 @@ alias cdt="cd ~/Desktop"
 alias cdesk="cd ~/Desktop"
 alias cdot="cd ~/dotfiles"
 alias cdev="cd ~/dev"
+
+# I don't wanna put this in my bin because it's specific to my mac, I guess...
+alias debounce='/Users/ari/Desktop/life/other/debounce-mac/debounce'
+
+# Invoke remote scripts with 'bashcurl'
 function bashcurl() {
   bash <(curl --silent $1)
 }
@@ -14,8 +19,6 @@ function vimhelp() {
   vim -c "help $1" -c "only" -c "nnoremap <C-w>c :q!<CR>"
 }
 
-# TODO do I want a new folder each invocation?
-# TODO do I want a new file each invocation?
 # Should TMPDIR be in /tmp?
 # What arguments will I wanna add?
   # File name
@@ -28,15 +31,7 @@ function vimtmp()  {
   popd
 }
 alias vimtxt='vimtmp .txt'
-
-# Run a job in a new terminal window - useful for stuff like git push
-function newWindow() {
-  osascript -e '
-  tell application "Terminal"
-    do script "cd '$PWD'; '"$*"'"
-  end tell
-  '
-}
+alias vimscratch='vimtmp $(date +%Y-%m-%d-%S)'
 
 # start a webserver
 alias www='python -m SimpleHTTPServer 8000'
@@ -47,6 +42,9 @@ alias showdt="defaults write com.apple.finder createdesktop -bool true && killal
 
 # show path line by line
 alias path='echo -e ${PATH//:/\\n}'
+
+# No reason for this, but it's a good use of shell escapes
+alias timestamp='echo $(date +%Y-%m-%d-%S)'
 
 # If I'm too lazy to hit <Ctrl-Command-Q>
 alias lock='/System/Library/CoreServices/Menu\ Extras/User.menu/Contents/Resources/CGSession -suspend'

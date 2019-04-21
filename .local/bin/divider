@@ -12,6 +12,7 @@ myLanguages = {
     'text':     {'m': '#'},
     'shell':    {'m': '#'},
     'bash':     {'m': '#'},
+    'sh':       {'m': '#'},
     'vim':      {'m': '"'},
     'dashes':   {'m': '-'},
 }
@@ -50,6 +51,9 @@ def myParse():
     # If we didn't manually specify a format, then look it up from the language
     if not result.comment_format:
         result.comment_format = myLanguages[result.language]
+    else:
+        (s, m, e) = result.comment_format
+        result.comment_format = {'s': s, 'm': m, 'e': e}
 
     return result
 
