@@ -13,6 +13,7 @@ myLanguages = {
     'shell':    {'m': '#'},
     'bash':     {'m': '#'},
     'sh':       {'m': '#'},
+    'tmux':     {'m': '#'},
     'vim':      {'m': '"'},
     'dashes':   {'m': '-'},
 }

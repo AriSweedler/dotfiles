@@ -16,8 +16,11 @@ set noerrorbells      "disable error bells
 set belloff=all       "disable bell for non-errors, too
 set lazyredraw        "don't update the screen when doing macros
 set updatetime=100    "let vim-gitgutter update faster
+set scrolloff=7       "Deafult to giving me a lil more space to see context
 "set undofile          "persist undo files past buffer cloes
-"TODO figure a value for scrolloff
+
+" Don't timeout on mappings. DO timeout on escape codes
+set notimeout ttimeout ttimeoutlen=100
 
 "allow backspacing over more things
 set backspace=indent,eol,start
@@ -31,10 +34,6 @@ set tags+=tags;
 
 " Toggle 'list' to show whitespace characters
 set listchars=tab:X-,space:.,eol:$,
-if (toupper(substitute(system('uname'), '\n', '', '')) =~# 'DARWIN')
-  " do some nicer stuff on my mac
-  set listchars=tab:▶\ ,trail:~,space:·,eol:¬
-endif
 
 """""""""""""""""""""""""""""""""" popup menu """"""""""""""""""""""""""""""""""
 " show a popup menu for completion even if there's only 1 option
@@ -68,16 +67,22 @@ set incsearch
 "briefly show the matching bracket {[( when typing )]}
 set showmatch matchtime=3
 
+" TODO make a function that relates colorcolumn and textwidth (support an
+" array of lengths, maybe? I dunno if I'll need that. That can be version 2, I
+" guess. I'll basically call this function instead of saying 'set tw=xyz')
+"
 " highlight columns - highlight the 80th column
-let &colorcolumn="80"
+let &colorcolumn=(&textwidth)?&textwidth:80
 highlight ColorColumn ctermbg=233
 
-"""""""""""""""""""""""""""""""" abbreviations """"""""""""""""""""""""""""""""
+""""""""""""""""""""""""""""""""" abbreviations """"""""""""""""""""""""""""""""
 """""""""""" easy hashbangs """"""""""""
 iabbrev #!b #!/bin/bash
 iabbrev #!p #!/usr/bin/env python3
 
-"""""""""""""""""""""""""""""""""""" remap """"""""""""""""""""""""""""""""""""
+""""""""""""""""""""""""""""""""""""" remap """"""""""""""""""""""""""""""""""""
+" TODO is there a place to shorten a call to help tmux copy/pasting?
+" nnoremap <leader><SOMETHING> :GitGutterToggle | set number!<CR>
 """""""""""""""" macros """"""""""""""""
 " Cute lil macro to insert dividers based on the python script I wrote
 function! DoDivider(width)
@@ -99,6 +104,9 @@ nnoremap <S-Tab> <<
 " clear highlighting (clear the buffer, or just stop highlighting)
 noremap <silent> <Leader>/ :let @/ = ""<CR>
 noremap <silent> <C-_> :nohlsearch<CR>
+
+" Help me! Calls help on the word under the cursor
+nnoremap <leader>hh viwy:help <C-r>"<CR>
 
 " Save a file as root (\W)
 nnoremap <Leader>WR :w !sudo tee % > /dev/null<CR>
@@ -144,8 +152,11 @@ nnoremap gr gT
 """"""""""""""" movement """""""""""""""
 nnoremap <Up> <C-y>k
 nnoremap <Down> <C-e>j
+nnoremap b ge
+nnoremap B gE
 
 """""""""""""""" other """"""""""""""""
+" TODO figure out if I wanna config netrw...
 " Config for netrw: https://shapeshed.com/vim-netrw/
 " Remove the banner
 "let g:netrw_banner = 0
