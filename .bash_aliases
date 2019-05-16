@@ -4,10 +4,17 @@ alias ...="cd ../.."
 alias cdt="cd ~/Desktop"
 alias cdesk="cd ~/Desktop"
 alias cdot="cd ~/dotfiles"
-alias cdev="cd ~/dev"
+
+function cdev() {
+  if [ -z "$1" ]; then
+    cd ~/dev
+  else
+    cd ~/dev/"$1"* || cd ~/dev; ls
+  fi
+}
 
 # I don't wanna put this in my bin because it's specific to my mac, I guess...
-alias debounce='/Users/ari/Desktop/life/other/debounce-mac/debounce'
+alias debounce='/Users/ari/Desktop/life/housekeeping/debounce-mac/debounce'
 
 # Invoke remote scripts with 'bashcurl'
 function bashcurl() {
