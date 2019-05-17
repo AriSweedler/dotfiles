@@ -2,13 +2,13 @@
 " I'd switch over to that. But it doesn't seem to be as easy.
 execute pathogen#infect()
 
-""""""""""""""""""""""""""""""""""" settings """"""""""""""""""""""""""""""""""
+"""""""""""""""""""""""""""""""""" settings """"""""""""""""""""""""""""""""""
 filetype plugin on    "allow for autocmds to be run based on filetype
 colorscheme desert    "pretty colors
 set display=lastline  "as much as possible of the last line will be displayed
 set gdefault          "turn global flag on by default for :substitute
 set history=1000      "the default is only 40.
-set nocompatible      "don't do weird stuff for backwards compatibility with vim
+set nocompatible      "idk what this does specifically. Setting it sucks tho
 set number            "turn on line numbers
 set showcmd           "multi-keystroke commands will be shown in bottom right.
 set noshowmode        "don't show the mode (we use airline now!)
@@ -17,17 +17,21 @@ set belloff=all       "disable bell for non-errors, too
 set lazyredraw        "don't update the screen when doing macros
 set updatetime=100    "let vim-gitgutter update faster
 set scrolloff=7       "Deafult to giving me a lil more space to see context
-"set undofile          "persist undo files past buffer cloes
 
-" Don't timeout on mappings. DO timeout on escape codes
+" Don't timeout on mappings. DO timeout after 100 ms on escape codes
 set notimeout ttimeout ttimeoutlen=100
 
 "allow backspacing over more things
 set backspace=indent,eol,start
 
-" Nicer <Tab>'ing in command mode
+" Nicer <Tab>'ing in command mode.
+" Select the dummy 0th item to remove text from the most recent completion
 set wildmenu
-set wildmode=list,full
+set wildmode=full
+
+" TODO make a keymapping that enters the current dir and doesn't select the
+" first item. Why doesn't this work!? Ask StackOverflow I guess
+" cnoremap <Down> <Down><Left>
 
 " ctags is so helpful! And easy, too.
 set tags+=tags;
@@ -35,13 +39,13 @@ set tags+=tags;
 " Toggle 'list' to show whitespace characters
 set listchars=tab:X-,space:.,eol:$,
 
-"""""""""""""""""""""""""""""""""" popup menu """"""""""""""""""""""""""""""""""
+""""""""""""""""""""""""""""""""" popup menu """""""""""""""""""""""""""""""""
 " show a popup menu for completion even if there's only 1 option
 set completeopt=menuone,preview
 " max popup menu height is 8
 set pumheight=8
 
-"""""""""""""""""""""""""""""""""" whitespace """"""""""""""""""""""""""""""""""
+""""""""""""""""""""""""""""""""" whitespace """""""""""""""""""""""""""""""""
 " remove trailing whitespace upon saving or upon hitting <Leader>w
 function! RemoveTrailingWhitespace()
   %substitute/\s\+$//e
@@ -52,7 +56,7 @@ nnoremap <silent> <Leader>w :call RemoveTrailingWhitespace()<CR>
 highlight trailing_whitespace ctermbg=red
 match trailing_whitespace /\s\+$/
 
-"""""""""""""""""""""""""""""""" pretty colors """"""""""""""""""""""""""""""""
+"""""""""""""""""""""""""""""""" pretty colors """""""""""""""""""""""""""""""
 " Look at colors: http://vim.wikia.com/wiki/Xterm256_color_names_for_console_Vim
 
 "allow for syntax highlighting and indenting
@@ -67,23 +71,30 @@ set incsearch
 "briefly show the matching bracket {[( when typing )]}
 set showmatch matchtime=3
 
-" TODO make a function that relates colorcolumn and textwidth (support an
-" array of lengths, maybe? I dunno if I'll need that. That can be version 2, I
-" guess. I'll basically call this function instead of saying 'set tw=xyz')
-"
-" highlight columns - highlight the 80th column
+" Use colorcolumn to display the textwidth
 let &colorcolumn=(&textwidth)?&textwidth:80
 highlight ColorColumn ctermbg=233
 
-""""""""""""""""""""""""""""""""" abbreviations """"""""""""""""""""""""""""""""
+" Easily update textwidth and colorcolumn at the same time
+nnoremap <silent> <Leader>tw :<C-u>call ChangeTextWidth(v:count)<CR>
+function! ChangeTextWidth(width)
+  " If we have a v:count, then set the textwidth.
+  if a:width
+    let &textwidth=(a:width)
+  fi
+  " match the colorcolumn to the textwidth
+  let &colorcolumn=(&textwidth)
+endfunction
+
+"""""""""""""""""""""""""""""""" abbreviations """""""""""""""""""""""""""""""
 """""""""""" easy hashbangs """"""""""""
 iabbrev #!b #!/bin/bash
 iabbrev #!p #!/usr/bin/env python3
 
-""""""""""""""""""""""""""""""""""""" remap """"""""""""""""""""""""""""""""""""
-" TODO is there a place to shorten a call to help tmux copy/pasting?
-" nnoremap <leader><SOMETHING> :GitGutterToggle | set number!<CR>
-"""""""""""""""" macros """"""""""""""""
+"""""""""""""""""""""""""""""""" remap macros """"""""""""""""""""""""""""""""
+" Shorten these calls to help tmux copy/pasting
+nnoremap <Leader>[ :GitGutterToggle \| set number!<CR>
+
 " Cute lil macro to insert dividers based on the python script I wrote
 function! DoDivider(width)
   " Use v:count. Or else, use textwidth. Or else, use 80
@@ -106,7 +117,7 @@ noremap <silent> <Leader>/ :let @/ = ""<CR>
 noremap <silent> <C-_> :nohlsearch<CR>
 
 " Help me! Calls help on the word under the cursor
-nnoremap <leader>hh viwy:help <C-r>"<CR>
+nnoremap <Leader>hh viwy:help <C-r>"<CR>
 
 " Save a file as root (\W)
 nnoremap <Leader>WR :w !sudo tee % > /dev/null<CR>
@@ -141,7 +152,8 @@ nnoremap <silent> <Leader>so :source %<CR>
 " Remove buffer from memory without closing window
 nnoremap <Leader>bd :bnext\|bdelete #<CR>
 
-" "relative" edit. Edit a file without having to cd by using `% (filename) :p (full path) :h (dirname)`
+" "relative" edit. Edit a file without having to cd by using `% (filename) :p
+" (full path) :h (dirname)`
 map <Leader>ew :edit <C-r>=expand("%:p:h") . "/" <CR>
 
 " easily switch between buffers and tabs
@@ -156,7 +168,8 @@ nnoremap b ge
 nnoremap B gE
 
 """""""""""""""" other """"""""""""""""
-" TODO figure out if I wanna config netrw...
+" TODO figure out if I wanna config netrw... It seems buggy lol. I'll worry
+" about this later lol.
 " Config for netrw: https://shapeshed.com/vim-netrw/
 " Remove the banner
 "let g:netrw_banner = 0
@@ -171,17 +184,17 @@ nmap <Leader>sess :wa<CR>:so ~/.vim/sessions/
 set omnifunc=syntaxcomplete#Complete
 
 " Entering a newline in insert mode adds a break in the undo sequence
-inoremap <CR> <C-]><C-G>u<CR>
+inoremap <CR> <C-]><C-g>u<CR>
 
 " exit insert mode with 'jk'
 inoremap jk <ESC>
 
-"""""""""""""""""""""""""""""""" plugin config """"""""""""""""""""""""""""""""
-""""""""""""""""""""""""""""""" airline """""""""""""""""""""""""""""""
+"""""""""""""""""""""""""""""""" plugin config """""""""""""""""""""""""""""""
+"""""""""""""""""""""""""""""" airline """""""""""""""""""""""""""""
 let g:airline#extensions#tabline#enabled = 1
 let g:airline_theme='dark'
 
-"""""""""""""""""""""""""""""" git gutter """"""""""""""""""""""""""""""
+"""""""""""""""""""""""""""" git gutter """"""""""""""""""""""""""""
 highlight DiffDelete term=bold ctermfg=1
 highlight DiffAdd term=bold ctermfg=2
 highlight DiffChange term=bold ctermfg=3

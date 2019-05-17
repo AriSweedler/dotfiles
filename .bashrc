@@ -15,6 +15,16 @@ echo ""
 # Add to PATH
 export PATH="$PATH:$HOME/.local/bin"
 
+# Lets me run 'cd folder' to go into '~/Desktop/folder'
+export CDPATH=".:$HOME/Desktop"
+
+# When using !! or !$, command is redisplayed ready to run instead of ran
+shopt -s histverify
+
+# Prevent overwriting a file with '>', the redirect operator. You can override
+# with the '>|' operator.
+set -o noclobber
+
 export EDITOR=vim
 
 ################################ History hacks ################################
@@ -35,7 +45,7 @@ export LSCOLORS='exGxFxDacxDxDxHbaDacec'
 export CLICOLOR=1
 
 # hah HAAAAAH
-trap 'echo lol oops' ERR
+trap 'echo lol oops - exited with $?' ERR
 
 #If I have an alias file, then source it here
 FILE="$HOME/.bash_aliases"

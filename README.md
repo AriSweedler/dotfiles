@@ -10,14 +10,6 @@ guaranteed to be unique for a user.
 
 Make sure you use `-a` when using `ls` in this folder ahaha. To start off, I'll talk about the only two NON-dotfiles here.
 
-## update.sh
-This script allows me to edit literal dotfiles and run this command to place
-them in this repo. Or, update the repo and update my dotfiles! Neat. There're
-a few TODOs for this script.
-    * Make a machine-specific folder (.local/<machine> for stuff where I want a
-    different PS1
-    * Figure out what else would be neat!
-
 ## fresh.sh
 A script to curl and pipe into bash, it helps set up a fresh new machine for
 me. To be invoked with bash <(curl --silent
