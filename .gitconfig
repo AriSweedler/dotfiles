@@ -39,7 +39,7 @@
 	chrislog = "format:%C(bold yellow)%d %C(reset)%C(cyan)%h %C(dim white)- %C(reset)%s %C(dim blue)(%cr) %C(dim white)<%an>%C(reset)"
 	newlog = "format:%C(cyan)%h %C(green)%<(12,trunc)%ar %C(dim white)%<(12,trunc)[%an] %C(reset)%s %w(0,0,8)%C(bold red)%+d%C(reset)"
 
-################################## shortcuts ##################################
+################################### shortcuts ##################################
 [alias]
 	a = !"git add .; git s"
 	alias = !"git config -l | grep ^alias | cut -c 7- | sort #"
@@ -63,6 +63,4 @@
 	ss = status
 	u = remote update
 	up = !"git remote update -p; git merge --ff-only @{u}"
-
-# TODO craft a push alias that kindly does an asynch push in the background - so it doesn't clog up my terminal or bother me at all
 
