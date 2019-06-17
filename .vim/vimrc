@@ -17,6 +17,10 @@ set belloff=all       "disable bell for non-errors, too
 set lazyredraw        "don't update the screen when doing macros
 set updatetime=100    "let vim-gitgutter update faster
 set scrolloff=7       "Deafult to giving me a lil more space to see context
+set sidescrolloff=4   "Min # of columns to keep to the left/right of the cursor
+set splitbelow splitright "new splits open to the bottom or to the right
+set autoread          "Autoload file changes. You can undo by pressing u
+set formatoptions+=j  "Delete comment character when joining commented lines
 
 " Don't timeout on mappings. DO timeout after 100 ms on escape codes
 set notimeout ttimeout ttimeoutlen=100
@@ -27,7 +31,7 @@ set backspace=indent,eol,start
 " Nicer <Tab>'ing in command mode.
 " Select the dummy 0th item to remove text from the most recent completion
 set wildmenu
-set wildmode=full
+set wildmode=longest:full,full
 
 " TODO make a keymapping that enters the current dir and doesn't select the
 " first item. Why doesn't this work!? Ask StackOverflow I guess
@@ -92,8 +96,15 @@ iabbrev #!b #!/bin/bash
 iabbrev #!p #!/usr/bin/env python3
 
 """""""""""""""""""""""""""""""" remap macros """"""""""""""""""""""""""""""""
+" for vimgolf lol
+nnoremap <Leader>vgr ggdG:read input.file<CR>ggdd
+nnoremap <Leader>vgw :write! input.file<CR>
+
 " Shorten these calls to help tmux copy/pasting
-nnoremap <Leader>[ :GitGutterToggle \| set number!<CR>
+nnoremap <Leader>[ :GitGutterToggle <Bar> set number!<CR>
+
+" Toggle &list
+nnoremap <Leader>l :set list!<CR>
 
 " Cute lil macro to insert dividers based on the python script I wrote
 function! DoDivider(width)
@@ -150,7 +161,7 @@ nnoremap <silent> <Leader>so :source %<CR>
 
 """"""""""""" buffers/tabs """""""""""""
 " Remove buffer from memory without closing window
-nnoremap <Leader>bd :bnext\|bdelete #<CR>
+nnoremap <Leader>bd :bnear <Bar> bdelete #<CR>
 
 " "relative" edit. Edit a file without having to cd by using `% (filename) :p
 " (full path) :h (dirname)`
@@ -177,8 +188,14 @@ nnoremap B gE
 "let g:netrw_browse_split = 3
 
 " sessions
-nmap <Leader>ss :wa<CR>:mksession! ~/.vim/sessions/
-nmap <Leader>sess :wa<CR>:so ~/.vim/sessions/
+nnoremap <Leader>ss :wa<CR>:mksession! ~/.vim/sessions/
+nnoremap <Leader>sess :wa<CR>:so ~/.vim/sessions/
+
+" Edit the ftplugin of the current file
+function! Edit_ftplugin(language)
+  execute "tabe $HOME/.vim/ftplugin/" . a:language . ".vim"
+endfunction 
+nnoremap <Leader>ef :<C-u>call Edit_ftplugin(&filetype)<CR>
 
 " enable omnicompletion
 set omnifunc=syntaxcomplete#Complete
