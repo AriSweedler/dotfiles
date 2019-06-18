@@ -107,12 +107,13 @@ nnoremap <Leader>[ :GitGutterToggle <Bar> set number!<CR>
 nnoremap <Leader>l :set list!<CR>
 
 " Cute lil macro to insert dividers based on the python script I wrote
-function! DoDivider(width)
+function! DoDivider(width, text)
   " Use v:count. Or else, use textwidth. Or else, use 80
   let l:width = a:width ? a:width : (&textwidth ? &textwidth : 80)
-  execute printf("read !divider --filetype %s --width %d %s", &filetype, l:width, shellescape(@", 1))
+  execute printf("read !divider --filetype %s --width %d %s", &filetype, l:width, a:text)
 endfunction
-nnoremap <Leader>d :<C-u>call DoDivider(v:count)<CR>
+nnoremap <Leader>D :call DoDivider(v:count, "")<CR>
+nnoremap <Leader>d :call DoDivider(v:count, shellescape(@", 1))<CR>
 vnoremap <Leader>d y:<C-u>call DoDivider(v:count)<CR>
 
 " easy folds around braces or comments
