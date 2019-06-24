@@ -4,6 +4,7 @@ alias ...="cd ../.."
 alias cdt="cd ~/Desktop"
 alias cdesk="cd ~/Desktop"
 alias cdot="cd ~/dotfiles"
+alias cnot="cd ~/Desktop/notes"
 
 function cdev() {
   if [ -z "$1" ]; then
