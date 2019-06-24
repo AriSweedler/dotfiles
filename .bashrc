@@ -7,8 +7,8 @@
 #######################################################################
 
 #This was my hello-world line for learning about bash :')
-echo "Today's date is `date`"
-HOME_INODE=`ls -ali ~/ | sed -n 2p | sed -E 's/ ([0-9]+).*/\1/'`
+echo "Today's date is $(date)"
+HOME_INODE=`ls -ali ~/ | sed -n 2p | awk '{print $1}'`
 echo "	Hello, user number $HOME_INODE"
 echo ""
 
