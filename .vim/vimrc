@@ -33,10 +33,6 @@ set backspace=indent,eol,start
 set wildmenu
 set wildmode=longest:full,full
 
-" TODO make a keymapping that enters the current dir and doesn't select the
-" first item. Why doesn't this work!? Ask StackOverflow I guess
-" cnoremap <Down> <Down><Left>
-
 " ctags is so helpful! And easy, too.
 set tags+=tags;
 
@@ -85,20 +81,21 @@ function! ChangeTextWidth(width)
   " If we have a v:count, then set the textwidth.
   if a:width
     let &textwidth=(a:width)
-  fi
+  endif
   " match the colorcolumn to the textwidth
   let &colorcolumn=(&textwidth)
 endfunction
 
 """""""""""""""""""""""""""""""" abbreviations """""""""""""""""""""""""""""""
 """""""""""" easy hashbangs """"""""""""
-iabbrev #!b #!/bin/bash
-iabbrev #!p #!/usr/bin/env python3
+inoreabbrev #!b #!/bin/bash
+inoreabbrev #!p #!/usr/bin/env python3
+inoreabbrev #!!p #!/usr/bin/env python3if __name__ == "__main__":
 
 """""""""""""""""""""""""""""""" remap macros """"""""""""""""""""""""""""""""
 " for vimgolf lol
-nnoremap <Leader>vgr ggdG:read input.file<CR>ggdd
-nnoremap <Leader>vgw :write! input.file<CR>
+"nnoremap <Leader>vgr ggdG:read input.file<CR>ggdd
+"nnoremap <Leader>vgw :write! input.file<CR>
 
 " Shorten these calls to help tmux copy/pasting
 nnoremap <Leader>[ :GitGutterToggle <Bar> set number!<CR>
@@ -106,23 +103,15 @@ nnoremap <Leader>[ :GitGutterToggle <Bar> set number!<CR>
 " Toggle &list
 nnoremap <Leader>l :set list!<CR>
 
-" Cute lil macro to insert dividers based on the python script I wrote
-function! DoDivider(width, text)
-  " Use v:count. Or else, use textwidth. Or else, use 80
-  let l:width = a:width ? a:width : (&textwidth ? &textwidth : 80)
-  execute printf("read !divider --filetype %s --width %d %s", &filetype, l:width, a:text)
-endfunction
-nnoremap <Leader>D :call DoDivider(v:count, "")<CR>
-nnoremap <Leader>d :call DoDivider(v:count, shellescape(@", 1))<CR>
-vnoremap <Leader>d y:<C-u>call DoDivider(v:count)<CR>
-
 " easy folds around braces or comments
 noremap <Leader>z %zfaB
 noremap <Leader>* [*zf]*
 
-" Have Shift-Tab remove one layer of indent in insert or normal
+" Remap Tab and Shift-Tab to only work on layers of indentation
 inoremap <S-Tab> <C-d>
 nnoremap <S-Tab> <<
+inoremap <Tab> <C-t>
+nnoremap <Tab> >>
 
 " clear highlighting (clear the buffer, or just stop highlighting)
 noremap <silent> <Leader>/ :let @/ = ""<CR>
@@ -162,7 +151,7 @@ nnoremap <silent> <Leader>so :source %<CR>
 
 """"""""""""" buffers/tabs """""""""""""
 " Remove buffer from memory without closing window
-nnoremap <Leader>bd :bnear <Bar> bdelete #<CR>
+nnoremap <Leader>bd :bnext <Bar> bdelete #<CR>
 
 " "relative" edit. Edit a file without having to cd by using `% (filename) :p
 " (full path) :h (dirname)`
@@ -195,7 +184,7 @@ nnoremap <Leader>sess :wa<CR>:so ~/.vim/sessions/
 " Edit the ftplugin of the current file
 function! Edit_ftplugin(language)
   execute "tabe $HOME/.vim/ftplugin/" . a:language . ".vim"
-endfunction 
+endfunction
 nnoremap <Leader>ef :<C-u>call Edit_ftplugin(&filetype)<CR>
 
 " enable omnicompletion
@@ -210,6 +199,8 @@ inoremap jk <ESC>
 """""""""""""""""""""""""""""""" plugin config """""""""""""""""""""""""""""""
 """""""""""""""""""""""""""""" airline """""""""""""""""""""""""""""
 let g:airline#extensions#tabline#enabled = 1
+"let g:airline#extensions#tabline#show_buffers = 0
+let g:airline#extensions#tabline#buffer_min_count = 2
 let g:airline_theme='dark'
 
 """""""""""""""""""""""""""" git gutter """"""""""""""""""""""""""""
