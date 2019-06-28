@@ -1,9 +1,7 @@
 # vim
 #################
 .*.swp
-.vim/spell
-.vim/.netrwhist
-.vim/bundle
+.netrwhist
 
 # npm
 node_modules

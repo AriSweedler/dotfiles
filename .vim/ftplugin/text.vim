@@ -24,3 +24,6 @@ function RemoveDoubleSpace()
   " Restore the search register
   let @/=l:saveSearch " TODO how to set register
 endfunction
+
+" Invoke spelling autocompletion
+nnoremap <Leader>sp is
