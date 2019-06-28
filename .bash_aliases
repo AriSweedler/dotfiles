@@ -1,10 +1,16 @@
 # Easier navigation
 alias ..="cd .."
 alias ...="cd ../.."
-alias cdt="cd ~/Desktop"
-alias cdesk="cd ~/Desktop"
 alias cdot="cd ~/dotfiles"
 alias cnot="cd ~/Desktop/notes"
+
+function cdesk() {
+  if [ -z "$1" ]; then
+    cd ~/Desktop
+  else
+    cd ~/Desktop/"$1"* || cd ~/Desktop; ls
+  fi
+}
 
 function cdev() {
   if [ -z "$1" ]; then
@@ -57,8 +63,11 @@ alias timestamp='echo $(date +%Y-%m-%d-%S)'
 # If I'm too lazy to hit <Ctrl-Command-Q>
 alias lock='/System/Library/CoreServices/Menu\ Extras/User.menu/Contents/Resources/CGSession -suspend'
 
-# make tmux support colors
+# Let tmux support colors
 alias tmux="tmux -2"
+
+# Easy attach
+alias tmuxa="tmux attach"
 
 # open man page in Preview
 function pman { man -t "$1" | open -f -a Preview; }

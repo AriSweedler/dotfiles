@@ -1,6 +1,7 @@
-nnoremap <leader>qw :cnext<cr>
-nnoremap <leader>qW :cprevious<cr>
-nnoremap <leader>qq :call QuickfixToggle()<cr>
+nnoremap <Leader>qw :cnext<CR>
+nnoremap <Leader>qe :cprevious<CR>
+nnoremap <Leader>qq :call QuickfixToggle()<CR>
+nnoremap <Leader>qc :cclose<CR>
 
 let g:quickfix_is_open = 0
 

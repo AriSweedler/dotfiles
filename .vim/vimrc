@@ -97,6 +97,20 @@ inoreabbrev #!!p #!/usr/bin/env python3if __name__ == "__main__":
 "nnoremap <Leader>vgr ggdG:read input.file<CR>ggdd
 "nnoremap <Leader>vgw :write! input.file<CR>
 
+" Two keystrokes to [exit insert mode and] write
+" If you want to exit insert mode without writing, use <C-c> or jk
+" This works super well when capslocks is bound to control
+inoremap <C-f> <ESC>:w<CR>
+nnoremap <C-f> :w<CR>
+vnoremap <C-f> <ESC>:w<CR>
+
+" <C-f> <C-g> will write and exit. Kinda emacs-y lol
+nnoremap <C-g> :q<CR>
+
+" Easier make (write all before invoking the make command)
+nnoremap <Leader>mm :wall<Bar>make!<CR>
+nnoremap <Leader>mc :make check<CR>
+
 " Shorten these calls to help tmux copy/pasting
 nnoremap <Leader>[ :GitGutterToggle <Bar> set number!<CR>
 
@@ -152,10 +166,12 @@ nnoremap <silent> <Leader>so :source %<CR>
 """"""""""""" buffers/tabs """""""""""""
 " Remove buffer from memory without closing window
 nnoremap <Leader>bd :bnext <Bar> bdelete #<CR>
+" Remove buffer from memory and close the window
+nnoremap <Leader>bc :.bdelete<CR>
 
 " "relative" edit. Edit a file without having to cd by using `% (filename) :p
 " (full path) :h (dirname)`
-map <Leader>ew :edit <C-r>=expand("%:p:h") . "/" <CR>
+map <Leader>ew :edit <C-r>=expand("%:h") . "/" <CR>
 
 " easily switch between buffers and tabs
 nnoremap [b :bprevious<CR>
@@ -163,8 +179,10 @@ nnoremap ]b :bnext<CR>
 nnoremap gr gT
 
 """"""""""""""" movement """""""""""""""
+" Up/Down don't change relative line number
 nnoremap <Up> <C-y>k
 nnoremap <Down> <C-e>j
+" 'b' movement takes me to the end of the word, not the start
 nnoremap b ge
 nnoremap B gE
 
@@ -199,11 +217,21 @@ inoremap jk <ESC>
 """""""""""""""""""""""""""""""" plugin config """""""""""""""""""""""""""""""
 """""""""""""""""""""""""""""" airline """""""""""""""""""""""""""""
 let g:airline#extensions#tabline#enabled = 1
-"let g:airline#extensions#tabline#show_buffers = 0
+let g:airline#extensions#tabline#show_buffers = 0
 let g:airline#extensions#tabline#buffer_min_count = 2
 let g:airline_theme='dark'
 
-"""""""""""""""""""""""""""" git gutter """"""""""""""""""""""""""""
-highlight DiffDelete term=bold ctermfg=1
-highlight DiffAdd term=bold ctermfg=2
-highlight DiffChange term=bold ctermfg=3
+"""""""""""""""""""""""""""""" GitGutter colors """"""""""""""""""""""""""""""
+let g:gitgutter_override_sign_column_highlight = 0
+if exists('&signcolumn')  " as of Vim 7.4.2201 and later
+  set signcolumn=yes
+else
+  let g:gitgutter_sign_column_always = 1
+endif
+highlight! link Folded SignColumn
+
+"White sign, colored background colorscheme
+highlight SignColumn term=bold ctermbg=234 ctermfg=8
+highlight GitGutterDelete term=bold ctermfg=88 ctermbg=88
+highlight GitGutterAdd term=bold ctermfg=189 ctermbg=22
+highlight GitGutterChange term=bold ctermfg=189 ctermbg=100
