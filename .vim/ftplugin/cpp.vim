@@ -8,5 +8,10 @@ command! -nargs=1 DebugP :normal ostd::cout << "<args> = " << <args> << std::end
 " TODO how can I make this local?
 command! -nargs=1 TabeC :tabe <args>.cpp <Bar> :vsp <args>.h
 
+" Make a function header signature from a constructor
+let @c = "0f:xxdb==A;gqq"
 " Make a function header signature from a function declaration
-let @h = "0f:xxdb==A;gqq"
+let @h = "0f f:xxdb==A;gqq"
+
+" Run make check in the other window real quick
+let @m="^W^Wmake check^M^W^W"

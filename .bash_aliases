@@ -37,13 +37,19 @@ function vimhelp() {
 # What arguments will I wanna add?
   # File name
   # File extension (.txt as $1 ==> scratch.txt)
-function vimtmp()  {
+function vimtmp() {
   TMPDIR="$HOME/vim-tmp"
   mkdir -p $TMPDIR
   pushd $TMPDIR
   vim "$TMPDIR/scratch${1}"
   popd
 }
+
+# Open a cpp & h file
+function vimc() {
+  vim "$1.cpp" "-c vsp $1.h"
+}
+
 alias vimtxt='vimtmp .txt'
 alias vimscratch='vimtmp $(date +%Y-%m-%d-%S)'
 
