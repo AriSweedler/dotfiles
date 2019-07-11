@@ -72,7 +72,8 @@ def formComment(args):
 	s = args.comment_format.get('s', '')
 	m = args.comment_format.get('m', '')
 	e = args.comment_format.get('e', '')
-	pad = args.width - (len(s) + len(e))
+	pad_chars = args.width - (len(s) + len(e))
+	pad = math.floor(pad_chars / len(m))
 
 	# Simple case, there's no text. Just make a brick
 	if not args.text:

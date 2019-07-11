@@ -30,10 +30,20 @@ endfunction
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 " Expose a globally scoped name that can hook into the script-scoped functions
-noremap <unique> <script> <Plug>DividersCurrentline 0y$:call <SID>Yanked(v:count)<CR>kdd
-noremap <unique> <script> <Plug>DividersTextless :call <SID>Textless(v:count)<CR>
-noremap <unique> <script> <Plug>DividersYanked :call <SID>Yanked(v:count)<CR>
-noremap <unique> <script> <Plug>DividersVisual y:call <SID>Yanked(v:count)<CR>
+" Also, save v:count in a local variable before overwriting it with '0y$' or
+" 'y' or something. Then call the functions with the proper value.
+
+"TODO write a getter/setter function instead of putting this in the global
+"namespace
+"TODO Use autoload functionality
+"(https://vi.stackexchange.com/questions/14008/how-an-autoload-file-vim-is-loaded)
+"(http://learnvimscriptthehardway.stevelosh.com/chapters/53.html)
+"(https://superuser.com/questions/566721/vim-script-is-it-possible-to-refer-to-script-local-variables-in-mappings)
+let g:dividers_count = 0
+noremap <unique> <script> <Plug>DividersCurrentline :<C-u>let g:dividers_count=v:count<CR>0y$:call <SID>Yanked(g:dividers_count)<CR>kdd
+noremap <unique> <script> <Plug>DividersTextless :<C-u>let g:dividers_count=v:count<CR>:call <SID>Textless(g:dividers_count)<CR>
+noremap <unique> <script> <Plug>DividersYanked :<C-u>let g:dividers_count=v:count<CR>:call <SID>Yanked(g:dividers_count)<CR>
+noremap <unique> <script> <Plug>DividersVisual :<C-u>let g:dividers_count=v:count<CR>y:call <SID>Yanked(g:dividers_count)<CR>
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 """""""""""" DEFAULT MAPPINGS: Map keystrokes to the global names. """""""""""
@@ -42,10 +52,10 @@ if !hasmapto('<Plug>DividersCurrentline')
   nmap <unique> <Leader>d <Plug>DividersCurrentline
 endif
 if !hasmapto('<Plug>DividersTextless')
-  map <unique> <Leader>DD <Plug>DividersTextless
+  map <unique> <Leader>D <Plug>DividersTextless
 endif
 if !hasmapto('<Plug>DividersYanked')
-  nmap <unique> <Leader>Dd <Plug>DividersYanked
+  nmap <unique> <Leader><Leader>d <Plug>DividersYanked
 endif
 if !hasmapto('<Plug>DividersVisual')
   vmap <unique> <Leader>d <Plug>DividersVisual

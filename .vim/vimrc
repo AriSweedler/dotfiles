@@ -1,5 +1,3 @@
-" My plugin manager of choice - if vim's new builtin package was this easy
-" I'd switch over to that. But it doesn't seem to be as easy.
 execute pathogen#infect()
 
 """""""""""""""""""""""""""""""""" settings """"""""""""""""""""""""""""""""""
@@ -97,6 +95,9 @@ inoreabbrev #!!p #!/usr/bin/env python3if __name__ == "__main__":
 "nnoremap <Leader>vgr ggdG:read input.file<CR>ggdd
 "nnoremap <Leader>vgw :write! input.file<CR>
 
+" When do I ever use vanilla 'D' capabilities
+nnoremap D dd
+
 " Two keystrokes to [exit insert mode and] write
 " If you want to exit insert mode without writing, use <C-c> or jk
 " This works super well when capslocks is bound to control
@@ -120,6 +121,9 @@ nnoremap <Leader>l :set list!<CR>
 " easy folds around braces or comments
 noremap <Leader>z %zfaB
 noremap <Leader>* [*zf]*
+" The "only this fold" command (should this be on 'zo'?)
+nnoremap zo zM9zozz
+nnoremap <Leader>zo zM9zozczOzz
 
 " Remap Tab and Shift-Tab to only work on layers of indentation
 inoremap <S-Tab> <C-d>
@@ -127,9 +131,13 @@ nnoremap <S-Tab> <<
 inoremap <Tab> <C-t>
 nnoremap <Tab> >>
 
+" <C-i> is really useful but remapping <Tab> overwrites it :(
+nnoremap <M-C-o> <C-i>
+
 " clear highlighting (clear the buffer, or just stop highlighting)
 noremap <silent> <Leader>/ :let @/ = ""<CR>
 noremap <silent> <C-_> :nohlsearch<CR>
+inoremap <silent> <C-_> <C-o>:nohlsearch<CR>
 
 " Help me! Calls help on the word under the cursor
 nnoremap <Leader>hh viwy:help <C-r>"<CR>
@@ -139,6 +147,9 @@ nnoremap <Leader>WR :w !sudo tee % > /dev/null<CR>
 
 " replace current word with most recently yanked text, preserving buffer
 nnoremap <Leader>r viwpyiw
+
+" Easier paragraph reformatting
+nnoremap gQ gqip
 
 " indent/highlight most recently pasted code
 nnoremap <Leader>= `[=`]
@@ -155,6 +166,9 @@ nnoremap <Leader>c mq:%!pbcopy<CR>u`q
 
 " Place highlighted text in Mac's clipboard
 vnoremap <Leader>c :!pbcopy<CR>u
+
+" Paste from Mac's clipboard
+nnoremap <Leader>p :set paste<CR>:read !pbpaste<ESC>:set nopaste<CR>
 
 " edit ~/.vimrc
 nnoremap <Leader>ev :tabe $MYVIMRC<CR>
@@ -215,13 +229,13 @@ inoremap <CR> <C-]><C-g>u<CR>
 inoremap jk <ESC>
 
 """""""""""""""""""""""""""""""" plugin config """""""""""""""""""""""""""""""
-"""""""""""""""""""""""""""""" airline """""""""""""""""""""""""""""
+""""""""""""""""""""""""""""""" airline """"""""""""""""""""""""""""""
 let g:airline#extensions#tabline#enabled = 1
 let g:airline#extensions#tabline#show_buffers = 0
 let g:airline#extensions#tabline#buffer_min_count = 2
 let g:airline_theme='dark'
 
-"""""""""""""""""""""""""""""" GitGutter colors """"""""""""""""""""""""""""""
+"""""""""""""""""""""""""""""" GitGutter """""""""""""""""""""""""""""
 let g:gitgutter_override_sign_column_highlight = 0
 if exists('&signcolumn')  " as of Vim 7.4.2201 and later
   set signcolumn=yes
@@ -235,3 +249,10 @@ highlight SignColumn term=bold ctermbg=234 ctermfg=8
 highlight GitGutterDelete term=bold ctermfg=88 ctermbg=88
 highlight GitGutterAdd term=bold ctermfg=189 ctermbg=22
 highlight GitGutterChange term=bold ctermfg=189 ctermbg=100
+
+let g:gitgutter_sign_added              = '>+'
+let g:gitgutter_sign_modified           = '>~'
+let g:gitgutter_sign_removed            = '>_'
+let g:gitgutter_sign_removed_first_line = '>‾'
+let g:gitgutter_sign_modified_removed   = '~_'
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
