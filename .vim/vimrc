@@ -128,11 +128,6 @@ nnoremap <Leader>zo zM9zozczOzz
 " Remap Tab and Shift-Tab to only work on layers of indentation
 inoremap <S-Tab> <C-d>
 nnoremap <S-Tab> <<
-inoremap <Tab> <C-t>
-nnoremap <Tab> >>
-
-" <C-i> is really useful but remapping <Tab> overwrites it :(
-nnoremap <M-C-o> <C-i>
 
 " clear highlighting (clear the buffer, or just stop highlighting)
 noremap <silent> <Leader>/ :let @/ = ""<CR>
