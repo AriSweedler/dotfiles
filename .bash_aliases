@@ -4,20 +4,20 @@ alias ...="cd ../.."
 alias cdot="cd ~/dotfiles"
 alias cnot="cd ~/Desktop/notes"
 
-function cdesk() {
-  if [ -z "$1" ]; then
-    cd ~/Desktop
+function double_cd() {
+  if [ -z "$2" ]; then
+    cd $1
   else
-    cd ~/Desktop/"$1"* || cd ~/Desktop; ls
+    cd "$1"/"$2"* || cd "$1"; ls
   fi
 }
 
+function cdesk() {
+  double_cd "$HOME/Desktop"
+}
+
 function cdev() {
-  if [ -z "$1" ]; then
-    cd ~/dev
-  else
-    cd ~/dev/"$1"* || cd ~/dev; ls
-  fi
+  double_cd "$HOME/dev"
 }
 
 # I don't wanna put this in my bin because it's specific to my mac, I guess...
