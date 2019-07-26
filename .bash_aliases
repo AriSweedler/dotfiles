@@ -13,11 +13,11 @@ function double_cd() {
 }
 
 function cdesk() {
-  double_cd "$HOME/Desktop"
+  double_cd "$HOME/Desktop" $1
 }
 
 function cdev() {
-  double_cd "$HOME/dev"
+  double_cd "$HOME/dev" $1
 }
 
 # I don't wanna put this in my bin because it's specific to my mac, I guess...
@@ -33,18 +33,6 @@ function vimhelp() {
   vim -c "help $1" -c "only" -c "nnoremap <C-w>c :q!<CR>"
 }
 
-# Should TMPDIR be in /tmp?
-# What arguments will I wanna add?
-  # File name
-  # File extension (.txt as $1 ==> scratch.txt)
-function vimtmp() {
-  TMPDIR="$HOME/vim-tmp"
-  mkdir -p $TMPDIR
-  pushd $TMPDIR
-  vim "$TMPDIR/scratch${1}"
-  popd
-}
-
 # Open a cpp & h file
 function vimc() {
   vim "$1.cpp" "-c vsp $1.h"
@@ -53,8 +41,27 @@ function vimc() {
 alias vimtxt='vimtmp .txt'
 alias vimscratch='vimtmp $(date +%Y-%m-%d-%S)'
 
-# start a webserver
-alias www='python -m SimpleHTTPServer 8000'
+# Start a webserver no matter the version of python. Used to be an alias:
+# alias www='python -m SimpleHTTPServer 8000'
+function www() {
+  PORT="8000"
+  if [ -z "$1" ]; then
+    PORT="$1"
+  fi
+
+  PYTHON="python"
+  MODULE="http.server"
+  if [ $(which python3) ]; then
+    PYTHON="python3"
+  elif [["$(python --version)" == "Python 2.*" ]]; then
+    # Everything else, which should be version 2
+    MODULE="SimpleHTTPServer"
+  fi
+
+  # Invoke the command
+  COMMAND="$PYTHON -m $MODULE $PORT"
+  $COMMAND
+}
 
 # hide/show all desktop icons (useful when presenting)
 alias hidedt="defaults write com.apple.finder createdesktop -bool false && killall finder"

@@ -26,7 +26,7 @@ set notimeout ttimeout ttimeoutlen=100
 "allow backspacing over more things
 set backspace=indent,eol,start
 
-" Nicer <Tab>'ing in command mode.
+" Nicer tab'ing in command mode.
 " Select the dummy 0th item to remove text from the most recent completion
 set wildmenu
 set wildmode=longest:full,full
@@ -48,7 +48,7 @@ set pumheight=8
 function! RemoveTrailingWhitespace()
   %substitute/\s\+$//e
 endfunction
-nnoremap <silent> <Leader>w :call RemoveTrailingWhitespace()<CR>
+nnoremap <silent> <Leader>w :call RemoveTrailingWhitespace()<CR><C-o>
 
 " highlight trailing whitespace
 highlight trailing_whitespace ctermbg=red
@@ -70,7 +70,6 @@ set incsearch
 set showmatch matchtime=3
 
 " Use colorcolumn to display the textwidth
-let &colorcolumn=(&textwidth)?&textwidth:80
 highlight ColorColumn ctermbg=233
 
 " Easily update textwidth and colorcolumn at the same time
@@ -90,17 +89,26 @@ inoreabbrev #!b #!/bin/bash
 inoreabbrev #!p #!/usr/bin/env python3
 inoreabbrev #!!p #!/usr/bin/env python3if __name__ == "__main__":
 
-"""""""""""""""""""""""""""""""" remap macros """"""""""""""""""""""""""""""""
-" for vimgolf lol
-"nnoremap <Leader>vgr ggdG:read input.file<CR>ggdd
-"nnoremap <Leader>vgw :write! input.file<CR>
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+"""""""""""""""""""""""""""""""""" mappings """"""""""""""""""""""""""""""""""
+" These are probably useless for anything but this env.
+nnoremap <Leader><Bar> 140<C-w><Bar>
+nnoremap <C-w>x <C-w>x140<C-w><Bar>
 
-" When do I ever use vanilla 'D' capabilities
+" Delete matching braces. Is this useful? TODO fix it to work on both sides
+nnoremap <Leader>9 %x<C-o>x<C-i>
+nnoremap <Leader>( %dd<C-o>dd<C-i>
+
+" Use divider in insert mode
+imap <C-d> <ESC><Plug>DividersCurrentline<CR>o
+
+" When do I ever wanna hit 2 keys to execute one thought.
 nnoremap D dd
+nnoremap < <<
+nnoremap > >>
 
-" Two keystrokes to [exit insert mode and] write
+" One keystroke to [exit insert mode and] write
 " If you want to exit insert mode without writing, use <C-c> or jk
-" This works super well when capslocks is bound to control
 inoremap <C-f> <ESC>:w<CR>
 nnoremap <C-f> :w<CR>
 vnoremap <C-f> <ESC>:w<CR>
@@ -118,16 +126,10 @@ nnoremap <Leader>[ :GitGutterToggle <Bar> set number!<CR>
 " Toggle &list
 nnoremap <Leader>l :set list!<CR>
 
-" easy folds around braces or comments
-noremap <Leader>z %zfaB
-noremap <Leader>* [*zf]*
-" The "only this fold" command (should this be on 'zo'?)
+" The "only this fold" command (should this be on 'zo'?) (TODO delete this, zx
+" does it alreeady
 nnoremap zo zM9zozz
 nnoremap <Leader>zo zM9zozczOzz
-
-" Remap Tab and Shift-Tab to only work on layers of indentation
-inoremap <S-Tab> <C-d>
-nnoremap <S-Tab> <<
 
 " clear highlighting (clear the buffer, or just stop highlighting)
 noremap <silent> <Leader>/ :let @/ = ""<CR>
@@ -137,18 +139,14 @@ inoremap <silent> <C-_> <C-o>:nohlsearch<CR>
 " Help me! Calls help on the word under the cursor
 nnoremap <Leader>hh viwy:help <C-r>"<CR>
 
-" Save a file as root (\W)
-nnoremap <Leader>WR :w !sudo tee % > /dev/null<CR>
-
 " replace current word with most recently yanked text, preserving buffer
 nnoremap <Leader>r viwpyiw
 
 " Easier paragraph reformatting
 nnoremap gQ gqip
 
-" indent/highlight most recently pasted code
+" indent most recently pasted code
 nnoremap <Leader>= `[=`]
-nnoremap <Leader>v `[v`]
 
 " use star in visual mode to search for the selected text
 " yank into register s --> forward search for the contents of register s
@@ -156,15 +154,20 @@ nnoremap <Leader>v `[v`]
 vnoremap * "sy/\V<C-r>=escape(@s, '/\')<CR><CR>N
 nnoremap * *N
 
-" Place whole file in Mac's clipboard
+" Place highlighted text/whole file in Mac's clipboard
 nnoremap <Leader>c mq:%!pbcopy<CR>u`q
-
-" Place highlighted text in Mac's clipboard
 vnoremap <Leader>c :!pbcopy<CR>u
 
 " Paste from Mac's clipboard
-nnoremap <Leader>p :set paste<CR>:read !pbpaste<ESC>:set nopaste<CR>
+nnoremap <Leader>p :set paste<CR>mq:read !pbpaste<ESC>:set nopaste<CR>='q
 
+" Entering a newline in insert mode adds a break in the undo sequence
+inoremap <CR> <C-]><C-g>u<CR>
+
+" exit insert mode with 'jk'
+inoremap jk <ESC>
+
+""""""""""""" meta mappings """"""""""""
 " edit ~/.vimrc
 nnoremap <Leader>ev :tabe $MYVIMRC<CR>
 
@@ -172,15 +175,14 @@ nnoremap <Leader>ev :tabe $MYVIMRC<CR>
 nnoremap <silent> <Leader>sv :source $MYVIMRC<CR>
 nnoremap <silent> <Leader>so :source %<CR>
 
+" Edit the ftplugin of the current file
+nnoremap <Leader>ef :execute printf("tabe $HOME/.vim/ftplugin/%s.vim", &filetype)<CR>
+
 """"""""""""" buffers/tabs """""""""""""
 " Remove buffer from memory without closing window
 nnoremap <Leader>bd :bnext <Bar> bdelete #<CR>
 " Remove buffer from memory and close the window
 nnoremap <Leader>bc :.bdelete<CR>
-
-" "relative" edit. Edit a file without having to cd by using `% (filename) :p
-" (full path) :h (dirname)`
-map <Leader>ew :edit <C-r>=expand("%:h") . "/" <CR>
 
 " easily switch between buffers and tabs
 nnoremap [b :bprevious<CR>
@@ -191,38 +193,14 @@ nnoremap gr gT
 " Up/Down don't change relative line number
 nnoremap <Up> <C-y>k
 nnoremap <Down> <C-e>j
-" 'b' movement takes me to the end of the word, not the start
-nnoremap b ge
-nnoremap B gE
 
-"""""""""""""""" other """"""""""""""""
-" TODO figure out if I wanna config netrw... It seems buggy lol. I'll worry
-" about this later lol.
-" Config for netrw: https://shapeshed.com/vim-netrw/
-" Remove the banner
-"let g:netrw_banner = 0
-" open files in a new tab
-"let g:netrw_browse_split = 3
-
-" sessions
+""""""""""""""" sessions """""""""""""""
 nnoremap <Leader>ss :wa<CR>:mksession! ~/.vim/sessions/
 nnoremap <Leader>sess :wa<CR>:so ~/.vim/sessions/
 
-" Edit the ftplugin of the current file
-function! Edit_ftplugin(language)
-  execute "tabe $HOME/.vim/ftplugin/" . a:language . ".vim"
-endfunction
-nnoremap <Leader>ef :<C-u>call Edit_ftplugin(&filetype)<CR>
-
 " enable omnicompletion
 set omnifunc=syntaxcomplete#Complete
-
-" Entering a newline in insert mode adds a break in the undo sequence
-inoremap <CR> <C-]><C-g>u<CR>
-
-" exit insert mode with 'jk'
-inoremap jk <ESC>
-
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 """""""""""""""""""""""""""""""" plugin config """""""""""""""""""""""""""""""
 """"""""""""""""""""""""""""""" airline """"""""""""""""""""""""""""""
 let g:airline#extensions#tabline#enabled = 1
