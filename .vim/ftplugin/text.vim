@@ -26,4 +26,4 @@ function RemoveDoubleSpace()
 endfunction
 
 " Invoke spelling autocompletion
-nnoremap <Leader>sp is
+nnoremap <Leader>sp lis
