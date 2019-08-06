@@ -100,7 +100,7 @@ nnoremap <Leader>9 %x<C-o>x<C-i>
 nnoremap <Leader>( %dd<C-o>dd<C-i>
 
 " Use divider in insert mode
-imap <C-d> <ESC><Plug>DividersCurrentline<CR>o
+imap <C-d> <ESC><Plug>DividersCurrentline<CR>i
 
 " When do I ever wanna hit 2 keys to execute one thought.
 nnoremap D dd
@@ -109,6 +109,7 @@ nnoremap > >>
 
 " One keystroke to [exit insert mode and] write
 " If you want to exit insert mode without writing, use <C-c> or jk
+" TODO trim trailing whitespace for the current line while doing this?
 inoremap <C-f> <ESC>:w<CR>
 nnoremap <C-f> :w<CR>
 vnoremap <C-f> <ESC>:w<CR>
@@ -126,11 +127,6 @@ nnoremap <Leader>[ :GitGutterToggle <Bar> set number!<CR>
 " Toggle &list
 nnoremap <Leader>l :set list!<CR>
 
-" The "only this fold" command (should this be on 'zo'?) (TODO delete this, zx
-" does it alreeady
-nnoremap zo zM9zozz
-nnoremap <Leader>zo zM9zozczOzz
-
 " clear highlighting (clear the buffer, or just stop highlighting)
 noremap <silent> <Leader>/ :let @/ = ""<CR>
 noremap <silent> <C-_> :nohlsearch<CR>
@@ -142,7 +138,7 @@ nnoremap <Leader>hh viwy:help <C-r>"<CR>
 " replace current word with most recently yanked text, preserving buffer
 nnoremap <Leader>r viwpyiw
 
-" Easier paragraph reformatting
+" Easier  reformatting
 nnoremap gQ gqip
 
 " indent most recently pasted code
@@ -193,6 +189,10 @@ nnoremap gr gT
 " Up/Down don't change relative line number
 nnoremap <Up> <C-y>k
 nnoremap <Down> <C-e>j
+
+" Move up/down this virtual column until you hit non-whitespace
+nnoremap gK ?\%<C-R>=virtcol(".")<CR>v\S<CR>
+nnoremap gJ /\%<C-R>=virtcol(".")<CR>v\S<CR>
 
 """"""""""""""" sessions """""""""""""""
 nnoremap <Leader>ss :wa<CR>:mksession! ~/.vim/sessions/
