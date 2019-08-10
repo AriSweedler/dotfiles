@@ -79,8 +79,9 @@ alias lock='/System/Library/CoreServices/Menu\ Extras/User.menu/Contents/Resourc
 # Let tmux support colors
 alias tmux="tmux -2"
 
-# Easy attach
-alias tmuxa="tmux attach"
+# Easy attach/ls
+alias tmuxa="tmux attach-session"
+alias tmuxls="tmux list-sessions"
 
 # open man page in Preview
 function pman { man -t "$1" | open -f -a Preview; }

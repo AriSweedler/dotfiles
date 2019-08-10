@@ -117,6 +117,9 @@ vnoremap <C-f> <ESC>:w<CR>
 " <C-f> <C-g> will write and exit. Kinda emacs-y lol
 nnoremap <C-g> :q<CR>
 
+" exit insert mode with 'jk'
+inoremap jk <ESC>
+
 " Easier make (write all before invoking the make command)
 nnoremap <Leader>mm :wall<Bar>make!<CR>
 nnoremap <Leader>mc :make check<CR>
@@ -157,22 +160,36 @@ vnoremap <Leader>c :!pbcopy<CR>u
 " Paste from Mac's clipboard
 nnoremap <Leader>p :set paste<CR>mq:read !pbpaste<ESC>:set nopaste<CR>='q
 
-" Entering a newline in insert mode adds a break in the undo sequence
-inoremap <CR> <C-]><C-g>u<CR>
+""""""""" vimscript development """"""""
+" We need a function to lazily evaluate the filetype. If we hard-coded it with
+" a mapping to ':tabe "$HOME/.vim/ftplugin/" . &filetype .  ".vim"<CR>', then
+" we'd have to make a new mapping with every new buffer. That could be done
+" with an autocommand, I suppose. But at this point, let's just use a function
+" to delay evaluation of filetype until we invoke the function!
 
-" exit insert mode with 'jk'
-inoremap jk <ESC>
+" Get the path for the ftplugin of the current file
+function! Evaluate_ftplugin_path()
+  return "$HOME/.vim/ftplugin/" . &filetype . ".vim"
+endfunction
 
-""""""""""""" meta mappings """"""""""""
-" edit ~/.vimrc
-nnoremap <Leader>ev :tabe $MYVIMRC<CR>
-
-" source my vimrc/current file - useful for testing
+" source my {vimrc,current,ftplugin} file - useful for developing
 nnoremap <silent> <Leader>sv :source $MYVIMRC<CR>
 nnoremap <silent> <Leader>so :source %<CR>
+nnoremap <silent> <Leader>sf :source <C-r>=Evaluate_ftplugin_path()<CR><CR>
 
-" Edit the ftplugin of the current file
-nnoremap <Leader>ef :execute printf("tabe $HOME/.vim/ftplugin/%s.vim", &filetype)<CR>
+" edit my {vimrc,ftplugin} file - useful for developing
+nnoremap <silent> <Leader>ev :tabe $MYVIMRC<CR>
+nnoremap <silent> <Leader>ef :tabe <C-r>=Evaluate_ftplugin_path()<CR><CR>
+nnoremap <silent> <Leader><Leader>ev :vsp $MYVIMRC<CR>
+nnoremap <silent> <Leader><Leader>ef :vsp <C-r>=Evaluate_ftplugin_path()<CR><CR>
+
+" TODO add an alias in bash_aliases to start vim with nothing. ':help vimrc'
+"
+" If Vim was started with "-u filename", the file "filename" is used.
+" All following initializations until 4. are skipped. $MYVIMRC is not
+" set.
+" "vim -u NORC" can be used to skip these initializations without
+" reading a file.  "vim -u NONE" also skips loading plugins.  |-u|
 
 """"""""""""" buffers/tabs """""""""""""
 " Remove buffer from memory without closing window
@@ -201,14 +218,19 @@ nnoremap <Leader>sess :wa<CR>:so ~/.vim/sessions/
 " enable omnicompletion
 set omnifunc=syntaxcomplete#Complete
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-"""""""""""""""""""""""""""""""" plugin config """""""""""""""""""""""""""""""
-""""""""""""""""""""""""""""""" airline """"""""""""""""""""""""""""""
+""""""""""""""""""""""""""""""""""" Plugins """"""""""""""""""""""""""""""""""
+"""""""""""""""""""" default plugin load & config """"""""""""""""""""
+"TODO update this
+packadd! matchit
+"""""""""""""""""""""" Pathogen plugins: config """"""""""""""""""""""
+"""""""""""""""""""""""""" airline """""""""""""""""""""""""
 let g:airline#extensions#tabline#enabled = 1
 let g:airline#extensions#tabline#show_buffers = 0
 let g:airline#extensions#tabline#buffer_min_count = 2
+let g:airline#extensions#tabline#buffer_nr_show = 1
 let g:airline_theme='dark'
 
-"""""""""""""""""""""""""""""" GitGutter """""""""""""""""""""""""""""
+""""""""""""""""""""""""" GitGutter """"""""""""""""""""""""
 let g:gitgutter_override_sign_column_highlight = 0
 if exists('&signcolumn')  " as of Vim 7.4.2201 and later
   set signcolumn=yes
@@ -228,4 +250,3 @@ let g:gitgutter_sign_modified           = '>~'
 let g:gitgutter_sign_removed            = '>_'
 let g:gitgutter_sign_removed_first_line = '>‾'
 let g:gitgutter_sign_modified_removed   = '~_'
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
