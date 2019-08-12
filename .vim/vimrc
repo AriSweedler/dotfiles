@@ -45,14 +45,12 @@ set pumheight=8
 
 """"""""""""""""""""""""""""""""" whitespace """""""""""""""""""""""""""""""""
 " remove trailing whitespace upon saving or upon hitting <Leader>w
-function! RemoveTrailingWhitespace()
-  %substitute/\s\+$//e
+function! RemoveTrailingWhitespace(range)
+  let save_pos = getpos(".")
+  execute 'keeppatterns ' . a:range . 'substitute/\s\+$//e'
+  call setpos('.', save_pos)
 endfunction
-nnoremap <silent> <Leader>w :call RemoveTrailingWhitespace()<CR><C-o>
-
-" highlight trailing whitespace
-highlight trailing_whitespace ctermbg=red
-match trailing_whitespace /\s\+$/
+nnoremap <silent> <Leader>w :call RemoveTrailingWhitespace('%')<CR><C-o>
 
 """""""""""""""""""""""""""""""" pretty colors """""""""""""""""""""""""""""""
 " Look at colors: http://vim.wikia.com/wiki/Xterm256_color_names_for_console_Vim
@@ -95,8 +93,9 @@ inoreabbrev #!!p #!/usr/bin/env python3if __name__ == "__main__":
 nnoremap <Leader><Bar> 140<C-w><Bar>
 nnoremap <C-w>x <C-w>x140<C-w><Bar>
 
-" Delete matching braces. Is this useful? TODO fix it to work on both sides
-nnoremap <Leader>9 %x<C-o>x<C-i>
+" Delete matching parens. Is this useful?
+nnoremap <Leader>9 %di("_x"_XP
+nnoremap <Leader>8 %di{"_x"_XP
 nnoremap <Leader>( %dd<C-o>dd<C-i>
 
 " Use divider in insert mode
@@ -109,8 +108,7 @@ nnoremap > >>
 
 " One keystroke to [exit insert mode and] write
 " If you want to exit insert mode without writing, use <C-c> or jk
-" TODO trim trailing whitespace for the current line while doing this?
-inoremap <C-f> <ESC>:w<CR>
+inoremap <C-f> <ESC>:call RemoveTrailingWhitespace('.')<CR>:w<CR>
 nnoremap <C-f> :w<CR>
 vnoremap <C-f> <ESC>:w<CR>
 

@@ -57,7 +57,7 @@
 	hub = !"git hubd $(basename $(pwd))"
 	hubd = !"git remote add origin git@github.com:AriSweedler/${1}.git; git pushu"
 	l = log --pretty=newlog --graph -10
-	lg = log --pretty=newlog
+	lg = log --pretty=newlog -10
 	ls = ls-tree --full-tree -r --abbrev HEAD
 	pushu = push --set-upstream origin master
 	p = !"script -q /dev/null git l | head -3; git push; stty sane; echo ''"

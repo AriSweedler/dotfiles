@@ -8,8 +8,12 @@ function double_cd() {
   if [ -z "$2" ]; then
     cd $1
   else
-    cd "$1"/"$2"* || cd "$1"; ls
+    cd "$1"/*"$2"* || cd "$1"; ls
   fi
+}
+
+function cdv() {
+  double_cd "$HOME/Desktop/vagrant" $1
 }
 
 function cdesk() {
