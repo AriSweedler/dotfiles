@@ -160,14 +160,14 @@ nnoremap <Leader>p :set paste<CR>mq:read !pbpaste<ESC>:set nopaste<CR>='q
 
 """"""""" vimscript development """"""""
 " We need a function to lazily evaluate the filetype. If we hard-coded it with
-" a mapping to ':tabe "$HOME/.vim/ftplugin/" . &filetype .  ".vim"<CR>', then
+" a mapping to ':tabe "$HOME/.vim/after/ftplugin/" . &filetype .  ".vim"<CR>', then
 " we'd have to make a new mapping with every new buffer. That could be done
 " with an autocommand, I suppose. But at this point, let's just use a function
 " to delay evaluation of filetype until we invoke the function!
 
 " Get the path for the ftplugin of the current file
 function! Evaluate_ftplugin_path()
-  return "$HOME/.vim/ftplugin/" . &filetype . ".vim"
+  return "$HOME/.vim/after/ftplugin/" . &filetype . ".vim"
 endfunction
 
 " source my {vimrc,current,ftplugin} file - useful for developing

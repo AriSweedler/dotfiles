@@ -1,31 +1,36 @@
 #!/bin/bash
 
-############ The daykeeper file is a newline-separated list of dates ###########
-TODAY="$(date '+%Y_%m_%d')"
-BASE="$HOME/Desktop/notes"
+############################# Initialize variables #############################
+YEAR="$(date '+%Y')"
+MONTH="$(date '+%b')"
+DAY="$(date '+%d')"
+BASE="$HOME/Desktop/notes_test"
+TODAYS_NOTE="$BASE/$MONTH/$DAY.md"
 DAYKEEPER_FILE="$BASE/.daykeeper"
-pushd $BASE
-
 function notes_past()
 {
   echo "$BASE/$(cat .daykeeper | tail -$1 | head -1).md"
 }
 ################################################################################
-
+############################ Initialize environement ###########################
+pushd $BASE
+mkdir -p $MONTH
+################################################################################
 ################### Add today to the DAYKEEPER_FILE if needed ##################
-TODAYS_NOTES="$BASE/$TODAY.md"
-MOST_RECENT_NOTES="$(notes_past 1)"
+MOST_RECENT_NOTE="$(notes_past 1)"
 
-if test "$TODAYS_NOTES" != "$MOST_RECENT_NOTES"; then
-  echo "$TODAY" >> "$DAYKEEPER_FILE"
+if test "$TODAYS_NOTE" != "$MOST_RECENT_NOTE"; then
+  echo "${MONTH}/${DAY}" >> "$DAYKEEPER_FILE"
 fi
 
-TODAYS_NOTES="$(notes_past 1)"
-YESTERDAYS_NOTES="$(notes_past 2)"
+TODAYS_NOTE="$(notes_past 1)"
+YESTERDAYS_NOTE="$(notes_past 2)"
 ################################################################################
 
 ############### Make sure we have today's notes in the git repo. ###############
 ############### Then open today & yesterday's notes ############################
-touch "$TODAYS_NOTES"
-git add "$TODAYS_NOTES"
-vim "$TODAYS_NOTES" -c "vsp $YESTERDAYS_NOTES" -c "wincmd h"
+if [ ! -e "$TODAYS_NOTE" ]; then
+  echo "$MONTH $DAY, $YEAR" > "$TODAYS_NOTE"
+  git add "$TODAYS_NOTE"
+fi
+vim "$TODAYS_NOTE" -c "vsp $YESTERDAYS_NOTE" -c "wincmd h"
