@@ -26,4 +26,5 @@ function RemoveDoubleSpace()
 endfunction
 
 " Invoke spelling autocompletion
-nnoremap <Leader>sp lis
+" nnoremap <Leader>sp lis
+" I just learned about 'z='
