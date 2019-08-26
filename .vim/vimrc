@@ -205,6 +205,12 @@ nnoremap gr gT
 nnoremap <Up> <C-y>k
 nnoremap <Down> <C-e>j
 
+" Pane navigation
+nnoremap <C-h> <C-w>h
+nnoremap <C-j> <C-w>j
+nnoremap <C-k> <C-w>k
+nnoremap <C-l> <C-w>l
+
 " Move up/down this virtual column until you hit non-whitespace
 nnoremap gK ?\%<C-R>=virtcol(".")<CR>v\S<CR>
 nnoremap gJ /\%<C-R>=virtcol(".")<CR>v\S<CR>
