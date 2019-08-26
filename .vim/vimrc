@@ -1,5 +1,8 @@
 execute pathogen#infect()
 
+" TODO write a command that'll let you edit a macro via an ex command, like:
+" let @<arg> = "<C-r><arg>"
+
 """""""""""""""""""""""""""""""""" settings """"""""""""""""""""""""""""""""""
 filetype plugin on    "allow for autocmds to be run based on filetype
 colorscheme desert    "pretty colors
@@ -72,14 +75,17 @@ highlight ColorColumn ctermbg=233
 
 " Easily update textwidth and colorcolumn at the same time
 nnoremap <silent> <Leader>tw :<C-u>call ChangeTextWidth(v:count)<CR>
-function! ChangeTextWidth(width)
+function! ChangeTextWidth(...)
   " If we have a v:count, then set the textwidth.
-  if a:width
-    let &textwidth=(a:width)
+  if a:0 == 1
+    let l:width = a:1
+    let &textwidth = (l:width)
   endif
+
   " match the colorcolumn to the textwidth
-  let &colorcolumn=(&textwidth)
+  let &colorcolumn = (&textwidth)
 endfunction
+call ChangeTextWidth()
 
 """""""""""""""""""""""""""""""" abbreviations """""""""""""""""""""""""""""""
 """""""""""" easy hashbangs """"""""""""
@@ -106,10 +112,14 @@ nnoremap D dd
 nnoremap < <<
 nnoremap > >>
 
+" Insert a newline without entering insert mode ?!?! This is rude.
+nnoremap go o<C-c>
+
 " One keystroke to [exit insert mode and] write
 " If you want to exit insert mode without writing, use <C-c> or jk
+" TODO wrap this all in an 'Enter Normal Mode' function, or something.
 inoremap <C-f> <ESC>:call RemoveTrailingWhitespace('.')<CR>:w<CR>
-nnoremap <C-f> :w<CR>
+nnoremap <C-f> :call RemoveTrailingWhitespace('.')<CR>:w<CR>
 vnoremap <C-f> <ESC>:w<CR>
 
 " <C-f> <C-g> will write and exit. Kinda emacs-y lol
@@ -190,10 +200,10 @@ nnoremap <silent> <Leader><Leader>ef :vsp <C-r>=Evaluate_ftplugin_path()<CR><CR>
 " reading a file.  "vim -u NONE" also skips loading plugins.  |-u|
 
 """"""""""""" buffers/tabs """""""""""""
-" Remove buffer from memory without closing window
-nnoremap <Leader>bd :bnext <Bar> bdelete #<CR>
-" Remove buffer from memory and close the window
-nnoremap <Leader>bc :.bdelete<CR>
+" Buffer close: remove buffer from memory
+nnoremap <Leader>bc :bnext <Bar> bdelete #<CR>
+" Remove buffer from memory AND close the window (This is the stronger option so it gets the extra <Leader> prefix)
+nnoremap <Leader><Leader>bc :.bdelete<CR>
 
 " easily switch between buffers and tabs
 nnoremap [b :bprevious<CR>

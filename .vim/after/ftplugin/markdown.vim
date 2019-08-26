@@ -1,4 +1,4 @@
-runtime ftplugin/text.vim
+runtime after/ftplugin/text.vim
 
 " Set folding for 3-backtick markdown divider block
 set foldmethod=marker foldmarker=```block,```

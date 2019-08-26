@@ -6,18 +6,18 @@ import argparse, math
 myLanguages = {
 	'c':        {'s': '/*', 'm': '*', 'e': '*/'},
 	'cpp':      {'s': '/*', 'm': '*', 'e': '*/'},
-	'cute':     {'s': '//', 'm': '~', 'e': '//'},
 	'markdown': {'s': '# ','m': '#'},
-	'python':   {'m': '#'},
-	'conf':     {'m': '#'},
-	'text':     {'m': '#'},
-	'shell':    {'m': '#'},
-	'bash':     {'m': '#'},
-	'sh':       {'m': '#'},
-	'tmux':     {'m': '#'},
-	'gitconfig':{'m': '#'},
 	'vim':      {'m': '"'},
 	'dashes':   {'m': '-'},
+	'bash':     {'m': '#'},
+	'conf':     {'m': '#'},
+	'gitconfig':{'m': '#'},
+	'make':     {'m': '#'},
+	'python':   {'m': '#'},
+	'sh':       {'m': '#'},
+	'shell':    {'m': '#'},
+	'text':     {'m': '#'},
+	'tmux':     {'m': '#'},
 }
 
 def myParse():

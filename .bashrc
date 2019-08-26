@@ -45,7 +45,7 @@ export LSCOLORS='exGxFxDacxDxDxHbaDacec'
 export CLICOLOR=1
 
 # hah HAAAAAH
-trap 'echo lol oops - exited with $?' ERR
+trap 'printf "lol oops - exited with $?\n$(whoami) is an idiot\n"' ERR
 
 #If I have an alias file, then source it here
 FILE="$HOME/.bash_aliases"

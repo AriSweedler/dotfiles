@@ -19,3 +19,4 @@ let @h = "0f f:xxdB==A;gqq"
 
 " Include ':' (58) in 'iskeyword' - used for the 'w' movement command
 set iskeyword=@,48-58,_,192-255
+set iskeyword=@,48-57,_,192-255

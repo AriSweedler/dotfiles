@@ -17,6 +17,9 @@
 [diff]
 	tool = vimdiff
 
+[stash]
+	showPatch = true
+
 [interactive]
 	singleKey = true
 
