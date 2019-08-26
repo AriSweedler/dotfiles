@@ -4,7 +4,7 @@
 YEAR="$(date '+%Y')"
 MONTH="$(date '+%b')"
 DAY="$(date '+%d')"
-BASE="$HOME/Desktop/notes_test"
+BASE="$HOME/Desktop/notes"
 TODAYS_NOTE="$BASE/$MONTH/$DAY.md"
 DAYKEEPER_FILE="$BASE/.daykeeper"
 function notes_past()
