@@ -233,8 +233,12 @@ nnoremap <Leader>sess :wa<CR>:so ~/.vim/sessions/
 set omnifunc=syntaxcomplete#Complete
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 """"""""""""""""""""""""""""""""""" Plugins """"""""""""""""""""""""""""""""""
+"TODO Find out the best place to put a 'plugin_conf' folder or something, and
+"use that to do all of these config things
 """""""""""""""""""" default plugin load & config """"""""""""""""""""
-"TODO update this
+"TODO update this - make sure I know what tf is actually going on under the
+"covers here. I will wanna config matchit (probably per language? Maybe
+"globally). Either way, invest time to find out the best way to do that
 packadd! matchit
 """""""""""""""""""""" Pathogen plugins: config """"""""""""""""""""""
 """""""""""""""""""""""""" airline """""""""""""""""""""""""
@@ -264,3 +268,21 @@ let g:gitgutter_sign_modified           = '>~'
 let g:gitgutter_sign_removed            = '>_'
 let g:gitgutter_sign_removed_first_line = '>‾'
 let g:gitgutter_sign_modified_removed   = '~_'
+
+" TODO this get the output of the command as a string - how can we have it induce side effects?
+"nunmap   <Leader>u
+"nnoremap <Leader>u call system("ls")<CR>
+"
+"This is to do that stupid thing lol. To communicate between [tmux, vim,
+"keyboard, shell]. There are specific ways for each bridge (or the
+"bridge doesn't exist).
+"
+"But the goal is to have a vim keybinding (keyboard[me]->vim)
+"invoke a shell command (vim->shell)
+"the shell command is a tmux command (shell->tmux)
+"the tmux command is send-keys (tmux->keyboard[system])
+"the sent keys will type something in vim (keyboard[system]->vim)
+"
+"The result will be LITERALLY no different from typing in the character
+"But by god will I be flexing on people when I get the syntax and escaping
+"right.
