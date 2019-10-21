@@ -10,13 +10,9 @@ command! -nargs=1 TabeC :tabe <args>.cpp <Bar> :vsp <args>.h
 
 " TODO check the extension of the other window. (example if it's cpp open the h)
 " TODO look at :_#0 to get the name of the other file in the open buffer
-nnoremap <Leader><Plug> w:call <SID>RecordFilename()<CR>p:call <SID>EditOtherFile()<CR>
+" nnoremap <Leader><Plug> w:call <SID>RecordFilename()<CR>p:call <SID>EditOtherFile()<CR>
 
 " Make a function header signature from a constructor
 let @c = "0f:xxdB$dF:xdF)==A);gqq"
 " Make a function header signature from a function declaration
 let @h = "0f f:xxdB==A;gqq"
-
-" Include ':' (58) in 'iskeyword' - used for the 'w' movement command
-set iskeyword=@,48-58,_,192-255
-set iskeyword=@,48-57,_,192-255

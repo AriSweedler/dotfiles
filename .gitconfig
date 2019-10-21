@@ -1,7 +1,7 @@
 # This is Git's per-user configuration file.
 [user]
 	name = Ari Sweedler
-	email = ari.sweedler@illumio.com
+	email = ari@sweedler.com
 	username = arisweedler
 
 [core]

@@ -26,6 +26,4 @@ function RemoveDoubleSpace()
   let @/=l:saveSearch " TODO how to set register
 endfunction
 
-" Invoke spelling autocompletion
-" nnoremap <Leader>sp lis
-" I just learned about 'z='
+let b:undo_ftplugin = "match DoubleSpace /$$/"
