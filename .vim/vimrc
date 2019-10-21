@@ -2,6 +2,8 @@ execute pathogen#infect()
 
 " TODO write a command that'll let you edit a macro via an ex command, like:
 " let @<arg> = "<C-r><arg>"
+"
+" TODO how do I want to organize my mappings better?
 
 """""""""""""""""""""""""""""""""" settings """"""""""""""""""""""""""""""""""
 filetype plugin on    "allow for autocmds to be run based on filetype
@@ -118,6 +120,9 @@ nnoremap <Leader>( %dd<C-o>dd<C-i>
 
 " Use divider in insert mode
 imap <C-d> <ESC><Plug>DividersCurrentline<CR>i
+
+" Jump to the next "TODO"
+nnoremap <Leader>to /TODO<CR>
 
 " When do I ever wanna hit 2 keys to execute one thought.
 nnoremap D dd
