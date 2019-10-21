@@ -6,4 +6,3 @@ setlocal comments=fb:* formatoptions+=n
 
 " highlight columns
 let &colorcolumn="3,50,72"
-

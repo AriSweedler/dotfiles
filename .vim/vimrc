@@ -37,13 +37,25 @@ set wildmode=longest:full,full
 " ctags is so helpful! And easy, too.
 set tags+=tags;
 
-" Toggle 'list' to show whitespace characters
-set listchars=tab:X-,space:.,eol:$,
+""""""""""""""""""""""""""""""" See whitespace """""""""""""""""""""""""""""""
+""""""""""""" Toggle 'list' to show whitespace characters """"""""""""
+nnoremap <Leader>l :set list!<CR>
+"""""""""""""" Get different listchars if it’s supported """""""""""""
+if (&termencoding ==# 'utf-8' || &encoding ==# 'utf-8') && version >= 700
+  set listchars=tab:•›,space:⋅,eol:¬,nbsp:+,
+  set fillchars=vert:\|,fold:\⋅,
+  "set showbreak=↪.
+  set showbreak=☞\ " "Leave this comment and extra whitespace
+else
+  set listchars=tab:X-,space:.,eol:$,nbsp:+,
+  set fillchars=vert:\|,fold:\~
+  set showbreak=->
+endif
 
 """"""""""""""""""""""""""""""""" popup menu """""""""""""""""""""""""""""""""
 " show a popup menu for completion even if there's only 1 option
 set completeopt=menuone,preview
-" max popup menu height is 8
+" set max popup menu height to 8
 set pumheight=8
 
 """"""""""""""""""""""""""""""""" whitespace """""""""""""""""""""""""""""""""
@@ -134,9 +146,6 @@ nnoremap <Leader>mc :make check<CR>
 
 " Shorten these calls to help tmux copy/pasting
 nnoremap <Leader>[ :GitGutterToggle <Bar> set number!<CR>
-
-" Toggle &list
-nnoremap <Leader>l :set list!<CR>
 
 " clear highlighting (clear the buffer, or just stop highlighting)
 noremap <silent> <Leader>/ :let @/ = ""<CR>
@@ -286,3 +295,4 @@ let g:gitgutter_sign_modified_removed   = '~_'
 "The result will be LITERALLY no different from typing in the character
 "But by god will I be flexing on people when I get the syntax and escaping
 "right.
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
