@@ -40,6 +40,8 @@ set wildmode=longest:full,full
 set tags+=tags;
 
 """"""""""""""""""""""""""""""" See whitespace """""""""""""""""""""""""""""""
+"""""""""""""""""""""""""""""""" Toggle Syntax """""""""""""""""""""""""""""""
+noremap <Leader>sy :set syntax==&syntax == "OFF" ? "ON" : "OFF"
 """"""""""""" Toggle 'list' to show whitespace characters """"""""""""
 nnoremap <Leader>l :set list!<CR>
 """""""""""""" Get different listchars if it’s supported """""""""""""
@@ -101,6 +103,17 @@ function! ChangeTextWidth(...)
 endfunction
 call ChangeTextWidth()
 
+function! PartyMode(revolutions)
+  let i = 0
+  while i < a:revolutions
+    set rightleft!
+    redraw
+    sleep 100m
+    let i = i + 0.5
+  endwhile
+endfunction
+nnoremap <Leader><Leader>p :<C-u>call PartyMode(v:count)<CR>
+
 """""""""""""""""""""""""""""""" abbreviations """""""""""""""""""""""""""""""
 """""""""""" easy hashbangs """"""""""""
 inoreabbrev #!b #!/bin/bash
@@ -150,7 +163,8 @@ nnoremap <Leader>mm :wall<Bar>make!<CR>
 nnoremap <Leader>mc :make check<CR>
 
 " Shorten these calls to help tmux copy/pasting
-nnoremap <Leader>[ :GitGutterToggle <Bar> set number!<CR>
+" Toggle on and off: GitGutter, margin numbers, signcolumn
+nnoremap <Leader>[ :GitGutterToggle <Bar> set number! <Bar> set signcolumn=<C-r>=&number?"no":"yes"<CR><CR>
 
 " clear highlighting (clear the buffer, or just stop highlighting)
 noremap <silent> <Leader>/ :let @/ = ""<CR>
