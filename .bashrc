@@ -41,7 +41,7 @@ shopt -s cmdhist
 shopt -s histappend
 
 #when invoking 'ls', I'll get colors.
-export LSCOLORS='exGxFxDacxDxDxHbaDacec'
+export LSCOLORS='ExGxFxDacxDxDxHbaDacec'
 export CLICOLOR=1
 
 # hah HAAAAAH
@@ -61,3 +61,5 @@ FILE="$HOME/.npm/completion.sh"
 if [ -f $FILE ]; then
   source $FILE
 fi
+
+[ -f ~/.fzf.bash ] && source ~/.fzf.bash
