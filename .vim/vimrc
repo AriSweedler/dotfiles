@@ -1,19 +1,67 @@
 execute pathogen#infect()
 
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " TODO write a command that'll let you edit a macro via an ex command, like:
 " let @<arg> = "<C-r><arg>"
+" Make it a plugin and it'll open a new buffer and when you quit the buffer
+" it'll save the buffer's text into the macro thing (make stuff like  and
+" <C-m> switch? Idk. That's a future feature.
+"
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" TODO
+" QUICKFIX SIGN PLUGIN
+"
+" add a mark to the sign column for every quick fix line entry
+" define shortcuts to jump around them
+" use sign's 'group' to do it properly
+" :help sign.txt is great
+"
+" How to parse quick fix output? It's pretty straightforward, apparently.
+" How to place signs? It's simple, you already learned and you can remember
+" easily.
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 "
 " TODO how do I want to organize my mappings better?
+" For fzf (https://github.com/junegunn/fzf): If installed using Homebrew
+" set rtp+=/usr/local/opt/fzf
 
 """""""""""""""""""""""""""""""""" settings """"""""""""""""""""""""""""""""""
 filetype plugin on    "allow for autocmds to be run based on filetype
+syntax on             "allow for syntax highlighting and indenting
 colorscheme desert    "pretty colors
+set number            "turn on line numbers
+set formatoptions+=j  "Delete comment character when joining commented lines
+
+" briefly show the matching bracket {[( when typing )]}
+set showmatch matchtime=3
+
+" highlight search (highlight matches)
+set hlsearch
+" incremental search (highlight as we type the search query)
+set incsearch
+" Clear highlighting for search terms
+noremap <silent> <C-_> :nohlsearch<CR>
+inoremap <silent> <C-_> <C-o>:nohlsearch<CR>
+
+" allow backspacing over more things
+set backspace=indent,eol,start
+
+" Multi-keystroke commands will be shown in bottom right, and they will not
+" timeout. Only cancel a partially given command manually (<C-c> or <ESC>)
+set showcmd notimeout
+" DO timeout on escape codes, after 100 ms
+set ttimeout ttimeoutlen=100
+
+" Nicer tab'ing in command mode (wild
+" 1st tab:         Complete the longest match and bring up 'wildmenu'
+" Additional tabs: Cycle through the menu
+set wildmenu wildmode=longest:full,full
+
+"""""""""""""""""""""""" Other (less important) settings """""""""""""""""""""""
 set display=lastline  "as much as possible of the last line will be displayed
 set gdefault          "turn global flag on by default for :substitute
 set history=1000      "the default is only 40.
-set nocompatible      "idk what this does specifically. Setting it sucks tho
-set number            "turn on line numbers
-set showcmd           "multi-keystroke commands will be shown in bottom right.
+set nocompatible      "Don't do weird stuff for old friends
 set noshowmode        "don't show the mode (we use airline now!)
 set noerrorbells      "disable error bells
 set belloff=all       "disable bell for non-errors, too
@@ -23,27 +71,10 @@ set scrolloff=7       "Deafult to giving me a lil more space to see context
 set sidescrolloff=4   "Min # of columns to keep to the left/right of the cursor
 set splitbelow splitright "new splits open to the bottom or to the right
 set autoread          "Autoload file changes. You can undo by pressing u
-set formatoptions+=j  "Delete comment character when joining commented lines
+set pumheight=8       "set max popup menu height to 8
+set tags+=tags;       "ctags is so helpful! And easy, too.
 
-" Don't timeout on mappings. DO timeout after 100 ms on escape codes
-set notimeout ttimeout ttimeoutlen=100
-
-"allow backspacing over more things
-set backspace=indent,eol,start
-
-" Nicer tab'ing in command mode.
-" Select the dummy 0th item to remove text from the most recent completion
-set wildmenu
-set wildmode=longest:full,full
-
-" ctags is so helpful! And easy, too.
-set tags+=tags;
-
-""""""""""""""""""""""""""""""" See whitespace """""""""""""""""""""""""""""""
-"""""""""""""""""""""""""""""""" Toggle Syntax """""""""""""""""""""""""""""""
-noremap <Leader>sy :set syntax==&syntax == "OFF" ? "ON" : "OFF"
-""""""""""""" Toggle 'list' to show whitespace characters """"""""""""
-nnoremap <Leader>l :set list!<CR>
+""""""""""""""""""""""""""""""""" Whitespace """""""""""""""""""""""""""""""""
 """""""""""""" Get different listchars if it’s supported """""""""""""
 if (&termencoding ==# 'utf-8' || &encoding ==# 'utf-8') && version >= 700
   set listchars=tab:•›,space:⋅,eol:¬,nbsp:+,
@@ -56,40 +87,32 @@ else
   set showbreak=->
 endif
 
-""""""""""""""""""""""""""""""""" popup menu """""""""""""""""""""""""""""""""
-" show a popup menu for completion even if there's only 1 option
-set completeopt=menuone,preview
-" set max popup menu height to 8
-set pumheight=8
+" Toggle displaying whitespace characters
+nnoremap <Leader>l :set list!<CR>
 
-""""""""""""""""""""""""""""""""" whitespace """""""""""""""""""""""""""""""""
-" remove trailing whitespace upon saving or upon hitting <Leader>w
+" Toggle on and off: GitGutter, margin numbers, signcolumn
+nnoremap <Leader>[ :GitGutterToggle <Bar> set number! <Bar> set signcolumn=<C-r>=&number?"no":"auto"<CR><CR>
+
+" remove trailing whitespace - https://vi.stackexchange.com/questions/454/
 function! RemoveTrailingWhitespace(range)
   let save_pos = getpos(".")
-  execute 'keeppatterns ' . a:range . 'substitute/\s\+$//e'
+  let trailing = "\s\+$"
+  execute 'keeppatterns ' . a:range . 'substitute/' . l:trailing . '//e'
   call setpos('.', save_pos)
 endfunction
 nnoremap <silent> <Leader>w :call RemoveTrailingWhitespace('%')<CR><C-o>
 
 """""""""""""""""""""""""""""""" pretty colors """""""""""""""""""""""""""""""
+" Toggle syntax highlighting
+noremap <Leader>sy :set syntax=<C-r>=&syntax == "OFF" ? "ON" : "OFF"<CR><CR>
+
 " Look at colors: http://vim.wikia.com/wiki/Xterm256_color_names_for_console_Vim
-
-"allow for syntax highlighting and indenting
-syntax on
-
-"highlight search
-set hlsearch
-
-"incremental search - show where hitting enter WOULD place you
-set incsearch
-
-"briefly show the matching bracket {[( when typing )]}
-set showmatch matchtime=3
+" Look at colors: https://github.com/guns/xterm-color-table.vim/blob/master/plugin/xterm-color-table.vim
 
 " Use colorcolumn to display the textwidth
 highlight ColorColumn ctermbg=233
 
-" Easily update textwidth and colorcolumn at the same time
+" Update textwidth and colorcolumn at the same time
 nnoremap <silent> <Leader>tw :<C-u>call ChangeTextWidth(v:count)<CR>
 function! ChangeTextWidth(...)
   " If we have a v:count, then set the textwidth.
@@ -103,82 +126,51 @@ function! ChangeTextWidth(...)
 endfunction
 call ChangeTextWidth()
 
-function! PartyMode(revolutions)
-  let i = 0
-  while i < a:revolutions
-    set rightleft!
-    redraw
-    sleep 100m
-    let i = i + 0.5
-  endwhile
-endfunction
-nnoremap <Leader><Leader>p :<C-u>call PartyMode(v:count)<CR>
-
 """""""""""""""""""""""""""""""" abbreviations """""""""""""""""""""""""""""""
 """""""""""" easy hashbangs """"""""""""
 inoreabbrev #!b #!/bin/bash
 inoreabbrev #!p #!/usr/bin/env python3
-inoreabbrev #!!p #!/usr/bin/env python3if __name__ == "__main__":
+inoreabbrev #!!p #!/usr/bin/env python3<CR><CR>if __name__ == "__main__":<CR>
 
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 """""""""""""""""""""""""""""""""" mappings """"""""""""""""""""""""""""""""""
-" These are probably useless for anything but this env.
-nnoremap <Leader><Bar> 140<C-w><Bar>
-nnoremap <C-w>x <C-w>x140<C-w><Bar>
-
-" Delete matching parens. Is this useful?
-nnoremap <Leader>9 %di("_x"_XP
-nnoremap <Leader>8 %di{"_x"_XP
-nnoremap <Leader>( %dd<C-o>dd<C-i>
-
-" Use divider in insert mode
-imap <C-d> <ESC><Plug>DividersCurrentline<CR>i
-
-" Jump to the next "TODO"
-nnoremap <Leader>to /TODO<CR>
-
-" When do I ever wanna hit 2 keys to execute one thought.
-nnoremap D dd
-nnoremap < <<
-nnoremap > >>
-
-" Insert a newline without entering insert mode ?!?! This is rude.
-nnoremap go o<C-c>
-
-" One keystroke to [exit insert mode and] write
-" If you want to exit insert mode without writing, use <C-c> or jk
-" TODO wrap this all in an 'Enter Normal Mode' function, or something.
-inoremap <C-f> <ESC>:call RemoveTrailingWhitespace('.')<CR>:w<CR>
-nnoremap <C-f> :call RemoveTrailingWhitespace('.')<CR>:w<CR>
-vnoremap <C-f> <ESC>:w<CR>
+" One keystroke to strip trailing whitespace on the current line and write
+" Works in a lotta modes. See `:help map-modes` for details
+" If you want to exit insert mode without writing or stripping trailing
+" whitespace, go somwehere else. Or use <C-c> or jk
+noremap  <C-f> <ESC>:call RemoveTrailingWhitespace('.')<CR>:w<CR>
+noremap! <C-f> <ESC>:call RemoveTrailingWhitespace('.')<CR>:w<CR>
 
 " <C-f> <C-g> will write and exit. Kinda emacs-y lol
 nnoremap <C-g> :q<CR>
 
-" exit insert mode with 'jk'
-inoremap jk <ESC>
+" When do I ever wanna hit 2 keys to execute one thought. Overwriting these
+" isn't an issue as if I wanna operate on a range I can just use visual mode.
+nnoremap D dd
+nnoremap < <<
+nnoremap > >>
+nnoremap = == =iB
+
+" Jump to the next "TODO"
+nnoremap <Leader>to /TODO<CR>
+
+" So cool! Execute currently highlighted text as bash or python
+" https://vimways.org/2019/vim-and-the-shell/
+vnoremap <Leader>xb !bash<CR>
+vnoremap <Leader>xp !python3<CR>
 
 " Easier make (write all before invoking the make command)
 nnoremap <Leader>mm :wall<Bar>make!<CR>
 nnoremap <Leader>mc :make check<CR>
 
-" Shorten these calls to help tmux copy/pasting
-" Toggle on and off: GitGutter, margin numbers, signcolumn
-nnoremap <Leader>[ :GitGutterToggle <Bar> set number! <Bar> set signcolumn=<C-r>=&number?"no":"yes"<CR><CR>
-
-" clear highlighting (clear the buffer, or just stop highlighting)
+" If you set :nohlsearch but then source vimrc again, then the highlights will
+" reappear. You must clear the @/ register to stop this.
 noremap <silent> <Leader>/ :let @/ = ""<CR>
-noremap <silent> <C-_> :nohlsearch<CR>
-inoremap <silent> <C-_> <C-o>:nohlsearch<CR>
 
 " Help me! Calls help on the word under the cursor
 nnoremap <Leader>hh viwy:help <C-r>"<CR>
 
 " replace current word with most recently yanked text, preserving buffer
 nnoremap <Leader>r viwpyiw
-
-" Easier  reformatting
-nnoremap gQ gqip
 
 " indent most recently pasted code
 nnoremap <Leader>= `[=`]
@@ -195,37 +187,6 @@ vnoremap <Leader>c :!pbcopy<CR>u
 
 " Paste from Mac's clipboard
 nnoremap <Leader>p :set paste<CR>mq:read !pbpaste<ESC>:set nopaste<CR>='q
-
-""""""""" vimscript development """"""""
-" We need a function to lazily evaluate the filetype. If we hard-coded it with
-" a mapping to ':tabe "$HOME/.vim/after/ftplugin/" . &filetype .  ".vim"<CR>', then
-" we'd have to make a new mapping with every new buffer. That could be done
-" with an autocommand, I suppose. But at this point, let's just use a function
-" to delay evaluation of filetype until we invoke the function!
-
-" Get the path for the ftplugin of the current file
-function! Evaluate_ftplugin_path()
-  return "$HOME/.vim/after/ftplugin/" . &filetype . ".vim"
-endfunction
-
-" source my {vimrc,current,ftplugin} file - useful for developing
-nnoremap <silent> <Leader>sv :source $MYVIMRC<CR>
-nnoremap <silent> <Leader>so :source %<CR>
-nnoremap <silent> <Leader>sf :source <C-r>=Evaluate_ftplugin_path()<CR><CR>
-
-" edit my {vimrc,ftplugin} file - useful for developing
-nnoremap <silent> <Leader>ev :tabe $MYVIMRC<CR>
-nnoremap <silent> <Leader>ef :tabe <C-r>=Evaluate_ftplugin_path()<CR><CR>
-nnoremap <silent> <Leader><Leader>ev :vsp $MYVIMRC<CR>
-nnoremap <silent> <Leader><Leader>ef :vsp <C-r>=Evaluate_ftplugin_path()<CR><CR>
-
-" TODO add an alias in bash_aliases to start vim with nothing. ':help vimrc'
-"
-" If Vim was started with "-u filename", the file "filename" is used.
-" All following initializations until 4. are skipped. $MYVIMRC is not
-" set.
-" "vim -u NORC" can be used to skip these initializations without
-" reading a file.  "vim -u NONE" also skips loading plugins.  |-u|
 
 """"""""""""" buffers/tabs """""""""""""
 " Buffer close: remove buffer from memory
@@ -262,7 +223,7 @@ set omnifunc=syntaxcomplete#Complete
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 """"""""""""""""""""""""""""""""""" Plugins """"""""""""""""""""""""""""""""""
 "TODO Find out the best place to put a 'plugin_conf' folder or something, and
-"use that to do all of these config things
+"use that to do all of these config things? Maybe?
 """""""""""""""""""" default plugin load & config """"""""""""""""""""
 "TODO update this - make sure I know what tf is actually going on under the
 "covers here. I will wanna config matchit (probably per language? Maybe
@@ -297,21 +258,6 @@ let g:gitgutter_sign_removed            = '>_'
 let g:gitgutter_sign_removed_first_line = '>‾'
 let g:gitgutter_sign_modified_removed   = '~_'
 
-" TODO this get the output of the command as a string - how can we have it induce side effects?
-"nunmap   <Leader>u
-"nnoremap <Leader>u call system("ls")<CR>
-"
-"This is to do that stupid thing lol. To communicate between [tmux, vim,
-"keyboard, shell]. There are specific ways for each bridge (or the
-"bridge doesn't exist).
-"
-"But the goal is to have a vim keybinding (keyboard[me]->vim)
-"invoke a shell command (vim->shell)
-"the shell command is a tmux command (shell->tmux)
-"the tmux command is send-keys (tmux->keyboard[system])
-"the sent keys will type something in vim (keyboard[system]->vim)
-"
-"The result will be LITERALLY no different from typing in the character
-"But by god will I be flexing on people when I get the syntax and escaping
-"right.
+"""""""""""""""""""""""""""""""""""" vsnip """""""""""""""""""""""""""""""""""
+imap <expr> <Tab> vsnip#available() ? '<Plug>(vsnip-expand-or-jump)' : '<Tab>'
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""

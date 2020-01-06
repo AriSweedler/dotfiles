@@ -40,4 +40,4 @@ YESTERDAYS_NOTE="$(notes_past 2)"
 ############### Make sure we have today's notes in the git repo. ###############
 ############### Then open today & yesterday's notes ############################
 echo "## $TIME" >> "$TODAYS_NOTE"
-vim "$TODAYS_NOTE" -c "vsp $YESTERDAYS_NOTE" -c "wincmd h"
+vim "$TODAYS_NOTE" -c "vsp $YESTERDAYS_NOTE" -c "wincmd h" -c "normal Go"
