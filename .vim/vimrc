@@ -29,6 +29,7 @@ execute pathogen#infect()
 filetype plugin on    "allow for autocmds to be run based on filetype
 syntax on             "allow for syntax highlighting and indenting
 colorscheme desert    "pretty colors
+set nocompatible      "Don't do weird stuff for old friends
 set number            "turn on line numbers
 set formatoptions+=j  "Delete comment character when joining commented lines
 
@@ -48,7 +49,8 @@ set backspace=indent,eol,start
 
 " Multi-keystroke commands will be shown in bottom right, and they will not
 " timeout. Only cancel a partially given command manually (<C-c> or <ESC>)
-set showcmd notimeout
+set showcmd
+set notimeout
 " DO timeout on escape codes, after 100 ms
 set ttimeout ttimeoutlen=100
 
@@ -61,7 +63,6 @@ set wildmenu wildmode=longest:full,full
 set display=lastline  "as much as possible of the last line will be displayed
 set gdefault          "turn global flag on by default for :substitute
 set history=1000      "the default is only 40.
-set nocompatible      "Don't do weird stuff for old friends
 set noshowmode        "don't show the mode (we use airline now!)
 set noerrorbells      "disable error bells
 set belloff=all       "disable bell for non-errors, too
@@ -96,8 +97,9 @@ nnoremap <Leader>[ :GitGutterToggle <Bar> set number! <Bar> set signcolumn=<C-r>
 " remove trailing whitespace - https://vi.stackexchange.com/questions/454/
 function! RemoveTrailingWhitespace(range)
   let save_pos = getpos(".")
-  let trailing = "\s\+$"
+  let trailing = '\s\+$'
   execute 'keeppatterns ' . a:range . 'substitute/' . l:trailing . '//e'
+  echom 'keeppatterns ' . a:range . 'substitute/' . l:trailing . '//e'
   call setpos('.', save_pos)
 endfunction
 nnoremap <silent> <Leader>w :call RemoveTrailingWhitespace('%')<CR><C-o>
@@ -146,6 +148,8 @@ nnoremap <C-g> :q<CR>
 " When do I ever wanna hit 2 keys to execute one thought. Overwriting these
 " isn't an issue as if I wanna operate on a range I can just use visual mode.
 nnoremap D dd
+nnoremap G Gzz
+nnoremap C cc
 nnoremap < <<
 nnoremap > >>
 nnoremap = == =iB

@@ -77,4 +77,4 @@ PS1+="${reset}"
 export PS1
 
 PS2="${yellow}→ ${reset}"
-export PS1
+export PS2

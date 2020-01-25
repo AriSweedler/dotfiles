@@ -9,7 +9,7 @@ YEAR="$(date '+%Y')"
 MONTH="$(date '+%b')"
 DAY="$(date '+%d')"
 TIME="$(date '+%R')"
-BASE="/Users/ari/dev/journal/"
+BASE="/Users/ari/dev/journal"
 TODAYS_NOTE="$BASE/$MONTH/$DAY.md"
 DAYKEEPER_FILE="$BASE/.daykeeper"
 function notes_past()

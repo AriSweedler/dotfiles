@@ -87,5 +87,8 @@ alias tmux="tmux -2"
 alias tmuxa="tmux attach-session"
 alias tmuxls="tmux list-sessions"
 
+# Easier jupyter notebooks
+alias jupyter="/Users/ari/opt/anaconda2/bin/jupyter_mac.command"
+
 # open man page in Preview
 function pman { man -t "$1" | open -f -a Preview; }
