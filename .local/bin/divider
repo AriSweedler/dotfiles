@@ -18,6 +18,7 @@ myLanguages = {
 	'shell':    {'m': '#'},
 	'text':     {'m': '#'},
 	'tmux':     {'m': '#'},
+	'tex':      {'m': '%'},
 }
 
 def myParse():
