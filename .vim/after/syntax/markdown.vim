@@ -4,10 +4,11 @@ syntax keyword mdTodo TODO
 highlight def link mdTodo Todo
 
 syntax region notesTodo start=/DO/ end=/!$/ oneline
+syntax region notesBackburner start=/Backburner/ end=/!$/ oneline
+syntax region notesDone start=/DONE/ end=/!$/ oneline contains=mdDone
 highlight notesTodo term=standout ctermfg=10
-
-syntax keyword mdDone DONE
-highlight mdDone cterm=bold ctermfg=6
+highlight notesBackburner term=standout ctermfg=64
+highlight notesDone term=standout ctermfg=6
 
 syntax match UConfidence /unshakeable\_sconfidence/
 syntax match AConfidence /adaptable\_sconfidence/
@@ -18,7 +19,7 @@ syntax case match
 
 " Conceal markdown links
 syntax match markdownUrl "\S\+" nextgroup=markdownUrlTitle skipwhite contained conceal cchar=x
-highlight Conceal ctermfg=14 ctermbg=242
+highlight Conceal ctermfg=15 ctermbg=90
 setlocal nowrap
 setlocal conceallevel=2
 setlocal concealcursor=nc
