@@ -1,8 +1,8 @@
 execute pathogen#infect()
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" TODO write a command that'll let you edit a macro via an ex command, like:
-" let @<arg> = "<C-r><arg>"
+" TODO write a command that'll let you edit a macro in a new buffer
+"
 " Make it a plugin and it'll open a new buffer and when you quit the buffer
 " it'll save the buffer's text into the macro thing (make stuff like  and
 " <C-m> switch? Idk. That's a future feature.
@@ -20,16 +20,12 @@ execute pathogen#infect()
 " How to place signs? It's simple, you already learned and you can remember
 " easily.
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-"
-" TODO how do I want to organize my mappings better?
-" For fzf (https://github.com/junegunn/fzf): If installed using Homebrew
-" set rtp+=/usr/local/opt/fzf
 
 """""""""""""""""""""""""""""""""" settings """"""""""""""""""""""""""""""""""
 filetype plugin on    "allow for autocmds to be run based on filetype
 syntax on             "allow for syntax highlighting and indenting
 colorscheme desert    "pretty colors
-set nocompatible      "Don't do weird stuff for old friends
+set nocompatible      "Don't do weird stuff for vi
 set number            "turn on line numbers
 set formatoptions+=j  "Delete comment character when joining commented lines
 
@@ -43,6 +39,9 @@ set incsearch
 " Clear highlighting for search terms
 noremap <silent> <C-_> :nohlsearch<CR>
 inoremap <silent> <C-_> <C-o>:nohlsearch<CR>
+" If you set :nohlsearch but then source vimrc again, then the highlights will
+" reappear. You must clear the @/ register to stop this.
+noremap <silent> <Leader>/ :let @/ = ""<CR>
 
 " allow backspacing over more things
 set backspace=indent,eol,start
@@ -99,17 +98,14 @@ function! RemoveTrailingWhitespace(range)
   let save_pos = getpos(".")
   let trailing = '\s\+$'
   execute 'keeppatterns ' . a:range . 'substitute/' . l:trailing . '//e'
-  echom 'keeppatterns ' . a:range . 'substitute/' . l:trailing . '//e'
   call setpos('.', save_pos)
 endfunction
-nnoremap <silent> <Leader>w :call RemoveTrailingWhitespace('%')<CR><C-o>
+nnoremap <silent> <Leader>w :call RemoveTrailingWhitespace('%')<CR>
 
 """""""""""""""""""""""""""""""" pretty colors """""""""""""""""""""""""""""""
+""""""""""""""" Look at colors with the XtermColorTable command """"""""""""""
 " Toggle syntax highlighting
 noremap <Leader>sy :set syntax=<C-r>=&syntax == "OFF" ? "ON" : "OFF"<CR><CR>
-
-" Look at colors: http://vim.wikia.com/wiki/Xterm256_color_names_for_console_Vim
-" Look at colors: https://github.com/guns/xterm-color-table.vim/blob/master/plugin/xterm-color-table.vim
 
 " Use colorcolumn to display the textwidth
 highlight ColorColumn ctermbg=233
@@ -126,7 +122,7 @@ function! ChangeTextWidth(...)
   " match the colorcolumn to the textwidth
   let &colorcolumn = (&textwidth)
 endfunction
-call ChangeTextWidth()
+call ChangeTextWidth(&textwidth)
 
 """""""""""""""""""""""""""""""" abbreviations """""""""""""""""""""""""""""""
 """""""""""" easy hashbangs """"""""""""
@@ -154,9 +150,6 @@ nnoremap < <<
 nnoremap > >>
 nnoremap = == =iB
 
-" Jump to the next "TODO"
-nnoremap <Leader>to /TODO<CR>
-
 " So cool! Execute currently highlighted text as bash or python
 " https://vimways.org/2019/vim-and-the-shell/
 vnoremap <Leader>xb !bash<CR>
@@ -166,15 +159,8 @@ vnoremap <Leader>xp !python3<CR>
 nnoremap <Leader>mm :wall<Bar>make!<CR>
 nnoremap <Leader>mc :make check<CR>
 
-" If you set :nohlsearch but then source vimrc again, then the highlights will
-" reappear. You must clear the @/ register to stop this.
-noremap <silent> <Leader>/ :let @/ = ""<CR>
-
 " Help me! Calls help on the word under the cursor
 nnoremap <Leader>hh viwy:help <C-r>"<CR>
-
-" replace current word with most recently yanked text, preserving buffer
-nnoremap <Leader>r viwpyiw
 
 " indent most recently pasted code
 nnoremap <Leader>= `[=`]
@@ -186,16 +172,17 @@ vnoremap * "sy/\V<C-r>=escape(@s, '/\')<CR><CR>N
 nnoremap * *N
 
 " Place highlighted text/whole file in Mac's clipboard
-nnoremap <Leader>c mq:%!pbcopy<CR>u`q
+nnoremap <Leader>c mq:%!pbcopy<CR>u`qmq
 vnoremap <Leader>c :!pbcopy<CR>u
 
 " Paste from Mac's clipboard
-nnoremap <Leader>p :set paste<CR>mq:read !pbpaste<ESC>:set nopaste<CR>='q
+nnoremap <Leader>p :set paste<CR>mq:read !pbpaste<ESC>:set nopaste<CR>='qmq
 
 """"""""""""" buffers/tabs """""""""""""
 " Buffer close: remove buffer from memory
 nnoremap <Leader>bc :bnext <Bar> bdelete #<CR>
-" Remove buffer from memory AND close the window (This is the stronger option so it gets the extra <Leader> prefix)
+" Remove buffer from memory AND close the window
+" (This is the stronger option so it gets the extra <Leader> prefix)
 nnoremap <Leader><Leader>bc :.bdelete<CR>
 
 " easily switch between buffers and tabs
@@ -208,12 +195,6 @@ nnoremap gr gT
 nnoremap <Up> <C-y>k
 nnoremap <Down> <C-e>j
 
-" Pane navigation
-nnoremap <C-h> <C-w>h
-nnoremap <C-j> <C-w>j
-nnoremap <C-k> <C-w>k
-nnoremap <C-l> <C-w>l
-
 " Move up/down this virtual column until you hit non-whitespace
 nnoremap gK ?\%<C-R>=virtcol(".")<CR>v\S<CR>
 nnoremap gJ /\%<C-R>=virtcol(".")<CR>v\S<CR>
@@ -222,16 +203,10 @@ nnoremap gJ /\%<C-R>=virtcol(".")<CR>v\S<CR>
 nnoremap <Leader>ss :wa<CR>:mksession! ~/.vim/sessions/
 nnoremap <Leader>sess :wa<CR>:so ~/.vim/sessions/
 
-" enable omnicompletion
-set omnifunc=syntaxcomplete#Complete
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 """"""""""""""""""""""""""""""""""" Plugins """"""""""""""""""""""""""""""""""
-"TODO Find out the best place to put a 'plugin_conf' folder or something, and
-"use that to do all of these config things? Maybe?
 """""""""""""""""""" default plugin load & config """"""""""""""""""""
-"TODO update this - make sure I know what tf is actually going on under the
-"covers here. I will wanna config matchit (probably per language? Maybe
-"globally). Either way, invest time to find out the best way to do that
+"TODO read about matchit (:help matchit)
 packadd! matchit
 """""""""""""""""""""" Pathogen plugins: config """"""""""""""""""""""
 """""""""""""""""""""""""" airline """""""""""""""""""""""""
@@ -264,4 +239,3 @@ let g:gitgutter_sign_modified_removed   = '~_'
 
 """""""""""""""""""""""""""""""""""" vsnip """""""""""""""""""""""""""""""""""
 imap <expr> <Tab> vsnip#available() ? '<Plug>(vsnip-expand-or-jump)' : '<Tab>'
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""

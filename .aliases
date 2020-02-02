@@ -12,10 +12,6 @@ function double_cd() {
   fi
 }
 
-function cdv() {
-  double_cd "$HOME/Desktop/vagrant" $1
-}
-
 function cdesk() {
   double_cd "$HOME/Desktop" $1
 }
@@ -32,18 +28,10 @@ function bashcurl() {
   bash <(curl --silent $1)
 }
 
-# read vim help pages straight from terminal. Allow exiting with 'c'
-function vimhelp() {
-  vim -c "help $1" -c "only" -c "nnoremap <C-w>c :q!<CR>"
-}
-
 # Open a cpp & h file
 function vimc() {
   vim "$1.cpp" "-c vsp $1.h"
 }
-
-alias vimtxt='vimtmp .txt'
-alias vimscratch='vimtmp $(date +%Y-%m-%d-%S)'
 
 # Start a webserver no matter the version of python. Used to be an alias:
 # alias www='python -m SimpleHTTPServer 8000'
@@ -67,18 +55,8 @@ function www() {
   $COMMAND
 }
 
-# hide/show all desktop icons (useful when presenting)
-alias hidedt="defaults write com.apple.finder createdesktop -bool false && killall finder"
-alias showdt="defaults write com.apple.finder createdesktop -bool true && killall finder"
-
 # show path line by line
 alias path='echo -e ${PATH//:/\\n}'
-
-# No reason for this, but it's a good use of shell escapes
-alias timestamp='echo $(date +%Y-%m-%d-%S)'
-
-# If I'm too lazy to hit <Ctrl-Command-Q>
-alias lock='/System/Library/CoreServices/Menu\ Extras/User.menu/Contents/Resources/CGSession -suspend'
 
 # Let tmux support colors
 alias tmux="tmux -2"
@@ -89,6 +67,3 @@ alias tmuxls="tmux list-sessions"
 
 # Easier jupyter notebooks
 alias jupyter="/Users/ari/opt/anaconda2/bin/jupyter_mac.command"
-
-# open man page in Preview
-function pman { man -t "$1" | open -f -a Preview; }
