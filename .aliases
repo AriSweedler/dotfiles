@@ -20,6 +20,10 @@ function cdev() {
   double_cd "$HOME/dev" $1
 }
 
+function cclass() {
+  double_cd "$HOME/Desktop/college/14-Winter-2019" $1
+}
+
 # I don't wanna put this in my bin because it's specific to my mac, I guess...
 alias debounce='/Users/ari/Desktop/life/housekeeping/debounce-mac/debounce'
 
@@ -63,6 +67,7 @@ alias tmux="tmux -2"
 
 # Easy attach/ls
 alias tmuxa="tmux attach-session"
+alias tmuxj="tmux new-session -A -s journal -n notepad ~/.local/bin/journal"
 alias tmuxls="tmux list-sessions"
 
 # Easier jupyter notebooks

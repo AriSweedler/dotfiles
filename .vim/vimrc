@@ -145,10 +145,12 @@ nnoremap <C-g> :q<CR>
 " isn't an issue as if I wanna operate on a range I can just use visual mode.
 nnoremap D dd
 nnoremap G Gzz
+nnoremap zz ^zz
 nnoremap C cc
 nnoremap < <<
 nnoremap > >>
 nnoremap = == =iB
+nnoremap <C-b> <C-o>vBda
 
 " So cool! Execute currently highlighted text as bash or python
 " https://vimways.org/2019/vim-and-the-shell/
