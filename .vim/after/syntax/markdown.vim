@@ -6,12 +6,6 @@ syntax case ignore
 syntax keyword mdTodo TODO
 highlight def link mdTodo Todo
 
-" First test of using a 'match'
-syntax match UConfidence /unshakeable\_sconfidence/
-syntax match AConfidence /adaptable\_sconfidence/
-highlight UConfidence term=standout ctermfg=2
-highlight AConfidence term=standout ctermfg=10
-
 syntax case match
 " Syntax matches where case matters go below
 
@@ -22,13 +16,13 @@ syntax region notesBackburner start=/Backburner/ end=/!$/ oneline
 syntax region notesDone start=/DONE/ end=/!$/ oneline contains=markdownLinkText
 highlight notesTodo term=standout ctermfg=10
 highlight notesBackburner term=standout ctermfg=238
-highlight notesDone term=standout ctermfg=6
+highlight notesDone term=standout ctermfg=23
 
 " Specially highlight Log lines. They're of the form:
 " {<logCategory>: <logDescription>}
 " Anything that has an imdb link goes under 'Movie', for now
-syntax region logLine start=/^{/ end=/}$/ keepend contains=logCategory,logDescription
-syntax keyword logCategory contained Chore Movie Workout Blog Drug
+syntax region logLine start=/^{[^{]/ end=/}$/ keepend oneline contains=logCategory,logDescription
+syntax keyword logCategory contained Chore Movie Workout Blog Drug Video
 syntax match logDescription /:\zs.*\ze.$/ contained
 " TODO make the logDescription pattern better somehow?
 highlight logLine term=standout ctermfg=7
@@ -42,5 +36,5 @@ highlight Conceal ctermfg=15 ctermbg=90
 " TODO: should I split the syntax commands and the highlight commands? Figure out
 " best practices here.
 "
-" TODO: Make a syntax construct where spelling is ignored? Useful for ascii
-" diagrams or whatever. ``` is mostly good enough
+" TODO: Write syntax highlighting to highlight the Headers of folds a certain
+" color

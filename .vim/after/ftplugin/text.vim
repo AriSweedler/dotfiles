@@ -20,7 +20,7 @@ let @f = "cgn \<C-c>"
 
 " Use the remapping '<leader>f' to place the MultiSpaceRegex in the search
 " register, then repeatedly invoke the '@f' macro until it fails.
-nnoremap <silent> <leader>f /\S\zs\( \)\{2,}\ze\S<CR>999@f
+nnoremap <silent> <Leader><Leader>f /\S\zs\( \)\{2,}\ze\S<CR>999@f
 
 " TODO upgrade the thing to not clobber the search register by having the
 " mapping invoke a function instead of a bunch of keypresses.

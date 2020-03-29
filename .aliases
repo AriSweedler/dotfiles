@@ -72,3 +72,6 @@ alias tmuxls="tmux list-sessions"
 
 # Easier jupyter notebooks
 alias jupyter="/Users/ari/opt/anaconda2/bin/jupyter_mac.command"
+
+# Easier duo mobile 2FA code gettings :/
+alias duo="/Users/ari/Desktop/college/0-Other/duo/duo.sh"
