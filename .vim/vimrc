@@ -8,7 +8,7 @@ execute pathogen#infect()
 " <C-m> switch? Idk. That's a future feature.
 "
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" TODO
+" TODObackburner
 " QUICKFIX SIGN PLUGIN
 "
 " add a mark to the sign column for every quick fix line entry
@@ -20,6 +20,17 @@ execute pathogen#infect()
 " How to place signs? It's simple, you already learned and you can remember
 " easily.
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+""""""""""""""""""""""""""""""" TODO place these """""""""""""""""""""""""""""""
+" Show those lovely folds
+set foldcolumn=2
+" Instead of stumbling into ex mode, repeat the last macro used.
+nnoremap Q @@
+"
+" TODO have an easy way to hide the gitgutter column
+" I tend to use semicolons as my leader key for imaps, because I almost never
+" need to follow a ; with anything other than a space or a newline.
+""""""""""""""""""""""""" TODO finish playing with this """"""""""""""""""""""""
 
 """""""""""""""""""""""""""""""""" settings """"""""""""""""""""""""""""""""""
 filetype plugin on    "allow for autocmds to be run based on filetype
@@ -191,6 +202,9 @@ nnoremap <Leader><Leader>bc :.bdelete<CR>
 nnoremap [b :bprevious<CR>
 nnoremap ]b :bnext<CR>
 nnoremap gr gT
+
+" Tabedit the file under the cursor
+nnoremap gF <C-w>f<C-w>T
 
 """"""""""""""" movement """""""""""""""
 " Up/Down don't change relative line number
