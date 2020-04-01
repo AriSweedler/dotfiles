@@ -161,7 +161,7 @@ nnoremap C cc
 nnoremap < <<
 nnoremap > >>
 nnoremap = == =iB
-nnoremap <C-b> <C-o>vBda
+nnoremap <C-b> gedaW
 
 " So cool! Execute currently highlighted text as bash or python
 " https://vimways.org/2019/vim-and-the-shell/
