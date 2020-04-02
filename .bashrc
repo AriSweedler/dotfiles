@@ -6,6 +6,7 @@
 #                                                                     #
 #######################################################################
 
+
 #This was my hello-world line for learning about bash :')
 echo "Today's date is $(date)"
 HOME_INODE=`ls -ali ~/ | sed -n 2p | awk '{print $1}'`
@@ -55,6 +56,12 @@ fi
 
 # Sourcing PS1 script for that dank pwd
 source "$HOME/.local/bin/PS1.sh"
+
+# If I have a .macos file, source it
+FILE="/Users/ari/.macos"
+if [ -f $FILE ]; then
+  source $FILE
+fi
 
 # If I have an npm completion script, source it
 FILE="$HOME/.npm/completion.sh"

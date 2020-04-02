@@ -75,3 +75,7 @@ alias jupyter="/Users/ari/opt/anaconda2/bin/jupyter_mac.command"
 
 # Easier duo mobile 2FA code gettings :/
 alias duo="/Users/ari/Desktop/college/0-Other/duo/duo.sh"
+
+# https://www.atlassian.com/git/tutorials/dotfiles
+# Alias to make it easy to track dotfiles
+alias config='/usr/bin/git --git-dir=$HOME/dotfiles/ --work-tree=$HOME'
