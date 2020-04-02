@@ -1,12 +1,5 @@
 execute pathogen#infect()
-
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" TODO write a command that'll let you edit a macro in a new buffer
-"
-" Make it a plugin and it'll open a new buffer and when you quit the buffer
-" it'll save the buffer's text into the macro thing (make stuff like  and
-" <C-m> switch? Idk. That's a future feature.
-"
+" ⌘
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " TODObackburner
 " QUICKFIX SIGN PLUGIN
@@ -21,16 +14,30 @@ execute pathogen#infect()
 " easily.
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-""""""""""""""""""""""""""""""" TODO place these """""""""""""""""""""""""""""""
+""""""""""""""""""""""""""""" TODO place these VVV """""""""""""""""""""""""""""
 " Show those lovely folds
 set foldcolumn=2
+
 " Instead of stumbling into ex mode, repeat the last macro used.
 nnoremap Q @@
 "
 " TODO have an easy way to hide the gitgutter column
 " I tend to use semicolons as my leader key for imaps, because I almost never
 " need to follow a ; with anything other than a space or a newline.
-""""""""""""""""""""""""" TODO finish playing with this """"""""""""""""""""""""
+
+"""""""""""""""""""""""""""""" Create textobjects """"""""""""""""""""""""""""""
+""" https://www.reddit.com/r/vim/comments/frlzt8/create_your_own_text_object/ ""
+" Define a text object for the whole buffer
+xnoremap <silent> wb GoggV
+onoremap <silent> wb :<C-u>normal vie<CR>
+
+" Easily define a text object for C-style commends
+xnoremap <silent> a* [*o]*
+onoremap <silent> a* :<C-u>normal va*V<CR>
+
+" Edit the macro stored in register x
+nnoremap <Leader>em :let @x = "<C-r>=@x<CR>"
+""""""""""""""""""""""" TODO finish playing with this ^^^ """"""""""""""""""""""
 
 """""""""""""""""""""""""""""""""" settings """"""""""""""""""""""""""""""""""
 filetype plugin on    "allow for autocmds to be run based on filetype
@@ -69,6 +76,13 @@ set ttimeout ttimeoutlen=100
 " Additional tabs: Cycle through the menu
 set wildmenu wildmode=longest:full,full
 
+" Use vim's system clipboard register ("*) instead of the unnamed register for
+" yank/put/delete. This links these commands to the system clipboard
+if !has('clipboard') && !has('xterm_clipboard')
+  echom "[VIMRC] WARNING: Not compiled with clipboard support"
+endif
+set clipboard=unnamed
+
 """""""""""""""""""""""" Other (less important) settings """""""""""""""""""""""
 set display=lastline  "as much as possible of the last line will be displayed
 set gdefault          "turn global flag on by default for :substitute
@@ -84,6 +98,7 @@ set splitbelow splitright "new splits open to the bottom or to the right
 set autoread          "Autoload file changes. You can undo by pressing u
 set pumheight=8       "set max popup menu height to 8
 set tags+=tags;       "ctags is so helpful! And easy, too.
+set indentexpr= "Turn off all indenting by default
 
 """"""""""""""""""""""""""""""""" Whitespace """""""""""""""""""""""""""""""""
 """""""""""""" Get different listchars if it’s supported """""""""""""
@@ -101,6 +116,10 @@ endif
 " Toggle displaying whitespace characters
 nnoremap <Leader>l :set list!<CR>
 
+" GitGutter(Enable|Disable)
+" signcolumn
+" foldcolumn
+" number
 " Toggle on and off: GitGutter, margin numbers, signcolumn
 nnoremap <Leader>[ :GitGutterToggle <Bar> set number! <Bar> set signcolumn=<C-r>=&number?"no":"auto"<CR><CR>
 
@@ -149,6 +168,9 @@ inoreabbrev #!!p #!/usr/bin/env python3<CR><CR>if __name__ == "__main__":<CR>
 noremap  <C-f> <ESC>:call RemoveTrailingWhitespace('.')<CR>:w<CR>
 noremap! <C-f> <ESC>:call RemoveTrailingWhitespace('.')<CR>:w<CR>
 
+" Exit insert mode without having to move fingers.
+inoremap jk <ESC>:call RemoveTrailingWhitespace('.')<CR>
+
 " <C-f> <C-g> will write and exit. Kinda emacs-y lol
 nnoremap <C-g> :q<CR>
 
@@ -157,10 +179,8 @@ nnoremap <C-g> :q<CR>
 nnoremap D dd
 nnoremap G Gzz
 nnoremap zz ^zz
-nnoremap C cc
 nnoremap < <<
 nnoremap > >>
-nnoremap = == =iB
 nnoremap <C-b> gedaW
 
 " So cool! Execute currently highlighted text as bash or python
@@ -183,13 +203,6 @@ nnoremap <Leader>= `[=`]
 " (Very nomagic, escape contents of s register before pasting)
 vnoremap * "sy/\V<C-r>=escape(@s, '/\')<CR><CR>N
 nnoremap * *N
-
-" Place highlighted text/whole file in Mac's clipboard
-nnoremap <Leader>c mq:%!pbcopy<CR>u`qmq
-vnoremap <Leader>c :!pbcopy<CR>u
-
-" Paste from Mac's clipboard
-nnoremap <Leader>p :set paste<CR>mq:read !pbpaste<ESC>:set nopaste<CR>='qmq
 
 """"""""""""" buffers/tabs """""""""""""
 " Buffer close: remove buffer from memory
@@ -215,16 +228,8 @@ nnoremap <Down> <C-e>j
 nnoremap gK ?\%<C-R>=virtcol(".")<CR>v\S<CR>
 nnoremap gJ /\%<C-R>=virtcol(".")<CR>v\S<CR>
 
-""""""""""""""" sessions """""""""""""""
-nnoremap <Leader>ss :wa<CR>:mksession! ~/.vim/sessions/
-nnoremap <Leader>sess :wa<CR>:so ~/.vim/sessions/
-
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 """"""""""""""""""""""""""""""""""" Plugins """"""""""""""""""""""""""""""""""
-"""""""""""""""""""" default plugin load & config """"""""""""""""""""
-"TODO read about matchit (:help matchit)
-packadd! matchit
-"""""""""""""""""""""" Pathogen plugins: config """"""""""""""""""""""
 """""""""""""""""""""""""" airline """""""""""""""""""""""""
 let g:airline#extensions#tabline#enabled = 1
 let g:airline#extensions#tabline#show_buffers = 0

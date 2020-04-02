@@ -18,3 +18,6 @@ node_modules
 # no need to back this up
 .ssh
 .local
+
+# Because of https://www.atlassian.com/git/tutorials/dotfiles
+dotfiles

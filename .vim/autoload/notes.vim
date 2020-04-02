@@ -5,7 +5,7 @@ echom "NOTES PLUGIN FILE SOURCED. THIS SHOULD NOT HAPPEN, ONLY AUTOLOAD!"
 
 """""""""""""""""""""""""""""" Initialize notes """""""""""""""""""""""""""""""{{{
 function! notes#init()
-  echom "NOTES INIT AUTOLOAD FUNCTION SOURCED!"
+  "echom "NOTES INIT AUTOLOAD FUNCTION SOURCED!"
 
   " This allows links to be displayed prettier
   setlocal nowrap
@@ -32,7 +32,7 @@ function! notes#init()
   " Remap <bang> to invoke the proper helper function
   nnoremap ! :call notes#MarkDone()<CR>
 
-  "command -nargs=? Yesterday call notes#Yesterday_Helper("tabedit", <args>)
+  "command! -nargs=? Yesterday call notes#Yesterday_Helper("tabedit", <args>)
 
 endfunction
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""}}}
@@ -105,14 +105,10 @@ function! notes#Yesterday_Helper(open_method, ...)
 
   " Get the line number in the daykeeper file
   let daykeeper_line = expand("%:.:r")->substitute("/", "\\\\/", "")
-  echom "Looking for the daykeeper line " . l:daykeeper_line
   let command = 'sed -n "/' . l:daykeeper_line . '/=" .daykeeper'
-  echom "Executing shell command " . l:command
   let absoltue_day = system(l:command)
   let desired_day = l:absoltue_day - l:days_ago
-  echom printf("We wanna get from %s, which is absolute=%d. At %d days ago, we wanna get %d", expand("%:.:r"), l:absoltue_day, l:days_ago, l:desired_day)
   if l:desired_day <= 0
-    echom "Desired day is not positive. Opening first day."
     let l:desired_day = 1
   endif
 
