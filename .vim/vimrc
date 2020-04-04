@@ -259,4 +259,4 @@ let g:gitgutter_sign_removed_first_line = '>‾'
 let g:gitgutter_sign_modified_removed   = '~_'
 
 """""""""""""""""""""""""""""""""""" vsnip """""""""""""""""""""""""""""""""""
-imap <expr> <Tab> vsnip#available() ? '<Plug>(vsnip-expand-or-jump)' : '<Tab>'
+"imap <expr> <Tab> vsnip#available() ? '<Plug>(vsnip-expand-or-jump)' : '<Tab>'
