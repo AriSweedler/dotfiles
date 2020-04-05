@@ -1,6 +1,5 @@
-execute pathogen#infect()
-" ⌘
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" ⌘
 " TODObackburner
 " QUICKFIX SIGN PLUGIN
 "

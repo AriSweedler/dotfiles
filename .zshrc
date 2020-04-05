@@ -21,14 +21,15 @@ for i in {0..255}; do
 done
 }
 
-# Add to PATH
-export PATH="$PATH:$HOME/.local/bin"
-
 # When using !! or !$, command is redisplayed ready to run instead of ran
 setopt histverify
 
+# Use vim by default
 export EDITOR=vim
-#
+
 # Let me use Ctrl-A / Ctrl-E as expected, even though $EDITOR is vim
 bindkey "^A" vi-beginning-of-line
 bindkey "^E" vi-end-of-line
+
+# Add .local/bin to front of path
+export PATH="$HOME/.local/bin:$PATH"
