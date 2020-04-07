@@ -46,5 +46,5 @@ endfunction
 
 command! ToggleSyntaxerDebug call s:ToggleDebug()
 
-echom expand('%') . " sourced"
+echom expand("<sfile>") . " sourced"
 finish
