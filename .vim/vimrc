@@ -1,7 +1,7 @@
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " ⌘
 " TODObackburner
-" QUICKFIX SIGN PLUGIN
+" QUICKFIX SIGN PLUGIN (exists already as ALE plugin?)
 "
 " add a mark to the sign column for every quick fix line entry
 " define shortcuts to jump around them
@@ -14,6 +14,9 @@
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 """"""""""""""""""""""""""""" TODO place these VVV """""""""""""""""""""""""""""
+" Persistent undo w/o clutter?
+set undodir="~/.vim/undo"
+
 " Show those lovely folds
 set foldcolumn=2
 

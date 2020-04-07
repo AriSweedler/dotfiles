@@ -23,12 +23,3 @@ nnoremap <silent> <Leader>ev :tabe $MYVIMRC<CR>
 nnoremap <silent> <Leader>ef :tabe <C-r>=Evaluate_path("$HOME/.vim/after/ftplugin/")<CR><CR>
 nnoremap <silent> <Leader>es :tabe <C-r>=Evaluate_path("$HOME/.vim/after/syntax/")<CR><CR>
 nnoremap <silent> <Leader><Leader>es :tabe <C-r>=Evaluate_path("$VIMRUNTIME/syntax/")<CR><CR>
-
-" TODO add an alias in bash_aliases to start vim with nothing. ':help vimrc'
-"
-" From ":help vimrc":
-" If Vim was started with "-u filename", the file "filename" is used.
-" All following initializations until 4. are skipped. $MYVIMRC is not
-" set.
-" "vim -u NORC" can be used to skip these initializations without
-" reading a file.  "vim -u NONE" also skips loading plugins.  |-u|
