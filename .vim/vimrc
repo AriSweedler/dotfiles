@@ -101,6 +101,7 @@ set autoread          "Autoload file changes. You can undo by pressing u
 set pumheight=8       "set max popup menu height to 8
 set tags+=tags;       "ctags is so helpful! And easy, too.
 set indentexpr= "Turn off all indenting by default
+set nojoinspaces      "don't put 2 spaces after [.!?] when using join command
 
 """"""""""""""""""""""""""""""""" Whitespace """""""""""""""""""""""""""""""""
 """""""""""""" Get different listchars if it’s supported """""""""""""
@@ -194,8 +195,10 @@ vnoremap <Leader>xp !python3<CR>
 nnoremap <Leader>mm :wall<Bar>make!<CR>
 nnoremap <Leader>mc :make check<CR>
 
+" Thanks to scriptteast, 'K' does this now. (TODO remove these after a commit)
 " Help me! Calls help on the word under the cursor
 nnoremap <Leader>hh viwy:help <C-r>"<CR>
+vnoremap <Leader>hh y:help <C-r>"<CR>
 
 " indent most recently pasted code
 nnoremap <Leader>= `[=`]
@@ -262,3 +265,28 @@ let g:gitgutter_sign_modified_removed   = '~_'
 
 """""""""""""""""""""""""""""""""""" vsnip """""""""""""""""""""""""""""""""""
 "imap <expr> <Tab> vsnip#available() ? '<Plug>(vsnip-expand-or-jump)' : '<Tab>'
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" Modified from http://dhruvasagar.com/2013/03/28/vim-better-foldtext
+"function! NeatFoldText()"{{{
+  "" Get the indent level, and put that many spaces
+  "let indent_level = indent(v:foldstart)
+  "let indent = repeat(' ',indent_level)
+"
+  "" Get the text on the foldline. Remove " &  from the start
+  "let line = ' ' . substitute(getline(v:foldstart), '^\s*"\?\s*\|\s*"\?\s*{{' . '{\d*\s*', '', 'g') . ' '
+"
+  "" Create a string detailing how many lines the fold folds
+  "let lines_count = v:foldend - v:foldstart + 1
+  "let lines_count_text = '-' . printf("%10s", lines_count . ' lines') . ' '
+"
+  "" Parse the long fillchars option to get just the char that we're folding with
+  "let foldchar = matchstr(&fillchars, 'fold:\zs.')
+"
+  "" Figure out how large the line should be
+  "let foldtextstart = strpart('+' . repeat(foldchar, v:foldlevel*2) . line, 0, (winwidth(0)*2)/3)
+  "let foldtextend = lines_count_text . repeat(foldchar, 8)
+  "let foldtextlength = strlen(substitute(foldtextstart . foldtextend, '.', 'x', 'g')) + &foldcolumn
+"
+  "return indent . foldtextstart . repeat(foldchar, winwidth(0)-foldtextlength) . foldtextend
+"endfunction"}}}
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""

@@ -33,6 +33,10 @@ function! notes#init()
   nnoremap ! :call notes#MarkDone()<CR>
 
   "command! -nargs=? Yesterday call notes#Yesterday_Helper("tabedit", <args>)
+  nnoremap <Leader>y :call notes#Yesterday_Helper('edit', 1)<CR>
+
+  " Foldo command to open a named fold
+  command! -nargs=1 Foldo keeppatterns g/^{\{3,3} <args>/normal zx
 
 endfunction
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""}}}
@@ -115,11 +119,25 @@ function! notes#Yesterday_Helper(open_method, ...)
   " Create a command to get the file from <days_ago> days ago (must strip
   " trailing newline)
   let command = "head -" . l:desired_day. " .daykeeper | tail -1 | tr -d '\n'"
-  let file = system(l:command) . ".md"
+  let file = system(l:command) . "*"
 
   " open up the file
   execute a:open_method . " " . l:file
 endfunction
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""}}}
+
+"""""""""""""""""""""""""""""" Copy Named Folds
+""""""""""""""""""""""""""""""{{{
+function! notes#GetNamedFold(pattern)
+  execute 'wincmd w'
+  let temp = &foldlevel
+  set foldlevel=10
+  execute 'silent keeppatterns global/^{\{3,3} ' . a:pattern . '/normal Va{"0y'
+  execute 'set foldlevel=' . temp
+  execute 'wincmd w'
+  .put 0
+endfunction
+nnoremap <Leader>T :call notes#GetNamedFold('TODOs')<CR>zO:UpdateDates<CR>:DoneBeGone<CR>zC
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""}}}
 
 " Ideally this would all be the "OPERATOR" key - depending on context it'll do
