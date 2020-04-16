@@ -1,0 +1,18 @@
+"""""""""" Example notes file. Syntax highlighting here should work. """""""""
+syntax clear
+syntax match  ccFoobar  "Foo.\{-}Bar"  contains=ccFoo
+syntax match  ccFoo     "Foo"	    contained nextgroup=ccFiller
+syntax region ccFiller  start="."  matchgroup=ccBar  end="Bar"  contained
+
+highlight ccFoobar ctermfg=red
+highlight ccFoo ctermfg=blue
+highlight ccFiller ctermfg=yellow
+highlight ccBar ctermfg=green
+finish
+
+This will highlight "Foo" and "Bar" differently, and only when there is a
+"Bar" after "Foo".  In the text line below, "f" shows where ccFoo is used for
+highlighting, and "bbb" where ccBar is used. >
+
+   Foo asdfasd Bar asdf Foo asdf Bar asdf
+   fff	       bbb	fff	 bbb
