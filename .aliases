@@ -1,7 +1,6 @@
 # Easier navigation
 alias ..="cd .."
 alias ...="cd ../.."
-alias cdot="cd ~/dotfiles"
 alias cnot="cd ~/Desktop/notes"
 
 function double_cd() {
@@ -21,7 +20,7 @@ function cdev() {
 }
 
 function cclass() {
-  double_cd "$HOME/Desktop/college/14-Winter-2019" $1
+  double_cd "$HOME/Desktop/college/15-Spring-2020" $1
 }
 
 # I don't wanna put this in my bin because it's specific to my mac, I guess...
@@ -79,3 +78,6 @@ alias duo="/Users/ari/Desktop/college/0-Other/duo/duo.sh"
 # https://www.atlassian.com/git/tutorials/dotfiles
 # Alias to make it easy to track dotfiles
 alias config='/usr/bin/git --git-dir=$HOME/dotfiles/ --work-tree=$HOME'
+
+# colored ls'ing
+alias ls='ls -G'
