@@ -2,7 +2,7 @@
 """"""""""""""""""""""" syntax & highlight group links """"""""""""""""""""{{{
 " {{{ Fold
 syntax match notesNamedFoldStart +^{{{+ nextgroup=notesNamedFoldHeader,notesLogStart
-syntax match notesNamedFoldHeader +[^!]*+ contained containedin=NONE
+syntax match notesNamedFoldHeader +[^!]*+ contained containedin=NONE contains=@NoSpell
 " {{{ fold-marker is not as good as fold-syntax when the marker is data :c
 syntax region notesNamedFoldBodyNospell start=+!@+ matchgroup=notesNamedFoldEnd end=+^}}}+ contains=@NoSpell
 syntax match notesNamedFoldEnd +^}}}+
@@ -35,23 +35,42 @@ syntax cluster notesLink contains=notesLinkText
 " THEN 0-width: Literal ](
 syntax region notesLinkText matchgroup=notesLinkTextDelimiter start=+\[\%(\_[^]]*](\)\@=+ matchgroup=notesLinkTextDelimiter end=+]+ nextgroup=notesLinkURL
 syntax region notesLinkURL matchgroup=notesLinkTextDelimiter start=+(+ matchgroup=notesLinkTextDelimiter end=+\%()\|\_s\)+ contained containedin=NONE contains=@NoSpell conceal
-highlight link notesLinkTextDelimiter notesLinkDelimiter
-highlight link notesLinkText String
+highlight link notesLinkTextDelimiter notesDelimiterHidden
+highlight link notesLinkText Underlined
 " }}}
 " {{{ Priority for notesListMarker
-syntax region notesListItem transparent matchgroup=notesListMarker start="^\s*[-*+]\%(\s\S\)\@=" end="$" keepend contains=@notesTodoListSpecialItems,@notesLink
+syntax region notesListItem transparent matchgroup=notesListMarker start="^\s*[-*+]\%(\s\S\)\@=" end="$" keepend contains=@notesText
 highlight link notesListMarker notesBullet
 
 " Special items in the list
-syntax cluster notesTodoList contains=@notesListItem,@notesTodoListSpecialItems
-syntax cluster notesTodoListSpecialItems contains=notesTodoListDO,notesTodoListDONE,notesTodoListBackburner
-syntax region notesTodoListDO start=/DO/ end=/!$/ oneline contains=@NoSpell,@notesLink contained
-syntax region notesTodoListDONE start=/DONE/ end=/!$/ oneline contains=@NoSpell,@notesLink contained
-syntax region notesTodoListBackburner start=/Backburner/ end=/!$/ oneline contains=@NoSpell,@notesLink contained
-highlight link notesTodoListDO notesDO
-highlight link notesTodoListDONE notesDONE
-highlight link notesTodoListBackburner notesBackburner
+syntax cluster notesBangList contains=@notesListItem,@notesBangListSpecialItems
+syntax cluster notesBangListSpecialItems contains=notesBangListDO,notesBangListDONE,notesBangListBackburner
+syntax region notesBangListDO start=/DO\>/ end=/!$/ oneline contains=@NoSpell,@notesText contained
+syntax region notesBangListDONE start=/DONE\>/ end=/!$/ oneline contains=@NoSpell,@notesText contained
+syntax region notesBangListBackburner start=/Backburner\>/ end=/!$/ oneline contains=@NoSpell,@notesText contained
+
+highlight link notesBangListDO notesDO
+highlight link notesBangListDONE notesDONE
+highlight link notesBangListBackburner notesBackburner
 " }}}
+" {{{ Italics/Bold/literals
+syntax region notesItalic matchgroup=notesItalicDelimiter start="\*\%(\S\)\@=" matchgroup=notesItalicDelimiter end="\%(\S\)\@<=\*" keepend concealends
+syntax region notesBold matchgroup=notesBoldDelimiter start="\*\*\%(\S\)\@=" matchgroup=notesBoldDelimiter end="\%(\S\)\@<=\*\*" keepend concealends
+syntax region notesCodeLiteral matchgroup=notesCodeLiteralDelimiter start="`\%(\S\)\@=" matchgroup=notesCodeLiteralDelimiter end="\%(\S\)\@<=`" keepend concealends
+syntax region notesBar matchgroup=notesBarDelimiter start="|\%(\S\)\@=" matchgroup=notesBarDelimiter end="\%(\S\)\@<=|" keepend concealends
+syntax cluster notesWeightedTextDelimiter contains=notesItalicDelimiter,notesBoldDelimiter,notesCodeLiteralDelimiter,notesBarDelimiter
+syntax cluster notesWeightedText contains=notesItalic,notesBold,notesCodeLiteral,notesBar,@notesWeightedTextDelimiter
+
+highlight notesItalic cterm=italic
+highlight notesBold cterm=bold
+highlight notesCodeLiteral ctermbg=240
+highlight notesBar cterm=underline ctermfg=20
+
+highlight notesItalicDelimiter ctermfg=22
+highlight notesBoldDelimiter ctermfg=27
+" }}}
+
+syntax cluster notesText contains=@notesBangListSpecialItems,@notesLink,@notesWeightedText
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""}}}
 
 """"""""""""""" Colorscheme (give colors to the linked groups) """"""""""""{{{
@@ -64,10 +83,12 @@ highlight notesBullet ctermfg=3
 highlight notesDO term=standout ctermfg=10
 highlight notesDONE term=standout ctermfg=23
 highlight notesBackburner term=standout ctermfg=238
-highlight notesLinkDelimiter ctermfg=17
+highlight notesDelimiterHidden ctermfg=17
+highlight notesDelimiterStandout ctermfg=5
 highlight notesLinkURL ctermfg=54
+highlight link notesCodeLiteralDelimiter notesDelimiterStandout
+highlight link notesBarDelimiter notesDelimiterHidden
+
+" TODO 22 is a beautiful green color. Can I use it somewhere?
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""}}}
-
-echom printf("[%s] Notes syntax file sourced", expand('%'))
-finish
