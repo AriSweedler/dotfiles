@@ -35,7 +35,7 @@ endfunction
 " With 1 argument, just find.
 " With 2 arguemnts, sub src for dst. (if unmoved, slide instead of sub)
 function! notes#banglist#controller(...)
-  let l:unmoved = notes#CursorUnmoved("notes#banglist")
+  let l:unmoved = notes#banglist#CursorUnmoved('controller')
 
   if a:0 == 0
     if ! l:unmoved
@@ -59,7 +59,29 @@ function! notes#banglist#controller(...)
   silent! normal! zO
 
   " Invoke CursorUnmoved to set the "unmoved cursor position"
-  call notes#CursorUnmoved("notes#banglist")
+  call notes#banglist#CursorUnmoved('controller')
 endfunction
 
+" Toggle between 27 and 238. Half optimized for literally no reason haha !
+let g:notes#banglist#bb_color = 238
+function! notes#banglist#toggle_backburner_highlight()
+  let g:notes#banglist#bb_color = 27 + (238-27)*(g:notes#banglist#bb_color == 27)
+  execute "highlight notesBackburner term=standout ctermfg=" . g:notes#banglist#bb_color
+endfunction
 
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" TODO move to utility folder
+" Originally this was built to be very general, but then I only use it here so I
+" just transplanted it. It's actually a utility function
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" Helper function to check if the cursor has moved since the last invocation
+" of this function.
+let g:notes#banglist#prev_cur_pos = {}
+function! notes#banglist#CursorUnmoved(tag)
+  let prev = exists("g:notes#banglist#prev_cur_pos[a:tag]") ? g:notes#banglist#prev_cur_pos[a:tag] : [0]
+  let answer = (l:prev == getpos('.'))
+
+  " Update tag's prev_cur_pos and return the answer
+  let g:notes#banglist#prev_cur_pos[a:tag] = getpos('.')
+  return answer
+endfunction
