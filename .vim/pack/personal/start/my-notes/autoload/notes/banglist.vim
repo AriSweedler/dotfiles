@@ -1,41 +1,29 @@
 let g:notes#banglist#pattern_start = '\* \<\zs'
 let g:notes#banglist#pattern_end = '\ze\>.*!'
-let g:notes#banglist#ver = 2
 
-function! notes#banglist#main(dict)
-  " dict has a MODE (find, sub, slide)
-  " dict has a SRC
-  " dict has a DST
-  "
-  " sliding a DONE-->DO ==> mode=slide src=DONE dst=DO
-  " finding a DO        ==> mode=find  src=DO
-  " subbing a DO-->DONE ==> mode=sub   src=DO   dst=DONE
+let g:notes#banglist#src = 'DO'
+let g:notes#banglist#dst = 'DONE'
 
-  let l:pat = notes#banglist#item(a:dict['src'])
+" Finds the next line containing src and changes it to dst. If 'slide' is set to
+" true, first changes this line from dst to src.
+function! notes#banglist#main(slide, src, dst)
+  " Convenience variables
+  let l:src_pat = notes#banglist#item(a:src)
+  let l:dst_pat = notes#banglist#item(a:dst)
 
-  if a:dict['mode'] == "find"
-    " Find the right line
-    call search(l:pat)
-    return
-  elseif a:dict['mode'] == "sub"
-    " Find the right line and make the substitution
-    call search(l:pat)
-    execute "substitute/" . l:pat . "/" . a:dict['dst'] . "/e"
-    let l:pat = notes#banglist#item(a:dict['dst'])
-  elseif a:dict['mode'] == "slide"
-    " TODO this doesn't work :c
-    " Undo the substitution and go to the pattern (instead of the beginning of the line)
-    execute "substitute/" . l:pat . "/" . a:dict['dst'] . "/e"
+  " Move to the start of the line before executing forward search, so
+  " invocations work linewise isntead of characterwise
+  normal ^
 
-    " Go to the next pattern and redo the substitution
-    let l:pat = notes#banglist#item(a:dict['dst'])
-    call search(l:pat)
-    call search(l:pat)
-    execute "substitute/" . l:pat . "/" . a:dict['src'] . "/e"
-  else
-    echo "unknown mode"
-    return
+  if a:slide
+    " Undo the substitution on this line and go to the next pattern
+    execute "substitute/" . l:dst_pat . "/" . a:src . "/e"
+    normal $
   endif
+
+  call search(l:src_pat)
+  execute "substitute/" . l:src_pat . "/" . a:dst . "/e"
+  call search(l:dst_pat)
 endfunction
 
 function! notes#banglist#item(name)
