@@ -21,9 +21,9 @@ function! notes#init()
   let g:notes#prev_cur_pos = {}
 
   " Remap <bang> to mark or toggle DO/DONE
-  nnoremap ! :call notes#Banglist_controller('sub', 'DO', 'DONE')<CR>
-  nnoremap <Leader>! :call notes#Banglist_controller('find', 'DO', '')<CR>
-  nnoremap ? :call notes#Banglist_controller('sub', 'DO', 'Backburner')<CR>
+  nnoremap ! :call notes#Banglist_controller('DO', 'DONE')<CR>
+  nnoremap <Leader>! :call notes#Banglist_controller('DO', 'DO')<CR>
+  nnoremap ? :call notes#Banglist_controller('DO', 'Backburner')<CR>
 
   command! DoneBeGone keeppatterns g/[!*] DONE/d
 
@@ -64,22 +64,16 @@ function! notes#CursorUnmoved(tag)
   return answer
 endfunction
 
-" There are a few things the "Banglist" function can do, depending on how it's
-" invoked. Here they were, in order of priority:
-" 1) If invoked with a flag, do the specified behavior.
-" 2) If the cursor is moved in between invocations, change the next DO to DONE
-" 3) If the cursor is unmoved, repeat the previous behavior's sequence (stored
-"    in variable s:banglist_mode)
-function! notes#Banglist_controller(mode, src, dst)
-  let l:unmoved = notes#CursorUnmoved("notes#Banglist")
-  let l:mode = (l:unmoved && a:mode == 'sub') ? 'slide' : a:mode
-  let l:banglist_args = {'mode': l:mode, 'src': a:src, 'dst': a:dst}
+" Wrapper function to call banglist. Tracks cursor movement & opens folds
+function! notes#Banglist_controller(src, dst)
+  " If cursor is unmoved between invocations, slide instead of sub
+  let l:should_slide = notes#CursorUnmoved("notes#Banglist")
+  call notes#banglist#main(l:should_slide, a:src, a:dst)
 
-  echo l:banglist_args
-  call notes#banglist#main(l:banglist_args)
+  " Open folds if needed
+  silent! normal! zO
 
-  " Invoke CursorUnmoved so a repeat invocation will think the cursor is unmoved
-  normal! zx
+  " Invoke CursorUnmoved to set the "unmoved cursor position"
   call notes#CursorUnmoved("notes#Banglist")
 endfunction
 
