@@ -1,8 +1,6 @@
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" Notes plugin to help me take notes
-echom "NOTES PLUGIN FILE SOURCED. THIS SHOULD NOT HAPPEN, ONLY AUTOLOAD!"
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" {{{
 """"""""""""""""""""""""""""" Initialize notes """"""""""""""""""""""""""""" {{{
+" TODO how do other plugins init themselves?
 function! notes#init()
   "echom "NOTES INIT AUTOLOAD FUNCTION SOURCED!"
 
@@ -11,19 +9,15 @@ function! notes#init()
   setlocal conceallevel=2
   setlocal concealcursor=nc
 
-  " Use gx to open the first link on this line.
-  " Use <Leader>gx to open the link in the parenthesis you're hovering over.
-  nnoremap gx :!open <C-r>=notes#GetLink(getline('.'))<CR>
-  nnoremap <Leader>gx "0yi(:!open "<C-r>0"<CR>
+  nnoremap gx :call notes#OpenLink()<CR>
 
   command! UpdateDates global/(in \d* days) !/normal dgn$h\1A !<C-_>
 
-  let g:notes#prev_cur_pos = {}
-
   " Remap <bang> to mark or toggle DO/DONE
   nnoremap ! :call notes#banglist#controller()<CR>
-  nnoremap ? :call notes#banglist#controller('DO', 'Backburner')<CR>
   nnoremap <Leader>! :call notes#banglist#controller('DO')<CR>
+  nnoremap ? :call notes#banglist#toggle_backburner_highlight()<CR>
+  nnoremap <Leader>? :call notes#banglist#controller('DO', 'Backburner')<CR>
 
   command! DoneBeGone keeppatterns g/[!*] DONE/d
 
@@ -40,30 +34,33 @@ function! notes#init()
   nnoremap <Leader>FT :Foldo TODOs<CR>
 
   " Change curly quotes into regular quotes and stuff
-  command! FixMe keeppatterns call notes#FixPastedFunction()
+  command! FixPastedPDF keeppatterns call notes#FixPastedPDF()
 endfunction
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""""""""" Links """""""""""""""""""""""""""""""""" {{{
-" Mapping + function to open the URL from a link in the current line.
+" Open the URL under cursor. Or the last link on the line
 " Links are of the form [title](URL)
-function! notes#GetLink(mdLink)
-  let link = substitute(a:mdLink, '^.*\[.*\](\(.*\)).*$', '"\1"', '')
-  return link
+function! notes#OpenLink()
+  " Try to find link under cursor
+  let l:link_regex = '\[\_[^]]*](\([^)\_s]\{-}\))'
+  let l:link = substitute(expand('<cWORD>'), l:link_regex, '\1', '')
+
+  " If no substitution is made, no link was found.
+  " Try to find last link on the current line
+  if l:link == expand('<cWORD>')
+    echom "No link under cursor. Trying to open last link on this line"
+    let l:line_link_regex = '^.*' . l:link_regex . '.*$'
+    let l:link = substitute(getline('.'), l:line_link_regex, '\1', '')
+  endif
+
+  " If no substitution is made, no link was found.
+  if l:link == getline('.')
+    echom "ERROR: No link found on this line. Giving up"
+    return
+  endif
+
+  execute '!open "' . l:link . '"'
 endfunction
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-""""""""""""""""""""""""""""""""" TODOlist """"""""""""""""""""""""""""""""" {{{
-
-" Helper function to check if the cursor has moved since the last invocation
-" of this function.
-function! notes#CursorUnmoved(tag)
-  let prev = exists("g:notes#prev_cur_pos[a:tag]") ? g:notes#prev_cur_pos[a:tag] : [0]
-  let answer = (l:prev == getpos('.'))
-
-  " Update tag's prev_cur_pos and return the answer
-  let g:notes#prev_cur_pos[a:tag] = getpos('.')
-  return answer
-endfunction
-
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""""""" Yesterday """""""""""""""""""""""""""""""" {{{
 " Open up Yesterday's notes file. Take the n'th line from the end in our
@@ -111,7 +108,7 @@ nnoremap <Leader>T :call notes#GetNamedFold('TODOs') <Bar> DoneBeGone<CR>:Foldo 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""" For copy/pasting from PDFs """""""""""""""""""""""" {{{
 " For copy/pasting that BS
-function! notes#FixPastedFunction()
+function! notes#FixPastedPDF()
   %substitute/â/-/e
   %substitute/â/'/e
   %substitute/â/"/e
