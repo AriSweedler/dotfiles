@@ -21,9 +21,9 @@ function! notes#init()
   let g:notes#prev_cur_pos = {}
 
   " Remap <bang> to mark or toggle DO/DONE
-  nnoremap ! :call notes#Banglist_controller('DO', 'DONE')<CR>
-  nnoremap <Leader>! :call notes#Banglist_controller('DO', 'DO')<CR>
-  nnoremap ? :call notes#Banglist_controller('DO', 'Backburner')<CR>
+  nnoremap ! :call notes#banglist#controller()<CR>
+  nnoremap ? :call notes#banglist#controller('DO', 'Backburner')<CR>
+  nnoremap <Leader>! :call notes#banglist#controller('DO')<CR>
 
   command! DoneBeGone keeppatterns g/[!*] DONE/d
 
@@ -62,19 +62,6 @@ function! notes#CursorUnmoved(tag)
   " Update tag's prev_cur_pos and return the answer
   let g:notes#prev_cur_pos[a:tag] = getpos('.')
   return answer
-endfunction
-
-" Wrapper function to call banglist. Tracks cursor movement & opens folds
-function! notes#Banglist_controller(src, dst)
-  " If cursor is unmoved between invocations, slide instead of sub
-  let l:should_slide = notes#CursorUnmoved("notes#Banglist")
-  call notes#banglist#main(l:should_slide, a:src, a:dst)
-
-  " Open folds if needed
-  silent! normal! zO
-
-  " Invoke CursorUnmoved to set the "unmoved cursor position"
-  call notes#CursorUnmoved("notes#Banglist")
 endfunction
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
