@@ -1,57 +1,22 @@
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" ⌘
-" TODObackburner
-" QUICKFIX SIGN PLUGIN (exists already as ALE plugin?)
-"
-" add a mark to the sign column for every quick fix line entry
-" define shortcuts to jump around them
-" use sign's 'group' to do it properly
-" :help sign.txt is great
-"
-" How to parse quick fix output? It's pretty straightforward, apparently.
-" How to place signs? It's simple, you already learned and you can remember
-" easily.
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+"""""""""""""""""""""""""" Most important settings """"""""""""""""""""""""" {{{
+" I hope this doesn't cause problems if I'm running pre 8.0? If so, I can add a
+" guard. And then I'll have to manually run the few imporant commands from
+" defaults.vim?? Seems easier to NOT do this - but I'll leave this here until it
+" causes an issue (which I don't think it ever will?)
+unlet! skip_defaults_vim
+source $VIMRUNTIME/defaults.vim
 
-""""""""""""""""""""""""""""" TODO place these VVV """""""""""""""""""""""""""""
-" Persistent undo w/o clutter?
-set undodir="~/.vim/undo"
-
-" Show those lovely folds
-set foldcolumn=2
-
-" Instead of stumbling into ex mode, repeat the last macro used.
-nnoremap Q @@
-"
-" TODO have an easy way to hide the gitgutter column
-" I tend to use semicolons as my leader key for imaps, because I almost never
-" need to follow a ; with anything other than a space or a newline.
-
-"""""""""""""""""""""""""""""" Create textobjects """"""""""""""""""""""""""""""
-""" https://www.reddit.com/r/vim/comments/frlzt8/create_your_own_text_object/ ""
-" Define a text object for the whole buffer
-xnoremap <silent> wb GoggV
-onoremap <silent> wb :<C-u>normal vie<CR>
-
-" Easily define a text object for C-style commends
-xnoremap <silent> a* [*o]*
-onoremap <silent> a* :<C-u>normal va*V<CR>
-
-" Edit the macro stored in register x
-nnoremap <Leader>em :let @x = "<C-r>=@x<CR>"
-""""""""""""""""""""""" TODO finish playing with this ^^^ """"""""""""""""""""""
-
-"""""""""""""""""""""""""""""""""" settings """"""""""""""""""""""""""""""""""
 filetype plugin on    "allow for autocmds to be run based on filetype
 syntax on             "allow for syntax highlighting and indenting
 colorscheme desert    "pretty colors
 set nocompatible      "Don't do weird stuff for vi
-set number            "turn on line numbers
+set number            "turn on line numbers in the left columns
 set formatoptions+=j  "Delete comment character when joining commented lines
 
 " briefly show the matching bracket {[( when typing )]}
 set showmatch matchtime=3
 
+"""""""""""""""""""""""""" Better search/highlight """"""""""""""""""""""""" {{{
 " highlight search (highlight matches)
 set hlsearch
 " incremental search (highlight as we type the search query)
@@ -63,20 +28,43 @@ inoremap <silent> <C-_> <C-o>:nohlsearch<CR>
 " reappear. You must clear the @/ register to stop this.
 noremap <silent> <Leader>/ :let @/ = ""<CR>
 
+" Improvements to '*' - work in visual mode & don't go to the next instance
+" This one is sweet: use star in visual mode to search for the selected text
+" yank into register 0 --> forward search for the contents of register 0
+" (Very nomagic, escape contents of 0 register before pasting).
+vnoremap <silent> * "0y:let@/='\V<C-r>=escape(@0, '/\')<CR>'<CR>
+nnoremap * *N
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+
+""""""""""""""""""" Important commands from defaults.vim """"""""""""""""""" {{{
 " allow backspacing over more things
 set backspace=indent,eol,start
 
-" Multi-keystroke commands will be shown in bottom right, and they will not
-" timeout. Only cancel a partially given command manually (<C-c> or <ESC>)
+" CTRL-U in insert mode deletes a lot.  Use CTRL-G u to first break undo,
+" so that you can undo CTRL-U after inserting a line break.
+" Revert with ":iunmap <C-U>".
+inoremap <C-U> <C-G>u<C-U>
+
+" Multi-keystroke commands will be shown in bottom right.
 set showcmd
-set notimeout
-" DO timeout on escape codes, after 100 ms
+
+" timeout on escape codes after 100 ms
 set ttimeout ttimeoutlen=100
 
 " Nicer tab'ing in command mode (wild
+set wildmenu
+
+" Default to giving me a lil more space to see context
+set scrolloff=5
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+
+" Multi-keystroke commands will not timeout Only cancel a partially given
+" command manually (<C-c> or <ESC>)
+set notimeout
+
 " 1st tab:         Complete the longest match and bring up 'wildmenu'
 " Additional tabs: Cycle through the menu
-set wildmenu wildmode=longest:full,full
+set wildmode=longest:full,full
 
 " Use vim's system clipboard register ("*) instead of the unnamed register for
 " yank/put/delete. This links these commands to the system clipboard
@@ -84,8 +72,8 @@ if !has('clipboard') && !has('xterm_clipboard')
   echom "[VIMRC] WARNING: Not compiled with clipboard support"
 endif
 set clipboard=unnamed
-
-"""""""""""""""""""""""" Other (less important) settings """""""""""""""""""""""
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+"""""""""""""""""""""""""" Less important settings """"""""""""""""""""""""" {{{
 set display=lastline  "as much as possible of the last line will be displayed
 set gdefault          "turn global flag on by default for :substitute
 set history=1000      "the default is only 40.
@@ -94,7 +82,6 @@ set noerrorbells      "disable error bells
 set belloff=all       "disable bell for non-errors, too
 set lazyredraw        "don't update the screen when doing macros
 set updatetime=100    "let vim-gitgutter update faster
-set scrolloff=7       "Deafult to giving me a lil more space to see context
 set sidescrolloff=4   "Min # of columns to keep to the left/right of the cursor
 set splitbelow splitright "new splits open to the bottom or to the right
 set autoread          "Autoload file changes. You can undo by pressing u
@@ -102,9 +89,13 @@ set pumheight=8       "set max popup menu height to 8
 set tags+=tags;       "ctags is so helpful! And easy, too.
 set indentexpr= "Turn off all indenting by default
 set nojoinspaces      "don't put 2 spaces after [.!?] when using join command
-
-""""""""""""""""""""""""""""""""" Whitespace """""""""""""""""""""""""""""""""
-"""""""""""""" Get different listchars if it’s supported """""""""""""
+set signcolumn=yes    "Show signs in the left columns
+" TODO only set signcolumn if we see we're in a git repo?
+" TODO deal with the 'config' bs to let my dotfiles properly show changes
+" TODO deal with the 'config' bs to let config have submodules properly
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+""""""""""""""""""""""""""""" Whitespace stuff """"""""""""""""""""""""""""" {{{
+" Get fancy listchars if it’s supported
 if (&termencoding ==# 'utf-8' || &encoding ==# 'utf-8') && version >= 700
   set listchars=tab:•›,space:⋅,eol:¬,nbsp:+,
   set fillchars=vert:\|,fold:\⋅,
@@ -119,63 +110,45 @@ endif
 " Toggle displaying whitespace characters
 nnoremap <Leader>l :set list!<CR>
 
-" GitGutter(Enable|Disable)
-" signcolumn
-" foldcolumn
-" number
-" Toggle on and off: GitGutter, margin numbers, signcolumn
-nnoremap <Leader>[ :GitGutterToggle <Bar> set number! <Bar> set signcolumn=<C-r>=&number?"no":"auto"<CR><CR>
+" Toggle hide/show of left columns
+nnoremap <silent> <Leader>[ :call lib#toggleLeftColumns()<CR>
 
-" remove trailing whitespace - https://vi.stackexchange.com/questions/454/
-function! RemoveTrailingWhitespace(range)
-  let save_pos = getpos(".")
-  let trailing = '\s\+$'
-  execute 'keeppatterns ' . a:range . 'substitute/' . l:trailing . '//e'
-  call setpos('.', save_pos)
-endfunction
-nnoremap <silent> <Leader>w :call RemoveTrailingWhitespace('%')<CR>
+" Keep it clean
+nnoremap <silent> <Leader>w :call lib#removeTrailingWhitespace('%')<CR>
 
-"""""""""""""""""""""""""""""""" pretty colors """""""""""""""""""""""""""""""
-""""""""""""""" Look at colors with the XtermColorTable command """"""""""""""
-" Toggle syntax highlighting
-noremap <Leader>sy :set syntax=<C-r>=&syntax == "OFF" ? "ON" : "OFF"<CR><CR>
+" TODO Is there a way to trigger a call to lib#changeTextWidth upon noticing the
+" option &textwidth changed?
+"
+" Update textwidth and ColorColumn at the same time
+nnoremap <silent> <Leader>tw :<C-u>call lib#changeTextWidth(v:count)<CR>
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+""""""""""""""""""""""""""""""" Pretty colors """""""""""""""""""""""""""""" {{{
+highlight Folded ctermbg=234 ctermfg=8
 
-" Use colorcolumn to display the textwidth
+" Give fun colors to the left columns (and the ColorColumn)
+highlight FoldColumn ctermbg=233 ctermfg=8
+highlight SignColumn ctermbg=234 ctermfg=8
 highlight ColorColumn ctermbg=233
 
-" Update textwidth and colorcolumn at the same time
-nnoremap <silent> <Leader>tw :<C-u>call ChangeTextWidth(v:count)<CR>
-function! ChangeTextWidth(...)
-  " If we have a v:count, then set the textwidth.
-  if a:0 == 1
-    let l:width = a:1
-    let &textwidth = (l:width)
-  endif
-
-  " match the colorcolumn to the textwidth
-  let &colorcolumn = (&textwidth)
-endfunction
-call ChangeTextWidth(&textwidth)
-
-"""""""""""""""""""""""""""""""" abbreviations """""""""""""""""""""""""""""""
-"""""""""""" easy hashbangs """"""""""""
-inoreabbrev #!b #!/bin/bash
-inoreabbrev #!p #!/usr/bin/env python3
-inoreabbrev #!!p #!/usr/bin/env python3<CR><CR>if __name__ == "__main__":<CR>
-
-"""""""""""""""""""""""""""""""""" mappings """"""""""""""""""""""""""""""""""
-" One keystroke to strip trailing whitespace on the current line and write
-" Works in a lotta modes. See `:help map-modes` for details
-" If you want to exit insert mode without writing or stripping trailing
-" whitespace, go somwehere else. Or use <C-c> or jk
-noremap  <C-f> <ESC>:call RemoveTrailingWhitespace('.')<CR>:w<CR>
-noremap! <C-f> <ESC>:call RemoveTrailingWhitespace('.')<CR>:w<CR>
-
-" Exit insert mode without having to move fingers.
-inoremap jk <ESC>:call RemoveTrailingWhitespace('.')<CR>
+" Toggle syntax highlighting
+noremap <Leader>sy :call lib#toggleSyntax()<CR>
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+"""""""""""""""""""""""""""""""" Easier make """"""""""""""""""""""""""""""" {{{
+" Easier make (write all before invoking the make command)
+nnoremap <Leader>mm :wall<Bar>make!<CR>
+nnoremap <Leader>mc :make check<CR>
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+"""""""""" convenience mappings (this stuff will mess with people) """"""""" {{{
+" One keystroke to strip trailing whitespace on the current line and write in
+" (almost) any mode
+noremap  <C-f> <ESC>:call lib#removeTrailingWhitespace('.')<CR>:w<CR>
+noremap! <C-f> <ESC>:call lib#removeTrailingWhitespace('.')<CR>:w<CR>
 
 " <C-f> <C-g> will write and exit. Kinda emacs-y lol
 nnoremap <C-g> :q<CR>
+
+" Also... exit insert mode without having to move fingers.
+inoremap jk <ESC>:call lib#removeTrailingWhitespace('.')<CR>
 
 " When do I ever wanna hit 2 keys to execute one thought. Overwriting these
 " isn't an issue as if I wanna operate on a range I can just use visual mode.
@@ -184,47 +157,7 @@ nnoremap G Gzz
 nnoremap zz ^zz
 nnoremap < <<
 nnoremap > >>
-nnoremap <C-b> gedaW
 
-" So cool! Execute currently highlighted text as bash or python
-" https://vimways.org/2019/vim-and-the-shell/
-vnoremap <Leader>xb !bash<CR>
-vnoremap <Leader>xp !python3<CR>
-
-" Easier make (write all before invoking the make command)
-nnoremap <Leader>mm :wall<Bar>make!<CR>
-nnoremap <Leader>mc :make check<CR>
-
-" Thanks to scriptteast, 'K' does this now. (TODO remove these after a commit)
-" Help me! Calls help on the word under the cursor
-nnoremap <Leader>hh viwy:help <C-r>"<CR>
-vnoremap <Leader>hh y:help <C-r>"<CR>
-
-" indent most recently pasted code
-nnoremap <Leader>= `[=`]
-
-" use star in visual mode to search for the selected text
-" yank into register s --> forward search for the contents of register s
-" (Very nomagic, escape contents of s register before pasting)
-vnoremap * "sy/\V<C-r>=escape(@s, '/\')<CR><CR>N
-nnoremap * *N
-
-""""""""""""" buffers/tabs """""""""""""
-" Buffer close: remove buffer from memory
-nnoremap <Leader>bc :bnext <Bar> bdelete #<CR>
-" Remove buffer from memory AND close the window
-" (This is the stronger option so it gets the extra <Leader> prefix)
-nnoremap <Leader><Leader>bc :.bdelete<CR>
-
-" easily switch between buffers and tabs
-nnoremap [b :bprevious<CR>
-nnoremap ]b :bnext<CR>
-nnoremap gr gT
-
-" Tabedit the file under the cursor
-nnoremap gF <C-w>f<C-w>T
-
-""""""""""""""" movement """""""""""""""
 " Up/Down don't change relative line number
 nnoremap <Up> <C-y>k
 nnoremap <Down> <C-e>j
@@ -232,61 +165,100 @@ nnoremap <Down> <C-e>j
 " Move up/down this virtual column until you hit non-whitespace
 nnoremap gK ?\%<C-R>=virtcol(".")<CR>v\S<CR>
 nnoremap gJ /\%<C-R>=virtcol(".")<CR>v\S<CR>
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+""""""""""""""""""""" Deal with buffest and tabs easier """""""""""""""""""" {{{
+" Buffer close: remove buffer from memory
+nnoremap <Leader>bc :bnext <Bar> bdelete #<CR>
+" Remove buffer from memory AND close the window
+nnoremap <Leader>BC :.bdelete<CR>
 
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-""""""""""""""""""""""""""""""""""" Plugins """"""""""""""""""""""""""""""""""
-"""""""""""""""""""""""""" airline """""""""""""""""""""""""
+" Switch between buffers and tabs easier
+nnoremap [b :bprevious<CR>
+nnoremap ]b :bnext<CR>
+
+" I like 'gr/gt' better than 'gT/gt'
+nnoremap gr gT
+
+" TODO do I actually use these? The parallelism to other '[' commands is nice.
+nnoremap ]t gT
+nnoremap [t gt
+
+" Tabedit the file under the cursor
+" (TODO I never use this. Should probably remove it)
+nnoremap gF <C-w>f<C-w>T
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+"""""""""""""""""""""""""""" create text objects """"""""""""""""""""""""""" {{{
+" Leaving this here cuz I might wanna do something actually useful with it
+" eventually. I haven't, yet. But here's an atomic power that can't be hacked
+" together easily
+""" https://www.reddit.com/r/vim/comments/frlzt8/create_your_own_text_object/ ""
+" Define a text object for the whole buffer
+xnoremap <silent> wb GoggV
+onoremap <silent> wb :<C-u>normal vie<CR>
+
+" Easily define a text object for C-style commends
+xnoremap <silent> a* [*o]*
+onoremap <silent> a* :<C-u>normal va*V<CR>
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+""""""""""""""""""""""""""""""" Plugin config """""""""""""""""""""""""""""" {{{
+"""""""""""""""""""""""""""""""""" airline """"""""""""""""""""""""""""""""" {{{
+" TODO figure this out lol
 let g:airline#extensions#tabline#enabled = 1
 let g:airline#extensions#tabline#show_buffers = 0
 let g:airline#extensions#tabline#buffer_min_count = 2
 let g:airline#extensions#tabline#buffer_nr_show = 1
 let g:airline_theme='dark'
-
-""""""""""""""""""""""""" GitGutter """"""""""""""""""""""""
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+""""""""""""""""""""""""""""""""" GitGutter """""""""""""""""""""""""""""""" {{{
+" Tell vim-gitgutter to leave the color of my signcolumn alone
 let g:gitgutter_override_sign_column_highlight = 0
-if exists('&signcolumn')  " as of Vim 7.4.2201 and later
-  set signcolumn=yes
-else
-  let g:gitgutter_sign_column_always = 1
-endif
-highlight! link Folded SignColumn
 
-"White sign, colored background colorscheme
-highlight SignColumn term=bold ctermbg=234 ctermfg=8
-highlight GitGutterDelete term=bold ctermfg=88 ctermbg=88
+" White sign, green background
 highlight GitGutterAdd term=bold ctermfg=189 ctermbg=22
+let g:gitgutter_sign_added = '>+'
+
+" White sign, yellow background
 highlight GitGutterChange term=bold ctermfg=189 ctermbg=100
+let g:gitgutter_sign_modified = '>~'
+let g:gitgutter_sign_modified_removed = '~_'
 
-let g:gitgutter_sign_added              = '>+'
-let g:gitgutter_sign_modified           = '>~'
-let g:gitgutter_sign_removed            = '>_'
+" Solid red box
+highlight GitGutterDelete term=bold ctermfg=88 ctermbg=88
 let g:gitgutter_sign_removed_first_line = '>‾'
-let g:gitgutter_sign_modified_removed   = '~_'
+let g:gitgutter_sign_removed = '>_'
 
-"""""""""""""""""""""""""""""""""""" vsnip """""""""""""""""""""""""""""""""""
-"imap <expr> <Tab> vsnip#available() ? '<Plug>(vsnip-expand-or-jump)' : '<Tab>'
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" They're Hunks not Chunks.
+nmap [h <Plug>(GitGutterPrevHunk)
+nmap ]h <Plug>(GitGutterNextHunk)
+
+" TODO read through `:help gitgutter.txt`
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+""" Customized foldtext text. This should probably go in a plugin if I care. {{{
+" Which I don't, for now.
+"
 " Modified from http://dhruvasagar.com/2013/03/28/vim-better-foldtext
-"function! NeatFoldText()"{{{
-  "" Get the indent level, and put that many spaces
-  "let indent_level = indent(v:foldstart)
-  "let indent = repeat(' ',indent_level)
 "
-  "" Get the text on the foldline. Remove " &  from the start
-  "let line = ' ' . substitute(getline(v:foldstart), '^\s*"\?\s*\|\s*"\?\s*{{' . '{\d*\s*', '', 'g') . ' '
+"function! NeatFoldText()
+" " Get the indent level, and put that many spaces
+" let indent_level = indent(v:foldstart)
+" let indent = repeat(' ',indent_level)
 "
-  "" Create a string detailing how many lines the fold folds
-  "let lines_count = v:foldend - v:foldstart + 1
-  "let lines_count_text = '-' . printf("%10s", lines_count . ' lines') . ' '
+" " Get the text on the foldline. Remove " &  from the start
+" let line = ' ' . substitute(getline(v:foldstart), '^\s*"\?\s*\|\s*"\?\s*{{' . '{\d*\s*', '', 'g') . ' '
 "
-  "" Parse the long fillchars option to get just the char that we're folding with
-  "let foldchar = matchstr(&fillchars, 'fold:\zs.')
+" " Create a string detailing how many lines the fold folds
+" let lines_count = v:foldend - v:foldstart + 1
+" let lines_count_text = '-' . printf("%10s", lines_count . ' lines') . ' '
 "
-  "" Figure out how large the line should be
-  "let foldtextstart = strpart('+' . repeat(foldchar, v:foldlevel*2) . line, 0, (winwidth(0)*2)/3)
-  "let foldtextend = lines_count_text . repeat(foldchar, 8)
-  "let foldtextlength = strlen(substitute(foldtextstart . foldtextend, '.', 'x', 'g')) + &foldcolumn
+" " Parse the long fillchars option to get just the char that we're folding with
+" let foldchar = matchstr(&fillchars, 'fold:\zs.')
 "
-  "return indent . foldtextstart . repeat(foldchar, winwidth(0)-foldtextlength) . foldtextend
-"endfunction"}}}
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" " Figure out how large the line should be
+" let foldtextstart = strpart('+' . repeat(foldchar, v:foldlevel*2) . line, 0, (winwidth(0)*2)/3)
+" let foldtextend = lines_count_text . repeat(foldchar, 8)
+" let foldtextlength = strlen(substitute(foldtextstart . foldtextend, '.', 'x', 'g')) + &foldcolumn
+"
+" return indent . foldtextstart . repeat(foldchar, winwidth(0)-foldtextlength) . foldtextend
+"endfunction
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
