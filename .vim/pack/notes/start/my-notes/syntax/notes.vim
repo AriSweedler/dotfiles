@@ -1,4 +1,8 @@
 """""""""""""""""""""" Syntax file for 'notes' filetype """"""""""""""""""""""
+if exists("b:current_syntax")
+  finish
+endif
+
 """"""""""""""""""""""" syntax & highlight group links """"""""""""""""""""{{{
 " {{{ Fold
 syntax match notesNamedFoldStart +^{{{+ nextgroup=notesNamedFoldHeader,notesLogStart
@@ -69,10 +73,8 @@ highlight notesBar cterm=underline ctermfg=20
 highlight notesItalicDelimiter ctermfg=22
 highlight notesBoldDelimiter ctermfg=27
 " }}}
-
 syntax cluster notesText contains=@notesBangListSpecialItems,@notesLink,@notesWeightedText
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""}}}
-
 """"""""""""""" Colorscheme (give colors to the linked groups) """"""""""""{{{
 highlight notesHeader term=bold ctermfg=5
 highlight notesSubheader term=bold ctermfg=61
@@ -90,5 +92,4 @@ highlight link notesCodeLiteralDelimiter notesDelimiterStandout
 highlight link notesBarDelimiter notesDelimiterHidden
 
 " TODO 22 is a beautiful green color. Can I use it somewhere?
-
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""}}}
