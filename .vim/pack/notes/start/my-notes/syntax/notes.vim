@@ -37,7 +37,7 @@ syntax cluster notesLink contains=notesLinkText
 " Literal [
 " THEN 0-width: zero-or-more of 'NOT ]'
 " THEN 0-width: Literal ](
-syntax region notesLinkText matchgroup=notesLinkTextDelimiter start=+\[\%(\_[^]]*](\)\@=+ matchgroup=notesLinkTextDelimiter end=+]+ nextgroup=notesLinkURL
+syntax region notesLinkText matchgroup=notesLinkTextDelimiter start=+\[\%(\_[^]]*](\)\@=+ matchgroup=notesLinkTextDelimiter end=+]+ nextgroup=notesLinkURL contains=@notesText
 syntax region notesLinkURL matchgroup=notesLinkTextDelimiter start=+(+ matchgroup=notesLinkTextDelimiter end=+\%()\|\_s\)+ contained containedin=NONE contains=@NoSpell conceal
 highlight link notesLinkTextDelimiter notesDelimiterHidden
 highlight link notesLinkText Underlined
@@ -60,8 +60,8 @@ highlight link notesBangListBackburner notesBackburner
 " {{{ Italics/Bold/literals
 syntax region notesItalic matchgroup=notesItalicDelimiter start="\*\%(\S\)\@=" matchgroup=notesItalicDelimiter end="\%(\S\)\@<=\*" keepend concealends
 syntax region notesBold matchgroup=notesBoldDelimiter start="\*\*\%(\S\)\@=" matchgroup=notesBoldDelimiter end="\%(\S\)\@<=\*\*" keepend concealends
-syntax region notesCodeLiteral matchgroup=notesCodeLiteralDelimiter start="`\%(\S\)\@=" matchgroup=notesCodeLiteralDelimiter end="\%(\S\)\@<=`" keepend concealends
-syntax region notesBar matchgroup=notesBarDelimiter start="|\%(\S\)\@=" matchgroup=notesBarDelimiter end="\%(\S\)\@<=|" keepend concealends
+syntax region notesCodeLiteral matchgroup=notesCodeLiteralDelimiter start="`\%(\S\)\@=" matchgroup=notesCodeLiteralDelimiter end="\%(\S\)\@<=`" keepend concealends contains=@NoSpell
+syntax region notesBar matchgroup=notesBarDelimiter start="|\%(\S\)\@=" matchgroup=notesBarDelimiter end="\%(\S\)\@<=|" keepend concealends contains=@NoSpell
 syntax cluster notesWeightedTextDelimiter contains=notesItalicDelimiter,notesBoldDelimiter,notesCodeLiteralDelimiter,notesBarDelimiter
 syntax cluster notesWeightedText contains=notesItalic,notesBold,notesCodeLiteral,notesBar,@notesWeightedTextDelimiter
 
@@ -85,9 +85,9 @@ highlight notesBullet ctermfg=3
 highlight notesDO term=standout ctermfg=10
 highlight notesDONE term=standout ctermfg=23
 highlight notesBackburner term=standout ctermfg=238
-highlight notesDelimiterHidden ctermfg=17
+highlight notesDelimiterHidden ctermfg=39
 highlight notesDelimiterStandout ctermfg=5
-highlight notesLinkURL ctermfg=54
+highlight notesLinkURL ctermfg=91
 highlight link notesCodeLiteralDelimiter notesDelimiterStandout
 highlight link notesBarDelimiter notesDelimiterHidden
 

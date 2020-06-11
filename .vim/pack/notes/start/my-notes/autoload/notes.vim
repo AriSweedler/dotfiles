@@ -1,37 +1,17 @@
-" TODO how do other plugins init themselves?
-" fugitive has 1 plugin file (automatically loaded) and it defines
-" 1) INCLUDE GUARDS
-" 2) some functions
-" 3) some vars (s, not g)
-" 4) augroup
-" 5) some commands
-" """
-" gitgutter also has only 1 plugin file
-" 1) Default mappings
-" 2) Default commands
-" 3) augroup
-" 4) INCLUDE GUARDS
-" Conclusion:
-" plugin -   I should have 1 and only 1 plugin file (of the same name as my plugin itself)
-"             This file should set up default mappings (politely/not
-"             overwritingly) and commands and the 100% needed functions
-" docs -     I should have docs file
-" autoload - I should have most of my code in autoload. Split into different
-"             folders and files at a reasonable level (Proably each top-level
-"             fold can be it's own file)
-" syntax -   This is needed (TODO)
-" ftdetect - This is also needed (TODO)
-" tests -    A test folder if I want (I don't lol)
-" gitignore, README, .github, license
-"
+" TODO:
+" 1) Add INCLUDE GUARDS where proper
+" 2) Add DOCS
 """""""""""""""""""""""""""""" notes autolaod """""""""""""""""""""""""""""" {{{
 """"""""""""""""""""""""""""" Initialize notes """"""""""""""""""""""""""""" {{{
+" This is where I put all my default kepmappings. If I wanted to make this a
+" real plugin, I would check to make sure I'm not overriding stuff first
 function! notes#init()
   " Remap <bang> to mark or toggle DO/DONE
+  nnoremap 1 :unlet g:lib#prev_cur_pos['banglist']<CR>
   nnoremap ! :call notes#banglist#controller()<CR>
   nnoremap <Leader>! :call notes#banglist#controller('DO')<CR>
-  nnoremap ? :call notes#banglist#toggle_backburner_highlight()<CR>
-  nnoremap <Leader>? :call notes#banglist#controller('DO', 'Backburner')<CR>
+  nnoremap ? :call notes#banglist#controller('DO', 'Backburner')<CR>
+  nnoremap <Leader>? :call notes#banglist#toggle_backburner_highlight()<CR>
 
   " Bring TODOs to today's file, delete DONE banglist items, open the Classes fold
   nnoremap <Leader>T :call notes#getNamedFold('TODOs') <Bar> call notes#banglist#global('DONE', 'delete') <Bar> FoldOpen Classes<CR>
@@ -40,6 +20,11 @@ function! notes#init()
   " Go to yesterday (<Leader>y) or tomorrow (<Leader>Y). Takes a count.
   nnoremap <Leader>y :<C-u>call notes#yesterday#openHelper('edit', v:count)<CR>
   nnoremap <Leader>Y :<C-u>call notes#yesterday#openHelper('edit', -1*v:count)<CR>
+  nnoremap <Leader><Leader>y :<C-u>call notes#yesterday#openHelper('edit', v:count)<CR>
+
+  " Give access to Today/Yesterday Commands to reset journal state
+  command! NotesToday execute "edit " . system('tail -1 .daykeeper | tr -d "\n"') . ".*"
+  command! NotesYesterday execute "edit " . system('tail -2 .daykeeper | head -1 | tr -d "\n"') . ".*"
 
   " Remap gx to my improved(?) function
   nnoremap gx :call notes#openLink()<CR>
@@ -53,15 +38,25 @@ function! notes#init()
 
   " Change curly quotes into regular quotes and stuff
   command! FixPastedPDF keeppatterns call notes#fixPastedPDF()
+
+  " Copy a link to a clipboard then invoke <C-k> to make a word say that
+  inoremap <C-k> <C-c>diWa[<C-r>"](<C-r>0)
+  nnoremap <C-k> diWa[<C-r>"](<C-r>0)
+  vnoremap <C-k> da[<C-r>"](<C-r>0)
 endfunction
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""""""""" Links """""""""""""""""""""""""""""""""" {{{
 " Open the URL under cursor. Or the last link on the line
 " Links are of the form [title](URL)
+" TODO wtf is up with \_S and \_s both not working?? This is fucking retarded.
 function! notes#openLink()
   " Try to find link under cursor
-  let l:link_regex = '\[\_[^]]*](\([^)\_s]\{-}\))'
+  echo "nice"
+  let l:link_regex = '\[\_[^]]*](\([^)]*\))'
   let l:link = substitute(expand('<cWORD>'), l:link_regex, '\1', '')
+  echom l:link
+  echom expand('<cWORD>')
+  echom getline('.')
 
   " If no substitution is made, no link was found.
   " Try to find last link on the current line
@@ -100,6 +95,7 @@ function! notes#fixPastedPDF()
   %substitute/â/'/e
   %substitute/â/"/e
   %substitute/â/"/e
+  %substitute/â¢/*/e
 endfunction
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}

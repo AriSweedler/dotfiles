@@ -1,3 +1,5 @@
+"TODO open today's file
+"TODO open yesterday's file
 """"""""""""""""""""""""""""""""" Yesterday """""""""""""""""""""""""""""""" {{{
 """"""""""""""""""""""""""""""" Get file name """""""""""""""""""""""""""""" {{{
 function! notes#yesterday#getFileName(...)
@@ -25,15 +27,15 @@ function! notes#yesterday#getFileName(...)
   return system(l:get_line_contents)
 endfunction
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-""""""""""""""""""""""""""" Open a yesterdayfile """"""""""""""""""""""""""" {{{
+""""""""""""""""""""""""" Open an older day's file """"""""""""""""""""""""" {{{
 function! notes#yesterday#openHelper(open_method, days_ago)
   " open up the desired file
-  let l:file = notes#yesterday#getFileName(a:days_ago) . "*"
-  execute a:open_method . " " . l:file
+  let l:file = notes#yesterday#getFileName(a:days_ago) . ".*"
+  let l:cmd = printf('%s %s', a:open_method, l:file)
+  execute l:cmd
 
   " If we invoked 'edit', then delete the previous buffer from the list
   if a:open_method == 'edit'
-    bnext
     bdelete #
   endif
 
