@@ -16,6 +16,7 @@ myLanguages = {
 	'make':     {'m': '#'},
 	'python':   {'m': '#'},
 	'sh':       {'m': '#'},
+	'zsh':      {'m': '#'},
 	'shell':    {'m': '#'},
 	'text':     {'m': '#'},
 	'tmux':     {'m': '#'},
