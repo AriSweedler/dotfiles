@@ -77,7 +77,7 @@ set clipboard=unnamed
 set display=lastline  "as much as possible of the last line will be displayed
 set gdefault          "turn global flag on by default for :substitute
 set history=1000      "the default is only 40.
-set noshowmode        "don't show the mode (we use airline now!)
+set noshowmode        "don't show the mode (we use nice statuslines now!)
 set noerrorbells      "disable error bells
 set belloff=all       "disable bell for non-errors, too
 set lazyredraw        "don't update the screen when doing macros
@@ -201,14 +201,6 @@ xnoremap <silent> a* [*o]*
 onoremap <silent> a* :<C-u>normal va*V<CR>
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""""" Plugin config """""""""""""""""""""""""""""" {{{
-"""""""""""""""""""""""""""""""""" airline """"""""""""""""""""""""""""""""" {{{
-" TODO figure this out lol
-let g:airline#extensions#tabline#enabled = 1
-let g:airline#extensions#tabline#show_buffers = 0
-let g:airline#extensions#tabline#buffer_min_count = 2
-let g:airline#extensions#tabline#buffer_nr_show = 1
-let g:airline_theme='dark'
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""""""" GitGutter """""""""""""""""""""""""""""""" {{{
 " Tell vim-gitgutter to leave the color of my signcolumn alone
 let g:gitgutter_override_sign_column_highlight = 0
@@ -232,6 +224,9 @@ nmap [h <Plug>(GitGutterPrevHunk)
 nmap ]h <Plug>(GitGutterNextHunk)
 
 " TODO read through `:help gitgutter.txt`
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+""""""""""""""""""""""""""""" xterm-color-table """""""""""""""""""""""""""" {{{
+packadd vim-xterm-color-table
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """ Customized foldtext text. This should probably go in a plugin if I care. {{{
