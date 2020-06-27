@@ -235,7 +235,9 @@ function GitGutterDotfilesToggle()
 endfunction
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""" xterm-color-table """""""""""""""""""""""""""" {{{
-packadd vim-xterm-color-table
+" TODO write a command that, when invoked for the first time, packadds this
+" boi. And every time it's invoked it'll do a TXTermColorTable command.
+packadd xterm-color-table
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """ Customized foldtext text. This should probably go in a plugin if I care. {{{
