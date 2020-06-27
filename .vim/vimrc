@@ -1,17 +1,14 @@
 """""""""""""""""""""""""" Most important settings """"""""""""""""""""""""" {{{
-" I hope this doesn't cause problems if I'm running pre 8.0? If so, I can add a
-" guard. And then I'll have to manually run the few imporant commands from
-" defaults.vim?? Seems easier to NOT do this - but I'll leave this here until it
-" causes an issue (which I don't think it ever will?)
-unlet! skip_defaults_vim
-source $VIMRUNTIME/defaults.vim
-
 filetype plugin on    "allow for autocmds to be run based on filetype
-syntax on             "allow for syntax highlighting and indenting
-colorscheme desert    "pretty colors
 set nocompatible      "Don't do weird stuff for vi
 set number            "turn on line numbers in the left columns
 set formatoptions+=j  "Delete comment character when joining commented lines
+
+" Enable syntax, and set a colorscheme. Don't do this twice
+if !exists("colors_name")
+  syntax enable       "allow for syntax highlighting and indenting
+  colorscheme desert  "pretty colors
+endif
 
 " briefly show the matching bracket {[( when typing )]}
 set showmatch matchtime=3
@@ -92,7 +89,6 @@ set nojoinspaces      "don't put 2 spaces after [.!?] when using join command
 set signcolumn=yes    "Show signs in the left columns
 " TODO only set signcolumn if we see we're in a git repo?
 " TODO deal with the 'config' bs to let my dotfiles properly show changes
-" TODO deal with the 'config' bs to let config have submodules properly
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""" Whitespace stuff """"""""""""""""""""""""""""" {{{
 " Get fancy listchars if it’s supported
@@ -118,7 +114,7 @@ nnoremap <silent> <Leader>w :call lib#removeTrailingWhitespace('%')<CR>
 
 " TODO Is there a way to trigger a call to lib#changeTextWidth upon noticing the
 " option &textwidth changed?
-"
+
 " Update textwidth and ColorColumn at the same time
 nnoremap <silent> <Leader>tw :<C-u>call lib#changeTextWidth(v:count)<CR>
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
@@ -206,16 +202,16 @@ onoremap <silent> a* :<C-u>normal va*V<CR>
 let g:gitgutter_override_sign_column_highlight = 0
 
 " White sign, green background
-highlight GitGutterAdd term=bold ctermfg=189 ctermbg=22
+highlight GitGutterAdd term=bold ctermfg=188 ctermbg=22
 let g:gitgutter_sign_added = '>+'
 
 " White sign, yellow background
-highlight GitGutterChange term=bold ctermfg=189 ctermbg=100
+highlight GitGutterChange term=bold ctermfg=188 ctermbg=3
 let g:gitgutter_sign_modified = '>~'
 let g:gitgutter_sign_modified_removed = '~_'
 
 " Solid red box
-highlight GitGutterDelete term=bold ctermfg=88 ctermbg=88
+highlight GitGutterDelete term=bold ctermfg=188 ctermbg=1
 let g:gitgutter_sign_removed_first_line = '>‾'
 let g:gitgutter_sign_removed = '>_'
 
@@ -223,7 +219,20 @@ let g:gitgutter_sign_removed = '>_'
 nmap [h <Plug>(GitGutterPrevHunk)
 nmap ]h <Plug>(GitGutterNextHunk)
 
-" TODO read through `:help gitgutter.txt`
+" Have GitGutter toggle between being normal and specially configured for my
+" dotfiles: [see tutorial](https://www.atlassian.com/git/tutorials/dotfiles).
+command Dotfiles call GitGutterDotfilesToggle()
+command GitGutterDotfiles call GitGutterDotfilesToggle()
+function GitGutterDotfilesToggle()
+  " TODO fix fugitive#head() to make it work, too.
+  if g:gitgutter_git_executable == "git"
+    let g:gitgutter_git_executable = 'git --git-dir=$HOME/dotfiles/ --work-tree=$HOME'
+  else
+    let g:gitgutter_git_executable = 'git'
+  endif
+  " Update GitGutter columns
+  GitGutter
+endfunction
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""" xterm-color-table """""""""""""""""""""""""""" {{{
 packadd vim-xterm-color-table
