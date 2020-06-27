@@ -75,9 +75,10 @@ alias jupyter="/Users/ari/opt/anaconda2/bin/jupyter_mac.command"
 # Easier duo mobile 2FA code gettings :/
 alias duo="/Users/ari/Desktop/college/0-Other/duo/duo.sh"
 
-# https://www.atlassian.com/git/tutorials/dotfiles
-# Alias to make it easy to track dotfiles
-alias config='/usr/bin/git --git-dir=$HOME/dotfiles/ --work-tree=$HOME'
+# Check out https://www.atlassian.com/git/tutorials/dotfiles for an in-depth
+# explanation. Splitting where you save the git data (which is normally in a
+# `.git` folder) and where you save the actual data is convenient in this case.
+alias dotfiles='git --git-dir=$HOME/dotfiles/ --work-tree=$HOME'
 
 # colored ls'ing
 alias ls='ls -G'
