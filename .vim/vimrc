@@ -224,7 +224,7 @@ nmap ]h <Plug>(GitGutterNextHunk)
 command Dotfiles call GitGutterDotfilesToggle()
 command GitGutterDotfiles call GitGutterDotfilesToggle()
 function GitGutterDotfilesToggle()
-  " TODO fix fugitive#head() to make it work, too.
+  " TODO fix fugitive#head() to make it work in the statusline, too.
   if g:gitgutter_git_executable == "git"
     let g:gitgutter_git_executable = 'git --git-dir=$HOME/dotfiles/ --work-tree=$HOME'
   else
@@ -235,9 +235,13 @@ function GitGutterDotfilesToggle()
 endfunction
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""" xterm-color-table """""""""""""""""""""""""""" {{{
-" TODO write a command that, when invoked for the first time, packadds this
-" boi. And every time it's invoked it'll do a TXTermColorTable command.
-packadd xterm-color-table
+command! XTerm call TXTerm()
+function! TXTerm()
+  if !exists('g:XtermColorTableDefaultOpen')
+    packadd xterm-color-table
+  endif
+  TXtermColorTable
+endfunction
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """ Customized foldtext text. This should probably go in a plugin if I care. {{{
