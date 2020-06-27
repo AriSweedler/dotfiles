@@ -1,0 +1,12 @@
+[submodule ".vim/pack/tpope/start/fugitive"]
+	path = .vim/pack/tpope/start/fugitive
+	url = https://tpope.io/vim/fugitive.git
+[submodule ".vim/pack/tpope/opt/scriptease"]
+	path = .vim/pack/tpope/opt/scriptease
+	url = https://tpope.io/vim/scriptease.git
+[submodule ".vim/pack/bundle/start/gitgutter"]
+	path = .vim/pack/bundle/start/gitgutter
+	url = https://github.com/airblade/vim-gitgutter.git
+[submodule ".vim/pack/bundle/opt/xterm-color-table"]
+	path = .vim/pack/bundle/opt/xterm-color-table
+	url = git@github.com:guns/xterm-color-table.vim.git
