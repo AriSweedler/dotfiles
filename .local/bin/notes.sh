@@ -10,34 +10,34 @@ MONTH="$(date '+%b')"
 DAY="$(date '+%d')"
 TIME="$(date '+%R')"
 BASE="/Users/ari/dev/journal"
-TODAYS_NOTE="$BASE/$MONTH/$DAY.md"
+TODAYS_NOTE="$BASE/$YEAR/$MONTH/$DAY.notes"
 DAYKEEPER_FILE="$BASE/.daykeeper"
 function notes_past()
 {
-  echo "$BASE/$(cat .daykeeper | tail -$1 | head -1).md"
+  echo "$BASE/$(cat .daykeeper | tail -$1 | head -1).notes"
 }
 
-pushd $BASE
-mkdir -p $MONTH
+mkdir -p "$BASE/$YEAR/$MONTH"
+pushd "$BASE/$YEAR"
 ################################################################################
 ########################## Create a new file if needed #########################
-MOST_RECENT_NOTE="$(notes_past 1)"
-if test "$TODAYS_NOTE" != "$MOST_RECENT_NOTE"; then
-  # Add today to the daykeeper file
-  echo "${MONTH}/${DAY}" >> "$DAYKEEPER_FILE"
+if test "$TODAYS_NOTE" != "$(notes_past 1)"; then
+  # Today isn't the most recent entry in the daykeeper file! Commit the last
+  # entry, and create this new one
+  git add "$(notes_past 1)"
+  git commit -m "Journal entry for $(notes_past 1)"
+  echo "${YEAR}/${MONTH}/${DAY}" >> "$DAYKEEPER_FILE"
 
-  # Create the file, add the 'date' heading, add the file to git
+  # If the file for today doesn't already exist (only happens if it was manually
+  # created) then create it and add it to git
   if test ! -e "$TODAYS_NOTE"; then
-    echo "# $MONTH $DAY, $YEAR" > "$TODAYS_NOTE"
+    printf "{{{ $MONTH $DAY, $YEAR\n}}}\n" > "$TODAYS_NOTE"
     git add "$TODAYS_NOTE"
+    git add "$DAYKEEPER_FILE"
   fi
 fi
 
-TODAYS_NOTE="$(notes_past 1)"
-YESTERDAYS_NOTE="$(notes_past 2)"
 ################################################################################
 
-############### Make sure we have today's notes in the git repo. ###############
-############### Then open today & yesterday's notes ############################
-echo "## $TIME" >> "$TODAYS_NOTE"
-vim "$TODAYS_NOTE" -c "vsp $YESTERDAYS_NOTE" -c "wincmd h" -c "normal Go"
+#################### Open today's and yesterday's note file ####################
+vim "$(notes_past 1)" -c "vsp $(notes_past 2)" -c "wincmd h" -c "normal gg"
