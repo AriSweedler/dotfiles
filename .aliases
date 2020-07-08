@@ -23,6 +23,10 @@ function cclass() {
   double_cd "$HOME/Desktop/college/15-Spring-2020" $1
 }
 
+function cvag() {
+  double_cd "$HOME/workspace/vagrant" $1
+}
+
 # I don't wanna put this in my bin because it's specific to my mac, I guess...
 alias debounce='/Users/ari/Desktop/life/housekeeping/debounce-mac/debounce'
 
