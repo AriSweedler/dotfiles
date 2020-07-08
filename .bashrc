@@ -6,7 +6,6 @@
 #                                                                     #
 #######################################################################
 
-
 #This was my hello-world line for learning about bash :')
 echo "Today's date is $(date)"
 HOME_INODE=`ls -ali ~/ | sed -n 2p | awk '{print $1}'`

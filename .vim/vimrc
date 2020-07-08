@@ -161,6 +161,9 @@ nnoremap <Down> <C-e>j
 " Move up/down this virtual column until you hit non-whitespace
 nnoremap gK ?\%<C-R>=virtcol(".")<CR>v\S<CR>
 nnoremap gJ /\%<C-R>=virtcol(".")<CR>v\S<CR>
+
+" Skip to next misspelled object and take the first fix
+nnoremap Z= ]s1z=
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""" Deal with buffest and tabs easier """""""""""""""""""" {{{
 " Buffer close: remove buffer from memory
