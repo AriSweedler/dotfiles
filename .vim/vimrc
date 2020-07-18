@@ -37,10 +37,9 @@ nnoremap * *N
 " allow backspacing over more things
 set backspace=indent,eol,start
 
-" CTRL-U in insert mode deletes a lot.  Use CTRL-G u to first break undo,
-" so that you can undo CTRL-U after inserting a line break.
-" Revert with ":iunmap <C-U>".
-inoremap <C-U> <C-G>u<C-U>
+" CTRL-W in insert mode deletes a lot. Wse CTRL-G u to first break undo,
+" so that you can undo CTRL-W after inserting a line break.
+inoremap <C-W> <C-G>u<C-W>
 
 " Multi-keystroke commands will be shown in bottom right.
 set showcmd

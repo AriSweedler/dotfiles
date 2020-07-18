@@ -19,7 +19,7 @@ function notes_past()
 }
 
 mkdir -p "$BASE/$YEAR/$MONTH"
-pushd "$BASE/$YEAR"
+pushd "$BASE"
 ################################################################################
 ########################## Create a new file if needed #########################
 if test "$TODAYS_NOTE" != "$(notes_past 1)"; then
@@ -34,8 +34,8 @@ if test "$TODAYS_NOTE" != "$(notes_past 1)"; then
   if test ! -e "$TODAYS_NOTE"; then
     # Prepopulate the new notes file
     printf "{{{ $MONTH $DAY, $YEAR\n" > "$TODAYS_NOTE"
-    cat "$DAILY_TASKS" > "$TODAYS_NOTE"
-    printf "}}}\n" > "$TODAYS_NOTE"
+    cat "$DAILY_TASKS" >> "$TODAYS_NOTE"
+    printf "}}}\n" >> "$TODAYS_NOTE"
 
     # And add it to git
     git add "$TODAYS_NOTE"
