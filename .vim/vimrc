@@ -161,8 +161,8 @@ nnoremap <Down> <C-e>j
 nnoremap gK ?\%<C-R>=virtcol(".")<CR>v\S<CR>
 nnoremap gJ /\%<C-R>=virtcol(".")<CR>v\S<CR>
 
-" Skip to next misspelled object and take the first fix
-nnoremap Z= ]s1z=
+" Skip to current/next misspelled object and take the first fix
+nnoremap Z= ge]s1z=
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""" Deal with buffest and tabs easier """""""""""""""""""" {{{
 " Buffer close: remove buffer from memory
@@ -216,6 +216,10 @@ let g:gitgutter_sign_modified_removed = '~_'
 highlight GitGutterDelete term=bold ctermfg=188 ctermbg=1
 let g:gitgutter_sign_removed_first_line = '>‾'
 let g:gitgutter_sign_removed = '>_'
+
+" They're changesets more generally than hunks.
+nmap [c <Plug>(GitGutterPrevHunk)
+nmap ]c <Plug>(GitGutterNextHunk)
 
 " They're Hunks not Chunks.
 nmap [h <Plug>(GitGutterPrevHunk)
