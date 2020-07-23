@@ -86,8 +86,6 @@ set tags+=tags;       "ctags is so helpful! And easy, too.
 set indentexpr= "Turn off all indenting by default
 set nojoinspaces      "don't put 2 spaces after [.!?] when using join command
 set signcolumn=yes    "Show signs in the left columns
-" TODO only set signcolumn if we see we're in a git repo?
-" TODO deal with the 'config' bs to let my dotfiles properly show changes
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""" Whitespace stuff """"""""""""""""""""""""""""" {{{
 " Get fancy listchars if it’s supported
@@ -110,9 +108,6 @@ nnoremap <silent> <Leader>[ :call lib#toggleLeftColumns()<CR>
 
 " Keep it clean
 nnoremap <silent> <Leader>w :call lib#removeTrailingWhitespace('%')<CR>
-
-" TODO Is there a way to trigger a call to lib#changeTextWidth upon noticing the
-" option &textwidth changed?
 
 " Update textwidth and ColorColumn at the same time
 nnoremap <silent> <Leader>tw :<C-u>call lib#changeTextWidth(v:count)<CR>
@@ -176,14 +171,6 @@ nnoremap ]b :bnext<CR>
 
 " I like 'gr/gt' better than 'gT/gt'
 nnoremap gr gT
-
-" TODO do I actually use these? The parallelism to other '[' commands is nice.
-nnoremap ]t gT
-nnoremap [t gt
-
-" Tabedit the file under the cursor
-" (TODO I never use this. Should probably remove it)
-nnoremap gF <C-w>f<C-w>T
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""" create text objects """"""""""""""""""""""""""" {{{
 " Leaving this here cuz I might wanna do something actually useful with it
@@ -224,21 +211,6 @@ nmap ]c <Plug>(GitGutterNextHunk)
 " They're Hunks not Chunks.
 nmap [h <Plug>(GitGutterPrevHunk)
 nmap ]h <Plug>(GitGutterNextHunk)
-
-" Have GitGutter toggle between being normal and specially configured for my
-" dotfiles: [see tutorial](https://www.atlassian.com/git/tutorials/dotfiles).
-command Dotfiles call GitGutterDotfilesToggle()
-command GitGutterDotfiles call GitGutterDotfilesToggle()
-function GitGutterDotfilesToggle()
-  " TODO fix fugitive#head() to make it work in the statusline, too.
-  if g:gitgutter_git_executable == "git"
-    let g:gitgutter_git_executable = 'git --git-dir=$HOME/dotfiles/ --work-tree=$HOME'
-  else
-    let g:gitgutter_git_executable = 'git'
-  endif
-  " Update GitGutter columns
-  GitGutter
-endfunction
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""" xterm-color-table """""""""""""""""""""""""""" {{{
 command! XTerm call TXTerm()
@@ -278,3 +250,8 @@ endfunction
 " return indent . foldtextstart . repeat(foldchar, winwidth(0)-foldtextlength) . foldtextend
 "endfunction
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+
+" Maybe make one for each imporant wrapper? Maybe not lol. It would go into a
+" plugin under the arisweedler pack. TODO
+vnoremap ` c`<C-r>"`<C-c>
+nnoremap <Leader>` vi`"0dda`"0P
