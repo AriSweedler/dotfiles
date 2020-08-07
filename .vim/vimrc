@@ -86,11 +86,12 @@ set tags+=tags;       "ctags is so helpful! And easy, too.
 set indentexpr= "Turn off all indenting by default
 set nojoinspaces      "don't put 2 spaces after [.!?] when using join command
 set signcolumn=yes    "Show signs in the left columns
+set whichwrap+=<,>,[,] "Have <Left> and <Right> go across lines
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""" Whitespace stuff """"""""""""""""""""""""""""" {{{
 " Get fancy listchars if it’s supported
 if (&termencoding ==# 'utf-8' || &encoding ==# 'utf-8') && version >= 700
-  set listchars=tab:•›,space:⋅,eol:¬,nbsp:+,
+  set listchars=tab:\¦›,space:⋅,eol:¬,nbsp:+,
   set fillchars=vert:\|,fold:\⋅,
   "set showbreak=↪.
   set showbreak=☞\ " "Leave this comment and extra whitespace
@@ -223,39 +224,11 @@ function! TXTerm()
 endfunction
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-""" Customized foldtext text. This should probably go in a plugin if I care. {{{
-" Which I don't, for now.
-"
-" Modified from http://dhruvasagar.com/2013/03/28/vim-better-foldtext
-"
-"function! NeatFoldText()
-" " Get the indent level, and put that many spaces
-" let indent_level = indent(v:foldstart)
-" let indent = repeat(' ',indent_level)
-"
-" " Get the text on the foldline. Remove " &  from the start
-" let line = ' ' . substitute(getline(v:foldstart), '^\s*"\?\s*\|\s*"\?\s*{{' . '{\d*\s*', '', 'g') . ' '
-"
-" " Create a string detailing how many lines the fold folds
-" let lines_count = v:foldend - v:foldstart + 1
-" let lines_count_text = '-' . printf("%10s", lines_count . ' lines') . ' '
-"
-" " Parse the long fillchars option to get just the char that we're folding with
-" let foldchar = matchstr(&fillchars, 'fold:\zs.')
-"
-" " Figure out how large the line should be
-" let foldtextstart = strpart('+' . repeat(foldchar, v:foldlevel*2) . line, 0, (winwidth(0)*2)/3)
-" let foldtextend = lines_count_text . repeat(foldchar, 8)
-" let foldtextlength = strlen(substitute(foldtextstart . foldtextend, '.', 'x', 'g')) + &foldcolumn
-"
-" return indent . foldtextstart . repeat(foldchar, winwidth(0)-foldtextlength) . foldtextend
-"endfunction
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-
+""""""""""""""""""""""""""""""""""" Misc """"""""""""""""""""""""""""""""""" {{{
 " Maybe make one for each imporant wrapper? Maybe not lol. It would go into a
-" plugin under the arisweedler pack. TODO
+" plugin under the arisweedler pack. TOD
 vnoremap ` c`<C-r>"`<C-c>
-nnoremap <Leader>` vi`"0dda`"0P
+nnoremap <Leader>` "0di`"_da`"0P
 
 " Make the grepprg git grep. This always searches from the root of the repo
 " and ignores files that .gitignore specifies. It's a lil nicer.
@@ -269,3 +242,24 @@ let &t_SI = "\033[5 q" " INSERT  |
 " temporary
 command! Dotfiles let g:gitgutter_git_executable = "git --git-dir=$HOME/dotfiles/ --work-tree=$HOME"
 command! NDotfiles let g:gitgutter_git_executable = "git"
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+"""""""""""""""""""""""""""""""" TODO stuff """""""""""""""""""""""""""""""" {{{
+"""""""""""""""" Update files when changed in the background """"""""""""""" {{{
+"This *would* be cool, if I had a use case for it. But I don't (for now)
+"set autoread " Auto reload file if it has been changed outside of vim
+"
+"" Triger `autoread` when files changes on disk
+"" https://unix.stackexchange.com/questions/149209/refresh-changed-content-of-file-opened-in-vim/383044#383044
+"" https://vi.stackexchange.com/questions/13692/prevent-focusgained-autocmd-running-in-command-line-editing-mode
+"autocmd FocusGained,BufEnter,CursorHold,CursorHoldI * if mode() != 'c' | checktime | endif
+"
+"" Notification after file change
+"" https://vi.stackexchange.com/questions/13091/autocmd-event-for-autoread
+"autocmd FileChangedShellPost *
+"\ echohl WarningMsg | echo "File changed on disk. Buffer reloaded." | echohl None
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+""""""""""""""""""""""""""""""""" foldtext """"""""""""""""""""""""""""""""" {{{
+" `help foldtext`
+" Reference: http://dhruvasagar.com/2013/03/28/vim-better-foldtext
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
