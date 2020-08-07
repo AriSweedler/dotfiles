@@ -13,10 +13,6 @@ command! -nargs=1 TabeC :tabe <args>.cpp <Bar> :vsp <args>.h
 nnoremap <Leader>head :vsp %:r.h<CR>
 nnoremap <Leader>cpp :vsp %:r.cpp<CR>
 
-" Make the grepprg git grep. This always searches from the root of the repo
-" and ignores files that .gitignore specifies. It's a lil nicer.
-let &grepprg="git grep --line-number"
-
 " Make a function header signature from a constructor
 let @c = "0f:xxdB$dF:xdF)==A);gqq"
 " Make a function header signature from a function declaration
