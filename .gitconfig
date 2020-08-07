@@ -14,6 +14,9 @@
 [init]
 	templatedir = ~/.git_template
 
+[merge]
+	tool = vimdiff
+
 [diff]
 	tool = vimdiff
 
@@ -66,3 +69,4 @@
 	s = status --short --branch
 	showme = !"printf \"The alias '$1' is: \"; git config -l | sed /alias.$1=/!d | sed s/.*=// #"
 	ss = status
+	initt = !"git init; git commit --allow-empty -m 'first commit'"

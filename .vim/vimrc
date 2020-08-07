@@ -101,7 +101,7 @@ else
 endif
 
 " Toggle displaying whitespace characters
-nnoremap <Leader>l :set list!<CR>
+nnoremap <Leader>l :let @/ = '\s$'<CR>:set list!<CR>
 
 " Toggle hide/show of left columns
 nnoremap <silent> <Leader>[ :call lib#toggleLeftColumns()<CR>
@@ -145,6 +145,7 @@ inoremap jk <ESC>:call lib#removeTrailingWhitespace('.')<CR>
 nnoremap D dd
 nnoremap G Gzz
 nnoremap zz ^zz
+nnoremap zZ zz$
 nnoremap < <<
 nnoremap > >>
 
@@ -255,3 +256,16 @@ endfunction
 " plugin under the arisweedler pack. TODO
 vnoremap ` c`<C-r>"`<C-c>
 nnoremap <Leader>` vi`"0dda`"0P
+
+" Make the grepprg git grep. This always searches from the root of the repo
+" and ignores files that .gitignore specifies. It's a lil nicer.
+let &grepprg="git grep --line-number"
+
+" https://github.com/khuedoan/dotfiles/blob/97d5d7bb4f00374a19beb50eaa75a83a7d570b06/.vimrc#L48
+" Change cursor shape in different modes (see :help cursor-shape)
+let &t_EI = "\033[2 q" " NORMAL  █
+let &t_SI = "\033[5 q" " INSERT  |
+
+" temporary
+command! Dotfiles let g:gitgutter_git_executable = "git --git-dir=$HOME/dotfiles/ --work-tree=$HOME"
+command! NDotfiles let g:gitgutter_git_executable = "git"
