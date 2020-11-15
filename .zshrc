@@ -1,22 +1,18 @@
-# Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
-# Initialization code that may require console input (password prompts, [y/n]
-# confirmations, etc.) must go above this block, everything else may go below.
-if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
-  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
-fi
+# To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 
+# Source these files
 files=()
 # Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
 # Initialization code that may require console input (password prompts, [y/n]
 # confirmations, etc.) must go above this block, everything else may go below.
 # System-level powerlevel10k stuff
 files+="${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
-# To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 files+="$HOME/.p10k.zsh"
 files+="$HOME/powerlevel10k/powerlevel10k.zsh-theme"
-files+="$HOME/.fzf.zsh"
+files+="$HOME/.macos"
 files+="$HOME/.aliases"
-
+files+="$HOME/.fzf.zsh"
+files+="$(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 for file in $files; do
   [[ ! -r $file ]] || source $file
 done
@@ -43,7 +39,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ################################################################################
 ###################################### XDG #####################################
-# Big man thinks he can follow best practices:
+# XDG best practices:
 # https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
 #
 # If $XDG_DATA_HOME is either not set or empty, a default equal to
@@ -65,9 +61,3 @@ export XDG_CONFIG_HOME="$HOME/.config"
 #
 # XDG_CACHE_HOME
 ################################################################################
-
-# To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
-[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
-
-# Syntax highlighting
-source "$(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
