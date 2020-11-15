@@ -12,7 +12,7 @@ TIME="$(date '+%R')"
 BASE="$HOME/Desktop/notes"
 TODAYS_NOTE="$BASE/$YEAR/$MONTH/$DAY.notes"
 DAYKEEPER_FILE="$BASE/.daykeeper"
-DAILY_TASKS="$BASE/.vitamins.notes"
+DAILY_TASKS="$BASE/etc/vitamins.notes"
 function notes_past()
 {
   echo "$BASE/$(cat $DAYKEEPER_FILE | tail -$1 | head -1).notes"

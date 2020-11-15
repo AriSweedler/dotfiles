@@ -55,18 +55,16 @@
 ################################### shortcuts ##################################
 [alias]
 	a = !"git add .; git s"
-	ag = grep --break --heading --line-number
 	alias = !"git config -l | grep ^alias | cut -c 7- | sort #"
 	amend = commit --amend --reuse-message=HEAD
 	cconfig = config --edit --global
 	ctags = !.git/hooks/ctags
 	d = diff --cached --diff-algorithm=minimal
-	empty = commit --allow-empty
+	grepp = grep --break --heading --line-number
+	initt = !"git init; git commit --allow-empty -m 'first commit'"
 	l = log --pretty=newlog --graph -10
-	lg = log --pretty=newlog --since "2 months ago"
 	ls = ls-tree --full-tree -r --abbrev HEAD
-	p = !"script -q /dev/null git l | head -3; git push; stty sane; echo ''"
+	popbranch = !"git stash pop $(echo $(git stash list | grep $(git rev-parse --abbrev-ref HEAD 2>/dev/null) | head -1) | awk '{print $1}' | tr -d ':')"
 	s = status --short --branch
 	showme = !"printf \"The alias '$1' is: \"; git config -l | sed /alias.$1=/!d | sed s/.*=// #"
-	ss = status
-	initt = !"git init; git commit --allow-empty -m 'first commit'"
+	ticket = !"git switch -c $1; git push --set-upstream origin $1"
