@@ -28,3 +28,6 @@ defaults write com.apple.dock showhidden -bool true
 
 # Don’t automatically rearrange Spaces based on most recent use
 defaults write com.apple.dock mru-spaces -bool false
+
+# Stop dock icons from bouncing
+defaults write com.apple.dock no-bouncing -bool TRUE

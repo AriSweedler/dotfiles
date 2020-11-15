@@ -86,3 +86,9 @@ alias dotfiles='git --git-dir=$HOME/dotfiles/ --work-tree=$HOME'
 
 # colored ls'ing
 alias ls='ls -G'
+
+# Update the time on a vagrant machine
+alias vdate='vagrant ssh -c "sudo date -s \"$(date)\""'
+
+# Easily read json stuff
+alias jvim='vim -c "%!python -m json.tool" -c "set ft=json" -c "set foldmethod=syntax"'

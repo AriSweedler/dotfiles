@@ -1,13 +1,12 @@
-" Give the 'verilog' filetype to testbench files
-au BufNewFile,BufRead *.tb setf verilog
+let map = {}
+let map.verilog = '*.tb'
+let map.markdown = '*.mdx'
+let map.yacc = '*.yacc'
+let map.make = 'Makefile.inc'
+let map.log = '*.log'
 
-" Give the 'markdown' filetype to explicitly named .mdx files
-au BufNewFile,BufRead *.mdx setf markdown
-
-" Give the 'yacc' filetype to explicitly named .yacc files
-au BufNewFile,BufRead *.yacc setf yacc
-
-" Give the 'make' filetype to 'Make include' files
-au BufNewFile,BufRead Makefile.inc setf make
-
-" TODO do these belong in their own file?
+" Give the 'key' filetype to files named 'value'
+for ft in map->keys()
+  let command = "au BufNewFile,BufRead " . map->get(ft) . " setf " . ft
+  execute command
+endfor

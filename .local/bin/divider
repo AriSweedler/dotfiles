@@ -84,7 +84,7 @@ def formComment(args):
 		return s + m*pad + e
 
 	# Figure out what the text should be
-	text = ' ' + ' '.join(args.text) + ' '
+	text = ' ' + ' '.join(args.text).strip() + ' '
 	# Ensure that single-piece comments start properly
 	if not s: text = m + text
 	pad -= len(text)
