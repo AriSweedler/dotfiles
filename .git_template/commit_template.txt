@@ -1,6 +1,0 @@
-50 char description
-
-  * Two spaces, asterisk, more description. Use a hanging in dent when
-    you wanna wrap the text
-
-  * cap these things at 72 columns -----------------------------------|
