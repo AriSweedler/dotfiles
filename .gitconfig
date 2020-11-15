@@ -5,14 +5,11 @@
 	username = arisweedler
 
 [core]
-	excludesfile = ~/.gitignore
+	excludesfile = ~/.local/git/ignore
 	editor = vim
 
-[push]
-	default = simple
-
 [init]
-	templatedir = ~/.git_template
+	templatedir = ~/.local/git/template
 
 [merge]
 	tool = vimdiff

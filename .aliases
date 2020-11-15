@@ -83,6 +83,7 @@ alias duo="/Users/ari/Desktop/college/0-Other/duo/duo.sh"
 # explanation. Splitting where you save the git data (which is normally in a
 # `.git` folder) and where you save the actual data is convenient in this case.
 alias dotfiles='git --git-dir=$HOME/dotfiles/ --work-tree=$HOME'
+alias df='dotfiles'
 
 # colored ls'ing
 alias ls='ls -G'
