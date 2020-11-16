@@ -1,0 +1,33 @@
+#!/bin/bash
+
+if [ ! -z "$2" ]; then
+  echo "Skipping regular prepare-commit-msg script because this commit isn't a regular commit. It is a: $2"
+  exit 0
+fi
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+
+function prepend() {
+  echo "$BRANCH -"
+
+  # We should skip tests if I still have personal debugging statements ([ARI])
+  if git grep -q "\[ARI\]"; then
+    echo ""
+    echo "* skiptests"
+  fi
+}
+
+function append() {
+  echo "# {{{ Git history:"
+  # '%s': subject
+  # '%h': abbreviated commit hash
+  # '%ar': author date, relative
+  # '%an': author name
+  # '%d': ref names
+  git log --graph -10 --pretty="format:%s:~[%h] %ar by %an;%d~" \
+    | tr '~' '\n' | sed -e 's/^/# /'
+  echo "# }}}"
+}
+
+# Cleanly prepend to the pre-populated commit message
+printf '%s\n%s\n' "$(prepend)" "$(cat $1)" "$(append)" > $1
