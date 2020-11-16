@@ -1,22 +1,20 @@
-# Hi! Welcome to my Dotfiles
+# Intro
 
-Here're some useful files that I might want on other machines. There're many
-ways to get input into a program.
-1) Hard-code constants
-2) Invoke program with parameters (--options)
-3) Read configuration files
-4) Get user input during the program
+Hi! Welcome to my Dotfiles
 
-Every program ever has some sort of configuration associated with it. It's
-common to put these per-program configuration files into "dotfiles": files
-beginning with a `.` that go in a user's home directory.
-
-Thanks to this repo, I can easily configure all programs relevant to me with a
-simple `git pull`. (Well, almost. Read
+"Dotfiles" are configuration files. With this git repo containing all my
+dotfiles, any machine can feel like home with a simple `git pull`. (Well,
+almost. I just need to get these dotfiles into my home directory. Read
 [this](https://www.atlassian.com/git/tutorials/dotfiles) for full details).
 
-## FAQ
-Why "*dot*files"? Seems random.
+Just as a general concept, understand that there're many ways to get input into
+a program, and using dotfiles (configuration files) is just one way of many:
+1) Hard-code constants
+2) Invoke program with parameters (--options)
+3) Read configuration files (like these!)
+4) Get user input during the program
+
+But why "*dot*files"? Seems random.
 * The "dot" makes the file hidden:
   [link](https://linux-audit.com/linux-history-how-dot-files-became-hidden-files/).
   It seems reasonable to have these configuration files hidden, as you only
@@ -28,6 +26,9 @@ Why "*dot*files"? Seems random.
 
 Many of these dotfiles have the `rc` suffix. Why?
 * [answer](https://stackoverflow.com/a/11030607/7531823)
+
+
+# My dotfiles
 
 ## `.bashrc`, `.bash_profile`, and `.profile`. And also `.zshrc`.
 Ahhh, the shell. If you don't know what a shell is, read
@@ -49,9 +50,8 @@ shell session is, it might be wise to read through this: [`.profile`,
 `.bash_profile`, and
 `.bashrc`](https://serverfault.com/questions/261802/what-are-the-functional-differences-between-profile-bash-profile-and-bashrc)?
 
-### .aliases
+### `.aliases`
 I have this as a separate file because I can source this in bash or zsh.
-
 
 ## `.gitconfig`
 Git is a great tool. It is very powerful. But sometimes a bit weird to interface
@@ -102,7 +102,7 @@ Personally, my folder structure is as follows:
   * `syntax` - Same, but for `:set syntax=xyz` instead. 95% of the time these
     two are interchangeable. But in some cases they aren't.
 
-## ssh-config
+## `.ssh/config`
 Another "dotdirectory"! Ok, whatever. Read about all the options
 [here](https://www.ssh.com/ssh/config/), or on `man ssh_config`
 
@@ -191,11 +191,11 @@ better.
 
 Realistically I could name this folder anything, but `.local` makes sense to me.
 
-### bin
+### `bin`
 Executable files that I wish to share across machines. By adding `~/.local/bin`
 to my `$PATH`, I automatically get access to them in my shell.
 
-### git
+### `git`
 More config files for git. Ideally, I'd like to have a `~/.git` dotdirectory,
 like for vim, but that actually implies that there's a repo with the repo-root
 in my home directory. Which is problematic. (That's why I do that weird Atlassian
