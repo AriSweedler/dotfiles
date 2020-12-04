@@ -1,7 +1,6 @@
 # Easier navigation
 alias ..="cd .."
 alias ...="cd ../.."
-alias cnot="cd ~/Desktop/notes"
 
 function double_cd() {
   if [ -z "$2" ]; then
@@ -19,16 +18,9 @@ function cdev() {
   double_cd "$HOME/dev" $1
 }
 
-function cclass() {
-  double_cd "$HOME/Desktop/college/15-Spring-2020" $1
-}
-
 function cvag() {
   double_cd "$HOME/workspace/vagrant" $1
 }
-
-# I don't wanna put this in my bin because it's specific to my mac, I guess...
-alias debounce='/Users/ari/Desktop/life/housekeeping/debounce-mac/debounce'
 
 # Invoke remote scripts with 'bashcurl'
 function bashcurl() {
@@ -70,14 +62,7 @@ alias tmux="tmux -2"
 
 # Easy attach/ls
 alias tmuxa="tmux attach-session"
-alias tmuxj="tmux new-session -A -s journal -n notepad ~/.local/bin/journal"
 alias tmuxls="tmux list-sessions"
-
-# Easier jupyter notebooks
-alias jupyter="/Users/ari/opt/anaconda2/bin/jupyter_mac.command"
-
-# Easier duo mobile 2FA code gettings :/
-alias duo="/Users/ari/Desktop/college/0-Other/duo/duo.sh"
 
 # Check out https://www.atlassian.com/git/tutorials/dotfiles for an in-depth
 # explanation. Splitting where you save the git data (which is normally in a

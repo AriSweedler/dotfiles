@@ -1,1 +1,1 @@
-setlocal tabstop=2 shiftwidth=2 noexpandtab autoindent
+setlocal tabstop=2 noexpandtab autoindent

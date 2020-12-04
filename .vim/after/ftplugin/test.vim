@@ -1,6 +1,6 @@
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 call ChangeTextWidth(45)
-set ts=2 sts=2 sw=2 et
+set tabstop=2 expandtab
 
 function! DumpSlatty()
   put =&comments

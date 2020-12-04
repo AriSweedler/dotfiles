@@ -1,4 +1,4 @@
-set tabstop=2 shiftwidth=2 expandtab
+set tabstop=2 expandtab
 set foldmethod=marker foldmarker=%-->,%<--
 
 " Make a command to compile

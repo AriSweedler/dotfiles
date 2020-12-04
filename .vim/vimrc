@@ -70,24 +70,27 @@ endif
 set clipboard=unnamed
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""" Less important settings """"""""""""""""""""""""" {{{
-set display=lastline  "as much as possible of the last line will be displayed
-set gdefault          "turn global flag on by default for :substitute
-set history=1000      "the default is only 40.
-set noshowmode        "don't show the mode (we use nice statuslines now!)
-set noerrorbells      "disable error bells
-set belloff=all       "disable bell for non-errors, too
-set lazyredraw        "don't update the screen when doing macros
-set updatetime=100    "let vim-gitgutter update faster
-set sidescrolloff=4   "Min # of columns to keep to the left/right of the cursor
-set splitbelow splitright "new splits open to the bottom or to the right
-set autoread          "Autoload file changes. You can undo by pressing u
-set pumheight=8       "set max popup menu height to 8
-set tags+=tags;       "ctags is so helpful! And easy, too.
-set indentexpr= "Turn off all indenting by default
-set nojoinspaces      "don't put 2 spaces after [.!?] when using join command
-set signcolumn=yes    "Show signs in the left columns
-set whichwrap+=<,>,[,] "Have <Left> and <Right> go across lines
-set foldlevel=3       " Don't fold most things by default
+set display=lastline   " as much as possible of the last line will be displayed
+set gdefault           " turn global flag on by default for :substitute
+set history=1000       " the default is only 40.
+set noshowmode         " don't show the mode (we use nice statuslines now!)
+set noerrorbells       " disable error bells
+set belloff=all        " disable bell for non-errors, too
+set lazyredraw         " don't update the screen when doing macros
+set updatetime=100     " let vim-gitgutter update faster
+set sidescrolloff=4    " Min # of columns to keep to the left/right of the cursor
+set splitbelow         " new splits open to the bottom or to the right
+set splitright         " ^
+set autoread           " Autoload file changes. You can undo by pressing u
+set pumheight=8        " set max popup menu height to 8
+set tags+=tags;        " ctags is so helpful! And easy, too.
+set indentexpr=        " Turn off all indenting by default
+set nojoinspaces       " don't put 2 spaces after [.!?] when using join command
+set signcolumn=yes     " Show signs in the left columns
+set whichwrap+=<,>,[,] " Have <Left> and <Right> go across lines
+set foldlevel=3        " Don't fold most things by default
+set softtabstop=0      " Use sane defaults for theses
+set shiftwidth=0       " ^
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""" Whitespace stuff """"""""""""""""""""""""""""" {{{
 " Get fancy listchars if it’s supported
@@ -103,7 +106,7 @@ else
 endif
 
 " Toggle displaying whitespace characters
-nnoremap <Leader>l :let @/ = '\s$'<CR>:set list!<CR>
+nnoremap <Leader>W :let @/ = '\s$'<CR>:set list!<CR>
 
 " Toggle hide/show of left columns
 nnoremap <silent> <Leader>[ :call lib#toggleLeftColumns()<CR>
