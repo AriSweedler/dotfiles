@@ -234,12 +234,6 @@ nnoremap <Leader>g :Git<CR>
 nnoremap gb :Git blame<CR>
 nnoremap gD :vertical Gdiffsplit dev<CR>
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-""""""""""""""""""""""""""""" My 'links' plugin """""""""""""""""""""""""""" {{{
-if exists('g:loaded_sweedlerLinks')
-  nmap <unique> gx <Plug>LinkOpenOpen
-  nmap <unique> gX <Plug>LinkOpenYank
-endif
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""""""""" Misc """"""""""""""""""""""""""""""""""" {{{
 " Maybe make one for each imporant wrapper? Maybe not lol. It would go into a
