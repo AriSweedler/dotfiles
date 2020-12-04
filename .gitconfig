@@ -60,8 +60,10 @@
 	grepp = grep --break --heading --line-number
 	initt = !"git init; git commit --allow-empty -m 'first commit'"
 	l = log --pretty=newlog --graph -10
+	ll = log --pretty=newlog --graph
 	ls = ls-tree --full-tree -r --abbrev HEAD
+	lss = diff --name-only HEAD
 	popbranch = !"git stash pop $(echo $(git stash list | grep $(git rev-parse --abbrev-ref HEAD 2>/dev/null) | head -1) | awk '{print $1}' | tr -d ':')"
 	s = status --short --branch
-	showme = !"printf \"The alias '$1' is: \"; git config -l | sed /alias.$1=/!d | sed s/.*=// #"
-	ticket = !"git switch -c $1; git push --set-upstream origin $1"
+	showme = !"printf \"The alias '$1' is: \"; git config -l | sed /alias.$1=/!d | sed s/[^=]*=// #"
+	ticket = !"git switch dev; git switch -c $1; git push --set-upstream origin $1 #"

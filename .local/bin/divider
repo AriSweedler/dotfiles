@@ -6,6 +6,7 @@ import argparse, math
 myLanguages = {
 	'c':        {'s': '/*', 'm': '*', 'e': '*/'},
 	'cpp':      {'s': '/*', 'm': '*', 'e': '*/'},
+	'go':       {'s': '/*', 'm': '*', 'e': '*/'},
 	'markdown': {'s': '# ','m': '#'},
 	'lisp':     {'m': ';'},
 	'vim':      {'m': '"'},
