@@ -34,3 +34,6 @@
 [submodule ".vim/pack/arisweedler/start/library"]
 	path = .vim/pack/arisweedler/start/library
 	url = git@github.com:AriSweedler/vim-lib.git
+[submodule ".vim/pack/arisweedler/start/links"]
+	path = .vim/pack/arisweedler/start/links
+	url = git@github.com:AriSweedler/vim-links.git
