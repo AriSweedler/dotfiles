@@ -18,10 +18,6 @@ function cdev() {
   double_cd "$HOME/dev" $1
 }
 
-function cvag() {
-  double_cd "$HOME/workspace/vagrant" $1
-}
-
 # Invoke remote scripts with 'bashcurl'
 function bashcurl() {
   bash <(curl --silent $1)

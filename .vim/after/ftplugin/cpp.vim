@@ -5,10 +5,6 @@ set foldlevel=10
 " Print a line of a var's value
 command! -nargs=1 DebugP :normal ostd::cout << "<args> = " << <args> << std::endl;
 
-" Open a cpp file and it's h file in a new tab
-" TODO how can I make this local?
-command! -nargs=1 TabeC :tabe <args>.cpp <Bar> :vsp <args>.h
-
 " Easily open a corresponding heaheader/cpp file
 nnoremap <Leader>head :vsp %:r.h<CR>
 nnoremap <Leader>cpp :vsp %:r.cpp<CR>
@@ -20,4 +16,6 @@ let @h = "0f f:xxdB==A;gqq"
 
 set cursorline
 
-iabbrev loggy SvcLog(LEVEL_INFO, "[ARI] '%s'\n", __FUNCTION__);<LEFT><LEFT><LEFT><LEFT><LEFT><LEFT><LEFT><LEFT><LEFT><LEFT><LEFT><LEFT><LEFT><LEFT><LEFT><LEFT><LEFT><LEFT><LEFT>
+" Use '<Leader>*' to do a project-wide search.
+" Put results in the location list
+nnoremap <silent> <Leader>* vgn"0y:lgrep! "<C-r>=escape(@0, '[]/\')<CR>"<CR>:lopen 15<CR><C-w>w
