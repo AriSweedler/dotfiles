@@ -37,3 +37,6 @@
 [submodule ".vim/pack/arisweedler/start/links"]
 	path = .vim/pack/arisweedler/start/links
 	url = git@github.com:AriSweedler/vim-links.git
+[submodule ".vim/pack/bundle/start/ctrlp"]
+	path = .vim/pack/bundle/start/ctrlp
+	url = https://github.com/ctrlpvim/ctrlp.vim.git

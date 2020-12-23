@@ -246,15 +246,21 @@ nnoremap gD :vertical Gdiffsplit dev<CR>
 " plugin under the arisweedler pack. TODO
 function! SurroundMap(surrounder)
   let l:it = a:surrounder
-  execute printf('vnoremap %s c%s<C-r>"%s<C-c>', it, it, it)
+  execute printf('vnoremap s%s c%s<C-r>"%s<C-c>', it, it, it)
   execute printf('nnoremap <Leader>%s "0di%s"_da%s"0P', it, it, it)
 endfunction
 call SurroundMap('`')
 call SurroundMap('"')
 
-" temporary TODO fix this garbo
+" TODO fix this garbo.
+" Maybe have the statusline plugin do it?
 command! Dotfiles let g:gitgutter_git_executable = "git --git-dir=$HOME/dotfiles/ --work-tree=$HOME"
 command! NDotfiles let g:gitgutter_git_executable = "git"
+
+" Give me a personalized TODO marker: ARISWEEDLER_TODO or TODO_ARISWEEDLER
+" TODO make this work in comments
+syntax keyword MyTodo TODO_ARISWEEDLER ARISWEEDLER_TODO
+highlight MyTodo ctermbg=52 ctermfg=14
 
 """"""""""""""""""""""""""""""""" foldtext """"""""""""""""""""""""""""""""" {{{
 " One day maybe I'll customize this
