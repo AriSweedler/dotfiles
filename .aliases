@@ -57,7 +57,8 @@ alias path='echo -e ${PATH//:/\\n}'
 alias tmux="tmux -2"
 
 # Easy attach/ls
-alias tmuxa="tmux attach-session"
+alias tmuxa="tmux attach-session\; choose-tree"
+alias tmuxj="tmux new-session -A -s journal -n notepad ~/.local/bin/journal"
 alias tmuxls="tmux list-sessions"
 
 # Check out https://www.atlassian.com/git/tutorials/dotfiles for an in-depth
