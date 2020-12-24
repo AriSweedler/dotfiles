@@ -3,28 +3,28 @@
 import argparse, math
 
 # Supported languages/filetypes and their start/middle/end comment syntaxes
-myLanguages = {
-	'c':        {'s': '/*', 'm': '*', 'e': '*/'},
-	'cpp':      {'s': '/*', 'm': '*', 'e': '*/'},
-	'go':       {'s': '/*', 'm': '*', 'e': '*/'},
-	'markdown': {'s': '# ','m': '#'},
-	'lisp':     {'m': ';'},
-	'vim':      {'m': '"'},
-	'dashes':   {'m': '-'},
-	'notes':    {'m': '='},
-	'bash':     {'m': '#'},
-	'conf':     {'m': '#'},
-	'gitconfig':{'m': '#'},
-	'make':     {'m': '#'},
-	'python':   {'m': '#'},
-	'sh':       {'m': '#'},
-	'zsh':      {'m': '#'},
-	'shell':    {'m': '#'},
-	'ruby':     {'m': '#'},
-	'text':     {'m': '#'},
-	'tmux':     {'m': '#'},
-	'tex':      {'m': '%'},
-}
+myLanguages = dict()
+myLanguages['c']           = {'s': '/*', 'm': '*', 'e': '*/'}
+myLanguages['cpp']         = {'s': '/*', 'm': '*', 'e': '*/'}
+myLanguages['go']          = {'s': '/*', 'm': '*', 'e': '*/'}
+myLanguages['javascript']  = {'s': '/*', 'm': '*', 'e': '*/'}
+myLanguages['markdown']    = {'s': '# ','m': '#'}
+myLanguages['bash']        = {'m': '#'}
+myLanguages['conf']        = {'m': '#'}
+myLanguages['gitconfig']   = {'m': '#'}
+myLanguages['make']        = {'m': '#'}
+myLanguages['python']      = {'m': '#'}
+myLanguages['sh']          = {'m': '#'}
+myLanguages['zsh']         = {'m': '#'}
+myLanguages['shell']       = {'m': '#'}
+myLanguages['ruby']        = {'m': '#'}
+myLanguages['text']        = {'m': '#'}
+myLanguages['tmux']        = {'m': '#'}
+myLanguages['dashes']      = {'m': '-'}
+myLanguages['lisp']        = {'m': ';'}
+myLanguages['notes']       = {'m': '='}
+myLanguages['tex']         = {'m': '%'}
+myLanguages['vim']         = {'m': '"'}
 
 def myParse():
 	# initialize parser object

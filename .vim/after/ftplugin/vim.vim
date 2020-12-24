@@ -8,3 +8,6 @@ map <Leader><Leader><Leader> /\cLeader<CR>
 
 nnoremap <Leader>f 0xx$xxA {{{<C-c>
 nnoremap <Leader>F 0xx$xxA }}}<C-c>
+
+" Debugging
+iabbrev loggy echom "[ARI] -"<Left>
