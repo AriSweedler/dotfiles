@@ -115,13 +115,13 @@ else
 endif
 
 " Toggle displaying whitespace characters
-nnoremap <Leader>W :let @/ = '\s$'<CR>:set list!<CR>
+nnoremap <Leader>w :let @/ = '\s$'<CR>:set list!<CR>
 
 " Toggle hide/show of left columns
 nnoremap <silent> <Leader>[ :call lib#toggleLeftColumns()<CR>
 
 " Keep it clean
-nnoremap <silent> <Leader>w :call lib#removeTrailingWhitespace('%')<CR>
+nnoremap <silent> <Leader>W :call lib#removeTrailingWhitespace('%')<CR>
 
 " Update textwidth and ColorColumn at the same time
 nnoremap <silent> <Leader>tw :<C-u>call lib#changeTextWidth(v:count)<CR>
