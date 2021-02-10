@@ -15,7 +15,3 @@ let @c = "0f:xxdB$dF:xdF)==A);gqq"
 let @h = "0f f:xxdB==A;gqq"
 
 set cursorline
-
-" Use '<Leader>*' to do a project-wide search.
-" Put results in the location list
-nnoremap <silent> <Leader>* vgn"0y:lgrep! "<C-r>=escape(@0, '[]/\')<CR>"<CR>:lopen 15<CR><C-w>w

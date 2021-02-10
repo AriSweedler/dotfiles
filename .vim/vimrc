@@ -21,9 +21,6 @@ set incsearch
 " Clear highlighting for search terms
 noremap <silent> <C-_> :nohlsearch<CR>
 inoremap <silent> <C-_> <C-o>:nohlsearch<CR>
-" If you set :nohlsearch but then source vimrc again, then the highlights will
-" reappear. You must clear the @/ register to stop this.
-noremap <silent> <Leader>/ :let @/ = ""<CR>
 
 " Improvements to '*' - work in visual mode & don't go to the next instance
 " This one is sweet: use star in visual mode to search for the selected text
@@ -51,7 +48,7 @@ set ttimeout ttimeoutlen=100
 set wildmenu
 
 " Default to giving me a lil more space to see context
-set scrolloff=5
+set scrolloff=2
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 
 " Multi-keystroke commands will not timeout Only cancel a partially given
@@ -100,6 +97,33 @@ set shiftwidth=0       " ^
 " Change cursor shape in different modes (see :help cursor-shape)
 let &t_EI = "\033[2 q" " NORMAL  █
 let &t_SI = "\033[5 q" " INSERT  |
+
+" The first time we invoke '%', load the matchit plugin. Don't need to try and
+" load it every time lol, so unmap it after we do it once.
+nnoremap % :packadd matchit <Bar> unmap %<CR>%
+" This should maybe be a plugin?
+function! SurroundMap(invoker, left, right)
+  " Visual mode mapping: `s<invoker>` will surround the visual text with
+  " <a:left><a:right>
+  execute printf('vnoremap s%s c%s<C-r>"%s<C-c>', a:invoker, a:left, a:right)
+  " Normal mode mapping: `<Leader><invoker>` will remove the difference between
+  " the text object `i<invoker>` and `a<invoker>`.
+  execute printf('nnoremap <Leader>%s "0di%s"_da%s"0Pa <Esc>', a:invoker, a:invoker, a:invoker)
+endfunction
+call SurroundMap('`', '`', '`')
+call SurroundMap('"', '"', '"')
+call SurroundMap('(', '(', ')')
+call SurroundMap('{', '{', '}')
+call SurroundMap('[', '[', ']')
+call SurroundMap('<', '<', '>')
+" TODO Don't yet have the word objects for these to remove them
+call SurroundMap("*", "*", "*")
+call SurroundMap("_", "_", "_")
+
+" Search for git conflict markers (maybe I should have a better way of doing
+" this....)
+nnoremap <Leader>/g /[>=<]\{7}<CR>
+
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""" Whitespace stuff """"""""""""""""""""""""""""" {{{
 " Get fancy listchars if it’s supported
@@ -193,11 +217,15 @@ nnoremap g<C-]> :tab tag <C-r>=expand("<cword>")<CR><CR>
 """ https://www.reddit.com/r/vim/comments/frlzt8/create_your_own_text_object/ ""
 " Define a text object for the whole buffer
 xnoremap <silent> wb GoggV
-onoremap <silent> wb :<C-u>normal vie<CR>
+onoremap <silent> wb :<C-u>normal vwb<CR>
 
 " Easily define a text object for C-style commends
 xnoremap <silent> a* [*o]*
-onoremap <silent> a* :<C-u>normal va*V<CR>
+onoremap <silent> a* :<C-u>normal Va*<CR>
+
+" Define a text object for editing regexes (inside of //s)
+xnoremap <silent> i/ F/lof/h
+onoremap <silent> i/ :<C-u>normal vi/<CR>
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""""" Plugin config """""""""""""""""""""""""""""" {{{
 """"""""""""""""""""""""""""""""" GitGutter """""""""""""""""""""""""""""""" {{{
@@ -242,16 +270,6 @@ nnoremap gD :vertical Gdiffsplit dev<CR>
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""""""""" Misc """"""""""""""""""""""""""""""""""" {{{
-" Maybe make one for each imporant wrapper? Maybe not lol. It would go into a
-" plugin under the arisweedler pack. TODO
-function! SurroundMap(surrounder)
-  let l:it = a:surrounder
-  execute printf('vnoremap s%s c%s<C-r>"%s<C-c>', it, it, it)
-  execute printf('nnoremap <Leader>%s "0di%s"_da%s"0P', it, it, it)
-endfunction
-call SurroundMap('`')
-call SurroundMap('"')
-
 " TODO fix this garbo.
 " Maybe have the statusline plugin do it?
 command! Dotfiles let g:gitgutter_git_executable = "git --git-dir=$HOME/dotfiles/ --work-tree=$HOME"
@@ -268,3 +286,10 @@ highlight MyTodo ctermbg=52 ctermfg=14
 " Reference: http://dhruvasagar.com/2013/03/28/vim-better-foldtext
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+
+" TODO Maybe this belongs in the quickfix plugin
+" Use '<Leader>*' to do a project-wide search.
+" Put results in the location list
+nnoremap <silent> <Leader>* vgn"0y:lgrep! "<C-r>=escape(@0, '[]/\')<CR>"<CR>:lopen 15<CR><C-w>w
+
+iabbrev #!b #!/bin/bash
