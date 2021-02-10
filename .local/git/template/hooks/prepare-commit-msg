@@ -44,7 +44,7 @@ function append() {
   # '%an': author name
   # '%d': ref names
   git log --graph -10 --pretty="format:%s:~[%h] %ar by %an;%d~" \
-    | tr '~' '\n' | sed -e 's/^/# /'
+    | tr '~' '\n' | sed -e 's/^/# /' -e 's/ $//g'
   echo "# }}}"
 }
 ############################################################################ }}}
