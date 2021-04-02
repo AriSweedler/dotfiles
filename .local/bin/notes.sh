@@ -43,7 +43,7 @@ if test "$todays_note" != "$(notes_past 1)"; then
   if test ! -e "$todays_note"; then
     # Prepopulate the new notes file
     printf "{{{ $month $day, $year\n" > "$todays_note"
-    cat "$daily_tasks" >> "$todays_note"
+    test -f "$daily_tasks" && cat "$daily_tasks" >> "$todays_note"
     printf "}}}\n" >> "$todays_note"
 
     # And add it to git
