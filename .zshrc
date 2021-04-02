@@ -12,6 +12,7 @@ files+="$HOME/powerlevel10k/powerlevel10k.zsh-theme"
 files+="$HOME/.macos"
 files+="$HOME/.aliases"
 files+="$HOME/.fzf.zsh"
+files+="$HOME/.local/this-computer.zsh"
 files+="$(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 for file in $files; do
   [[ ! -r $file ]] || source $file
