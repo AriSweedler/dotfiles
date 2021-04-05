@@ -70,8 +70,12 @@ alias df='dotfiles'
 # colored ls'ing
 alias ls='ls -G'
 
-# Update the time on a vagrant machine
-alias vdate='vagrant ssh -c "sudo date -s \"$(date)\""'
+# Update the time on a vagrant machine (optional parameter)
+function vdate() {
+	date_to_set=$(date -v +5S)
+  vagrant ssh "$1" -c "sudo date -s '$date_to_set'"
+}
 
 # Easily read json stuff
 alias jvim='vim -c "%!python -m json.tool" -c "set ft=json" -c "set foldmethod=syntax"'
+

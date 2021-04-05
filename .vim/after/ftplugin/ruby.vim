@@ -1,2 +1,2 @@
-set tabstop=4 expandtab
+setlocal tabstop=4 expandtab autoindent
 setlocal foldmethod=syntax
