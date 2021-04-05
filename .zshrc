@@ -18,6 +18,9 @@ for file in $files; do
   [[ ! -r $file ]] || source $file
 done
 
+# Enable tab completion for git. And more!
+autoload -Uz compinit && compinit
+
 # Function to print a colormap
 function colors() {
 for i in {0..255}; do
@@ -38,8 +41,7 @@ bindkey "^E" vi-end-of-line
 # Add .local/bin to front of path
 export PATH="$HOME/.local/bin:$PATH"
 
-################################################################################
-###################################### XDG #####################################
+#################################### XDG ################################### {{{
 # XDG best practices:
 # https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
 #
@@ -61,4 +63,5 @@ export XDG_CONFIG_HOME="$HOME/.config"
 # If $XDG_CACHE_HOME is either not set or empty, a default equal to $HOME/.cache should be used.
 #
 # XDG_CACHE_HOME
-################################################################################
+############################################################################ }}}
+

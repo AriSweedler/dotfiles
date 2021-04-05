@@ -209,6 +209,8 @@ nnoremap gr gT
 nnoremap gT :tabe<CR><C-O>
 " Open a tag in a new tab. Useful for tracing execution across a stack.
 nnoremap g<C-]> :tab tag <C-r>=expand("<cword>")<CR><CR>
+" Tselect tab in new tag
+nnoremap g[] :tab tselect <C-r>=expand("<cword>")<CR><CR>
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""" create text objects """"""""""""""""""""""""""" {{{
 " Leaving this here cuz I might wanna do something actually useful with it
@@ -270,21 +272,21 @@ nnoremap gD :vertical Gdiffsplit dev<CR>
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""""""""" Misc """"""""""""""""""""""""""""""""""" {{{
-" Give me a personalized TODO marker: ARISWEEDLER_TODO or TODO_ARISWEEDLER
-syntax keyword MyTodo TODO_ARISWEEDLER ARISWEEDLER_TODO containedin=ALL
-highlight MyTodo ctermbg=52 ctermfg=14
-
 """"""""""""""""""""""""""""""""" foldtext """"""""""""""""""""""""""""""""" {{{
 " One day maybe I'll customize this
 " `help foldtext`
 " Reference: http://dhruvasagar.com/2013/03/28/vim-better-foldtext
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-
-" TODO Maybe this belongs in the quickfix plugin
-" Use '<Leader>*' to do a project-wide search.
-" Put results in the location list
-nnoremap <silent> <Leader>* vgn"0y:lgrep! "<C-r>=escape(@0, '[]/\')<CR>"<CR>:lopen 15<CR><C-w>w
-
+""""""""""""""""""""""""""""""""" hashbangs """""""""""""""""""""""""""""""" {{{
 iabbrev #!b #!/bin/bash
 iabbrev #!p #!/usr/bin/env python3
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+"""""""""""""""""""""""""""""" persistent undo """"""""""""""""""""""""""""" {{{
+" Persistent undo: keep undo history across sessions - store in XDG_CACHE (?)
+if has('persistent_undo')
+  " Make sure you have created the '~/.cache/vim-undodir' directory.
+  let &undodir = expand('$HOME/.cache/vim-undodir')
+  set undofile
+endif
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
