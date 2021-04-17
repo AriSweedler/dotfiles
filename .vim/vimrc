@@ -101,6 +101,7 @@ let &t_SI = "\033[5 q" " INSERT  |
 " The first time we invoke '%', load the matchit plugin. Don't need to try and
 " load it every time lol, so unmap it after we do it once.
 nnoremap % :packadd matchit <Bar> unmap %<CR>%
+
 " This should maybe be a plugin?
 function! SurroundMap(invoker, left, right)
   " Visual mode mapping: `s<invoker>` will surround the visual text with
@@ -191,7 +192,10 @@ nnoremap gK ?\%<C-R>=virtcol(".")<CR>v\S<CR>
 nnoremap gJ /\%<C-R>=virtcol(".")<CR>v\S<CR>
 
 " Skip to current/next misspelled object and take the first fix
-nnoremap Z= ge]s1z=
+nnoremap Z mzge]s1z=
+nnoremap [Z mzw[s1z=`z
+nnoremap ]Z mzge]s1z=`z
+
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""" Deal with buffest and tabs easier """""""""""""""""""" {{{
 " Buffer close: remove buffer from memory
@@ -202,15 +206,22 @@ nnoremap <Leader>BC :.bdelete<CR>
 " Switch between buffers and tabs easier
 nnoremap [b :bprevious<CR>
 nnoremap ]b :bnext<CR>
+nnoremap <Leader>b :ls<CR>:buffer<Space>
+nnoremap ]E :edit **/*
+nnoremap ]T :tabedit **/*
+nnoremap <C-b> :b#<CR>
 
+" Remember, <C-w>T moves a window to a new tab
 " I like 'gr/gt' better than 'gT/gt'
 nnoremap gr gT
-" Remember <C-w>T moves a window to a new tab
 nnoremap gT :tabe<CR><C-O>
+
 " Open a tag in a new tab. Useful for tracing execution across a stack.
 nnoremap g<C-]> :tab tag <C-r>=expand("<cword>")<CR><CR>
 " Tselect tab in new tag
 nnoremap g[] :tab tselect <C-r>=expand("<cword>")<CR><CR>
+nnoremap ]<C-]> :tjump /
+nnoremap [<C-]> :tjump /
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""" create text objects """"""""""""""""""""""""""" {{{
 " Leaving this here cuz I might wanna do something actually useful with it
