@@ -11,11 +11,20 @@
 [init]
 	templatedir = ~/.local/git/template
 
-[merge]
-	tool = vimdiff
-
 [diff]
-	tool = vimdiff
+	tool = diffconflicts
+
+[merge]
+	tool = diffconflicts
+
+[mergetool "diffconflicts"]
+	cmd = vim -c DiffConflicts \"$MERGED\" \"$BASE\" \"$LOCAL\" \"$REMOTE\"
+	trustExitCode = true
+
+[mergetool]
+	# After performing a merge, the original file with conflict markers can
+	# be saved as a file with a .orig extension. I do not want that
+	keepBackup = false
 
 [stash]
 	showPatch = true
@@ -59,6 +68,7 @@
 	ctags = !.git/hooks/ctags
 	d = diff --cached --diff-algorithm=minimal
 	diffls = diff --name-only
+	diffc = diff HEAD^
 	diffsub = submodule foreach git diff
 	grepp = grep --break --heading --line-number
 	initt = !"git init; git commit --allow-empty -m 'first commit'"

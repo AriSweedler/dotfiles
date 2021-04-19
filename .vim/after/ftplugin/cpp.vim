@@ -15,3 +15,9 @@ let @c = "0f:xxdB$dF:xdF)==A);gqq"
 let @h = "0f f:xxdB==A;gqq"
 
 set cursorline
+
+" Experimental...
+let &makeprg="remote-build venPlatformHandler u16 default"
+set errorformat=%f:%l:%c:\ %trror:\ %m
+nnoremap <Leader>m :lmake<CR>
+" TODO add %E for multiline

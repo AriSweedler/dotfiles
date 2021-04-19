@@ -21,6 +21,11 @@ done
 # Enable tab completion for git. And more!
 autoload -Uz compinit && compinit
 
+# Set history stuff. Lines configured by zsh-newuser-install
+HISTFILE=~/.histfile
+HISTSIZE=10000
+SAVEHIST=10000
+
 # Function to print a colormap
 function colors() {
 for i in {0..255}; do
@@ -64,4 +69,11 @@ export XDG_CONFIG_HOME="$HOME/.config"
 #
 # XDG_CACHE_HOME
 ############################################################################ }}}
+
+# The following lines were added by compinstall
+zstyle ':completion:*' list-colors ''
+zstyle ':completion:*' list-prompt %SAt %p: Hit TAB for more, or the character to insert%s
+zstyle ':completion:*' matcher-list 'm:{[:lower:]}={[:upper:]} r:|[._-]=** r:|=**'
+zstyle ':completion:*' squeeze-slashes true
+zstyle :compinstall filename '/Users/arisweedler/.zshrc'
 
