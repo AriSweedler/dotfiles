@@ -209,13 +209,16 @@ nnoremap ]b :bnext<CR>
 nnoremap <Leader>b :ls<CR>:buffer<Space>
 nnoremap ]E :edit **/*
 nnoremap ]T :tabedit **/*
-nnoremap <C-b> :b#<CR>
+nnoremap <C-b> :buffer #<CR>
 
-" Remember, <C-w>T moves a window to a new tab
+" <C-w>T moves a window to a new tab, but I like '!' better. Like tmux
+nnoremap <C-w>! <C-w>T
 " I like 'gr/gt' better than 'gT/gt'
 nnoremap gr gT
 nnoremap gT :tabe<CR><C-O>
 
+" Re-run ctags
+nnoremap <Leader><C-]> :!ctags -R .<CR>
 " Open a tag in a new tab. Useful for tracing execution across a stack.
 nnoremap g<C-]> :tab tag <C-r>=expand("<cword>")<CR><CR>
 " Tselect tab in new tag

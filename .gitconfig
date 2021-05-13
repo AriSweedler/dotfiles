@@ -26,6 +26,9 @@
 	# be saved as a file with a .orig extension. I do not want that
 	keepBackup = false
 
+[pull]
+	ff = only
+
 [stash]
 	showPatch = true
 
