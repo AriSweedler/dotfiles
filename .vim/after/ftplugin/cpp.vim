@@ -17,7 +17,10 @@ let @h = "0f f:xxdB==A;gqq"
 set cursorline
 
 " Experimental...
-let &makeprg="remote-build venPlatformHandler u16 default"
+let &makeprg='docker run --mount type=bind,source="$HOME/Desktop/source",destination="$HOME/Desktop/source" ari-build-image'
 set errorformat=%f:%l:%c:\ %trror:\ %m
+set errorformat+=\|\|\ %f:%l:%c:\ note:\ %m
 nnoremap <Leader>m :lmake<CR>
 " TODO add %E for multiline
+
+nnoremap <silent> <Leader>gq mqgggqG`q:delmark q<CR>zz
