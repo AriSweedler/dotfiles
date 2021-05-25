@@ -182,6 +182,11 @@ nnoremap zz ^zz
 nnoremap zZ zz$
 nnoremap < <<
 nnoremap > >>
+nnoremap gq mz3[{gqaB`z
+
+" Make a newline without comments
+nnoremap go o<C-c>cc
+nnoremap gO O<C-c>cc
 
 " Up/Down don't change relative line number
 nnoremap <Up> <C-y>k
@@ -271,12 +276,14 @@ nmap [h <Plug>(GitGutterPrevHunk)
 nmap ]h <Plug>(GitGutterNextHunk)
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""" xterm-color-table """""""""""""""""""""""""""" {{{
-command! XTerm call TXTerm()
-function! TXTerm()
+" TODO optional arg to call the whatever (Xterm('V')) or something. Defaults
+" V for VSPLIT
+command! Xterm call VXterm()
+function! VXterm()
   if !exists('g:XtermColorTableDefaultOpen')
     packadd xterm-color-table
   endif
-  TXtermColorTable
+  VXtermColorTable
 endfunction
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""""""" fugitive """"""""""""""""""""""""""""""""" {{{
