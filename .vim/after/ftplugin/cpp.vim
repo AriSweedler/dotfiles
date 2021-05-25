@@ -1,6 +1,6 @@
 setlocal tabstop=4 expandtab
 setlocal cindent foldmethod=syntax textwidth=120
-set foldlevel=10
+setlocal foldlevel=10
 
 " Print a line of a var's value
 command! -nargs=1 DebugP :normal ostd::cout << "<args> = " << <args> << std::endl;
@@ -14,12 +14,12 @@ let @c = "0f:xxdB$dF:xdF)==A);gqq"
 " Make a function header signature from a function declaration
 let @h = "0f f:xxdB==A;gqq"
 
-set cursorline
+setlocal cursorline
 
 " Experimental...
 let &makeprg='docker run --mount type=bind,source="$HOME/Desktop/source",destination="$HOME/Desktop/source" ari-build-image'
-set errorformat=%f:%l:%c:\ %trror:\ %m
-set errorformat+=\|\|\ %f:%l:%c:\ note:\ %m
+setlocal errorformat=%f:%l:%c:\ %trror:\ %m
+setlocal errorformat+=\|\|\ %f:%l:%c:\ note:\ %m
 nnoremap <Leader>m :lmake<CR>
 " TODO add %E for multiline
 

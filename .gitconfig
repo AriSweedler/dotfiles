@@ -10,6 +10,7 @@
 
 [init]
 	templatedir = ~/.local/git/template
+	defaultBranch = main
 
 [diff]
 	tool = diffconflicts
@@ -70,6 +71,7 @@
 	cconfig = config --edit --global
 	ctags = !.git/hooks/ctags
 	d = diff --cached --diff-algorithm=minimal
+	po = !"git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)"
 	diffls = diff --name-only
 	diffc = diff HEAD^
 	diffsub = submodule foreach git diff
