@@ -222,6 +222,10 @@ nnoremap <C-w>! <C-w>T
 nnoremap gr gT
 nnoremap gT :tabe<CR><C-O>
 
+" tabmove more easily
+nnoremap ]t :tabm+<CR>
+nnoremap [t :tabm-<CR>
+
 " Re-run ctags
 nnoremap <Leader><C-]> :!ctags -R .<CR>
 " Open a tag in a new tab. Useful for tracing execution across a stack.
@@ -290,6 +294,7 @@ endfunction
 nnoremap <Leader>g :Git<CR>
 nnoremap gb :Git blame<CR>
 nnoremap gD :vertical Gdiffsplit dev<CR>
+nnoremap gH :vertical Gdiffsplit HEAD^<CR>
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""""""""" Misc """"""""""""""""""""""""""""""""""" {{{

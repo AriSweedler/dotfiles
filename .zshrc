@@ -21,16 +21,27 @@ done
 # Enable tab completion for git. And more!
 autoload -Uz compinit && compinit
 
-# Set history stuff. Lines configured by zsh-newuser-install
-HISTFILE=~/.histfile
-HISTSIZE=10000
-SAVEHIST=10000
+# Set history stuff. https://zsh.sourceforge.io/Doc/Release/Options.html#History
+setopt SHARE_HISTORY          # imports new commands from the history file, and also causes your typed commands to be appended to the history file immediately
+setopt HIST_IGNORE_SPACE      # ignore commands that start with space
+setopt HIST_EXPIRE_DUPS_FIRST # delete duplicates first when HISTFILE size exceeds HISTSIZE
+setopt HIST_FCNTL_LOCK        # Use a more modern way to lock the history file. Should be a net positive on my shiny new machine
+setopt EXTENDED_HISTORY       # Add timestamps to history files
+setopt HIST_REDUCE_BLANKS     # Trim silly whitespace from history
+export HISTFILE="$HOME/.histfile"
+export HISTSIZE=1000
+export SAVEHIST=$HISTSIZE
 
 # Function to print a colormap
 function colors() {
 for i in {0..255}; do
   print -Pn "%K{$i} %k%F{$i}${(l:3::0:)i}%f " ${${(M)$((i%8)):#7}:+$'\n'}
 done
+}
+
+# Function to print all my ssh-able machines
+function machines() {
+  cat ~/.ssh/conf.d/* | awk '/^Host / {print $2}' | sort
 }
 
 # When using !! or !$, command is redisplayed ready to run instead of ran
