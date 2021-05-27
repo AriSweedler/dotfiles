@@ -1,6 +1,4 @@
-hi def link pythonCapitalizeError		Error
-
-" This isn't really all that helpful but I just wanna extend the sytax
-" highlighting capabilities of vim and this is the first thing that came to
-" mind.
-syn keyword pythonCapitalizeError	false none true
+" I used to make this mistake all the time. Maybe an `iabbrev` woulda been
+" better!
+syntax keyword pythonCapitalizeError false none true
+highlight link pythonCapitalizeError Error

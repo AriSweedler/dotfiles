@@ -1,12 +1,13 @@
 setlocal tabstop=2 expandtab
 
-" If I have a bunch of functions, this is helpful.
+" Fold all functions
 setlocal foldmethod=manual
 nnoremap <buffer> <Leader>zM :g/() {$/norm $zfaB<CR>
 
-" TODO figure out how to configure `matchit` to properly jump around syntax
-
+" TODO maybe <Leader>m should get generalized, too.
 " Use shellcheck to lint easily
-nnoremap <Leader>m :lmake<CR>
+nnoremap <buffer> <Leader>m :lmake<CR>
 setlocal makeprg=shellcheck\ -x\ %
 setlocal errorformat=In\ %f\ line\ %l:
+
+" TODO figure out how to configure `matchit` to properly jump around syntax

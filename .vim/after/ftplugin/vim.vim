@@ -1,13 +1,17 @@
 setlocal tabstop=2 expandtab
-set nospell
+setlocal nospell
 
-set foldmethod=marker
+setlocal foldmethod=marker
 
-" I find myself doing this a lot for some reason.
-map <Leader><Leader><Leader> /\cLeader<CR>
+" Easily search for Leader mappings
+map <buffer> <Leader>/<Leader> /\c.Leader><CR>
 
-nnoremap <Leader>f 0xx$xxA {{{<C-c>
-nnoremap <Leader>F 0xx$xxA }}}<C-c>
+nnoremap <buffer> <Leader>f 0xx$xxA {{{<C-c>
+nnoremap <buffer> <Leader>F 0xx$xxA }}}<C-c>
 
 " Debugging
+" TODO another thing to standardize.
+" * loggy
+" * <Leader>m
+" * Format this file
 iabbrev loggy echom "[ARI] -"<Left>
