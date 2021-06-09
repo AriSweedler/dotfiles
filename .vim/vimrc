@@ -197,7 +197,6 @@ nnoremap gK ?\%<C-R>=virtcol(".")<CR>v\S<CR>
 nnoremap gJ /\%<C-R>=virtcol(".")<CR>v\S<CR>
 
 " Skip to current/next misspelled object and take the first fix
-nnoremap Z mzge]s1z=
 nnoremap [Z mzw[s1z=`z
 nnoremap ]Z mzge]s1z=`z
 
