@@ -12,31 +12,39 @@ time="$(date '+%R')"
 base="$HOME/Desktop/notes"
 todays_note="$base/$year/$month/$day.notes"
 daykeeper_file="$base/.daykeeper"
-daily_tasks="$base/etc/vitamins.notes"
+daily_tasks="$base/etc/tasks/daily.notes"
+weekly_tasks="$base/etc/tasks/$(date +%A | tr 'A-Z' 'a-z').notes"
+
+pushd "$base"
+
 function notes_past()
 {
   echo "$base/$(cat $daykeeper_file | tail -$1 | head -1).notes"
 }
+function initialize()
+{
+  git init
+  git commit --allow-empty -m 'first commit'
+  touch "$daykeeper_file"
+}
 
 mkdir -p "$base/$year/$month"
-if ! ls "$base/$year/$month"; then
-  echo "something is wrong"
-  exit 1
-fi
-pushd "$base"
+if ! ls "$base/$year/$month"; then echo "something is wrong"; exit 1; fi
+if [ ! -f "$daykeeper_file" ]; then initialize; fi
+
+# TODO standardize IF statements in here
 ################################################################################
 ########################## Create a new file if needed #########################
 if test "$todays_note" != "$(notes_past 1)"; then
   # Today isn't the most recent entry in the daykeeper file! Commit the last
   # entry, and create this new one
-  git add "$(notes_past 1)"
+  test -f "$(notes_past 1)" && git add "$(notes_past 1)"
   git commit -m "Journal entry for $(notes_past 1)"
   echo "${year}/${month}/${day}" >> "$daykeeper_file"
 
   # link to A, and name that file B
   today_symlink="$base/today.notes"
-  rm "$today_symlink"
-  ln -s "$todays_note" "$today_symlink"
+  ln -f -s "$todays_note" "$today_symlink"
 
   # If the file for today doesn't already exist (only happens if it was manually
   # created) then create it and add it to git
@@ -44,6 +52,7 @@ if test "$todays_note" != "$(notes_past 1)"; then
     # Prepopulate the new notes file
     printf "{{{ $month $day, $year\n" > "$todays_note"
     test -f "$daily_tasks" && cat "$daily_tasks" >> "$todays_note"
+    test -f "$weekly_tasks" && cat "$weekly_tasks" >> "$todays_note"
     printf "}}}\n" >> "$todays_note"
 
     # And add it to git
