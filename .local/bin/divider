@@ -21,6 +21,7 @@ myLanguages['ruby']        = {'m': '#'}
 myLanguages['text']        = {'m': '#'}
 myLanguages['tmux']        = {'m': '#'}
 myLanguages['dashes']      = {'m': '-'}
+myLanguages['lua']         = {'m': '-'}
 myLanguages['lisp']        = {'m': ';'}
 myLanguages['notes']       = {'m': '='}
 myLanguages['tex']         = {'m': '%'}
