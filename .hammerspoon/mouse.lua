@@ -1,0 +1,3 @@
+-- TODO I can probably do cool stuff with this
+-- hs.mouse.getRelativePosition()
+-- hs.mouse.getCurrentScreen()
