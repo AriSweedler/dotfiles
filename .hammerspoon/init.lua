@@ -1,6 +1,8 @@
 -- Author: Ari Sweedler
 
 require "brightness"
+require "volume"
+require "application"
 require "easy-reload"
 
 --------------------------------- Experimenting --------------------------------
@@ -10,5 +12,4 @@ require "easy-reload"
 -- require "caffeine"
 -- require "messages"
 -- require "mouse"
--- require "noises"
-require "application"
+require "noises"
