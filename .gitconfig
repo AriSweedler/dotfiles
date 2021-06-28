@@ -65,22 +65,22 @@
 ################################### shortcuts ##################################
 [alias]
 	a = !"git add .; git s"
-	alias = !"git config -l | grep ^alias | cut -c 7- | sort #"
+	alias = !"git config --list | grep ^alias | cut -c 7- | sort #"
 	amend = commit --amend --reuse-message=HEAD
 	ari = grep --break --heading --line-number "\\\\[ARI\\\\]"
 	cconfig = config --edit --global
 	ctags = !.git/hooks/ctags
-	d = diff --cached --diff-algorithm=minimal
+	d = diff --staged --diff-algorithm=minimal
 	po = !"git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)"
 	diffls = diff --name-only
 	diffc = diff HEAD^
 	diffsub = submodule foreach git diff
 	grepp = grep --break --heading --line-number
-	initt = !"git init; git commit --allow-empty -m 'first commit'"
+	initt = !"git init; git commit --allow-empty --message 'first commit'"
 	l = log --pretty=newlog --graph -10
 	ll = log --pretty=newlog --graph
 	ls = ls-tree --full-tree -r --abbrev HEAD
 	popbranch = !"git stash pop $(echo $(git stash list | grep $(git rev-parse --abbrev-ref HEAD 2>/dev/null) | head -1) | awk '{print $1}' | tr -d ':')"
 	s = status --short --branch
-	showme = !"printf \"The alias '$1' is: \"; git config -l | sed /alias.$1=/!d | sed s/[^=]*=// #"
-	ticket = !"git switch dev && git pull && git switch -c $1 && git push --set-upstream origin $1 #"
+	showme = !"printf \"The alias '$1' is: \"; git config --list | sed /alias.$1=/!d | sed s/[^=]*=// #"
+	ticket = !"git pull origin dev && git switch --create $1 dev && git push --set-upstream origin $1 #"
