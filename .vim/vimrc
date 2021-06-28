@@ -92,6 +92,7 @@ set whichwrap+=<,>,[,] " Have <Left> and <Right> go across lines
 set foldlevel=3        " Don't fold most things by default
 set softtabstop=0      " Use sane defaults for theses
 set shiftwidth=0       " ^
+set switchbuf=newtab   " New invocation of `lgrep` takes me to a new tab
 
 " https://github.com/khuedoan/dotfiles/blob/97d5d7bb4f00374a19beb50eaa75a83a7d570b06/.vimrc#L48
 " Change cursor shape in different modes (see :help cursor-shape)
@@ -182,7 +183,6 @@ nnoremap zz ^zz
 nnoremap zZ zz$
 nnoremap < <<
 nnoremap > >>
-nnoremap gq mz3[{gqaB`z
 
 " Make a newline without comments
 nnoremap go o<C-c>cc

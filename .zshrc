@@ -7,16 +7,19 @@ files=()
 # confirmations, etc.) must go above this block, everything else may go below.
 # System-level powerlevel10k stuff
 files+="${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+files+="$(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 files+="$HOME/.p10k.zsh"
 files+="$HOME/powerlevel10k/powerlevel10k.zsh-theme"
+files+="$HOME/.fzf.zsh"
 files+="$HOME/.macos"
 files+="$HOME/.aliases"
-files+="$HOME/.fzf.zsh"
 files+="$HOME/.local/this-computer.zsh"
-files+="$(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 for file in $files; do
   [[ ! -r $file ]] || source $file
 done
+
+# Add .local/bin to front of path
+export PATH="$HOME/.local/bin:$PATH"
 
 # Enable tab completion for git. And more!
 autoload -Uz compinit && compinit
@@ -28,34 +31,17 @@ setopt HIST_EXPIRE_DUPS_FIRST # delete duplicates first when HISTFILE size excee
 setopt HIST_FCNTL_LOCK        # Use a more modern way to lock the history file. Should be a net positive on my shiny new machine
 setopt EXTENDED_HISTORY       # Add timestamps to history files
 setopt HIST_REDUCE_BLANKS     # Trim silly whitespace from history
+setopt HISTVERIFY             # When using !! or !$, command is redisplayed ready to run instead of ran
 export HISTFILE="$HOME/.histfile"
 export HISTSIZE=1000
 export SAVEHIST=$HISTSIZE
 
-# Function to print a colormap
-function colors() {
-for i in {0..255}; do
-  print -Pn "%K{$i} %k%F{$i}${(l:3::0:)i}%f " ${${(M)$((i%8)):#7}:+$'\n'}
-done
-}
-
-# Function to print all my ssh-able machines
-function machines() {
-  cat ~/.ssh/conf.d/* | awk '/^Host / {print $2}' | sort
-}
-
-# When using !! or !$, command is redisplayed ready to run instead of ran
-setopt histverify
-
 # Use vim by default
-export EDITOR=vim
+export EDITOR="vim"
 
 # Let me use Ctrl-A / Ctrl-E as expected, even though $EDITOR is vim
 bindkey "^A" vi-beginning-of-line
 bindkey "^E" vi-end-of-line
-
-# Add .local/bin to front of path
-export PATH="$HOME/.local/bin:$PATH"
 
 #################################### XDG ################################### {{{
 # XDG best practices:
@@ -88,3 +74,9 @@ zstyle ':completion:*' matcher-list 'm:{[:lower:]}={[:upper:]} r:|[._-]=** r:|=*
 zstyle ':completion:*' squeeze-slashes true
 zstyle :compinstall filename '/Users/arisweedler/.zshrc'
 
+# Fun little function to print a colormap
+function colors() {
+  for i in {0..255}; do
+    print -Pn "%K{$i} %k%F{$i}${(l:3::0:)i}%f " ${${(M)$((i%8)):#7}:+$'\n'}
+  done
+}
