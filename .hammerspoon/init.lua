@@ -1,7 +1,6 @@
 -- Author: Ari Sweedler
 
-require "brightness"
-require "volume"
+require "volume-and-brightness"
 require "application"
 require "easy-reload"
 
