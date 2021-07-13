@@ -14,9 +14,13 @@
 
 [diff]
 	tool = diffconflicts
+	submodule = diff
 
 [merge]
 	tool = diffconflicts
+
+[status]
+	submoduleSummary = true
 
 [mergetool "diffconflicts"]
 	cmd = vim -c DiffConflicts \"$MERGED\" \"$BASE\" \"$LOCAL\" \"$REMOTE\"
@@ -84,5 +88,3 @@
 	s = status --short --branch
 	showme = !"printf \"The alias '$1' is: \"; git config --list | sed /alias.$1=/!d | sed s/[^=]*=// #"
 	ticket = !"git pull origin dev && git switch --create $1 dev && git push --set-upstream origin $1 #"
-[status]
-	submoduleSummary = true
