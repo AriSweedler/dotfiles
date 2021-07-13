@@ -1,45 +1,48 @@
 [submodule ".vim/pack/tpope/start/fugitive"]
 	path = .vim/pack/tpope/start/fugitive
 	url = https://tpope.io/vim/fugitive.git
+	branch = master
 [submodule ".vim/pack/tpope/opt/scriptease"]
 	path = .vim/pack/tpope/opt/scriptease
 	url = https://tpope.io/vim/scriptease.git
+	branch = master
 [submodule ".vim/pack/bundle/start/gitgutter"]
 	path = .vim/pack/bundle/start/gitgutter
 	url = https://github.com/airblade/vim-gitgutter.git
+	branch = master
 [submodule ".vim/pack/bundle/opt/xterm-color-table"]
 	path = .vim/pack/bundle/opt/xterm-color-table
 	url = git@github.com:guns/xterm-color-table.vim.git
-[submodule ".vim/pack/arisweedler/start/developer"]
-	path = .vim/pack/arisweedler/start/developer
-	url = git@github.com:AriSweedler/vim-developer.git
-[submodule ".vim/pack/arisweedler/start/dividers"]
-	path = .vim/pack/arisweedler/start/dividers
-	url = git@github.com:AriSweedler/vim-dividers.git
-[submodule ".vim/pack/arisweedler/start/fold"]
-	path = .vim/pack/arisweedler/start/fold
-	url = git@github.com:AriSweedler/vim-fold.git
-[submodule ".vim/pack/arisweedler/opt/partymode"]
-	path = .vim/pack/arisweedler/opt/partymode
-	url = git@github.com:AriSweedler/vim-partymode.git
-[submodule ".vim/pack/arisweedler/start/quickfix"]
-	path = .vim/pack/arisweedler/start/quickfix
-	url = git@github.com:AriSweedler/vim-quickfix.git
-[submodule ".vim/pack/arisweedler/start/statusline"]
-	path = .vim/pack/arisweedler/start/statusline
-	url = git@github.com:AriSweedler/vim-statusline.git
-[submodule ".vim/pack/arisweedler/start/notes"]
-	path = .vim/pack/arisweedler/start/notes
-	url = git@github.com:AriSweedler/vim-notes.git
-[submodule ".vim/pack/arisweedler/start/library"]
-	path = .vim/pack/arisweedler/start/library
-	url = git@github.com:AriSweedler/vim-lib.git
-[submodule ".vim/pack/arisweedler/start/links"]
-	path = .vim/pack/arisweedler/start/links
-	url = git@github.com:AriSweedler/vim-links.git
-[submodule ".vim/pack/bundle/start/ctrlp"]
-	path = .vim/pack/bundle/start/ctrlp
-	url = https://github.com/ctrlpvim/ctrlp.vim.git
+	branch = master
 [submodule ".vim/pack/betterdiff/start/diffconflicts"]
 	path = .vim/pack/betterdiff/start/diffconflicts
 	url = https://github.com/whiteinge/diffconflicts.git
+	branch = master
+[submodule ".vim/pack/arisweedler/start/developer"]
+	path = .vim/pack/arisweedler/start/developer
+	url = git@github.com:AriSweedler/vim-developer.git
+	branch = main
+[submodule ".vim/pack/arisweedler/start/dividers"]
+	path = .vim/pack/arisweedler/start/dividers
+	url = git@github.com:AriSweedler/vim-dividers.git
+	branch = main
+[submodule ".vim/pack/arisweedler/start/quickfix"]
+	path = .vim/pack/arisweedler/start/quickfix
+	url = git@github.com:AriSweedler/vim-quickfix.git
+	branch = main
+[submodule ".vim/pack/arisweedler/start/statusline"]
+	path = .vim/pack/arisweedler/start/statusline
+	url = git@github.com:AriSweedler/vim-statusline.git
+	branch = main
+[submodule ".vim/pack/arisweedler/start/notes"]
+	path = .vim/pack/arisweedler/start/notes
+	url = git@github.com:AriSweedler/vim-notes.git
+	branch = main
+[submodule ".vim/pack/arisweedler/start/library"]
+	path = .vim/pack/arisweedler/start/library
+	url = git@github.com:AriSweedler/vim-lib.git
+	branch = main
+[submodule ".vim/pack/arisweedler/start/links"]
+	path = .vim/pack/arisweedler/start/links
+	url = git@github.com:AriSweedler/vim-links.git
+	branch = main
