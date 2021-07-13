@@ -46,3 +46,7 @@
 	path = .vim/pack/arisweedler/start/links
 	url = git@github.com:AriSweedler/vim-links.git
 	branch = main
+[submodule ".vim/pack/arisweedler/opt/spellcheck"]
+	path = .vim/pack/arisweedler/opt/spellcheck
+	url = git@github.com:AriSweedler/vim-spellcheck.git
+	branch = main
