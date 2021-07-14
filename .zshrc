@@ -25,13 +25,14 @@ export PATH="$HOME/.local/bin:$PATH"
 autoload -Uz compinit && compinit
 
 # Set history stuff. https://zsh.sourceforge.io/Doc/Release/Options.html#History
-setopt SHARE_HISTORY          # imports new commands from the history file, and also causes your typed commands to be appended to the history file immediately
 setopt HIST_IGNORE_SPACE      # ignore commands that start with space
 setopt HIST_EXPIRE_DUPS_FIRST # delete duplicates first when HISTFILE size exceeds HISTSIZE
 setopt HIST_FCNTL_LOCK        # Use a more modern way to lock the history file. Should be a net positive on my shiny new machine
 setopt EXTENDED_HISTORY       # Add timestamps to history files
 setopt HIST_REDUCE_BLANKS     # Trim silly whitespace from history
 setopt HISTVERIFY             # When using !! or !$, command is redisplayed ready to run instead of ran
+setopt SHARE_HISTORY          # imports new commands from the history file, and also causes your typed commands to be
+                              # appended to the history file immediately
 export HISTFILE="$HOME/.histfile"
 export HISTSIZE=1000
 export SAVEHIST=$HISTSIZE
