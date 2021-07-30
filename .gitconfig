@@ -83,8 +83,15 @@
 	initt = !"git init; git commit --allow-empty --message 'first commit'"
 	l = log --pretty=newlog --graph -10
 	ll = log --pretty=newlog --graph
+	# Just like we can use 'log -S' to search through changes, we can use 'log --grep' to search through commit messages
+	logged = ll --all --grep
 	ls = ls-tree --full-tree -r --abbrev HEAD
-	popbranch = !"git stash pop $(echo $(git stash list | grep $(git rev-parse --abbrev-ref HEAD 2>/dev/null) | head -1) | awk '{print $1}' | tr -d ':')"
 	s = status --short --branch
 	showme = !"printf \"The alias '$1' is: \"; git config --list | sed /alias.$1=/!d | sed s/[^=]*=// #"
+
+	# The Jira ticket suite
 	ticket = !"git pull origin dev && git switch --create $1 dev && git push --set-upstream origin $1 #"
+	scar = !"git ticket scartissue/$1"
+	bug = !"git ticket bugfix/$1"
+	feature = !"git ticket feature/$1"
+	experiment = !"git ticket ari/$1"

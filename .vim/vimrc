@@ -194,8 +194,11 @@ nnoremap gO O<C-c>cc
 nnoremap gK ?\%<C-R>=virtcol(".")<CR>v\S<CR>
 nnoremap gJ /\%<C-R>=virtcol(".")<CR>v\S<CR>
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-""""""""""""""""""""" Deal with buffest and tabs easier """""""""""""""""""" {{{
+""""""""""""""""""""" Deal with buffers and tabs easier """""""""""""""""""" {{{
 " TODO make this a plugin
+" Reload a buffer. Pick which one I like the most
+nnoremap <silent> <Leader>E :edit! %<CR>
+
 " Buffer close: remove buffer from memory
 nnoremap <Leader>bc :bnext <Bar> bdelete #<CR>
 " Remove buffer from memory AND close the window
