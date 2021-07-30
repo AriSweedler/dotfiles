@@ -6,7 +6,7 @@ function check-for-big-files() {
   BIG=200
   echo "* Check for big files: du \$file > $BIG"
 
-  for file in $(git diff --name-only HEAD^); do
+  for file in $(git diff --name-only HEAD); do
     # Exit early - continue the loop if the file is not big
     test "$(du "$file" | awk '{print $1}')" -gt "$BIG" || continue
 
@@ -24,9 +24,30 @@ function check-for-big-files() {
   done
 }
 
+function has_gtest_filter() {
+  git grep "add_test" | grep "gtest_filter"
+}
+
+function check-for-gtest_filter() {
+  if ! has_gtest_filter; then
+    return 0
+  fi
+
+  echo
+  echo -n "There is a gtest filter line in this commit. Did you intend this? [y/N]? "
+  read -n 1 ANSWER
+  echo
+  if [[ ! "$ANSWER" =~ [yY] ]]; then
+    echo "aborting commit"
+    exit 1
+  fi
+  echo "ok, cool :). Make sure you remove it before merging to dev"
+}
+
 # Read user input, assign stdin to keyboard
 exec < /dev/tty
 echo "Pre-commit hook"
 check-for-big-files
+check-for-gtest_filter
 exec <&-
 
