@@ -193,6 +193,8 @@ nnoremap gO O<C-c>cc
 " Move up/down this virtual column until you hit non-whitespace
 nnoremap gK ?\%<C-R>=virtcol(".")<CR>v\S<CR>
 nnoremap gJ /\%<C-R>=virtcol(".")<CR>v\S<CR>
+
+command! DiffThis diffthis | wincmd w | diffthis | wincmd w
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""" Deal with buffers and tabs easier """""""""""""""""""" {{{
 " TODO make this a plugin
@@ -207,10 +209,8 @@ nnoremap <Leader>BC :.bdelete<CR>
 " Switch between buffers and tabs easier
 nnoremap [b :bprevious<CR>
 nnoremap ]b :bnext<CR>
-nnoremap <Leader>b :ls<CR>:buffer<Space>
-nnoremap ]E :edit **/*
-nnoremap ]T :tabedit **/*
-nnoremap <C-b> :buffer #<CR>
+nnoremap <C-b> :ls<CR>:buffer<Space>
+nnoremap <Leader>T :tabedit **/*
 
 " <C-w>T moves a window to a new tab, but I like '!' better. Like tmux
 nnoremap <C-w>! <C-w>T
@@ -228,8 +228,6 @@ nnoremap <Leader><C-]> :!ctags -R .<CR>
 nnoremap g<C-]> :tab tag <C-r>=expand("<cword>")<CR><CR>
 " Tselect tab in new tag
 nnoremap g[] :tab tselect <C-r>=expand("<cword>")<CR><CR>
-nnoremap ]<C-]> :tjump /
-nnoremap [<C-]> :tjump /
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""" create text objects """"""""""""""""""""""""""" {{{
 " Leaving this here cuz I might wanna do something actually useful with it
@@ -307,4 +305,37 @@ if has('persistent_undo')
   set undofile
 endif
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+"""""""""""" Set a buffer to automatically scp to remote machine """"""""""" {{{
+" Set an autocommand to run this for every file we open
+function! RemoteWriteFunction(host, path)
+  " TODO set up an autocommand to run the RemoteWriteOne for every new buffer
+  " TODO RemoteWriteOne has to be intelligent - only do it if it's a child of getcwd()
+  " TODO print error messages better
+  " TODO do this in vim9script in plugin lol
+  " TODO investigate netrw for this same capability
+  call RemoteWriteOne(a:host, a:path)
+endfunction
+
+" Run this for every buffer
+function! RemoteWriteOne(host, path)
+  let l:auto_command = "autocmd BufWritePost <buffer> silent!"
+  let l:scp_target = a:host . ":" . a:path . "/%"
+  let l:shell_command = "scp -q %:p " . l:scp_target . " &"
+  let l:command = l:auto_command . " !" . l:shell_command
+  echom l:command
+  execute l:command
+endfunction
+command! -nargs=* RemoteWrite call RemoteWriteFunction(<f-args>)
+command! RemoteWriteSol call RemoteWriteFunction('v-sol10u8', '/source/hawkeye')
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+""""""""""""""""""""""""""" diff highlight text """""""""""""""""""""""""" {{{
+highlight DiffAdd        ctermbg=47
+highlight DiffChange     ctermbg=227
+highlight DiffDelete     ctermbg=196 ctermfg=124
+highlight DiffText       term=reverse cterm=bold ctermbg=1
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+"""""""""""""""""""""""""""""""""" netrw """"""""""""""""""""""""""""""""" {{{
+let g:netrw_browse_split = 3   " open files in new tabs (TODO there is a <Plug> to open something as a background tab. Maybe use that)
+let g:netrw_liststyle = 3      " tree style listing
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
