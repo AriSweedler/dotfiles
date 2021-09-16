@@ -10,6 +10,7 @@ myLanguages['go']          = {'s': '/*', 'm': '*', 'e': '*/'}
 myLanguages['javascript']  = {'s': '/*', 'm': '*', 'e': '*/'}
 myLanguages['markdown']    = {'s': '# ','m': '#'}
 myLanguages['bash']        = {'m': '#'}
+myLanguages['cmake']       = {'m': '#'}
 myLanguages['conf']        = {'m': '#'}
 myLanguages['gitconfig']   = {'m': '#'}
 myLanguages['make']        = {'m': '#'}

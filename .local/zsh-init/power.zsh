@@ -1,7 +1,7 @@
 # Functions that give me a bit more power
 function double_cd() {
   if [ -z "$2" ]; then
-    cd $1
+    cd "$1"
   else
     cd "$1"/*"$2"* || cd "$1"
     b-echo "$(pwd)"
@@ -60,7 +60,7 @@ function machines() {
       print "\t " FILENAME
     }
     /Host / {host=$2}
-    /Hostname / {hostname=$2}
+    /Host[nN]ame / {hostname=$2}
     host && hostname {
       print host " - " hostname
       host=""
@@ -97,3 +97,17 @@ function www() {
   $COMMAND
 }
 
+function key() {
+  echo "pubkey copied to clipboard"
+  pbcopy < "$HOME/.ssh/id_rsa.pub"
+}
+
+function scoop() {
+  local -r download_dir="$HOME/Downloads"
+  echo "Moving all files from '$download_dir' to pwd"
+  local -r d="downloads"
+  mkdir -p "$d"
+  mv "$download_dir"/* "$d"
+  printf "\n$d:\n"
+  ls "$d"
+}
