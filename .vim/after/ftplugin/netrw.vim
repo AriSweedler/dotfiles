@@ -3,7 +3,7 @@
 
 setlocal relativenumber
 
-# More convenient mapping to "close a tree fold"
+" More convenient mapping to "close a tree fold"
 nmap <buffer> <silent> <nowait> zc <Plug>NetrwTreeSqueeze
 
 " Open up a background tab

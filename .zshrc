@@ -34,7 +34,7 @@ setopt HISTVERIFY             # When using !! or !$, command is redisplayed read
 setopt SHARE_HISTORY          # imports new commands from the history file, and also causes your typed commands to be
                               # appended to the history file immediately
 export HISTFILE="$HOME/.histfile"
-export HISTSIZE=1000
+export HISTSIZE=50000
 export SAVEHIST=$HISTSIZE
 
 # Use vim by default

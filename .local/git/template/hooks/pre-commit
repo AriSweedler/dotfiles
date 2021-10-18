@@ -7,6 +7,9 @@ function check-for-big-files() {
   echo "* Check for big files: du \$file > $BIG"
 
   for file in $(git diff --name-only HEAD); do
+    # Exit early - continue the loop if the file doesn't exist
+    if [ ! -f "$file" ]; then continue; fi
+
     # Exit early - continue the loop if the file is not big
     test "$(du "$file" | awk '{print $1}')" -gt "$BIG" || continue
 
@@ -17,7 +20,7 @@ function check-for-big-files() {
     if [[ "$ANSWER" =~ [yY] ]]; then
       continue
     else
-      echo "This file is ~/Desktop/source/hawkeye/.git/hooks/pre-commit"
+      echo "This file is $BASH_SOURCE"
       git diff --name-only | du -sh
       exit 1
     fi

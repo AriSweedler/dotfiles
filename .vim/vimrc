@@ -211,6 +211,7 @@ nnoremap [b :bprevious<CR>
 nnoremap ]b :bnext<CR>
 nnoremap <C-b> :ls<CR>:buffer<Space>
 nnoremap <Leader>T :tabedit **/*
+nnoremap <Leader>H :tabedit %:h
 
 " <C-w>T moves a window to a new tab, but I like '!' better. Like tmux
 nnoremap <C-w>! <C-w>T
@@ -305,34 +306,11 @@ if has('persistent_undo')
   set undofile
 endif
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-"""""""""""" Set a buffer to automatically scp to remote machine """"""""""" {{{
-" Set an autocommand to run this for every file we open
-function! RemoteWriteFunction(host, path)
-  " TODO set up an autocommand to run the RemoteWriteOne for every new buffer
-  " TODO RemoteWriteOne has to be intelligent - only do it if it's a child of getcwd()
-  " TODO print error messages better
-  " TODO do this in vim9script in plugin lol
-  " TODO investigate netrw for this same capability
-  call RemoteWriteOne(a:host, a:path)
-endfunction
-
-" Run this for every buffer
-function! RemoteWriteOne(host, path)
-  let l:auto_command = "autocmd BufWritePost <buffer> silent!"
-  let l:scp_target = a:host . ":" . a:path . "/%"
-  let l:shell_command = "scp -q %:p " . l:scp_target . " &"
-  let l:command = l:auto_command . " !" . l:shell_command
-  echom l:command
-  execute l:command
-endfunction
-command! -nargs=* RemoteWrite call RemoteWriteFunction(<f-args>)
-command! RemoteWriteSol call RemoteWriteFunction('v-sol10u8', '/source/hawkeye')
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""" diff highlight text """""""""""""""""""""""""" {{{
-highlight DiffAdd        ctermbg=47
-highlight DiffChange     ctermbg=227
-highlight DiffDelete     ctermbg=196 ctermfg=124
+highlight DiffAdd        ctermbg=22
+highlight DiffChange     ctermbg=178 cterm=bold
+highlight DiffDelete     ctermbg=124 ctermfg=1
 highlight DiffText       term=reverse cterm=bold ctermbg=1
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""" netrw """"""""""""""""""""""""""""""""" {{{
