@@ -29,8 +29,8 @@ end
 --- Define the "words" in our "DSL"
 volume = "V"
 bright = "B"
-k_up = "command"
-k_abs = "shift"
+k_abs = "command"
+k_up = "shift"
 down =     {"ctrl", "alt"}
 abs_down = {k_abs, "ctrl", "alt"}
 up =       {k_up, "ctrl", "alt"}

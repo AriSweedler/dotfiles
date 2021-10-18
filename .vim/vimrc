@@ -26,7 +26,7 @@ inoremap <silent> <C-_> <C-o>:nohlsearch<CR>
 " This one is sweet: use star in visual mode to search for the selected text
 " yank into register 0 --> forward search for the contents of register 0
 " (Very nomagic, escape contents of 0 register before pasting).
-vnoremap <silent> * "0y:let@/='\V<C-r>=escape(@0, '/\')<CR>'<CR>
+vnoremap <silent> * "0y:let@/='<C-r>=escape(@0, '/\')<CR>\V'<CR>
 nnoremap * *N
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 
@@ -246,6 +246,13 @@ onoremap <silent> a* :<C-u>normal Va*<CR>
 " Define a text object for editing regexes (single line, inside of //s)
 xnoremap <silent> i/ F/lof/h
 onoremap <silent> i/ :<C-u>normal vi/<CR>
+
+"" TODO text object for "arg"s
+" foo(a, b, c, d)
+" foo(a, *b*, c, d) - in arg
+" foo(a, *b, *c, d) - around arg
+" Maybe don't even need the `i/a` prefixes. Can do something else.
+" Also a command to swap words might be good?
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""""" Plugin config """""""""""""""""""""""""""""" {{{
 """"""""""""""""""""""""""""""""" GitGutter """""""""""""""""""""""""""""""" {{{
