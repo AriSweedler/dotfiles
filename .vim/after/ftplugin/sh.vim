@@ -1,5 +1,6 @@
 setlocal tabstop=2 expandtab
 setlocal foldlevel=0
+setlocal autoindent
 
 " Have bash syntax fold stuff nicely. Because they don't want that by default.
 "

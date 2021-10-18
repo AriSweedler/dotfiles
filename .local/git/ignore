@@ -1,6 +1,7 @@
 # vim
 .*.swp
 .netrwhist
+tags
 
 # OS generated files
 .DS_Store*

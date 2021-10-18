@@ -1,3 +1,5 @@
+nnoremap <buffer> <C-p> :set paste!<CR>
+
 " Format bulleted lists properly
 setlocal tabstop=2 autoindent
 inoremap <buffer> <silent> 8 <Esc>:call <SID>Bullet()<CR>A

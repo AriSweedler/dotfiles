@@ -9,3 +9,5 @@ nnoremap <buffer> gq mz3[{gqaB`z
 " * iabbrev for 'loggy' to debug/log
 " * Help with function headers (don't need)
 " * Define a function to format the whole file
+
+nnoremap <C-w><C-w> <nop>

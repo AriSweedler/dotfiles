@@ -59,39 +59,63 @@
 	untracked = red reverse bold
 
 [pretty]
-	# '%h': abbreviated commit hash
-	# '%ar': author date, relative
-	# '%D': ref names without the " (", ")" wrapping.
-	# '%s': subject
-	# '%an': author name
-	newlog = "format:%C(cyan)%h %C(green)%<(12,trunc)%ar %C(dim white)%<(12,trunc)[%an] %C(reset)%s %w(0,0,8)%C(bold red)%+d%C(reset)"
+	# https://git-scm.com/docs/pretty-formats
+	# %C(color) ::= color directive
+	# %<(N,TX) ::= make the next placeholder take at least N columns, truncate according to TX
+	# %h ::= abbreviated commit hash
+	# %ar ::= author date, relative to now
+	# %an ::= author name (compared to committer name)
+	# %s ::= subject (first line of commit message)
+	# %w(width, indent1, indent2) ::= change linewrap
+	# + ::= A linefeed is inserted before the expansion if expansion is not null
+	# %d ::= ref names.
+	newlog = "format:\
+%C(cyan)%<(9,trunc)%h \
+%C(green)%<(12,trunc)%ar \
+%C(dim white)%<(12,trunc)[%an]%C(reset) \
+%C(reset)%s \
+%C(bold reverse cyan)%w(0,0,8)%+d\
+%C(reset)"
+	# TODO the ref names aren't being colored. This looks like a bug.
 
-################################### shortcuts ##################################
+#################################### aliases ###################################
 [alias]
-	a = !"git add .; git s"
+	# Meta-aliases
 	alias = !"git config --list | grep ^alias | cut -c 7- | sort #"
-	amend = commit --amend --reuse-message=HEAD
-	ari = grep --break --heading --line-number "\\\\[ARI\\\\]"
-	cconfig = config --edit --global
-	ctags = !.git/hooks/ctags
-	d = diff --staged --diff-algorithm=minimal
-	po = !"git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)"
-	diffls = diff --name-only
-	diffc = diff HEAD^
-	diffsub = submodule foreach git diff
-	grepp = grep --break --heading --line-number
-	initt = !"git init; git commit --allow-empty --message 'first commit'"
-	l = log --pretty=newlog --graph -10
-	ll = log --pretty=newlog --graph
-	# Just like we can use 'log -S' to search through changes, we can use 'log --grep' to search through commit messages
-	logged = ll --all --grep
-	ls = ls-tree --full-tree -r --abbrev HEAD
-	s = status --short --branch
 	showme = !"printf \"The alias '$1' is: \"; git config --list | sed /alias.$1=/!d | sed s/[^=]*=// #"
 
+	# Shortcuts
+	a = !"git add .; git s"
+	d = diff --staged --diff-algorithm=minimal
+	f = fetch --append --prune --jobs=4
+	ll = log --pretty=newlog --graph
+	l = ll -10
+	s = status --short --branch
+	sw = switch
+	po = !"git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)"
+	rc = rebase --continue
+	m = mergetool
+
+	# New commands
+	amend = commit --amend --reuse-message=HEAD
+	ctags = !.git/hooks/ctags
+	ls = ls-tree --full-tree -r --abbrev HEAD
+	cconfig = config --edit --global
+	diffls = diff --name-only
+	dh = diff HEAD^
+	initt = !"git init; git commit --allow-empty --message 'first commit'"
+
+	# Searching
+	# 'git log -S' to search through changes
+	# 'log --grep' to search through commit messages
+	grepp = grep --break --heading --line-number
+	ari = grepp "\\\\[ARI\\\\]"
+	grep-code = ll -S
+	grep-commit = ll --all --grep
+
 	# The Jira ticket suite
-	ticket = !"git pull origin dev && git switch --create $1 dev && git push --set-upstream origin $1 #"
-	scar = !"git ticket scartissue/$1"
-	bug = !"git ticket bugfix/$1"
-	feature = !"git ticket feature/$1"
-	experiment = !"git ticket ari/$1"
+	j-bug = !"git j-ticket bugfix/$1"
+	j-experiment = !"git j-ticket ari/$1"
+	j-feature = !"git j-ticket feature/$1"
+	j-scar = !"git j-ticket scartissue/$1"
+	j-ticket = !"git f && git switch --create $1 origin/dev && git po #"
