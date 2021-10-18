@@ -324,3 +324,7 @@ highlight DiffText       term=reverse cterm=bold ctermbg=1
 let g:netrw_browse_split = 3   " open files in new tabs (TODO there is a <Plug> to open something as a background tab. Maybe use that)
 let g:netrw_liststyle = 3      " tree style listing
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+
+" autoload scriptease with this command.
+" scriptease will overwrite the meaning of this command
+command! Scriptnames packadd scriptease <Bar> Scriptnames
