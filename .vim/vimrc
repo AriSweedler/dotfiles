@@ -1,160 +1,71 @@
-"""""""""""""""""""""""""" Most important settings """"""""""""""""""""""""" {{{
+""""""""""""""""""""""""""""""""" settings """"""""""""""""""""""""""""""""" {{{
 filetype plugin on    "allow for autocmds to be run based on filetype
 set nocompatible      "Don't do weird stuff for vi
 set number            "turn on line numbers in the left columns
-set formatoptions+=j  "Delete comment character when joining commented lines
 
+" briefly show the matching bracket {[( when typing )]}
+set showmatch matchtime=3
+
+" allow backspacing over more things
+set backspace=indent,eol,start
+"""""""""""""""""""""""""""""" Other settings """""""""""""""""""""""""""""" {{{
+" CTRL-W in insert mode deletes a lot. Use CTRL-G u to "break the undo
+" sequence", so that you can use 'u'  to undo CTRL-W
+inoremap <C-W> <C-G>u<C-W>
+
+" timeout on escape codes after 100 ms
+set ttimeout ttimeoutlen=100
+
+" Only cancel a partially given command manually (<C-c> or <ESC>).
+" Multi-keystroke commands will not timeout.
+set notimeout
+" Multi-keystroke commands will be shown in bottom right.
+set showcmd
+
+" 1st tab:         Complete the longest match and bring up 'wildmenu'
+" Additional tabs: Cycle through the menu
+set wildmode=longest:full,full
+" Nicer tab'ing in command mode
+set wildmenu
+
+" Don't update the screen when doing macros. Much faster
+set lazyredraw
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+"""""""""""""""""""""""""" Less important settings """"""""""""""""""""""""" {{{
+set noerrorbells       " disable error bells
+set belloff=all        " disable bell for non-errors, too
+
+set scrolloff=2        " Default to giving me a lil more space to see context
+set sidescrolloff=4    " Min # of columns to keep to the left/right of the cursor
+
+set splitbelow         " new splits open to the bottom or to the right
+set splitright         " ^
+
+set softtabstop=0      " Use sane defaults for these. Just set tabstop.
+set shiftwidth=0       " ^
+
+set display=lastline   " as much as possible of the last line will be displayed
+set history=512        " the default is only 50.
+set pumheight=8        " set max popup menu height to 8
+set tags+=tags;        " ctags is so helpful! And easy, too.
+set formatoptions+=j   " Delete comment character when joining commented lines
+set nojoinspaces       " don't put 2 spaces after [.!?] when using join command
+set signcolumn=yes     " Show signs in the left columns
+set whichwrap+=<,>,[,] " Have <Left> and <Right> go across lines
+set updatetime=100     " let vim-gitgutter update faster - used by CursorHold autocommand
+
+" Toggle hide/show of left columns
+nnoremap <silent> <Leader>[ :call lib#toggleLeftColumns()<CR>
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+"""""""""""""""""""""""""""""""""" colors """""""""""""""""""""""""""""""""" {{{
 " Enable syntax, and set a colorscheme. Don't do this twice
 if !exists("colors_name")
   syntax enable       "allow for syntax highlighting and indenting
   colorscheme desert  "pretty colors
 endif
 
-" briefly show the matching bracket {[( when typing )]}
-set showmatch matchtime=3
-
-"""""""""""""""""""""""""" Better search/highlight """"""""""""""""""""""""" {{{
-" highlight search (highlight matches)
-set hlsearch
-" incremental search (highlight as we type the search query)
-set incsearch
-" Clear highlighting for search terms
-noremap <silent> <C-_> :nohlsearch<CR>
-inoremap <silent> <C-_> <C-o>:nohlsearch<CR>
-
-" Improvements to '*' - work in visual mode & don't go to the next instance
-" This one is sweet: use star in visual mode to search for the selected text
-" yank into register 0 --> forward search for the contents of register 0
-" (Very nomagic, escape contents of 0 register before pasting).
-vnoremap <silent> * "0y:let@/='<C-r>=escape(@0, '/\')<CR>\V'<CR>
-nnoremap * *N
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-
-""""""""""""""""""" Important commands from defaults.vim """"""""""""""""""" {{{
-" allow backspacing over more things
-set backspace=indent,eol,start
-
-" CTRL-W in insert mode deletes a lot. Wse CTRL-G u to first break undo,
-" so that you can undo CTRL-W after inserting a line break.
-inoremap <C-W> <C-G>u<C-W>
-
-" Multi-keystroke commands will be shown in bottom right.
-set showcmd
-
-" timeout on escape codes after 100 ms
-set ttimeout ttimeoutlen=100
-
-" Nicer tab'ing in command mode (wild
-set wildmenu
-
-" Default to giving me a lil more space to see context
-set scrolloff=2
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-
-" Multi-keystroke commands will not timeout Only cancel a partially given
-" command manually (<C-c> or <ESC>)
-set notimeout
-
-" 1st tab:         Complete the longest match and bring up 'wildmenu'
-" Additional tabs: Cycle through the menu
-set wildmode=longest:full,full
-
-" Use vim's system clipboard register ("*) instead of the unnamed register for
-" yank/put/delete. This links these commands to the system clipboard
-if !has('clipboard') && !has('xterm_clipboard')
-  echom "[VIMRC] WARNING: Not compiled with clipboard support"
-endif
-set clipboard=unnamed
-
-" Make the grepprg git grep. This always searches from the root of the repo
-" and ignores files that .gitignore specifies. It's a lil nicer.
-let &grepprg="git grep --line-number"
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-"""""""""""""""""""""""""" Less important settings """"""""""""""""""""""""" {{{
-set display=lastline   " as much as possible of the last line will be displayed
-set gdefault           " turn global flag on by default for :substitute
-set history=1000       " the default is only 40.
-set noshowmode         " don't show the mode (we use nice statuslines now!)
-set noerrorbells       " disable error bells
-set belloff=all        " disable bell for non-errors, too
-set lazyredraw         " don't update the screen when doing macros
-set updatetime=100     " let vim-gitgutter update faster - used by CursorHold autocommand
-set sidescrolloff=4    " Min # of columns to keep to the left/right of the cursor
-set splitbelow         " new splits open to the bottom or to the right
-set splitright         " ^
-set pumheight=8        " set max popup menu height to 8
-set tags+=tags;        " ctags is so helpful! And easy, too.
-set nojoinspaces       " don't put 2 spaces after [.!?] when using join command
-set signcolumn=yes     " Show signs in the left columns
-set whichwrap+=<,>,[,] " Have <Left> and <Right> go across lines
-set foldlevel=3        " Don't fold most things by default
-set softtabstop=0      " Use sane defaults for these. Just set tabstop.
-set shiftwidth=0       " ^
-
-" https://github.com/khuedoan/dotfiles/blob/97d5d7bb4f00374a19beb50eaa75a83a7d570b06/.vimrc#L48
-" Change cursor shape in different modes (see :help cursor-shape)
-let &t_EI = "\033[2 q" " NORMAL  █
-let &t_SI = "\033[5 q" " INSERT  |
-
-" The first time we invoke '%', load the matchit plugin. Don't need to try and
-" load it every time lol, so unmap it after we do it once.
-nnoremap <silent> % :packadd matchit <Bar> unmap %<CR>%
-
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" This should maybe be a plugin?
-function! SurroundMap(invoker, left, right)
-  " Visual mode mapping: `s<invoker>` will surround the visual text with
-  " <a:left><a:right>
-  execute printf('vnoremap s%s c%s<C-r>"%s<C-c>', a:invoker, a:left, a:right)
-  " Normal mode mapping: `<C-s><invoker>` will viws<invoker>
-  execute printf('nmap <C-s>%s viws%s', a:invoker, a:invoker)
-  " Normal mode mapping: `<Leader><invoker>` will remove the difference between
-  " the text object `i<invoker>` and `a<invoker>`.
-  execute printf('nnoremap <Leader>%s "0di%s"_da%s"0Pa <Esc>', a:invoker, a:invoker, a:invoker)
-endfunction
-call SurroundMap('`', '`', '`')
-call SurroundMap('"', '"', '"')
-call SurroundMap('(', '(', ')')
-call SurroundMap('{', '{', '}')
-call SurroundMap('[', '[', ']')
-call SurroundMap('<', '<', '>')
-" TODO Don't yet have the word objects for these to remove them
-call SurroundMap("*", "*", "*")
-call SurroundMap("_", "_", "_")
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-
-" Search for git conflict markers (maybe I should have a better way of doing
-" this....)
-nnoremap <Leader>/g /[>=<]\{7}<CR>
-
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-""""""""""""""""""""""""""""" Whitespace stuff """"""""""""""""""""""""""""" {{{
-" TODO make this a plugin
-" Get fancy listchars if it’s supported
-if (&termencoding ==# 'utf-8' || &encoding ==# 'utf-8') && version >= 700
-  set listchars=tab:\¦›,space:⋅,eol:¬,nbsp:+,
-  set fillchars=vert:\|,fold:\⋅,
-  "set showbreak=↪.
-  set showbreak=☞\ " "Leave this comment and extra whitespace
-else
-  set listchars=tab:X-,space:.,eol:$,nbsp:+,
-  set fillchars=vert:\|,fold:\~
-  set showbreak=->
-endif
-
-" Toggle displaying whitespace characters
-nnoremap <Leader>w :let @/ = '\s$'<CR>:set list!<CR>
-
-" Remove trailing whitespace characters
-nnoremap <silent> <Leader>W :call lib#removeTrailingWhitespace('%')<CR>
-
-" Toggle hide/show of left columns
-nnoremap <silent> <Leader>[ :call lib#toggleLeftColumns()<CR>
-
-" Update textwidth and ColorColumn at the same time
-nnoremap <silent> <Leader>tw :<C-u>call lib#changeTextWidth(v:count)<CR>
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-""""""""""""""""""""""""""""""" Pretty colors """""""""""""""""""""""""""""" {{{
+" Highlight the lines that folds create when folded
 highlight Folded ctermbg=234 ctermfg=8
 
 " Give fun colors to the left columns (and the ColorColumn)
@@ -164,18 +75,23 @@ highlight ColorColumn ctermbg=233
 
 " Toggle syntax highlighting
 noremap <Leader>sy :call lib#toggleSyntax()<CR>
+
+" Diff colors
+highlight DiffAdd        ctermbg=22
+highlight DiffChange     ctermbg=178 cterm=bold
+highlight DiffDelete     ctermbg=124 ctermfg=1
+highlight DiffText       term=reverse cterm=bold ctermbg=1
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-"""""""""" convenience mappings (this stuff will mess with people) """"""""" {{{
+""""""""""""""""""""""""""" convenience mappings """"""""""""""""""""""""""" {{{
 " One keystroke to strip trailing whitespace on the current line and write in
 " (almost) any mode
-noremap  <C-f> <ESC>:call lib#removeTrailingWhitespace('.')<CR>:w<CR>
-noremap! <C-f> <ESC>:call lib#removeTrailingWhitespace('.')<CR>:w<CR>
+noremap  <C-f> <ESC>:call lib#remove_trailing_whitespace('.')<CR>:w<CR>
+noremap! <C-f> <ESC>:call lib#remove_trailing_whitespace('.')<CR>:w<CR>
+" Also... exit insert mode without having to move fingers.
+inoremap jk <ESC>:call lib#remove_trailing_whitespace('.')<CR>
 
 " <C-f> <C-g> will write and exit. Kinda emacs-y lol
 nnoremap <C-g> :q<CR>
-
-" Also... exit insert mode without having to move fingers.
-inoremap jk <ESC>:call lib#removeTrailingWhitespace('.')<CR>
 
 " When do I ever wanna hit 2 keys to execute one thought. Overwriting these
 " isn't an issue as if I wanna operate on a range I can just use visual mode.
@@ -186,73 +102,11 @@ nnoremap zZ zz$
 nnoremap < <<
 nnoremap > >>
 
-" Make a newline without comments
-nnoremap go o<C-c>cc
-nnoremap gO O<C-c>cc
-
 " Move up/down this virtual column until you hit non-whitespace
 nnoremap gK ?\%<C-R>=virtcol(".")<CR>v\S<CR>
 nnoremap gJ /\%<C-R>=virtcol(".")<CR>v\S<CR>
 
 command! DiffThis diffthis | wincmd w | diffthis | wincmd w
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-""""""""""""""""""""" Deal with buffers and tabs easier """""""""""""""""""" {{{
-" TODO make this a plugin
-" Reload a buffer. Pick which one I like the most
-nnoremap <silent> <Leader>E :edit! %<CR>
-
-" Buffer close: remove buffer from memory
-nnoremap <Leader>bc :bnext <Bar> bdelete #<CR>
-" Remove buffer from memory AND close the window
-nnoremap <Leader>BC :.bdelete<CR>
-
-" Switch between buffers and tabs easier
-nnoremap [b :bprevious<CR>
-nnoremap ]b :bnext<CR>
-nnoremap <C-b> :ls<CR>:buffer<Space>
-nnoremap <Leader>T :tabedit **/*
-nnoremap <Leader>H :tabedit %:h
-
-" <C-w>T moves a window to a new tab, but I like '!' better. Like tmux
-nnoremap <C-w>! <C-w>T
-" I like 'gr/gt' better than 'gT/gt'
-nnoremap gr gT
-nnoremap gT :tabe<CR><C-O>
-
-" tabmove more easily
-nnoremap ]t :tabm+<CR>
-nnoremap [t :tabm-<CR>
-
-" Re-run ctags
-nnoremap <Leader><C-]> :!ctags -R .<CR>
-" Open a tag in a new tab. Useful for tracing execution across a stack.
-nnoremap g<C-]> :tab tag <C-r>=expand("<cword>")<CR><CR>
-" Tselect tab in new tag
-nnoremap g[] :tab tselect <C-r>=expand("<cword>")<CR><CR>
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-"""""""""""""""""""""""""""" create text objects """"""""""""""""""""""""""" {{{
-" Leaving this here cuz I might wanna do something actually useful with it
-" eventually. I haven't, yet. But here's an atomic power that can't be hacked
-" together easily
-""" https://www.reddit.com/r/vim/comments/frlzt8/create_your_own_text_object/ ""
-" Define a text object for the whole buffer
-"xnoremap <silent> wb GoggV
-"onoremap <silent> wb :<C-u>normal vwb<CR>
-
-" Easily define a text object for C-style commends
-xnoremap <silent> a* [*o]*
-onoremap <silent> a* :<C-u>normal Va*<CR>
-
-" Define a text object for editing regexes (single line, inside of //s)
-xnoremap <silent> i/ F/lof/h
-onoremap <silent> i/ :<C-u>normal vi/<CR>
-
-"" TODO text object for "arg"s
-" foo(a, b, c, d)
-" foo(a, *b*, c, d) - in arg
-" foo(a, *b, *c, d) - around arg
-" Maybe don't even need the `i/a` prefixes. Can do something else.
-" Also a command to swap words might be good?
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""""" Plugin config """""""""""""""""""""""""""""" {{{
 """"""""""""""""""""""""""""""""" GitGutter """""""""""""""""""""""""""""""" {{{
@@ -294,37 +148,16 @@ nnoremap gb :Git blame<CR>
 nnoremap gD :vertical Gdiffsplit dev<CR>
 nnoremap gH :vertical Gdiffsplit HEAD^<CR>
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-""""""""""""""""""""""""""""""""""" Misc """"""""""""""""""""""""""""""""""" {{{
-""""""""""""""""""""""""""""""""" foldtext """"""""""""""""""""""""""""""""" {{{
-" One day maybe I'll customize this
-" `help foldtext`
-" Reference: http://dhruvasagar.com/2013/03/28/vim-better-foldtext
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-""""""""""""""""""""""""""""""""" hashbangs """""""""""""""""""""""""""""""" {{{
-iabbrev #!b #!/bin/bash
-iabbrev #!p #!/usr/bin/env python3
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-"""""""""""""""""""""""""""""" persistent undo """"""""""""""""""""""""""""" {{{
-" Persistent undo: keep undo history across sessions - store in XDG_CACHE (?)
-if has('persistent_undo')
-  " Make sure you have created the '~/.cache/vim-undodir' directory.
-  let &undodir = expand('$HOME/.cache/vim-undodir')
-  set undofile
-endif
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-""""""""""""""""""""""""""" diff highlight text """""""""""""""""""""""""" {{{
-highlight DiffAdd        ctermbg=22
-highlight DiffChange     ctermbg=178 cterm=bold
-highlight DiffDelete     ctermbg=124 ctermfg=1
-highlight DiffText       term=reverse cterm=bold ctermbg=1
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""" netrw """"""""""""""""""""""""""""""""" {{{
 let g:netrw_browse_split = 3   " open files in new tabs (TODO there is a <Plug> to open something as a background tab. Maybe use that)
 let g:netrw_liststyle = 3      " tree style listing
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-
-" autoload scriptease with this command.
+""""""""""""""""""""""""""""""""" autoloads """""""""""""""""""""""""""""""" {{{
 " scriptease will overwrite the meaning of this command
 command! Scriptnames packadd scriptease <Bar> Scriptnames
+
+" The first time we invoke '%', load the matchit plugin. Don't need to try and
+" load it every time lol, so unmap it after we do it once.
+nnoremap <silent> % :packadd matchit <Bar> unmap %<CR>%
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
