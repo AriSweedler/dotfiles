@@ -31,3 +31,28 @@ defaults write com.apple.dock mru-spaces -bool false
 
 # Stop dock icons from bouncing
 defaults write com.apple.dock no-bouncing -bool TRUE
+
+################################### Terminal ###################################
+# Give access to meta key
+# TODO I'd like to have something like this instead:
+# defaults write com.apple.Terminal "Window Settings" Basic useOptionAsMetaKey -int 1
+osascript -e '
+tell application "System Events"
+  set finderPrefsFile to property list file "~/Library/Preferences/com.apple.Terminal.plist"
+  tell finderPrefsFile
+    tell property list item "Window Settings"
+      tell property list item "Basic"
+        set value of property list item "useOptionAsMetaKey" to 1
+      end tell
+    end tell
+  end tell
+end tell
+'
+### Need to write to this structure:
+### {
+###     "Window Settings" =     {
+###         Basic =         {
+###             useOptionAsMetaKey = 1;
+###         }
+###     }
+### }
