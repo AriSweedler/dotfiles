@@ -88,6 +88,7 @@
 	a = !"git add .; git s"
 	d = diff --staged --diff-algorithm=minimal
 	f = fetch --append --prune --jobs=4
+	ff = pull --ff-only
 	ll = log --pretty=newlog --graph
 	l = ll -10
 	s = status --short --branch
