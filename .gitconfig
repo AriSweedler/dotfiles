@@ -99,12 +99,13 @@
 
 	# New commands
 	amend = commit --amend --reuse-message=HEAD
-	ctags = !.git/hooks/ctags
-	ls = ls-tree --full-tree -r --abbrev HEAD
 	cconfig = config --edit --global
-	diffls = diff --name-only
+	ctags = !.git/hooks/ctags
 	dh = diff HEAD^
+	diffls = diff --name-only
 	initt = !"git init; git commit --allow-empty --message 'first commit'"
+	ls = ls-tree --full-tree -r --abbrev HEAD
+	patch = add --patch
 
 	# Searching
 	# 'git log -S' to search through changes
