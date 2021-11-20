@@ -1,7 +1,9 @@
 """"""""""""""""""""""""""""""""" settings """"""""""""""""""""""""""""""""" {{{
 filetype plugin on    "allow for autocmds to be run based on filetype
 set nocompatible      "Don't do weird stuff for vi
-set number            "turn on line numbers in the left columns
+
+"turn on line numbers in the left columns & make them relative.
+set number relativenumber
 
 " briefly show the matching bracket {[( when typing )]}
 set showmatch matchtime=3
