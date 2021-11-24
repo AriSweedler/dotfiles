@@ -55,9 +55,6 @@ set nojoinspaces       " don't put 2 spaces after [.!?] when using join command
 set signcolumn=yes     " Show signs in the left columns
 set whichwrap+=<,>,[,] " Have <Left> and <Right> go across lines
 set updatetime=100     " let vim-gitgutter update faster - used by CursorHold autocommand
-
-" Toggle hide/show of left columns
-nnoremap <silent> <Leader>[ :call lib#toggleLeftColumns()<CR>
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""" colors """""""""""""""""""""""""""""""""" {{{

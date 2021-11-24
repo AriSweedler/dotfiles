@@ -29,14 +29,14 @@ function! lib#toggleLeftColumns()
     " Turn all the gutter info OFF
     let g:lib#showLeftColumns = 0
     GitGutterDisable
-    setlocal nonumber
+    setlocal nonumber norelativenumber
     setlocal signcolumn=no
     setlocal foldcolumn=0
   else
     " Turn all the gutter info ON
     let g:lib#showLeftColumns = 1
     GitGutterEnable
-    setlocal number
+    setlocal number relativenumber
     setlocal signcolumn=yes
     setlocal foldcolumn=2
   endif

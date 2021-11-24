@@ -96,6 +96,7 @@
 	po = !"git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)"
 	rc = rebase --continue
 	m = mergetool
+	yb = yankbranch
 
 	# New commands
 	amend = commit --amend --reuse-message=HEAD
@@ -106,6 +107,7 @@
 	initt = !"git init; git commit --allow-empty --message 'first commit'"
 	ls = ls-tree --full-tree -r --abbrev HEAD
 	patch = add --patch
+	yankbranch = !"git rev-parse --abbrev-ref HEAD | tr -d '\n' | pbcopy"
 
 	# Searching
 	# 'git log -S' to search through changes
