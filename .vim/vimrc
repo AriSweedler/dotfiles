@@ -160,3 +160,4 @@ command! Scriptnames packadd scriptease <Bar> Scriptnames
 nnoremap <silent> % :packadd matchit <Bar> unmap %<CR>%
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+cnoremap w!! w !sudo tee % > /dev/null
