@@ -1,4 +1,4 @@
-nnoremap <Leader>f :call lib#new_fold()<CR>zxkA<Space>
+nnoremap <Leader>f :call lib#new_fold()<CR>zvkA<Space>
 
 """"""""""""""""""""""""""""""""" foldtext """"""""""""""""""""""""""""""""" {{{
 " One day maybe I'll customize this

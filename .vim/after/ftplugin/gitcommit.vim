@@ -11,6 +11,12 @@ function! s:Bullet()
     return
   endif
 
+  " Don't make a bullet on the second line
+  let [_, lnum, _, _, _] = getcurpos()
+  if lnum == 1
+    execute "normal j"
+  endif
+
   " New bullet (on the same indent level as we were before
   if getline('.')->match('^\s\+\*') != -1
     execute "normal o*\<C-c>A\<Space>"

@@ -97,6 +97,8 @@
 	rc = rebase --continue
 	m = mergetool
 	yb = yankbranch
+	sb = branch --show-current
+	cp = cherry-pick
 
 	# New commands
 	amend = commit --amend --reuse-message=HEAD
@@ -107,7 +109,8 @@
 	initt = !"git init; git commit --allow-empty --message 'first commit'"
 	ls = ls-tree --full-tree -r --abbrev HEAD
 	patch = add --patch
-	yankbranch = !"git rev-parse --abbrev-ref HEAD | tr -d '\n' | pbcopy"
+	yankbranch = !"git branch --show-current | tr -d '\n' | pbcopy"
+	children = "!f() { git rev-list --all --not $1^@ --children | grep $(git rev-parse $1); }; f" # reachable children of a ref
 
 	# Searching
 	# 'git log -S' to search through changes
