@@ -126,7 +126,8 @@ highlight GitGutterDelete term=bold ctermfg=188 ctermbg=1
 let g:gitgutter_sign_removed_first_line = '>‾'
 let g:gitgutter_sign_removed = '>_'
 
-" They're changesets more generally than hunks.
+" They're changesets more generally than hunks. Use `:nmap GitGutterNextHunk`
+" into `@:` when a `Gdiffsplit` is open and you need to navigate by changes
 nmap [c <Plug>(GitGutterPrevHunk)
 nmap ]c <Plug>(GitGutterNextHunk)
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}

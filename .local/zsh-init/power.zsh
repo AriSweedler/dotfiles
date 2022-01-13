@@ -1,12 +1,19 @@
 # Functions that give me a bit more power
+c_red='\e[31m' ; c_green='\e[32m' ; c_rst='\e[0m'
+ven_timestamp() { date "+%Y-%m-%dT%T.000Z" ; }
+log_err() { echo -e "${c_red}$(ven_timestamp) ERROR::${c_rst}" "$@" >&2 ; }
+log_info() { echo -e "${c_green}$(ven_timestamp) INFO::${c_rst}" "$@" >&2 ; }
+run_cmd() { log_info "$@"; "$@" && return; rc=$?; log_err "cmd '$@' failed"; return $?; }
+
 function double_cd() {
   if [ -z "$2" ]; then
     cd "$1"
-  else
-    cd "$1"/*"$2"* || cd "$1"
-    b-echo "$(pwd)"
-    ls
+    return
   fi
+
+  cd "$1"/*"$2"* || cd "$1"
+  b-echo "$(pwd)"
+  ls
 }
 
 

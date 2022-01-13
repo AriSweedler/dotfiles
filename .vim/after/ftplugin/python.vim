@@ -1,6 +1,20 @@
 setlocal tabstop=4 expandtab
 setlocal autoindent foldmethod=indent
 
+" Easy hashbang
+let snippet =<< END
+#!/usr/bin/env python3
+
+
+def main():
+    print("Hello, world!")
+
+
+if __name__ == "__main__":
+    main()
+
+END
+nnoremap <buffer> <Leader>#! o<Esc>:let @h=snippet->join("\n")<CR>"hp
 " TODO make a 'format everything' keybinding. This is the implementation for here
 nnoremap <buffer> <Leader>= :!python3 -m black %<CR>L
 
@@ -12,4 +26,4 @@ iabbrev loggy print(f"[ARI]")<C-o>F"
 nnoremap <buffer> <Leader>f 0da"0f(af<C-c>p
 
 " Run the current file as a python file with <Leader>m
-nnoremap <buffer> <Leader>m :!python3 %<CR>
+nnoremap <buffer> <Leader>m :!clear && python3 %<CR>
