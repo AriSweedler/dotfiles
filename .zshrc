@@ -23,6 +23,8 @@ export PATH="$HOME/.local/bin:$PATH"
 
 # Enable tab completion for git. And more!
 autoload -Uz compinit && compinit
+autoload -U +X bashcompinit && bashcompinit
+eval "$(stack --bash-completion-script stack)"
 
 # Set history stuff. https://zsh.sourceforge.io/Doc/Release/Options.html#History
 setopt HIST_IGNORE_SPACE      # ignore commands that start with space
