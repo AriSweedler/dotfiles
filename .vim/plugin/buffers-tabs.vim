@@ -9,17 +9,6 @@ nnoremap [t :tabm-<CR>
 " <C-w>T moves a window to a new tab, but I like '!' better. Like tmux
 nnoremap <C-w>! <C-w>T
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-"""""""""""""""""""""""""""""" Reload buffers """""""""""""""""""""""""""""" {{{
-" Reload a buffer
-" nnoremap <silent> <Leader>EE :edit! %<CR>
-" Reload a buffer in a new tab
-" nnoremap <silent> <Leader>ET :tabedit! %<CR>
-
-" Subsumed by 'developer' plugin.
-" <Leader>eo ==> tabedit open file
-" <Leader>Eo ==> edit! open file (reloads the buffer)
-" TODO remove this chunk if this is satisfactory
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""" buffer cleanup """""""""""""""""""""""""""""" {{{
 " remove buffer from memory
 nnoremap <Leader>bc :bnext <Bar> bdelete #<CR>
