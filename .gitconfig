@@ -109,8 +109,10 @@
 	initt = !"git init; git commit --allow-empty --message 'first commit'"
 	ls = ls-tree --full-tree -r --abbrev HEAD
 	patch = add --patch
-	yankbranch = !"git branch --show-current | tr -d '\n' | pbcopy"
-	children = "!f() { git rev-list --all --not $1^@ --children | grep $(git rev-parse $1); }; f" # reachable children of a ref
+	yankbranch = !"git branch --show-current | tr -d '\n' | tee /dev/tty | pbcopy"
+	children = !"f() { git rev-list --all --not $1^@ --children | grep $(git rev-parse $1); }; f" # reachable children of a ref
+	subf = submodule foreach git fetch
+	subff = submodule foreach git pull --ff-only
 
 	# Searching
 	# 'git log -S' to search through changes
