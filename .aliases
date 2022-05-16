@@ -3,7 +3,8 @@ alias ..="cd .."
 alias ...="cd ../.."
 
 # Most of my `find` commands start with `find . -iname`
-alias fin="find . -iname"
+alias fin="find . -name"
+alias fiin="find . -iname"
 
 # show path line by line
 alias path='echo -e ${PATH//:/\\n}'
