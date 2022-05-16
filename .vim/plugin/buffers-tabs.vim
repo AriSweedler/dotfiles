@@ -20,10 +20,8 @@ nnoremap <Leader>BC :.bdelete<CR>
 nnoremap [b :bprevious<CR>
 nnoremap ]b :bnext<CR>
 
-" TODO fuzzy find
-nnoremap <C-b> :ls<CR>:buffer<Space>
-" TODO fuzzy find
-nnoremap <Leader>T :tabedit **/*
+nnoremap <C-b> :Buffers<CR>
+nnoremap <C-t> :Files<CR>
 
 " Tabedit a file in the same directory as the current file
 nnoremap <Leader>H :tabedit <C-r>=expand("%:h")<CR>/

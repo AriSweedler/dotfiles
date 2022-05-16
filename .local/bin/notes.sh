@@ -63,6 +63,12 @@ fi
 
 ################################################################################
 
-#################### Open today's and yesterday's note file ####################
-vim "$(notes_past 1)" -c "vsp $(notes_past 2)" -c "wincmd h" -c "normal gg"
+################################## Open files ##################################
+files_to_open=""
+for i in {1..5}; do
+  files_to_open="$files_to_open $(notes_past "$i")"
+done
+# Open a week of notes in buffers.
+# Use the `Notes` command to get that nice view split
+vim $files_to_open -c"Notes"
 git add "$todays_note"

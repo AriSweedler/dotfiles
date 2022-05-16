@@ -24,7 +24,7 @@ export PATH="$HOME/.local/bin:$PATH"
 # Enable tab completion for git. And more!
 autoload -Uz compinit && compinit
 autoload -U +X bashcompinit && bashcompinit
-eval "$(stack --bash-completion-script stack)"
+# eval "$(stack --bash-completion-script stack)"
 
 # Set history stuff. https://zsh.sourceforge.io/Doc/Release/Options.html#History
 setopt HIST_IGNORE_SPACE      # ignore commands that start with space
@@ -83,3 +83,14 @@ function colors() {
     print -Pn "%K{$i} %k%F{$i}${(l:3::0:)i}%f " ${${(M)$((i%8)):#7}:+$'\n'}
   done
 }
+
+# fzf config
+# Use 'rg' for 'fzf' - if possible
+if type rg &> /dev/null; then
+  export FZF_DEFAULT_COMMAND='rg --files --hidden'
+  function _fzf_compgen_path() {
+    rg --files --hidden
+  }
+fi
+# Use exact match by default. Now `'` toggles back to fuzzy match
+export FZF_DEFAULT_OPTS='--exact'

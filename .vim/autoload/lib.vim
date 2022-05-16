@@ -51,21 +51,23 @@ function! lib#in_dotfiles()
     return b:in_dotfiles
   endif
 
-  " Get the current file's name relative to `~`, but without the leading `~/`.
+  " Get the current file's name relative to `~`, then strip the leading `~/`.
   "
   " This is the desired format because `git ls-tree --name-only` does this and
-  " I just wanna match what they do so I can grep later.
-  "
-  " See `:help %:~`. And then I chained it with `:s|<pat>|<sub>|`. Regex looks
-  " really confusing when magic characters need to be treated as literals, but
-  " there's nothing more expressive.
-  let filename = expand('%:~:s|\~/||')
+  " I just wanna match what they do so I can do a trivial ==# check
+  let pat='\~/'
+  let remove_tilde_slash=':s|'.pat.'||'
+  let filename = expand('%:~'.remove_tilde_slash)
 
   " See if this file's name is in the dotfiles git tree
-  call system(s:df_git . " ls-tree --full-tree -r --name-only HEAD | grep ^" . l:filename)
-
-  " If grep found a match, then it will return 0. So we set 'in dotfiles' to 1.
-  let b:in_dotfiles = (! v:shell_error)
+  let b:in_dotfiles = 0
+  let my_files=systemlist(s:df_git . " ls-tree --full-tree -r --name-only HEAD")
+  for item in my_files
+    if (item ==# filename)
+      let b:in_dotfiles = 1
+      break
+    endif
+  endfor
 
   return lib#in_dotfiles()
 endfunction

@@ -96,14 +96,20 @@ nnoremap <C-g> :q<CR>
 " isn't an issue as if I wanna operate on a range I can just use visual mode.
 nnoremap D dd
 nnoremap G Gzz
-nnoremap zz ^zz
-nnoremap zZ zz$
 nnoremap < <<
 nnoremap > >>
+nnoremap Q "_
+
+" if &wrap | move to start | else don't | endif
+nnoremap zz ^zz
+nnoremap zZ zz$
 
 " Move up/down this virtual column until you hit non-whitespace
 nnoremap gK ?\%<C-R>=virtcol(".")<CR>v\S<CR>
 nnoremap gJ /\%<C-R>=virtcol(".")<CR>v\S<CR>
+
+" Always use '\m' to 'Make'
+nnoremap <Leader>m :lmake<CR>
 
 command! DiffThis diffthis | wincmd w | diffthis | wincmd w
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
@@ -148,6 +154,13 @@ nnoremap gb :Git blame<CR>
 nnoremap gD :vertical Gdiffsplit dev<CR>
 nnoremap gH :vertical Gdiffsplit HEAD^<CR>
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+"""""""""""""""""""""""""""""""""" fzf.vim """"""""""""""""""""""""""""""""" {{{
+let g:fzf_commits_log_options = '--graph --color=always --format="%C(auto)%h%d %s %C(black)%C(bold)%cr" --follow -- filename'
+command! -bang HawkFiles call fzf#vim#files('~/Desktop/source/hawkeye/', <bang>0)
+" Arg is a command string OR a list. This can be used to autocomplete something
+" from a personal dictionary
+" inoremap <expr> <c-x><c-k> fzf#vim#complete('cat /usr/share/dict/words')
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""" netrw """"""""""""""""""""""""""""""""" {{{
 let g:netrw_browse_split = 3   " open files in new tabs (TODO there is a <Plug> to open something as a background tab. Maybe use that)
 let g:netrw_liststyle = 3      " tree style listing
@@ -163,3 +176,4 @@ nnoremap <silent> % :packadd matchit <Bar> unmap %<CR>%
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 cabbrev w!! w !sudo tee % > /dev/null
 cabbrev %:H %:h
+command! -nargs=1 Scratch :tabe <args> | setlocal buftype=nofile
