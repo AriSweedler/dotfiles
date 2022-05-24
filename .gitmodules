@@ -38,17 +38,9 @@
 	path = .vim/pack/arisweedler/start/notes
 	url = git@github.com:AriSweedler/vim-notes.git
 	branch = main
-[submodule ".vim/pack/arisweedler/start/library"]
-	path = .vim/pack/arisweedler/start/library
-	url = git@github.com:AriSweedler/vim-lib.git
-	branch = main
 [submodule ".vim/pack/arisweedler/start/links"]
 	path = .vim/pack/arisweedler/start/links
 	url = git@github.com:AriSweedler/vim-links.git
-	branch = main
-[submodule ".vim/pack/arisweedler/opt/spellcheck"]
-	path = .vim/pack/arisweedler/opt/spellcheck
-	url = git@github.com:AriSweedler/vim-spellcheck.git
 	branch = main
 [submodule ".vim/pack/junegunn/start/fzf.vim"]
 	path = .vim/pack/junegunn/start/fzf.vim
