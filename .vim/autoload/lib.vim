@@ -47,6 +47,7 @@ let s:df_git = "git --git-dir=$HOME/dotfiles/ --work-tree=$HOME"
 " Cache answer per buffer. Figure this out by listing all the dotfiles and
 " checking if the current filname is in it.
 function! lib#in_dotfiles()
+  " TODO use this? echo getbufvar('','gitgutter').path
   if exists('b:in_dotfiles')
     return b:in_dotfiles
   endif
