@@ -11,3 +11,4 @@ nnoremap <buffer> gq mz3[{gqaB`z
 " * Define a function to format the whole file
 
 nnoremap <C-w><C-w> <nop>
+iabbrev cour cout

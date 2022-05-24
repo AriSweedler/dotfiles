@@ -8,6 +8,7 @@ myLanguages['c']           = {'s': '/*', 'm': '*', 'e': '*/'}
 myLanguages['cpp']         = {'s': '/*', 'm': '*', 'e': '*/'}
 myLanguages['go']          = {'s': '/*', 'm': '*', 'e': '*/'}
 myLanguages['javascript']  = {'s': '/*', 'm': '*', 'e': '*/'}
+myLanguages['groovy']      = {'s': '/*', 'm': '*', 'e': '*/'}
 myLanguages['markdown']    = {'s': '# ','m': '#'}
 myLanguages['bash']        = {'m': '#'}
 myLanguages['cmake']       = {'m': '#'}
