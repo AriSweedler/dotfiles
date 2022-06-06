@@ -48,3 +48,6 @@ You can see what it looks like on my
 
 This idea is funny
 
+## displayplacer
+
+Ripped from [displayplacer github](https://github.com/jakehilborn/displayplacer). This is just a useful command. 500 lins of C code that just makes updating the mac display settings trivially scriptable. Maybe it already was even without this, but I don't know how. Allows you to do capture (`displayplacer list`) and replace (`displayplacer $(displayplacer list)`).

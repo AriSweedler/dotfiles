@@ -3,6 +3,7 @@ alias ..="cd .."
 alias ...="cd ../.."
 
 # Most of my `find` commands start with `find . -iname`
+# Use `fd`
 alias fin="find . -name"
 alias fiin="find . -iname"
 
