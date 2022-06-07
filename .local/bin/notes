@@ -1,0 +1,103 @@
+#!/bin/bash
+
+####################### Initialize variables & functions #######################
+readonly year="$(date '+%Y')"
+readonly month="$(date '+%b')"
+readonly day="$(date '+%d')"
+readonly date="$year/$month/$day"
+
+readonly note_repo="${NOTE_BASE:-$HOME/Desktop/notes}"
+readonly todays_note="$note_repo/$date.notes"
+readonly daykeeper_file="$note_repo/.daykeeper"
+
+function notes_past()
+{
+  [ ! -f "$daykeeper_file" ] && return
+  local -r nth_date="$(tail "-$1" "$daykeeper_file" | head -1)"
+  echo "$note_repo/$nth_date.notes"
+}
+function initialize()
+{
+  git init &>/dev/null
+  touch "$daykeeper_file"
+  echo "today.notes" > "$note_repo/.gitignore"
+  git add "$note_repo/.gitignore" &>/dev/null
+  git commit -m 'first commit' &>/dev/null
+}
+function today_note_exists_in_daykeeper()
+{
+  # Test if today's not is the FIRST note that shows up from notes_past. If it
+  # is, that means success/it already exists
+  test "$todays_note" == "$(notes_past 1)"
+}
+function today_note_exists_in_filesystem()
+{
+  test -e "$todays_note"
+}
+function create_today_note_file()
+{
+
+  echo "{{{ $month $day, $year" > "$todays_note"
+
+  # Append tasks to new note file
+  local -r tasks="$note_repo/etc/tasks"
+  local task taskfile
+  for task in daily "$(date +%A | tr '[:upper:]' '[:lower:]')"; do
+    taskfile="$tasks/$task.notes"
+    test -f "$taskfile" || continue
+    cat "$taskfile" >> "$todays_note"
+  done
+
+  echo "}}}" >> "$todays_note"
+}
+
+#################################### Do work ###################################
+function handle_today()
+{
+  # Initialization
+  mkdir -p "$(dirname "$todays_note")" || exit 1
+  pushd "$note_repo" &>/dev/null || exit 1
+  if [ ! -f "$daykeeper_file" ]; then initialize; fi
+
+  # If we've already registered a file for today in daykeeper, then
+  # initialization is done
+  today_note_exists_in_daykeeper && return
+
+  # Today isn't the most recent entry in the daykeeper file!
+  # Commit the last entry - prepare to add a new one
+  test -f "$(notes_past 1)" && git add "$(notes_past 1)"
+  git commit -m "Journal entry for $(notes_past 1)"
+
+  # link to todays_note, and name that file today_symlink
+  today_symlink="$note_repo/today.notes"
+  ln -f -s "$todays_note" "$today_symlink"
+
+  # If the file for today already exists on the filesystem, our work is done.
+  # This will only happen if we manually create the file
+  today_note_exists_in_filesystem && return
+
+  # create the file & add it to git
+  # Register with daykeeper
+  echo "$date" >> "$daykeeper_file"
+
+  # Create the file - prepopulate the new notes file
+  create_today_note_file
+
+  # And add it to git
+  git add "$todays_note"
+  git add "$daykeeper_file"
+}
+handle_today
+
+function open_files() {
+  # Open a week of notes in buffers.
+  local files_to_open=()
+  for i in {1..5}; do
+    files_to_open+=( "$(notes_past "$i")" )
+  done
+
+  # Use the `Notes` command to get that nice view split
+  vim "${files_to_open[@]}" -c"Notes"
+  git add "$todays_note"
+}
+open_files
