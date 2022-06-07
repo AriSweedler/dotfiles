@@ -34,3 +34,9 @@ defaults write com.apple.dock no-bouncing -bool TRUE
 
 # When the mouse is over a terminal window, it automatically gains focus
 defaults write com.apple.Terminal FocusFollowsMouse -bool true
+
+################################### Utilities ##################################
+function restart-touchbar() {
+  sudo pkill TouchBarServer
+  sudo killall "ControlStrip"
+}
