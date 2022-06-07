@@ -5,11 +5,11 @@
 	username = arisweedler
 
 [core]
-	excludesfile = ~/.local/git/ignore
+	excludesfile = ~/.config/git/ignore
 	editor = vim
 
 [init]
-	templatedir = ~/.local/git/template
+	templatedir = ~/.config/git/template
 	defaultBranch = main
 
 [diff]
