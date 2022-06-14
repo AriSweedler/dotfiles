@@ -1,8 +1,8 @@
 source_file "$HOME/.config/macos.sh"
 source_file "$HOME/.config/aliases.sh"
 
-# Add .local/bin to front of path
-export PATH="$HOME/.local/bin:$PATH"
+# Add .config/bin to front of path
+export PATH="$HOME/.config/bin:$PATH"
 
 # Use vim by default
 export EDITOR="vim"
