@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+
+import argparse, math
+
+# Supported languages/filetypes and their start/middle/end comment syntaxes
+myLanguages = dict()
+myLanguages['c']           = {'s': '/*', 'm': '*', 'e': '*/'}
+myLanguages['cpp']         = {'s': '/*', 'm': '*', 'e': '*/'}
+myLanguages['go']          = {'s': '/*', 'm': '*', 'e': '*/'}
+myLanguages['javascript']  = {'s': '/*', 'm': '*', 'e': '*/'}
+myLanguages['groovy']      = {'s': '/*', 'm': '*', 'e': '*/'}
+myLanguages['markdown']    = {'s': '# ','m': '#'}
+myLanguages['bash']        = {'m': '#'}
+myLanguages['cmake']       = {'m': '#'}
+myLanguages['conf']        = {'m': '#'}
+myLanguages['gitconfig']   = {'m': '#'}
+myLanguages['make']        = {'m': '#'}
+myLanguages['python']      = {'m': '#'}
+myLanguages['sh']          = {'m': '#'}
+myLanguages['zsh']         = {'m': '#'}
+myLanguages['shell']       = {'m': '#'}
+myLanguages['ruby']        = {'m': '#'}
+myLanguages['text']        = {'m': '#'}
+myLanguages['tmux']        = {'m': '#'}
+myLanguages['dashes']      = {'m': '-'}
+myLanguages['lua']         = {'m': '-'}
+myLanguages['lisp']        = {'m': ';'}
+myLanguages['notes']       = {'m': '='}
+myLanguages['tex']         = {'m': '%'}
+myLanguages['vim']         = {'m': '"'}
+
+def myParse():
+	# initialize parser object
+	myParser = argparse.ArgumentParser(
+		description='Make a pretty divider for code',
+		epilog='Cheers for flying'
+	)
+
+	# Sane defaults
+	myParser.set_defaults(width=80, text='', language='c')
+
+	# add arguments to the parser object
+	myParser.add_argument('-w', '--width', type=int, metavar='COLUMNS')
+	myParser.add_argument('text', nargs='*')
+	myParser.add_argument(
+		'-l', '--language', '-f', '--filetype',
+		metavar='LANGUAGE',
+		help=f'Choose from {myLanguages}',
+		nargs='?',
+		const='bash',
+		choices=myLanguages
+	)
+	myParser.add_argument(
+		'--comment-format',
+		nargs=3,
+		metavar=('START', 'MIDDLE', 'END'),
+		dest='comment_format'
+	)
+
+	# Parse the arguments, so we can lookup the comment_format before returning
+	result = myParser.parse_args()
+
+	# If we manutally specified a comment format, then use that.
+	if result.comment_format:
+		(s, m, e) = result.comment_format
+		result.comment_format = {'s': s, 'm': m, 'e': e}
+		return result
+
+	# TODO change option parsing so it uses a deafult instead of not accepting a
+	# language it hasn't seen
+#	# Otherwise, look it up from the language. Use '#' by default
+#	if result.language not in myLanguages:
+#		result.comment_format = myLanguages['default']
+#		print('we use default')
+#		return result
+
+	result.comment_format = myLanguages[result.language]
+	return result
+
+def formComment(args):
+	s = args.comment_format.get('s', '')
+	m = args.comment_format.get('m', '')
+	e = args.comment_format.get('e', '')
+	pad_chars = args.width - (len(s) + len(e))
+	pad = math.floor(pad_chars / len(m))
+
+	# Simple case, there's no text. Just make a brick
+	if not args.text:
+		return s + m*pad + e
+
+	# Figure out what the text should be
+	text = ' ' + ' '.join(args.text).strip() + ' '
+	# Ensure that single-piece comments start properly
+	if not s: text = m + text
+	pad -= len(text)
+
+	# Format comment
+	if pad < 0:
+		return "Comment is too big for width. TODO multiline block"
+
+	lpad = math.floor(pad/2)
+	rpad = pad - lpad
+
+	return s + m*lpad + text + m*rpad + e
+
+def main():
+	args = myParse()
+	comment = formComment(args)
+	print(comment)
+
+if __name__== "__main__":
+	main()
+#TODO FIGURE WHAT ELSE IS BEING SOURCED AFTER THIS THAT'S CHANGING HOW TS IS :O
