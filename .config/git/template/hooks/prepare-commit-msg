@@ -1,0 +1,56 @@
+#!/bin/bash
+
+# https://www.atlassian.com/git/tutorials/git-hooks
+#
+# $2 is 'the type of commit.
+# * This can be message (-m or -F option)
+# * template (-t option)
+# * merge (if the commit is a merge commit)
+# * squash (if the commit is squashing other commits).'
+# * Or empty, if this is just a regular commit made from `git commit`
+#
+if [ ! -z "$2" ]; then
+  # We only want to proceed if this is a regular commit.
+  echo "Skipping regular prepare-commit-msg script because this commit isn't a regular commit. It is a: $2"
+  exit 0
+fi
+
+################################ Helper function ########################### {{{
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+
+function prepend() {
+  # If my branch is not named after a ticket, then I don't need to add anything.
+  if [[ ! "$BRANCH" =~ "EYE-" ]]; then
+    return
+  fi
+
+  # I'm working on a ticket. Put that information into the commit message
+  echo "$BRANCH -"
+
+  # We should skip tests if I still have personal debugging statements ([ARI])
+  if git grep -q "\[ARI\]"; then
+    echo ""
+    echo "* skiptests"
+  fi
+}
+
+function append() {
+  # Add a pretty summary of git history (commented out - see the 'sed'
+  # command). This helps me write commit messages sometimes.
+  echo "# {{{ Git history:"
+  # '%s': subject
+  # '%h': abbreviated commit hash
+  # '%ar': author date, relative
+  # '%an': author name
+  # '%d': ref names
+  git log --graph -10 --pretty="format:%s:~[%h] %ar by %an;%d~" \
+    | tr '~' '\n' | sed -e 's/^/# /' -e 's/ $//g'
+  echo "# }}}"
+}
+############################################################################ }}}
+
+# $1 is 'the name of a temporary file that contains the message. You change the
+# commit message by altering this file in-place.'
+#
+# Add my informatoin around the pre-populated commit message.
+printf '%s\n%s\n%s' "$(prepend)" "$(cat $1)" "$(append)" > $1

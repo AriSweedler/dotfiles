@@ -1,0 +1,14 @@
+# vim
+.*.swp
+.netrwhist
+tags
+
+# OS generated files
+.DS_Store*
+
+# No need to back this up
+.ssh
+.local
+
+# Because of https://www.atlassian.com/git/tutorials/dotfiles
+dotfiles
