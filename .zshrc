@@ -17,6 +17,15 @@ function source_zsh_dir() {
   done
 }
 
+# An idempotent way to add a path to PATH
+function prepend_to_path() {
+  local -r add_me="$1"
+  case ":${PATH}:" in
+    *:"$add_me":*) ;;
+    *) export PATH="$add_me:$PATH" ;;
+  esac
+}
+
 # Source all files in these folders
 source_zsh_dir "$HOME/.config/zsh-init"
 source_zsh_dir "$HOME/.local/zsh-init"

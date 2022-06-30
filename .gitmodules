@@ -14,10 +14,6 @@
 	path = .vim/pack/bundle/opt/xterm-color-table
 	url = git@github.com:guns/xterm-color-table.vim.git
 	branch = master
-[submodule ".vim/pack/betterdiff/start/diffconflicts"]
-	path = .vim/pack/betterdiff/start/diffconflicts
-	url = https://github.com/whiteinge/diffconflicts.git
-	branch = master
 [submodule ".vim/pack/arisweedler/start/developer"]
 	path = .vim/pack/arisweedler/start/developer
 	url = git@github.com:AriSweedler/vim-developer.git
@@ -42,6 +38,12 @@
 	path = .vim/pack/arisweedler/start/links
 	url = git@github.com:AriSweedler/vim-links.git
 	branch = main
-[submodule ".vim/pack/junegunn/start/fzf.vim"]
-	path = .vim/pack/junegunn/start/fzf.vim
-	url = https://github.com/junegunn/fzf.vim
+[submodule ".vim/pack/languages/start/vim-go"]
+	path = .vim/pack/languages/start/vim-go
+	url = git@github.com:fatih/vim-go.git
+[submodule ".vim/pack/bundle/start/fzf.vim"]
+	path = .vim/pack/bundle/start/fzf.vim
+	url = git@github.com:junegunn/fzf.vim.git
+[submodule ".vim/pack/bundle/start/diffconflicts"]
+	path = .vim/pack/bundle/start/diffconflicts
+	url = git@github.com:whiteinge/diffconflicts.git
