@@ -57,62 +57,6 @@ set whichwrap+=<,>,[,] " Have <Left> and <Right> go across lines
 set updatetime=100     " let vim-gitgutter update faster - used by CursorHold autocommand
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-"""""""""""""""""""""""""""""""""" colors """""""""""""""""""""""""""""""""" {{{
-" Enable syntax, and set a colorscheme. Don't do this twice
-if !exists("colors_name")
-  syntax enable       "allow for syntax highlighting and indenting
-  colorscheme slate   "pretty colors
-endif
-
-" Highlight the lines that folds create when folded
-highlight Folded ctermbg=234 ctermfg=8
-
-" Give fun colors to the left columns (and the ColorColumn)
-highlight FoldColumn ctermbg=233 ctermfg=8
-highlight SignColumn ctermbg=234 ctermfg=8
-highlight ColorColumn ctermbg=233
-
-" Toggle syntax highlighting
-noremap <Leader>sy :call lib#toggleSyntax()<CR>
-
-" Diff colors
-highlight DiffAdd        ctermbg=22
-highlight DiffChange     ctermbg=178 cterm=bold
-highlight DiffDelete     ctermbg=124 ctermfg=1
-highlight DiffText       term=reverse cterm=bold ctermbg=1
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-""""""""""""""""""""""""""" convenience mappings """"""""""""""""""""""""""" {{{
-" One keystroke to strip trailing whitespace on the current line and write in
-" (almost) any mode
-noremap  <C-f> <ESC>:call lib#remove_trailing_whitespace('.')<CR>:w<CR>
-noremap! <C-f> <ESC>:call lib#remove_trailing_whitespace('.')<CR>:w<CR>
-" Also... exit insert mode without having to move fingers.
-inoremap jk <ESC>:call lib#remove_trailing_whitespace('.')<CR>
-
-" <C-f> <C-g> will write and exit. Kinda emacs-y lol
-nnoremap <C-g> :q<CR>
-
-" When do I ever wanna hit 2 keys to execute one thought. Overwriting these
-" isn't an issue as if I wanna operate on a range I can just use visual mode.
-nnoremap D dd
-nnoremap G Gzz
-nnoremap < <<
-nnoremap > >>
-nnoremap Q "_
-
-" if &wrap | move to start | else don't | endif
-nnoremap zz ^zz
-nnoremap zZ zz$
-
-" Move up/down this virtual column until you hit non-whitespace
-nnoremap gK ?\%<C-R>=virtcol(".")<CR>v\S<CR>
-nnoremap gJ /\%<C-R>=virtcol(".")<CR>v\S<CR>
-
-" Always use '\m' to 'Make'
-nnoremap <Leader>m :lmake<CR>
-
-command! DiffThis diffthis | wincmd w | diffthis | wincmd w
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """"""""""""""""""""""""""""""" Plugin config """""""""""""""""""""""""""""" {{{
 """"""""""""""""""""""""""""""""" GitGutter """""""""""""""""""""""""""""""" {{{
 """""""""""""""""""""""""""""""""" colors """""""""""""""""""""""""""""""""" {{{
@@ -190,6 +134,3 @@ command! Scriptnames packadd scriptease <Bar> Scriptnames
 nnoremap <silent> % :packadd matchit <Bar> unmap %<CR>%
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
-cabbrev w!! w !sudo tee % > /dev/null
-cabbrev %:H %:h
-command! -nargs=1 Scratch :tabe <args> | setlocal buftype=nofile
