@@ -48,11 +48,11 @@ function shsh() {
 
 # Show the machine dashboard
 function machines() {
-  b-echo "~~~"
+  b_echo "~~~"
   pushd "$HOME/workspace/hawkeye-tools/output" || exit
-  b-echo "Vagrant folders"
+  b_echo "Vagrant folders"
   ls -1
-  b-echo "machines"
+  b_echo "machines"
   # When we get to the 'Host' start looking for the Hostname
   awk '
     prev_filename != FILENAME {
@@ -73,6 +73,6 @@ function machines() {
     }
   ' "$HOME/.ssh/conf.d/"*
   popd &>/dev/null || exit
-  b-echo "~~~"
+  b_echo "~~~"
 }
 
