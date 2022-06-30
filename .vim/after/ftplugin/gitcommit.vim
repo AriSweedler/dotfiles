@@ -2,7 +2,7 @@ nnoremap <buffer> <C-p> :set paste!<CR>
 
 " Format bulleted lists properly
 setlocal tabstop=2 autoindent
-inoremap <buffer> <silent> 8 <Esc>:call <SID>Bullet()<CR>A
+" inoremap <buffer> <silent> 8 <Esc>:call <SID>Bullet()<CR>A
 function! s:Bullet()
   " This is a repeat invocation. Just remove 2 chars from the start to
   " de-indent.

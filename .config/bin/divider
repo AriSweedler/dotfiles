@@ -6,6 +6,7 @@ import argparse, math
 myLanguages = dict()
 myLanguages['c']           = {'s': '/*', 'm': '*', 'e': '*/'}
 myLanguages['cpp']         = {'s': '/*', 'm': '*', 'e': '*/'}
+myLanguages['rust']        = {'s': '/*', 'm': '*', 'e': '*/'}
 myLanguages['go']          = {'s': '/*', 'm': '*', 'e': '*/'}
 myLanguages['javascript']  = {'s': '/*', 'm': '*', 'e': '*/'}
 myLanguages['groovy']      = {'s': '/*', 'm': '*', 'e': '*/'}

@@ -61,7 +61,7 @@ set updatetime=100     " let vim-gitgutter update faster - used by CursorHold au
 " Enable syntax, and set a colorscheme. Don't do this twice
 if !exists("colors_name")
   syntax enable       "allow for syntax highlighting and indenting
-  colorscheme desert  "pretty colors
+  colorscheme slate   "pretty colors
 endif
 
 " Highlight the lines that folds create when folded
