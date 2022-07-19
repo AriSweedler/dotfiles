@@ -13,17 +13,14 @@
 	defaultBranch = main
 
 [diff]
-	tool = diffconflicts
 	submodule = diff
 
 [merge]
-	tool = diffconflicts
+	tool = vim_mergetool
+	conflictStyle=diff3
 
-[status]
-	# submoduleSummary = true
-
-[mergetool "diffconflicts"]
-	cmd = vim -c DiffConflicts \"$MERGED\" \"$BASE\" \"$LOCAL\" \"$REMOTE\"
+[mergetool "vim_mergetool"]
+	cmd = vim -f -c "MergetoolStart" "$MERGED" "$BASE" "$LOCAL" "$REMOTE"
 	trustExitCode = true
 
 [mergetool]
@@ -86,50 +83,47 @@
 
 	# Shortcuts
 	a = !"git add .; git s"
+	cp = cherry-pick
 	d = diff --staged --diff-algorithm=minimal
 	f = fetch --append --prune --jobs=4
 	ff = pull --ff-only
-	ll = log --pretty=newlog --graph
 	l = ll -10
-	s = status --short --branch
-	sw = switch
+	ll = log --pretty=newlog --graph
 	po = !"git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)"
 	rc = rebase --continue
-	m = mergetool
-	yb = yankbranch
-	sb = branch --show-current
-	cp = cherry-pick
+	s = status --short --branch
 
 	# New commands
 	amend = commit --amend --reuse-message=HEAD
 	cconfig = config --edit --global
 	ctags = !.git/hooks/ctags
-	dh = diff HEAD^
 	diffls = diff --name-only
-	initt = !"git init; git commit --allow-empty --message 'first commit'"
 	ls = ls-tree --full-tree -r --abbrev HEAD
 	patch = add --patch
-	yankbranch = !"git branch --show-current | tr -d '\n' | tee /dev/tty | pbcopy"
+
+	# These are just hard to rememeber
 	children = !"f() { git rev-list --all --not $1^@ --children | grep $(git rev-parse $1); }; f" # reachable children of a ref
 	history-of = ll --follow --
+	initt = !"git init; git commit --allow-empty --message 'first commit'"
+	yankbranch = !"git branch --show-current | tr -d '\n' | tee /dev/tty | pbcopy"
 
 	# Submodule control
-	sub = submodule
 	sub-all = submodule foreach git
-	# HEAD --> commit (If git config submodule.branch is set, then HEAD -> commit pointed to by origin/<branch>)
-	sub-u = submodule update --remote
 	# If HEAD --> branch, this works nicely
-	subff = submodule foreach git pull --ff-only
+	sub-ff = submodule foreach git pull --ff-only
+	# Leaves submodules with HEAD pointing to a commit. Not the best.
+	# (If git config submodule.branch is set, then HEAD -> commit pointed
+	# to by origin/<branch>)
+	sub-u = submodule update --remote
 
 	# Searching
 	# 'git log -S' to search through changes
 	# 'log --grep' to search through commit messages
 	grepp = grep --break --heading --line-number
-	ari = grepp "\\\\[ARI\\\\]"
 	grep-code = ll -S
 	grep-commit = ll --all --grep
 
-	# The Jira ticket suite
+	# The Jira ticket suite (only works off of 'dev')
 	j-bug = !"git j-ticket bugfix/$1"
 	j-experiment = !"git j-ticket ari/$1"
 	j-feature = !"git j-ticket feature/$1"
