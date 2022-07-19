@@ -23,27 +23,30 @@ function shsh() {
   done
 
   # If there's no command, do not allow multiple machines to be selected
-  local multi="--multi"
-  [ -z "$*" ] && multi="--no-multi"
+  local multi
+  if (( $# == 0 )); then
+    multi="--no-multi"
+  else
+    multi="--multi"
+  fi
 
-  # Invoke fzf
+  # Invoke fzf to select a
   local -r sshable_machines="$(awk '/Host / {print $2}' "$HOME/.ssh/conf.d/"*)"
-  local -r selected="$(echo "$sshable_machines" | fzf $multi --query "$query")"
+  local -r selected=( $(echo "$sshable_machines" | fzf "$multi" --query "$query") )
+  log::info "You selected: '${selected[*]}'"
 
-  # Invoke the command for each selected machine. If there's no command, we
-  # just open up a shell
-  log_info "You selected: '$selected'"
+  # If there's no command, simply SSH into the machine and return
+  if (( $# == 0 )); then
+    ssh "$selected"
+    return
+  fi
 
-  while read machine; do
-    if (( $# == 0 )); then
-      log_err "TODO fix this bug 'vim:///Users/arisweedler/.local/zsh-init/ssh.zsh:38'"
-      ssh -n "$machine"
-    else
-      log_info "On machine '$machine', running command '$*'"
-      ssh "$machine" /bin/bash <<< "$@"
-      echo
-    fi
-  done <<< "$selected"
+  # Invoke the command on each machine
+  for machine in "${selected[@]}"; do
+    log::info "On machine '$machine', running command '$*'"
+    ssh "$machine" /bin/bash <<< "$@"
+    echo
+  done
 }
 
 # Show the machine dashboard

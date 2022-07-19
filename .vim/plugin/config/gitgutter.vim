@@ -3,18 +3,24 @@
 let g:gitgutter_override_sign_column_highlight = 0
 
 " White sign, green background
-highlight GitGutterAdd term=bold ctermfg=188 ctermbg=22
+highlight clear GitGutterAdd
+highlight link GitGutterAdd DiffAdd
 let g:gitgutter_sign_added = '>+'
 
 " White sign, yellow background
-highlight GitGutterChange term=bold ctermfg=188 ctermbg=3
+highlight clear GitGutterChange
+highlight link GitGutterChange DiffChange
 let g:gitgutter_sign_modified = '>~'
 let g:gitgutter_sign_modified_removed = '~_'
 
 " Solid red box
-highlight GitGutterDelete term=bold ctermfg=188 ctermbg=1
+highlight clear GitGutterDelete
+highlight link GitGutterDelete DiffDelete
 let g:gitgutter_sign_removed_first_line = '>‾'
 let g:gitgutter_sign_removed = '>_'
+
+highlight clear GitGutterText
+highlight link GitGutterText DiffText
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 
 """"""""""""""""""""""""" shortcuts and settings """"""""""""""""""""""""""" {{{
@@ -34,6 +40,9 @@ nnoremap <Leader>Gl :GitGutterQuickFixCurrentFile<CR>:lopen<CR>
 " Toggle: Fold all unchanged lines
 nnoremap <Leader>Gzx :GitGutterFold<CR>
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+
+" TODO enter 'PATCH' mode. It asks you what to do with each hunk (starting
+" from the beginning of the file). 1 keypress to stage, skip, undo.
 
 " TODO GITGUTTER FOCUS
 let g:gitgutter_terminal_reports_focus = 0

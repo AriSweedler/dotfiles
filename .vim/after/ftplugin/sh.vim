@@ -16,19 +16,20 @@ let g:is_bash = 1
 " Use shellcheck to lint easily
 compiler shellcheck
 
+nnoremap <buffer> <Leader>#? :map <Leader>#<CR>
 " {{{ Snippets
 " {{{ Hashbang with arg parsing loop
-let snip_hashbang =<< END
-#!/bin/bash
-
-while [ $# -gt 0 ]; do
+let snip_argparsing =<< END
+# Parse args
+while (( $# > 0 )); do
   case "$1" in
     --arg) arg=true; shift 1 ;;
-    *) echo "Unkonwn argument '$1'; exit 1 ;;
+    --key) value="$2"; shift 2 ;;
+    *) echo "Unkonwn argument in ${FUNCNAME[0]}: '$1'"; exit 1 ;;
   esac
 done
 END
-nnoremap <buffer> <Leader>#! o<Esc>:let @h=snip_hashbang->join("\n")<CR>"hp
+nnoremap <buffer> <Leader>#a o<Esc>:let @h=snip_argparsing->join("\n")<CR>"hp
 " }}}
 " {{{ Table driven programming
 let snip_table =<< END
@@ -43,7 +44,7 @@ do
     echo "From line='$line' we see column1='$col1' column2='$col2' column3='$col3'"
 done
 END
-nnoremap <buffer> <Leader>#s o<Esc>:let @h=snip_table->join("\n")<CR>"hp
+nnoremap <buffer> <Leader>#t o<Esc>:let @h=snip_table->join("\n")<CR>"hp
 " }}}
 " {{{ Read in the output of a command (one line == 1 entry in the array)
 let snip_readlines =<< END
@@ -52,7 +53,7 @@ for line in "${lines[@]}"; do
   echo "Hello line '$line'"
 done
 END
-nnoremap <buffer> <Leader>R o<Esc>:let @h=snip_readlines->join("\n")<CR>"hp
+nnoremap <buffer> <Leader>#r o<Esc>:let @h=snip_readlines->join("\n")<CR>"hp
 " }}}
 " }}}
 "
