@@ -20,7 +20,7 @@
 	tool = diffconflicts
 
 [status]
-	submoduleSummary = true
+	# submoduleSummary = true
 
 [mergetool "diffconflicts"]
 	cmd = vim -c DiffConflicts \"$MERGED\" \"$BASE\" \"$LOCAL\" \"$REMOTE\"
