@@ -20,11 +20,6 @@ function www() {
   "$python" -m "$module" "$port"
 }
 
-function key() {
-  echo "pubkey copied to clipboard"
-  pbcopy < "$HOME/.ssh/id_rsa.pub"
-}
-
 function scoop_downloads() {
   local -r download_dir="$HOME/Downloads"
   echo "Moving all files from '$download_dir' to pwd"

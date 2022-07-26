@@ -24,6 +24,12 @@ nnoremap zZ zz$
 nnoremap gK ?\%<C-R>=virtcol(".")<CR>v\S<CR>
 nnoremap gJ /\%<C-R>=virtcol(".")<CR>v\S<CR>
 
+" Fold commands are prefixed with 'z'. But movement commands are prefixed with
+" '['. I think that either should work. But I prefer saying 'move fold' in my
+" head rather than 'fold move'
+nnoremap ]z zj
+nnoremap [z zk
+
 " Always use '\m' to 'Make'
 nnoremap <Leader>m :lmake<CR>
 

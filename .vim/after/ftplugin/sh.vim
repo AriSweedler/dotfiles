@@ -55,6 +55,14 @@ done
 END
 nnoremap <buffer> <Leader>#r o<Esc>:let @h=snip_readlines->join("\n")<CR>"hp
 " }}}
+" {{{ Press any key to continue
+let snip_input =<< END
+read -k 1 -p "Press any key to continue" input
+echo
+echo "You stated '$input'"
+END
+nnoremap <buffer> <Leader>#i o<Esc>:let @h=snip_input->join("\n")<CR>"hp
+" }}}
 " }}}
 "
 " Abbrevs
