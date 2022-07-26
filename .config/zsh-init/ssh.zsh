@@ -79,3 +79,8 @@ function machines() {
   b_echo "~~~"
 }
 
+function key() {
+  log::info "pubkey copied to clipboard"
+  pbcopy < "$HOME/.ssh/id_rsa.pub"
+}
+

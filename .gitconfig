@@ -92,12 +92,14 @@
 	po = !"git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)"
 	rc = rebase --continue
 	s = status --short --branch
+	df = dotfiles
 
 	# New commands
 	amend = commit --amend --reuse-message=HEAD
 	cconfig = config --edit --global
 	ctags = !.git/hooks/ctags
 	diffls = diff --name-only
+	dotfiles = !"git --git-dir=\"$HOME/dotfiles/\" --work-tree=\"$HOME\""
 	ls = ls-tree --full-tree -r --abbrev HEAD
 	patch = add --patch
 
