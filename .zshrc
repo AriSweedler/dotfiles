@@ -15,6 +15,10 @@ function source_zsh_dir() {
   for file in $(find "$dir" -name "*.zsh"); do
     source_file "$file"
   done
+
+  for file in $(find "$dir" -name "*.sh"); do
+    log::err "Not sourcing file '$file'"
+  done
 }
 
 # An idempotent way to add a path to PATH

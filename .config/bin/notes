@@ -16,12 +16,18 @@ function notes_past()
   local -r nth_date="$(tail "-$1" "$daykeeper_file" | head -1)"
   echo "$note_repo/$nth_date.notes"
 }
+
+function initialize_file() {
+  local -r file="${1:?}"
+  echo "$*" > "$file"
+  git add "$file"
+}
+
 function initialize()
 {
   git init &>/dev/null
-  touch "$daykeeper_file"
-  echo "today.notes" > "$note_repo/.gitignore"
-  git add "$note_repo/.gitignore" &>/dev/null
+  initialize_file "$daykeeper_file"
+  initialize_file "$note_repo/.gitignore" "today.notes"
   git commit -m 'first commit' &>/dev/null
 }
 function today_note_exists_in_daykeeper()
@@ -100,4 +106,6 @@ function open_files() {
   vim "${files_to_open[@]}" -c"Notes"
   git add "$todays_note"
 }
+
+echo "$0: note_repo=$note_repo"
 open_files
