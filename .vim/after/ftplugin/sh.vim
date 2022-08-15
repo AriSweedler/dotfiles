@@ -67,3 +67,4 @@ nnoremap <buffer> <Leader>#i o<Esc>:let @h=snip_input->join("\n")<CR>"hp
 "
 " Abbrevs
 iabbrev loggy echo "Function='${FUNCNAME[0]}' with '$#' args: '$*'"
+iabbrev functino function
