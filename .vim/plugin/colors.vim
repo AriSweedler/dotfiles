@@ -5,9 +5,9 @@ if !exists("colors_name")
 endif
 
 " Diff colors
-highlight DiffAdd        ctermbg=22
-highlight DiffChange     ctermbg=178 cterm=bold
-highlight DiffDelete     ctermbg=124 ctermfg=1
+highlight DiffDelete     ctermbg=124 ctermfg=9
+highlight DiffAdd        ctermbg=22 ctermfg=2
+highlight DiffChange     ctermbg=178 ctermfg=3
 highlight DiffText       term=reverse cterm=bold ctermbg=1
 
 " I like this bright green for MatchParens
@@ -31,3 +31,6 @@ function! s:Reload()
   StatuslineReload
   source ~/.vim/plugin/config/gitgutter.vim
 endfunction
+
+" Tmux clear background
+highlight Normal ctermbg=NONE
