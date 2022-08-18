@@ -36,3 +36,5 @@ nnoremap g<C-]> :tab tag <C-r>=expand("<cword>")<CR><CR>
 " Tselect tab in new tag
 nnoremap g[] :tab tselect <C-r>=expand("<cword>")<CR><CR>
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+
+" TODO write a command to close all buffers that aren't open

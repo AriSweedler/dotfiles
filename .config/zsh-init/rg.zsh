@@ -9,5 +9,6 @@ function vimrg() {
   fi
   shift
 
-  vim $(rg --files-with-matches "$@")
+  # Open all the files that rg finds. Additionaly highlight the pattern in vim, if possible.
+  vim -c":lgrep '$*'" -c"/$*" $(rg --files-with-matches "$@")
 }

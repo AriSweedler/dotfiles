@@ -83,7 +83,6 @@
 
 	# Shortcuts
 	a = !"git add .; git s"
-	cp = cherry-pick
 	d = diff --staged --diff-algorithm=minimal
 	f = fetch --append --prune --jobs=4
 	ff = pull --ff-only
