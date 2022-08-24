@@ -10,6 +10,7 @@ nnoremap <C-g> :q<CR>
 
 " When do I ever wanna hit 2 keys to execute one thought. Overwriting these
 " isn't an issue as if I wanna operate on a range I can just use visual mode.
+nnoremap Y yy
 nnoremap D dd
 nnoremap G Gzz
 nnoremap < <<
