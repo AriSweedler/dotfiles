@@ -15,3 +15,6 @@ nnoremap <buffer> <Leader>F 0xx$xxA }}}<C-c>
 " * <Leader>m
 " * Format this file
 iabbrev loggy echom "[ARI] -"<Left>
+
+syntax keyword vimIfError fi
+highlight link vimIfError Error

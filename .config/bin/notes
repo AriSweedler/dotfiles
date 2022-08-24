@@ -1,111 +1,168 @@
-#!/bin/bash
+#!/bin/bash -e
 
-####################### Initialize variables & functions #######################
-readonly year="$(date '+%Y')"
-readonly month="$(date '+%b')"
-readonly day="$(date '+%d')"
-readonly date="$year/$month/$day"
+# The classic log suite
+c_red='\e[31m'; c_green='\e[32m'; c_yellow='\e[33m'; c_rst='\e[0m'
+preamble() { echo -n "[$(date "+%Y-%m-%dT%T.000Z")] [${FUNCNAME[2]}]" ; }
+# shellcheck disable=SC2059
+log::err() { printf "$(echo -e "${c_red}[ERROR] $(preamble)${c_rst}" "$@")\n" >&2 ; }
+# shellcheck disable=SC2059
+log::info() { printf "$(echo -e "${c_green}[INFO] $(preamble)${c_rst}" "$@")\n" >&2 ; }
+# shellcheck disable=SC2059
+log::warn() { printf "$(echo -e "${c_yellow}[WARN] $(preamble)${c_rst}" "$@")\n" >&2 ; }
 
-readonly note_repo="${NOTE_BASE:-$HOME/Desktop/notes}"
-readonly todays_note="$note_repo/$date.notes"
-readonly daykeeper_file="$note_repo/.daykeeper"
+# Define globals
+readonly root="${NOTE_BASE:-$HOME/Desktop/notes}"
+readonly NOTE_BASE="${root?}"
+export NOTE_BASE
+readonly datekeeper_file="${root?}/.datekeeper"
+IFS='|' read -r year month day weekday < <(date '+%Y|%b|%d|%A')
+weekday="$(echo "$weekday" | tr '[:upper:]' '[:lower:]')"
+readonly git=( "git" "-C" "${root?}" )
+readonly ext="md"
 
-function notes_past()
-{
-  [ ! -f "$daykeeper_file" ] && return
-  local -r nth_date="$(tail "-$1" "$daykeeper_file" | head -1)"
-  echo "$note_repo/$nth_date.notes"
+function note::from_date() {
+  local base="${root?}/"
+
+  if [ "$1" == "--relative" ]; then
+    shift 1
+    base=""
+  fi
+
+  local -r date="$1"
+  echo "${base}${date?}.$ext"
 }
 
-function initialize_file() {
-  local -r file="${1:?}"
-  echo "$*" > "$file"
-  git add "$file"
+function note::ensure_initialized() {
+  local -r note="${1?}"
+
+  # Exit early if the note already exists
+  [ -e "$note" ] && return
+
+  echo "# $month $day, $year" > "$note"
+  note::init::tasks "$note"
 }
 
-function initialize()
-{
-  git init &>/dev/null
-  initialize_file "$daykeeper_file"
-  initialize_file "$note_repo/.gitignore" "today.notes"
-  git commit -m 'first commit' &>/dev/null
-}
-function today_note_exists_in_daykeeper()
-{
-  # Test if today's not is the FIRST note that shows up from notes_past. If it
-  # is, that means success/it already exists
-  test "$todays_note" == "$(notes_past 1)"
-}
-function today_note_exists_in_filesystem()
-{
-  test -e "$todays_note"
-}
-function create_today_note_file()
-{
-
-  echo "{{{ $month $day, $year" > "$todays_note"
+function note::init::tasks() {
+  local -r note="${1?}"
+  readonly task_root="${root?}/etc/tasks"
 
   # Append tasks to new note file
-  local -r tasks="$note_repo/etc/tasks"
   local task taskfile
-  for task in daily "$(date +%A | tr '[:upper:]' '[:lower:]')"; do
-    taskfile="$tasks/$task.notes"
+  local tasks=( "daily" "$weekday" )
+  for task in "${tasks[@]}"; do
+    taskfile="$task_root/$task.$ext"
     test -f "$taskfile" || continue
-    cat "$taskfile" >> "$todays_note"
+    cat "$taskfile" >> "$note"
   done
-
-  echo "}}}" >> "$todays_note"
 }
 
-#################################### Do work ###################################
-function handle_today()
-{
-  # Initialization
-  mkdir -p "$(dirname "$todays_note")" || exit 1
-  pushd "$note_repo" &>/dev/null || exit 1
-  if [ ! -f "$daykeeper_file" ]; then initialize; fi
+function repo::is_initialized() {
+  # The repo is not initialized if the datekeeper file doesn't exist
+  [ ! -f "$datekeeper_file" ] && return 1
 
-  # If we've already registered a file for today in daykeeper, then
+  # The repo is not initialized if the datekeeper file doesn't show up in git
+  # Directly forward the return code of this command as the return code of this function
+  "${git[@]}" log -- "$(basename "$datekeeper_file")" &>/dev/null
+}
+
+function repo::ensure_initialized() {
+  repo::is_initialized && return
+
+  log::info "Initializing repo"
+  set -x
+  "${git[@]}" init &>/dev/null
+  echo "today.$ext" > "${root?}/.gitignore"
+  touch "$datekeeper_file"
+  "${git[@]}" add ".gitignore" "$datekeeper_file"
+  "${git[@]}" commit -m 'first commit' &>/dev/null
+}
+
+function repo::history::note() {
+  # Return a notes file corresponding to the date
+  note::from_date "$(repo::history::date "$@")"
+}
+
+function repo::history::date() {
+  [ ! -f "$datekeeper_file" ] && return
+  local -r entries_back="${1?}"
+  local -r date="$(tail "-$entries_back" "$datekeeper_file" | head -1)"
+
+  # Return the date recorded in the 'nth' spot of history
+  echo "$date"
+}
+
+function repo::contains_date() {
+  # Check to see if the datekeeper_file already contains the date
+  local -r date="$1"
+  grep -q "${date?}" "$datekeeper_file" || return 1
+
+  # And check fit, too
+  local -r note="$(note::from_date --relative "$date")"
+  "${git[@]}" log -- "$note" &>/dev/null
+}
+
+function repo::register_today() {
+  # If we've already registered a file for today in datekeeper, then
   # initialization is done
-  today_note_exists_in_daykeeper && return
+  local -r date_today="$year/$month/$day"
+  if repo::contains_date "${date_today?}"; then
+    log::info "We already have a journal entry for '$date_today'"
+    return
+  fi
 
-  # Today isn't the most recent entry in the daykeeper file!
-  # Commit the last entry - prepare to add a new one
-  test -f "$(notes_past 1)" && git add "$(notes_past 1)"
-  git commit -m "Journal entry for $(notes_past 1)"
+  # Today isn't in the datekeeper file!
+  # This means that we're done editing the previous notes file. Add/commit it
+  local -r prev_date="$(repo::history::date 1)"
+  local -r prev_note="$(note::from_date "$prev_date")"
+  if [ ! -f "$prev_note" ]; then
+    log::err "Could not find file for datekeeper entry '$prev_date'. Something is wrong."
+    exit 1
+  fi
+  "${git[@]}" add "$prev_note"
+  "${git[@]}" commit -m "Journal entry for $prev_date" || true
 
-  # link to todays_note, and name that file today_symlink
-  today_symlink="$note_repo/today.notes"
-  ln -f -s "$todays_note" "$today_symlink"
-
-  # If the file for today already exists on the filesystem, our work is done.
-  # This will only happen if we manually create the file
-  today_note_exists_in_filesystem && return
-
-  # create the file & add it to git
-  # Register with daykeeper
-  echo "$date" >> "$daykeeper_file"
-
-  # Create the file - prepopulate the new notes file
-  create_today_note_file
-
-  # And add it to git
-  git add "$todays_note"
-  git add "$daykeeper_file"
+  # Create & prepopulate a notes file for today. Symlink to it, and add it to git.
+  local -r note="$(repo::journal::add_date "${date_today?}")"
+  local -r symlink_to_today="${root?}/today.$ext"
+  ln -f -s "$note" "$symlink_to_today"
+  "${git[@]}" add "$note" "$datekeeper_file"
 }
-handle_today
 
-function open_files() {
+function repo::journal::add_date() {
+  local -r date="$1"
+  local -r note="$(note::from_date "${date?}")"
+  log::info "Adding '$date' to journal - '$note'"
+  mkdir -p "$(dirname "$note")" || exit 1
+
+  # Register with datekeeper
+  echo "$date" >> "$datekeeper_file"
+
+  # Ensure the note is initialized
+  note::ensure_initialized "$note"
+
+  # Return the created note
+  echo "$note"
+}
+
+function repo::journal::open() {
+  pushd "${root?}" &>/dev/null || exit 1
+
   # Open a week of notes in buffers.
   local files_to_open=()
   for i in {1..5}; do
-    files_to_open+=( "$(notes_past "$i")" )
+    files_to_open+=( "$(repo::history::note "$i")" )
   done
 
   # Use the `Notes` command to get that nice view split
   vim "${files_to_open[@]}" -c"Notes"
-  git add "$todays_note"
+
+  popd &>/dev/null || exit 1
 }
 
-echo "$0: note_repo=$note_repo"
-open_files
+function main() {
+  log::info "$0: Root of notes = '${root?}'"
+  repo::ensure_initialized
+  repo::register_today
+  repo::journal::open
+}
+main "$@"
