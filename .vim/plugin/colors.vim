@@ -20,7 +20,7 @@ highlight clear LineNrBelow
 highlight LineNrAbove term=underline ctermfg=8
 highlight link LineNrBelow LineNrAbove
 
-" Comments should stick out slightly more
+" Comments should stick out slightly more than 'slate' makes them
 highlight Comment term=bold ctermfg=66
 
 " Toggle syntax highlighting
@@ -32,5 +32,6 @@ function! s:Reload()
   source ~/.vim/plugin/config/gitgutter.vim
 endfunction
 
-" Tmux clear background
+" https://github.com/vim/vim/issues/10449
+" Transparent background (for tmux inactive panes)
 highlight Normal ctermbg=NONE
