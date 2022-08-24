@@ -33,7 +33,7 @@ defaults write com.apple.dock mru-spaces -bool false
 defaults write com.apple.dock no-bouncing -bool TRUE
 
 # When the mouse is over a terminal window, it automatically gains focus
-defaults write com.apple.Terminal FocusFollowsMouse -bool true
+# defaults write com.apple.Terminal FocusFollowsMouse -bool true
 
 ################################### Utilities ##################################
 function restart-touchbar() {

@@ -21,15 +21,29 @@ readonly git=( "git" "-C" "${root?}" )
 readonly ext="md"
 
 function note::from_date() {
+  # Arg parsing
   local base="${root?}/"
-
   if [ "$1" == "--relative" ]; then
     shift 1
     base=""
   fi
-
   local -r date="$1"
-  echo "${base}${date?}.$ext"
+
+  # Respect changing extensions
+  local -r file="$(compgen -G "${base}${date?}.*")"
+  if [ ! -f "${file}" ]; then
+    log::err "Can't find a file for '${base}${date}'!"
+    exit 1
+  fi
+
+  # Be noisy if we've changed recently
+  local -r found_ext="${file##*.}"
+  if [ "$found_ext" != "$ext" ]; then
+    log::warn "The file '$file' has a different extension than what we create"
+  fi
+
+  # Return
+  echo "$file"
 }
 
 function note::ensure_initialized() {
@@ -154,7 +168,7 @@ function repo::journal::open() {
   done
 
   # Use the `Notes` command to get that nice view split
-  vim "${files_to_open[@]}" -c"Notes"
+  nvim "${files_to_open[@]}" -c"Notes"
 
   popd &>/dev/null || exit 1
 }
