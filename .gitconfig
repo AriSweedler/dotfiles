@@ -6,7 +6,7 @@
 
 [core]
 	excludesfile = ~/.config/git/ignore
-	editor = vim
+	editor = nvim
 
 [init]
 	templatedir = ~/.config/git/template
@@ -20,7 +20,7 @@
 	conflictStyle=diff3
 
 [mergetool "vim_mergetool"]
-	cmd = vim -f -c "MergetoolStart" "$MERGED" "$BASE" "$LOCAL" "$REMOTE"
+	cmd = nvim -f -c "MergetoolStart" "$MERGED" "$BASE" "$LOCAL" "$REMOTE"
 	trustExitCode = true
 
 [mergetool]

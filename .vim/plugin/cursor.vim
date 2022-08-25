@@ -3,12 +3,13 @@
 "
 " *termcap-cursor-shape*
 
-" START INSERT: |
+" START INSERT: '|'
 let &t_SI = "[5 q"
 
-" START REPLACE: <TODO>
+" START REPLACE: '_'
 let &t_SR = "[3 q"
-" END   INSERT: █
+
+" END   INSERT: '█'
 let &t_EI = "[2 q"
 
 " Enter Insert : 't_SI'
