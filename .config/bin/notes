@@ -32,8 +32,9 @@ function note::from_date() {
   # Respect changing extensions
   local -r file="$(compgen -G "${base}${date?}.*")"
   if [ ! -f "${file}" ]; then
-    log::err "Can't find a file for '${base}${date}'!"
-    exit 1
+    # We have to come up with a name for a file that doesn't exist
+    echo "${base}${date?}.${ext}"
+    return
   fi
 
   # Be noisy if we've changed recently
@@ -42,7 +43,13 @@ function note::from_date() {
     log::warn "The file '$file' has a different extension than what we create"
   fi
 
-  # Return
+  # Redundant error check
+  if [ -z "$file" ]; then
+    log::err "${FUNCNAME[0]} '$@' failed - could not come up with an answer"
+    exit 1
+  fi
+
+  # return
   echo "$file"
 }
 
@@ -51,6 +58,10 @@ function note::ensure_initialized() {
 
   # Exit early if the note already exists
   [ -e "$note" ] && return
+  if ! touch "$note"; then
+    log::err "Can't create note '$note'"
+    exit 1
+  fi
 
   echo "# $month $day, $year" > "$note"
   note::init::tasks "$note"
@@ -145,6 +156,10 @@ function repo::register_today() {
 function repo::journal::add_date() {
   local -r date="$1"
   local -r note="$(note::from_date "${date?}")"
+  if [ -z "$note" ]; then
+    log::err "note::from_date FAILED"
+    exit 1
+  fi
   log::info "Adding '$date' to journal - '$note'"
   mkdir -p "$(dirname "$note")" || exit 1
 
