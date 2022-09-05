@@ -2,7 +2,7 @@ function ssh-conf() {
   local -r base="$HOME/.ssh/conf.d"
   # shellcheck disable=SC2012
   local -r file="$(ls -1 "$base" | fzf)"
-  vim "$base/$file"
+  "$EDITOR" "$base/$file"
 }
 
 # Invoke ssh on any machine in my config.
