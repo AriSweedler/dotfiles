@@ -14,3 +14,5 @@ highlight Conceal ctermfg=15 ctermbg=90
 " `highlight cString ctermbg=240 ctermfg=117`
 highlight markdownCodeBlock ctermbg=240
 highlight markdownHighlightC ctermbg=240
+
+let g:markdown_fenced_languages = ["bash", "sh"]

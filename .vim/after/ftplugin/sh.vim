@@ -31,6 +31,12 @@ done
 END
 nnoremap <buffer> <Leader>#a o<Esc>:let @h=snip_argparsing->join("\n")<CR>"hp
 " }}}
+" {{{
+let snip_basicarg =<< END
+  local -r ARG="${1?}"
+END
+nnoremap <buffer> <Leader>#A o<Esc>:let @h=snip_basicarg->join("\n")<CR>"hp
+" }}}
 " {{{ Table driven programming
 let snip_table =<< END
 readonly my_table=(

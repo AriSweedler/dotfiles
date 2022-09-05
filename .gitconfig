@@ -107,6 +107,7 @@
 	history-of = ll --follow --
 	initt = !"git init; git commit --allow-empty --message 'first commit'"
 	yankbranch = !"git branch --show-current | tr -d '\n' | tee /dev/tty | pbcopy"
+	wipebranch = !"f() { git branch -D $1; git push origin --delete $1; }; f"
 
 	# Submodule control
 	sub-all = submodule foreach git
