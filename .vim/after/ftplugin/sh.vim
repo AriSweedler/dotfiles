@@ -15,6 +15,7 @@ let g:is_bash = 1
 
 " Use shellcheck to lint easily
 compiler shellcheck
+nnoremap <Leader>m :lmake --shell bash -e SC2064 %<CR>
 
 nnoremap <buffer> <Leader>#? :map <Leader>#<CR>
 " {{{ Snippets

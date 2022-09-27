@@ -5,7 +5,7 @@ setopt HIST_EXPIRE_DUPS_FIRST # delete duplicates first when HISTFILE size excee
 setopt EXTENDED_HISTORY       # Add timestamps to history files
 setopt HIST_REDUCE_BLANKS     # Trim silly whitespace from history
 export HISTFILE="$HOME/.histfile"
-export HISTSIZE=50000
+export HISTSIZE=500000
 export SAVEHIST=$HISTSIZE
 
 # Use a more modern way to lock the history file. Should be a net positive on
