@@ -21,9 +21,9 @@ nnoremap Q "_
 nnoremap zz ^zz
 nnoremap zZ zz$
 
-" Move up/down this virtual column until you hit non-whitespace
-nnoremap gK ?\%<C-R>=virtcol(".")<CR>v\S<CR>
-nnoremap gJ /\%<C-R>=virtcol(".")<CR>v\S<CR>
+" Highlight this (virtual) column. Ability to jump up and down (past whitespace)
+" gK because it's like 'k', which movies up, but different
+nnoremap gK /\%<C-R>=virtcol(".")<CR>v\S<CR>N
 
 " Fold commands are prefixed with 'z'. But movement commands are prefixed with
 " '['. I think that either should work. But I prefer saying 'move fold' in my
@@ -39,6 +39,8 @@ cabbrev w!! w !sudo tee % > /dev/null
 
 " No need to drop 'shift' when taking the head of the current path
 cabbrev %:H %:h
+cabbrev VH vsp %:h/
+cabbrev vh vsp %:h/
 
 " Turn 'diff' on for the 2 open windows in this tab.
 " Turn off in all windows with 'diffoff!'

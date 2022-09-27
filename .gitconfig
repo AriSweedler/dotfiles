@@ -110,6 +110,7 @@
 	wipebranch = !"f() { git branch -D $1; git push origin --delete $1; }; f"
 
 	# Submodule control
+	push-all = !"f() { git submodule foreach git push && git push; }; f"
 	sub-all = submodule foreach git
 	# If HEAD --> branch, this works nicely
 	sub-ff = submodule foreach git pull --ff-only
