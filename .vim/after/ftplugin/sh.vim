@@ -75,3 +75,11 @@ nnoremap <buffer> <Leader>#i o<Esc>:let @h=snip_input->join("\n")<CR>"hp
 " Abbrevs
 iabbrev loggy echo "[ARI] FUNCNAME='${FUNCNAME[0]}' LINENO='$LINENO' with '$#' args: '$*'"<Left>
 iabbrev functino function
+
+" Configure the matchit plugin to play nice with shell
+let s:matchpairs = [
+\   ['\<if\>', '\<then\>', '\<elif\>', '\<else\>', '\<fi\>']->join(':'),
+\   ['\<while\>', '\<do\>', '\<done\>']->join(':'),
+\   ['\<case\>', '\<in\>', '\<esac\>']->join(':')
+\ ]
+let b:match_words = s:matchpairs->join(',')
