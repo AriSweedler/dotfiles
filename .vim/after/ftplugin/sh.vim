@@ -70,6 +70,18 @@ echo "You stated '$input'"
 END
 nnoremap <buffer> <Leader>#i o<Esc>:let @h=snip_input->join("\n")<CR>"hp
 " }}}
+" {{{ Press any key to continue
+let snip_groot_use =<< END
+function extract::usage() {
+  echo "usage"
+}
+
+function extract::example() {
+  echo "example"
+}
+END
+nnoremap <buffer> <Leader>#u o<Esc>:let @h=snip_groot_use->join("\n")<CR>"hp
+" }}}
 " }}}
 "
 " Abbrevs
@@ -80,6 +92,6 @@ iabbrev functino function
 let s:matchpairs = [
 \   ['\<if\>', '\<then\>', '\<elif\>', '\<else\>', '\<fi\>']->join(':'),
 \   ['\<while\>', '\<do\>', '\<done\>']->join(':'),
-\   ['\<case\>', '\<in\>', '\<esac\>']->join(':')
+\   ['\<case\>', '\<in\>$', '\<esac\>']->join(':')
 \ ]
 let b:match_words = s:matchpairs->join(',')

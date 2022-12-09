@@ -31,6 +31,9 @@ set wildmenu
 
 " Don't update the screen when doing macros. Much faster
 set lazyredraw
+
+" Disable mouse. I'm not used to it...
+set mouse=
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""" Less important settings """"""""""""""""""""""""" {{{
 set noerrorbells       " disable error bells
