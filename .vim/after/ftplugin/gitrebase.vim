@@ -21,14 +21,14 @@
 " However, if you remove everything, the rebase will be aborted.
 "
 
-nnoremap <buffer> <unique> P ciwpick<C-c>j0
-nnoremap <buffer> <unique> R ciwreword<C-c>j0
-nnoremap <buffer> <unique> E ciwedit<C-c>j0
-nnoremap <buffer> <unique> S ciwsquash<C-c>j0
-nnoremap <buffer> <unique> F ciwfixup<C-c>j0
-nnoremap <buffer> <unique> X ciwexec<C-c>j0
-nnoremap <buffer> <unique> B ciwbreak<C-c>j0
-"nnoremap <buffer> <unique> D ciwdrop<C-c>j0
-nnoremap <buffer> <unique> L ciwlabel<C-c>j0
-nnoremap <buffer> <unique> T ciwreset<C-c>j0
-nnoremap <buffer> <unique> M ciwmerge<C-c>j0
+nnoremap <buffer> <unique> _P ciwpick<C-c>j0
+nnoremap <buffer> <unique> _R ciwreword<C-c>j0
+nnoremap <buffer> <unique> _E ciwedit<C-c>j0
+nnoremap <buffer> <unique> _S ciwsquash<C-c>j0
+nnoremap <buffer> <unique> _F ciwfixup<C-c>j0
+nnoremap <buffer> <unique> _X ciwexec<C-c>j0
+nnoremap <buffer> <unique> _B ciwbreak<C-c>j0
+nnoremap <buffer> <unique> _D ciwdrop<C-c>j0
+nnoremap <buffer> <unique> _L ciwlabel<C-c>j0
+nnoremap <buffer> <unique> _T ciwreset<C-c>j0
+nnoremap <buffer> <unique> _M ciwmerge<C-c>j0
