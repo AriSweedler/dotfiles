@@ -10,8 +10,9 @@ function _vimrg() {
     return 1
   fi
   shift
-  set -- $(echo $* | tr "'" ".")
+  local rg_search="$*"
+  local vimsearch="$(echo $* | sed -e "s|'\(.*\)'|\1|")"
 
   # Open all the files that rg finds. Additionaly highlight the pattern in vim, if possible.
-  vim -c":lgrep $*" -c"/$*" $(rg --files-with-matches "$*")
+  vim -c":lgrep $rg_search" -c"/$vimsearch" -c"norm zOn" $(rg --files-with-matches "$*")
 }

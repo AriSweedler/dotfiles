@@ -5,10 +5,14 @@ nnoremap gr gT
 " tabmove more easily
 nnoremap ]t :tabm+<CR>
 nnoremap [t :tabm-<CR>
-
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+""""""""""""""""""""""""""""""""" Windows """""""""""""""""""""""""""""""" {{{
 " <C-w>T moves a window to a new tab, but I like '!' better. Like tmux
 nnoremap <C-w>! <C-w>T
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
+
+" <C-w>p moves to the previous window, but I like ';' better. Like tmux
+nnoremap <C-w>; <C-w><C-p>
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" }}}
 """""""""""""""""""""""""""""" buffer cleanup """""""""""""""""""""""""""""" {{{
 " remove buffer from memory
 nnoremap <Leader>bc :bnext <Bar> bdelete #<CR>

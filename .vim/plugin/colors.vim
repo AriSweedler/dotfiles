@@ -62,6 +62,7 @@ highlight CursorLineNr ctermfg=3 ctermbg=240
 highlight CursorLineSign ctermbg=238
 highlight CursorLineFold ctermbg=3 ctermfg=3
 highlight Visual ctermbg=22
+highlight Search ctermbg=11 ctermfg=8
 highlight IncSearch ctermbg=12 ctermfg=7
 highlight Operator ctermfg=130
 highlight Function cterm=bold ctermfg=38
