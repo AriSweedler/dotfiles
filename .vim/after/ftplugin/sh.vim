@@ -24,8 +24,8 @@ let snip_argparsing =<< END
 # Parse args
 while (( $# > 0 )); do
   case "$1" in
-    --arg) arg=true; shift 1 ;;
-    --key) value="$2"; shift 2 ;;
+    --arg) arg=true; shift ;;
+    --key) value="$2"; shift 2 || break ;;
     *) echo "Unkonwn argument in ${FUNCNAME[0]}: '$1'"; exit 1 ;;
   esac
 done
@@ -95,3 +95,16 @@ let s:matchpairs = [
 \   ['\<case\>', '\<in\>$', '\<esac\>']->join(':')
 \ ]
 let b:match_words = s:matchpairs->join(',')
+
+" Structured logging shortcuts {{{
+" Add err log
+nnoremap <buffer> <Leader>E olog::err ""<Left>
+
+" Add the first field
+nnoremap <buffer> <Leader>F $i <Bar> $(log::_f "")<Left><Left>
+" Add an additional field
+nnoremap <buffer> <Leader><Leader>F $F<Bar>a $(log::_f "")<Left><Left>
+" Remove a field we're hovering over
+nnoremap <buffer> <Leader><Leader><Leader>F da(XX
+" }}}
+

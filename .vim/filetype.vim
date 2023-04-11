@@ -6,7 +6,7 @@ let my_map.make = 'Makefile.inc'
 let my_map.spec = '*.spec*'
 let my_map.log = '*.log,*.log.old'
 let my_map.strace = '*.truss,*.strace,*.strace.*'
-let my_map.json = '*.jsonl'
+let my_map.json = '*.jsonl,*.json.template'
 
 " Give the 'key' filetype to files named according to the pattern 'pat'
 for [ft, pat] in my_map->items()

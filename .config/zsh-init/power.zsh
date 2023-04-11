@@ -20,16 +20,6 @@ function www() {
   "$python" -m "$module" "$port"
 }
 
-function scoop_downloads() {
-  local -r download_dir="$HOME/Downloads"
-  echo "Moving all files from '$download_dir' to pwd"
-  local -r dir="downloads"
-  mkdir -p "$dir"
-  mv "$download_dir"/* "$dir"
-  printf "\n%s:\n" "$dir"
-  ls "$dir"
-}
-
 # Helper function to let you know how many args there are. Useful for when
 # you're messing with arrays and unquoted variable expansion as arguments
 function describe() {

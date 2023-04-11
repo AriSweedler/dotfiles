@@ -3,6 +3,7 @@
 require "volume-and-brightness"
 require "application"
 require "easy-reload"
+require "gpt"
 
 --------------------------------- Experimenting --------------------------------
 -- require "nethack-movement"

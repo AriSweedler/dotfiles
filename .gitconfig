@@ -92,12 +92,16 @@
 	rc = rebase --continue
 	s = status --short --branch
 	df = dotfiles
+	wb = wipebranch
+	els = editdiffls
 
 	# New commands
 	amend = commit --amend --reuse-message=HEAD
 	cconfig = config --edit --global
 	ctags = !.git/hooks/ctags
 	diffls = diff --name-only
+	# If I could run ']c' upon starup that would be great. Can't figure it out tho
+	editdiffls = !"f() { files=$(git diff --name-only $1); [ -n \"$files\" ] && $EDITOR -p $files || echo \"no changes since ref='$1'\" ;}; f"
 	dotfiles = !"git --git-dir=\"$HOME/dotfiles/\" --work-tree=\"$HOME\""
 	ls = ls-tree --full-tree -r --abbrev HEAD
 	patch = add --patch

@@ -21,6 +21,9 @@ endfunction
 
 " Special-case log filtering commands
 nnoremap <buffer> <Leader>f? :nnoremap <Leader>f<Enter>
+nnoremap <buffer> <Leader>fJ :norm WWi<Delete><Enter><Esc>:.!jq<Enter>
+nnoremap <buffer> <Leader>fT :%substitute/^[0-9T:.-]*Z\s\[HIT] \(.*\)/\1/<Enter>
+nnoremap <buffer> <Leader>fV :%substitute/^[0-9T:. -]* \(.*\)/\1/<Enter>
 nnoremap <buffer> <Leader>fD :%!awk '/DEBUG.*{{{/,/}}}/ {next} /DEBUG/ {next} {print}'<Enter>
 nnoremap <buffer> <Leader>fR :%!prettier --parser ruby<Enter>
 nnoremap <buffer> <Leader>fU :%!ult filter 2>/dev/null<Enter>
