@@ -18,3 +18,6 @@ bindkey -v
 bindkey "^A" vi-beginning-of-line
 bindkey "^B" vi-beginning-of-line
 bindkey "^E" vi-end-of-line
+
+# Enable autocomplete
+fpath+=~/.zfunc
