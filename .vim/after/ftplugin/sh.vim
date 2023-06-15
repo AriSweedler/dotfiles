@@ -26,7 +26,7 @@ while (( $# > 0 )); do
   case "$1" in
     --arg) arg=true; shift ;;
     --key) value="$2"; shift 2 || break ;;
-    *) echo "Unkonwn argument in ${FUNCNAME[0]}: '$1'"; exit 1 ;;
+    *) echo "Unknown argument in ${FUNCNAME[0]}: '$1'"; exit 1 ;;
   esac
 done
 END
@@ -70,17 +70,17 @@ echo "You stated '$input'"
 END
 nnoremap <buffer> <Leader>#i o<Esc>:let @h=snip_input->join("\n")<CR>"hp
 " }}}
-" {{{ Press any key to continue
+" {{{ groot usage
 let snip_groot_use =<< END
 function extract::usage() {
-  echo "usage"
+  echo "Do the thing that you've always wanted to do"
 }
 
 function extract::example() {
-  echo "example"
+  echo "ven activate mPCE"
 }
 END
-nnoremap <buffer> <Leader>#u o<Esc>:let @h=snip_groot_use->join("\n")<CR>"hp
+nnoremap <buffer> <Leader>#u ggO<Esc>:let @h=snip_groot_use->join("\n")<CR>"hPzojf"
 " }}}
 " }}}
 "
@@ -107,4 +107,3 @@ nnoremap <buffer> <Leader><Leader>F $F<Bar>a $(log::_f "")<Left><Left>
 " Remove a field we're hovering over
 nnoremap <buffer> <Leader><Leader><Leader>F da(XX
 " }}}
-

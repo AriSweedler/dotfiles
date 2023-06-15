@@ -27,3 +27,6 @@ nnoremap <buffer> <Leader>f 0da"0f(af<C-c>p
 
 " Run the current file as a python file with <Leader>m
 nnoremap <buffer> <Leader>m :!clear && python3 %<CR>
+
+" TODO lsp bindings
+setlocal omnifunc=v:lua.vim.lsp.omnifunc

@@ -7,10 +7,6 @@ let b:fetch_log_cmd = ""
 nnoremap <buffer> <Leader>r :let b:fetch_log_cmd = "!FILLMEOUT"
 nnoremap <buffer> <Leader>R :execute b:fetch_log_cmd<CR>:edit! %<CR>
 
-" For HIT logs...
-" setlocal conceallevel=3
-setlocal foldmethod=marker
-
 " Better dealing with escape codes
 syntax match LogANSIEscapeCode /\[[0-9]\+\(;[0-9]\+\)*m/ conceal
 highlight link LogANSIEscapeCode error
@@ -28,3 +24,6 @@ nnoremap <buffer> <Leader>fD :%!awk '/DEBUG.*{{{/,/}}}/ {next} /DEBUG/ {next} {p
 nnoremap <buffer> <Leader>fR :%!prettier --parser ruby<Enter>
 nnoremap <buffer> <Leader>fU :%!ult filter 2>/dev/null<Enter>
 nnoremap <buffer> <Leader>fO :%!ult filter cmd_output 2>/dev/null<Enter>
+
+" Open a file on the same line (move to the first single quote of the line)
+nnoremap <buffer> <Leader>gf f'gf

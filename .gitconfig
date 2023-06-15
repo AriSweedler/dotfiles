@@ -89,9 +89,9 @@
 	l = ll -10
 	ll = log --pretty=newlog --graph
 	po = !"git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)"
-	rc = rebase --continue
 	s = status --short --branch
 	df = dotfiles
+	yb = yankbranch
 	wb = wipebranch
 	els = editdiffls
 
@@ -105,6 +105,9 @@
 	dotfiles = !"git --git-dir=\"$HOME/dotfiles/\" --work-tree=\"$HOME\""
 	ls = ls-tree --full-tree -r --abbrev HEAD
 	patch = add --patch
+	active-operation = !"f() { find \"$(git rev-parse --git-dir)\" -name '*_HEAD' | awk -F '/' '/REBASE|CHERRY_PICK/ {print substr($NF, 1, length($NF)-5)}' | tr 'A-Z_' 'a-z-'; }; f"
+	abort = !"f() { op=$(git active-operation) && test -n \"$op\" && git $op --abort; }; f"
+	continue = !"f() { op=$(git active-operation) && test -n \"$op\" && git $op --continue; }; f"
 
 	# These are just hard to rememeber or type
 	children = !"f() { git rev-list --all --not $1^@ --children | grep $(git rev-parse $1); }; f" # reachable children of a ref
@@ -113,6 +116,7 @@
 	yankbranch = !"git branch --show-current | tr -d '\n' | tee /dev/tty | pbcopy"
 	wipebranch = !"f() { git branch -D $1; git push origin --delete $1; }; f"
 	contains = !"f() {  git tag --contains $1; git branch --contains $1; }; f"
+	pr = !"f() { browser_pr_for_current_branch_in_pwd_stash ; }; f"
 
 	# Submodule control
 	push-all = !"f() { git submodule foreach git push && git push; }; f"

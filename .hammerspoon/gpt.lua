@@ -5,10 +5,12 @@ end
 
 -- Define a table that maps key codes to argument values
 local keyBindings = {
-  ["0"] = gptPromptLTEWords(100),
-  ["2"] = gptPromptLTEWords(20),
-  [","] = gptPromptLTEWords(50),
-  ["-"] = "Answer in as few words as possible"
+  ["0"] = gptPromptLTEWords(100)
+  ,["2"] = gptPromptLTEWords(20)
+  ,[","] = gptPromptLTEWords(50)
+  ,["-"] = "Answer in as few words as possible"
+  ,["b"] = "Give me a bulleted list"
+  ,["c"] = "Answer in one line of code"
 }
 
 -- Returns the name of the currently focused application
@@ -22,7 +24,7 @@ end
 
 -- Define a function that creates a hotkey binding for a given key code
 function bindKeyCode(keyCode)
-  hs.hotkey.bind({"cmd", "shift"}, keyCode, function()
+  hs.hotkey.bind({"cmd", "shift", "alt"}, keyCode, function()
     hs.eventtap.keyStrokes(keyBindings[keyCode])
   end)
 end
