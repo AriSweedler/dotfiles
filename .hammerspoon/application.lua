@@ -9,7 +9,7 @@ S = "Spotify",
 T = "Terminal",
 }
 
-application_select = {"cmd", "alt"}
+local application_select = {"cmd", "alt"}
 for key, app in pairs(key_app) do
   hs.hotkey.bind(application_select, key, function()
     hs.application.launchOrFocus(app)

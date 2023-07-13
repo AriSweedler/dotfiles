@@ -1,14 +1,14 @@
 -- Getters
-function get_volume()
+local function get_volume()
   return hs.audiodevice.defaultOutputDevice():outputVolume()
 end
-function get_bright()
+local function get_bright()
   -- Pretend brightness is on a scale of 0 to 100 instead of 0 to 1
   return hs.screen.mainScreen():getBrightness() * 100
 end
 
 -- Setters
-function set_volume(value)
+local function set_volume(value)
   if (value < 0) then
     value = 0
   end
@@ -16,7 +16,7 @@ function set_volume(value)
   msg = string.format("Volume set to: %3.2f", value)
   hs.alert.show(msg)
 end
-function set_bright(value)
+local function set_bright(value)
   if (value < 0) then
     value = 1
   end
@@ -35,7 +35,7 @@ down =     {"ctrl", "alt"}
 abs_down = {k_abs, "ctrl", "alt"}
 up =       {k_up, "ctrl", "alt"}
 abs_up =   {k_abs, k_up, "ctrl", "alt"}
-function hot(key, mod, func)
+local function hot(key, mod, func)
   hs.hotkey.bind(mod, key, func)
 end
 
