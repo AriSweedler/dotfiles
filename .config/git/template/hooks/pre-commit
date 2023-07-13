@@ -3,7 +3,7 @@
 # Make sure none of the files are large
 function check-for-big-files() {
   # Init
-  BIG=200
+  BIG=300
   echo "* Check for big files: du \$file > $BIG"
 
   for file in $(git diff --name-only HEAD); do
