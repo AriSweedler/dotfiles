@@ -2,6 +2,34 @@
 
 # Easier viewing of json files
 alias jvim='vim -c "%!python3 -m json.tool" -c "set ft=json" -c "set foldmethod=syntax"'
+function swapd_vim() {
+  # Parse args
+  local -r file="${1:?}"
+
+  # Validate args
+  if ! [ -f "$file" ]; then
+    log::info "File does not exist: '$file'"
+  fi
+
+  # Swapfiles replace '/' and '%' and append to ~/.local/state/nvim/swap
+  # Like so:
+  #
+  #     "~/.local/state/nvim/swap//%Users%ari%Desktop%farmrpg%sh_lib%goodmorning.sh.swp"
+  #
+  local swapfile_encoding swapfile_path
+  local -r realpath_file="$(realpath "$file")"
+  local -r xdg="${XDG_STATE_HOME:-~/.local/state}"
+  swapfile_encoding="$(echo "$realpath_file" | sed -e "s|/|%|g")"
+  swapfile_path="$xdg/nvim/swap/${swapfile_encoding}.swp"
+
+  # Swap the files
+  if ! [ -f "$swapfile_path" ]; then
+    log::warn "No swap file, returning success"
+    return
+  fi
+
+  rm "$swapfile_path"
+}
 
 # Start a webserver no matter the version of python. Used to be an alias:
 # alias www='python -m SimpleHTTPServer 8000'

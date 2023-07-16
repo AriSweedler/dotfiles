@@ -47,3 +47,9 @@
 [submodule ".vim/pack/bundle/start/vim-mergetool"]
 	path = .vim/pack/bundle/start/vim-mergetool
 	url = git@github.com:samoshkin/vim-mergetool.git
+[submodule ".config/nvim/blah/bundle/start/leap.nvim"]
+	path = .config/nvim/blah/bundle/start/leap.nvim
+	url = git@github.com:ggandor/leap.nvim.git
+[submodule "/Users/ari/.vim/pack/languages/start/rust.vim"]
+	path = /Users/ari/.vim/pack/languages/start/rust.vim
+	url = git@github.com:rust-lang/rust.vim.git
