@@ -1,3 +1,8 @@
+function sonic::open_dir() {
+  local -r SONIC_DIR='/Users/ari/Desktop/life/apartment/3 - 43Diamond/sonic receipts'
+  run_cmd open "$SONIC_DIR"
+}
+
 function sonic() {
   local -r SONIC_DIR='/Users/ari/Desktop/life/apartment/3 - 43Diamond/sonic receipts'
 

@@ -2,6 +2,7 @@
 # https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
 export XDG_DATA_HOME="$HOME/.local/share"
 export XDG_CONFIG_HOME="$HOME/.config"
+export XDG_STATE_HOME="$HOME/.local/state"
 
 # XDG_DATA_DIRS
 # If $XDG_DATA_DIRS is either not set or empty, a value equal to /usr/local/share/:/usr/share/ should be used.
