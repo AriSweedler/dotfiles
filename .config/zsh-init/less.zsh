@@ -6,15 +6,16 @@ export LESS_TERMCAP_so=$(printf '\e[01;31m') 	# enter standout - red
 export LESS_TERMCAP_ue=$(printf '\e[0m') 		# leave underline
 export LESS_TERMCAP_us=$(printf '\e[01;37m') 	# enter underline - white
 
-readonly prompt_string="%T: 'f?%F:stdin.': %bt/%bb %B ?cSIDEWAYS. ?xNext file: %x.%t"
-readonly flags=(
-  "--status-column"
-  "--Long-prompt"
-  "--Hilite-unread"
-  "--follow-name"
-  "-P${prompt_string}"
-)
-alias less="less ${flags[*]}"
+#readonly prompt_string="%T: 'f?%F:stdin.': %bt/%bb %B ?cSIDEWAYS. ?xNext file: %x.%t"
+#readonly flags=(
+  #"--status-column"
+  #"--Long-prompt"
+  #"--Hilite-unread"
+  #"--follow-name"
+  #"-P${prompt_string}"
+#)
+#alias less="less ${flags[*]}"
+#alias lesss="less"
 
 # TODO write a colorscheme. Or a compiler that takes a YAML file and outputs a colorscheme commands
 # b      Blue
