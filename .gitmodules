@@ -53,3 +53,6 @@
 [submodule "/Users/ari/.vim/pack/languages/start/rust.vim"]
 	path = /Users/ari/.vim/pack/languages/start/rust.vim
 	url = git@github.com:rust-lang/rust.vim.git
+[submodule "/Users/ari/.vim/pack/Exafunction/opt/codeium.vim"]
+	path = /Users/ari/.vim/pack/Exafunction/opt/codeium.vim
+	url = https://github.com/Exafunction/codeium.vim
