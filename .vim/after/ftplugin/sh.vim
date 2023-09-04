@@ -1,21 +1,7 @@
-setlocal tabstop=2 expandtab
-setlocal foldlevel=0
-setlocal autoindent
-
-" {{{ Have bash syntax fold stuff nicely.
-"
-" Because they don't want that by default. Lmfao... some old dudes wrote this
-" and they didn't wanna use 3 variables. So they use a friggin bitfield. In a
-" SCRIPTING language. Insane xD
-let g:sh_fold_enabled = 1 + 2 + 4
-
-" On unknown `*.sh` files, assume it's bash.
-let g:is_bash = 1
-" }}}
-
-" Use shellcheck to lint easily
-compiler shellcheck
-nnoremap <Leader>m :lmake --shell bash -e SC2064 %<CR>
+" Decommissioning this while I'm trying to get the LSP setup pristine
+""" " Use shellcheck to lint easily
+""" compiler shellcheck
+""" nnoremap <Leader>m :lmake --shell bash -e SC2064 %<CR>
 
 nnoremap <buffer> <Leader>#? :map <Leader>#<CR>
 " {{{ Snippets
