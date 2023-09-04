@@ -15,7 +15,7 @@ local pe_key_bindings = {
 }
 
 -- Define a function that creates a hotkey binding for a given key code
-mod = {"cmd", "shift", "alt"}
+local mod = {"cmd", "shift", "alt"}
 local function bind_pe_keycode(key_code)
   hs.hotkey.bind(mod, key_code, function()
     hs.eventtap.keyStrokes(pe_key_bindings[key_code])

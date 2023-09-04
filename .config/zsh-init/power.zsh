@@ -100,3 +100,27 @@ function clipboard() {
   echo -n "$value" | pbcopy
 }
 
+function xarg() {
+  echo "$@" | xargs -L 1
+}
+function xarg::complete() {
+  # When you hit tab on 'xarg/ then turn it into the actual xargs command
+  generated=$(compen -W "xargs -L1 ${COMP_WORDS[@]}" -- "${COMP_WORDS[$COMP_CWORD]}")
+  COMPREPLY=( "${generated[@]}" )
+}
+
+function f1() {
+  # Parse args
+  local minutes
+  minutes="${1:-1}"
+
+  # Validate args
+  if (( minutes <= 0 )); then
+    log::err "Bad argument. Give a positive number | arg='$1'"
+    return 1
+  fi
+
+  # Do work
+  log::info "Finding all non-hidden files that are less than '$minutes' minutes old"
+  find . -newermt "$minutes minute ago" | grep -v "\/\."
+}
