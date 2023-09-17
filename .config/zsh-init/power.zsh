@@ -100,9 +100,21 @@ function clipboard() {
   echo -n "$value" | pbcopy
 }
 
+function downloads::clean() {
+  log::err "TODO fixme ~/.config/zsh-init/power.zsh"
+  local -r clean_me="$(compgen -G "~/Downloads/*")"
+  if [ -z "$clean_me" ]; then
+    log::info "Nothing to clean up from downloads"
+    return
+  fi
+
+  run_cmd mv "$clean_me" "$HOME/.Trash"
+}
+
 function xarg() {
   echo "$@" | xargs -L 1
 }
+
 function xarg::complete() {
   # When you hit tab on 'xarg/ then turn it into the actual xargs command
   generated=$(compen -W "xargs -L1 ${COMP_WORDS[@]}" -- "${COMP_WORDS[$COMP_CWORD]}")

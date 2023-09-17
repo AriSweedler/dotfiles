@@ -44,7 +44,7 @@ local messages = {
 
 -- Define the keybinding
 local hyper = {"cmd", "alt", "ctrl", "shift"}
-hs.hotkey.bind(hyper, "S", function()
+hs.hotkey.bind(hyper, "s", function()
   -- Repeat the loop three times
   for i = 1, 3 do
     -- Select a random message from the array

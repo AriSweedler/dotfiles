@@ -3,6 +3,11 @@
 .netrwhist
 tags
 
+# Linters
+.clangd
+.clang-format
+.cache
+
 # OS generated files
 .DS_Store*
 
