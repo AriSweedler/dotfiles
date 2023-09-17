@@ -1,0 +1,14 @@
+[nodejs]
+symbol = "[⬢](bold green) "
+
+[git_branch]
+symbol = 'branch '
+
+[git_metrics]
+disabled = false
+
+[git_status]
+style = 'bg:black fg:bold green'
+
+[cmake]
+symbol = 'cmake '
