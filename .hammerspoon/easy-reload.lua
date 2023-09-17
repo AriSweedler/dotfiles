@@ -18,7 +18,7 @@ hs.pathwatcher.new(os.getenv("HOME") .. "/.hammerspoon/", reloadConfig):start()
 
 -- Add a keyboard shortcut to reload
 local hyper = {"cmd", "shift", "alt", "ctrl"}
-hs.hotkey.bind(hyper, "R", function()
+hs.hotkey.bind(hyper, "r", function()
   hs.reload()
 end)
 

@@ -2,7 +2,20 @@ function source_file() {
   local -r file="$1"
 
   # shellcheck disable=SC1090
-  [[ -r "$file" ]] && source "$file"
+  [[ -r "$file" ]] || return
+  source "$file"
+}
+
+function source_file::timed() {
+  local -r file="$1"
+
+  local timer_s timer_e
+  timer_s="$(gdate +'%s%N')"
+  # shellcheck disable=SC1090
+  [[ -r "$file" ]] || return
+  source "$file"
+  timer_e="$(gdate +'%s%N')"
+  echo "$((timer_e-timer_s)) Loading | file='$file' elapsed=$((timer_e-timer_s))"
 }
 
 function source_zsh_dir() {

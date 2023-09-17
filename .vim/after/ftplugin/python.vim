@@ -25,8 +25,12 @@ iabbrev loggy print(f"[ARI]")<C-o>F"
 " TODO convert any string into an f-string. Currently buggy (Should just use a function)
 nnoremap <buffer> <Leader>f 0da"0f(af<C-c>p
 
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Run the current file as a python file with <Leader>m
-nnoremap <buffer> <Leader>m :!clear && python3 %<CR>
+" TODO its this for now
+setlocal makeprg=pyright
+" nnoremap <buffer> <Leader>m :!clear && python3 %<CR>
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 " TODO lsp bindings
 setlocal omnifunc=v:lua.vim.lsp.omnifunc

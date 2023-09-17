@@ -1,4 +1,4 @@
-source_file "$HOME/.config/macos.sh"
+# source_file "$HOME/.config/macos.sh"
 source_file "$HOME/.config/aliases.sh"
 
 # Add .config/bin to front of path

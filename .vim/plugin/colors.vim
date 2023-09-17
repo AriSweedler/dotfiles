@@ -48,8 +48,10 @@ highlight SignColumn ctermbg=234 ctermfg=8
 highlight ColorColumn ctermbg=233
 
 " ??? Why did these go away? Fking neovim.
+highlight Identifier ctermfg=39
 highlight String ctermfg=208
 highlight Constant ctermfg=172
+highlight Function cterm=bold ctermfg=45
 highlight Special ctermfg=200
 highlight Type cterm=bold ctermfg=40
 highlight Statement cterm=NONE ctermfg=184
