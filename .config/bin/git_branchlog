@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# Print local branches that we have touched in the 50 most recent entries of
+# reflog. Helps you remember what you've just been working on
+function main() {
+  git reflog | head -30 | awk '
+  {
+    hash = $1
+    cmd = "git for-each-ref --contains " hash
+
+    # Awk does something very strange here. It runs the command but only
+    # returns a single record. To get the next record, the syntax looks like
+    # you are trying to run the same command again. But that is NOT what
+    # happens. It will not invoke a new shell. If you want to actually invoke
+    # the command again you have to "close(cmd)". And then the next time you
+    # invoke the pipe to getline it will run the command again. Well, I do not
+    # want to do that here, as I only want branches from a hash once, so I am
+    # taking advantage of this oddity as an optimization.
+    while ((cmd | getline) > 0) {
+      # bd1f573b49e7bc723679697ffa14b7573d937bd9 commit refs/heads/dev
+      if ($2 != "commit") { continue }
+      branches[$3] = "yes"
+    }
+  }
+  END {
+    for (branch in branches) {
+      if (branch ~ /^refs\/remote/) { continue } # Ignore remote branches
+      sub(/^refs\/heads\//, "", branch) # Mutate
+      print branch
+    }
+  }
+  '
+}
+main "$@"

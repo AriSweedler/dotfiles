@@ -108,6 +108,7 @@
 	active-operation = !"f() { find \"$(git rev-parse --git-dir)\" -name '*_HEAD' | awk -F '/' '/REBASE|CHERRY_PICK/ {print substr($NF, 1, length($NF)-5)}' | tr 'A-Z_' 'a-z-'; }; f"
 	abort = !"f() { op=$(git active-operation) && test -n \"$op\" && git $op --abort; }; f"
 	continue = !"f() { op=$(git active-operation) && test -n \"$op\" && git $op --continue; }; f"
+	branchlog = !"f() { git_branchlog ; }; f"
 
 	# These are just hard to rememeber or type
 	children = !"f() { git rev-list --all --not $1^@ --children | grep $(git rev-parse $1); }; f" # reachable children of a ref
