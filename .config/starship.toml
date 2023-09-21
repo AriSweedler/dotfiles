@@ -12,3 +12,6 @@ style = 'bg:black fg:bold green'
 
 [cmake]
 symbol = 'cmake '
+
+[battery]
+discharging_symbol = "⚡️ "
