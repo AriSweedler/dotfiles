@@ -1,0 +1,21 @@
+{
+  "Log to Info": {
+    "prefix": "log",
+    "body": [
+      "logger.debug(\"$1\", extra={\"$2\": $3})"
+    ],
+    "description": "Structured log"
+  },
+  "Python 'main' clause": {
+    "prefix": "main",
+    "body": [
+      "def main():",
+      "\t$0",
+      "",
+      "",
+      "if __name__ == \"__main__\":",
+      "\tmain()"
+    ],
+    "description": "Give a function and an entrypoint hook for a python script"
+  }
+}

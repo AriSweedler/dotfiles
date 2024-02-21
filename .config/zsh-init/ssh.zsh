@@ -52,9 +52,6 @@ function shsh() {
 # Show the machine dashboard
 function machines() {
   b_echo "~~~"
-  pushd "$HOME/workspace/hawkeye-tools/output" || exit
-  b_echo "Vagrant folders"
-  ls -1
   b_echo "machines"
   # When we get to the 'Host' start looking for the Hostname
   awk '
@@ -75,12 +72,25 @@ function machines() {
       hostname=""
     }
   ' "$HOME/.ssh/conf.d/"*
-  popd &>/dev/null || exit
   b_echo "~~~"
 }
 
 function key() {
   log::info "pubkey copied to clipboard"
-  pbcopy < "$HOME/.ssh/id_rsa.pub"
+  pbcopy < "$HOME/.ssh/id_ed25519.pub"
 }
 
+function ssh::load_agent() {
+  local auth_socket="$HOME/.ssh/ssh_auth_sock"
+  [ -S "$auth_socket" ] && return
+
+  eval "$(ssh-agent)" &>/dev/null
+  ln -sf "$SSH_AUTH_SOCK" "$auth_socket"
+  export SSH_AUTH_SOCK="$auth_socket"
+
+  ssh-add -l &> /dev/null && return
+  for id in "$HOME"/.ssh/*id*; do
+    ssh-add "$id" 2&>/dev/null
+  done
+}
+ssh::load_agent

@@ -1,40 +1,16 @@
-#!/bin/bash
-
-# https://www.atlassian.com/git/tutorials/git-hooks
-#
-# $2 is 'the type of commit.
-# * This can be message (-m or -F option)
-# * template (-t option)
-# * merge (if the commit is a merge commit)
-# * squash (if the commit is squashing other commits).'
-# * Or empty, if this is just a regular commit made from `git commit`
-#
-if [ ! -z "$2" ]; then
-  # We only want to proceed if this is a regular commit.
-  echo "Skipping regular prepare-commit-msg script because this commit isn't a regular commit. It is a: $2"
-  exit 0
-fi
-
-################################ Helper function ########################### {{{
-BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+#!/usr/bin/env bash
 
 function prepend() {
   # If my branch is not named after a ticket, then I don't need to add anything.
-  if [[ ! "$BRANCH" =~ "EYE-" ]]; then
-    return
-  fi
-
-  # I'm working on a ticket. Put that information into the commit message
-  echo "$BRANCH -"
-
-  # We should skip tests if I still have personal debugging statements ([ARI])
-  if git grep -q "\[ARI\]"; then
-    echo ""
-    echo "* skiptests"
+  if grep -q 'EYE-' <<< "$BRANCH"; then
+    log::info "Prepending EYE branch to commit message | EYE_BRANCH='$BRANCH'"
+    echo "$BRANCH -"
   fi
 }
 
 function append() {
+  log::info "Appending git history to commit message"
+
   # Add a pretty summary of git history (commented out - see the 'sed'
   # command). This helps me write commit messages sometimes.
   echo "# {{{ Git history:"
@@ -47,10 +23,34 @@ function append() {
     | tr '~' '\n' | sed -e 's/^/# /' -e 's/ $//g'
   echo "# }}}"
 }
-############################################################################ }}}
 
-# $1 is 'the name of a temporary file that contains the message. You change the
-# commit message by altering this file in-place.'
-#
-# Add my informatoin around the pre-populated commit message.
-printf '%s\n%s\n%s' "$(prepend)" "$(cat $1)" "$(append)" > $1
+function main() {
+  if ! source "$HOME/.config/bash-init/log.sh" &>/dev/null; then
+    function log::info { echo "[INFO] $@"; }
+    function log::err { echo "[ERROR] $@"; }
+  fi
+
+  # https://www.atlassian.com/git/tutorials/git-hooks
+  #
+  # $2 is 'the type of commit.
+  # * This can be message (-m or -F option)
+  # * template (-t option)
+  # * merge (if the commit is a merge commit)
+  # * squash (if the commit is squashing other commits).'
+  # * Or empty, if this is just a regular commit made from `git commit`
+  #
+  # We only have work to do if '$2' is empty
+  if [ -n "$2" ]; then
+    log::info "Skipping prepare-commit-msg script, commit_type='$2' will provide if for us"
+    exit 0
+  fi
+
+  # $1 is 'the name of a temporary file that contains the message. You change the
+  # commit message by altering this file in-place.'
+  #
+  # Add my informatoin around the pre-populated commit message.
+  readonly BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+  printf '%s\n%s\n%s' "$(prepend)" "$(cat $1)" "$(append)" > "$1"
+}
+
+main "$@"

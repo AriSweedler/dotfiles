@@ -4,7 +4,8 @@ local function get_volume()
 end
 local function get_bright()
   -- Pretend brightness is on a scale of 0 to 100 instead of 0 to 1
-  return hs.screen.mainScreen():getBrightness() * 100
+  hs.alert.show(hs.brightness.get())
+  return hs.brightness.get() * 100
 end
 
 -- Setters

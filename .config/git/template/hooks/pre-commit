@@ -1,56 +1,67 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Make sure none of the files are large
-function check-for-big-files() {
-  # Init
-  BIG=300
-  echo "* Check for big files: du \$file > $BIG"
-
+# Helper - run function on each file
+function check_changed() {
+  local -r fxn="${1:?}"
+  log::info "* Checking: $fxn"
   for file in $(git diff --name-only HEAD); do
     # Exit early - continue the loop if the file doesn't exist
     if [ ! -f "$file" ]; then continue; fi
 
-    # Exit early - continue the loop if the file is not big
-    test "$(du "$file" | awk '{print $1}')" -gt "$BIG" || continue
+    # Run the function
+    if "$fxn" "$file"; then continue; fi
 
-    # Deal with big files
-    echo -n "Are you happy with committing $file? It is big. [y/N]? "
+    # Ask the user how to deal with files that failed the function
+    log::warn "File has failed test | file='$file' test='$fxn'"
+    echo -n "Do you want to commit file='$file' anyway? [y/N] "
     read -n 1 ANSWER
     echo
-    if [[ "$ANSWER" =~ [yY] ]]; then
-      continue
-    else
-      echo "This file is $BASH_SOURCE"
-      git diff --name-only | du -sh
-      exit 1
-    fi
+
+    # Happy path
+    if [[ "$ANSWER" =~ [yY] ]]; then continue; fi
+
+    # Return a failure - abort the commit
+    log::err "You did not say yes - failing the commit"
+    log::err "This file is $BASH_SOURCE"
+    git diff --name-only | du -sh
+    exit 1
   done
 }
 
-function has_gtest_filter() {
-  git grep "add_test" | grep "gtest_filter"
+# A file is large
+function big_files() {
+  local -r file="${1:?}"
+  local BIG=300
+  if test "$(du "$file" | awk '{print $1}')" -gt "$BIG"; then
+    return 1
+  fi
 }
 
-function check-for-gtest_filter() {
-  if ! has_gtest_filter; then
-    return 0
+# A file has trailing whitespace
+function trailing_whitespace() {
+  local -r file="${1:?}"
+  if grep -q '\s$' "$file"; then
+    return 1
   fi
-
-  echo
-  echo -n "There is a gtest filter line in this commit. Did you intend this? [y/N]? "
-  read -n 1 ANSWER
-  echo
-  if [[ ! "$ANSWER" =~ [yY] ]]; then
-    echo "aborting commit"
-    exit 1
-  fi
-  echo "ok, cool :). Make sure you remove it before merging to dev"
 }
 
-# Read user input, assign stdin to keyboard
-exec < /dev/tty
-echo "Pre-commit hook"
-check-for-big-files
-check-for-gtest_filter
-exec <&-
+function main() {
+  if ! source "$HOME/.config/bash-init/log.sh" &>/dev/null; then
+    function log::info { echo "[INFO] $@"; }
+    function log::err { echo "[ERROR] $@"; }
+  fi
 
+  # Preflight check
+  if ! git rev-parse HEAD &>/dev/null; then
+    log::info "First commit"
+    return
+  fi
+
+  # Read user input, assign stdin to keyboard
+  exec < /dev/tty
+  log::info "Pre-commit hook"
+  set -- "big_files" "trailing_whitespace"
+  for my_check in "$@"; do check_changed "$my_check"; done
+  exec <&-
+}
+main "$@"
