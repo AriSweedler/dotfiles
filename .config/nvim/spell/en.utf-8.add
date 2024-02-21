@@ -109,3 +109,5 @@ metadata
 Kubernetes
 ClusterIP
 localhost
+DBs
+vDB
