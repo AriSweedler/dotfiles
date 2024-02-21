@@ -179,11 +179,21 @@ function repo::journal::open() {
   # Open a week of notes in buffers.
   local files_to_open=()
   for i in {1..5}; do
-    files_to_open+=( "$(repo::history::note "$i")" )
+    files_to_open+=(
+      "$(repo::history::note "$i")"
+      "${files_to_open[@]}"
+    )
   done
 
   # Use the `Notes` command to get that nice view split
-  nvim "${files_to_open[@]}" -c"Notes"
+  startup_cmd=(
+    "1b |"
+    "vsp |"
+    "2b |"
+    "setlocal foldlevel=1 |"
+    "wincmd h"
+  )
+  nvim "${files_to_open[@]}" -c"${startup_cmd[*]}"
 
   popd &>/dev/null || exit 1
 }

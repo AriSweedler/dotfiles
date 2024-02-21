@@ -28,4 +28,3 @@ function bb_echo() {
     b_echo "$@" ' '
     echo "."
 }
-

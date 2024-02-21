@@ -1,18 +1,49 @@
 # Classic
 function double_cd() {
-  if [ -z "$2" ]; then
-    cd "$1" || return 1
-    return
-  fi
+  cd "$1" || return 1
+  shift
 
-  cd "$1"/*"$2"* || cd "$1" || return 2
+  [ -z "$1" ] && return
+  local my_dirs=( $( find . -maxdepth 1 -type d -name "*$1*") )
+  shift
+  local target
+  case "${#my_dirs[@]}" in
+    0) :;;
+    1) target="$my_dirs" ;;
+    2)
+      local fzf_args=()
+      fzf_args+=(--select-1)
+      if [ -n "$1" ]; then
+        fzf_args+=(--query "$1")
+      fi
+      target="$(printf '%s\n' "${my_dirs[@]}" | fzf "${fzf_args[@]}")"
+      ;;
+  esac
+
+  cd "$target" || return 2
+  if which tmux &>/dev/null; then
+    local func="${funcstack[2]}"
+    local btarget="$(basename "$target")"
+    local sep=" "
+    if [ "$func" = "cc" ]; then
+      func=""
+    fi
+    if [ -z "$func" ] || [ -z "$btarget" ]; then
+      sep=""
+    fi
+    tmux rename-window "${func}${sep}${btarget}"
+  fi
   b_echo "$(pwd)"
-  ls
+  ls -G
 }
 
-function ensure_dir_created() {
-  test -d "$1" && return
-  echo "Creating dir '$1'"
-  mkdir -p "$1"
+# cd to my Desktop
+function cdesk() {
+  double_cd "$HOME/Desktop" "$1"
+}
+
+# cd to my Downloads folder
+function cdown() {
+  double_cd "$HOME/Downloads" "$1"
 }
 

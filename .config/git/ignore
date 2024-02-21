@@ -1,5 +1,6 @@
 # vim
 .*.swp
+*.add.spl
 .netrwhist
 tags
 
@@ -17,3 +18,16 @@ tags
 
 # Because of https://www.atlassian.com/git/tutorials/dotfiles
 dotfiles
+
+# Python
+.env
+.venv
+env
+local_env
+
+# autoenv
+.env.leave
+.env.enter
+
+# Helm secrets
+ari.*secret*.yaml

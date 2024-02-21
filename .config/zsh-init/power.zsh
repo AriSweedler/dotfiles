@@ -1,126 +1,3 @@
-# Functions that give me a bit more power
-
-# Easier viewing of json files
-alias jvim='vim -c "%!python3 -m json.tool" -c "set ft=json" -c "set foldmethod=syntax"'
-function swapd_vim() {
-  # Parse args
-  local -r file="${1:?}"
-
-  # Validate args
-  if ! [ -f "$file" ]; then
-    log::info "File does not exist: '$file'"
-  fi
-
-  # Swapfiles replace '/' and '%' and append to ~/.local/state/nvim/swap
-  # Like so:
-  #
-  #     "~/.local/state/nvim/swap//%Users%ari%Desktop%farmrpg%sh_lib%goodmorning.sh.swp"
-  #
-  local swapfile_encoding swapfile_path
-  local -r realpath_file="$(realpath "$file")"
-  local -r xdg="${XDG_STATE_HOME:-~/.local/state}"
-  swapfile_encoding="$(echo "$realpath_file" | sed -e "s|/|%|g")"
-  swapfile_path="$xdg/nvim/swap/${swapfile_encoding}.swp"
-
-  # Swap the files
-  if ! [ -f "$swapfile_path" ]; then
-    log::warn "No swap file, returning success"
-    return
-  fi
-
-  rm "$swapfile_path"
-}
-
-# Start a webserver no matter the version of python. Used to be an alias:
-# alias www='python -m SimpleHTTPServer 8000'
-# But I want it to work for any version of python installed
-function www() {
-  local port="${1:-8000}"
-  local python="python3"
-  local module="http.server"
-  if ! which python3; then
-    # Everything else, which should be version 2
-    python="python"
-    module="SimpleHTTPServer"
-  fi
-
-  # Invoke the command
-  "$python" -m "$module" "$port"
-}
-
-# Helper function to let you know how many args there are. Useful for when
-# you're messing with arrays and unquoted variable expansion as arguments
-function describe() {
-  echo "There are '$#' args:"
-  while (( $# > 0 )); do
-    echo "arg: '$1'"
-    shift
-  done
-  echo
-}
-
-# Shell lib function
-function wait_for_keypress() {
-  echo -n "Press any key to continue..."
-
-  (
-    # Turn off printing to the screen while this scope is active (so 'read -k1'
-    # doesn't echo user input)
-    stty -echo
-    trap 'stty echo' EXIT
-    read -k1
-  )
-
-  # Move the cursor to the start of the line and clear the rest.
-  #
-  # TODO it would be better if we restored position to what it was at the start
-  # of this function instead of just assuming we started at the start of a line
-  printf "\r\033[K"
-}
-
-function clipboard() {
-  # Parse args
-  local -r value="${1:?}"
-  shift 1
-  local descr
-  while (( $# > 0 )); do
-    case "$1" in
-      --description) descr="Placing value on clipboard: $2"; shift 2 || break ;;
-      *) log::err "Unkonwn argument in ${FUNCNAME[0]}: '$1'"; exit 1 ;;
-    esac
-  done
-
-  # Massage args
-  if [ -z "$descr" ]; then
-    descr="Placing value on clipboard"
-  fi
-
-  # Do work
-  log::info "$description | value='$value'"
-  echo -n "$value" | pbcopy
-}
-
-function downloads::clean() {
-  log::err "TODO fixme ~/.config/zsh-init/power.zsh"
-  local -r clean_me="$(compgen -G "~/Downloads/*")"
-  if [ -z "$clean_me" ]; then
-    log::info "Nothing to clean up from downloads"
-    return
-  fi
-
-  run_cmd mv "$clean_me" "$HOME/.Trash"
-}
-
-function xarg() {
-  echo "$@" | xargs -L 1
-}
-
-function xarg::complete() {
-  # When you hit tab on 'xarg/ then turn it into the actual xargs command
-  generated=$(compen -W "xargs -L1 ${COMP_WORDS[@]}" -- "${COMP_WORDS[$COMP_CWORD]}")
-  COMPREPLY=( "${generated[@]}" )
-}
-
 function f1() {
   # Parse args
   local minutes
@@ -134,5 +11,22 @@ function f1() {
 
   # Do work
   log::info "Finding all non-hidden files that are less than '$minutes' minutes old"
-  find . -newermt "$minutes minute ago" | grep -v "\/\."
+  find . -newermt "$minutes minute ago" -type f | grep -v "\/\."
+}
+
+# Edit the file that a shell function is defined in
+function vifxn() {
+  local -r func_name="${1:?}"
+  if ! type "$func_name" | grep -q "shell function"; then
+    log::err "Function does not exist | func_name='$func_name'"
+    log::warn "type $func_name='$(type "$func_name")'"
+    return 1
+  fi
+
+  # Parse the file
+  local file
+  file="$(type -a "$func_name" | awk '{print $NF}')"
+
+  # Open the file and try jumping to the function with a search command
+  vi +"/$func_name() {" "$file"
 }

@@ -2,7 +2,7 @@
 [user]
 	name = Ari Sweedler
 	email = ari@sweedler.com
-	username = arisweedler
+	username = ari.sweedler
 
 [core]
 	excludesfile = ~/.config/git/ignore
@@ -31,11 +31,50 @@
 [pull]
 	ff = only
 
+[fetch]
+	writeCommitGraph = true
+
 [stash]
 	showPatch = true
 
 [interactive]
 	singleKey = true
+
+[rerere]
+	# Reuse recorded resolution: record hand-resolved results to merge
+	# conflicts. To get use of this feature, you have to enable it and then
+	# manually invoke 'git rerere' in the following 3 unique situations:
+	# * A new merge conflict (REcords the conflicted working tree files)
+	# * Resolving the merge conflict (REcords the REsolution)
+	# * An old merge conflict (REuses the resolution)
+	enabled = true
+
+[rebase]
+	# In a normal rebase of branch A onto main, you'll go from this
+	#
+	#     x(A)-y(B)-main
+	#
+	# to this
+	#
+	#     x2(A)-y2-main
+	#
+	# We lost the ref for B! Because the rebase was only working on the
+	# commits, not on the refs that referred to the commits. We would need
+	# to manually update the branch (B) to point to y2. With the
+	# 'updateRefs' option turned on, git will update the refs for you and
+	# we'll get
+	#
+	#     x2(A)-y2(B)-main
+	#
+	# Ofc, origin/B can no longer fast-forward to B, but that's ok.
+	updateRefs = true
+	# You can't rebase with a dirty working tree. You will have to
+	# * make a commit (and then git reset --mixed @~)
+	# * Or stash rebase unstash.
+	# Two ways of spelling the same thing. With this option turned on, git
+	# will automatically stash before a rebase and unstash after
+	autoStash = true
+	autosquash = true
 
 ################################## aesthetics ##################################
 [color "branch"]
@@ -84,50 +123,52 @@
 	# Shortcuts
 	a = !"git add .; git s"
 	d = diff --staged --diff-algorithm=minimal
+	df = dotfiles
+	els = editdiffls
 	f = fetch --append --prune --jobs=4
 	ff = pull --ff-only
 	l = ll -10
 	ll = log --pretty=newlog --graph
-	po = !"git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)"
+	po = push-origin
 	s = status --short --branch
-	df = dotfiles
-	yb = yankbranch
+	sub-u = sub-update
 	wb = wipebranch
-	els = editdiffls
+	yb = yankbranch
 
 	# New commands
-	amend = commit --amend --reuse-message=HEAD
+	branchlog = !"f() { git_branchlog ; }; f"
 	cconfig = config --edit --global
+	children = !"f() { git rev-list --all --not $1^@ --children | grep $(git rev-parse $1); }; f" # reachable children of a ref
+	contains = !"f() {  git tag --contains $1; git branch --contains $1; }; f"
 	ctags = !.git/hooks/ctags
 	diffls = diff --name-only
-	# If I could run ']c' upon starup that would be great. Can't figure it out tho
-	editdiffls = !"f() { files=$(git diff --name-only $1); [ -n \"$files\" ] && $EDITOR -p $files || echo \"no changes since ref='$1'\" ;}; f"
 	dotfiles = !"git --git-dir=\"$HOME/dotfiles/\" --work-tree=\"$HOME\""
-	ls = ls-tree --full-tree -r --abbrev HEAD
-	patch = add --patch
-	active-operation = !"f() { find \"$(git rev-parse --git-dir)\" -name '*_HEAD' | awk -F '/' '/REBASE|CHERRY_PICK/ {print substr($NF, 1, length($NF)-5)}' | tr 'A-Z_' 'a-z-'; }; f"
-	abort = !"f() { op=$(git active-operation) && test -n \"$op\" && git $op --abort; }; f"
-	continue = !"f() { op=$(git active-operation) && test -n \"$op\" && git $op --continue; }; f"
-	branchlog = !"f() { git_branchlog ; }; f"
-
-	# These are just hard to rememeber or type
-	children = !"f() { git rev-list --all --not $1^@ --children | grep $(git rev-parse $1); }; f" # reachable children of a ref
+	# editdiffls: If I could run ']c' upon starup that would be great. Can't figure it out tho
+	editdiffls = !"f() { files=$(git diff --name-only $1); [ -n \"$files\" ] && $EDITOR -p $files || echo \"no changes since ref='$1'\" ;}; f"
 	history-of = ll --follow --
+	ignore = !"f() { echo $1 >> .gitignore; }; f"
 	initt = !"git init; git commit --allow-empty --message 'first commit'"
-	yankbranch = !"git branch --show-current | tr -d '\n' | tee /dev/tty | pbcopy"
-	wipebranch = !"f() { git branch -D $1; git push origin --delete $1; }; f"
-	contains = !"f() {  git tag --contains $1; git branch --contains $1; }; f"
+	ls = ls-tree --full-tree -r --abbrev HEAD
 	pr = !"f() { browser_pr_for_current_branch_in_pwd_stash ; }; f"
+	push-origin = !"git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)"
+	wipebranch = !"f() { git branch -D $1; git push origin --delete $1; }; f"
+	yankbranch = !"git branch --show-current | tr -d '\n' | tee /dev/tty | pbcopy"
+
+	# jujutsu-inspired syntax
+	describe = commit --amend
+	amend = commit --amend --reuse-message=HEAD
+	patch = add --patch
 
 	# Submodule control
-	push-all = !"f() { git submodule foreach git push && git push; }; f"
+	sub-push = !"f() { git submodule foreach git push && git push; }; f"
 	sub-all = submodule foreach git
-	# If HEAD --> branch, this works nicely
+	# If HEAD is attached (points to a branch), this works nicely. If HEAD
+	# is detached then this is a no-op
 	sub-ff = submodule foreach git pull --ff-only
-	# Leaves submodules with HEAD pointing to a commit. Not the best.
-	# (If git config submodule.branch is set, then HEAD -> commit pointed
-	# to by origin/<branch>)
-	sub-u = submodule update --remote
+	# This command leaves submodules with HEAD pointing to a commit, by
+	# default. Not the best. However if git config submodule.branch is set,
+	# then HEAD -> commit pointed to by origin/<branch>)
+	sub-update = submodule update --remote
 
 	# Searching
 	# 'git log -S' to search through changes
@@ -136,9 +177,7 @@
 	grep-code = ll -S
 	grep-commit = ll --all --grep
 
-	# The Jira ticket suite (only works off of 'dev')
-	j-bug = !"git j-ticket bugfix/$1"
-	j-experiment = !"git j-ticket ari/$1"
-	j-feature = !"git j-ticket feature/$1"
-	j-scar = !"git j-ticket scartissue/$1"
-	j-ticket = !"git f && git switch --create $1 origin/dev && git po #"
+# Include computer-specific git configuration. Put this last so we can override
+# all of the above
+[includeIf "gitdir:~/"]
+	path = ~/.local/git/config

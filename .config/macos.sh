@@ -1,12 +1,6 @@
 # Disable the warning when changing a file extension
 defaults write com.apple.finder FXEnableExtensionChangeWarning -bool false
 
-# Trackpad: map bottom right corner to right-click
-defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad TrackpadCornerSecondaryClick -int 2
-defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad TrackpadRightClick -bool true
-defaults -currentHost write NSGlobalDomain com.apple.trackpad.trackpadCornerClickBehavior -int 1
-defaults -currentHost write NSGlobalDomain com.apple.trackpad.enableSecondaryClick -bool true
-
 #################################### Finder ####################################
 # Finder: show path bar
 defaults write com.apple.finder ShowPathbar -bool true
@@ -31,12 +25,3 @@ defaults write com.apple.dock mru-spaces -bool false
 
 # Stop dock icons from bouncing
 defaults write com.apple.dock no-bouncing -bool TRUE
-
-# When the mouse is over a terminal window, it automatically gains focus
-# defaults write com.apple.Terminal FocusFollowsMouse -bool true
-
-################################### Utilities ##################################
-function restart-touchbar() {
-  sudo pkill TouchBarServer
-  sudo killall "ControlStrip"
-}
