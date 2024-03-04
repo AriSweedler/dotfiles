@@ -1,6 +1,6 @@
 vim.o.grepprg = "rg --vimgrep"
 
-local ari = require('ari')
+local ari = require("ari")
 
 --[[
 Error detected while processing /Users/ari.sweedler/.config/nvim/plugin/quickfix.lua:
@@ -12,21 +12,21 @@ stack traceback:
 --]]
 -- vim.api.nvim_get_runtime_file(string.format("queries/%s/%s.scm", vim.o.filetype, 'folds'), true)[0], -- TODO
 
-ari.lua_map('n', '<Leader>ll', {"quickfix", "toggle_llist"})
-ari.map('n', '[l', ':lprev<Enter>')
-ari.map('n', ']l', ':lnext<Enter>')
-ari.map('n', '[L', ':lpfile<Enter>')
-ari.map('n', ']L', ':lnfile<Enter>')
-ari.map('n', '<Leader>[L', ':lfirst<Enter>')
-ari.map('n', '<Leader>]L', ':llast<Enter>')
+ari.lua_map("n", "<Leader>ll", { "quickfix", "toggle_llist" })
+ari.map("n", "[l", ":lprev<Enter>")
+ari.map("n", "]l", ":lnext<Enter>")
+ari.map("n", "[L", ":lpfile<Enter>")
+ari.map("n", "]L", ":lnfile<Enter>")
+ari.map("n", "<Leader>[L", ":lfirst<Enter>")
+ari.map("n", "<Leader>]L", ":llast<Enter>")
 
-ari.lua_map('n', '<Leader>qq', {"quickfix", "toggle_qflist"})
-ari.map('n', '[q', ':cprev<Enter>')
-ari.map('n', ']q', ':cnext<Enter>')
-ari.map('n', '[Q', ':cpfile<Enter>')
-ari.map('n', ']Q', ':cnfile<Enter>')
-ari.map('n', '<Leader>[Q', ':cfirst<Enter>')
-ari.map('n', '<Leader>]Q', ':clast<Enter>')
+ari.lua_map("n", "<Leader>qq", { "quickfix", "toggle_qflist" })
+ari.map("n", "[q", ":cprev<Enter>")
+ari.map("n", "]q", ":cnext<Enter>")
+ari.map("n", "[Q", ":cpfile<Enter>")
+ari.map("n", "]Q", ":cnfile<Enter>")
+ari.map("n", "<Leader>[Q", ":cfirst<Enter>")
+ari.map("n", "<Leader>]Q", ":clast<Enter>")
 
 -- Add content to the locationlist
-ari.lua_map('n', '<Leader>l+', {"quickfix", "add_curline_llist"})
+ari.lua_map("n", "<Leader>l+", { "quickfix", "add_curline_llist" })

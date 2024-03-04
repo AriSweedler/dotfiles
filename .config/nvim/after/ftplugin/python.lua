@@ -1,4 +1,4 @@
-require('lspconfig').pyright.setup {}
+require("lspconfig").pyright.setup({})
 
 vim.o.textwidth = 0 -- Unset textwidth
 
@@ -12,21 +12,21 @@ vim.opt.foldexpr = "nvim_treesitter#foldexpr()"
 vim.cmd("command! FormatCommand PyrightOrganizeImports")
 
 -- Mess with the LSP?
-vim.api.nvim_create_autocmd('LspAttach', {
-  callback = function(args)
-    local lsp_client = vim.lsp.get_active_clients({bufnr = vim.api.nvim_get_current_buf()})[1]
-    if lsp_client ~= nil then
-      local lsp_descr = "name=" .. lsp_client.name .. " " .. "id=" .. lsp_client.id
-      print("Python LSP attached: " .. lsp_descr)
-    end
+vim.api.nvim_create_autocmd("LspAttach", {
+	callback = function(args)
+		local lsp_client = vim.lsp.get_active_clients({ bufnr = vim.api.nvim_get_current_buf() })[1]
+		if lsp_client ~= nil then
+			local lsp_descr = "name=" .. lsp_client.name .. " " .. "id=" .. lsp_client.id
+			print("Python LSP attached: " .. lsp_descr)
+		end
 
-    local augroup = vim.api.nvim_create_augroup
-    local autocmd = vim.api.nvim_create_autocmd
-    augroup("__formatter__", { clear = true })
-    autocmd("BufWrite", {
-      group = "__formatter__",
-      command = ":FormatCommand",
-      buffer = vim.api.nvim_get_current_buf()
-    })
-  end,
+		local augroup = vim.api.nvim_create_augroup
+		local autocmd = vim.api.nvim_create_autocmd
+		augroup("__formatter__", { clear = true })
+		autocmd("BufWrite", {
+			group = "__formatter__",
+			command = ":FormatCommand",
+			buffer = vim.api.nvim_get_current_buf(),
+		})
+	end,
 })

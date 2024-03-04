@@ -1,4 +1,4 @@
-local ari = require('ari')
+local ari = require("ari")
 
 -- Map <Leader>w to toggle list option
-ari.map('n', '<Leader>w', ':setlocal list!<Enter>')
+ari.map("n", "<Leader>w", ":setlocal list!<Enter>")
