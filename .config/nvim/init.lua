@@ -149,6 +149,12 @@ require("lazy").setup({
 		opts = {
 			numhl = true,
 			on_attach = require("config.gitsigns").on_attach_hook, -- set up keymaps
+			worktrees = {
+				{ -- My dotfiles
+					toplevel = vim.env.HOME,
+					gitdir = vim.env.HOME .. "/dotfiles",
+				},
+			},
 		},
 	},
 
