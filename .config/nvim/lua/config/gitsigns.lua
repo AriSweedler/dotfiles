@@ -39,6 +39,7 @@ function M.on_attach_hook(bufnr)
 	-- Buffer hunk actions
 	my_map("n", "<Leader>hS", gs.stage_buffer, { desc = "git Stage buffer" })
 	my_map("n", "<Leader>hR", gs.reset_buffer, { desc = "git Reset buffer" })
+	my_map("n", "<Leader>hL", gs.setloclist, { desc = "git Hunks -> loclist" })
 
 	-- diffs (<Leader>hd)
 	my_map("n", "<Leader>hdd", gs.diffthis, { desc = "git diff against index" })
