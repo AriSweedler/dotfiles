@@ -1,19 +1,17 @@
 local builtin = require("telescope.builtin")
 
--- TODO these mappings don't work!
-require("telescope").setup({
-	opts = {
-		defaults = {
-			mappings = {
-				i = {
-					["<ESC>"] = require("telescope.actions").close,
-					["<C-;>"] = require("telescope.actions").send_to_loclist
-						+ require("telescope.actions").open_loclist,
-				},
-			},
-		},
-	},
-})
+-- 	opts = {
+-- 		defaults = {
+-- 			-- TODO these mappings don't work!
+-- 			mappings = {
+-- 				i = {
+-- 					["<ESC>"] = require("telescope.actions").close,
+-- 					["<C-;>"] = require("telescope.actions").send_to_loclist
+-- 						+ require("telescope.actions").open_loclist,
+-- 				},
+-- 			},
+-- 		},
+-- 	},
 
 -- Enable telescope fzf native, if installed
 pcall(require("telescope").load_extension, "fzf")
