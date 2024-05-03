@@ -7,6 +7,8 @@
 [core]
 	excludesfile = ~/.config/git/ignore
 	editor = nvim
+	# Tabs are only worth 2 spaces
+	pager = less -x2
 
 [init]
 	templatedir = ~/.config/git/template
