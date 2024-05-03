@@ -100,6 +100,10 @@ vim.defer_fn(function()
 			scm = "folds",
 		},
 		{
+			key = "h",
+			scm = "highlights",
+		},
+		{
 			key = "t",
 			scm = "textobjects",
 		},
