@@ -1,15 +1,17 @@
-local ari = require("ari")
+-- If I'm holding shift, the action should linewise (Except for 'C', I'll allow
+-- that one)
+local function shift_mappings()
+	local map = {
+		D = "dd",
+		Y = "yy",
+		["<"] = "<<",
+		[">"] = ">>",
+	}
 
--- Double stuff up:
--- Define double mappings
-local double_mappings = {
-	D = "dd",
-	Y = "yy",
-	["<"] = "<<",
-	[">"] = ">>",
-}
-
--- Set up the mappings
-for lhs, rhs in pairs(double_mappings) do
-	ari.map("n", lhs, rhs)
+	-- Set up the mappings
+	for lhs, rhs in pairs(map) do
+		vim.keymap.set("n", lhs, rhs)
+	end
 end
+
+shift_mappings()

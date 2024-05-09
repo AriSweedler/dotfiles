@@ -2,7 +2,10 @@
 vim.keymap.set("t", "<Esc>", "<C-\\><C-n>")
 
 -- Or just use <C-w> straight from terminal mode
-vim.keymap.set("t", "<C-w>", "<C-\\><C-n><C-w>")
+vim.keymap.set("t", "[t", "<C-\\><C-n>:tabprev")
+vim.keymap.set("t", "]t", "<C-\\><C-n>:tabnext")
+vim.keymap.set("t", "[w", "<C-\\><C-n><C-w>h")
+vim.keymap.set("t", "]w", "<C-\\><C-n><C-w>l")
 
 -- Make <C-d> in terminal mode send that then <Enter>
 vim.keymap.set("t", "<C-g>", "<C-\\><C-n>:q<Enter>")
