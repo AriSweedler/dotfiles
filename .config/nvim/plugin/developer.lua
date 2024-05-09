@@ -2,7 +2,7 @@
 
 -- The grammar is:
 --
--- | <Leader>{e,S,v,t,s} | {edit,split,vsplit,tabedit,source (lowercase only_}
+-- | <Leader>{e,S,v,t,s} | {edit,split,vsplit,tabedit,source (lowercase only)}
 -- | f (filetype),
 --   v (vimrc init.lua),
 --   o (current file)
@@ -72,7 +72,7 @@ local function tes_mappings()
 	end
 end
 
--- <Leader>ts | tabedit and vsp all the relevant treesitter query files
+-- | <Leader>ts | tabedit and vsp all the relevant treesitter query files
 -- | f (fold),
 --   h (highlight),
 --   t (textobject)
@@ -123,6 +123,33 @@ local function ts_mappings()
 	vim.keymap.set("n", "<Leader>ts?", ":map <Leader>ts<Enter>", { desc = "[ari] [developer] [treesitter]: Help" })
 end
 
+-- Use the ':help %:h' patterns to place filename on clipboard
+--
+-- | <Leader>% | copies file path to clipboard
+-- | h (head)
+--   p (path)
+--   t (tail)
+--   r (root)
+--   . (relative)
+--   ? (help)
+local function cb_mappings()
+	-- Define the grammar
+	local fname_modifiers = { "h", "p", "t", "r", "." }
+
+	-- Use the grammar to create all the mappings
+	for _, fname_modifier in ipairs(fname_modifiers) do
+		local lhs = "<Leader>%" .. fname_modifier
+		local d = "[ari] [developer]: Copy file path to clipboard"
+		vim.keymap.set("n", lhs, function()
+			vim.fn.setreg("+", vim.fn.expand("%:" .. fname_modifier))
+		end, { desc = d })
+	end
+
+	-- help
+	vim.keymap.set("n", "<Leader>%?", ":map <Leader>%<Enter>", { desc = "[ari] [developer]: Help" })
+end
+
 -- Invoke the mapping-creating functions
 tes_mappings()
 ts_mappings()
+cb_mappings()

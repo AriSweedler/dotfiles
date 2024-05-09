@@ -1,12 +1,10 @@
-local ari = require("ari")
-
 -- Map <C-f> to leave you in normal mode, written
-ari.map("i", "<C-f>", "<Esc>:w<Enter>")
-ari.map("n", "<C-f>", ":w<Enter>")
-ari.map("v", "<C-f>", "<Esc>:w<Enter>")
+vim.keymap.set("i", "<C-f>", "<Esc>:w<Enter>")
+vim.keymap.set("n", "<C-f>", ":w<Enter>")
+vim.keymap.set("v", "<C-f>", "<Esc>:w<Enter>")
 
 -- Map <C-g> to quit
-ari.map("n", "<C-g>", ":q<Enter>")
+vim.keymap.set("n", "<C-g>", ":q<Enter>")
 
 -- jk to exit insert
-ari.map("i", "jk", "<Esc>")
+vim.keymap.set("i", "jk", "<Esc>")
