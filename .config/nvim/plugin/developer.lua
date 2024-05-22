@@ -104,7 +104,7 @@ local function ts_mappings()
 			local files = vim.api.nvim_get_runtime_file(stub, true)
 
 			-- Ensure there is a local file in this list.
-			local my_file = vim.fn.stdpath("config") .. stub
+			local my_file = vim.fn.stdpath("config") .. "/" .. stub
 			if not vim.tbl_contains(files, my_file) then
 				table.insert(files, my_file)
 			end

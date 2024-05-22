@@ -8,6 +8,8 @@ local function quickmap(lhs, rhs1, rhs2)
 		if err then
 			vim.cmd(rhs2)
 		end
+		-- open folds until you can see the cursor
+		vim.cmd("norm! zv")
 	end, { silent = true })
 end
 
@@ -54,8 +56,8 @@ local function quickfix_mappings()
 		quickmap("]" .. k, x .. "next", x .. "last")
 		quickmap("[" .. k:upper(), x .. "pfile", x .. "first")
 		quickmap("]" .. k:upper(), x .. "nfile", x .. "last")
-		quickmap("<Leader>[" .. k, x .. "first", x .. "first")
-		quickmap("<Leader>]" .. k, x .. "last", x .. "last")
+		quickmap("<Leader>[" .. k:upper(), x .. "first", x .. "first")
+		quickmap("<Leader>]" .. k:upper(), x .. "last", x .. "last")
 		quicktoggle(x)
 		quickadd(x)
 	end

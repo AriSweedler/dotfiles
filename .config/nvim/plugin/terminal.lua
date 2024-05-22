@@ -2,8 +2,8 @@
 vim.keymap.set("t", "<Esc>", "<C-\\><C-n>")
 
 -- Or just use <C-w> straight from terminal mode
-vim.keymap.set("t", "[t", "<C-\\><C-n>:tabprev")
-vim.keymap.set("t", "]t", "<C-\\><C-n>:tabnext")
+vim.keymap.set("t", "[t", "<C-\\><C-n>:tabprev<Enter>")
+vim.keymap.set("t", "]t", "<C-\\><C-n>:tabnext<Enter>")
 vim.keymap.set("t", "[w", "<C-\\><C-n><C-w>h")
 vim.keymap.set("t", "]w", "<C-\\><C-n><C-w>l")
 

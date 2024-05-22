@@ -1,5 +1,5 @@
 vim.keymap.set("n", "<Leader>w", function()
-	vim.bo.list = not vim.bo.list
+	vim.wo.list = not vim.wo.list
 	-- Prime the next search to find trailing whitespace. Just hit 'n'
 	vim.fn.setreg("/", [[\s\+$]])
 end, { desc = "Toggle list option" })

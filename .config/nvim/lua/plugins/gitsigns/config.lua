@@ -1,21 +1,30 @@
 local M = {}
 
-function M.on_attach_hook(bufnr)
-	local function my_map(mode, l, r, opts)
-		opts = opts or { noremap = true }
-		opts.buffer = bufnr
-		vim.keymap.set(mode, l, r, opts)
-	end
+local function set_colors()
+	-- This is my eye color: #535F69
+	vim.api.nvim_set_hl(0, "GitSignsAdd", { fg = "#008800", bg = "#004400" })
+	vim.api.nvim_set_hl(0, "GitSignsDelete", { fg = "#aa0000", bg = "#440000" })
+	vim.api.nvim_set_hl(0, "GitSignsChange", { fg = "#bbbb00", bg = "#808000" })
+end
 
-	local function brack_h(bc, fxn)
-		return function()
-			if vim.wo.diff then
-				return bc
-			end
-			vim.schedule(fxn)
-			return "<Ignore>"
+local function my_map(mode, l, r, opts)
+	opts = opts or { noremap = true }
+	opts.buffer = bufnr
+	vim.keymap.set(mode, l, r, opts)
+end
+
+local function brack_h(bc, fxn)
+	return function()
+		if vim.wo.diff then
+			return bc
 		end
+		vim.schedule(fxn)
+		return "<Ignore>"
 	end
+end
+
+function M.on_attach_hook(bufnr)
+	set_colors()
 
 	local gs = package.loaded.gitsigns
 
