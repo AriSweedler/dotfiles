@@ -1,16 +1,57 @@
--- Run lgrep and set the search register
-local function lgrep(word)
-	vim.fn.setreg("/", word)
-	vim.cmd("lgrep " .. word)
+local function slash_escape(word)
+	return word
 end
 
--- Get the visually selected text without clobbering any registers
+local function rg_escape(word)
+	return word
+end
+
+-- TODO: Come up with a set of tests. Each test is a table...
+-- * word input
+-- * rg output
+-- * slash output
+-- TODO: How to write an escaping function?
+-- * split into individual characters ('a', '^', '<', '*', '\')
+-- * escape each one that needs to be escaped (table lookup ==> add a '\')
+
+-- Run lgrep, set the search register, and open the loclist
+local function lgrep(word, opts)
+	opts = opts or {}
+	cmd = ""
+
+	if not opts.verbose then
+		cmd = cmd .. "silent "
+	end
+
+	cmd = cmd .. "lgrep"
+	if opts.add then
+		vim.cmd = cmd .. "add"
+	end
+
+	if not opts.nobang then
+		cmd = cmd .. "!"
+	end
+
+	vim.fn.setreg("/", slash_escape(word))
+	vim.cmd(cmd .. " " .. rg_escape(word))
+	vim.cmd("lopen | wincmd p")
+end
+
+-- Get the visually selected text
 local function vyank()
-	local saved = vim.fn.getreg("t")
-	vim.api.nvim_feedkeys([["ty]], "n", false)
-	local highlighted = vim.fn.getreg("t")
-	vim.fn.setreg("t", saved)
-	return highlighted
+	-- Read the two edges of the visual selection
+	local _, s_lnum, s_col, _ = unpack(vim.fn.getpos("v"))
+	local _, e_lnum, e_col, _ = unpack(vim.fn.getpos("."))
+
+	-- Swap the endpoints if necessary - the 'start' has to come before 'end'
+	if s_lnum > e_lnum or (s_lnum == e_lnum and s_col > e_col) then
+		s_lnum, e_lnum = e_lnum, s_lnum
+		s_col, e_col = e_col, s_col
+	end
+
+	-- Get the array of lines, return a single string
+	local arr_of_lines = vim.api.nvim_buf_get_text(0, s_lnum - 1, s_col - 1, e_lnum - 1, e_col, {})
+	return table.concat(arr_of_lines, "\n")
 end
 
 -- Set highlight on search
@@ -29,5 +70,7 @@ end, { silent = true })
 
 -- lgrep on the visual selection
 vim.keymap.set("v", "g*", function()
-	lgrep(vyank())
+	local selected = vyank()
+	vim.cmd("stopinsert") -- Exit visual mode
+	lgrep(selected)
 end, { silent = true })

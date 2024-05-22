@@ -160,6 +160,7 @@
 	describe = commit --amend
 	amend = commit --amend --reuse-message=HEAD
 	patch = add --patch
+	fixup = !"f() { git commit --fixup $1 && git rebase --autosquash $1~ ; } ; f"
 
 	# Submodule control
 	sub-push = !"f() { git submodule foreach git push && git push; }; f"

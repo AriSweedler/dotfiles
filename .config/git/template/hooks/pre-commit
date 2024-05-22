@@ -8,23 +8,31 @@ function check_changed() {
     # Exit early - continue the loop if the file doesn't exist
     if [ ! -f "$file" ]; then continue; fi
 
-    # Run the function
-    if "$fxn" "$file"; then continue; fi
-
-    # Ask the user how to deal with files that failed the function
-    log::warn "File has failed test | file='$file' test='$fxn'"
-    echo -n "Do you want to commit file='$file' anyway? [y/N] "
-    read -n 1 ANSWER
-    echo
-
-    # Happy path
-    if [[ "$ANSWER" =~ [yY] ]]; then continue; fi
-
-    # Return a failure - abort the commit
-    log::err "You did not say yes - failing the commit"
-    log::err "This file is $BASH_SOURCE"
-    git diff --name-only | du -sh
-    exit 1
+    while ! "$fxn" "$file"; do
+      # Ask the user how to deal with files that failed the function
+      log::warn "File has failed test | file='$file' test='$fxn'"
+      echo -n "Do you want to commit file='$file' anyway? [y,n,e,?]?"
+      read -n 1 answer
+      echo
+      log::dev "USER SAYS '$answer'"
+      case "$answer" in
+        y|Y) break ;;
+        e|E) "$EDITOR" "$file" ;;
+        "?")
+          log::INFO "
+y - bypass this failed check and continue with the commit
+n - abort the commit
+e - edit the offending file then ask again
+? - print help"
+          ;;
+        n|N|*)
+          # Abort the commit
+          log::err "Failing the commit"
+          git diff --name-only | du -sh
+          exit 1
+          ;;
+      esac
+    done
   done
 }
 

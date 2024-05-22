@@ -5,6 +5,4 @@ require("gpt") -- prompt_engineering snippets
 require("email") -- paste my email easily
 require("logyank") -- yank from a LOG:: line | data=blah
 require("rocket_league") -- spam emotes lol
--- require "macros"                  -- macro library & some special ones
---------------------------------- Experimenting --------------------------------
--- require "noises"
+require("local") -- load local config

@@ -1,4 +1,7 @@
-vim.o.textwidth = 0 -- Unset textwidth
+vim.bo.tabstop = 2
+vim.bo.shiftwidth = 2
+vim.bo.expandtab = true
+vim.bo.textwidth = 0 -- Unset textwidth
 
 vim.opt.foldmethod = "expr"
 vim.opt.foldexpr = "nvim_treesitter#foldexpr()"
