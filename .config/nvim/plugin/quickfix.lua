@@ -26,12 +26,6 @@ end
 
 local function quickadd(x)
 	vim.keymap.set("n", "<Leader>" .. x .. "+", function()
-		-- Figure how to add something to the xlist
-		local setxxlist = vim.fn.setqflist
-		if x == "l" then
-			setxxlist = vim.fn.setloclist
-		end
-
 		-- Generate a thing to add from the current column
 		local entry = {
 			bufnr = vim.api.nvim_get_current_buf(),
@@ -41,8 +35,12 @@ local function quickadd(x)
 			type = "I",
 		}
 
-		-- Add it to the xlist
-		setxxlist(0, {}, "a", { items = { entry } })
+		-- Figure how to add something to the xlist
+		if x == "l" then
+			vim.fn.setloclist(0, {}, "a", { items = { entry } })
+		elseif x == "c" then
+			vim.fn.setqflist({}, "a", { items = { entry } })
+		end
 	end, { silent = true })
 end
 
@@ -64,3 +62,14 @@ local function quickfix_mappings()
 end
 
 quickfix_mappings()
+
+-- If telescope is installed
+if pcall(require, "telescope") then
+	local t_builtin = require("telescope.builtin")
+	vim.keymap.set("n", "<Leader>cT", function()
+		t_builtin.quickfix()
+	end)
+	vim.keymap.set("n", "<Leader>lT", function()
+		t_builtin.loclist()
+	end)
+end
