@@ -1,13 +1,24 @@
-local ari = require("ari")
-
 vim.cmd("packadd cfilter")
 
+local lmap = function(keys, fxn, desc)
+	vim.keymap.set("n", keys, fxn, { buffer = true, desc = "Loclist: " .. desc })
+end
+
 -- Delete
-ari.buf_map("n", "D", ":Lfilter! /<C-r>//<Enter>")
+lmap("D", function()
+	vim.cmd("Lfilter! /" .. vim.fn.getreg("/") .. "/")
+end, "Delete (filter-out) entries matching search register")
 
 -- Filter-in
-ari.buf_map("n", "F", ":Lfilter /<C-r>//<Enter>")
+lmap("F", function()
+	vim.cmd("Lfilter /" .. vim.fn.getreg("/") .. "/")
+end, "Select for (filter-in) entries matching search register")
 
 -- undo and redo
-ari.buf_map("n", "u", ":lolder<Enter>")
-ari.buf_map("n", "<C-r>", ":lnewer<Enter>")
+lmap("u", function()
+	vim.cmd("lolder")
+end, "Undo change")
+
+lmap("<C-r>", function()
+	vim.cmd("lnewer")
+end, "Redo change")

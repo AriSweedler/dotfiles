@@ -14,9 +14,15 @@ local M = {
 		{ "nvim-telescope/telescope-ui-select.nvim" },
 		{ "nvim-tree/nvim-web-devicons" },
 	},
-	config = function()
+	config = function(_, opts)
 		require("plugins.telescope.config")
+		require("telescope").setup(opts)
 	end,
+	opts = {
+		defaults = {
+			mappings = require("plugins.telescope.mappings"),
+		},
+	},
 }
 
 return M

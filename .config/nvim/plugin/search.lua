@@ -2,7 +2,7 @@ local function slash_escape(word)
 	return word
 end
 
-local function rg_escape(word)
+local function lgrep_escape(word)
 	return word
 end
 
@@ -33,7 +33,7 @@ local function lgrep(word, opts)
 	end
 
 	vim.fn.setreg("/", slash_escape(word))
-	vim.cmd(cmd .. " " .. rg_escape(word))
+	vim.cmd(cmd .. " " .. lgrep_escape(word))
 	vim.cmd("lopen | wincmd p")
 end
 
@@ -63,6 +63,14 @@ vim.keymap.set("n", "<C-_>", ":nohlsearch<CR>", { silent = true })
 vim.keymap.set("i", "<C-_>", "<Esc>:nohlsearch<CR>a", { silent = true })
 vim.keymap.set("v", "<C-_>", "<Esc>:nohlsearch<CR>`>a", { silent = true })
 
+-- Make '*' better
+vim.keymap.set("n", "*", "*N")
+vim.keymap.set("v", "*", function()
+	local selected = vyank()
+	vim.fn.setreg("/", slash_escape(selected))
+	vim.api.nvim_input("<Esc>")
+end, { silent = true })
+
 -- lgrep on the word under the cursor.
 vim.keymap.set("n", "g*", function()
 	lgrep(vim.fn.expand("<cword>"))
@@ -71,6 +79,17 @@ end, { silent = true })
 -- lgrep on the visual selection
 vim.keymap.set("v", "g*", function()
 	local selected = vyank()
-	vim.cmd("stopinsert") -- Exit visual mode
 	lgrep(selected)
 end, { silent = true })
+
+-- Keymap to invoke lgrep
+vim.keymap.set("n", "<C-s>", function()
+	-- TODO: catch keyboard interupts - currently <C-c> to cancel logs an error.
+	-- But I wanna get canceled silently
+	local word = vim.fn.input("lgrep: ")
+	if word == "" then
+		return
+	end
+
+	lgrep(word)
+end)
