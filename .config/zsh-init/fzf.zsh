@@ -1,31 +1,32 @@
 eval "$(fzf --zsh)"
 
-# fzf config
-#
-# Use 'rg' for 'fzf' - if possible
-if type rg &> /dev/null; then
-  export FZF_DEFAULT_COMMAND='rg --files --hidden'
-  function _fzf_compgen_path() {
-    rg --files --hidden
-  }
-fi
+# Use fd instead of fzf
+export FZF_DEFAULT_COMMAND="fd --hidden --strip-cwd-prefix --exclude .git"
+export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 
-function cfg_fzf_def_opts() {
-  # Define the "modes"
-  ## Show hidden AND .gitignored files
-  local CTRL_A="reload:'rg --files --hidden --no-ignore'"
-  ## Show just files
-  local CTRL_X="reload:'rg --files'"
-
-  local fzf_default_opts_arr=(
-    # Use exact match by default. Now `'` toggles back to fuzzy match
-    --exact
-
-    # 2 modes
-    --bind="ctrl-a:${CTRL_A}"
-    --bind="ctrl-x:${CTRL_X}"
-  )
-  export FZF_DEFAULT_OPTS="${fzf_default_opts_arr[*]}"
+# Use fd (https://github.com/sharkdp/fd) for listing path candidates.
+# - The first argument to the function ($1) is the base path to start traversal
+# - See the source code (completion.{bash,zsh}) for the details.
+_fzf_compgen_path() {
+  fd --hidden --exclude .git . "$1"
 }
-cfg_fzf_def_opts
-unset -f cfg_fzf_def_opts
+
+# Use fd to generate the list for directory completion
+_fzf_compgen_dir() {
+  fd --type=d --hidden --exclude .git . "$1"
+}
+
+# Advanced customization of fzf options via _fzf_comprun function
+# - The first argument to the function is the name of the command.
+# - You should make sure to pass the rest of the arguments to fzf.
+_fzf_comprun() {
+  local command=$1
+  shift
+
+  case "$command" in
+    cd)           fzf --preview 'tree -C {} | head -200'   "$@" ;;
+    export|unset) fzf --preview "eval 'echo \$'{}"         "$@" ;;
+    ssh)          fzf --preview 'dig {}'                   "$@" ;;
+    *)            fzf --preview 'bat -n --color=always {}' "$@" ;;
+  esac
+}

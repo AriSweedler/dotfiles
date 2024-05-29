@@ -19,9 +19,17 @@ function source_file::timed() {
 }
 
 function source_zsh_dir() {
+  local optional="false"
+  while grep -q "^-" <<< "$1"; do
+    case "$1" in
+      --optional) optional="true"; shift ;;
+    esac
+  done
+
   local -r dir="$1"
-  if [ ! -d "$dir" ]; then
-    log_err "'$dir' is not a directory"
+  if ! [ -d "$dir" ]; then
+    [ "$optional" = "true" ] && return 0
+    log::err "'$dir' is not a directory"
     return 1
   fi
 
@@ -45,4 +53,4 @@ function prepend_to_path() {
 
 # Source all files in these folders
 source_zsh_dir "$HOME/.config/zsh-init"
-source_zsh_dir "$HOME/.local/zsh-init"
+source_zsh_dir --optional "$HOME/.local/zsh-init"

@@ -42,10 +42,6 @@ end
 
 -- All the capabilities
 hot(volume, down, function() set_volume(get_volume() - 5) end)
-hot(bright, down, function() set_bright(get_bright() - 5) end)
 hot(volume, up,   function() set_volume(get_volume() + 5) end)
-hot(bright, up,   function() set_bright(get_bright() + 5) end)
 hot(volume, abs_down, function() set_volume(0)   end)
-hot(bright, abs_down, function() set_bright(1)   end)
 hot(volume, abs_up,   function() set_volume(100) end)
-hot(bright, abs_up,   function() set_bright(100) end)

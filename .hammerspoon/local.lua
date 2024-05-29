@@ -8,7 +8,7 @@ prepend_to_package_path(local_runtime)
 
 hs.pathwatcher.new(local_runtime, ReloadConfig):start()
 
-if local_runtime then
+if hs.fs.attributes(local_runtime , "mode") ~= nil then
 	require("ari_local")
 	hs.alert.show("Local config loaded")
 end
