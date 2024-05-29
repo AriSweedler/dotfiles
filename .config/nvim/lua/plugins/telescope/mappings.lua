@@ -1,10 +1,9 @@
-local acts = require("telescope.actions")
-
 local M = {
 	i = {
 		["<Esc>"] = "close",
 		["<C-h>"] = "which_key",
 		["<C-l>"] = function(prompt_buffer)
+			local acts = require("telescope.actions")
 			acts.smart_send_to_loclist(prompt_buffer)
 			acts.open_loclist(prompt_buffer)
 		end,

@@ -27,3 +27,4 @@ vim.keymap.set("n", "<Leader>Sw", builtin.grep_string, { desc = "[S]earch curren
 vim.keymap.set("n", "<Leader>Sd", builtin.diagnostics, { desc = "[S]earch [D]iagnostics" })
 vim.keymap.set("n", "<Leader>Sk", builtin.keymaps, { desc = "[S]earch [K]eymaps" })
 vim.keymap.set("n", "<Leader>Sm", builtin.marks, { desc = "[S]earch through [m]arks" })
+vim.keymap.set("n", "<Leader>Sh", builtin.help_tags, { desc = "[S]earch through [h]elp" })

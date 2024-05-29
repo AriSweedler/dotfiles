@@ -1,7 +1,7 @@
 local builtin = require("telescope.builtin")
 
 -- I feel like this misses some highlights
-vim.keymap.set("n", "<Leader>Sh", builtin.highlights, { desc = "[S]earch [h]ighlights" })
+vim.keymap.set("n", "<Leader>Si", builtin.highlights, { desc = "[S]earch h[i]ghlights" })
 
 vim.keymap.set("n", "<Leader>Sj", builtin.jumplist, { desc = "[S]earch [j]umplist" })
 
