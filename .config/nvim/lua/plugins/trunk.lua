@@ -1,6 +1,6 @@
 local M = {
 	"trunk-io/neovim-trunk",
-	event = "BufReadPre",
+	event = "VimEnter",
 	main = "trunk",
 	dependencies = { "nvim-telescope/telescope.nvim", "nvim-lua/plenary.nvim" },
 	opts = {
