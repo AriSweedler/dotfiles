@@ -1,16 +1,34 @@
+-- nvim-cmp is not a complete solution. It is more like a shell.
+--
+-- The plugin expects to be presented with a set of completion engines, each of
+-- which comes with config options and includes the all-important completion
+-- function that - when invoked - will return a set of available completions.
+--
+-- nvim-cmp will use the config options to figure out WHEN to call the
+-- completion functions (when typing, on a keystroke, etc.) and the results UI
+-- (popup menu, results ordering, how to scroll or accept)
+--
+-- So it should come as no surprise that this plugin has a large set of
+-- dependencies - we need to download all these completion engines! (Completion
+-- sources), and then we need to configure this plugin to actually USE those
+-- engines.
 local M = {
 	"hrsh7th/nvim-cmp",
 	event = "BufReadPre",
-	opts = {},
 	dependencies = {
-		-- Snippet Engine & its associated nvim-cmp source
-		"L3MON4D3/LuaSnip",
-		"saadparwaiz1/cmp_luasnip",
-
-		-- Adds LSP completion capabilities
-		"hrsh7th/cmp-nvim-lsp",
+		-- Make vim's native completions available
 		"hrsh7th/cmp-path",
+		"hrsh7th/cmp-buffer",
+
+		-- And add LSP completion capabilities
+		"hrsh7th/cmp-nvim-lsp",
+
+		-- Snippet Engine & associated nvim-cmp source
+		{ "L3MON4D3/LuaSnip", build = "make install_jsregexp", dependencies = { "saadparwaiz1/cmp_luasnip" } },
 	},
+	config = function()
+		require("plugins.nvim-cmp.config")
+	end,
 }
 
 return M

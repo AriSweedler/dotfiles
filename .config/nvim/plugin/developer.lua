@@ -40,7 +40,7 @@ local function tes_mappings()
 		{
 			key = "S",
 			desc = "my personal snippets",
-			path = vim.fn.stdpath("config") .. "/snippets/package.json",
+			path = vim.fn.stdpath("config") .. "/snippets/" .. ft .. ".lua",
 		},
 		{
 			key = "L",

@@ -151,7 +151,6 @@
 	ignore = !"f() { echo $1 >> .gitignore; }; f"
 	initt = !"git init; git commit --allow-empty --message 'first commit'"
 	ls = ls-tree --full-tree -r --abbrev HEAD
-	pr = !"f() { browser_pr_for_current_branch_in_pwd_stash ; }; f"
 	push-origin = !"git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)"
 	wipebranch = !"f() { git branch -D $1; git push origin --delete $1; }; f"
 	yankbranch = !"git branch --show-current | tr -d '\n' | tee /dev/tty | pbcopy"
@@ -163,6 +162,7 @@
 	fixup = !"f() { git commit --fixup $1 && git rebase --autosquash $1~ ; } ; f"
 
 	# Submodule control
+	push-all = sub-push
 	sub-push = !"f() { git submodule foreach git push && git push; }; f"
 	sub-all = submodule foreach git
 	# If HEAD is attached (points to a branch), this works nicely. If HEAD
