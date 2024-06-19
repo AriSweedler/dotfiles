@@ -1,17 +1,15 @@
 -- hs.application.frontmostApplication()
 
 local key_app = {
-C = "Calendar",
-F = "Firefox",
-I = "Signal",
-M = "Messages",
-S = "Spotify",
-T = "Terminal",
+	F = "Firefox",
+	M = "Messages",
+	S = "Spotify",
+	T = "Terminal",
 }
 
-local application_select = {"cmd", "alt"}
+local application_select = { "cmd", "alt" }
 for key, app in pairs(key_app) do
-  hs.hotkey.bind(application_select, key, function()
-    hs.application.launchOrFocus(app)
-  end)
+	hs.hotkey.bind(application_select, key, function()
+		hs.application.launchOrFocus(app)
+	end)
 end

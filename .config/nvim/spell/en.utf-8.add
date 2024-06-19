@@ -201,3 +201,8 @@ IPs
 MaxMind
 MMDB
 endian
+arg
+nvim
+LSP
+nvim-cmp
+autocomplete

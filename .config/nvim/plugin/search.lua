@@ -33,8 +33,9 @@ local function lgrep(word, opts)
 	end
 
 	vim.fn.setreg("/", slash_escape(word))
+	vim.cmd("tabnew")
 	vim.cmd(cmd .. " " .. lgrep_escape(word))
-	vim.cmd("lopen | wincmd p")
+	vim.cmd("lopen | wincmd p | lfirst")
 end
 
 -- Get the visually selected text
@@ -61,7 +62,7 @@ vim.o.hlsearch = true
 -- Use <C-_> to unhighlight stuff
 vim.keymap.set("n", "<C-_>", ":nohlsearch<CR>", { silent = true })
 vim.keymap.set("i", "<C-_>", "<Esc>:nohlsearch<CR>a", { silent = true })
-vim.keymap.set("v", "<C-_>", "<Esc>:nohlsearch<CR>`>a", { silent = true })
+vim.keymap.set("v", "<C-_>", "<Esc>:nohlsearch<CR>`>", { silent = true })
 
 -- Make '*' better
 vim.keymap.set("n", "*", "*N")

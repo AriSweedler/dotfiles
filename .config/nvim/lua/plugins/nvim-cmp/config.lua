@@ -1,47 +1,30 @@
-local cmp = require("cmp")
-local luasnip = require("luasnip")
-require("luasnip.loaders.from_vscode").lazy_load({ paths = "~/.config/nvim/snippets" })
+-- vim.opt.completeopt = { "menu", "menuone", "noselect" }
+-- vim.opt.shortmess:append "c"
 
-luasnip.config.setup({})
+local cmp = require("cmp")
 
 cmp.setup({
-	snippet = {
-		expand = function(args)
-			luasnip.lsp_expand(args.body)
-		end,
-	},
-	completion = {
-		completeopt = "menu,menuone",
-	},
-	mapping = cmp.mapping.preset.insert({
-		["<C-n>"] = cmp.mapping.select_next_item(),
-		["<C-p>"] = cmp.mapping.select_prev_item(),
-		["<C-y>"] = cmp.mapping.confirm({ select = true }),
-		["<C-Space>"] = cmp.mapping.complete({}),
-
-		-- Think of <c-l> as moving to the right of your snippet expansion.
-		--  So if you have a snippet that's like:
-		--  function $name($args)
-		--    $body
-		--  end
-		--
-		-- <c-l> will move you to the right of each of the expansion locations.
-		-- <c-h> is similar, except moving you backwards.
-		["<C-l>"] = cmp.mapping(function()
-			if luasnip.expand_or_locally_jumpable() then
-				luasnip.expand_or_jump()
-			end
-		end, { "i", "s" }),
-		["<C-h>"] = cmp.mapping(function()
-			if luasnip.locally_jumpable(-1) then
-				luasnip.jump(-1)
-			end
-		end, { "i", "s" }),
-	}),
 	sources = {
 		{ name = "nvim_lsp" },
 		{ name = "path" },
-		{ name = "luasnip" },
-		{ name = "copilot" },
+		{ name = "buffer" },
+	},
+	mapping = {
+		["<C-n>"] = cmp.mapping.select_next_item({ behavior = cmp.SelectBehavior.Insert }),
+		["<C-p>"] = cmp.mapping.select_prev_item({ behavior = cmp.SelectBehavior.Insert }),
+		["<C-y>"] = cmp.mapping(
+			cmp.mapping.confirm({
+				behavior = cmp.ConfirmBehavior.Insert,
+				select = true,
+			}),
+			{ "i", "c" }
+		),
+	},
+
+	-- Enable luasnip to handle snippet expansion for nvim-cmp
+	snippet = {
+		expand = function(args)
+			vim.snippet.expand(args.body)
+		end,
 	},
 })

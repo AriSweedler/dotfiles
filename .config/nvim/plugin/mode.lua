@@ -8,3 +8,5 @@ vim.keymap.set("n", "<C-g>", ":q<Enter>")
 
 -- jk to exit insert
 vim.keymap.set("i", "jk", "<Esc>")
+vim.keymap.set("i", "Jk", "<Esc>")
+vim.keymap.set("i", "JK", "<Esc>")
