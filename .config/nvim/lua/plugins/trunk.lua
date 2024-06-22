@@ -1,6 +1,7 @@
 local M = {
 	"trunk-io/neovim-trunk",
-	event = "BufReadPre",
+	-- TODO: Disabling for now because it lags my shit
+	-- event = "BufReadPre",
 	main = "trunk",
 	dependencies = { "nvim-telescope/telescope.nvim", "nvim-lua/plenary.nvim" },
 	opts = {

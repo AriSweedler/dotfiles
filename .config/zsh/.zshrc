@@ -52,5 +52,5 @@ function prepend_to_path() {
 }
 
 # Source all files in these folders
-source_zsh_dir "$HOME/.config/zsh-init"
-source_zsh_dir --optional "$HOME/.local/zsh-init"
+source_zsh_dir "${ZDOTDIR}/plugins"
+source_zsh_dir --optional "$HOME/.local/zsh/plugins"
