@@ -2,7 +2,6 @@ bindkey -v
 bindkey '^R' history-incremental-search-backward
 
 # Set history stuff. https://zsh.sourceforge.io/Doc/Release/Options.html#History
-#
 setopt HIST_IGNORE_SPACE      # ignore commands that start with space
 setopt HIST_EXPIRE_DUPS_FIRST # delete duplicates first when HISTFILE size exceeds HISTSIZE
 setopt EXTENDED_HISTORY       # Add timestamps to history files

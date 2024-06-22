@@ -1,0 +1,32 @@
+.CFUserTextEncoding
+.IdentityService/
+.ServiceHub/
+.anyconnect
+.aws/
+.azure/
+.cisco/
+.config/Microsoft\\VisualStudio Services/
+.config/github-copilot/
+.config/helm/
+.config/pgcli/
+.docker/
+.groot_data/
+.histfile
+.kube/
+.lesshst
+.npm/
+.nvs/
+.python_history
+.tmux/
+.tsh/
+
+Desktop/
+Documents/
+Downloads/
+Library/
+Movies/
+Music/
+OneDrive - Illumio
+Pictures/
+Public/
+go/

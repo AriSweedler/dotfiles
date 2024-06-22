@@ -1,0 +1,13 @@
+# /Users/arisweedler/.config/tmuxinator/work.yml
+
+name: marvel
+root: ~/
+
+windows:
+- notepad:
+    root: "~/Desktop/notes"
+    panes: notes
+
+- source:
+    root: "~/Desktop/workspace/code/"
+    panes: ls -1t
