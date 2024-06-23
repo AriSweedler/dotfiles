@@ -9,7 +9,7 @@ alias vi='nvim'
 alias vim='nvim'
 alias vimdiff='nvim -d'
 
-# Enable colors in LS
+# Enable colors by default in ls
 alias ls='ls -G'
 
 # What's the magic word
@@ -23,6 +23,3 @@ bindkey -v
 bindkey "^A" vi-beginning-of-line
 bindkey "^B" vi-beginning-of-line
 bindkey "^E" vi-end-of-line
-
-# Enable autocomplete
-fpath+=~/.zfunc

@@ -15,7 +15,7 @@ local M = {
 		-- Normally, I have this keymap clear highlights. But I really just want it
 		-- to mean "distraction level: LOW". So it can clear highlights AND ALSO
 		-- notifications.
-		vim.keymap.set("n", "<C-_>", function()
+		vim.keymap.set({ "n", "i", "v" }, "<C-_>", function()
 			require("noice").cmd("dismiss")
 			vim.cmd("nohlsearch")
 		end)

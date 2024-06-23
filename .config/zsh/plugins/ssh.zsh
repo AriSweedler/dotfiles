@@ -75,11 +75,6 @@ function machines() {
   b_echo "~~~"
 }
 
-function key() {
-  log::info "pubkey copied to clipboard"
-  pbcopy < "$HOME/.ssh/id_ed25519.pub"
-}
-
 function ssh::load_agent() {
   local auth_socket="$HOME/.ssh/ssh_auth_sock"
   [ -S "$auth_socket" ] && return

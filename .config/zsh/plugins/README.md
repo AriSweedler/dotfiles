@@ -1,2 +1,2 @@
 # ZSH files for every machine
-Extend the `zsh` language with useful utilities
+Extend `zsh` with useful utilities
