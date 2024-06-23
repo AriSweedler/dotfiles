@@ -1,0 +1,14 @@
+local cmd
+if ! cmd=( $(fc -ln | grep "^\\<rg\\>" | tail -1) ); then
+  log::err "Failed to find most recent 'rg' command"
+  return 1
+fi
+args=${cmd[1]}
+
+# The arg should have quotes around it. Strip quotes for vim's search.
+local rg_search="$args"
+local vimsearch="$(echo $args | sed -e "s|'\(.*\)'|\1|")"
+
+# Open all the files that rg finds. Load them into the loclist. Highlight the
+# pattern with the '/' command
+vim -c":lgrep $rg_search" -c"/$vimsearch" -c"norm n" $(rg --files-with-matches "$args")

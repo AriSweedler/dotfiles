@@ -1,0 +1,18 @@
+# Edit the file that a shell function is defined in
+local -r func_name="${1:?}"
+if ! type "$func_name" | grep -q "shell function"; then
+  log::err "Function does not exist | func_name='$func_name'"
+  log::warn "type $func_name='$(type "$func_name")'"
+  return 1
+fi
+
+local file
+file="$(type -a "$func_name" | awk '{print $NF}')"
+type -a "$func_name"
+if type -a "$func_name" | grep -q "\/functions\/"; then
+  # This is the only function in the file
+  "$EDITOR" "$file"
+else
+  # Open the file and try jumping to the function with a search command
+  "$EDITOR" +"/$func_name() {" "$file"
+fi

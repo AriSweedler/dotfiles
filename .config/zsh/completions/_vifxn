@@ -1,0 +1,7 @@
+#compdef vifxn
+
+_vifxn() {
+  _describe 'function names' ${(k)functions}
+}
+
+_vifxn "$@"
