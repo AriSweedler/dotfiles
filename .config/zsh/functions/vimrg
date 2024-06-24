@@ -3,7 +3,7 @@ if ! cmd=( $(fc -ln | grep "^\\<rg\\>" | tail -1) ); then
   log::err "Failed to find most recent 'rg' command"
   return 1
 fi
-args=${cmd[1]}
+args=${cmd[@]:1}
 
 # The arg should have quotes around it. Strip quotes for vim's search.
 local rg_search="$args"
