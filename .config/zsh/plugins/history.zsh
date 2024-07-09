@@ -6,7 +6,8 @@ setopt HIST_IGNORE_SPACE      # ignore commands that start with space
 setopt HIST_EXPIRE_DUPS_FIRST # delete duplicates first when HISTFILE size exceeds HISTSIZE
 setopt EXTENDED_HISTORY       # Add timestamps to history files
 setopt HIST_REDUCE_BLANKS     # Trim silly whitespace from history
-export HISTFILE="$HOME/.histfile"
+export HISTFILE="$XDG_STATE_HOME/zsh/history"
+mkdir -p "$(dirname "$HISTFILE")"
 export HISTSIZE=500000
 export SAVEHIST=$HISTSIZE
 

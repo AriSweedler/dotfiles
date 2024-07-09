@@ -11,6 +11,7 @@
 .config/helm/
 .config/nvim/spell/en.utf-8.add
 .config/pgcli/
+.config/zsh/history
 .docker/
 .groot_data/
 .histfile
@@ -22,6 +23,7 @@
 .tmux/
 .tsh/
 .viminfo
+.wget-hsts
 
 Desktop/
 Documents/

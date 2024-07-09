@@ -7,9 +7,9 @@ if ! type "$func_name" | grep -q "shell function"; then
 fi
 
 local file
-file="$(type -a "$func_name" | awk '{print $NF}')"
-type -a "$func_name"
-if type -a "$func_name" | grep -q "\/functions\/"; then
+file="$(type "$func_name" | awk '{print $NF}')"
+type "$func_name"
+if type "$func_name" | grep -q "\/functions\/"; then
   # This is the only function in the file
   "$EDITOR" "$file"
 else
