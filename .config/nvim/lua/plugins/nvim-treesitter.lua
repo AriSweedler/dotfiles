@@ -90,14 +90,14 @@ local M = {
 		textobjects = {
 			select = {
 				enable = true,
-
-				-- Automatically jump forward to textobjects, similar to targets.vim
 				lookahead = true,
-
 				keymaps = {
-					-- You can use the capture groups defined in textobjects.scm
-					["ia"] = { query = "@parameter.inner", desc = "Select inner part of a parameter" },
-					["aa"] = { query = "@parameter.outer", desc = "Select outer part of a parameter" },
+					["aa"] = "@parameter.outer",
+					["ia"] = "@parameter.inner",
+					["af"] = "@function.outer",
+					["if"] = "@function.inner",
+					["ac"] = "@class.outer",
+					["ic"] = "@class.inner",
 				},
 				include_surrounding_whitespace = true,
 			},
@@ -118,8 +118,12 @@ local M = {
 		},
 	},
 	config = function(_, opts)
-		require("nvim-treesitter.configs").setup(opts)
-	end,
+		-- Defer Treesitter setup after first render to improve startup time of
+		-- 'nvim {filename}'
+		vim.defer_fn(function()
+			require("nvim-treesitter.configs").setup(opts)
+		end, 0)
+	end
 }
 
 return M

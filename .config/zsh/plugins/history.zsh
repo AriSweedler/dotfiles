@@ -10,6 +10,7 @@ export HISTFILE="$XDG_STATE_HOME/zsh/history"
 mkdir -p "$(dirname "$HISTFILE")"
 export HISTSIZE=500000
 export SAVEHIST=$HISTSIZE
+export HISTORY_IGNORE
 
 # Use a more modern way to lock the history file. Should be a net positive on
 # my shiny new machine
