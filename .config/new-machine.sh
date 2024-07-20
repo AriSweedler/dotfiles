@@ -89,10 +89,17 @@ function ensure_brew_pkgs() {
   run_cmd brew install "${pkgs[@]}"
 }
 
+function terminal_settings() {
+  # Now that we have a nerdfont installed, set it
+  log::warn "You will need to manually set an installed nerdfont as a default font | installed_nerdfont='font-caskaydia-mono-nerd-font
+'"
+}
+
 # Ensure we have crucial programs installed
 function main() {
   ensure_brew
   ensure_brew_pkgs
+  terminal_settings
 }
 
 main "$@"
