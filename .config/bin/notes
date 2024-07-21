@@ -140,6 +140,7 @@ function repo::register_today() {
   local -r prev_date="$(repo::history::date 1)"
   local -r prev_note="$(note::from_date "$prev_date")"
   if [ ! -f "$prev_note" ]; then
+    repo::journal::add_date "${prev_date?}"
     log::err "Could not find file for datekeeper entry '$prev_date'. Something is wrong."
     exit 1
   fi
