@@ -118,12 +118,18 @@ local M = {
 		},
 	},
 	config = function(_, opts)
+		-- My first instinct is to say 'TreeSitter' in order to Inspect the
+		-- Treesitter Tree.
+		vim.api.nvim_create_user_command("TreeSitter", function()
+			vim.api.nvim_command("InspectTree")
+		end, {})
+
 		-- Defer Treesitter setup after first render to improve startup time of
 		-- 'nvim {filename}'
 		vim.defer_fn(function()
 			require("nvim-treesitter.configs").setup(opts)
 		end, 0)
-	end
+	end,
 }
 
 return M

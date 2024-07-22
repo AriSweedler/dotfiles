@@ -4,6 +4,7 @@
 .Trash/
 .anyconnect
 .aws/
+.azcopy/
 .azure/
 .bash_history
 .cisco/

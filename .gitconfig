@@ -136,6 +136,7 @@
 	sub-u = sub-update
 	wb = wipebranch
 	yb = yankbranch
+	fpr = finish-pr
 
 	# New commands
 	branchlog = !"f() { git_branchlog ; }; f"

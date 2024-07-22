@@ -5,7 +5,9 @@ local M = {
 		"MunifTanjim/nui.nvim",
 		"rcarriga/nvim-notify",
 	},
-	event = "VeryLazy",
+	-- TODO: Disabling for now because I don't prefer it - but I wanna check it
+	-- out more in the future...
+	-- event = "VeryLazy",
 	opts = {
 		-- add any options here
 	},

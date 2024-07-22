@@ -1,0 +1,1 @@
+printf "\e[33m[ERROR]\e0m \n" >&2
