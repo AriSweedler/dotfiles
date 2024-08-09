@@ -58,6 +58,7 @@ function ensure_brew_pkgs() {
     wget
 
     # Nice CLI utilities
+    atac
     bat
     fd
     ffmpeg

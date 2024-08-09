@@ -1,0 +1,62 @@
+{
+  "name": "autolabel",
+  "requests": [
+    {
+      "name": "ingest_flowdata aws",
+      "url": "http://localhost:8002/api/v1/ingest_flowdata/aws",
+      "method": "POST",
+      "params": [],
+      "headers": [
+        {
+          "data": [
+            "cache-control",
+            "no-cache"
+          ],
+          "enabled": true
+        },
+        {
+          "data": [
+            "user-agent",
+            "ATAC/v0.16.0"
+          ],
+          "enabled": true
+        },
+        {
+          "data": [
+            "accept",
+            "*/*"
+          ],
+          "enabled": true
+        },
+        {
+          "data": [
+            "accept-encoding",
+            "gzip, deflate, br"
+          ],
+          "enabled": true
+        },
+        {
+          "data": [
+            "connection",
+            "keep-alive"
+          ],
+          "enabled": true
+        }
+      ],
+      "body": {
+        "json": "{\n\t\"year\": 2024,\n\t\"month\": 6,\n\t\"day\": 20,\n\t\"tenant_id\": \"042ee3d2-81a4-432f-9040-698c5abc5e8a\",\n\t\"request_id\": \"12345678-0000-4000-0000-0123456789ab\"\n}"
+      },
+      "auth": "no_auth",
+      "scripts": {
+        "pre_request_script": null,
+        "post_request_script": null
+      },
+      "settings": {
+        "use_config_proxy": true,
+        "allow_redirects": true,
+        "store_received_cookies": true,
+        "pretty_print_response_content": true
+      }
+    }
+  ]
+}
