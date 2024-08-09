@@ -10,7 +10,7 @@ preamble() { echo -n "[$(date "+%Y-%m-%dT%T.000Z")] [$funcstack[3]]" ; }
 log::dev() { echo -e "${c_cyan}[DEV] $(preamble)${c_rst}" "$@" >&2 ; }
 log::err() { echo -e "${c_red}[ERROR] $(preamble)${c_rst}" "$@" >&2 ; }
 log::info() { echo -e "${c_green}[INFO] $(preamble)${c_rst}" "$@" >&2 ; }
-log::debug() { [ -n "$ARI_DEBUG" ] && echo -e "${c_grey}[DEBUG] $(preamble)${c_rst}" "$@" >&2 ; }
+log::debug() { [ -z "$ARI_DEBUG" ] && return; echo -e "${c_grey}[DEBUG] $(preamble)${c_rst}" "$@" >&2 ; }
 log::warn() { echo -e "${c_yellow}[WARN] $(preamble)${c_rst}" "$@" >&2 ; }
 
 run_cmd() {
