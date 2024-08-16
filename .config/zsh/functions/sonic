@@ -1,14 +1,15 @@
-function sonic::open_dir() {
-  local -r SONIC_DIR='/Users/ari/Desktop/life/apartment/3 - 43Diamond/sonic receipts'
-  run_cmd open "$SONIC_DIR"
+function sonic::dir() {
+  echo "$HOME/Desktop/life/apartment/3 - 43Diamond/sonic receipts"
+}
+
+function sonic::browser() {
+  open -a Arc "$@"
 }
 
 function sonic::_file() {
-  local -r SONIC_DIR='/Users/ari/Desktop/life/apartment/3 - 43Diamond/sonic receipts'
-
   # Make sure there's an 'invoice' in Downloads
   local -r download_dir="$HOME/Downloads"
-  local invoice="$(compgen -G "$download_dir/invoice*")"
+  local invoice="$(bash -c "compgen -G '$download_dir/invoice*'")"
   if ! [ -f "$invoice" ]; then
     log::err "No sonic invoice found | download_dir='$download_dir'"
     ls -1 "$download_dir"
@@ -16,12 +17,12 @@ function sonic::_file() {
   fi
 
   # Move it to the invoices folder
-  if ! [ -d "$SONIC_DIR" ]; then
-    log::err "Could not find sonic directory | SONIC_DIR='$SONIC_DIR'"
+  if ! [ -d "$(sonic::dir)" ]; then
+    log::err "Could not find sonic directory | SONIC_DIR='$(sonic::dir)'"
     return 1
   fi
-  run_cmd mv "$invoice" "$SONIC_DIR"
-  invoice="$SONIC_DIR/$(basename "$invoice")"
+  run_cmd mv "$invoice" "$(sonic::dir)"
+  invoice="$(sonic::dir)/$(basename "$invoice")"
   echo "$invoice"
 }
 
@@ -49,8 +50,6 @@ function sonic::_extract_from_pdf() {
   pdfgrep 'Current Charges' "$invoice" | awk '/-/ {print $3","$5","$6}' | tr -d '$'
 }
 
-local -r SONIC_DIR='/Users/ari/Desktop/life/apartment/3 - 43Diamond/sonic receipts'
-
 # Manage filesystem stuff
 local invoice
 if ! invoice="$(sonic::_file)"; then
@@ -60,9 +59,9 @@ fi
 
 # Open up splitwise then the sonic folder. Return to this terminal window
 local -r splitwise_group_url="https://secure.splitwise.com/#/groups/20951549"
-run_cmd open -a Firefox "$splitwise_group_url"
+run_cmd sonic::browser "$splitwise_group_url"
 run_cmd open "$invoice"
-run_cmd open "$SONIC_DIR"
+run_cmd open "$(sonic::dir)"
 run_cmd open -a Terminal
 
 # Parse information from the pdf
@@ -79,15 +78,15 @@ wait_for_keypress
 # Do the 3 stages
 clipboard "$new_invoice_name" --description "New invoice name"
 wait_for_keypress "Open 'SONIC_DIR' to rename the invoice"
-open "$SONIC_DIR"
+open "$(sonic::dir)"
 wait_for_keypress
 
 clipboard "$splitwise_description" --description "Splitwise description"
 wait_for_keypress "Open splitwise to enter the transaction name"
-open -a Firefox
+sonic::browser
 wait_for_keypress
 
 clipboard "$amount" --description "amount"
 wait_for_keypress "Open splitwise to enter the transaction amount"
-open -a Firefox
+sonic::browser
 wait_for_keypress
