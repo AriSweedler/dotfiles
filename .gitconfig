@@ -137,10 +137,11 @@
 	wb = wipebranch
 	yb = yankbranch
 	fpr = finish-pr
+	swr = switchr
 
 	# New commands
-	branchlog = !"f() { git_branchlog ; }; f"
 	cconfig = config --edit --global
+	switchr = !"git branchlog | git switch \"$(fzf --select-1)\""
 	children = !"f() { git rev-list --all --not $1^@ --children | grep $(git rev-parse $1); }; f" # reachable children of a ref
 	contains = !"f() {  git tag --contains $1; git branch --contains $1; }; f"
 	ctags = !.git/hooks/ctags

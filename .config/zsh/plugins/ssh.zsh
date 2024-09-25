@@ -89,3 +89,37 @@ function ssh::load_agent() {
   done
 }
 ssh::load_agent
+
+# Input: a friend and their public key
+# Output: A function that logs a message & copies the public key to your clipboard
+function _pubkey::_gen_fxn() {
+  local -r friend="${1:?}"
+  local -r pubkey="${2:?}"
+
+  cat << EOF
+function pubkey::$friend() {
+pbcopy <<< '$pubkey'
+log::info "Pubkey for friend copied to clipboard | friend='$friend' pubkey='$pubkey'"
+};
+EOF
+}
+
+function _pubkey::_init_fxns() {
+  local friend_keys_dir="$XDG_DATA_HOME/ssh/pubkeys_of_friends"
+  if ! [ -d "$friend_keys_dir" ]; then
+    log::info "You do not have any friends on this machine, yet | friend_keys_dir='$friend_keys_dir'"
+    return
+  fi
+
+  local friend_key_abs_path friend pubkey
+  for friend_key_abs_path in $(find "$friend_keys_dir" -type f); do
+    friend="$(basename "$friend_key_abs_path")"
+    pubkey="$(cat "$friend_key_abs_path")"
+    fxn="$(_pubkey::_gen_fxn "$friend" "$pubkey")"
+    eval "$fxn"
+  done
+
+  unset -f _pubkey::_gen_fxn
+  unset -f _pubkey::_init_fxns
+}
+_pubkey::_init_fxns
