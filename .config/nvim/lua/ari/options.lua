@@ -29,3 +29,6 @@ vim.api.nvim_set_hl(0, "Normal", { bg = "None" })
 
 -- Set listchars for spaces and tabs
 vim.opt.listchars = { space = ".", tab = "|>" }
+
+-- Turn 'timeout' off so we have unlimited time to enter mapped commands
+vim.o.timeout = false

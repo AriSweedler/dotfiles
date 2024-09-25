@@ -25,6 +25,7 @@
 .npm/
 .nvs/
 .python_history
+.sqlite_history
 .tmux/
 .tsh/
 .viminfo
