@@ -12,6 +12,12 @@
 .config/atac/atac.log
 .config/github-copilot/
 .config/helm/
+# Controversial to not version a lockfile - but I have autoupdates on so it
+# makes more sense to me to keep my git history clean of these annoying updates.
+# Let's say I use my laptop every day and my desktop once a month - I don't
+# wanna have auto updates from my laptop on where most of the udpates are cruft.
+# Until I only make a commit on *interesting* changes this will get ignored
+.config/nvim/lazy-lock.json
 .config/nvim/spell/en.utf-8.add
 .config/pgcli/
 .config/zsh/.zcompdump
