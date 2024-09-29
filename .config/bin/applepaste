@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+import sys
+import os
+
+my_script = "/tmp/applepaste.scpt"
+
+# Gotta special case some of these dumb codes.
+# https://eastmanreference.com/complete-list-of-applescript-key-codes
+switcher= {
+"0": "key code 29",
+"1": "key code 18",
+"2": "key code 19",
+"3": "key code 20",
+"4": "key code 21",
+"5": "key code 23",
+"6": "key code 22",
+"7": "key code 26",
+"8": "key code 28",
+"9": "key code 25",
+"\"": "key code 39 using shift down",
+":": "key code 41 using shift down",
+".": "key code 47",
+"\\": "key code 42",
+}
+def transform(s):
+	x = switcher.get(s, "empty_value")
+
+	if x == "empty_value":
+		return f'keystroke "{s}"'
+	else:
+		return x
+
+# Input
+def main():
+	if len(sys.argv) <= 1:
+		my_input = ""
+	my_input = ' '.join(sys.argv[1:])
+
+	# Write to a file
+	with open(my_script, 'w') as f:
+		f.write('tell application "System Events"\n')
+		f.write('delay 1\n')
+		for i in my_input:
+			f.write(f'{transform(i)}\n')
+			f.write('delay 0.02\n')
+		f.write('end tell\n')
+		# Race condition in `open` if we don't flush here. I wish the context
+		# manager should do this for us, but I guess it just calls 'close'
+		f.flush()
+
+def open_script_editor():
+	script_editor = "/System/Applications/Utilities/Script\ Editor.app"
+	os.system(f"open -a {script_editor} {my_script}")
+
+if __name__ == "__main__":
+	main()
+	open_script_editor()
