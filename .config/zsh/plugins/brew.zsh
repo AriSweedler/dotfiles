@@ -23,8 +23,7 @@ fi
 unset prefix
 unset brew_prefix
 
-config/nvim/lazy-lock.json
-# This is what I want to configure
+# TODO: This is what I want to configure
 #
 #    ==> Auto-updating Homebrew...
 #     Adjust how often this is run with HOMEBREW_AUTO_UPDATE_SECS or disable with
