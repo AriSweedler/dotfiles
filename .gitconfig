@@ -185,4 +185,4 @@
 # Include computer-specific git configuration. Put this last so we can override
 # all of the above
 [includeIf "gitdir:~/"]
-	path = ~/.local/git/config
+	path = ~/.local/share/git/config

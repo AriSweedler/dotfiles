@@ -53,4 +53,4 @@ function prepend_to_path() {
 
 # Source all files in these folders
 source_zsh_dir "${ZDOTDIR}/plugins"
-source_zsh_dir --optional "$HOME/.local/zsh/plugins"
+source_zsh_dir --optional "${XDG_DATA_HOME}/zsh/plugins"
