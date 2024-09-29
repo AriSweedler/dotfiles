@@ -12,6 +12,7 @@ Biome
 Caches
 Calendars
 CallServices
+CloudStorage
 ColorPickers
 Colors
 Compositions
@@ -32,6 +33,7 @@ FontCollections
 Fonts
 FrontBoard
 GameKit
+Google
 Group Containers
 HTTPStorages
 HomeKit
@@ -76,12 +78,18 @@ Suggestions
 SyncedPreferences
 Translation
 Trial
+UnifiedAssetFramework
 Weather
 WebKit
+com.apple.AppleMediaServices
+com.apple.WatchListKit
 com.apple.aiml.instrumentation
 com.apple.appleaccountd
 com.apple.bluetooth.services.cloud
+com.apple.bluetoothuser
 com.apple.iTunesCloud
 com.apple.icloud.searchpartyd
 com.apple.internal.ck
+homeenergyd
+iTunes
 studentd

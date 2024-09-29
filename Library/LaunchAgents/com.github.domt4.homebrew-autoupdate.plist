@@ -6,18 +6,18 @@
   <string>com.github.domt4.homebrew-autoupdate</string>
 
   <key>Program</key>
-  <string>/Users/arisweedler/Library/Application Support/com.github.domt4.homebrew-autoupdate/brew_autoupdate</string>
+  <string>/Users/ari.sweedler/Library/Application Support/com.github.domt4.homebrew-autoupdate/brew_autoupdate</string>
 
   <key>ProgramArguments</key>
   <array>
-      <string>/Users/arisweedler/Library/Application Support/com.github.domt4.homebrew-autoupdate/brew_autoupdate</string>
+      <string>/Users/ari.sweedler/Library/Application Support/com.github.domt4.homebrew-autoupdate/brew_autoupdate</string>
   </array>
 
   <key>StandardErrorPath</key>
-  <string>/Users/arisweedler/Library/Logs/com.github.domt4.homebrew-autoupdate/com.github.domt4.homebrew-autoupdate.out</string>
+  <string>/Users/ari.sweedler/Library/Logs/com.github.domt4.homebrew-autoupdate/com.github.domt4.homebrew-autoupdate.out</string>
 
   <key>StandardOutPath</key>
-  <string>/Users/arisweedler/Library/Logs/com.github.domt4.homebrew-autoupdate/com.github.domt4.homebrew-autoupdate.out</string>
+  <string>/Users/ari.sweedler/Library/Logs/com.github.domt4.homebrew-autoupdate/com.github.domt4.homebrew-autoupdate.out</string>
 
   <key>StartInterval</key>
   <integer>86400</integer>
