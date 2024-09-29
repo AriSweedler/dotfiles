@@ -23,14 +23,10 @@ fi
 unset prefix
 unset brew_prefix
 
-# TODO: This is what I want to configure
+# Because I ran:
 #
-#    ==> Auto-updating Homebrew...
-#     Adjust how often this is run with HOMEBREW_AUTO_UPDATE_SECS or disable with
-#     HOMEBREW_NO_AUTO_UPDATE. Hide these hints with HOMEBREW_NO_ENV_HINTS (see `man brew`).
-# 
-#    ==> `brew cleanup` has not been run in the last 30 days, running now...
-#     Disable this behaviour by setting HOMEBREW_NO_INSTALL_CLEANUP.
-#     Hide these hints with HOMEBREW_NO_ENV_HINTS (see `man brew`).
+#     brew tap homebrew/autoupdate
+#     brew autoupdate start
 #
-# I don't want to have it update at the start. Update at the END. Ugh.
+# I can do this
+HOMEBREW_NO_AUTO_UPDATE=true
