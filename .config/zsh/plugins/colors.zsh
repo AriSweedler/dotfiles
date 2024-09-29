@@ -15,8 +15,8 @@ function color::contrast() {
   fi
 
   # For each block of 36 colors - Use white for the first 3rd
-  g=$(( ( (color-16) % 36) / 6 ))
-  (( g < 2 )) && printf "15" || printf "0"
+  local row=$(( ( (color-16) % 36) / 6 ))
+  (( row < 2 )) && printf "15" || printf "0"
 }
 
 function color::ize() {
@@ -32,8 +32,9 @@ function color::ize() {
   fi
 
   # Parse args
+  local color
+  local padding=""
   while (( $# > 0 )); do
-    local color padding=""
     case "${1:?}" in
       --color) color="${2:?}"; shift 2 ;;
       --padding) padding="${2:?}"; shift 2 ;;
@@ -88,6 +89,7 @@ function color::xterm::movement() {
     exit 1
   fi
 
+  # Dividers between sections
   case "${i}" in
     16|232) echo ;;
   esac
