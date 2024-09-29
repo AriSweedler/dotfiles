@@ -24,6 +24,9 @@ function is_installed() {
 function install_brew() {
   log::info "Installing brew"
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+  log::info "Tapping all additional thingies"
+  brew tap homebrew/autoupdate
 }
 
 function ensure_brew() {
