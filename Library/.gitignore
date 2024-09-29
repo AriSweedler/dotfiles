@@ -1,0 +1,87 @@
+.localized
+Accessibility
+Accounts
+AppleMediaServices
+Application Scripts
+Application Support
+Assistant
+Assistants
+Audio
+Autosave Information
+Biome
+Caches
+Calendars
+CallServices
+ColorPickers
+Colors
+Compositions
+Contacts
+ContainerManager
+Containers
+Cookies
+CoreFollowUp
+DES
+Daemon Containers
+DataAccess
+DataDeliveryServices
+DoNotDisturb
+DuetExpertCenter
+Favorites
+Finance
+FontCollections
+Fonts
+FrontBoard
+GameKit
+Group Containers
+HTTPStorages
+HomeKit
+IdentityServices
+Input Methods
+IntelligencePlatform
+Intents
+Internet Plug-Ins
+Keyboard
+Keyboard Layouts
+KeyboardServices
+Keychains
+LanguageModeling
+# LaunchAgents
+Logs
+Mail
+Messages
+Metadata
+Mobile Documents
+News
+Passes
+PersonalizationPortrait
+Photos
+PreferencePanes
+Preferences
+Printers
+Reminders
+ResponseKit
+Safari
+SafariSafeBrowsing
+SafariSandboxBroker
+Saved Application State
+Screen Savers
+Services
+Sharing
+Shortcuts
+Sounds
+Spelling
+Staging
+StatusKit
+Suggestions
+SyncedPreferences
+Translation
+Trial
+Weather
+WebKit
+com.apple.aiml.instrumentation
+com.apple.appleaccountd
+com.apple.bluetooth.services.cloud
+com.apple.iTunesCloud
+com.apple.icloud.searchpartyd
+com.apple.internal.ck
+studentd
