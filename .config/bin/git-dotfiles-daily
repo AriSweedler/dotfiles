@@ -116,7 +116,7 @@ function main() {
   ${c_yellow}[u]${c_rst} add untracked files
   ${c_yellow}[s]${c_rst} status
   ${c_green}[p]${c_rst} patch
-  ${c_green}[c]${c_rst} commit
+  ${c_green}[c]${c_rst} commit & push
   ${c_red}[q]${c_rst} quit
   Uppercase anything - do that and quit
 
@@ -136,7 +136,7 @@ function main() {
       "l") clear ;;
       "s") clear; git df status ;;
       "p") git df patch ;;
-      "c") git df commit ;;
+      "c") git df commit; git df push ;;
       "q") log::info "Goodbye"; finished="true" ;;
       "<"*">") log::warn "Don't press a special character it's weird" ;;
       *) log::warn "Invalid option: ${user_choice}"; :;;
