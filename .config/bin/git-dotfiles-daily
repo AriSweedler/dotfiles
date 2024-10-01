@@ -149,6 +149,7 @@ function main() {
         git df commit
         git df push
         finished="true"
+        git df l
         ;;
       "q") log::info "Goodbye"; finished="true" ;;
       "<"*">") log::warn "Don't press a special character it's weird" ;;
