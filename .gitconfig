@@ -126,6 +126,7 @@
 	a = !"git add .; git s"
 	d = diff --staged --diff-algorithm=minimal
 	df = dotfiles
+	dfd = dotfiles-daily
 	els = editdiffls
 	f = fetch --append --prune --jobs=4
 	ff = pull --ff-only

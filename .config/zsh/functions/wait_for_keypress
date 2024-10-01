@@ -1,17 +1,1 @@
-# helper function to write simple shell UIs
-
-echo -n "Press any key to continue..."
-
-(
-  # Turn off printing to the screen while this scope is active (so 'read -k1'
-  # doesn't echo user input)
-  stty -echo
-  trap 'stty echo' EXIT
-  read -k1
-)
-
-# Move the cursor to the start of the line and clear the rest.
-#
-# TODO it would be better if we restored position to what it was at the start
-# of this function instead of just assuming we started at the start of a line
-printf "\r\033[K"
+read_one_keypress "$RANDOM"

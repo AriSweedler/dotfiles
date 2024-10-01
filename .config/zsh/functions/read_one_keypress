@@ -1,0 +1,53 @@
+function handle_escape_sequence() {
+  local key_ref="${1:?}"
+  local rest
+
+  # Read the next two characters to complete the escape sequence
+  read -k2 rest
+  local full_seq="${key_ref}${rest}"
+
+  case "${rest}" in
+    '[A') eval "$key_ref='<up>'" ;;
+    '[B') eval "$key_ref='<down>'" ;;
+    '[C') eval "$key_ref='<right>'" ;;
+    '[D') eval "$key_ref='<left>'" ;;
+    *) return 1 ;;  # Exit with status 1 for other escape sequences
+  esac
+
+  return 0
+}
+
+local var="${1:?}"
+local prompt="${2:-"Press any key to continue..."}"
+echo -n "${prompt}"
+
+# Turn off printing to the screen while this scope is active (so 'read -k1'
+# doesn't echo user input)
+old_stty=$(stty -g)
+stty -echo
+trap 'stty "$old_stty"' EXIT
+
+# Read the first character
+local key
+read -k1 key
+
+# Check if it is an escape character and handle accordingly
+if [[ "$key" == $'\e' ]]; then
+  handle_escape_sequence key || return 1
+fi
+
+# Store the result in the variable named by '$var'
+eval "$var='$key'"
+
+# Move the cursor to the start of the line and clear the rest.
+#
+# TODO: it would be better if we restored position to what it was at the start
+# of this function instead of just assuming we started at the start of a line
+printf "\r\033[K"
+
+# Restore terminal settings (and clear scope guard)
+stty "$old_stty"
+trap - EXIT
+
+# Return the captured key
+log::debug "User pressed ${(P)var}"
