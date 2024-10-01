@@ -1,0 +1,146 @@
+#!/usr/bin/env zsh
+
+# The classic log suite
+c_red='\e[31m'
+c_green='\e[32m'
+c_yellow='\e[33m'
+c_cyan='\e[36m'
+c_rst='\e[0m'
+
+preamble() { echo -n "[$(date "+%Y-%m-%dT%T.000Z")] [$funcstack[3]]" ; }
+log::dev() { echo -e "${c_cyan}[DEV] $(preamble)${c_rst}" "$@" >&2 ; }
+log::err() { echo -e "${c_red}[ERROR] $(preamble)${c_rst}" "$@" >&2 ; }
+log::warn() { echo -e "${c_yellow}[WARN] $(preamble)${c_rst}" "$@" >&2 ; }
+log::info() { echo -e "${c_green}[INFO] $(preamble)${c_rst}" "$@" >&2 ; }
+log::debug() { [ -z "$DEBUG" ] && return; echo -e "${c_grey}[DEBUG] $(preamble)${c_rst}" "$@" >&2 ; }
+run_cmd() {
+  log::${lvl:-info} "$@"
+  "$@" && return; rc=$?
+  log::${lvl_fail:-err} "cmd '$*' failed: $rc"
+  return $rc
+}
+
+# Helper function
+function handle_escape_sequence() {
+  local key_ref="${1:?}"
+  local rest
+
+  # Read the next two characters to complete the escape sequence
+  read -k2 rest
+  local full_seq="${key_ref}${rest}"
+
+  case "${rest}" in
+    '[A') eval "$key_ref='<up>'" ;;
+    '[B') eval "$key_ref='<down>'" ;;
+    '[C') eval "$key_ref='<right>'" ;;
+    '[D') eval "$key_ref='<left>'" ;;
+    *) return 1 ;;  # Exit with status 1 for other escape sequences
+  esac
+
+  return 0
+}
+
+function read_one_keypress() {
+  local var="${1:?}"
+  local prompt="${2:-"Press any key to continue..."}"
+  echo -n "${prompt}"
+
+  # Turn off printing to the screen while this scope is active (so 'read -k1'
+  # doesn't echo user input)
+  old_stty=$(stty -g)
+  stty -echo
+  trap 'stty "$old_stty"' EXIT
+
+  # Read the first character
+  local key
+  read -k1 key
+
+  # Check if it is an escape character and handle accordingly
+  if [[ "$key" == $'\e' ]]; then
+    handle_escape_sequence key || return 1
+  fi
+
+  # Store the result in the variable named by '$var'
+  eval "$var='$key'"
+
+  # Move the cursor to the start of the line and clear the rest.
+  #
+  # TODO: it would be better if we restored position to what it was at the start
+  # of this function instead of just assuming we started at the start of a line
+  printf "\r\033[K"
+
+  # Restore terminal settings (and clear scope guard)
+  stty "$old_stty"
+  trap - EXIT
+
+  # Return the captured key
+  log::debug "User pressed ${(P)var}"
+}
+
+function _dfd::edit_gitignore() {
+  local git_root
+  git_root=$(git df rev-parse --show-toplevel)
+  "${EDITOR}" "${git_root}/.gitignore"
+}
+
+function _dfd::fzf_add_untracked() {
+  local git_root
+  git_root=$(git df rev-parse --show-toplevel)
+
+  pushd "${git_root}" &>/dev/null || return 1
+  local untracked
+  untracked="$(git df ls-files --others --exclude-standard)"
+  popd
+
+  local selected
+  selected="$(echo "${untracked}" |\
+    fzf --multi --preview 'bat --color=always {}' |\
+    sed "s|^|${git_root}/|g" |\
+    tr '\n' ' ')"
+  [ -z "${selected}" ] && return 0
+
+  run_cmd git df add ${=selected}
+}
+
+# Main function
+function main() {
+  git df status
+
+  local user_choice="?"
+  local finished="false"
+  while [ "${finished}" = "false" ]; do
+    read_one_keypress user_choice "
+  ${c_cyan}[?]${c_rst} repeat options
+  ${c_cyan}[l]${c_rst} clear
+  ${c_yellow}[g]${c_rst} edit .gitignore
+  ${c_yellow}[u]${c_rst} add untracked files
+  ${c_yellow}[s]${c_rst} status
+  ${c_green}[p]${c_rst} patch
+  ${c_green}[c]${c_rst} commit
+  ${c_red}[q]${c_rst} quit
+  Uppercase anything - do that and quit
+
+  Select an option..."
+
+    # If the uppercase letter is set, then we're done
+    local uc_down=$(tr '[:upper:]' '[:lower:]' <<< "${user_choice}")
+    if [ "${user_choice}" != "${uc_down}" ]; then
+      finished="true"
+      user_choice="${uc_down}"
+    fi
+
+    case "${user_choice}" in
+      "?") ;;
+      "g") _dfd::edit_gitignore ;;
+      "u") _dfd::fzf_add_untracked ;;
+      "l") clear ;;
+      "s") clear; git df status ;;
+      "p") git df patch ;;
+      "c") git df commit ;;
+      "q") log::info "Goodbye"; finished="true" ;;
+      "<"*">") log::warn "Don't press a special character it's weird" ;;
+      *) log::warn "Invalid option: ${user_choice}"; :;;
+    esac
+  done
+}
+main "$@"
