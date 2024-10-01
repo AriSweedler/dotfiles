@@ -1,18 +1,30 @@
 # Edit the file that a shell function is defined in
 local -r func_name="${1:?}"
-if ! type "$func_name" | grep -q "shell function"; then
-  log::err "Function does not exist | func_name='$func_name'"
-  log::warn "type $func_name='$(type "$func_name")'"
+local type
+type="$(type "${func_name}")"
+if ! grep -q "shell function" <<< "${type}"; then
+  log::err "Function does not exist | func_name='$func_name' type='${type}'"
   return 1
 fi
 
+# Find the file the function is in
 local file
-file="$(type "$func_name" | awk '{print $NF}')"
-type "$func_name"
-if type "$func_name" | grep -q "\/functions\/"; then
-  # This is the only function in the file
-  "$EDITOR" "$file"
+if grep -q "is an autoload shell function" <<< "${type}"; then
+  for autoload_file in "${fpath[@]}"; do
+    local maybe_file="${autoload_file}/${func_name}"
+    [ -f "${maybe_file}" ] || continue
+    file="${maybe_file}"
+    log::info "Found autoload function | func_name='${func_name}' file='${file}'"
+    break
+  done
 else
-  # Open the file and try jumping to the function with a search command
-  "$EDITOR" +"/$func_name() {" "$file"
+  file="$(awk '{print $NF}' <<< "${type}")"
 fi
+
+# Set editor args: Jump to the function definition. If it's an autoloaded
+# function then there's nothing to do here
+local editor_args=()
+if grep -q "\/functions\/" <<< "${type}"; then
+  editor_args=("+/${func_name} () {")
+fi
+"${EDITOR}" "${editor_args[@]}" "${file}"
