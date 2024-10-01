@@ -104,6 +104,10 @@ function _dfd::fzf_add_untracked() {
 
 # Main function
 function main() {
+  if grep -q "nothing to commit, working tree clean" < <(git df status); then
+    log::info "Nothing to commit, working tree clean! :)"
+    return
+  fi
   git df status
 
   local user_choice="?"
@@ -116,7 +120,9 @@ function main() {
   ${c_yellow}[u]${c_rst} add untracked files
   ${c_yellow}[s]${c_rst} status
   ${c_green}[p]${c_rst} patch
-  ${c_green}[c]${c_rst} commit & push
+  ${c_green}[c]${c_rst} commit
+  ${c_green}[h]${c_rst} push
+  ${c_green}[d]${c_rst} Do it all (patch, commit, push)
   ${c_red}[q]${c_rst} quit
   Uppercase anything - do that and quit
 
@@ -136,7 +142,14 @@ function main() {
       "l") clear ;;
       "s") clear; git df status ;;
       "p") git df patch ;;
-      "c") git df commit; git df push ;;
+      "c") git df commit ;;
+      "h") git df push ;;
+      "d")
+        git df patch
+        git df commit
+        git df push
+        finished="true"
+        ;;
       "q") log::info "Goodbye"; finished="true" ;;
       "<"*">") log::warn "Don't press a special character it's weird" ;;
       *) log::warn "Invalid option: ${user_choice}"; :;;
