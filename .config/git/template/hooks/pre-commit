@@ -54,7 +54,7 @@ function trailing_whitespace() {
 }
 
 function main() {
-  if ! source "$HOME/.config/bash-init/log.sh" &>/dev/null; then
+  if ! source "$HOME/.config/bash/plugins/log.bash" &>/dev/null; then
     function log::info { echo "[INFO] $@" >&2; }
     function log::err { echo "[ERROR] $@" >&2; }
   fi
