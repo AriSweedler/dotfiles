@@ -4,32 +4,6 @@ Usage: jq::drill [options]
 HELP
 }
 
-function jq::drill() {
-  # Parse args
-  while (( $# > 0 )); do
-    case "$1" in
-      -h|--help) jq::drill::help; return ;;
-      *) log::err "Unknown argument in ${funcstack[1]}: ${1}"; return 1;;
-    esac
-  done
-
-  # If there is no stdin, then just quit
-  if [ -t 0 ]; then
-    log::err "No input"
-    return 1
-  fi
-  local original_json
-  original_json=$(cat - | jq)
-
-  # Initialize global values and start drilling
-  local histstack_filt=() histstack_json=()
-  local generated_filter="" cur_json="${original_json}"
-  jq::_drill
-
-  # Put results on clipboard
-  pbcopy < <(jq::_drill::selection)
-}
-
 function jq::_drill::selection() {
   # Validate
   JQ_DRILL_SELECTION="${JQ_DRILL_SELECTION:-result}"
@@ -62,7 +36,8 @@ function jq::_drill() {
   # Type check
   case "${type}" in
     string | number | null) return ;;
-    object | array) ;;
+    object) ;;
+    array) generated_filter="${generated_filter:-.}" ;;
     *)
       log::err "Unknown type | type='${type}' filter='${generated_filter}' cur_json='${cur_json}'"
       return 1
@@ -93,8 +68,9 @@ function jq::_drill() {
   local fzf_input=$(
     echo
     echo -e "${(j.\n.)keys[@]}"
-    echo ".."
   )
+  (( ${#histstack_filt[@]} > 0 )) && fzf_input+="
+.."
   local user_selection
   if ! user_selection=$(fzf "${fzf_opts[@]}" <<< "${fzf_input}"); then
     log::warn "No key selected - drilling done"
@@ -151,33 +127,32 @@ function jq::_drill::array::_update_cur_json_and_generated_filter() {
   cur_json=$(echo "${cur_json}" | jq -r ".[${user_selection}]")
 }
 
-function jq::drill::resource() {
-  source /Users/ari.sweedler/.config/zsh/plugins/jq.zsh
-}
+# Parse args
+while (( $# > 0 )); do
+  case "$1" in
+    -h|--help) jq::drill::help; return ;;
+    *) log::err "Unknown argument in ${funcstack[1]}: ${1}"; return 1;;
+  esac
+done
 
-function jq::drill::example::1() {
-  jq::drill::resource
-  jq::drill <<< '
-{
-  "a": 1,
-  "b": 2,
-  "c": { "d": 3, "e": 4 }
-}
-'
-}
+# If there is no stdin, then just quit
+if [ -t 0 ]; then
+  log::err "No input"
+  return 1
+fi
+local input
+input="$(cat -)"
+local original_json
+if ! original_json=$(jq 2>&1 <<< "${input}"); then
+  log::err "Failed to parse input as json | input='${input}'"
+  echo "${original_json}"
+  return 1
+fi
 
-function jq::drill::example::2() {
-  jq::drill::resource
-  jq::drill <<< '
-{
-  "a": 1,
-  "b": 2,
-  "c": { "d": 3, "e": 4 },
-  "f": [
-    { "x0": 0, "x1": 1 },
-    { "y0": 0, "y1": 1 },
-    { "z0": 0, "z1": 1 }
-  ]
-}
-'
-}
+# Initialize global values and start drilling
+local histstack_filt=() histstack_json=()
+local generated_filter="" cur_json="${original_json}"
+jq::_drill
+
+# Put results on clipboard
+pbcopy < <(jq::_drill::selection)
