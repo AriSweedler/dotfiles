@@ -1,2 +1,13 @@
-pbcopy < "$HOME/.ssh/id_ed25519.pub"
-log::info "Pubkey for self copied to clipboard | pubkey='$(pbpaste)'"
+my_keys=(
+  "id_ed25519.pub" # Work laptop
+  "id_ecdsa.pub"   # Personal laptop
+)
+local ssh_dir="${HOME}/.ssh"
+for rel_key in "${my_keys[@]}"; do
+  local key="${ssh_dir}/${rel_key}"
+  [ -f "${key}" ] || continue
+  pbcopy < "${key}"
+  log::info "Pubkey for self copied to clipboard | pubkey='$(pbpaste)'"
+  return
+done
+log::err "No keys found! Check your ssh dir | ssh_dir='${ssh_dir}'"

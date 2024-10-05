@@ -107,6 +107,7 @@ EOF
 function _pubkey::_init_fxns() {
   local friend_keys_dir="$XDG_DATA_HOME/ssh/pubkeys_of_friends"
   if ! [ -d "$friend_keys_dir" ]; then
+    type log::info &>/dev/null || function log::info() { echo "INFO:: $*" >&2 ; }
     log::info "You do not have any friends on this machine, yet | friend_keys_dir='$friend_keys_dir'"
     return
   fi
