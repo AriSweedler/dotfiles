@@ -108,6 +108,7 @@ function main() {
     log::info "Nothing to commit, working tree clean! :)"
     return
   fi
+  pushd "$(git df rev-parse --show-toplevel)" &>/dev/null
   git df status
 
   local user_choice="?"
@@ -157,4 +158,4 @@ function main() {
     esac
   done
 }
-main "$@"
+( main "$@" )
