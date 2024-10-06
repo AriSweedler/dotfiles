@@ -50,11 +50,12 @@ function jq::_drill() {
     --layout=reverse
     --border
     --ansi
+    --header="Generated filter: '${generated_filter}'"
   )
   "jq::_drill::${type}::_append_fzf_opts"
 
   local keys
-  if ! keys=($(jq -r 'keys[]' <<< "${cur_json}" 2>/dev/null)); then
+  if ! keys=("${(f)"$(jq -r 'keys[]' <<< "${cur_json}" 2>/dev/null)"}"); then
     log::info "Drilling complete | filter='${generated_filter}'"
     return
   fi
@@ -65,12 +66,11 @@ function jq::_drill() {
   # 3. Go to prev filter
   # TODO: Give user an escape sequence to add non-drill filters - a pipe or a
   # function
+  (( ${#histstack_filt[@]} > 0 )) && keys+=(..)
   local fzf_input=$(
     echo
     echo -e "${(j.\n.)keys[@]}"
   )
-  (( ${#histstack_filt[@]} > 0 )) && fzf_input+="
-.."
   local user_selection
   if ! user_selection=$(fzf "${fzf_opts[@]}" <<< "${fzf_input}"); then
     log::warn "No key selected - drilling done"
@@ -103,7 +103,6 @@ function jq::_drill() {
 
 function jq::_drill::object::_append_fzf_opts() {
   fzf_opts+=(
-    --header="Generated filter: '${generated_filter}'"
     --prompt="Key> "
     --preview="echo '${cur_json}' | jq -r '.{}'"
   )
@@ -116,7 +115,6 @@ function jq::_drill::object::_update_cur_json_and_generated_filter() {
 
 function jq::_drill::array::_append_fzf_opts() {
   fzf_opts+=(
-    --header="Generated filter: '${generated_filter}'"
     --prompt="Index> "
     --preview="echo '${cur_json}' | jq -r '.[{}]'"
   )
