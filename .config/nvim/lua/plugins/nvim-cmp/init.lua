@@ -16,14 +16,15 @@ local M = {
 	"hrsh7th/nvim-cmp",
 	event = "BufReadPre",
 	dependencies = {
-		-- Make vim's native completions available
+		-- Make vim's native completions available as sources
 		"hrsh7th/cmp-path",
 		"hrsh7th/cmp-buffer",
 
-		-- And add LSP completion capabilities
+		-- Add LSP as a source
 		"hrsh7th/cmp-nvim-lsp",
 
-		-- Snippet Engine & associated nvim-cmp source
+		-- 1. Snippet Engine
+		-- 2. Expose the snippet engine's power as an nvim-cmp source
 		{ "L3MON4D3/LuaSnip", build = "make install_jsregexp", dependencies = { "saadparwaiz1/cmp_luasnip" } },
 	},
 	config = function()

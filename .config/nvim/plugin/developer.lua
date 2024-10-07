@@ -2,11 +2,10 @@
 
 -- The grammar is:
 --
--- | <Leader>{e,S,v,t,s} | {edit,split,vsplit,tabedit,source (lowercase only)}
+-- | <Leader>{e,v,t,s} | {edit,split,vsplit,tabedit,source (lowercase only)}
 -- | f (filetype),
 --   v (vimrc init.lua),
 --   o (current file)
---   S (snippets),
 --   L (nvim-lspconfig)
 --   T (terminal)
 --   ? (help)
@@ -36,11 +35,6 @@ local function tes_mappings()
 			key = "o",
 			desc = "the current file",
 			path = "%",
-		},
-		{
-			key = "S",
-			desc = "my personal snippets",
-			path = vim.fn.stdpath("config") .. "/snippets/" .. ft .. ".lua",
 		},
 		{
 			key = "L",
