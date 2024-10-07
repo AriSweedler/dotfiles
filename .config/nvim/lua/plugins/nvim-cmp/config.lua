@@ -18,7 +18,6 @@ local from_source = function(src)
 	}
 end
 
-print("[ARI] Setting up 'cmp'")
 cmp.setup({
 	snippet = {
 		expand = function(args)
@@ -69,7 +68,4 @@ cmp.setup.cmdline(':', {
 })
 
 -- All loaders (except the vscode-standalone-loader) share a similar interface:
-require("luasnip.loaders.from_lua").lazy_load({
-	paths = { "./snippets" }
-})
-require("luasnip.loaders.from_lua").lazy_load({ paths = "~/.config/nvim/LuaSnip/" })
+require("luasnip.loaders.from_lua").lazy_load({ paths = { "./snippets" } })
