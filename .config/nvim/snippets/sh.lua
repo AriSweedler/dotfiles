@@ -1,5 +1,3 @@
-print("[ARI] Loading shell snippets (ari.snippets)")
-
 -- Add snippets for shell scripting
 return {
 	-- First snippet: argparse
@@ -22,15 +20,15 @@ done
 	-- Second snippet: logsuite
 	s(
 		"logsuite",
-		t(
+		fmt(
 			[[
 ## The classic log suite
 c_red='\e[31m'; c_green='\e[32m'; c_rst='\e[0m'
-log::ts() { date "+%Y-%m-%dT%T.%N"; }
-log::err() { echo -e "${c_red}$(log::ts) ERROR::${c_rst}" "$@" >&2; }
-log::info() { echo -e "${c_green}$(log::ts) INFO::${c_rst}" "$@" >&2; }
-run_cmd() { log::info "$@"; "$@" && return; rc=$?; log::err "cmd '$*' failed: $rc"; return $rc; }
+log::ts() {{ date "+%Y-%m-%dT%T.%N"; }}
+log::err() {{ echo -e "${{c_red}}$(log::ts) ERROR::${{c_rst}}" "$@" >&2; }}
+log::info() {{ echo -e "${{c_green}}$(log::ts) INFO::${{c_rst}}" "$@" >&2; }}
+run_cmd() {{ log::info "$@"; "$@" && return; rc=$?; log::err "cmd '$*' failed: ${{rc}}"; return ${{rc}}; }}
 ]]
-		)
+			, {})
 	),
 }
