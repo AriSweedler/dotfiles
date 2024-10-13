@@ -15,7 +15,6 @@ M.get_tool_names = function(path_rel_to_config_lua_dir)
 	for _, tf in ipairs(tool_files) do
 		table.insert(tools, tf:match("([^/]+)%.lua$"))
 	end
-	print("[nvim-lspconfig/get_tool_names.lua] These are the tools we require: " .. vim.inspect(tools))
 	return tools
 end
 
