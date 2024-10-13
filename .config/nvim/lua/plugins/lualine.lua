@@ -3,6 +3,22 @@ local function snippet_mode()
 	return ls.in_snippet() and "SNIP" or ""
 end
 
+local function LSP_list()
+	local clients = vim.lsp.get_clients()
+	if #clients <= 0 then
+		return "No LSP"
+	end
+
+	local names = {}
+	for _, client in ipairs(clients) do
+		table.insert(names, client.name)
+	end
+
+	local ans = table.concat(names, ", ")
+
+	return ans
+end
+
 local progress_symbols = {
 	status = {
 		hl = {
@@ -33,7 +49,8 @@ local M = {
 			lualine_a = { 'mode', snippet_mode },
 			lualine_y = {
 				"copilot",
-				{ "progress", symbols = progress_symbols }
+				{ "progress", symbols = progress_symbols },
+				LSP_list,
 			},
 		},
 	},

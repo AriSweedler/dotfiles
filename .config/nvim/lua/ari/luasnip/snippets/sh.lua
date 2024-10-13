@@ -1,6 +1,8 @@
 -- Add snippets for shell scripting
 local fmt_a = require("luasnip").extend_decorator.apply(fmt, { delimiters = "`~" })
 
+-- TODO: make it such that you can keep adding options (and it adds local
+-- variables and then flags with setting values) to this snippet
 return {
 	-- First snippet: argparse
 	s(
@@ -19,6 +21,8 @@ done
 		)
 	),
 
+	-- TODO: Choose between bash and zsh and other preambles
+	--
 	-- Second snippet: logsuite
 	s(
 		"logsuite",
@@ -33,9 +37,4 @@ run_cmd() { log::info "$@"; "$@" && return; rc=$?; log::err "cmd '$*' failed: ${
 ]]
 			, {})
 	),
-}, {
-	s(
-		"test",
-		t("We expand this into a full line")
-	)
 }

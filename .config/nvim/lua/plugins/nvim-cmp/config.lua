@@ -2,48 +2,38 @@
 -- vim.opt.shortmess:append "c"
 
 local cmp = require("cmp")
-local luasnip = require("luasnip")
-
-luasnip.config.setup({
-	enable_autosnippets = true,
-})
-
-local from_source = function(src)
-	return {
-		config = {
-			sources = {
-				{ name = src }
-			}
-		}
-	}
-end
+local sug = require("plugins.nvim-cmp.syntactic_sugar")
+require("ari.luasnip")
 
 cmp.setup({
-	snippet = {
-		expand = function(args)
-			luasnip.lsp_expand(args.body)
-		end,
-	},
+	snippet = sug.ls_expander,
 	mapping = {
+		-- Start completion
 		["<C-Space>"] = cmp.mapping.complete(),
-		["<C-s>"] = cmp.mapping.complete(from_source("luasnip")),
+		["<C-s>"] = cmp.mapping.complete(sug.from_sources({ "luasnip" })),
 
-		-- TODO: Do '<C-n>' and '<C-p>' work when
-		-- 'luasnip.expand_or_locally_jumpable' is possible?
+		-- Finish completion
+		["<C-y>"] = cmp.mapping(sug.confirm, { "i", "c" }),
+		["<Enter>"] = cmp.mapping(sug.confirm, { "i" }),
+
+		-- Movement
 		["<C-n>"] = cmp.mapping.select_next_item({ behavior = cmp.SelectBehavior.Insert }),
 		["<C-p>"] = cmp.mapping.select_prev_item({ behavior = cmp.SelectBehavior.Insert }),
+		["<C-l>"] = cmp.mapping(sug.snip_right, { "i", "s" }),
+		["<C-h>"] = cmp.mapping(sug.snip_left, { "i", "s" }),
+
+		-- Less important movements
 		["<C-d>"] = cmp.mapping.scroll_docs(-4),
 		["<C-f>"] = cmp.mapping.scroll_docs(4),
-		["<C-y>"] = cmp.mapping(
-			cmp.mapping.confirm({
-				behavior = cmp.ConfirmBehavior.Insert,
-				select = true,
-			}),
-			{ "i", "c" }
-		),
 	},
+	-- TODO: should we use (cmp.config.sources)
 	sources = {
-		{ name = "luasnip" },
+		-- lazydev has better completions (at least for nvim lua) than the lua
+		-- language server's built-in completions. (Language servers ship with
+		-- default completions). Let's set group index to 0 to hoist these better
+		-- completions above the others
+		{ name = "lazydev", group_index = 0, },
+		{ name = "luasnip", option = { show_autosnippets = true }, },
 		{ name = "nvim_lsp" },
 		{ name = "path" },
 		{ name = "buffer" },
@@ -66,6 +56,3 @@ cmp.setup.cmdline(":", {
 	}),
 	matching = { disallow_symbol_nonprefix_matching = false }
 })
-
--- All loaders (except the vscode-standalone-loader) share a similar interface:
-require("luasnip.loaders.from_lua").lazy_load({ paths = { "./snippets" } })
