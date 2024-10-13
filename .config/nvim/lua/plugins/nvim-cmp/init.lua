@@ -14,21 +14,26 @@
 -- engines.
 local M = {
 	"hrsh7th/nvim-cmp",
-	event = "BufReadPre",
+	event = "InsertEnter",
 	dependencies = {
 		-- Make vim's native completions available as sources
 		"hrsh7th/cmp-path",
 		"hrsh7th/cmp-buffer",
 
-		-- Add LSP as a source
+		-- Add LSP as a source (struct fields, variables in scope, etc.)
 		"hrsh7th/cmp-nvim-lsp",
 
-		-- 1. Snippet Engine
-		-- 2. Expose the snippet engine's power as an nvim-cmp source
-		{ "L3MON4D3/LuaSnip", build = "make install_jsregexp", dependencies = { "saadparwaiz1/cmp_luasnip" } },
+		-- 1. Install the LuaSnip snippet engine
+		-- 2. Register all the snippets it loads as available from an nvim-cmp source
+		{
+			"L3MON4D3/LuaSnip",
+			build = "make install_jsregexp",
+			dependencies = { "saadparwaiz1/cmp_luasnip" },
+		},
 	},
 	config = function()
 		require("plugins.nvim-cmp.config")
+		require("cmp").register_source("luasnip", require("cmp_luasnip").new())
 	end,
 }
 

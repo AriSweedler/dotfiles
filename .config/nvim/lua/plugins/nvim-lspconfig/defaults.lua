@@ -43,8 +43,14 @@ M.on_attach = function(_, bufnr)
 	end, { desc = "Open LSP log" })
 end
 
--- 'cmp_nvim_lsp' gives additional LSP client capabilities
-local capabilities = vim.lsp.protocol.make_client_capabilities()
-M.capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
+-- 'cmp_nvim_lsp' gives additional LSP client capabilities. You can take the
+-- defaults, and override them like so:
+-- local capabilities = vim.lsp.protocol.make_client_capabilities()
+-- M.capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
+--
+-- Or you can just take what cmp_nvim_lsp says you have without overrides:
+-- M.capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
+--
+-- I think I wanna do it deliberately in each 'lua/ari/lsp' file
 
 return M

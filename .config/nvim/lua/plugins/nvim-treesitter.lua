@@ -62,7 +62,7 @@ local M = {
 	},
 	opts = {
 		auto_install = true,
-		ensure_installed = "all",
+		ensure_installed = { "bash", "lua", "vim", "vimdoc", "query", "python", "javascript", "go", },
 		sync_install = true, -- Install parsers syncronously. Lol.
 		ignore_install = {}, -- List of parsers to ignore installation
 		highlight = {
@@ -76,7 +76,7 @@ local M = {
 			smart_rename = {
 				enable = true,
 				keymaps = {
-					smart_rename = "grr",
+					smart_rename = "gR",
 				},
 			},
 			navigation = {
