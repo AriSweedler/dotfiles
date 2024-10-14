@@ -51,6 +51,7 @@ function ensure_brew_pkgs() {
     # Shells
     bash
     zsh
+    zsh-vi-mode
 
     # Unix
     awk

@@ -19,7 +19,7 @@ vim.keymap.set("n", "<Leader><C-t>d", function()
 	builtin.find_files({
 		cwd = "$HOME/",
 		prompt_title = "My dotfiles tracked with git",
-		find_command = { 'git', 'df', 'ls', '--name-only' },
+		find_command = { "git", "df", "ls", "--name-only" },
 	})
 end, { desc = "Search Git tracked dotfiles" })
 
