@@ -50,6 +50,7 @@ function histrm::_commit() {
   my_diff="$(diff "${HISTFILE}.tmp" "${HISTFILE}")"
   local actual_lines
   actual_lines="$(wc -l <<< "${my_diff}")"
+  actual_lines=$(( actual_lines - 1 )) # Diff has a header
 
   if (( actual_lines > max_lines )); then
     _log::histrm::warn::rollback
@@ -57,7 +58,13 @@ function histrm::_commit() {
     return 1
   fi
 
+  log::info "Removed N lines | N='${actual_lines}'"
   mv "${HISTFILE}.tmp" "${HISTFILE}"
+  histpersist::disk_to_shell
+
+  local histrm_history="${XDG_STATE_HOME}/zsh/histrm"
+  log::debug "Saving histrm history | histrm_history='${histrm_history}'"
+  echo "${my_diff}" > "${XDG_STATE_HOME}/zsh/histrm"
 }
 
 # Take all lines with dates > 'X seconds ago' and remove them
@@ -67,9 +74,8 @@ function histrm::recent::seconds() {
   local now largest_ts
   now="$(date +%s)"
   largest_ts=$(( now - seconds_ago ))
-  log::info "Removing all history that's less than X seconds old | X='$seconds_ago' now='$now' largest_ts='$largest_ts'"
-
-  log::dev "data | now='$now' largest_ts='$largest_ts'"
+  log::info "Removing all history that's less than X seconds old | X='$seconds_ago'"
+  log::debug "data | now='$now' largest_ts='$largest_ts'"
 
   # We save the timestamp when we see a new command and skip or print every line
   # until we get to the next one. This works for multiline files
@@ -90,7 +96,7 @@ function histrm::recent::lines() {
   # delete N entries, we need to remove N+1 lines (assuming none are multiline!)
   log::info "Removing the last N lines from history | N='$lines'"
   tac "${HISTFILE}" | sed "1,${lines}d" | tac > "${HISTFILE}.tmp"
-  mv "${HISTFILE}.tmp" "${HISTFILE}"
+  histrm::_commit "${lines}"
 }
 
 # Take all lines with a specific command and remove them
