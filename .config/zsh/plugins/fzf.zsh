@@ -1,3 +1,4 @@
+function fzf::init() {
 eval "$(fzf --zsh)"
 
 # Use fd instead of fzf
@@ -29,4 +30,5 @@ _fzf_comprun() {
     ssh)          fzf --preview 'dig {}'                   "$@" ;;
     *)            fzf --preview 'bat -n --color=always {}' "$@" ;;
   esac
+}
 }

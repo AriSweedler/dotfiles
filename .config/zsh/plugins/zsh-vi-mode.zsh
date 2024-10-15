@@ -12,3 +12,5 @@ function zvm_config() {
   bindkey -M vicmd 'D' delete-entire-line
 }
 zvm_config
+
+zvm_after_init_commands+=('fzf::init')
