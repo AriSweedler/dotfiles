@@ -32,3 +32,7 @@ vim.opt.listchars = { space = ".", tab = "|>" }
 
 -- Turn 'timeout' off so we have unlimited time to enter mapped commands
 vim.o.timeout = false
+
+-- Tell nvim that we've already loaded netrw, so we don't try to load it ever
+-- again. This effectively disables netrw
+vim.g.loaded_netrwPlugin = 1
