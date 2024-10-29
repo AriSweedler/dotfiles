@@ -11,11 +11,11 @@ log::_debug() { echo -e "${c_grey}[DEBUG] $(log::preamble)${c_rst}" "$@" >&2 ; }
 log::debug() { [ -z "${DEBUG:-}" ] && return; log::_debug "$@" ; }
 
 # Multiline logs
-log::DEV()   { while read -r line; do log::dev   "$line"; done <<< "$*" ; }
-log::ERR()   { while read -r line; do log::err   "$line"; done <<< "$*" ; }
-log::WARN()  { while read -r line; do log::warn  "$line"; done <<< "$*" ; }
-log::INFO()  { while read -r line; do log::info  "$line"; done <<< "$*" ; }
-log::DEBUG() { while read -r line; do log::debug "$line"; done <<< "$*" ; }
+log::DEV()   { while IFS= read -r line; do log::dev   "| $line"; done <<< "$*" ; }
+log::ERR()   { while IFS= read -r line; do log::err   "| $line"; done <<< "$*" ; }
+log::WARN()  { while IFS= read -r line; do log::warn  "| $line"; done <<< "$*" ; }
+log::INFO()  { while IFS= read -r line; do log::info  "| $line"; done <<< "$*" ; }
+log::DEBUG() { while IFS= read -r line; do log::debug "| $line"; done <<< "$*" ; }
 
 # Running commands
 function run_cmd() {

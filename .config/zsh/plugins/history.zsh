@@ -60,7 +60,7 @@ function histrm::_commit() {
 
   log::info "Removed N lines | N='${actual_lines}'"
   mv "${HISTFILE}.tmp" "${HISTFILE}"
-  histpersist::disk_to_shell
+  hist::persist::shell_to_disk
 
   local histrm_history="${XDG_STATE_HOME}/zsh/histrm"
   log::debug "Saving histrm history | histrm_history='${histrm_history}'"
@@ -111,16 +111,28 @@ function histrm::cmd() {
     return
   fi
 
-  histrm::_commit 20
+  histrm::_commit "${HISTRM_MAX:-20}"
 }
 
+function hist::yank() {
+  fc -ln -1 | pbcopy
+  log::INFO "
+Copied last command to clipboard.
+You're such a good coworker!
+Thanks for helping your friends
+
+    $(pbpaste)
+"
+}
+alias hy=hist::yank
+
 # Take loaded history and persist it to disk
-function histpersist::shell_to_disk() {
+function hist::persist::shell_to_disk() {
   fc -W
 }
 
 # Take disk history and load it to shell
-function histpersist::disk_to_shell() {
+function hist::persist::disk_to_shell() {
   fc -R
 }
 
