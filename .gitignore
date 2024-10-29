@@ -8,6 +8,7 @@
 .azure/
 .bash_history
 .cisco/
+.config/Google/
 .config/Microsoft\\VisualStudio Services/
 .config/atac/atac.log
 .config/github-copilot/
@@ -24,10 +25,12 @@
 .config/zsh/history
 .docker/
 .gnupg
+.gradle/
 .groot_data/
 .histfile
 .kube/
 .lesshst
+.m2/
 .npm/
 .nvs/
 .python_history
@@ -41,6 +44,7 @@
 Desktop/
 Documents/
 Downloads/
+Library/Java/
 Movies/
 Music/
 OneDrive - Illumio
