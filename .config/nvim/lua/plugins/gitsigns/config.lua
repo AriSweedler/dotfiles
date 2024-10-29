@@ -7,12 +7,6 @@ local function set_colors()
 	vim.api.nvim_set_hl(0, "GitSignsChange", { fg = "#bbbb00", bg = "#808000" })
 end
 
-local function my_map(mode, l, r, opts)
-	opts = opts or { noremap = true }
-	opts.buffer = bufnr
-	vim.keymap.set(mode, l, r, opts)
-end
-
 local function brack_h(bc, fxn)
 	return function()
 		if vim.wo.diff then
@@ -24,9 +18,14 @@ local function brack_h(bc, fxn)
 end
 
 function M.on_attach_hook(bufnr)
-	set_colors()
-
+	local function my_map(mode, l, r, opts)
+		opts = opts or { noremap = true }
+		opts.buffer = bufnr
+		vim.keymap.set(mode, l, r, opts)
+	end
 	local gs = package.loaded.gitsigns
+
+	set_colors()
 
 	-- Navigation
 	my_map({ "n", "v" }, "]h", brack_h("]h", gs.next_hunk), { expr = true, desc = "Jump to next hunk" })
@@ -40,7 +39,7 @@ function M.on_attach_hook(bufnr)
 		gs.reset_hunk({ vim.fn.line("."), vim.fn.line("v") })
 	end, { desc = "reset git hunk" })
 	my_map("n", "<Leader>hs", gs.stage_hunk, { desc = "git stage hunk" })
-	my_map("n", "<Leader>hsu", gs.undo_stage_hunk, { desc = "undo stage hunk" })
+	my_map("n", "<Leader>hS", gs.undo_stage_hunk, { desc = "undo stage hunk" })
 	my_map("n", "<Leader>hr", gs.reset_hunk, { desc = "git reset hunk" })
 	my_map("n", "<Leader>hp", gs.preview_hunk, { desc = "preview git hunk" })
 	my_map("n", "<Leader>hb", gs.blame_line, { desc = "git blame line" })

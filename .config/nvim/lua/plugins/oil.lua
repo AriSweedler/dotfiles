@@ -1,6 +1,6 @@
 local M = {
 	"stevearc/oil.nvim",
-	event = "BufReadPre",
+	event = "VeryLazy",
 	config = function()
 		require("oil").setup({
 			columns = { "icon" },

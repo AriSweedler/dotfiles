@@ -4,6 +4,7 @@ local M = {
 	opts = {
 		numhl = true,
 		on_attach = require("plugins.gitsigns.config").on_attach_hook, -- set up keymaps
+		signs_staged_enable = false,
 		worktrees = {
 			{ -- My dotfiles
 				toplevel = vim.env.HOME,
