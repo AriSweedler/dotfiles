@@ -14,28 +14,28 @@ EOF
 
 function pubkey() {
   local action=copy
-  local epp=1 pp=() # [expected] positional parameters
+  local rpp=1 mpp=1 pp=() # [required/max] positional parameters
 
   while (( $# > 0 )); do
     case "$1" in
       -h|--help) _pk::help; return 0;;
-      --edit) action=edit; epp=1; shift;;
-      --copy) action=copy; epp=1; shift;;
-      --list) action=list; epp=0; shift;;
-      --dir) action=dir; epp=0; shift;;
-      --compare) action=compare; epp=1; shift;;
+      --edit) action=edit; rpp=0; mpp=1; shift;;
+      --copy) action=copy; rpp=1; mpp=1; shift;;
+      --list) action=list; rpp=0; mpp=0; shift;;
+      --dir) action=dir; rpp=0; mpp=0; shift;;
+      --compare) action=compare; rpp=1; mpp=1; shift;;
       *)
         pp+=( "$1" ) && shift
-        if (( ${#pp[@]} > epp )); then
-          log::err "Expected only N positional parameters | N='${epp}'"
+        if (( ${#pp[@]} > mpp )); then
+          log::err "Maximum of N positional parameters | N='${mpp}'"
           return 1
         fi
         ;;
     esac
   done
 
-  if (( ${#pp[@]} != epp )); then
-    log::err "Expected N positional parameters | N='${epp}' #pp='${#pp[@]}'"
+  if (( ${#pp[@]} < rpp )); then
+    log::err "Required N positional parameters | N='${rpp}' #pp='${#pp[@]}'"
     return 1
   fi
 
@@ -50,7 +50,7 @@ function validate::pubkey() {
 }
 
 function _pk::dir() {
-  echo "$XDG_DATA_HOME/ssh/pubkeys_of_friends"
+  echo "${XDG_DATA_HOME:-$HOME/.local/share}/ssh/pubkeys_of_friends"
 }
 
 function _pk::file() {
