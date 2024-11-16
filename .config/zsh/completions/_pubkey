@@ -1,0 +1,34 @@
+#compdef pubkey
+
+_pubkey::pubkey() {
+  local pks
+  pks=( $(pubkey --list) )
+  _describe 'public keys' pks
+}
+
+_pubkey() {
+  local arguments=(
+    '(action)'{-h,--help}'[Show help message and exit]'
+    '(action)--edit[Edit pubkey file]:pubkey:->pubkeys'
+    '(action)--copy[Copy pubkey to clipboard]:pubkey:->pubkeys'
+    '(action)--compare[Use rg on your pubkey database]:regex:'
+    '(action)--dir[Show the directory where pubkeys are stored]'
+    '(action)--list[List all pubkeys in your database]'
+    '*:default:->default'
+  )
+  _arguments -C "${arguments[@]}"
+
+  case "$state" in
+    pubkeys) _pubkey::pubkey ;;
+    default)
+      # pubkey for BLANK
+      (( ${#words} == 2 )) && _pubkey::pubkey && return
+
+      # No-op for --dir, --list, --compare
+      arr::contains "--dir" $words && return
+      arr::contains "--list" $words && return
+      arr::contains "--compare" $words && return
+  esac
+}
+
+_pubkey "$@"
