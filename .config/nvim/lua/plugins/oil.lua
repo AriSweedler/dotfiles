@@ -23,6 +23,7 @@ local M = {
 					local always_hidden_files = {
 						".git",
 						".DS_Store",
+						"__pycache__",
 					}
 					return vim.tbl_contains(always_hidden_files, name)
 				end,

@@ -2,6 +2,7 @@
 .IdentityService/
 .ServiceHub/
 .Trash/
+.android/
 .anyconnect
 .aws/
 .azcopy/
@@ -23,11 +24,13 @@
 .config/pgcli/
 .config/zsh/.zcompdump
 .config/zsh/history
+.deno/
 .docker/
 .gnupg
 .gradle/
 .groot_data/
 .histfile
+.jenv/
 .kube/
 .lesshst
 .m2/
