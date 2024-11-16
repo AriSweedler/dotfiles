@@ -1,6 +1,6 @@
 local M = {
 	"NachoNievaG/atac.nvim",
-	event = "BufReadPre",
+	event = "VeryLazy",
 	dependencies = { "akinsho/toggleterm.nvim" },
 	config = function()
 		require("atac").setup({
