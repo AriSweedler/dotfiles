@@ -138,6 +138,7 @@
 	wb = wipebranch
 	yb = yankbranch
 	fpr = finish-pr
+	sw = switch -
 	swr = switchr
 
 	# New commands
