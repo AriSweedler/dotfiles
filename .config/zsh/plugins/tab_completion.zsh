@@ -30,7 +30,7 @@ unset ZCACHE
 compinit
 # autoload -U +X bashcompinit && bashcompinit
 
-# 5) Register my autoloadable functions and completions
+# 5) Register my autoloadable functions and completions (ZDOTDIR)
 fpath=("$ZDOTDIR/functions" $fpath)
 while IFS= read -r fxn; do
   autoload -z "$fxn"
@@ -45,3 +45,21 @@ while IFS= read -r comp_fxn; do
   fi
   compdef "$comp_fxn" "${comp_fxn#_}"
 done < <(find "${ZDOTDIR}/completions" -type f -exec basename {} \;)
+
+# 6) Register my autoloadable functions and completions (local)
+local_functions="$XDG_DATA_HOME/zsh/functions"
+if [ -d "${local_functions}" ]; then
+  fpath=("${local_functions}" $fpath)
+  while IFS= read -r fxn; do
+    autoload -z "$fxn"
+  done < <(find "${local_functions}" -type f -exec basename {} \;)
+fi
+
+local_completions="$XDG_DATA_HOME/zsh/completions"
+if [ -d "${local_completions}" ]; then
+  fpath=("${local_completions}" $fpath)
+  while IFS= read -r comp_fxn; do
+    autoload -z "$comp_fxn"
+    compdef "$comp_fxn" "${comp_fxn#_}"
+  done < <(find "${local_completions}" -type f -exec basename {} \;)
+fi
