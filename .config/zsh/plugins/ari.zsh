@@ -23,3 +23,9 @@ bindkey -v
 bindkey "^A" vi-beginning-of-line
 bindkey "^B" vi-beginning-of-line
 bindkey "^E" vi-end-of-line
+
+# Run a command DIRECTLY from a keystroke:
+# https://unix.stackexchange.com/a/668986/248906
+function ari-keystroke-coder { cc; zle redisplay; }
+zle -N ari-keystroke-coder
+bindkey '^o' ari-keystroke-coder
