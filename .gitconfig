@@ -124,22 +124,23 @@
 
 	# Shortcuts
 	a = !"git add .; git s"
+	ca = amend
 	d = diff --staged --diff-algorithm=minimal
 	df = dotfiles
 	dfd = dotfiles-daily
 	els = editdiffls
 	f = fetch --append --prune --jobs=4
 	ff = pull --ff-only
+	fpr = finish-pr
 	l = ll -10
 	ll = log --pretty=newlog --graph
 	po = push-origin
 	s = status --short --branch
 	sub-u = sub-update
-	wb = wipebranch
-	yb = yankbranch
-	fpr = finish-pr
 	sw = switch -
 	swr = switchr
+	wb = wipebranch
+	yb = yankbranch
 
 	# New commands
 	cconfig = config --edit --global
@@ -160,7 +161,7 @@
 	yankbranch = !"git branch --show-current | tr -d '\n' | tee /dev/tty | pbcopy"
 
 	# jujutsu-inspired syntax
-	describe = commit --amend
+	reword = commit --amend
 	amend = commit --amend --reuse-message=HEAD
 	patch = add --patch
 	fixup = !"f() { git commit --fixup $1 && git rebase --autosquash $1~ ; } ; f"

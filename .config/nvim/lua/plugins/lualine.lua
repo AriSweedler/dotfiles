@@ -26,12 +26,12 @@ local progress_symbols = {
 			sleep = "#AEB7D0",
 			disabled = "#6272A4",
 			warning = "#FFB86C",
-			unknown = "#FF5555"
-		}
+			unknown = "#FF5555",
+		},
 	},
 	-- require("copilot-lualine").spinners.moon
 	spinners = { "🌑 ", "🌒 ", "🌓 ", "🌔 ", "🌕 ", "🌖 ", "🌗 ", "🌘 " },
-	spinner_color = "#6272A4"
+	spinner_color = "#6272A4",
 }
 
 local M = {
@@ -46,7 +46,7 @@ local M = {
 			path = 1,
 		},
 		sections = {
-			lualine_a = { 'mode', snippet_mode },
+			lualine_a = { "mode", snippet_mode },
 			lualine_y = {
 				"copilot",
 				{ "progress", symbols = progress_symbols },
