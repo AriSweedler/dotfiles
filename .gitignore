@@ -12,6 +12,7 @@
 .config/Google/
 .config/Microsoft\\VisualStudio Services/
 .config/atac/atac.log
+.config/gatsby/
 .config/github-copilot/
 .config/helm/
 # Controversial to not version a lockfile - but I have autoupdates on so it
@@ -42,6 +43,7 @@
 .tmux/
 .tsh/
 .viminfo
+.vscode/
 .wget-hsts
 
 Desktop/
