@@ -15,6 +15,7 @@
 .config/gatsby/
 .config/github-copilot/
 .config/helm/
+.config/k9s/
 # Controversial to not version a lockfile - but I have autoupdates on so it
 # makes more sense to me to keep my git history clean of these annoying updates.
 # Let's say I use my laptop every day and my desktop once a month - I don't
@@ -35,11 +36,13 @@
 .kube/
 .lesshst
 .m2/
+.mono/
 .npm/
 .nvs/
 .python_history
 .rye/
 .sqlite_history
+.testcontainers.properties
 .tmux/
 .tsh/
 .viminfo

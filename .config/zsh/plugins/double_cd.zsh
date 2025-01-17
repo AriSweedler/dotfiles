@@ -64,7 +64,7 @@ function double_cd::generate() {
       cat << EOF > "${dcd_functions}/c$y"
 if (( \$# == 0 )); then
   choice="\$(ls  '$y_expand' | fzf)"
-  cd "${y_expand}/\${choice}"
+  double_cd '$y_expand' "\${choice}"
   return
 fi
 double_cd '$y_expand' "\$@"
