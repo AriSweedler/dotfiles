@@ -1,0 +1,1 @@
+eval "$(kubectl completion zsh)"
