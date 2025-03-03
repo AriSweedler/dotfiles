@@ -44,6 +44,39 @@ local function quickadd(x)
 	end, { silent = true })
 end
 
+local function quicksub(x)
+	vim.keymap.set("n", "<Leader>" .. x .. "-", function()
+		-- Make sure we're in a quickfix list (or else silently return)
+		if vim.o.buftype ~= "quickfix" then
+			-- log a message debug
+			vim.notify("Not in a quickfix list - cannot remove current line", vim.log.levels.DEBUG)
+			return
+		end
+
+		-- Get the line in the qflist we're on
+		local curpos = vim.api.nvim_win_get_cursor(0)
+		local lnum = curpos[1]
+
+		-- Remove entry from the xlist
+		if x == "l" then
+			local loclist = vim.fn.getloclist(0)
+			table.remove(loclist, lnum)
+			vim.fn.setloclist(0, {}, "r", { items = loclist })
+		elseif x == "c" then
+			local qflist = vim.fn.getqflist()
+			table.remove(qflist, lnum)
+			vim.fn.setqflist({}, "r", { items = qflist })
+		end
+
+		-- Move the cursor back to the place in the buffer we were before. If it's
+		-- past the end of the buffer, go 1 back
+		if curpos[1] > vim.api.nvim_buf_line_count(0) then
+			curpos[1] = curpos[1] - 1
+		end
+		vim.api.nvim_win_set_cursor(0, curpos)
+	end, { silent = true })
+end
+
 local function quickfix_mappings()
 	local xlists = {
 		l = "l",
@@ -58,6 +91,7 @@ local function quickfix_mappings()
 		quickmap("<Leader>]" .. k:upper(), x .. "last", x .. "last")
 		quicktoggle(x)
 		quickadd(x)
+		quicksub(x)
 	end
 end
 

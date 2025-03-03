@@ -22,3 +22,29 @@ end, "Undo change")
 lmap("<C-r>", function()
 	vim.cmd("lnewer")
 end, "Redo change")
+
+-- Remove current line from qflist
+--
+-- Go bongo mode with this fun 'Shift + Subtract' keymap
+lmap("_", function()
+	local feedme = function(str)
+		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(str, true, false, true), "m", false)
+	end
+
+	-- Remove the current line
+	feedme("\\l-")
+
+	-- If the loclist is NOT empty, do some extra stuff
+	if #vim.fn.getloclist(0) ~= 1 then
+		feedme("<Enter>")
+		if vim.fn.foldclosed(vim.api.nvim_win_get_cursor(0)[1]) ~= -1 then
+			feedme("zO")
+		else
+			feedme("zO")
+		end
+		feedme("zz")
+	end
+
+	-- Return to the loclist or close it
+	feedme("\\ll")
+end, "Remove current line from qflist")
