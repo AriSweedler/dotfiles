@@ -1,0 +1,104 @@
+#!/usr/bin/env zsh
+
+# The classic log suite
+c_red='\e[31m'; c_green='\e[32m'; c_rst='\e[0m'
+preamble() { echo -n "[$(date "+%Y-%m-%dT%T.000Z")] [$funcstack[3]]" ; }
+log::err() { echo -e "${c_red}[ERROR] $(preamble)${c_rst}" "$@" >&2 ; }
+log::info() { echo -e "${c_green}[INFO] $(preamble)${c_rst}" "$@" >&2 ; }
+
+function help() {
+cat << EOF
+Usage: git branchclean
+OPTIONS:
+  --help
+      Show this help message
+
+  --dead_duration <duration>
+      Duration to consider a branch dead. Examples:
+      * 4w (4 weeks)
+      * 8w (8 weeks)
+      * 8d (8 days)
+
+ACTIONS:
+  -n, --dry-run
+      Dry run. Print the commands that would be executed
+  --remove
+      Remove the the branches
+
+LOCATIONS:
+  --remote <remote>
+      Remove branches from the remote
+  --local
+      Remove branches from the local
+EOF
+}
+
+function action::log() {
+  echo "hash='$(git rev-parse ${branch})' branch='${branch}' " >&2
+}
+
+function action::dry-run() {
+  :
+}
+
+function action::remove::remote() {
+  git wb "${branch#origin/}" &
+}
+
+function action::remove::local() {
+  git branch -D "${branch#${remove_refs}}"
+}
+
+# dead_duration can be like '4w'. Something that MacOS date accepts as a time
+# range to '-v'
+function dead_branches() {
+  local dead_duration="${1:?}"
+  local dead_time="$(date -v "-${dead_duration}" "+%Y-%m-%d")"
+  local git_f_e_ref_args=(
+    "for-each-ref"
+    "--sort=committerdate"
+    "${remove_refs:?}"
+    "--format=%(refname:short) %(committerdate:iso8601)"
+  )
+  git "${git_f_e_ref_args[@]}" | awk -v "d=${dead_time}" '$2 < d {print $1}'
+}
+
+function main() {
+  local action="dry-run"
+  local dead_duration="4w"
+  local remove_loc=remote remove_refs="refs/remotes/origin/"
+  while (( $# > 0 )); do
+    case "${1:?}" in
+      -n|--dry-run) action="dry-run"; shift ;;
+      --remove) action="remove"; shift ;;
+      --dead_duration) dead_duration="${2:?}"; shift 2 ;;
+      --remote) 
+        remove_loc=remote;
+        remove_refs="refs/remotes/${2:?}/";
+        shift 2 
+        ;;
+      --local)
+        remove_loc=local;
+        remove_refs="refs/heads/";
+        shift 1
+        ;;
+      -h|--help) help; exit 0 ;;
+      *) log::err "Unknown arg | arg='${1}'"; exit 1 ;;
+    esac
+  done
+  [ "${action}" = "remove" ] && action="remove::${remove_loc}"
+
+  log::info "Dealing with all branches older than | dead_duration='${dead_duration}'"
+
+  local branch branches
+
+  branches=( ${(@f)$(dead_branches "${dead_duration}")} )
+  for branch in "${branches[@]}"; do
+    action::log
+    "action::${action}"
+  done
+  wait
+
+  log::info "Dealt with all branches older than | dead_duration='${dead_duration}'"
+}
+main "$@"

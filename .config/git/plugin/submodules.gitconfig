@@ -1,0 +1,17 @@
+[diff]
+	submodule = diff
+
+[alias]
+	sub-u = sub-update
+
+	push-all = sub-push
+	sub-push = !"f() { git submodule foreach git push && git push; }; f"
+	sub-all = submodule foreach git
+	# sub-ff: If submodule HEAD is attached (points to a branch), this works
+	# nicely. If submodule HEAD is detached then this is a no-op
+	sub-ff = submodule foreach git pull --ff-only
+	# sub-update: This command leaves submodules with HEAD pointing to a
+	# commit, by default. Not the best. However if git config
+	# submodule.branch is set, then HEAD -> commit pointed to by
+	# origin/<branch>)
+	sub-update = submodule update --remote

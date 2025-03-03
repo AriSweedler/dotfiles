@@ -1,0 +1,7 @@
+[alias]
+	# Improve git. jujutsu-inspired
+	amend = commit --amend --reuse-message=HEAD
+	fixup = !"f() { git commit --fixup \"${1:?}\" && git rebase --autosquash \"${1:?}~\" ; } ; f"
+	patch = add --patch
+	reword = commit --amend
+	unadd = !"f() { echo git restore --staged ${1:-.} ; }; f"

@@ -1,0 +1,23 @@
+[alias]
+	l = ll -10
+	ll = log --pretty=newlog --graph
+
+[pretty]
+	# https://git-scm.com/docs/pretty-formats
+	# %C(color) ::= color directive
+	# %<(N,TX) ::= make the next placeholder take at least N columns, truncate according to TX
+	# %h ::= abbreviated commit hash
+	# %ar ::= author date, relative to now
+	# %an ::= author name (compared to committer name)
+	# %s ::= subject (first line of commit message)
+	# %w(width, indent1, indent2) ::= change linewrap
+	# + ::= A linefeed is inserted before the expansion if expansion is not null
+	# %d ::= ref names.
+	newlog = "format:\
+%C(cyan)%<(9,trunc)%h \
+%C(green)%<(12,trunc)%ar \
+%C(dim white)%<(12,trunc)[%an]%C(reset) \
+%C(reset)%s \
+%C(bold reverse cyan)%w(0,0,8)%+d\
+%C(reset)"
+	# TODO the ref names aren't being colored. This looks like a bug.

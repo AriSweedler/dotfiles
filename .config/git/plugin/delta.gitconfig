@@ -1,0 +1,11 @@
+[alias]
+	show-sbs = -c delta.features=side-by-side show
+
+[core]
+	pager = delta
+
+[delta]
+	navigate = true    # use n and N to move between diff sections
+
+[interactive]
+	diffFilter = delta --color-only
