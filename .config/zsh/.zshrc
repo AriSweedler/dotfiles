@@ -52,5 +52,6 @@ function prepend_to_path() {
 }
 
 # Source all files in these folders
+source_file "${ZDOTDIR}/tab_completion.zsh"
 source_zsh_dir "${ZDOTDIR}/plugins"
 source_zsh_dir --optional "${XDG_DATA_HOME}/zsh/plugins"
