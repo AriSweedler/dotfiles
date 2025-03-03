@@ -48,11 +48,6 @@ function ensure_brew() {
 
 function ensure_brew_pkgs() {
   local pkgs=(
-    # Shells
-    bash
-    zsh
-    zsh-vi-mode
-
     # Unix
     awk
     coreutils
@@ -61,33 +56,53 @@ function ensure_brew_pkgs() {
     watch
     wget
 
-    # Nice CLI utilities
-    atac
+    # Nicer CLI
     bat
     fd
     ffmpeg
     font-caskaydia-mono-nerd-font
     fzf
+    git-delta
     jq
     neovim
     ripgrep
+    starship
     tmux
     tmuxinator
     tree
     yq
 
-    # Mac customization
-    hammerspoon
-    monitorcontrol
-    rectangle
-    starship
+    # Lang: Shells
+    bash
+    zsh
+    zsh-vi-mode
 
-    # Languages and tools
+    # Lang: Go
     go
+    goland
+
+    # Lang: Java
+    jenv
+    intellij-idea
+
+    # Lang: misc
     lua
-    node
     python
+    node
     shellcheck
+    visual-studio-code
+
+    # Containers
+    docker
+    helm
+
+    # Mac customization
+    # removed: hammerspoon
+    # removed: monitorcontrol
+    rectangle
+
+    # Personal
+    spotify
   )
 
   # TODO: Suppress the warning errors if packages are already installed
