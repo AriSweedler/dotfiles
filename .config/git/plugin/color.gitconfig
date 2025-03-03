@@ -1,0 +1,16 @@
+[color "branch"]
+	current = red reverse
+	local = blue
+	remote = green
+
+[color "diff"]
+	meta = yellow black bold
+	frag = magenta black bold
+	old = red bold
+	new = green bold
+	plain = white
+
+[color "status"]
+	added = green black bold
+	changed = yellow black bold
+	untracked = red reverse bold

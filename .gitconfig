@@ -7,28 +7,10 @@
 [core]
 	excludesfile = ~/.config/git/ignore
 	editor = nvim
-	# Tabs are only worth 2 spaces
-	pager = less -x2
 
 [init]
 	templatedir = ~/.config/git/template
 	defaultBranch = main
-
-[diff]
-	submodule = diff
-
-[merge]
-	tool = vim_mergetool
-	conflictStyle=diff3
-
-[mergetool "vim_mergetool"]
-	cmd = nvim -f -c "MergetoolStart" "$MERGED" "$BASE" "$LOCAL" "$REMOTE"
-	trustExitCode = true
-
-[mergetool]
-	# After performing a merge, the original file with conflict markers can
-	# be saved as a file with a .orig extension. I do not want that
-	keepBackup = false
 
 [pull]
 	ff = only
@@ -45,7 +27,7 @@
 [rerere]
 	# Reuse recorded resolution: record hand-resolved results to merge
 	# conflicts. To get use of this feature, you have to enable it and then
-	# manually invoke 'git rerere' in the following 3 unique situations:
+	# it gets invoked in the following 3 unique situations:
 	# * A new merge conflict (REcords the conflicted working tree files)
 	# * Resolving the merge conflict (REcords the REsolution)
 	# * An old merge conflict (REuses the resolution)
@@ -78,53 +60,16 @@
 	autoStash = true
 	autosquash = true
 
-################################## aesthetics ##################################
-[color "branch"]
-	current = red reverse
-	local = blue
-	remote = green
-
-[color "diff"]
-	meta = yellow black bold
-	frag = magenta black bold
-	old = red bold
-	new = green bold
-	plain = white
-
-[color "status"]
-	added = green black bold
-	changed = yellow black bold
-	untracked = red reverse bold
-
-[pretty]
-	# https://git-scm.com/docs/pretty-formats
-	# %C(color) ::= color directive
-	# %<(N,TX) ::= make the next placeholder take at least N columns, truncate according to TX
-	# %h ::= abbreviated commit hash
-	# %ar ::= author date, relative to now
-	# %an ::= author name (compared to committer name)
-	# %s ::= subject (first line of commit message)
-	# %w(width, indent1, indent2) ::= change linewrap
-	# + ::= A linefeed is inserted before the expansion if expansion is not null
-	# %d ::= ref names.
-	newlog = "format:\
-%C(cyan)%<(9,trunc)%h \
-%C(green)%<(12,trunc)%ar \
-%C(dim white)%<(12,trunc)[%an]%C(reset) \
-%C(reset)%s \
-%C(bold reverse cyan)%w(0,0,8)%+d\
-%C(reset)"
-	# TODO the ref names aren't being colored. This looks like a bug.
-
-#################################### aliases ###################################
 [alias]
-	# Meta-aliases
+	# Easily edit this file
+	cconfig = config --edit --global
+
+	# View these aliases more easily
 	alias = !"git config --list | grep ^alias | cut -c 7- | sort #"
 	showme = !"printf \"The alias '$1' is: \"; git config --list | sed /alias.$1=/!d | sed s/[^=]*=// #"
 
-	# Shortcuts
+	# shorten
 	a = !"git add .; git s"
-	ca = amend
 	d = diff --staged --diff-algorithm=minimal
 	df = dotfiles
 	dfd = dotfiles-daily
@@ -133,62 +78,37 @@
 	ff = pull --ff-only
 	rr = rebase-remote
 	fpr = finish-pr
-	l = ll -10
-	ll = log --pretty=newlog --graph
 	po = push-origin
-	s = status --short --branch
-	sub-u = sub-update
 	sw = !"git yankbranch; git switch -"
-	swr = switchr
+	swr = switch-recent
+	swbl = switch-branchlog
 	wb = wipebranch
 	yb = yankbranch
 
 	# New commands
-	cconfig = config --edit --global
-	switchr = !"git branchlog | git switch \"$(fzf --select-1)\""
-	children = !"f() { git rev-list --all --not $1^@ --children | grep $(git rev-parse $1); }; f" # reachable children of a ref
-	contains = !"f() {  git tag --contains $1; git branch --contains $1; }; f"
-	ctags = !.git/hooks/ctags
 	diffls = diff --name-only
 	dotfiles = !"git --git-dir=\"$HOME/dotfiles/\" --work-tree=\"$HOME\""
-	# editdiffls: If I could run ']c' upon starup that would be great. Can't figure it out tho
-	editdiffls = !"f() { files=$(git diff --name-only $1); [ -n \"$files\" ] && $EDITOR -p $files || echo \"no changes since ref='$1'\" ;}; f"
-	rebase-remote = !"f() { git fetch; git branch -f "${1:?}" "origin/$1"; git rebase -i "$1"; }; f"
-	history-of = ll --follow --
+	editdiffls = !"f() { files=$(git diff --name-only ${1:?}); [ -n \"${files}\" ] && $EDITOR -p ${files} || echo \"no changes since ref='$1'\" ;}; f"
 	ignore = !"f() { echo $1 >> .gitignore; }; f"
 	initt = !"git init; git commit --allow-empty --message 'first commit'"
 	ls = ls-tree --full-tree -r --abbrev HEAD
 	push-origin = !"git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)"
+	rebase-remote = !"f() { git fetch; git branch -f "${1:?}" "origin/$1"; git rebase -i "$1"; }; f"
+	switch-branchlog = !"git branchlog | git switch \"$(fzf --select-1)\""
+	switch-recent = !"f() { git branch --format=\"%(refname:short)\" --sort=-committerdate | fzf --header \"Switch to recent branch\" --preview 'git diff {1} --color=always | delta' | xargs git switch; }; f"
 	wipebranch = !"f() { git branch -D $1; git push origin --delete $1; }; f"
-	yankbranch = !"git branch --show-current | tr -d '\n' | tee /dev/tty | pbcopy; echo"
-	unadd = restore --staged .
+	yankbranch = !"git branch --show-current | tee /dev/tty | tr -d '\n' | pbcopy"
 
-	# jujutsu-inspired syntax
-	reword = commit --amend
-	amend = commit --amend --reuse-message=HEAD
-	patch = add --patch
-	fixup = !"f() { git commit --fixup $1 && git rebase --autosquash $1~ ; } ; f"
-
-	# Submodule control
-	push-all = sub-push
-	sub-push = !"f() { git submodule foreach git push && git push; }; f"
-	sub-all = submodule foreach git
-	# If HEAD is attached (points to a branch), this works nicely. If HEAD
-	# is detached then this is a no-op
-	sub-ff = submodule foreach git pull --ff-only
-	# This command leaves submodules with HEAD pointing to a commit, by
-	# default. Not the best. However if git config submodule.branch is set,
-	# then HEAD -> commit pointed to by origin/<branch>)
-	sub-update = submodule update --remote
-
-	# Searching
-	# 'git log -S' to search through changes
-	# 'log --grep' to search through commit messages
-	grepp = grep --break --heading --line-number
-	grep-code = ll -S
-	grep-commit = ll --all --grep
-
-# Include computer-specific git configuration. Put this last so we can override
-# all of the above
 [includeIf "gitdir:~/"]
+	# Include computer-specific git configuration. Put this last so we can
+	# override all of the above
 	path = ~/.local/share/git/config
+
+[include]
+	path = ~/.config/git/plugin/color.gitconfig
+	path = ~/.config/git/plugin/delta.gitconfig
+	path = ~/.config/git/plugin/grep.gitconfig
+	path = ~/.config/git/plugin/jujutsu-inspired.gitconfig
+	path = ~/.config/git/plugin/log.gitconfig
+	path = ~/.config/git/plugin/merge.gitconfig
+	path = ~/.config/git/plugin/submodules.gitconfig
