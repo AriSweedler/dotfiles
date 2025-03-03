@@ -161,6 +161,7 @@
 	push-origin = !"git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)"
 	wipebranch = !"f() { git branch -D $1; git push origin --delete $1; }; f"
 	yankbranch = !"git branch --show-current | tr -d '\n' | tee /dev/tty | pbcopy; echo"
+	unadd = restore --staged .
 
 	# jujutsu-inspired syntax
 	reword = commit --amend
