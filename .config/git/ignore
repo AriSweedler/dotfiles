@@ -1,13 +1,7 @@
 # vim
 .*.swp
 *.add.spl
-.netrwhist
 tags
-
-# Linters
-.clangd
-.clang-format
-.cache
 
 # OS generated files
 .DS_Store*
@@ -19,15 +13,9 @@ tags
 # Because of https://www.atlassian.com/git/tutorials/dotfiles
 dotfiles
 
+# Misc utilities
+.cache
+
 # Python
 .env
 .venv
-env
-local_env
-
-# autoenv
-.env.leave
-.env.enter
-
-# Helm secrets
-ari.*secret*.yaml
