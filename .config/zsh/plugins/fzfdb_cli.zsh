@@ -125,9 +125,16 @@ function fzfdb() {
   fi
 
   # Generate the fzf menu
-  local fzfdb_m_items=() fzfdb_k
+  local tmpdir="$(mktemp -d "/tmp/fzfdb.${fzfdb_name}.XXXXX")"
+  setopt LOCAL_OPTIONS NO_MONITOR
   for fzfdb_k in "${fzfdb_ks[@]}"; do
-    fzfdb_m_items+=("$(fzfdb::_dispatch key::menuitem "${fzfdb_k}")")
+    fzfdb::_dispatch key::menuitem "${fzfdb_k}" > "${tmpdir}/${fzfdb_k}" &
+  done
+  wait
+  local fzfdb_m_items=()
+  local fzfdb_k
+  for fzfdb_k in "${fzfdb_ks[@]}"; do
+    fzfdb_m_items+=("$(cat "${tmpdir}/${fzfdb_k}")")
   done
 
   # Generate the fzf command
