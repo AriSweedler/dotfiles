@@ -90,7 +90,7 @@ function fzfdb() {
   local grep_pat='.'
   while (( $# > 0 )); do
     case "${1}" in
-      --dir|--list|--edit|--help) fzfdb::_dispatch "action::${1#--}"; return 0;;
+      --dir|--list|--edit|--help) fzfdb::_dispatch "action::${1#--}" "$@"; return 0;;
       --key::value|--key::menuitem) fzfdb::_dispatch "${1#--}" "${2:?}"; return 0;;
       -g|--grep) grep_pat=(${(s/ /)2}); shift 2;;
       -q|--query) fzf_args+=(--query "${2}"); shift 2;;

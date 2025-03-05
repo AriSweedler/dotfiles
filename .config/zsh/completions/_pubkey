@@ -8,10 +8,8 @@ _pubkey::pubkey() {
 
 _pubkey() {
   local arguments=(
-    '(action)'{-h,--help}'[Show help message and exit]'
     '(action)--edit[Edit pubkey file]:pubkey:->pubkeys'
-    '(action)--copy[Copy pubkey to clipboard]:pubkey:->pubkeys'
-    '(action)--compare[Use rg on your pubkey database]:regex:'
+    '(action)--help[Show help message and exit]'
     '(action)--dir[Show the directory where pubkeys are stored]'
     '(action)--list[List all pubkeys in your database]'
     '*:default:->default'

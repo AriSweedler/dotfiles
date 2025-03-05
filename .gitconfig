@@ -69,7 +69,7 @@
 	showme = !"printf \"The alias '$1' is: \"; git config --list | sed /alias.$1=/!d | sed s/[^=]*=// #"
 
 	# shorten
-	a = !"git add .; git s"
+	a = !"git add .; git status"
 	d = diff --staged --diff-algorithm=minimal
 	df = dotfiles
 	dfd = dotfiles-daily
