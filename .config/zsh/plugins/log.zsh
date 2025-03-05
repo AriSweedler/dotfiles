@@ -26,6 +26,21 @@ function run_cmd() {
   return $rc
 }
 
+# Nicer preamble
+log::preamble()       { echo -n "[$(date "+%Y-%m-%dT%T.000Z")] [$(log::_caller)]" ; }
+log::is_irrelevant_fxn() {
+  [ -z "${1:-}" ] && return 0 # empty function: irrelevant
+  case "$1" in
+    run_cmd*|fzfdb*|^_*|log::*|_log::*|*::_*) return 0 ;; # irrelevant functions
+  esac
+  return 1 # found a relevant function!
+}
+log::_caller() {
+  local i=0
+  while log::is_irrelevant_fxn "${funcstack[$i]}" && (( i++ < 10 )); do :; done
+  echo -n "${funcstack[$i]}"
+}
+
 # String manipulation
 function _prepend() {
   [ -t 0 ] && return 1
