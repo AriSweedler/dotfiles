@@ -32,7 +32,7 @@ end
 
 -- Set keyboard bindings
 vim.keymap.set("n", "<Leader>w", toggle_view_whitespace, { desc = "Toggle list option" })
-vim.keymap.set("n", "<Leader>d", toggle_view_diffthis, { desc = "Toggle diffthis in all windows" })
+vim.keymap.set("n", "<Leader>D", toggle_view_diffthis, { desc = "Toggle diffthis in all windows" })
 vim.keymap.set("n", "<Leader>W", clear_whitespace, { desc = "Clear trailing whitespace" })
 vim.keymap.set("n", "<Leader>tw", view_textwrapN, { desc = "Set textwidth (accepts v:count)" })
 

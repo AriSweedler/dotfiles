@@ -1,4 +1,4 @@
-local function disable_ts_highlight_fxn(lang, buf)
+local function disable_ts_highlight_fxn(_, buf)
 	local max_filesize = 100 * 1024 -- 100 KB
 	local filename = vim.api.nvim_buf_get_name(buf)
 	local ok, stats = pcall(vim.loop.fs_stat, filename)
@@ -62,7 +62,7 @@ local M = {
 	},
 	opts = {
 		auto_install = true,
-		ensure_installed = { "bash", "lua", "vim", "vimdoc", "query", "python", "javascript", "go", },
+		ensure_installed = { "bash", "lua", "vim", "vimdoc", "query", "python", "javascript", "go" },
 		sync_install = true, -- Install parsers syncronously. Lol.
 		ignore_install = {}, -- List of parsers to ignore installation
 		highlight = {

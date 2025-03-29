@@ -72,6 +72,9 @@ vim.keymap.set("v", "*", function()
 	vim.api.nvim_input("<Esc>")
 end, { silent = true })
 
+-- Go to the END instead of next match
+vim.keymap.set("n", "<C-n>", "vgn<Esc>")
+
 -- lgrep on the word under the cursor.
 vim.keymap.set("n", "g*", function()
 	lgrep(vim.fn.expand("<cword>"))

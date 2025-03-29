@@ -22,6 +22,13 @@ local function quicktoggle(x)
 
 		vim.cmd(x .. "open")
 	end)
+
+	vim.keymap.set("n", "<Leader>" .. x .. "o", function()
+		vim.cmd(x .. "open")
+	end)
+	vim.keymap.set("n", "<Leader>" .. x .. "c", function()
+		vim.cmd(x .. "close")
+	end)
 end
 
 local function quickadd(x)
