@@ -11,12 +11,21 @@ M.on_attach = function(_, bufnr)
 	bufmap("K", vim.lsp.buf.hover, "Hover documendation")
 
 	-- Navigation
-	bufmap("gd", ts_b.lsp_definitions, "[G]oto [D]efinition")
 	bufmap("gtd", ts_b.lsp_type_definitions, "[G]oto Type [D]efinition")
-	bufmap("gr", ts_b.lsp_references, "[G]oto [R]eferences")
+	bufmap("grr", ts_b.lsp_references, "[G]oto [R]eferences")
 	bufmap("gI", ts_b.lsp_implementations, "[G]oto [I]mplementation")
 	bufmap("<Leader>Ssd", ts_b.lsp_document_symbols, "[S]ymbol[s] in [D]ocument")
 	bufmap("<Leader>Ssw", ts_b.lsp_dynamic_workspace_symbols, "[S]ymbol[s] in [W]orkspace")
+
+	-- <C-]> but in a new tab
+	bufmap("<Leader><C-]>", function(_)
+		local feedme = function(str)
+			local key = vim.api.nvim_replace_termcodes(str, true, false, true)
+			vim.api.nvim_feedkeys(key, "n", false)
+		end
+		vim.cmd("tabnew")
+		feedme("<C-o><C-]>zO")
+	end, "Open definition in new tab")
 
 	-- Format
 	vim.api.nvim_buf_create_user_command(0, "LspFormat", function(_)
@@ -24,15 +33,19 @@ M.on_attach = function(_, bufnr)
 	end, { desc = "Format current buffer with LSP" })
 
 	-- Diagnostics
-	bufmap("<Leader>Do", vim.diagnostic.open_float, "Open floating diagnostic message")
-	bufmap("<Leader>Dq", vim.diagnostic.setloclist, "Open diagnostics list")
-	bufmap("<Leader>D?", function()
-		vim.cmd("map <Leader>D")
+	bufmap("<Leader>do", vim.diagnostic.open_float, "Open floating diagnostic message")
+	bufmap("<Leader>dq", vim.diagnostic.setloclist, "Open buffer diagnostics list")
+	bufmap("<Leader><Leader>dq", function()
+		vim.diagnostic.setloclist({ severity = vim.diagnostic.severity.ERROR })
+	end, "Open buffer diagnostics list only for Errors")
+	bufmap("<Leader>da", vim.lsp.buf.code_action, "[d]iagnostic [A]ction")
+	bufmap("<Leader>d?", function()
+		vim.cmd("map <Leader>d")
 	end, "Show diagnostics keymaps")
 
 	-- Actions
-	bufmap("<Leader>rn", vim.lsp.buf.rename, "[R]e[n]ame") -- Rename the variable under your cursor
-	bufmap("<Leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")
+	bufmap("grn", vim.lsp.buf.rename, "Rename the variable under your cursor")
+	-- show code actions
 
 	-- Commands to dump information
 	vim.api.nvim_buf_create_user_command(0, "LspWorkspaceFolders", function()
