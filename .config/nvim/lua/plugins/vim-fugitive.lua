@@ -1,5 +1,5 @@
 -- Return true if the path is a FILE and inside the 'dotfiles' repo
-local function is_dotfile(path)
+function is_dotfile(path)
 	-- Read the files that exist in the bare repo stored in ~/dotfiles
 	local git_dir = vim.fn.expand("$HOME") .. "/dotfiles"
 	local git = "git --git-dir='" .. git_dir .. "' "
@@ -19,17 +19,35 @@ local M = {
 	"tpope/vim-fugitive",
 	event = "BufReadPre",
 	config = function()
+		vim.keymap.set("n", "<Leader>gg", function()
+			vim.cmd("Git")
+		end, { desc = "Fugitive: Open git window" })
+
 		vim.keymap.set("n", "gb", function()
-			local flags = ""
+			local restoreme = {
+				fugitive_git_executable = vim.g.fugitive_git_executable,
+				git_dir = vim.b.git_dir,
+			}
+
 			if is_dotfile(vim.fn.expand("%:p")) then
-				-- TODO make this work
-				print("THIS IS A DOTFILE - ADDING FLAGS TO GB")
-				flags = " --git-dir='" .. vim.fn.expand("$HOME") .. "/dotfiles'"
+				vim.notify("Running 'Git blame' on a dotfile")
+				local home = vim.fn.expand("$HOME")
+				local git_dir = home .. "/dotfiles"
+				vim.g.fugitive_git_executable = {
+					"git",
+					"--git-dir=" .. git_dir,
+					"--work-tree=" .. home,
+				}
+				vim.b.git_dir = git_dir
 			end
-			-- Check to see
-			print("Git blame" .. flags)
-			vim.cmd("Git blame" .. flags)
+
+			-- Run the actual command
+			vim.cmd("Git blame")
 			vim.cmd("vertical resize 25")
+
+			-- Restore
+			vim.g.fugitive_git_executable = restoreme.fugitive_git_executable
+			vim.b.git_dir = restoreme.git_dir
 		end, { desc = "Fugitive: Git blame" })
 	end,
 }
