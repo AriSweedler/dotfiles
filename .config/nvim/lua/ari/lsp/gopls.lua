@@ -3,12 +3,19 @@ local defaults = require("plugins.nvim-lspconfig.defaults")
 local get_local_module = function()
 	-- Find the 'go.mod' file
 	local go_mod = vim.fn.findfile("go.mod", ".;")
+	if go_mod == "" then
+		vim.notify("No go.mod file found", vim.log.levels.INFO)
+		return ""
+	end
 
 	-- Use awk to parse the module out of the file
 	local module = vim.fn.system("awk '/module / {print $2}' " .. go_mod)
 	module = string.gsub(module, "\n", "")
+	if module == "" then
+		vim.notify("No module found in go.mod", vim.log.levels.WARN)
+		return ""
+	end
 
-	print("We got the module as: " .. module)
 	return module
 end
 

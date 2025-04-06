@@ -3,9 +3,7 @@ vim.bo.shiftwidth = 2
 vim.bo.expandtab = false
 
 require("ari.lsp.gopls")
-
-vim.opt.foldmethod = "expr"
-vim.opt.foldexpr = "nvim_treesitter#foldexpr()"
+require("ari.dap.delve")
 
 -- Put in the comment leader when hitting '<Enter>' while in insert mode on a comment
 vim.opt.formatoptions:append("r")
