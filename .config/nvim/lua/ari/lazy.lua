@@ -16,17 +16,11 @@ vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup({
 	spec = {
-		{ import = "plugins" },
+		{ import = "plugins" }, -- Go to $VIMHOME/lua/plugins find plugin specs
 	},
 	defaults = { lazy = true },
 	checker = { enabled = true, notify = false },
-	ui = {
-		notifications = {
-			disable_notifications = {
-				config_change = true,
-			},
-		},
-	},
+	change_detection = { enabled = false },
 })
 
 -- If there are updates to be had, then update
