@@ -37,8 +37,10 @@ local function lgrep(word, opts)
 
 	vim.fn.setreg("/", slash_escape(word))
 	vim.cmd("tabnew")
+	vim.cmd("file deleteme")
 	vim.cmd(table.concat(cmdTable, " "))
 	vim.cmd("lopen | wincmd p | lfirst")
+	vim.cmd("bdelete! deleteme")
 end
 
 -- Get the visually selected text
