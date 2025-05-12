@@ -43,10 +43,21 @@ return {
 	---@type snacks.Config
 	opts = {
 		picker = { enabled = true },
+		scratch = { enabled = true },
 	},
 	config = function(_, opts)
 		local Snacks = require("snacks")
 		Snacks.setup(opts)
+
+		SNACK_DESC_PREFIX = "Snacks Scratch"
+		SNACK_LEADER = "<Leader>S"
+		bufmap("S", Snacks.scratch.open, "Scratch Buffer")
+		bufmap("s", Snacks.scratch.select, "Select Scratch Buffer")
+
+		SNACK_DESC_PREFIX = "Buffer"
+		SNACK_LEADER = "<Leader>b"
+		bufmap("b", Snacks.bufdelete, "Close Buffer")
+		bufmap("B", Snacks.bufdelete, "Close Buffer")
 
 		SNACK_DESC_PREFIX = "Snacks Picker"
 		SNACK_LEADER = "<Leader>p"
@@ -90,32 +101,6 @@ return {
 		bufmap("s", Snacks.picker.lsp_symbols, "LSP Symbols")
 		bufmap("S", Snacks.picker.lsp_workspace_symbols, "LSP Workspace Symbols")
 
-		-- Replace my personal plugins with these
-		--		-- scratch
-		--		{
-		--			"<leader>.",
-		--			function()
-		--				Snacks.scratch()
-		--			end,
-		--			desc = "Toggle Scratch Buffer",
-		--		},
-		--		{
-		--			"<leader>S",
-		--			function()
-		--				Snacks.scratch.select()
-		--			end,
-		--			desc = "Select Scratch Buffer",
-		--		},
-		--
-		--			-- buf delete
-		--		{
-		--			"<leader>bd",
-		--			function()
-		--				Snacks.bufdelete()
-		--			end,
-		--			desc = "Delete Buffer",
-		--		},
-
 		-- Files
 		SNACK_DESC_PREFIX = "Snacks File Picker"
 		SNACK_LEADER = "<C-t>"
@@ -125,6 +110,13 @@ return {
 		bufmap("v", Snacks.picker.files, "Vim config files", {
 			args = { cwd = vim.fn.stdpath("config") },
 		})
+		bufmap("d", function()
+			require("plugins.snacks.picker").git_files({
+				title = "Dotfiles",
+				git_dir = vim.fn.expand("$HOME/dotfiles"),
+				work_tree = vim.fn.expand("$HOME"),
+			})
+		end, "Dotfiles")
 		bufmap("g", Snacks.picker.git_files, "Find git files")
 		bufmap("p", Snacks.picker.projects, "Projects")
 

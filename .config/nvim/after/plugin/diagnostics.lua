@@ -6,6 +6,6 @@ local d = require("ari.diagnostics")
 d.setup()
 
 -- Keymap to toggle diagnostics display
-vim.keymap.set("n", "<leader>td", d.toggle, {
+vim.keymap.set("n", "<Leader>td", d.toggle, {
 	desc = "Toggle Diagnostics Display (virtual_text <--> virtual_lines)",
 })
