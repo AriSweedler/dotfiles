@@ -17,24 +17,27 @@ end
 -- Run lgrep, set the search register, and open the loclist
 local function lgrep(word, opts)
 	opts = opts or {}
-	cmd = ""
+	local cmdTable = {}
 
 	if not opts.verbose then
-		cmd = cmd .. "silent "
+		table.insert(cmdTable, "silent")
 	end
 
-	cmd = cmd .. "lgrep"
 	if opts.add then
-		vim.cmd = cmd .. "add"
+		table.insert(cmdTable, "lgrepadd")
+	else
+		table.insert(cmdTable, "lgrep")
 	end
 
 	if not opts.nobang then
-		cmd = cmd .. "!"
+		table.insert(cmdTable, "!")
 	end
+
+	table.insert(cmdTable, lgrep_escape(word))
 
 	vim.fn.setreg("/", slash_escape(word))
 	vim.cmd("tabnew")
-	vim.cmd(cmd .. " " .. lgrep_escape(word))
+	vim.cmd(table.concat(cmdTable, " "))
 	vim.cmd("lopen | wincmd p | lfirst")
 end
 
