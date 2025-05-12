@@ -1,6 +1,6 @@
 # /Users/arisweedler/.config/tmuxinator/work.yml
 
-name: marvel
+name: cloud-containers
 root: ~/
 
 windows:
@@ -10,4 +10,4 @@ windows:
 
 - source:
     root: "~/Desktop/workspace/code/"
-    panes: ls -1t
+    panes: ls -1

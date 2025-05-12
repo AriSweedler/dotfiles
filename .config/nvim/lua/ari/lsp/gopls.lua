@@ -26,6 +26,15 @@ require("lspconfig").gopls.setup({
 		gopls = {
 			-- Local imports configuration
 			["go.imports.local"] = get_local_module(),
+			hints = {
+				assignVariableTypes = true,
+				compositeLiteralFields = true,
+				compositeLiteralTypes = true,
+				constantValues = true,
+				functionTypeParameters = true,
+				parameterNames = true,
+				rangeVariableTypes = true,
+			},
 		},
 	},
 })

@@ -1,30 +1,30 @@
-# The classic log suite
-c_red='\e[31m'; c_green='\e[32m'; c_yellow='\e[33m'; c_cyan='\e[36m'; c_rst='\e[0m'
-log::preamble::bash() { echo -n "[$(date "+%Y-%m-%dT%T.000Z")] [${BASH_SOURCE[2]}]" ; }
-log::preamble()       { echo -n "[$(date "+%Y-%m-%dT%T.000Z")] [$funcstack[3]]" ; }
+# Colors
+c_red='\033[31m'
+c_green='\033[32m'
+c_yellow='\033[33m'
+c_blue='\033[34m'
+c_magenta='\033[35m'
+c_cyan='\033[36m'
+c_white='\033[37m'
+c_grey='\033[90m'
+c_rst='\033[0m'
 
+# Colorize and send to stderr.
+# Send err to OTTO_ERR_LOGFILE if that env var is set
 log::dev()      { echo -e "${c_cyan}[DEV] $(log::preamble)${c_rst}" "$@" >&2 ; }
-log::err()     { echo -e "${c_red}[ERROR] $(log::preamble)${c_rst}" "$@" >&2 ; }
+log::_err()    { echo -e "${c_red}[ERROR] $(log::preamble)${c_rst}" "$@" >&2 ; }
+log::err()    { log::_err "$@"; [ -n "${OTTO_ERR_LOGFILE:-}" ] && echo "$@" >> "${OTTO_ERR_LOGFILE}"; return 0; }
 log::warn()  { echo -e "${c_yellow}[WARN] $(log::preamble)${c_rst}" "$@" >&2 ; }
 log::info()   { echo -e "${c_green}[INFO] $(log::preamble)${c_rst}" "$@" >&2 ; }
 log::_debug() { echo -e "${c_grey}[DEBUG] $(log::preamble)${c_rst}" "$@" >&2 ; }
-log::debug() { [ -z "${DEBUG:-}" ] && return; log::_debug "$@" ; }
+log::debug() { test -f "${OTTO_DEBUG:-}" || return 0; log::_debug "$@" ; }
 
 # Multiline logs
-log::DEV()   { while IFS= read -r line; do log::dev   "| $line"; done <<< "$*" ; }
-log::ERR()   { while IFS= read -r line; do log::err   "| $line"; done <<< "$*" ; }
-log::WARN()  { while IFS= read -r line; do log::warn  "| $line"; done <<< "$*" ; }
-log::INFO()  { while IFS= read -r line; do log::info  "| $line"; done <<< "$*" ; }
-log::DEBUG() { while IFS= read -r line; do log::debug "| $line"; done <<< "$*" ; }
-
-# Running commands
-function run_cmd() {
-  log::${lvl:-info} "$@"
-  "$@" && return; rc=$?
-  set -- $(printf "'%s' " "$@")
-  log::${lvl_fail:-ERR} "cmd failed | rc=$rc cmd_quoted=|$*|"
-  return $rc
-}
+log::DEV()   { (while IFS= read -r line; do log::dev   "| $line"; done <<< "$*") ; }
+log::ERR()   { (while IFS= read -r line; do log::err   "| $line"; done <<< "$*") ; }
+log::WARN()  { (while IFS= read -r line; do log::warn  "| $line"; done <<< "$*") ; }
+log::INFO()  { (while IFS= read -r line; do log::info  "| $line"; done <<< "$*") ; }
+log::DEBUG() { (while IFS= read -r line; do log::debug "| $line"; done <<< "$*") ; }
 
 # Nicer preamble
 log::preamble()       { echo -n "[$(date "+%Y-%m-%dT%T.000Z")] [$(log::_caller)]" ; }
@@ -41,13 +41,26 @@ log::_caller() {
   echo -n "${funcstack[$i]}"
 }
 
-# String manipulation
-function _prepend() {
-  [ -t 0 ] && return 1
-  while read -r line; do echo "${1:?}${line}"; done
+# Log the running commands
+export lvl=INFO
+export lvl_fail=ERR
+function run_cmd() {
+  # Log the command, exit early if it succeeds
+  "log::${lvl}" "$@"
+  "$@" && return
+  rc=$?
+  # Log the failure with th ecommand quoted. Forward the rc
+  set -- $(printf "'%s' " "$@")
+  "log::${lvl_fail}" "cmd failed | rc=$rc cmd_quoted=|$*|"
+  return $rc
 }
-function _indent() {
-  local indent=""
-  for ((i="${1:?}"; i-->0;)); indent+=" "
-  _prepend "${indent}"
+
+# Log the running command and capture the stdout only (allow stderr - which
+# probably contains logs - through)
+function run_cmd_cap() {
+  o="$(run_cmd "$@")"
+  rc=$?
+  (( rc == 0 )) && log::${lvl} "${o}"
+  (( rc != 0 )) && log::${lvl_fail} "${o}"
+  return $rc
 }

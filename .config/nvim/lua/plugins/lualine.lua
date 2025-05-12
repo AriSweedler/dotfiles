@@ -3,6 +3,10 @@ local function snippet_mode()
 	return ls.in_snippet() and "SNIP" or ""
 end
 
+local function hydra_mode()
+	return require("hydra.statusline").get_name()
+end
+
 local function LSP_list()
 	local clients = vim.lsp.get_clients()
 	if #clients <= 0 then
@@ -46,7 +50,16 @@ local M = {
 			path = 1,
 		},
 		sections = {
-			lualine_a = { "mode", snippet_mode },
+			lualine_a = {
+				"mode",
+				snippet_mode,
+				{
+					hydra_mode,
+					cond = function()
+						return require("hydra.statusline").is_active()
+					end,
+				},
+			},
 			lualine_y = {
 				"copilot",
 				{ "progress", symbols = progress_symbols },

@@ -16,6 +16,7 @@ M.on_attach = function(_, bufnr)
 	bufmap("gI", ts_b.lsp_implementations, "[G]oto [I]mplementation")
 	bufmap("<Leader>Ssd", ts_b.lsp_document_symbols, "[S]ymbol[s] in [D]ocument")
 	bufmap("<Leader>Ssw", ts_b.lsp_dynamic_workspace_symbols, "[S]ymbol[s] in [W]orkspace")
+	bufmap("gfu", ts_b.lsp_function_usages, "[G]oto [F]unction [U]sages")
 
 	-- <C-]> but in a new tab
 	bufmap("<Leader><C-]>", function(_)
@@ -23,8 +24,7 @@ M.on_attach = function(_, bufnr)
 			local key = vim.api.nvim_replace_termcodes(str, true, false, true)
 			vim.api.nvim_feedkeys(key, "n", false)
 		end
-		vim.cmd("tabnew")
-		feedme("<C-o><C-]>zO")
+		feedme("<C-W><C-]><C-W>T")
 	end, "Open definition in new tab")
 
 	-- Format
@@ -33,24 +33,31 @@ M.on_attach = function(_, bufnr)
 	end, { desc = "Format current buffer with LSP" })
 
 	-- Diagnostics
-	bufmap("<Leader>do", vim.diagnostic.open_float, "Open floating diagnostic message")
-	bufmap("<Leader>dq", vim.diagnostic.setloclist, "Open buffer diagnostics list")
-	bufmap("<Leader><Leader>dq", function()
+	bufmap("<Leader>do", vim.diagnostic.setloclist, "Open buffer diagnostics in loclist")
+	bufmap("<Leader>dO", vim.diagnostic.open_float, "Open floating diagnostic message")
+	bufmap("<Leader>dqq", vim.diagnostic.setqflist, "Open buffer diagnostics in quickfix lust")
+	bufmap("<Leader>dQq", function()
+		vim.diagnostic.setqflist({ severity = vim.diagnostic.severity.ERROR })
+	end, "Open buffer diagnostics list only for Errors")
+	bufmap("<Leader>dql", vim.diagnostic.setloclist, "Open buffer diagnostics loclist")
+	bufmap("<Leader>dQl", function()
 		vim.diagnostic.setloclist({ severity = vim.diagnostic.severity.ERROR })
 	end, "Open buffer diagnostics list only for Errors")
-	bufmap("<Leader>da", vim.lsp.buf.code_action, "[d]iagnostic [A]ction")
-	bufmap("<Leader>d?", function()
-		vim.cmd("map <Leader>d")
+	bufmap("<Leader>dd?", function()
+		vim.cmd("map <Leader>dd")
 	end, "Show diagnostics keymaps")
 
 	-- Actions
+	bufmap("<Leader>ca", vim.lsp.buf.code_action, "[c]ode [a]ction")
 	bufmap("grn", vim.lsp.buf.rename, "Rename the variable under your cursor")
-	-- show code actions
 
 	-- Commands to dump information
-	vim.api.nvim_buf_create_user_command(0, "LspWorkspaceFolders", function()
-		print("LSP workspace folders: " .. vim.inspect(vim.lsp.buf.list_workspace_folders()))
-	end, { desc = "List LSP workspace folders" })
+	vim.api.nvim_buf_create_user_command(
+		0,
+		"LspWorkspaceFolders",
+		lsp_workspace_folders,
+		{ desc = "List LSP workspace folders" }
+	)
 	vim.api.nvim_buf_create_user_command(0, "LspLog", function()
 		vim.cmd.tabedit(vim.lsp.get_log_path())
 	end, { desc = "Open LSP log" })

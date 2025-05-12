@@ -48,3 +48,12 @@ lmap("_", function()
 	-- Return to the loclist or close it
 	feedme("\\ll")
 end, "Remove current line from qflist")
+
+-- Filter in 'func ', filter out '_test' and 'mock'
+--
+-- Useful for finding golang functions
+lmap("ff", function()
+	vim.cmd("Lfilter /func /")
+	vim.cmd("Lfilter! /_test/")
+	vim.cmd("Lfilter! /mock/")
+end, "Find functions (golang)")
