@@ -1,71 +1,5 @@
 -- Easy and consistent editing of all sorts of nvim files
 
--- The grammar is:
---
--- | <Leader>{e,v,t,s} | {edit,split,vsplit,tabedit,source (lowercase only)}
--- | f (filetype),
---   v (vimrc init.lua),
---   o (current file)
---   L (nvim-lspconfig)
---   T (terminal)
---   ? (help)
-local function tes_mappings()
-	-- Define the grammar
-	local mappings_hook = {
-		e = "edit",
-		S = "split",
-		v = "vsplit",
-		t = "tabedit",
-		s = "source",
-	}
-
-	local ft = "<C-r>=&filetype<Enter>"
-	local mappings_cmd = {
-		{
-			key = "f",
-			desc = "filetype plugin",
-			path = vim.fn.stdpath("config") .. "/after/ftplugin/" .. ft .. ".lua",
-		},
-		{
-			key = "v",
-			desc = "my init.vim file",
-			path = "$MYVIMRC",
-		},
-		{
-			key = "o",
-			desc = "the current file",
-			path = "%",
-		},
-		{
-			key = "L",
-			desc = "installed LSP configurations",
-			path = vim.fn.stdpath("data") .. "/lazy/nvim-lspconfig/lua/lspconfig/server_configurations",
-		},
-		{
-			key = "T",
-			desc = "New terminal buffer",
-			path = "term://zsh",
-		},
-	}
-
-	-- Use the grammar to create all the mappings
-	for key1, action in pairs(mappings_hook) do
-		for _, target in pairs(mappings_cmd) do
-			local lhs = string.format("<Leader>%s%s", key1, target.key)
-			local rhs = string.format(":%s %s<Enter>", action, target.path)
-			local d = "[ari] [developer]: " .. action .. " " .. target.desc
-			vim.keymap.set("n", lhs, rhs, { desc = d })
-		end
-
-		-- help
-		do
-			local lhs = string.format("<Leader>%s?", key1)
-			local rhs = string.format(":map <Leader>%s<Enter>", key1)
-			vim.keymap.set("n", lhs, rhs, { desc = "[ari] [developer]: Help" })
-		end
-	end
-end
-
 -- | <Leader>ts | tabedit and vsp all the relevant treesitter query files
 -- | f (fold),
 --   h (highlight),
@@ -94,7 +28,7 @@ local function ts_mappings()
 		local desc = "[ari] [developer] [treesitter]: Compare and tabedit treesitter query files for " .. target.scm
 		vim.keymap.set("n", lhs, function()
 			-- Find all runtime files that match this stub
-			local stub = string.format("queries/%s/%s.scm", vim.bo.filetype, target.scm)
+			local stub = string.format("after/queries/%s/%s.scm", vim.bo.filetype, target.scm)
 			local files = vim.api.nvim_get_runtime_file(stub, true)
 
 			-- Ensure there is a local file in this list.
@@ -144,6 +78,5 @@ local function cb_mappings()
 end
 
 -- Invoke the mapping-creating functions
-tes_mappings()
 ts_mappings()
 cb_mappings()

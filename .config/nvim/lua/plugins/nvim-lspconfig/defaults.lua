@@ -1,5 +1,25 @@
 local M = {}
 
+local function lsp_workspace_folders()
+	for _, client in pairs(vim.lsp.get_clients({ bufnr = 0 })) do
+		--      • {workspace_folders}     (`lsp.WorkspaceFolder[]?`) The workspace
+		--                                folders configured in the client when the
+		--                                server starts. This property is only available
+		--                                if the client supports workspace folders. It
+		--                                can be `null` if the client supports workspace
+		--                                folders but none are configured.
+		local folder_names_table = {}
+		for _, folder in ipairs(client.workspace_folders) do
+			table.insert(folder_names_table, folder.name)
+		end
+		local folder_names = table.concat(folder_names_table, ", ")
+		local client_name_padded = client.name .. string.rep(" ", 10 - #client.name)
+		print("LSP workspace folders for " .. client_name_padded .. ": " .. folder_names)
+	end
+end
+
+-- TODO: Use and conform to nvim 0.11.0 defaults instead of writing my own
+
 local ts_b = require("telescope.builtin")
 M.on_attach = function(_, bufnr)
 	local bufmap = function(keys, func, desc)
