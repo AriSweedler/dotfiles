@@ -1,3 +1,9 @@
+[submodule]
+	recurse = true
+
+[push]
+	recurseSubmodules = on-demand
+
 [diff]
 	submodule = diff
 

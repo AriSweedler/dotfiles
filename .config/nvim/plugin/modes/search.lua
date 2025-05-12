@@ -97,3 +97,7 @@ vim.keymap.set("n", "<C-s>", function()
 
 	lgrep(word)
 end)
+
+-- Searching in visual move searches just inside the selection. `:help \%V` for
+-- the win!!
+vim.keymap.set("x", "/", "<Esc>/\\%V")

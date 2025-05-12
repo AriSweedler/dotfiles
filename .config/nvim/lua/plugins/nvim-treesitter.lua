@@ -63,7 +63,7 @@ local M = {
 	opts = {
 		auto_install = true,
 		ensure_installed = { "bash", "lua", "vim", "vimdoc", "query", "python", "javascript", "go" },
-		sync_install = true, -- Install parsers syncronously. Lol.
+		sync_install = false,
 		ignore_install = {}, -- List of parsers to ignore installation
 		highlight = {
 			enable = true,
@@ -129,6 +129,20 @@ local M = {
 		vim.defer_fn(function()
 			require("nvim-treesitter.configs").setup(opts)
 		end, 0)
+
+		-- For every file, set the foldmethod to 'expr' and use Treesitter's
+		-- foldexpr as the foldmethod
+		vim.api.nvim_create_autocmd("FileType", {
+			group = vim.api.nvim_create_augroup("TreesitterFileType", { clear = true }),
+			pattern = "*",
+			callback = function()
+				if require("nvim-treesitter.parsers").has_parser() then
+					-- vim.notify("[nvim-treesitter] Using nvim_treesitter syntax folding", vim.log.levels.DEBUG)
+					vim.opt.foldmethod = "expr"
+					vim.opt.foldexpr = "nvim_treesitter#foldexpr()"
+				end
+			end,
+		})
 	end,
 }
 

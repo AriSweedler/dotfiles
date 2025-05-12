@@ -3,10 +3,8 @@
 	conflictstyle = zdiff3
 
 [mergetool "vim_mergetool"]
-	cmd = nvim -f -c "MergetoolStart" "$MERGED" "$BASE" "$LOCAL" "$REMOTE"
-	trustExitCode = true
-
-[mergetool]
 	# After performing a merge, the original file with conflict markers can
 	# be saved as a file with a .orig extension. I do not want that
 	keepBackup = false
+	cmd = nvim -f -c "MergetoolStart" "$MERGED" "$BASE" "$LOCAL" "$REMOTE"
+	trustExitCode = true

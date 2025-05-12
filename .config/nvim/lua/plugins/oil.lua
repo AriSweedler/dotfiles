@@ -1,34 +1,36 @@
 local M = {
 	"stevearc/oil.nvim",
 	event = "VeryLazy",
-	config = function()
-		require("oil").setup({
-			columns = { "icon" },
-			default_file_explorer = true,
-			keymaps = {
-				["<C-v>"] = {
-					"actions.select",
-					opts = { vertical = true },
-					desc = "Open the entry in a vertical split",
-				},
-				["<C-s>"] = {
-					"actions.select",
-					opts = { horizontal = true },
-					desc = "Open the entry in a horizontal split",
-				},
+	opts = {
+		columns = { "icon" },
+		default_file_explorer = true,
+		keymaps = {
+			["<C-v>"] = {
+				"actions.select",
+				opts = { vertical = true },
+				desc = "Open the entry in a vertical split",
 			},
-			view_options = {
-				show_hidden = true,
-				is_always_hidden = function(name, _)
-					local always_hidden_files = {
-						".git",
-						".DS_Store",
-						"__pycache__",
-					}
-					return vim.tbl_contains(always_hidden_files, name)
-				end,
+			["<C-s>"] = {
+				"actions.select",
+				opts = { horizontal = true },
+				desc = "Open the entry in a horizontal split",
 			},
-		})
+		},
+		view_options = {
+			show_hidden = true,
+			is_always_hidden = function(name, _)
+				local always_hidden_files = {
+					".git",
+					".DS_Store",
+					"__pycache__",
+				}
+				return vim.tbl_contains(always_hidden_files, name)
+			end,
+		},
+	},
+	config = function(_, opts)
+		-- Set up oil.nvim
+		require("oil").setup(opts)
 
 		-- Open parent directory in floating window
 		vim.keymap.set("n", "-", require("oil").toggle_float, { desc = "[Oil] Open floating window" })

@@ -99,11 +99,6 @@
 	wipebranch = !"f() { git branch -D $1; git push origin --delete $1; }; f"
 	yankbranch = !"git branch --show-current | tee /dev/tty | tr -d '\n' | pbcopy"
 
-[includeIf "gitdir:~/"]
-	# Include computer-specific git configuration. Put this last so we can
-	# override all of the above
-	path = ~/.local/share/git/config
-
 [include]
 	path = ~/.config/git/plugin/color.gitconfig
 	path = ~/.config/git/plugin/delta.gitconfig
@@ -112,3 +107,8 @@
 	path = ~/.config/git/plugin/log.gitconfig
 	path = ~/.config/git/plugin/mergetool.gitconfig
 	path = ~/.config/git/plugin/submodules.gitconfig
+
+[includeIf "gitdir:~/"]
+	# Include computer-specific git configuration. Put this last so we can
+	# override all of the above
+	path = ~/.local/share/git/config

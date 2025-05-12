@@ -1,62 +1,71 @@
-# The classic log suite
-c_red='\033[31m'; c_green='\033[32m'; c_yellow='\033[33m';
-c_cyan='\033[36m'; c_grey='\033[90m'; c_rst='\033[0m'
-log::is_irrelevant_fxn() {
-  [ -z "${1:-}" ] && return 0 # empty function: irrelevant
-  case "$1" in
-    run_cmd*|log::*|_log::*|*::_*) return 0 ;; # irrelevant functions
-  esac
-  return 1 # found a relevant function!
-}
-log::preamble() {
-  local -r date=$(date "+%Y-%m-%dT%T.000Z")
+# Colors
+c_red='\033[31m'
+c_green='\033[32m'
+c_yellow='\033[33m'
+c_blue='\033[34m'
+c_magenta='\033[35m'
+c_cyan='\033[36m'
+c_white='\033[37m'
+c_grey='\033[90m'
+c_rst='\033[0m'
 
-  local fxn=main i=0
-  while log::is_irrelevant_fxn "${FUNCNAME[$i]}" && (( i++ < 10 )); do :; done
-  local fxn=${FUNCNAME[$i]}
-  local line=${BASH_LINENO[$((i-1))]}
-  # local src="${BASH_SOURCE[$i]#${OTTO_REPO_ROOT}/bash_lib/}"
-
-  echo -n "[${date}] [${fxn}+${line}]"
-}
-[ -n "${OTTO_DISABLE_PREAMBLE:-}" ] && log::preamble() { :; }
-
-# Colorize and send to stderr
+# Colorize and send to stderr.
+# Send err to OTTO_ERR_LOGFILE if that env var is set
 log::dev()      { echo -e "${c_cyan}[DEV] $(log::preamble)${c_rst}" "$@" >&2 ; }
 log::_err()    { echo -e "${c_red}[ERROR] $(log::preamble)${c_rst}" "$@" >&2 ; }
-log::err()    { log::_err "$@"; [ -n "${OTTO_ERR_LOGFILE:-}" ] && echo "$@" >> "${OTTO_ERR_LOGFILE}" ; }
+log::err()    { log::_err "$@"; [ -n "${OTTO_ERR_LOGFILE:-}" ] && echo "$@" >> "${OTTO_ERR_LOGFILE}"; return 0; }
 log::warn()  { echo -e "${c_yellow}[WARN] $(log::preamble)${c_rst}" "$@" >&2 ; }
 log::info()   { echo -e "${c_green}[INFO] $(log::preamble)${c_rst}" "$@" >&2 ; }
 log::_debug() { echo -e "${c_grey}[DEBUG] $(log::preamble)${c_rst}" "$@" >&2 ; }
-log::debug() { otto::is_true "${OTTO_DEBUG:-}" || return 0; log::_debug "$@" ; }
+log::debug() { [ "${OTTO_DEBUG:-}" ] || return 0; log::_debug "$@" ; }
 
-# Multiline
+# Multiline. You may want to set OTTO_DISABLE_PREAMBLE here.
 log::DEV()   { (while IFS= read -r line; do log::dev   "| $line"; done <<< "$*") ; }
-log::ERR()   { (while IFS= read -r line; do log::_err  "| $line"; done <<< "$*") ; }
+log::ERR()   { (while IFS= read -r line; do log::err   "| $line"; done <<< "$*") ; }
 log::WARN()  { (while IFS= read -r line; do log::warn  "| $line"; done <<< "$*") ; }
 log::INFO()  { (while IFS= read -r line; do log::info  "| $line"; done <<< "$*") ; }
 log::DEBUG() { (while IFS= read -r line; do log::debug "| $line"; done <<< "$*") ; }
 
-# Running commands
+# Preamble with function name of relevant caller
+function log::preamble() {
+  [ "${OTTO_DISABLE_PREAMBLE:-}" ] && return
+  local -r date=$(date "+%Y-%m-%dT%T.000Z")
+
+  local fxn=main i=0
+  while log::is_irrelevant_fxn "${FUNCNAME[$i]}" && (( i++ < 10 )); do :; done
+  local fxn=${FUNCNAME[$i]} line=${BASH_LINENO[$((i-1))]}
+
+  echo -n "[${date}] [${fxn}+${line}]"
+}
+
+function log::is_irrelevant_fxn() {
+  [ -z "${1:-}" ] && return 0 # empty function: irrelevant
+  case "$1" in
+    run_cmd*|log::*|*::_*|_*) return 0 ;; # irrelevant functions
+  esac
+  return 1 # found a relevant function!
+}
+
+# Log the running commands
+export lvl=INFO
+export lvl_fail=ERR
+function run_cmd() {
+  # Log the command, exit early if it succeeds
+  "log::${lvl}" "$@"
+  "$@" && return
+  rc=$?
+  # Log the failure with th ecommand quoted. Forward the rc
+  set -- $(printf "'%s' " "$@")
+  "log::${lvl_fail}" "cmd failed | rc=$rc cmd_quoted=|$*|"
+  return $rc
+}
+
+# Log the running command and capture the stdout only (allow stderr - which
+# probably contains logs - through)
 function run_cmd_cap() {
   o="$(run_cmd "$@")"
   rc=$?
-  (( rc == 0 )) && log::${lvl:-INFO} "${o}"
-  (( rc != 0 )) && log::${lvl_fail:-ERR} "${o}"
+  (( rc == 0 )) && log::${lvl} "${o}"
+  (( rc != 0 )) && log::${lvl_fail} "${o}"
   return $rc
-}
-
-function run_cmd() {
-  "log::${lvl:-info}" "$@"
-  "$@" && return; rc=$?
-  set -- $(printf "'%s' " "$@")
-  "log::${lvl_fail:-ERR}" "cmd failed | rc=$rc cmd_quoted=|$*|"
-  return $rc
-}
-
-# Debugging
-function log::dev::trace() {
-  log::dev "We just invoked function with args | func='${FUNCNAME[1]}'"
-  local i=0
-  for arg in "$@"; do log::dev "arg | \$$((++i))='${arg}'"; done
 }

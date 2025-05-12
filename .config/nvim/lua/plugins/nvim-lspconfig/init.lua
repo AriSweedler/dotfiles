@@ -2,7 +2,7 @@ local M = {
 	"neovim/nvim-lspconfig",
 	event = "VeryLazy",
 	dependencies = {
-		"williamboman/mason.nvim",         -- Install LSPs private to nvim
+		"williamboman/mason.nvim", -- Install LSPs private to nvim
 		"williamboman/mason-lspconfig.nvim", -- Nice default configs for LSPs - saves a lot of work
 		{ "j-hui/fidget.nvim", opts = {} }, -- Show long-running LSP commands in statusline
 		"nvim-telescope/telescope.nvim",

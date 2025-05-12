@@ -19,3 +19,6 @@ dotfiles
 # Python
 .env
 .venv
+
+# delve
+__debug_bin*
