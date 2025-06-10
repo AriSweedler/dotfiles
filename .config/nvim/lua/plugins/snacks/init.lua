@@ -9,6 +9,34 @@ local bufmap = function(lhs, rhs, desc, opts)
 		lhs = SNACK_LEADER .. lhs
 	end
 
+	-- Expand `wik_min` into nested args.win.input.keys with { "i", "n" } mode
+	if opts.wik_min then
+		opts.args = opts.args or {}
+		local args = opts.args
+		args.win = args.win or {}
+		args.win.input = args.win.input or {}
+		args.win.input.keys = args.win.input.keys or {}
+		args.actions = args.actions or {}
+
+		for key, action in pairs(opts.wik_min) do
+			local action_name = desc:lower():gsub("[^a-z]", "_")
+
+			-- Use a built-in action or a user-supplied function
+			if type(action) == "string" then
+				action_name = action
+			elseif type(action) == "function" then
+				args.actions[action_name] = action
+			end
+
+			if action_name then
+				args.win.input.keys[key] = {
+					action_name,
+					mode = { "i", "n" },
+				}
+			end
+		end
+	end
+
 	-- Generate and extend opts with "desc"
 	keymapOpts = vim.tbl_extend("force", keymapOpts, {
 		desc = SNACK_DESC_PREFIX .. ": " .. desc,
@@ -31,6 +59,19 @@ local bufmap = function(lhs, rhs, desc, opts)
 	vim.keymap.set("n", lhs, rhs, keymapOpts)
 end
 
+local action_tabedit = function(picker)
+	local selections = picker:selected({ fallback = true })
+	for _, item in ipairs(selections) do
+		if not item.file then
+			vim.notify("No file found for keymap: " .. item.text, vim.log.levels.ERROR)
+			return
+		end
+		vim.cmd("tabedit " .. vim.fn.fnameescape(item.file))
+		vim.api.nvim_win_set_cursor(0, item.pos)
+	end
+	picker:close()
+end
+
 -- In the picker UI, you can hit `<ESC>` to enter normal mode.
 -- <Alt-w> to cycle windows
 -- <C-b>/<C-f> to scroll in preview
@@ -42,30 +83,36 @@ return {
 	lazy = false,
 	---@type snacks.Config
 	opts = {
-		picker = { enabled = true },
-		scratch = { enabled = true },
+		picker = {
+			win = {
+				input = {
+					keys = {
+						["<C-l>"] = { "loclist", mode = { "i", "n" } },
+						["<C-g>"] = { "close", mode = { "i", "n" } },
+					},
+				},
+			},
+		},
 	},
 	config = function(_, opts)
 		local Snacks = require("snacks")
+		local SnacksActions = require("snacks.picker.actions")
 		Snacks.setup(opts)
 
-		SNACK_DESC_PREFIX = "Snacks Scratch"
-		SNACK_LEADER = "<Leader>S"
-		bufmap("S", Snacks.scratch.open, "Scratch Buffer")
-		bufmap("s", Snacks.scratch.select, "Select Scratch Buffer")
-
-		SNACK_DESC_PREFIX = "Buffer"
-		SNACK_LEADER = "<Leader>b"
-		bufmap("b", Snacks.bufdelete, "Close Buffer")
-		bufmap("B", Snacks.bufdelete, "Close Buffer")
+		vim.keymap.set("n", "<Leader>bd", function()
+			Snacks.bufdelete()
+		end, { desc = "Snacks: Close Buffer" })
 
 		SNACK_DESC_PREFIX = "Snacks Picker"
 		SNACK_LEADER = "<Leader>p"
-		bufmap("<C-b>", Snacks.picker.buffers, "Buffers", { no_leader = true })
+		bufmap("<C-b>", Snacks.picker.buffers, "Buffers", {
+			no_leader = true,
+			wik_min = { ["<C-d>"] = "bufdelete" },
+		})
 		bufmap('"', Snacks.picker.registers, "Registers")
 		bufmap("/", Snacks.picker.search_history, "Search History")
 		bufmap("a", Snacks.picker.autocmds, "Autocmds")
-		bufmap("b", Snacks.picker.buffers, "Buffers")
+		bufmap("b", Snacks.picker.buffers, "Buffers", { wik_min = { ["<C-d>"] = "bufdelete" } })
 		bufmap("c", Snacks.picker.command_history, "Command History")
 		bufmap("C", Snacks.picker.commands, "All possible commands")
 		bufmap("<Leader>c", Snacks.picker.colorschemes, "Colorschemes")
@@ -77,7 +124,7 @@ return {
 		bufmap("H", Snacks.picker.highlights, "Highlights")
 		bufmap("i", Snacks.picker.icons, "Icons")
 		bufmap("j", Snacks.picker.jumps, "Jump List")
-		bufmap("k", Snacks.picker.keymaps, "Keymaps")
+		bufmap("k", Snacks.picker.keymaps, "Keymaps", { wik_min = { ["<C-t>"] = action_tabedit, } })
 		bufmap("l", Snacks.picker.loclist, "Location List")
 		bufmap("m", Snacks.picker.marks, "Marks")
 		bufmap("M", Snacks.picker.man, "Man Pages")
@@ -92,14 +139,14 @@ return {
 
 		-- LSP
 		SNACK_DESC_PREFIX = "Snacks LSP Pickers"
-		SNACK_LEADER = "g"
+		SNACK_LEADER = "gr"
 		bufmap("d", Snacks.picker.lsp_definitions, "Goto Definition")
 		bufmap("D", Snacks.picker.lsp_declarations, "Goto Declaration")
-		bufmap("r", Snacks.picker.lsp_references, "References")
-		bufmap("I", Snacks.picker.lsp_implementations, "Goto Implementation")
+		bufmap("r", Snacks.picker.lsp_references, "Goto References")
+		bufmap("i", Snacks.picker.lsp_implementations, "Goto Implementation")
 		bufmap("y", Snacks.picker.lsp_type_definitions, "Goto Type Definition")
-		bufmap("s", Snacks.picker.lsp_symbols, "LSP Symbols")
-		bufmap("S", Snacks.picker.lsp_workspace_symbols, "LSP Workspace Symbols")
+		bufmap("s", Snacks.picker.lsp_symbols, "Symbols")
+		bufmap("S", Snacks.picker.lsp_workspace_symbols, "Workspace Symbols")
 
 		-- Files
 		SNACK_DESC_PREFIX = "Snacks File Picker"

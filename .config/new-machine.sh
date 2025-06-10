@@ -87,6 +87,7 @@ function ensure_brew_pkgs() {
 
     # Lang: misc
     lua
+    lua-language-server
     python
     node
     shellcheck

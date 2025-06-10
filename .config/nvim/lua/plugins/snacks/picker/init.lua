@@ -52,10 +52,9 @@ M.git_files = function(opts)
 				"git",
 				"--git-dir=" .. opts.git_dir,
 				"--work-tree=" .. opts.work_tree,
-				"ls-tree",
+				"ls",
 				"-r",
 				"--name-only",
-				"HEAD",
 			}
 			local cmd_str = table.concat(cmd, " ")
 			local filenames = vim.fn.systemlist(cmd_str)
@@ -63,8 +62,9 @@ M.git_files = function(opts)
 			local items = {}
 			for idx, filename in ipairs(filenames) do
 				--- @type snacks.picker.Item
+				local abs_filename = opts.work_tree .. "/" .. filename
 				local i = {
-					file = filename,
+					file = abs_filename,
 					idx = idx,
 					score = 100,
 					text = filename,
