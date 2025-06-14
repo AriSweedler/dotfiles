@@ -98,9 +98,10 @@ function ensure_brew_pkgs() {
     helm
 
     # Mac customization
-    # removed: hammerspoon
-    # removed: monitorcontrol
-    rectangle
+    raycast
+    karabiner-elements
+    bartender
+    homerow
 
     # Personal
     spotify

@@ -29,8 +29,10 @@ autoload edit-command-line
 zle -N edit-command-line
 bindkey "^X^E" edit-command-line
 
-# Run a command DIRECTLY from a keystroke:
-# https://unix.stackexchange.com/a/668986/248906
-function ari-keystroke-coder { cc; zle redisplay; }
-zle -N ari-keystroke-coder
-bindkey '^o' ari-keystroke-coder
+# Easily edit my machine's setup script. This script makes sure I have
+# everything I expect on a machine. I have to update it if I install new
+# permanent applications (language servers, command-line utilities, apps via
+# brew, etc.)
+function vnew() {
+  vi "${HOME}/.config/new-machine.sh"
+}

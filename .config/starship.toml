@@ -2,7 +2,7 @@
 symbol = "[⬢](bold green) "
 
 [git_branch]
-symbol = 'branch '
+symbol = ' '
 
 [git_metrics]
 disabled = false
@@ -13,5 +13,15 @@ style = 'bg:black fg:bold green'
 [cmake]
 symbol = 'cmake '
 
+[terraform]
+symbol = ' '
+
 [battery]
 discharging_symbol = "⚡️ "
+
+[gcloud]
+symbol = '󰊶 '
+format = '[$symbol$active]($style) '
+
+[aws]
+symbol = ' '

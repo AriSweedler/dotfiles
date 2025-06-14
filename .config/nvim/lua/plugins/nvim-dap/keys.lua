@@ -153,7 +153,7 @@ return {
 
 	-- Breakpoints
 	{
-		"<Leader>db",
+		"<Leader>db<Enter>",
 		function()
 			require("dap").toggle_breakpoint()
 		end,
@@ -167,14 +167,14 @@ return {
 		desc = ddesc("breakpoint condition", { capitalize = true }),
 	},
 	{
-		"[db",
+		"<Leader>db[",
 		function()
 			require("plugins.nvim-dap.breakpoint").jump("prev")
 		end,
 		desc = "jump to prev breakpoint",
 	},
 	{
-		"]db",
+		"<Leader>db]",
 		function()
 			require("plugins.nvim-dap.breakpoint").jump("next")
 		end,

@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Config
+SESSION="karabiner"
+CMD="cd ~/.config/karabiner/karabiner.ts/ && npm run build"
+
+# Check if session exists
+tmux has-session -t "$SESSION" 2>/dev/null
+
+if [ $? != 0 ]; then
+  echo "Tmux session '$SESSION' not found. Creating it."
+  tmux new-session -d -s "$SESSION"
+fi
+
+# Send command to the session's active pane (without needing window name/index)
+tmux send-keys -t "$SESSION" "$CMD" C-m
+
+# Optional: macOS notification
+osascript -e 'display notification "Karabiner config rebuild triggered." with title "Karabiner Reloaded"'

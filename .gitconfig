@@ -65,11 +65,11 @@
 	cconfig = config --edit --global
 
 	# View these aliases more easily
-	alias = !"git config --list | grep ^alias | cut -c 7- | sort #"
-	showme = !"printf \"The alias '$1' is: \"; git config --list | sed /alias.$1=/!d | sed s/[^=]*=// #"
+	alias = "!git config --list | grep ^alias | cut -c 7- | sort #"
+	showme = "!printf \"The alias '$1' is: \"; git config --list | sed /alias.$1=/!d | sed s/[^=]*=// #"
 
 	# shorten
-	a = !"git add .; git status"
+	a = "!git add .; git status"
 	d = diff --staged --diff-algorithm=minimal
 	df = dotfiles
 	dfd = dotfiles-daily
@@ -79,7 +79,7 @@
 	rr = rebase-remote
 	fpr = finish-pr
 	po = push-origin
-	sw = !"git yankbranch; git switch -"
+	sw = "!git yankbranch; git switch -"
 	swr = switch-recent
 	swbl = switch-branchlog
 	wb = wipebranch
@@ -87,17 +87,21 @@
 
 	# New commands
 	diffls = diff --name-only
-	dotfiles = !"git --git-dir=\"$HOME/dotfiles/\" --work-tree=\"$HOME\""
-	editdiffls = !"f() { refspec="${1:-@}"; files=$(git diff --name-only ${refspec}); [ -n \"${files}\" ] && $EDITOR -p ${files} || echo \"no changes since ref='${refspec}'\" ;}; f"
-	ignore = !"f() { echo $1 >> .gitignore; }; f"
-	initt = !"git init; git commit --allow-empty --message 'first commit'"
+	dotfiles = "!git --git-dir=\"$HOME/dotfiles/\" --work-tree=\"$HOME\""
+	editdiffls = "!f() { refspec="${1:-@}"; files=$(git diff --name-only ${refspec}); [ -n \"${files}\" ] && $EDITOR -p ${files} || echo \"no changes since ref='${refspec}'\" ;}; f"
+	ignore = "!f() { echo $1 >> .gitignore; }; f"
+	initt = "!git init; git commit --allow-empty --message 'first commit'"
 	ls = ls-tree --full-tree -r --abbrev HEAD
-	push-origin = !"git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)"
-	rebase-remote = !"f() { : "${1:?}"; git fetch; git branch -f "$1" "origin/$1"; git rebase -i "$1"; }; f"
-	switch-branchlog = !"git branchlog | git switch \"$(fzf --select-1)\""
-	switch-recent = !"f() { git branch --format=\"%(refname:short)\" --sort=-committerdate | fzf --header \"Switch to recent branch\" --preview 'git diff {1} --color=always | delta' | xargs git switch; }; f"
-	wipebranch = !"f() { git branch -D $1; git push origin --delete $1; }; f"
-	yankbranch = !"git branch --show-current | tee /dev/tty | tr -d '\n' | pbcopy"
+	push-origin = "!git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)"
+	rebase-remote = "!f() { b="${1:?provide a branch}"; o="${2:-origin}" ; git fetch "${o}" && git rebase -i "${o}/${b}" && git branch -f "${b}" "${o}/${b}"; }; f"
+
+	switch-branchlog = "!git branchlog | git switch \"$(fzf --select-1)\""
+	switch-recent = "!f() { git branch --format=\"%(refname:short)\" --sort=-committerdate | fzf --header \"Switch to recent branch\" --preview 'git diff {1} --color=always | delta' | xargs git switch; }; f"
+	wipebranch = "!f() { git branch -D $1; git push origin --delete $1; }; f"
+	yankbranch = "!git branch --show-current | tee /dev/tty | tr -d '\n' | pbcopy"
+	hash = log -1 --pretty=format:'%H'
+	h = log -1 --pretty=format:'%h'
+	worka = worktreex-add
 
 [include]
 	path = ~/.config/git/plugin/color.gitconfig

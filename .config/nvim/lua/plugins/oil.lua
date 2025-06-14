@@ -5,12 +5,22 @@ local M = {
 		columns = { "icon" },
 		default_file_explorer = true,
 		keymaps = {
-			["<C-v>"] = {
+			["<Esc>"] = {
+				"actions.close",
+				desc = "Close oil",
+				mode = "n",
+			},
+			["<C-T><C-T>"] = {
+				"actions.select",
+				opts = { tab = true },
+				desc = "Open the entry in a new tab",
+			},
+			["<C-V><C-V>"] = {
 				"actions.select",
 				opts = { vertical = true },
 				desc = "Open the entry in a vertical split",
 			},
-			["<C-s>"] = {
+			["<C-S><C-S>"] = {
 				"actions.select",
 				opts = { horizontal = true },
 				desc = "Open the entry in a horizontal split",

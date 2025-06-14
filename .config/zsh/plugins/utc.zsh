@@ -21,7 +21,26 @@ print(f'UTC Time: ..... {dt.astimezone(datetime.timezone.utc)}')
 "
 }
 
-# Example usage
-#
-#     utc "2024-09-30T16:35:58.441Z"
-#
+function timedelta() {
+  local t1="${1:?}"
+  local t2="${2:?}"
+  python3 -c "
+import datetime
+
+# Get str from user
+dt_str_usr1 = '$t1'
+dt_str_usr2 = '$t2'
+
+# Parse as a datetime
+dt1 = datetime.datetime.fromisoformat(dt_str_usr1)
+dt2 = datetime.datetime.fromisoformat(dt_str_usr2)
+delta = dt2 - dt1
+if delta.days < 0:
+  print('Negative delta')
+  delta = -delta
+
+# Pretty print the delta
+print(f'Time delta in seconds: {delta.total_seconds()}')
+print(f'Time delta: {delta}')
+"
+}
