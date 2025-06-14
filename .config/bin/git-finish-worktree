@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# `git finish-worktree` will produce a script. The script will remove the
+# worktree, cd to git repo root, and then delete the branch.
+#
+# To be used like:
+#
+#     eval "$(git finish-worktree)"
+#
+# from inside the finished worktree
+function main() {
+  # Ensure we're in a git repository
+  if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+    log::err "Not inside a Git repository."
+    return 1
+  fi
+
+  # Get finished_worktree Git branch
+  local finished_worktree_branch
+  if ! finished_worktree_branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null); then
+    echo "Unable to determine the finished_worktree Git branch (maybe in detached HEAD state)."
+    return 1
+  fi
+
+cat << EOF
+  git worktree remove .
+  cd ..
+  cd \$(git rev-parse --show-toplevel)
+  git branch -D "${finished_worktree_branch}"
+EOF
+}
+main "$@"

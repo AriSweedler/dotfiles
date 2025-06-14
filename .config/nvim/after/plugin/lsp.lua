@@ -1,14 +1,19 @@
 local setup_inlay_hits = function(args)
 	vim.lsp.inlay_hint.enable(true, { bufnr = args.buf })
 
-	-- Toggle and log
 	vim.keymap.set("n", "gih", function()
+		-- Get data
 		local is_enabled = vim.lsp.inlay_hint.is_enabled()
-		vim.lsp.inlay_hint.enable(not is_enabled)
-		vim.notify("Inlay hints " .. (is_enabled and "enabled" or "disabled"))
+
+		-- Toggle
+		local set_enabled = not is_enabled
+		vim.lsp.inlay_hint.enable(set_enabled)
+
+		-- Log
+		vim.notify("Inlay hints " .. (set_enabled and "enabled" or "disabled"))
 	end, { desc = "LSP: Toggle [I]nlay [H]ints", buffer = args.buf })
 
-	-- And nice dark green color
+	-- Highlight a nice dark green color
 	vim.api.nvim_set_hl(0, "LspInlayHint", { fg = "#008f40" })
 end
 

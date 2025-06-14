@@ -2,9 +2,6 @@ vim.bo.tabstop = 2
 vim.bo.shiftwidth = 2
 vim.bo.expandtab = false
 
-require("ari.lsp.gopls")
-require("ari.dap.delve")
-
 -- Put in the comment leader when hitting '<Enter>' while in insert mode on a comment
 vim.opt.formatoptions:append("r")
 -- Put in the comment leader when hitting 'O' while in normal mode on a comment

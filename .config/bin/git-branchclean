@@ -86,12 +86,14 @@ function main() {
       *) log::err "Unknown arg | arg='${1}'"; exit 1 ;;
     esac
   done
-  [ "${action}" = "remove" ] && action="remove::${remove_loc}"
+
+  if [ "${action}" = "remove" ]; then 
+    action="remove::${remove_loc}"
+    git fetch
+  fi
 
   log::info "Dealing with all branches older than | dead_duration='${dead_duration}'"
-
   local branch branches
-
   branches=( ${(@f)$(dead_branches "${dead_duration}")} )
   for branch in "${branches[@]}"; do
     action::log

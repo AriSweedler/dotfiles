@@ -2,6 +2,7 @@ local SNACK_DESC_PREFIX = "Snacks Picker"
 local SNACK_LEADER = "<Leader>p"
 
 local bufmap = function(lhs, rhs, desc, opts)
+	desc = desc or opts.args.title or "UNKNOWN"
 	opts = opts or {}
 	local keymapOpts = opts.keymapOpts or {}
 
@@ -74,8 +75,8 @@ end
 
 -- In the picker UI, you can hit `<ESC>` to enter normal mode.
 -- <Alt-w> to cycle windows
--- <C-b>/<C-f> to scroll in preview
--- <C-w>K to move the picker UP (removes preview?)
+-- <C-B>/<C-F> to scroll in preview
+-- <C-W>K to move the picker UP (removes preview?)
 
 return {
 	"folke/snacks.nvim",
@@ -87,8 +88,8 @@ return {
 			win = {
 				input = {
 					keys = {
-						["<C-l>"] = { "loclist", mode = { "i", "n" } },
-						["<C-g>"] = { "close", mode = { "i", "n" } },
+						["<C-L>"] = { "loclist", mode = { "i", "n" } },
+						["<C-G>"] = { "close", mode = { "i", "n" } },
 					},
 				},
 			},
@@ -105,37 +106,34 @@ return {
 
 		SNACK_DESC_PREFIX = "Snacks Picker"
 		SNACK_LEADER = "<Leader>p"
-		bufmap("<C-b>", Snacks.picker.buffers, "Buffers", {
+		bufmap("<C-B>", Snacks.picker.buffers, "Buffers", {
 			no_leader = true,
-			wik_min = { ["<C-d>"] = "bufdelete" },
+			wik_min = { ["<C-D>"] = "bufdelete" },
 		})
 		bufmap('"', Snacks.picker.registers, "Registers")
 		bufmap("/", Snacks.picker.search_history, "Search History")
 		bufmap("a", Snacks.picker.autocmds, "Autocmds")
-		bufmap("b", Snacks.picker.buffers, "Buffers", { wik_min = { ["<C-d>"] = "bufdelete" } })
+		bufmap("b", Snacks.picker.buffers, "Buffers", { wik_min = { ["<C-D>"] = "bufdelete" } })
 		bufmap("c", Snacks.picker.command_history, "Command History")
 		bufmap("C", Snacks.picker.commands, "All possible commands")
 		bufmap("<Leader>c", Snacks.picker.colorschemes, "Colorschemes")
 		bufmap("d", Snacks.picker.diagnostics_buffer, "Buffer diagnostics")
 		bufmap("D", Snacks.picker.diagnostics, "All diagnostics")
 		bufmap("e", Snacks.picker.explorer, "File Explorer")
-		bufmap("g", Snacks.picker.grep, "Grep")
+		bufmap("G", Snacks.picker.grep_buffers, "Grep open buffers")
+		bufmap("<Leader>g", Snacks.picker.lines, "current buffer")
+		bufmap("<Leader>G", Snacks.picker.grep, "Grep globally")
 		bufmap("h", Snacks.picker.help, "Help pages")
 		bufmap("H", Snacks.picker.highlights, "Highlights")
 		bufmap("i", Snacks.picker.icons, "Icons")
 		bufmap("j", Snacks.picker.jumps, "Jump List")
-		bufmap("k", Snacks.picker.keymaps, "Keymaps", { wik_min = { ["<C-t>"] = action_tabedit, } })
+		bufmap("k", Snacks.picker.keymaps, "Keymaps", { wik_min = { ["<C-T>"] = action_tabedit, } })
 		bufmap("l", Snacks.picker.loclist, "Location List")
 		bufmap("m", Snacks.picker.marks, "Marks")
 		bufmap("M", Snacks.picker.man, "Man Pages")
+		bufmap("p", Snacks.picker.lazy, "Plugins from Lazy package manager")
 		bufmap("n", Snacks.picker.notifications, "Notification History")
 		bufmap("u", Snacks.picker.undo, "Undo History")
-
-		SNACK_DESC_PREFIX = "Snacks Search Pickers"
-		SNACK_LEADER = "<Leader>ps"
-		bufmap("b", Snacks.picker.lines, "current buffer")
-		bufmap("B", Snacks.picker.grep_buffers, "All open buffers")
-		bufmap("p", Snacks.picker.lazy, "Plugins from Lazy package manager")
 
 		-- LSP
 		SNACK_DESC_PREFIX = "Snacks LSP Pickers"
@@ -150,8 +148,8 @@ return {
 
 		-- Files
 		SNACK_DESC_PREFIX = "Snacks File Picker"
-		SNACK_LEADER = "<C-t>"
-		bufmap("<C-t>", Snacks.picker.smart, "Smart Find Files")
+		SNACK_LEADER = "<C-T>"
+		bufmap("<C-T>", Snacks.picker.smart, "Smart Find Files")
 		bufmap("r", Snacks.picker.recent, "Recent files")
 		bufmap("f", Snacks.picker.files, "Files")
 		bufmap("v", Snacks.picker.files, "Vim config files", {
@@ -164,6 +162,12 @@ return {
 				work_tree = vim.fn.expand("$HOME"),
 			})
 		end, "Dotfiles")
+		bufmap("l", Snacks.picker.files, nil, {
+			args = {
+				cwd = vim.fn.expand("$XDG_DATA_HOME"),
+				title = "Local config files (XDG_DATA_HOME)"
+			}
+		})
 		bufmap("g", Snacks.picker.git_files, "Find git files")
 		bufmap("p", Snacks.picker.projects, "Projects")
 

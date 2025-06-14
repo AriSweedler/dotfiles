@@ -1,0 +1,8 @@
+#!/bin/bash
+
+env > /tmp/env-from-karabiner.txt
+whoami >> /tmp/env-from-karabiner.txt
+echo "Ran from: $(pwd)" >> /tmp/env-from-karabiner.txt
+echo "-----" >> /tmp/env-from-karabiner.txt
+
+open "raycast://extensions/raycast/raycast/confetti"

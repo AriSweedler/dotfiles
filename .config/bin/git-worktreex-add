@@ -1,0 +1,46 @@
+#!/bin/bash
+
+# `git worktreex-add <TARGET>` will create the git worktree & put a 'cd' command
+# on clipboard
+#
+# To be used like:
+#
+#     git worktreex-add abc/xyz
+#
+# And then hit "Command+V" to cd into it
+function main() {
+  local target="${1:?}"
+
+  # Find the git repository root
+  local git_repo_root
+  if ! git_repo_root=$(git rev-parse --show-toplevel 2>/dev/null); then
+    log::err "Not a git repository. Please run this command inside a git repository."
+    return 1
+  fi
+
+  # If the worktree exists already, just cd into it (no branching)
+  if git worktree list | grep --quiet "^${git_repo_root}/${target}"; then
+    echo -n "cd '${target}'" | pbcopy
+    echo "Worktree exists | target='${target}'"
+    return 0
+  fi
+
+  # Ensure the local branch exists
+  if ! git show-ref --verify --quiet "refs/heads/${target}"; then
+    local targets_revspec=HEAD
+    if git show-ref --verify --quiet "refs/remotes/origin/${target}"; then
+      # If the branch exists remote then use that
+      targets_revspec="origin/${target}"
+    fi
+    git branch --create "${target}" "${targets_revspec}"
+  fi
+
+  # Create the worktree & set it to the target branch
+  git worktree add "${target}" "${target}" || return 1
+
+  # Success
+  echo -n "cd '${target}'" | pbcopy
+  echo "Worktree created | target='${target}'"
+  return 0
+}
+main "$@"

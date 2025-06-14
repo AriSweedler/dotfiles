@@ -1,5 +1,3 @@
-local defaults = require("plugins.nvim-lspconfig.defaults")
-
 local get_local_module = function()
 	-- Find the 'go.mod' file
 	local go_mod = vim.fn.findfile("go.mod", ".;")
@@ -19,8 +17,11 @@ local get_local_module = function()
 	return module
 end
 
-require("lspconfig").gopls.setup({
-	on_attach = defaults.on_attach,
+return {
+	cmd = { "gopls" },
+	filetypes = { "go", "gomod", "gowork", "gotmpl" },
+	single_file_support = true,
+	root_markers = { 'go.mod' },
 	capabilities = require("cmp_nvim_lsp").default_capabilities(),
 	settings = {
 		gopls = {
@@ -37,4 +38,4 @@ require("lspconfig").gopls.setup({
 			},
 		},
 	},
-})
+}

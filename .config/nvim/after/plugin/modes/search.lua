@@ -30,15 +30,15 @@ local function lgrep(word, opts)
 	end
 
 	if not opts.nobang then
-		table.insert(cmdTable, "!")
+		cmdTable[#cmdTable] = cmdTable[#cmdTable] .. "!"
 	end
 
-	table.insert(cmdTable, lgrep_escape(word))
+	table.insert(cmdTable, "'" .. lgrep_escape(word) .. "'")
+	local cmd = table.concat(cmdTable, " ")
 
 	vim.fn.setreg("/", slash_escape(word))
-	vim.cmd("tabnew")
-	vim.cmd("file deleteme")
-	vim.cmd(table.concat(cmdTable, " "))
+	vim.cmd("tabnew deleteme")
+	vim.cmd(cmd)
 	vim.cmd("lopen | wincmd p | lfirst")
 	vim.cmd("bdelete! deleteme")
 end
