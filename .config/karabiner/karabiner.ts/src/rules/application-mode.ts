@@ -1,13 +1,31 @@
 import { hyperLayer, toApp, map } from "karabiner.ts"
 
-export const applicationMode = hyperLayer("a", "application-mode")
-  .description("Open App Mode (hyper + a)")
+const entrypoint = "a"
+const layer_name = "application-mode"
+const description = "Open application"
+
+const key_action_map = {
+  "a": "Arc",
+  "f": "Finder",
+  "t": "Terminal",
+  "s": "Spotify",
+  "v": "Cisco AnyConnect Secure Mobility Client",
+}
+
+const to_manipulator = ([key, app]: [string, string]) => {
+  return map(key).to(toApp(app))
+}
+
+const to_description = (map: Record<string, string>) => {
+  const entries = Object.entries(map)
+    .map(([key, app]) => `• \`${key}\` → ${app}`)
+    .join("\n")
+
+  return `(hyper + ${entrypoint}): ${description}\n\n${entries}`
+}
+
+export const applicationMode = hyperLayer(entrypoint, layer_name)
+  .description(to_description(key_action_map))
   .leaderMode()
   .notification()
-  .manipulators([
-    map("a").to(toApp("Arc")),
-    map("f").to(toApp("Finder")),
-    map("t").to(toApp("Terminal")),
-    map("s").to(toApp("Spotify")),
-    map("v").to(toApp("Cisco AnyConnect Secure Mobility Client")),
-  ])
+  .manipulators(Object.entries(key_action_map).map(to_manipulator))

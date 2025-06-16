@@ -3,7 +3,7 @@ import { hyper_c, raycast_deeplink } from "./utils"
 import { symbolModeLayer } from "./rules/symbol-mode"
 import { applicationMode } from "./rules/application-mode"
 import { karabinerMode } from "./rules/karabiner-mode"
-
+import { windowMode } from "./rules/window-mode"
 
 writeToProfile("Default", [
   rule('Right option → Hyper').manipulators([
@@ -17,4 +17,5 @@ writeToProfile("Default", [
 
   applicationMode,
   karabinerMode,
+  windowMode,
 ])
