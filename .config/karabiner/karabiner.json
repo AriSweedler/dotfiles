@@ -25,38 +25,6 @@
                       "shift"
                     ]
                   }
-                ],
-                "to_if_alone": [
-                  {
-                    "key_code": "right_option"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "description": "confetti",
-            "manipulators": [
-              {
-                "type": "basic",
-                "from": {
-                  "modifiers": {
-                    "mandatory": [
-                      "left_command",
-                      "left_option",
-                      "left_control",
-                      "left_shift"
-                    ],
-                    "optional": [
-                      "any"
-                    ]
-                  },
-                  "key_code": "c"
-                },
-                "to": [
-                  {
-                    "shell_command": "open raycast://extensions/raycast/raycast/confetti"
-                  }
                 ]
               }
             ]
