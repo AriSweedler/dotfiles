@@ -1,7 +1,14 @@
 import { hyperLayer, map } from "karabiner.ts"
-import { raycast_deeplink } from "../utils"
+import { raycast_deeplink } from "../utils/macros"
+import { AriMode } from "../utils/mode"
 
-const key_action_map = {
+const meta = {
+  entrypoint: "w",
+  layerName: "window-mode",
+  description: "Window management",
+}
+
+const dict = {
   "⌫": "restore",
   "⏎": "almost-maximize",
 
@@ -57,8 +64,6 @@ const to_manipulator_keystrokes = ([key, action]: [string, string]) => {
 }
 ////////////////////////////////////////////////////////////////////////////////
 
-export const windowMode = hyperLayer("w", "window-mode")
-  .description("Window Mode (hyper + w)")
-  .leaderMode()
-  .notification()
-  .manipulators(Object.entries(key_action_map).map(to_manipulator_keystrokes))
+// --- Export Final Rule ---
+const windowMode = new AriMode(meta, dict, to_manipulator_keystrokes)
+export default windowMode.asRule()

@@ -1,9 +1,8 @@
 import { map, rule, writeToProfile } from "karabiner.ts"
-import { hyper_c, raycast_deeplink } from "./utils"
-import { symbolModeLayer } from "./rules/symbol-mode"
-import { applicationMode } from "./rules/application-mode"
-import { karabinerMode } from "./rules/karabiner-mode"
-import { windowMode } from "./rules/window-mode"
+import { hyper_c, raycast_deeplink } from "./utils/macros"
+import applicationMode from "./modes/application"
+import karabinerMode from "./modes/karabiner"
+import windowMode from "./modes/window"
 
 writeToProfile("Default", [
   rule('Right option → Hyper').manipulators([
