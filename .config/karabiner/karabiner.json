@@ -62,7 +62,7 @@
             ]
           },
           {
-            "description": "Open App Mode (hyper + a)",
+            "description": "(hyper + a): Open applications\n\n• `a` → Arc (open app)\n• `f` → Finder (open app)\n• `t` → Terminal (open app)\n• `m` → Microsoft Outlook (open app)\n• `s` → Spotify (open app)\n• `v` → Cisco AnyConnect Secure Mobility Client (open app)",
             "manipulators": [
               {
                 "type": "basic",
@@ -93,7 +93,7 @@
                   {
                     "set_notification_message": {
                       "id": "layer-application-mode",
-                      "text": "Open App Mode (hyper + a)"
+                      "text": "(hyper + a): Open applications\n\n• `a` → Arc (open app)\n• `f` → Finder (open app)\n• `t` → Terminal (open app)\n• `m` → Microsoft Outlook (open app)\n• `s` → Spotify (open app)\n• `v` → Cisco AnyConnect Secure Mobility Client (open app)"
                     }
                   }
                 ],
@@ -122,7 +122,8 @@
                 },
                 "to": [
                   {
-                    "shell_command": "open -a \"Arc\".app"
+                    "kind": "app",
+                    "name": "Arc"
                   },
                   {
                     "set_variable": {
@@ -163,7 +164,8 @@
                 },
                 "to": [
                   {
-                    "shell_command": "open -a \"Finder\".app"
+                    "kind": "app",
+                    "name": "Finder"
                   },
                   {
                     "set_variable": {
@@ -204,7 +206,50 @@
                 },
                 "to": [
                   {
-                    "shell_command": "open -a \"Terminal\".app"
+                    "kind": "app",
+                    "name": "Terminal"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "application-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-application-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "application-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "m",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "kind": "app",
+                    "name": "Microsoft Outlook"
                   },
                   {
                     "set_variable": {
@@ -245,7 +290,8 @@
                 },
                 "to": [
                   {
-                    "shell_command": "open -a \"Spotify\".app"
+                    "kind": "app",
+                    "name": "Spotify"
                   },
                   {
                     "set_variable": {
@@ -286,7 +332,8 @@
                 },
                 "to": [
                   {
-                    "shell_command": "open -a \"Cisco AnyConnect Secure Mobility Client\".app"
+                    "kind": "app",
+                    "name": "Cisco AnyConnect Secure Mobility Client"
                   },
                   {
                     "set_variable": {
@@ -394,7 +441,7 @@
             ]
           },
           {
-            "description": "Karabiner Mode (hyper + k)",
+            "description": "(hyper + k): Karabiner development helpers\n\n• `d` → deeplink: extensions/raycast/raycast/confetti\n• `s` → script: script-example\n• `e` → script: karabiner-edit-index\n• `r` → script: karabiner-recompile",
             "manipulators": [
               {
                 "type": "basic",
@@ -425,7 +472,7 @@
                   {
                     "set_notification_message": {
                       "id": "layer-karabiner-mode",
-                      "text": "Karabiner Mode (hyper + k)"
+                      "text": "(hyper + k): Karabiner development helpers\n\n• `d` → deeplink: extensions/raycast/raycast/confetti\n• `s` → script: script-example\n• `e` → script: karabiner-edit-index\n• `r` → script: karabiner-recompile"
                     }
                   }
                 ],
@@ -495,7 +542,89 @@
                 },
                 "to": [
                   {
-                    "shell_command": "/Users/ari.sweedler/.config/karabiner/karabiner.ts/scripts/bin/confetti"
+                    "shell_command": "export LOG_FILE=/tmp/karabiner.script-example.txt; export REPO_ROOT=/Users/ari.sweedler/.config/karabiner/karabiner.ts; /Users/ari.sweedler/.config/karabiner/karabiner.ts/src/scripts/bin/script-example"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "karabiner-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "e",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "export LOG_FILE=/tmp/karabiner.karabiner-edit-index.txt; export REPO_ROOT=/Users/ari.sweedler/.config/karabiner/karabiner.ts; /Users/ari.sweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "karabiner-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "r",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "export LOG_FILE=/tmp/karabiner.karabiner-recompile.txt; export REPO_ROOT=/Users/ari.sweedler/.config/karabiner/karabiner.ts; /Users/ari.sweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile"
                   },
                   {
                     "set_variable": {
@@ -595,6 +724,881 @@
                   {
                     "set_notification_message": {
                       "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "description": "(hyper + w): Window management\n\n• `⌫` → restore (key code)\n• `⏎` → almost-maximize (key code)\n• `h` → left-half (key code)\n• `l` → right-half (key code)\n• `u` → top-left-quarter (key code)\n• `i` → top-right-quarter (key code)\n• `j` → bottom-left-quarter (key code)\n• `k` → bottom-right-quarter (key code)\n• `c` → center (key code)\n• `r` → reasonable-size (key code)\n• `f` → toggle-fullscreen (key code)\n• `-` → make-smaller (key code)\n• `=` → make-larger (key code)\n• `,` → previous-display (key code)\n• `.` → next-display (key code)\n• `[` → previous-desktop (key code)\n• `]` → next-desktop (key code)",
+            "manipulators": [
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "w",
+                  "modifiers": {
+                    "mandatory": [
+                      "command",
+                      "option",
+                      "control",
+                      "shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": "(hyper + w): Window management\n\n• `⌫` → restore (key code)\n• `⏎` → almost-maximize (key code)\n• `h` → left-half (key code)\n• `l` → right-half (key code)\n• `u` → top-left-quarter (key code)\n• `i` → top-right-quarter (key code)\n• `j` → bottom-left-quarter (key code)\n• `k` → bottom-right-quarter (key code)\n• `c` → center (key code)\n• `r` → reasonable-size (key code)\n• `f` → toggle-fullscreen (key code)\n• `-` → make-smaller (key code)\n• `=` → make-larger (key code)\n• `,` → previous-display (key code)\n• `.` → next-display (key code)\n• `[` → previous-desktop (key code)\n• `]` → next-desktop (key code)"
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_unless",
+                    "name": "window-mode",
+                    "value": 1
+                  },
+                  {
+                    "type": "variable_unless",
+                    "name": "__layer",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "delete_or_backspace",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "modifiers": [
+                      "control",
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "return_or_enter",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "modifiers": [
+                      "control",
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "h",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "modifiers": [
+                      "control",
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "l",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "modifiers": [
+                      "control",
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "u",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "modifiers": [
+                      "control",
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "i",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "modifiers": [
+                      "control",
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "j",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "modifiers": [
+                      "control",
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "k",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "modifiers": [
+                      "control",
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "c",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "modifiers": [
+                      "control",
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "r",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "modifiers": [
+                      "control",
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "f",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "modifiers": [
+                      "control",
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "hyphen",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "modifiers": [
+                      "control",
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "equal_sign",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "modifiers": [
+                      "control",
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "comma",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "modifiers": [
+                      "control",
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "period",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "modifiers": [
+                      "control",
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "open_bracket",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "modifiers": [
+                      "control",
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "close_bracket",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "modifiers": [
+                      "control",
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "escape",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ],
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
+                      "text": ""
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "caps_lock",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "window-mode",
+                    "value": 1
+                  }
+                ],
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "window-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-window-mode",
                       "text": ""
                     }
                   }
