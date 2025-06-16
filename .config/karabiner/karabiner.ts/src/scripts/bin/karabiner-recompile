@@ -1,0 +1,12 @@
+#!/bin/bash
+
+function main() {
+  npm run build
+}
+
+# Boilerplate: set up PATH, PWD & logging
+set -x
+date
+export PATH="/opt/homebrew/bin:${PATH}"
+cd "${REPO_ROOT:?}"
+main "$@" &> "${LOG_FILE:-/tmp/karabiner.log}"
