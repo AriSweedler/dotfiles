@@ -1,22 +1,20 @@
 import { map } from "karabiner.ts"
-import { AriMode, toApp } from "../utils/mode"
+import { AriMode, app } from "../utils/mode"
 
 const meta = {
   entrypoint: "a",
   layerName: "application-mode",
-  description: "Open applications",
+  description: "Open application",
 }
 
-const dict = Object.fromEntries(
-  Object.entries({
-    "a": "Arc",
-    "f": "Finder",
-    "t": "Terminal",
-    "m": "Microsoft Outlook",
-    "s": "Spotify",
-    "v": "Cisco AnyConnect Secure Mobility Client",
-  }).map(([key, value]) => [key, toApp(value)])
-)
+const dict = {
+  "a": app("Arc"),
+  "f": app("Finder"),
+  "t": app("Terminal"),
+  "s": app("Spotify"),
+  "v": app("Cisco AnyConnect Secure Mobility Client"),
+  "z": app("Zoom"),
+}
 
 // --- Export Final Rule ---
 const applicationMode = new AriMode(meta, dict)
