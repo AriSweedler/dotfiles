@@ -1,0 +1,15 @@
+#!/bin/bash
+
+set -x
+set -euo pipefail
+
+function main() (
+	cd "$HOME/.config/karabiner/karabiner.ts"
+	npm run build
+	cd ".."
+	cat ./karabiner.json | jq --sort-keys > ./karabiner.json.sorted
+	mv karabiner.json.sorted karabiner.json
+	git df add karabiner.json
+	git df d karabiner.json
+)
+main "$@"

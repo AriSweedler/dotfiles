@@ -27,12 +27,78 @@
                     ]
                   }
                 ],
+                "to_if_alone": [
+                  {
+                    "key_code": "right_option"
+                  }
+                ],
                 "type": "basic"
               }
             ]
           },
           {
-            "description": "(hyper + a): Open applications\n\n• `a` → Arc (open app)\n• `f` → Finder (open app)\n• `t` → Terminal (open app)\n• `m` → Microsoft Outlook (open app)\n• `s` → Spotify (open app)\n• `v` → Cisco AnyConnect Secure Mobility Client (open app)",
+            "description": "Kinesis swaps command and option!",
+            "manipulators": [
+              {
+                "conditions": [
+                  {
+                    "identifiers": [
+                      {
+                        "is_keyboard": true,
+                        "product_id": 37904,
+                        "vendor_id": 1423
+                      }
+                    ],
+                    "type": "device_if"
+                  }
+                ],
+                "from": {
+                  "key_code": "left_command",
+                  "modifiers": {
+                    "optional": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "left_option"
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "identifiers": [
+                      {
+                        "is_keyboard": true,
+                        "product_id": 37904,
+                        "vendor_id": 1423
+                      }
+                    ],
+                    "type": "device_if"
+                  }
+                ],
+                "from": {
+                  "key_code": "left_option",
+                  "modifiers": {
+                    "optional": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "left_command"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "(hyper + a): Open application\n\n• `a` → open app: Arc\n• `f` → open app: Finder\n• `t` → open app: Terminal\n• `s` → open app: Spotify\n• `v` → open app: Cisco AnyConnect Secure Mobility Client\n• `z` → open app: Zoom",
             "manipulators": [
               {
                 "conditions": [
@@ -74,7 +140,7 @@
                   {
                     "set_notification_message": {
                       "id": "layer-application-mode",
-                      "text": "(hyper + a): Open applications\n\n• `a` → Arc (open app)\n• `f` → Finder (open app)\n• `t` → Terminal (open app)\n• `m` → Microsoft Outlook (open app)\n• `s` → Spotify (open app)\n• `v` → Cisco AnyConnect Secure Mobility Client (open app)"
+                      "text": "(hyper + a): Open application\n\n• `a` → open app: Arc\n• `f` → open app: Finder\n• `t` → open app: Terminal\n• `s` → open app: Spotify\n• `v` → open app: Cisco AnyConnect Secure Mobility Client\n• `z` → open app: Zoom"
                     }
                   }
                 ],
@@ -98,8 +164,7 @@
                 },
                 "to": [
                   {
-                    "kind": "app",
-                    "name": "Arc"
+                    "shell_command": "open -a \"Arc\".app"
                   },
                   {
                     "set_variable": {
@@ -140,8 +205,7 @@
                 },
                 "to": [
                   {
-                    "kind": "app",
-                    "name": "Finder"
+                    "shell_command": "open -a \"Finder\".app"
                   },
                   {
                     "set_variable": {
@@ -182,50 +246,7 @@
                 },
                 "to": [
                   {
-                    "kind": "app",
-                    "name": "Terminal"
-                  },
-                  {
-                    "set_variable": {
-                      "name": "application-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-application-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "application-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "m",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "kind": "app",
-                    "name": "Microsoft Outlook"
+                    "shell_command": "open -a \"Terminal\".app"
                   },
                   {
                     "set_variable": {
@@ -266,8 +287,7 @@
                 },
                 "to": [
                   {
-                    "kind": "app",
-                    "name": "Spotify"
+                    "shell_command": "open -a \"Spotify\".app"
                   },
                   {
                     "set_variable": {
@@ -308,8 +328,48 @@
                 },
                 "to": [
                   {
-                    "kind": "app",
-                    "name": "Cisco AnyConnect Secure Mobility Client"
+                    "shell_command": "open -a \"Cisco AnyConnect Secure Mobility Client\".app"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "application-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-application-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "z",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -a \"Zoom\".app"
                   },
                   {
                     "set_variable": {
@@ -411,7 +471,7 @@
             ]
           },
           {
-            "description": "(hyper + k): Karabiner development helpers\n\n• `d` → deeplink: extensions/raycast/raycast/confetti\n• `s` → script: script-example\n• `e` → script: karabiner-edit-index\n• `r` → script: karabiner-recompile",
+            "description": "(hyper + k): Karabiner development helpers\n\n• `d` → deeplink: extensions/raycast/raycast/confetti\n• `s` → run script: script-example\n• `e` → run script: karabiner-edit-index\n• `r` → run script: karabiner-recompile",
             "manipulators": [
               {
                 "conditions": [
@@ -453,7 +513,7 @@
                   {
                     "set_notification_message": {
                       "id": "layer-karabiner-mode",
-                      "text": "(hyper + k): Karabiner development helpers\n\n• `d` → deeplink: extensions/raycast/raycast/confetti\n• `s` → script: script-example\n• `e` → script: karabiner-edit-index\n• `r` → script: karabiner-recompile"
+                      "text": "(hyper + k): Karabiner development helpers\n\n• `d` → deeplink: extensions/raycast/raycast/confetti\n• `s` → run script: script-example\n• `e` → run script: karabiner-edit-index\n• `r` → run script: karabiner-recompile"
                     }
                   }
                 ],
@@ -518,7 +578,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "export LOG_FILE=/tmp/karabiner.script-example.txt; export REPO_ROOT=/Users/ari.sweedler/.config/karabiner/karabiner.ts; /Users/ari.sweedler/.config/karabiner/karabiner.ts/src/scripts/bin/script-example"
+                    "shell_command": "export LOG_FILE=/tmp/karabiner.script-example.txt; export REPO_ROOT=$HOME/.config/karabiner/karabiner.ts; $HOME/.config/karabiner/karabiner.ts/src/scripts/bin/script-example"
                   },
                   {
                     "set_variable": {
@@ -559,7 +619,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "export LOG_FILE=/tmp/karabiner.karabiner-edit-index.txt; export REPO_ROOT=/Users/ari.sweedler/.config/karabiner/karabiner.ts; /Users/ari.sweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index"
+                    "shell_command": "export LOG_FILE=/tmp/karabiner.karabiner-edit-index.txt; export REPO_ROOT=$HOME/.config/karabiner/karabiner.ts; $HOME/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index"
                   },
                   {
                     "set_variable": {
@@ -600,7 +660,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "export LOG_FILE=/tmp/karabiner.karabiner-recompile.txt; export REPO_ROOT=/Users/ari.sweedler/.config/karabiner/karabiner.ts; /Users/ari.sweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile"
+                    "shell_command": "export LOG_FILE=/tmp/karabiner.karabiner-recompile.txt; export REPO_ROOT=$HOME/.config/karabiner/karabiner.ts; $HOME/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile"
                   },
                   {
                     "set_variable": {
@@ -702,7 +762,7 @@
             ]
           },
           {
-            "description": "(hyper + w): Window management\n\n• `⌫` → restore (key code)\n• `⏎` → almost-maximize (key code)\n• `h` → left-half (key code)\n• `l` → right-half (key code)\n• `u` → top-left-quarter (key code)\n• `i` → top-right-quarter (key code)\n• `j` → bottom-left-quarter (key code)\n• `k` → bottom-right-quarter (key code)\n• `c` → center (key code)\n• `r` → reasonable-size (key code)\n• `f` → toggle-fullscreen (key code)\n• `-` → make-smaller (key code)\n• `=` → make-larger (key code)\n• `,` → previous-display (key code)\n• `.` → next-display (key code)\n• `[` → previous-desktop (key code)\n• `]` → next-desktop (key code)",
+            "description": "(hyper + w): Window management\n\n• `⌫` → restore\n• `⏎` → almost-maximize\n• `h` → left-half\n• `l` → right-half\n• `u` → top-left-quarter\n• `i` → top-right-quarter\n• `j` → bottom-left-quarter\n• `k` → bottom-right-quarter\n• `c` → center\n• `r` → reasonable-size\n• `f` → toggle-fullscreen\n• `-` → make-smaller\n• `=` → make-larger\n• `,` → previous-display\n• `.` → next-display\n• `[` → previous-desktop\n• `]` → next-desktop",
             "manipulators": [
               {
                 "conditions": [
@@ -744,7 +804,7 @@
                   {
                     "set_notification_message": {
                       "id": "layer-window-mode",
-                      "text": "(hyper + w): Window management\n\n• `⌫` → restore (key code)\n• `⏎` → almost-maximize (key code)\n• `h` → left-half (key code)\n• `l` → right-half (key code)\n• `u` → top-left-quarter (key code)\n• `i` → top-right-quarter (key code)\n• `j` → bottom-left-quarter (key code)\n• `k` → bottom-right-quarter (key code)\n• `c` → center (key code)\n• `r` → reasonable-size (key code)\n• `f` → toggle-fullscreen (key code)\n• `-` → make-smaller (key code)\n• `=` → make-larger (key code)\n• `,` → previous-display (key code)\n• `.` → next-display (key code)\n• `[` → previous-desktop (key code)\n• `]` → next-desktop (key code)"
+                      "text": "(hyper + w): Window management\n\n• `⌫` → restore\n• `⏎` → almost-maximize\n• `h` → left-half\n• `l` → right-half\n• `u` → top-left-quarter\n• `i` → top-right-quarter\n• `j` → bottom-left-quarter\n• `k` → bottom-right-quarter\n• `c` → center\n• `r` → reasonable-size\n• `f` → toggle-fullscreen\n• `-` → make-smaller\n• `=` → make-larger\n• `,` → previous-display\n• `.` → next-display\n• `[` → previous-desktop\n• `]` → next-desktop"
                     }
                   }
                 ],
@@ -768,6 +828,8 @@
                 },
                 "to": [
                   {
+                    "description": "restore",
+                    "key_code": "delete_or_backspace",
                     "modifiers": [
                       "control",
                       "option"
@@ -812,6 +874,8 @@
                 },
                 "to": [
                   {
+                    "description": "almost-maximize",
+                    "key_code": "return_or_enter",
                     "modifiers": [
                       "control",
                       "option"
@@ -856,6 +920,8 @@
                 },
                 "to": [
                   {
+                    "description": "left-half",
+                    "key_code": "h",
                     "modifiers": [
                       "control",
                       "option"
@@ -900,6 +966,8 @@
                 },
                 "to": [
                   {
+                    "description": "right-half",
+                    "key_code": "l",
                     "modifiers": [
                       "control",
                       "option"
@@ -944,6 +1012,8 @@
                 },
                 "to": [
                   {
+                    "description": "top-left-quarter",
+                    "key_code": "u",
                     "modifiers": [
                       "control",
                       "option"
@@ -988,6 +1058,8 @@
                 },
                 "to": [
                   {
+                    "description": "top-right-quarter",
+                    "key_code": "i",
                     "modifiers": [
                       "control",
                       "option"
@@ -1032,6 +1104,8 @@
                 },
                 "to": [
                   {
+                    "description": "bottom-left-quarter",
+                    "key_code": "j",
                     "modifiers": [
                       "control",
                       "option"
@@ -1076,6 +1150,8 @@
                 },
                 "to": [
                   {
+                    "description": "bottom-right-quarter",
+                    "key_code": "k",
                     "modifiers": [
                       "control",
                       "option"
@@ -1120,6 +1196,8 @@
                 },
                 "to": [
                   {
+                    "description": "center",
+                    "key_code": "c",
                     "modifiers": [
                       "control",
                       "option"
@@ -1164,6 +1242,8 @@
                 },
                 "to": [
                   {
+                    "description": "reasonable-size",
+                    "key_code": "r",
                     "modifiers": [
                       "control",
                       "option"
@@ -1208,6 +1288,8 @@
                 },
                 "to": [
                   {
+                    "description": "toggle-fullscreen",
+                    "key_code": "f",
                     "modifiers": [
                       "control",
                       "option"
@@ -1252,6 +1334,8 @@
                 },
                 "to": [
                   {
+                    "description": "make-smaller",
+                    "key_code": "hyphen",
                     "modifiers": [
                       "control",
                       "option"
@@ -1296,6 +1380,8 @@
                 },
                 "to": [
                   {
+                    "description": "make-larger",
+                    "key_code": "equal_sign",
                     "modifiers": [
                       "control",
                       "option"
@@ -1340,6 +1426,8 @@
                 },
                 "to": [
                   {
+                    "description": "previous-display",
+                    "key_code": ",",
                     "modifiers": [
                       "control",
                       "option"
@@ -1384,6 +1472,8 @@
                 },
                 "to": [
                   {
+                    "description": "next-display",
+                    "key_code": ".",
                     "modifiers": [
                       "control",
                       "option"
@@ -1428,6 +1518,8 @@
                 },
                 "to": [
                   {
+                    "description": "previous-desktop",
+                    "key_code": "[",
                     "modifiers": [
                       "control",
                       "option"
@@ -1472,6 +1564,8 @@
                 },
                 "to": [
                   {
+                    "description": "next-desktop",
+                    "key_code": "]",
                     "modifiers": [
                       "control",
                       "option"

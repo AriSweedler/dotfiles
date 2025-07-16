@@ -31,7 +31,7 @@ export default homeRow = [
   rule('Right option → Hyper').manipulators([
     map('right_option').toHyper().toIfAlone('right_option'),
   ]),
-  rule('Kinesis swaps command and option')
+  rule('Kinesis swaps command and option!')
     .condition({
       type: 'device_if',
       identifiers: [kinesisDevice],
