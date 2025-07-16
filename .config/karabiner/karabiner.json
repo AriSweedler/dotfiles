@@ -1,18 +1,19 @@
 {
   "profiles": [
     {
-      "name": "Default",
-      "selected": true,
-      "virtual_hid_keyboard": {
-        "keyboard_type_v2": "ansi"
-      },
       "complex_modifications": {
+        "parameters": {
+          "basic.simultaneous_threshold_milliseconds": 50,
+          "basic.to_delayed_action_delay_milliseconds": 500,
+          "basic.to_if_alone_timeout_milliseconds": 1000,
+          "basic.to_if_held_down_threshold_milliseconds": 500,
+          "mouse_motion_to_scroll.speed": 100
+        },
         "rules": [
           {
             "description": "Right option → Hyper",
             "manipulators": [
               {
-                "type": "basic",
                 "from": {
                   "key_code": "right_option"
                 },
@@ -25,7 +26,8 @@
                       "shift"
                     ]
                   }
-                ]
+                ],
+                "type": "basic"
               }
             ]
           },
@@ -33,7 +35,18 @@
             "description": "(hyper + a): Open applications\n\n• `a` → Arc (open app)\n• `f` → Finder (open app)\n• `t` → Terminal (open app)\n• `m` → Microsoft Outlook (open app)\n• `s` → Spotify (open app)\n• `v` → Cisco AnyConnect Secure Mobility Client (open app)",
             "manipulators": [
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_unless",
+                    "value": 1
+                  },
+                  {
+                    "name": "__layer",
+                    "type": "variable_unless",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "a",
                   "modifiers": {
@@ -65,21 +78,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_unless",
-                    "name": "application-mode",
-                    "value": 1
-                  },
-                  {
-                    "type": "variable_unless",
-                    "name": "__layer",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "a",
                   "modifiers": {
@@ -112,16 +120,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "application-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "f",
                   "modifiers": {
@@ -154,16 +162,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "application-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "t",
                   "modifiers": {
@@ -196,16 +204,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "application-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "m",
                   "modifiers": {
@@ -238,16 +246,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "application-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "s",
                   "modifiers": {
@@ -280,16 +288,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "application-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "v",
                   "modifiers": {
@@ -322,16 +330,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "application-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "escape",
                   "modifiers": {
@@ -340,13 +348,6 @@
                     ]
                   }
                 },
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "application-mode",
-                    "value": 1
-                  }
-                ],
                 "to": [
                   {
                     "set_variable": {
@@ -366,10 +367,17 @@
                       "text": ""
                     }
                   }
-                ]
+                ],
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "caps_lock",
                   "modifiers": {
@@ -378,13 +386,6 @@
                     ]
                   }
                 },
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "application-mode",
-                    "value": 1
-                  }
-                ],
                 "to": [
                   {
                     "set_variable": {
@@ -404,7 +405,8 @@
                       "text": ""
                     }
                   }
-                ]
+                ],
+                "type": "basic"
               }
             ]
           },
@@ -412,7 +414,18 @@
             "description": "(hyper + k): Karabiner development helpers\n\n• `d` → deeplink: extensions/raycast/raycast/confetti\n• `s` → script: script-example\n• `e` → script: karabiner-edit-index\n• `r` → script: karabiner-recompile",
             "manipulators": [
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_unless",
+                    "value": 1
+                  },
+                  {
+                    "name": "__layer",
+                    "type": "variable_unless",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "k",
                   "modifiers": {
@@ -444,21 +457,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_unless",
-                    "name": "karabiner-mode",
-                    "value": 1
-                  },
-                  {
-                    "type": "variable_unless",
-                    "name": "__layer",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "d",
                   "modifiers": {
@@ -490,16 +498,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "karabiner-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "s",
                   "modifiers": {
@@ -531,16 +539,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "karabiner-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "e",
                   "modifiers": {
@@ -572,16 +580,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "karabiner-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "r",
                   "modifiers": {
@@ -613,16 +621,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "karabiner-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "escape",
                   "modifiers": {
@@ -631,13 +639,6 @@
                     ]
                   }
                 },
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "karabiner-mode",
-                    "value": 1
-                  }
-                ],
                 "to": [
                   {
                     "set_variable": {
@@ -657,10 +658,17 @@
                       "text": ""
                     }
                   }
-                ]
+                ],
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "caps_lock",
                   "modifiers": {
@@ -669,13 +677,6 @@
                     ]
                   }
                 },
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "karabiner-mode",
-                    "value": 1
-                  }
-                ],
                 "to": [
                   {
                     "set_variable": {
@@ -695,7 +696,8 @@
                       "text": ""
                     }
                   }
-                ]
+                ],
+                "type": "basic"
               }
             ]
           },
@@ -703,7 +705,18 @@
             "description": "(hyper + w): Window management\n\n• `⌫` → restore (key code)\n• `⏎` → almost-maximize (key code)\n• `h` → left-half (key code)\n• `l` → right-half (key code)\n• `u` → top-left-quarter (key code)\n• `i` → top-right-quarter (key code)\n• `j` → bottom-left-quarter (key code)\n• `k` → bottom-right-quarter (key code)\n• `c` → center (key code)\n• `r` → reasonable-size (key code)\n• `f` → toggle-fullscreen (key code)\n• `-` → make-smaller (key code)\n• `=` → make-larger (key code)\n• `,` → previous-display (key code)\n• `.` → next-display (key code)\n• `[` → previous-desktop (key code)\n• `]` → next-desktop (key code)",
             "manipulators": [
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_unless",
+                    "value": 1
+                  },
+                  {
+                    "name": "__layer",
+                    "type": "variable_unless",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "w",
                   "modifiers": {
@@ -735,21 +748,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_unless",
-                    "name": "window-mode",
-                    "value": 1
-                  },
-                  {
-                    "type": "variable_unless",
-                    "name": "__layer",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "delete_or_backspace",
                   "modifiers": {
@@ -784,16 +792,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "return_or_enter",
                   "modifiers": {
@@ -828,16 +836,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "h",
                   "modifiers": {
@@ -872,16 +880,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "l",
                   "modifiers": {
@@ -916,16 +924,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "u",
                   "modifiers": {
@@ -960,16 +968,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "i",
                   "modifiers": {
@@ -1004,16 +1012,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "j",
                   "modifiers": {
@@ -1048,16 +1056,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "k",
                   "modifiers": {
@@ -1092,16 +1100,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "c",
                   "modifiers": {
@@ -1136,16 +1144,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "r",
                   "modifiers": {
@@ -1180,16 +1188,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "f",
                   "modifiers": {
@@ -1224,16 +1232,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "hyphen",
                   "modifiers": {
@@ -1268,16 +1276,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "equal_sign",
                   "modifiers": {
@@ -1312,16 +1320,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "comma",
                   "modifiers": {
@@ -1356,16 +1364,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "period",
                   "modifiers": {
@@ -1400,16 +1408,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "open_bracket",
                   "modifiers": {
@@ -1444,16 +1452,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "close_bracket",
                   "modifiers": {
@@ -1488,16 +1496,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "escape",
                   "modifiers": {
@@ -1506,13 +1514,6 @@
                     ]
                   }
                 },
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ],
                 "to": [
                   {
                     "set_variable": {
@@ -1532,10 +1533,17 @@
                       "text": ""
                     }
                   }
-                ]
+                ],
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "caps_lock",
                   "modifiers": {
@@ -1544,13 +1552,6 @@
                     ]
                   }
                 },
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ],
                 "to": [
                   {
                     "set_variable": {
@@ -1570,18 +1571,17 @@
                       "text": ""
                     }
                   }
-                ]
+                ],
+                "type": "basic"
               }
             ]
           }
-        ],
-        "parameters": {
-          "basic.to_if_alone_timeout_milliseconds": 1000,
-          "basic.to_if_held_down_threshold_milliseconds": 500,
-          "basic.to_delayed_action_delay_milliseconds": 500,
-          "basic.simultaneous_threshold_milliseconds": 50,
-          "mouse_motion_to_scroll.speed": 100
-        }
+        ]
+      },
+      "name": "Default",
+      "selected": true,
+      "virtual_hid_keyboard": {
+        "keyboard_type_v2": "ansi"
       }
     }
   ]
