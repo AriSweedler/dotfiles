@@ -37,7 +37,7 @@
             ]
           },
           {
-            "description": "Kinesis swaps command and option!",
+            "description": "Kinesis swaps command and option",
             "manipulators": [
               {
                 "conditions": [
