@@ -25,3 +25,6 @@ defaults write com.apple.dock mru-spaces -bool false
 
 # Stop dock icons from bouncing
 defaults write com.apple.dock no-bouncing -bool TRUE
+
+# Put the dock on the left (instead of the deafult: the bottom)
+defaults write com.apple.dock orientation -string "left"

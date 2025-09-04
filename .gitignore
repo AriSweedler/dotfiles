@@ -8,7 +8,9 @@
 .azcopy/
 .azure/
 .bash_history
+.bashrc*
 .cisco/
+.claude*
 .config/Google/
 .config/Microsoft\\VisualStudio Services/
 .config/atac/atac.log
@@ -22,8 +24,11 @@
 .config/karabiner/automatic_backups
 .config/karabiner/karabiner.ts/node_modules
 .config/nvim/lazy-lock.json
+.config/nvim/pack/airtable/
 .config/nvim/spell/en.utf-8.add
+.config/op
 .config/pgcli/
+.config/raycast
 .config/raycast/extensions/
 .config/zsh/.zcompdump
 .config/zsh/history
@@ -41,6 +46,7 @@
 .mono/
 .node_repl_history
 .npm/
+.npmrc
 .nvs/
 .psql_history
 .python_history
@@ -53,13 +59,20 @@
 .viminfo
 .vscode/
 .wget-hsts
+.zsh_history
+.zsh_sessions
+.zshrc*
 
+Applications/
 Desktop/
 Documents/
 Downloads/
+Google*Drive
+Library/
 Movies/
 Music/
-OneDrive - Illumio
 Pictures/
 Public/
+bazel-cache
 go/
+h/

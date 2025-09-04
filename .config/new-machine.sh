@@ -64,7 +64,7 @@ function ensure_brew_pkgs() {
     # Nicer CLI
     bat
     fd
-    ffmpeg
+    # ffmpeg
     font-caskaydia-mono-nerd-font
     fzf
     git-delta
@@ -92,25 +92,24 @@ function ensure_brew_pkgs() {
 
     # Lang: misc
     lua
-    lua-language-server
-    python@3.13
-    node
+    # lua-language-server
+    # python@3.13
+    # node
     shellcheck
-    visual-studio-code
+    # visual-studio-code
 
     # Containers
     docker
     helm
-
-    # Mac customization
-    raycast
-    karabiner-elements
-    bartender
-    homerow
+    kubectl
 
     # Personal
+    # karabiner-elements
     spotify
   )
+
+  echo "brew install ${pkgs[*]}"
+  return
 
   # TODO: FIX ALL THIS
   # Get all currently installed formulae + casks
@@ -172,8 +171,8 @@ function set_karabiner() {
 function main() {
   ensure_brew
   ensure_brew_pkgs
-  set_terminal_nerdfont
-  set_karabiner
+  # set_terminal_nerdfont
+  # set_karabiner
 }
 
 main "$@"
