@@ -1,6 +1,13 @@
 import { hyperLayer, map } from "karabiner.ts"
 import { AriMode, key_code } from "../utils/mode"
 
+// To enable one-click usage, the user needs to check to see if all the raycast
+// shortcuts are set up properly. Go to `Raycast > Settings > Extensions` & make
+// sure all the `Window Management` hotkeys are set.
+//
+// TODO: On my 34 inch monitor, I may want a different set of entries for this.
+// For example, 'h' should maybe mean "left-third" instead of "left-half"
+
 const meta = {
   entrypoint: "w",
   layerName: "window-mode",
@@ -14,6 +21,10 @@ const dict = Object.fromEntries(
 
     "h": "left-half",
     "l": "right-half",
+
+    "q": "left-third",
+    "w": "center-third",
+    "e": "right-third",
 
     "u": "top-left-quarter",
     "i": "top-right-quarter",
