@@ -9,6 +9,7 @@
 .azure/
 .bash_history
 .bashrc*
+.cargo/
 .cisco/
 .claude*
 .config/Google/
@@ -18,6 +19,7 @@
 .config/dlv
 .config/gatsby/
 .config/gcloud/
+.config/gh/hosts.yml
 .config/github-copilot/
 .config/helm/
 .config/k9s/
@@ -44,12 +46,14 @@
 .lesshst
 .m2/
 .mono/
+.mysql_history
 .node_repl_history
 .npm/
 .npmrc
 .nvs/
 .psql_history
 .python_history
+.rustup/
 .rye/
 .sqlite_history
 .terraform.d/

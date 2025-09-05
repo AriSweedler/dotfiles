@@ -22,3 +22,5 @@ dotfiles
 
 # delve
 __debug_bin*
+
+**/.claude/settings.local.json

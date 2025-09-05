@@ -92,10 +92,11 @@ function ensure_brew_pkgs() {
 
     # Lang: misc
     lua
-    # lua-language-server
+    lua-language-server
     # python@3.13
     # node
     shellcheck
+    terraform-ls
     # visual-studio-code
 
     # Containers
