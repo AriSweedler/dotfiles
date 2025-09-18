@@ -1,3 +1,7 @@
+local format_settings = {
+  insertSpaceAfterOpeningAndBeforeClosingNonemptyBraces = false,
+}
+
 return {
   -- Command to start the language server
   cmd = { "typescript-language-server", "--stdio" },
@@ -20,45 +24,16 @@ return {
 
   -- Allow single file support (no project needed)
   single_file_support = true,
-
---   -- Server-specific settings
---   settings = {
---     typescript = {
---       inlayHints = {
---         includeInlayParameterNameHints = "all",
---         includeInlayParameterNameHintsWhenArgumentMatchesName = false,
---         includeInlayFunctionParameterTypeHints = true,
---         includeInlayVariableTypeHints = true,
---         includeInlayPropertyDeclarationTypeHints = true,
---         includeInlayFunctionLikeReturnTypeHints = true,
---         includeInlayEnumMemberValueHints = true,
---       },
---       suggest = {
---         includeCompletionsForModuleExports = true,
---         includeAutomaticOptionalChainCompletions = true,
---       },
---       preferences = {
---         importModuleSpecifierPreference = "relative",
---         includePackageJsonAutoImports = "auto",
---       },
---     },
---     javascript = {
---       inlayHints = {
---         includeInlayParameterNameHints = "all",
---         includeInlayParameterNameHintsWhenArgumentMatchesName = false,
---         includeInlayFunctionParameterTypeHints = true,
---         includeInlayVariableTypeHints = true,
---         includeInlayPropertyDeclarationTypeHints = true,
---         includeInlayFunctionLikeReturnTypeHints = true,
---         includeInlayEnumMemberValueHints = true,
---       },
---     },
---   },
---
---   -- Custom initialization options
---   init_options = {
---     preferences = {
---       disableSuggestions = false,
---     },
---   },
+  settings = {
+    typescript = {
+      format = format_settings,
+      preferences = {
+        importModuleSpecifierPreference = "relative",
+        includePackageJsonAutoImports = "auto",
+      },
+    },
+    javascript = {
+      format = format_settings,
+    },
+  },
 }
