@@ -20,8 +20,6 @@ local hydra_config = {
 		{ "j", "<C-w>-", { desc = "Resize window down" } },
 		{ "k", "<C-w>+", { desc = "Resize window up" } },
 		{ "l", "<C-w>>", { desc = "Resize window right" } },
-		{ "q", nil, { exit = true, nowait = true, desc = "Quit" } },
-		{ "<Esc>", nil, { exit = true, nowait = true, desc = "Quit" } },
 	},
 }
 

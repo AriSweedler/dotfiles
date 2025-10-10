@@ -23,31 +23,14 @@ local function LSP_list()
 	return ans
 end
 
-local progress_symbols = {
-	status = {
-		hl = {
-			enabled = "#50FA7B",
-			sleep = "#AEB7D0",
-			disabled = "#6272A4",
-			warning = "#FFB86C",
-			unknown = "#FF5555",
-		},
-	},
-	-- require("copilot-lualine").spinners.moon
-	spinners = { "🌑 ", "🌒 ", "🌓 ", "🌔 ", "🌕 ", "🌖 ", "🌗 ", "🌘 " },
-	spinner_color = "#6272A4",
-}
-
 local M = {
 	"nvim-lualine/lualine.nvim",
-	event = "BufReadPre",
-	dependencies = {
-		"AndreM222/copilot-lualine",
-	},
+	event = "VimEnter",
 	opts = {
 		options = {
 			theme = "wombat",
 			path = 1,
+			shorting_target = 40,
 		},
 		sections = {
 			lualine_a = {
@@ -61,8 +44,6 @@ local M = {
 				},
 			},
 			lualine_y = {
-				"copilot",
-				{ "progress", symbols = progress_symbols },
 				LSP_list,
 			},
 		},

@@ -1,4 +1,10 @@
 local function disable_ts_highlight_fxn(_, buf)
+	-- if it is a spinnaker JSON then allow it
+	local ft = vim.bo[buf].filetype
+	if ft == "json" then
+		return true
+	end
+
 	local max_filesize = 100 * 1024 -- 100 KB
 	local filename = vim.api.nvim_buf_get_name(buf)
 	local ok, stats = pcall(vim.loop.fs_stat, filename)
@@ -26,7 +32,7 @@ end
 local function opts_textobjects_move()
 	local objects = {
 		m = "function",
-		c = "class",
+		-- c = "class",
 		a = "parameter",
 	}
 	local directions = {

@@ -30,13 +30,33 @@ local function toggle_view_diffthis()
 	vim.api.nvim_set_current_win(original_win)
 end
 
+local function set_tab_width_to(width)
+	vim.bo.softtabstop = width
+	vim.bo.shiftwidth = width
+	vim.bo.tabstop = width
+	vim.notify("Set softtabstop, shiftwidth, and tabstop to " .. width, vim.log.levels.INFO)
+end
+
+local function set_tab_width()
+	local width = vim.v.count
+	if width == 0 then
+		width = 2 -- default if no count given
+	end
+	set_tab_width_to(width)
+end
+
 -- Set keyboard bindings
 vim.keymap.set("n", "<Leader>w", toggle_view_whitespace, { desc = "Toggle list option" })
 vim.keymap.set("n", "<Leader><Leader>D", toggle_view_diffthis, { desc = "Toggle diffthis in all windows" })
 vim.keymap.set("n", "<Leader>W", clear_whitespace, { desc = "Clear trailing whitespace" })
 vim.keymap.set("n", "<Leader>tw", view_textwrapN, { desc = "Set textwidth (accepts v:count)" })
+vim.keymap.set("n", "<Leader>sw", set_tab_width, { desc = "Set tab widths (accepts v:count)" })
 
 -- And make command bindings
 vim.api.nvim_create_user_command("ToggleWhitespace", toggle_view_whitespace, {})
 vim.api.nvim_create_user_command("ClearWhitespace", clear_whitespace, {})
 vim.api.nvim_create_user_command("DiffThis", toggle_view_diffthis, {})
+vim.api.nvim_create_user_command("SetTabWidth", function(opts)
+	local width = tonumber(opts.args) or 4
+	set_tab_width_to(width)
+end, { nargs = 1 })
