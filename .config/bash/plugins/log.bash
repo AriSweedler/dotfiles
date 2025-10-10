@@ -1,3 +1,8 @@
+# # Minimal log lib
+# c_red='\033[31m'; c_green='\033[32m'; c_rst='\033[0m'
+# log::err()    { echo -e "${c_red}[ERROR]${c_rst}" "$@" >&2 ; }
+# log::info()   { echo -e "${c_green}[INFO]${c_rst}" "$@" >&2 ; }
+
 # Colors
 c_red='\033[31m'
 c_green='\033[32m'

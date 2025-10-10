@@ -5,9 +5,6 @@ prepend_to_path "$HOME/.config/bin"
 
 # Use nvim by default
 export EDITOR="nvim"
-alias vi='nvim'
-alias vim='nvim'
-alias vimdiff='nvim -d'
 
 # Enable colors by default in ls
 alias ls='ls -G'

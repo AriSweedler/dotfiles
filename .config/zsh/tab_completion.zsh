@@ -10,14 +10,15 @@ autoload -U compinit
 # * '%S' and '%s' start and end 'Standout' styling respectively
 zstyle ':completion:*' list-prompt '%SHi Ari :), lots of options! At %p.%s'
 
-# Use default colors when we're listing completion options
-zstyle ':completion:*' list-colors ''
-
 # Allow for case-insensitive matches
 zstyle ':completion:*' matcher-list 'm:{[:lower:]}={[:upper:]} r:|[._-]=** r:|=**'
 
 # Treat multiple consecutive slashes as a single slash
 zstyle ':completion:*' squeeze-slashes true
+
+# Highlight the background of the selected item in the menu light blue
+zstyle ':completion:*' menu select
+zstyle ':completion:*' list-colors 'ma=30;46'  # Black text on cyan background
 
 # 3) Tell the completion subsystem to use the following files
 ZCACHE="${XDG_CACHE_HOME:-$HOME/.cache}/zsh"
@@ -63,3 +64,15 @@ if [ -d "${local_completions}" ]; then
     compdef "$comp_fxn" "${comp_fxn#_}"
   done < <(find "${local_completions}" -type f -exec basename {} \;)
 fi
+
+# Configure tab completions
+setopt MENU_COMPLETE    # Immediately insert first match, TAB cycles
+setopt AUTO_MENU        # Show menu on second TAB
+unsetopt BEEP           # No bell
+
+# Load menu selection module (creates menuselect keymap)
+zmodload zsh/complist
+
+# Cancel
+bindkey -M menuselect '^E' send-break  # Cancel (like Vim)
+bindkey -M menuselect '^[' send-break  # ESC also cancels

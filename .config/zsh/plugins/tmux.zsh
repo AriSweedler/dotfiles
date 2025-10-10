@@ -24,3 +24,8 @@ function ensure_tpm_installed() {
 }
 ensure_tpm_installed
 unset -f ensure_tpm_installed
+
+function tmux::rename-window() {
+  [ -z "$TMUX" ] && return
+  tmux rename-window "$@"
+}
