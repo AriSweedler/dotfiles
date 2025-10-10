@@ -108,6 +108,44 @@
             ]
           },
           {
+            "description": "Caps locks is ctrl",
+            "manipulators": [
+              {
+                "conditions": [
+                  {
+                    "identifiers": [
+                      {
+                        "is_keyboard": true,
+                        "product_id": 258,
+                        "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 37904,
+                        "vendor_id": 1423
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 632,
+                        "vendor_id": 1452
+                      }
+                    ],
+                    "type": "device_if"
+                  }
+                ],
+                "from": {
+                  "key_code": "caps_lock"
+                },
+                "to": [
+                  {
+                    "key_code": "left_control"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
             "description": "(hyper + a): Open application\n\n• `a` → open app: Arc\n• `f` → open app: Finder\n• `t` → open app: Terminal\n• `s` → open app: Spotify\n• `v` → open app: Cisco AnyConnect Secure Mobility Client\n• `z` → open app: Zoom",
             "manipulators": [
               {
