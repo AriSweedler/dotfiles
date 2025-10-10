@@ -3,13 +3,28 @@
 set -x
 set -euo pipefail
 
-function main() (
-	cd "$HOME/.config/karabiner/karabiner.ts"
+function main() {
+	local repo_root="${XDG_CONFIG_HOME:?}/karabiner"
+	local out_raw="${repo_root}/karabiner.json"
+	local out_sorted="${repo_root}/karabiner.json.sorted"
+
+	bake::generate
+	bake::add_to_git
+}
+
+function bake::generate() (
+	cd "${repo_root}/karabiner.ts"
 	npm run build
-	cd ".."
-	cat ./karabiner.json | jq --sort-keys > ./karabiner.json.sorted
-	mv karabiner.json.sorted karabiner.json
-	git df add karabiner.json
-	git df d karabiner.json
+	echo "Generated raw output | out_raw='${out_raw}'" >&2
 )
+
+function bake::add_to_git() {
+	cat "${out_raw}" | jq --sort-keys > "${out_sorted}"
+	mv "${out_sorted}" "${out_raw}"
+	echo "Sorted output for better diffs" >&2
+
+	git df add "${out_raw}"
+	git df diff --staged "${out_raw}"
+}
+
 main "$@"

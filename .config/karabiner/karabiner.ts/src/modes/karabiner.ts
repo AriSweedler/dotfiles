@@ -1,4 +1,3 @@
-import { map } from "karabiner.ts"
 import { AriMode, deeplink, script } from "../utils/mode"
 
 const meta = {
