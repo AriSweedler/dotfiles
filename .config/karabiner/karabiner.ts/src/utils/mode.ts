@@ -1,11 +1,11 @@
-import { hyperLayer, toApp, map } from "karabiner.ts"
+import { hyperLayer, toApp, map, FromKeyCode, Modifier } from "karabiner.ts"
 import { karabiner_script } from "./macros"
 
 // --- Types ---
 type Deeplink = { kind: "deeplink"; path: string }
 type Script = { kind: "script"; name: string }
 type App = { kind: "app"; name: string }
-type KeyCode = { kind: "key_code"; key_code: string; modifiers?: string[]; description: string }
+type KeyCode = { kind: "key_code"; key_code: string; modifiers?: Modifier[]; description: string }
 type Action = Deeplink | Script | KeyCode | App
 
 type Meta = {
@@ -18,7 +18,7 @@ type Meta = {
 export const deeplink = (path: string): Deeplink => ({ kind: "deeplink", path })
 export const script = (name: string): Script => ({ kind: "script", name })
 export const app = (name: string): App => ({ kind: "app", name })
-export const key_code = (key: string, modifiers: string[], description: string): KeyCode => ({
+export const key_code = (key: string, modifiers: Modifier[], description: string): KeyCode => ({
   kind: "key_code",
   key_code: to_key_code(key),
   modifiers: modifiers,
@@ -38,7 +38,7 @@ function to_key_code(key: string)  {
   return key
 }
 
-type ActionDict = Record<string, string>
+type ActionDict = Record<string, Action>
 export class AriMode {
   meta: Meta
   actionDict: ActionDict
@@ -56,7 +56,7 @@ export class AriMode {
       } 
       switch (val.kind) {
         case "key_code":
-          return val.description || `key_code: ${val.key}`
+          return val.description || `key_code: ${val.key_code}`
         case "app":
           return `open app: ${val.name}`
         case "script":
@@ -76,7 +76,7 @@ export class AriMode {
     return `(hyper + ${this.meta.entrypoint}): ${this.meta.description}\n\n${entries}`
   }
 
-  private toManipulator = ([key, action]: [string, Action]) => {
+  private toManipulator = ([key, action]: [FromKeyCode, Action]) => {
     switch (action.kind) {
       case "deeplink":
         return map(key).to({shell_command: `open raycast://${action.path}`})

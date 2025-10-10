@@ -1,4 +1,3 @@
-import { hyperLayer, map } from "karabiner.ts"
 import { AriMode, key_code } from "../utils/mode"
 
 // To enable one-click usage, the user needs to check to see if all the raycast
