@@ -7,16 +7,25 @@ import { DeviceIdentifier, FromAndToKeyCode, Manipulator, map, rule } from "kara
 //
 //     jq '.[] | select(.manufacturer == "Kinesis")'
 //
-const devices: Record<string, DeviceIdentifier> = {
-  kinesisFreestylePro: {
+const kinesisDevices: Record<string, DeviceIdentifier> = {
+  freestylePro: { // TODO: Should we just switch to mac layout?
     is_keyboard: true,
     product_id: 258,
     vendor_id: 10730,
   },
-  kinesisFreestyle2: {
+  freestyle2: {
     is_keyboard: true,
     product_id: 37904,
     vendor_id: 1423,
+  }
+}
+
+const devices: Record<string, DeviceIdentifier> = {
+  ...kinesisDevices,
+  appleInternalKeyboard: {
+    is_keyboard: true,
+    product_id: 632,
+    vendor_id: 1452,
   }
 }
 
@@ -47,9 +56,21 @@ export const homeRow = [
   rule('Kinesis swaps command and option')
     .condition({
       type: 'device_if',
-      identifiers: Object.values(devices),
+      identifiers: Object.values(kinesisDevices),
     })
     .manipulators([
       ...swapKeys('left_command', 'left_option')
+    ]),
+  rule('Caps locks is ctrl')
+    .condition({
+      type: 'device_if',
+      identifiers: Object.values(devices),
+    })
+    .manipulators([
+      {
+        type: 'basic',
+        from: { key_code: 'caps_lock' },
+        to: [{ key_code: 'left_control' }],
+      },
     ]),
 ]
