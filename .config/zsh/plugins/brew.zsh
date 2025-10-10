@@ -16,8 +16,9 @@ if prefix="$(brew_prefix)"; then
   # Get homebrew set up (sets env variables, including PATH & MANPATH)
   eval "$("${prefix}/bin/brew" shellenv)"
 
-  # Prepend brew completion files to the 'fpath'
-  fpath=("${prefix}/share/zsh/site-functions" $fpath)
+  # Move the fpath prepending that 'brew shellenv' did - move it to the end
+  local my_path="${prefix}/share/zsh/site-functions"
+  fpath=(${fpath:#$my_path} ${my_path})
 fi
 
 unset prefix

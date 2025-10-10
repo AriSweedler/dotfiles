@@ -6,6 +6,19 @@
 
 [delta]
 	navigate = true    # use n and N to move between diff sections
+	file-modified-label = Δ✏️
+	file-added-label = Δ🌱
+	file-removed-label = Δ💥
+	file-renamed-label = Δ🔀
+	file-copied-label = Δ👯
+
+[alias]
+	show-sbs = -c delta.features=side-by-side show
+	diff-sbs = -c delta.features=side-by-side diff
+	d-sbs = -c delta.features=side-by-side diff --staged
+
+	diff-f =  -c delta.navigate-regex='^(commit|added:|removed:|renamed:|@)' diff
+	d-f = -c delta.navigate-regex='^(commit|added:|removed:|renamed:|@)' diff --staged
 
 [interactive]
 	diffFilter = delta --color-only
