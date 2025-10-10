@@ -15,6 +15,7 @@ local hydra_config = {
 			"n",
 			function()
 				require("gitsigns").nav_hunk("next", { wrap = true })
+				vim.cmd("normal! zt")
 			end,
 			{ desc = "Next hunk" },
 		},
@@ -22,6 +23,15 @@ local hydra_config = {
 			"p",
 			function()
 				require("gitsigns").nav_hunk("prev", { wrap = true })
+				vim.cmd("normal! zt")
+			end,
+			{ desc = "Prev hunk" },
+		},
+		{ -- 'N' is a synonym for 'p'
+			"N",
+			function()
+				require("gitsigns").nav_hunk("prev", { wrap = true })
+				vim.cmd("normal! zt")
 			end,
 			{ desc = "Prev hunk" },
 		},
@@ -51,9 +61,6 @@ local hydra_config = {
 			end,
 			{ desc = "Reset hunk" },
 		},
-
-		{ "q", nil, { exit = true, nowait = true, desc = "Quit" } },
-		{ "<Esc>", nil, { exit = true, nowait = true, desc = "Quit" } },
 	},
 }
 

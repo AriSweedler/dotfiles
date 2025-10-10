@@ -70,7 +70,7 @@ vim.keymap.set("i", "<C-_>", "<Esc>:nohlsearch<CR>a", { silent = true })
 vim.keymap.set("v", "<C-_>", "<Esc>:nohlsearch<CR>`>", { silent = true })
 
 -- Make '*' better
-vim.keymap.set("n", "*", "*N")
+vim.keymap.set("n", "*", "<Cmd>keepjumps normal! *N<CR>")
 vim.keymap.set("v", "*", function()
 	local selected = vyank()
 	vim.fn.setreg("/", slash_escape(selected))

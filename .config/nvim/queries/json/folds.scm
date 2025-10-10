@@ -1,0 +1,6 @@
+[
+  (pair)
+  (object)
+  (array)
+] @fold
+

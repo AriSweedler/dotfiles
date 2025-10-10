@@ -11,6 +11,7 @@ local bufmap = function(lhs, rhs, desc, opts)
 	end
 
 	-- Expand `wik_min` into nested args.win.input.keys with { "i", "n" } mode
+	-- wik_min stands for: With Input Key: Mode Insert Normal
 	if opts.wik_min then
 		opts.args = opts.args or {}
 		local args = opts.args
