@@ -20,15 +20,6 @@ const kinesisDevices: Record<string, DeviceIdentifier> = {
   }
 }
 
-const devices: Record<string, DeviceIdentifier> = {
-  ...kinesisDevices,
-  appleInternalKeyboard: {
-    is_keyboard: true,
-    product_id: 632,
-    vendor_id: 1452,
-  }
-}
-
 // Helper to swap two keys, preserving any modifiers
 const swapKeys = (keyA: FromAndToKeyCode, keyB: FromAndToKeyCode): Manipulator[] => [
   {
@@ -50,22 +41,21 @@ const swapKeys = (keyA: FromAndToKeyCode, keyB: FromAndToKeyCode): Manipulator[]
 ];
 
 export const homeRow = [
-  rule('Right option → Hyper').manipulators([
-    map('right_option').toHyper().toIfAlone('right_option'),
-  ]),
+  rule('Right option → Hyper')
+    .manipulators([
+      map('right_option').toHyper().toIfAlone('right_option'),
+    ]),
+
   rule('Kinesis swaps command and option')
     .condition({
       type: 'device_if',
       identifiers: Object.values(kinesisDevices),
     })
     .manipulators([
-      ...swapKeys('left_command', 'left_option')
+      ...swapKeys('left_command', 'left_option'),
     ]),
+
   rule('Caps locks is ctrl')
-    .condition({
-      type: 'device_if',
-      identifiers: Object.values(devices),
-    })
     .manipulators([
       {
         type: 'basic',

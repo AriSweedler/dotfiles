@@ -1,0 +1,74 @@
+#!/bin/bash
+
+# Tmux Session/Window Management Framework
+# This script demonstrates the high-level flow:
+# 1. Session Management - ensure we're in the right session
+# 2. Window Management - ensure we're in the right window  
+# 3. Command Execution - send arbitrary commands
+
+set -e
+
+# ============================================================================
+# TMUX SESSION MANAGEMENT
+# ============================================================================
+
+ensure_session::created() {
+  local session_name="$1"
+  local window_name="$2"
+  
+  if tmux has-session -t "$session_name" 2>/dev/null; then
+    echo "Session already exists | session_name='$session_name'"
+    return 0
+  fi
+  
+  echo "Creating session | session_name='$session_name'"
+  tmux new-session -d -s "$session_name"
+  local first_window=$(tmux list-windows -t "$session_name" -F "#{window_index}" | head -1)
+  tmux rename-window -t "$session_name:$first_window" "$window_name"
+  echo "Session created first window | session_name='$session_name' window_name='$window_name' first_window='$first_window'"
+}
+
+ensure_session::_switch() {
+  local session_name="$1"
+  
+  echo "Switching to session | session_name='$session_name'"
+  tmux switch-client -t "$session_name"
+}
+
+ensure_session() {
+  local session_name="$1"
+  local window_name="$2"
+  echo "=== SESSION MANAGEMENT ==="
+  
+  ensure_session::created "$session_name" "$window_name"
+  ensure_session::_switch "$session_name"
+}
+
+# ============================================================================
+# COMMAND EXECUTION
+# ============================================================================
+
+send_command() {
+  local session_name="$1"
+  local window_name="$2"
+  local command="$3"
+  
+  echo "=== COMMAND EXECUTION ==="
+  echo "Sending command to $session_name:$window_name: $command"
+  
+  tmux send-keys -t "$session_name:$window_name" "$command" Enter
+}
+
+# ============================================================================
+# MAIN SCRIPT
+# ============================================================================
+
+main() {
+  set -x
+  local target_session="karabiner"
+  local target_window="${1:-first-window}"
+  
+  ensure_session "$target_session" "$target_window"
+}
+
+main "$@"
