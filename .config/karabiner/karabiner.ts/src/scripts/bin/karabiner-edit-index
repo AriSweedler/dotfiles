@@ -1,28 +1,9 @@
 #!/bin/bash
 
-function main() {
-  # Open Terminal.app
-  open -a "Terminal"
+set -e
 
-  # Start the session if it doesn't exist
-  local tmux_session="karabiner"
-  if ! tmux has-session -t "${tmux_session}" 2>/dev/null; then
-    tmux new-session -d -s "${tmux_session}"
-  fi
+# Load in library commands
+source "${REPO_LIB:?}/tmux_session_window.bash"
 
-  # Open a new window with the configured args
-  local tmux_window_name="karabiner-edit-index"
-  local tmux_args=(
-    -t "${tmux_session}"
-    -n "${tmux_window_name}"
-    "'${EDITOR:-nvim}' '${REPO_ROOT}/src/index.ts'"
-  )
-  tmux new-window "${tmux_args[@]}"
-}
-
-# Boilerplate: set up PATH, PWD & logging
-set -x
-date
-export PATH="/opt/homebrew/bin:${PATH}"
-cd "${REPO_ROOT:?}"
-main "$@" &> "${LOG_FILE:-/tmp/karabiner.log}" # 'vsp /tmp/karabiner.%:t:r.txt'
+cmd="${EDITOR:-nvim} '${REPO_ROOT:?}/src/index.ts'"
+tmux_session_window::run_cmd "karabiner" "edit-index" "$cmd"
