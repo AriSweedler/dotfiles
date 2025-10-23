@@ -111,28 +111,6 @@
             "description": "Caps locks is ctrl",
             "manipulators": [
               {
-                "conditions": [
-                  {
-                    "identifiers": [
-                      {
-                        "is_keyboard": true,
-                        "product_id": 258,
-                        "vendor_id": 10730
-                      },
-                      {
-                        "is_keyboard": true,
-                        "product_id": 37904,
-                        "vendor_id": 1423
-                      },
-                      {
-                        "is_keyboard": true,
-                        "product_id": 632,
-                        "vendor_id": 1452
-                      }
-                    ],
-                    "type": "device_if"
-                  }
-                ],
                 "from": {
                   "key_code": "caps_lock",
                   "modifiers": {
