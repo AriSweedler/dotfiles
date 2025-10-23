@@ -3,7 +3,7 @@
 set -e
 
 # Load in library commands"
-source "${REPO_LIB}/tmux_session_window.bash"
+source "${REPO_LIB:?}/tmux_session_window.bash"
 
 cmd="echo 'hello world from tmux'"
 tmux_session_window::run_cmd "karabiner" "hello-world" "$cmd"

@@ -1,15 +1,7 @@
 #!/bin/bash
 
-function main() {
-  pwd
-  env
-  whoami
-  open "raycast://extensions/raycast/raycast/confetti"
-}
-
-# Boilerplate: set up PATH, PWD & logging
-set -x
-date
-export PATH="/opt/homebrew/bin:${PATH}"
-cd "${REPO_ROOT:?}"
-main "$@" &> "${LOG_FILE:-/tmp/karabiner.log}" # 'vsp /tmp/karabiner.%:t:r.txt'
+set -e
+pwd
+env
+whoami
+open "raycast://extensions/raycast/raycast/confetti"

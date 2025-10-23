@@ -1,0 +1,23 @@
+#!/bin/bash
+
+set -e
+
+# Load in library commands
+source "${REPO_LIB:?}/tmux_session_window.bash"
+
+function ksl() {
+  selected=$(ls -1t /tmp/karabiner* 2>/dev/null | fzf \
+    --preview 'awk "/marker=.*\{\{\{.*/{depth++; if(depth==1) print \"----> \" \$0 \" <----\"; next} /marker=.*\}\}\}.*/{depth--; next} depth==0" {}' \
+    --preview-window=right:70% \
+    --height=80% \
+    --border \
+    --header="Select log file (ESC to cancel)")
+
+  [ -n "$selected" ] && "${EDITOR:-nvim}" "$selected"
+}
+
+export -f ksl
+
+# Compile the function into a command string
+cmd="$(tmux_session_window::cmd::from_exported_fxn 'ksl')"
+tmux_session_window::run_cmd "karabiner" "karabiner-script-logs" "$cmd"
