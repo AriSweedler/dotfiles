@@ -28,11 +28,13 @@ ensure_session::created() {
   echo "Session created first window | session_name='$session_name' window_name='$window_name' first_window='$first_window'"
 }
 
+# Assumes the session already exists
 ensure_session::_switch() {
   local session_name="$1"
   
   echo "Switching to session | session_name='$session_name'"
   tmux switch-client -t "$session_name"
+  echo "Switched to session | session_name='$session_name'"
 }
 
 ensure_session() {
@@ -42,6 +44,44 @@ ensure_session() {
   
   ensure_session::created "$session_name" "$window_name"
   ensure_session::_switch "$session_name"
+}
+
+# ============================================================================
+# TMUX WINDOW MANAGEMENT
+# ============================================================================
+
+# Assumes we are already in the correct session
+ensure_window::_created() {
+  local session_name="$1"
+  local window_name="$2"
+  
+  if tmux list-windows -t "$session_name" -F "#{window_name}" | grep -q "^$window_name$"; then
+    echo "Window already exists | session_name='$session_name' window_name='$window_name'"
+    return 0
+  fi
+  
+  echo "Creating window | session_name='$session_name' window_name='$window_name'"
+  tmux new-window -t "$session_name" -n "$window_name"
+  echo "Window created | session_name='$session_name' window_name='$window_name'"
+}
+
+# Assumes we are already in the correct session and the window exists
+ensure_window::_switch() {
+  local session_name="$1"
+  local window_name="$2"
+  
+  echo "Switchi_ng to window | session_name='$session_name' window_name='$window_name'"
+  tmux select-window -t "$session_name:$window_name"
+}
+
+# Assumes we are already in the correct session
+ensure_window() {
+  local session_name="$1"
+  local window_name="$2"
+  echo "=== WINDOW MANAGEMENT ==="
+  
+  ensure_window::_created "$session_name" "$window_name"
+  ensure_window::_switch "$session_name" "$window_name"
 }
 
 # ============================================================================
@@ -69,6 +109,7 @@ main() {
   local target_window="${1:-first-window}"
   
   ensure_session "$target_session" "$target_window"
+  ensure_window "$target_session" "$target_window"
 }
 
 main "$@"
