@@ -1,0 +1,25 @@
+#!/bin/bash
+
+set -e
+
+echo "Starting karabiner-logs-helper"
+echo "Available files:"
+ls -la /tmp/karabiner* 2>/dev/null || echo "No karabiner files found"
+
+# Use fzf to select a karabiner log file
+echo "Launching fzf..."
+selected_file=$(ls /tmp/karabiner* 2>/dev/null | fzf --preview "cat {}" --preview-window=right:70%) || {
+  echo "fzf was cancelled or failed"
+  exec bash
+}
+
+if [[ -n "$selected_file" ]]; then
+  echo "Selected file: $selected_file"
+  echo "Opening with editor: ${EDITOR:-nvim}"
+  "${EDITOR:-nvim}" "$selected_file"
+  echo "Editor closed, starting bash shell..."
+  exec bash
+else
+  echo "No file selected"
+  exec bash
+fi

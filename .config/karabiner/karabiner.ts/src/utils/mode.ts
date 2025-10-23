@@ -53,7 +53,7 @@ export class AriMode {
     .map(([_, val]) => {
       if (typeof val === "string") {
         return val
-      } 
+      }
       switch (val.kind) {
         case "key_code":
           return val.description || `key_code: ${val.key_code}`

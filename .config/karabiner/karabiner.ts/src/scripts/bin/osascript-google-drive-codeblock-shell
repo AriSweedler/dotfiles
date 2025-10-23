@@ -1,30 +1,22 @@
 #!/bin/bash
 
-function main() {
-  # Use AppleScript via osascript to type @code<Tab>Shell<Enter>
-  osascript <<'APPLESCRIPT'
-  tell application "System Events"
-    -- Type @code
-    keystroke "@code"
-    delay 0.3
+set -e
+# Use AppleScript via osascript to type @code<Tab>Shell<Enter>
+osascript <<'APPLESCRIPT'
+tell application "System Events"
+  -- Type @code
+  keystroke "@code"
+  delay 0.3
 
-    -- Press Tab
-    key code 48
-    delay 0.3
+  -- Press Tab
+  key code 48
+  delay 0.3
 
-    -- Type Shell
-    keystroke "Shell"
-    delay 0.3
+  -- Type Shell
+  keystroke "Shell"
+  delay 0.3
 
-    -- Press Enter
-    key code 36
-  end tell
+  -- Press Enter
+  key code 36
+end tell
 APPLESCRIPT
-}
-
-# Boilerplate: set up PATH, PWD & logging
-set -x
-date
-export PATH="/opt/homebrew/bin:/usr/local/bin:${PATH}"
-cd "${REPO_ROOT:?}"
-main "$@" &> "${LOG_FILE:-/tmp/karabiner.log}" # 'vsp /tmp/karabiner.%:t:r.txt'

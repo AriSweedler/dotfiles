@@ -1,14 +1,6 @@
 #!/bin/bash
 
-function main() {
-  set -e
-  npm run build
-  open "raycast://extensions/raycast/raycast/confetti"
-}
-
-# Boilerplate: set up PATH, PWD & logging
-set -x
-date
-export PATH="/opt/homebrew/bin:/usr/local/bin:${PATH}"
-cd "${REPO_ROOT:?}"
-main "$@" &> "${LOG_FILE:-/tmp/karabiner.log}" # 'vsp /tmp/karabiner.%:t:r.txt'
+set -e
+echo "PATH='${PATH}'"
+npm run build
+open "raycast://extensions/raycast/raycast/confetti"

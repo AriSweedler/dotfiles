@@ -7,11 +7,9 @@ const meta = {
 }
 
 const dict = {
-  "a": app("Arc"),
-  "f": app("Finder"),
+  "b": app("Google Chrome"), // browser
+  "m": app("Spotify"), // music
   "t": app("Terminal"),
-  "s": app("Spotify"),
-  "v": app("Cisco AnyConnect Secure Mobility Client"),
   "z": app("Zoom"),
 }
 

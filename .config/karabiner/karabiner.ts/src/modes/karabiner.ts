@@ -11,6 +11,8 @@ const dict = {
   s: script("script-example"),
   e: script("karabiner-edit-index"),
   r: script("karabiner-recompile"),
+  l: script("karabiner-logs"),
+  x: script("karabiner-hello-world"),
 }
 
 // --- Export Final Rule ---
