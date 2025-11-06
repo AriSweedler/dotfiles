@@ -24,4 +24,9 @@ symbol = '󰊶 '
 format = '[$symbol$active]($style) '
 
 [aws]
-symbol = ' '
+symbol = '  '
+
+[time]
+disabled = false
+time_format = '%T UTC'
+utc_time_offset = '0'
