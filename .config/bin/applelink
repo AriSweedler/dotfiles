@@ -1,0 +1,20 @@
+#!/usr/bin/env swift
+import Cocoa
+
+guard CommandLine.arguments.count >= 3 else {
+    print("Usage: richlink <url> <text>")
+    exit(1)
+}
+
+let url = CommandLine.arguments[1]
+let text = CommandLine.arguments[2]
+let html = "<a href=\"\(url)\">\(text)</a>"
+
+let pasteboard = NSPasteboard.general
+pasteboard.clearContents()
+
+// Set BOTH types - this is the key!
+pasteboard.setString(text, forType: .string)
+pasteboard.setString(html, forType: .html)
+
+print("✓ Copied rich link: \(text)")
