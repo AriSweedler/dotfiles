@@ -21,45 +21,6 @@
 [stash]
 	showPatch = true
 
-[interactive]
-	singleKey = true
-
-[rerere]
-	# Reuse recorded resolution: record hand-resolved results to merge
-	# conflicts. To get use of this feature, you have to enable it and then
-	# it gets invoked in the following 3 unique situations:
-	# * A new merge conflict (REcords the conflicted working tree files)
-	# * Resolving the merge conflict (REcords the REsolution)
-	# * An old merge conflict (REuses the resolution)
-	enabled = true
-
-[rebase]
-	# In a normal rebase of branch A onto main, you'll go from this
-	#
-	#     x(A)-y(B)-main
-	#
-	# to this
-	#
-	#     x2(A)-y2-main
-	#
-	# We lost the ref for B! Because the rebase was only working on the
-	# commits, not on the refs that referred to the commits. We would need
-	# to manually update the branch (B) to point to y2. With the
-	# 'updateRefs' option turned on, git will update the refs for you and
-	# we'll get
-	#
-	#     x2(A)-y2(B)-main
-	#
-	# Ofc, origin/B can no longer fast-forward to B, but that's ok.
-	updateRefs = true
-	# You can't rebase with a dirty working tree. You will have to
-	# * make a commit (and then git reset --mixed @~)
-	# * Or stash rebase unstash.
-	# Two ways of spelling the same thing. With this option turned on, git
-	# will automatically stash before a rebase and unstash after
-	autoStash = true
-	autosquash = true
-
 [alias]
 	# Easily edit this file
 	cconfig = config --edit --global
@@ -71,8 +32,6 @@
 	# shorten
 	a = "!git add .; git status"
 	d = diff --staged --diff-algorithm=minimal
-	df = dotfiles
-	dfd = dotfiles-daily
 	els = editdiffls
 	f = fetch --append --prune --jobs=4
 	ff = pull --ff-only
@@ -80,36 +39,29 @@
 	fpr = finish-pr
 	po = push-origin
 	sw = "!git yankbranch; git switch -"
-	swr = switch-recent
-	swbl = switch-branchlog
-	wb = wipebranch
-	yb = yankbranch
 
 	# New commands
 	diffls = diff --name-only
-	dotfiles = "!git --git-dir=\"$HOME/dotfiles/\" --work-tree=\"$HOME\""
 	editdiffls = "!f() { refspec="${1:-@}"; files=$(git diff --name-only ${refspec}); [ -n \"${files}\" ] && $EDITOR -p ${files} || echo \"no changes since ref='${refspec}'\" ;}; f"
 	ignore = "!f() { echo $1 >> .gitignore; }; f"
 	initt = "!git init; git commit --allow-empty --message 'first commit'"
 	ls = ls-tree --full-tree -r --abbrev HEAD
 	push-origin = "!git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)"
 	rebase-remote = "!f() { b="${1:?provide a branch}"; o="${2:-origin}" ; git fetch "${o}" && git rebase -i "${o}/${b}" && git branch -f "${b}" "${o}/${b}"; }; f"
-
-	switch-branchlog = "!git branchlog | git switch \"$(fzf --select-1)\""
-	switch-recent = "!f() { git branch --format=\"%(refname:short)\" --sort=-committerdate | fzf --header \"Switch to recent branch\" --preview 'git diff {1} --color=always | delta' | xargs git switch; }; f"
-	wipebranch = "!f() { git branch -D $1; git push origin --delete $1; }; f"
-	yankbranch = "!git branch --show-current | tee /dev/tty | tr -d '\n' | pbcopy"
-	hash = log -1 --pretty=format:'%H'
-	h = log -1 --pretty=format:'%h'
 	worka = worktreex-add
+
 
 [include]
 	path = ~/.config/git/plugin/color.gitconfig
 	path = ~/.config/git/plugin/delta.gitconfig
+	path = ~/.config/git/plugin/dotfiles.gitconfig
 	path = ~/.config/git/plugin/grep.gitconfig
 	path = ~/.config/git/plugin/jujutsu-inspired.gitconfig
 	path = ~/.config/git/plugin/log.gitconfig
+	path = ~/.config/git/plugin/clipboard-utils.gitconfig
 	path = ~/.config/git/plugin/mergetool.gitconfig
+	path = ~/.config/git/plugin/rebase.gitconfig
+	path = ~/.config/git/plugin/rerere.gitconfig
 	path = ~/.config/git/plugin/submodules.gitconfig
 
 [includeIf "gitdir:~/"]

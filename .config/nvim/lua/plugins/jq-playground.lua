@@ -30,7 +30,7 @@ local function ftplugin_xq()
 		local escaped = xq_escape(content)
 
 		-- Build command and copy to clipboard
-		local cmd = vim.o.filetype .. " '" .. escaped .. "' " .. vim.api.nvim_buf_get_name(vim.b.parent_bufnr)
+		local cmd = vim.o.filetype .. " '" .. escaped .. "' " .. vim.api.nvim_buf_get_name(vim.b.jqplayground_inputbuf)
 		vim.fn.setreg("+", cmd)
 
 		vim.notify("Copied " .. vim.o.filetype .. " command: " .. cmd, vim.log.levels.INFO)

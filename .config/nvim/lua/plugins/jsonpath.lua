@@ -37,7 +37,7 @@ end
 
 function M.init()
 	vim.api.nvim_create_autocmd("FileType", {
-		pattern = "json",
+		pattern = { "json", "jsonl" },
 		callback = ftplugin,
 	})
 end

@@ -2,7 +2,7 @@ local hydra_config = {
 	name = "Git mode",
 	mode = "n",
 	invoke_on_body = true,
-	body = "<Leader>HH",
+	body = "<Leader>gg",
 	config = {
 		-- pink means:
 		-- 1) default key handler does NOT exit the hydra
@@ -15,7 +15,6 @@ local hydra_config = {
 			"n",
 			function()
 				require("gitsigns").nav_hunk("next", { wrap = true })
-				vim.cmd("normal! zt")
 			end,
 			{ desc = "Next hunk" },
 		},
@@ -23,7 +22,6 @@ local hydra_config = {
 			"p",
 			function()
 				require("gitsigns").nav_hunk("prev", { wrap = true })
-				vim.cmd("normal! zt")
 			end,
 			{ desc = "Prev hunk" },
 		},
@@ -31,7 +29,6 @@ local hydra_config = {
 			"N",
 			function()
 				require("gitsigns").nav_hunk("prev", { wrap = true })
-				vim.cmd("normal! zt")
 			end,
 			{ desc = "Prev hunk" },
 		},

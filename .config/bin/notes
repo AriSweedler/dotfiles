@@ -199,10 +199,16 @@ function repo::journal::open() {
   popd &>/dev/null || exit 1
 }
 
+function repo::tmux() {
+  [ -z "$TMUX" ] && return
+  tmux rename-window "notes"
+}
+
 function main() {
   log::info "$0: Root of notes = '${root?}'"
   repo::ensure_initialized
   repo::register_today
   repo::journal::open
+  repo::tmux
 }
 main "$@"

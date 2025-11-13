@@ -1,4 +1,4 @@
-vim.o.textwidth = 98
+vim.o.textwidth = 0
 vim.o.colorcolumn = "+1"
 
 require('ari.operator').create_operator({
