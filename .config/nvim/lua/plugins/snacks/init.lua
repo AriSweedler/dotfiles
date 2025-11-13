@@ -1,10 +1,28 @@
 local SNACK_DESC_PREFIX = "Snacks Picker"
 local SNACK_LEADER = "<Leader>p"
 
+local function can_require(module)
+	local ok, _ = pcall(require, module)
+	return ok
+end
+
 local bufmap = function(lhs, rhs, desc, opts)
 	desc = desc or opts.args.title or "UNKNOWN"
 	opts = opts or {}
 	local keymapOpts = opts.keymapOpts or {}
+
+	-- Exit early if not enabled
+	if opts.enabled_fxn then
+		local enabled_verdict = true
+		if type(opts.enabled_fxn) == "function" then
+			enabled_verdict = opts.enabled_fxn()
+		elseif type(opts.enabled_fxn) == "boolean" then
+			enabled_verdict = opts.enabled_fxn
+		end
+		if not enabled_verdict then
+			return
+		end
+	end
 
 	if opts.no_leader == nil then
 		lhs = SNACK_LEADER .. lhs
@@ -85,6 +103,7 @@ return {
 	lazy = false,
 	---@type snacks.Config
 	opts = {
+		gh = {},
 		picker = {
 			win = {
 				input = {
@@ -96,9 +115,9 @@ return {
 			},
 		},
 	},
+
 	config = function(_, opts)
 		local Snacks = require("snacks")
-		local SnacksActions = require("snacks.picker.actions")
 		Snacks.setup(opts)
 
 		vim.keymap.set("n", "<Leader>bd", function()
@@ -132,9 +151,11 @@ return {
 		bufmap("l", Snacks.picker.loclist, "Location List")
 		bufmap("m", Snacks.picker.marks, "Marks")
 		bufmap("M", Snacks.picker.man, "Man Pages")
-		bufmap("p", Snacks.picker.lazy, "Plugins from Lazy package manager")
+		bufmap("p", function() Snacks.picker.gh_pr({ author = "@me" }) end, "My Pull Requests")
+		bufmap("P", Snacks.picker.lazy, "Plugins from Lazy package manager")
 		bufmap("n", Snacks.picker.notifications, "Notification History")
 		bufmap("u", Snacks.picker.undo, "Undo History")
+		bufmap("y", require("yaml_nvim").snacks, "Yaml keys", { enabled_fxn = can_require("yaml_nvim") })
 
 		-- LSP
 		SNACK_DESC_PREFIX = "Snacks LSP Pickers"
@@ -182,7 +203,12 @@ return {
 		bufmap("S", Snacks.picker.git_stash, "Stash")
 		bufmap("d", Snacks.picker.git_diff, "Diff (Hunks)")
 		bufmap("f", Snacks.picker.git_log_file, "Log File")
+		bufmap("i", Snacks.picker.gh_issue, "GitHub Issues (open)")
+		bufmap("I", function() Snacks.picker.gh_issue({ state = "all" }) end, "GitHub Issues (all)")
+		bufmap("p", Snacks.picker.gh_pr, "GitHub Pull Requests (open)")
+		bufmap("P", function() Snacks.picker.gh_pr({ state = "all" }) end, "GitHub Pull Requests (all)")
 	end,
+
 	init = function()
 		vim.api.nvim_create_autocmd("User", {
 			pattern = "VeryLazy",

@@ -12,11 +12,13 @@
 .cargo/
 .cisco/
 .claude*
+.config/AWSVPNClient
 .config/Google/
 .config/Microsoft\\VisualStudio Services/
 .config/atac/atac.log
 .config/containers/
 .config/dlv
+.config/fish/
 .config/gatsby/
 .config/gcloud/
 .config/gh/hosts.yml
@@ -80,3 +82,4 @@ Public/
 bazel-cache
 go/
 h/
+non-interactive-bazel-output-base/

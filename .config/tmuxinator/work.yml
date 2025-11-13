@@ -1,6 +1,6 @@
 # /Users/arisweedler/.config/tmuxinator/work.yml
 
-name: cloud-containers
+name: airtable
 root: ~/
 
 windows:
@@ -8,6 +8,13 @@ windows:
     root: "~/Desktop/notes"
     panes: notes
 
-- source:
-    root: "~/Desktop/workspace/code/"
+- transpiler:
+    root: "~/h/source/"
+    panes:
+        - cd hyperbase; node bin/transpile.js
+        - cd secondary-hyperbase; node bin/transpile.js
+        - cd tertiary-hyperbase; node bin/transpile.js
+
+- hyperbase:
+    root: "~/h/source/hyperbase/"
     panes: ls -1

@@ -5,10 +5,11 @@ symbol = "[⬢](bold green) "
 symbol = ' '
 
 [git_metrics]
-disabled = false
+disabled = true
 
 [git_status]
 style = 'bg:black fg:bold green'
+disabled = true
 
 [cmake]
 symbol = 'cmake '
@@ -30,3 +31,15 @@ symbol = '  '
 disabled = false
 time_format = '%T UTC'
 utc_time_offset = '0'
+
+# Example: green-alpha-use1-tooling-shard01-002
+#          $1    __    $2   $3      $4      $5
+[kubernetes]
+disabled = false
+format = 'kctx [$context(: $namespace)]($style) '
+style = 'red bold' # default style if cluster unrecognized
+contexts = [
+  { context_pattern = "([^-]+)-alpha-([^-]+)-([^-]+)-([^-]+)-([0-9]+)", style = "bold green", context_alias = "🟢 $3 ($2)" },
+  { context_pattern = "([^-]+)-staging-([^-]+)-([^-]+)-([^-]+)-([0-9]+)", style = "bold yellow", context_alias = "🟡 $3 ($2)" },
+  { context_pattern = "([^-]+)-production-([^-]+)-([^-]+)-([^-]+)-([0-9]+)", style = "bold red", context_alias = "🔴 $3 ($2)" },
+]

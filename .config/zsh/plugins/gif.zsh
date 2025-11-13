@@ -5,6 +5,11 @@ function convert_to_gif() {
     return 1
   fi
 
+  if ! docker version &>/dev/null; then
+    log::err "Docker is not running"
+    return 1
+  fi
+
   # Get absolute paths and filenames
   local input_abs="$(realpath "${input}")"
   local input_dir="$(dirname "${input_abs}")"

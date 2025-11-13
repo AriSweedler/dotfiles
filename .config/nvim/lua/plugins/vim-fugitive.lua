@@ -19,10 +19,6 @@ local M = {
 	"tpope/vim-fugitive",
 	event = "BufReadPre",
 	config = function()
-		vim.keymap.set("n", "<Leader>gg", function()
-			vim.cmd("Git")
-		end, { desc = "Fugitive: Open git window" })
-
 		vim.keymap.set("n", "gb", function()
 			local restoreme = {
 				fugitive_git_executable = vim.g.fugitive_git_executable,
