@@ -1,0 +1,5 @@
+[alias]
+	# Dotfiles management
+	dotfiles = "!git --git-dir=\"$HOME/dotfiles/\" --work-tree=\"$HOME\""
+	df = dotfiles
+	dfd = dotfiles-daily
