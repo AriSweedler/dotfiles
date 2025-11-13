@@ -1,0 +1,26 @@
+[rebase]
+	# In a normal rebase of branch A onto main, you'll go from this
+	#
+	#     x(A)-y(B)-main
+	#
+	# to this
+	#
+	#     x2(A)-y2-main
+	#
+	# We lost the ref for B! Because the rebase was only working on the
+	# commits, not on the refs that referred to the commits. We would need
+	# to manually update the branch (B) to point to y2. With the
+	# 'updateRefs' option turned on, git will update the refs for you and
+	# we'll get
+	#
+	#     x2(A)-y2(B)-main
+	#
+	# Ofc, origin/B can no longer fast-forward to B, but that's ok.
+	updateRefs = true
+	# You can't rebase with a dirty working tree. You will have to
+	# * make a commit (and then git reset --mixed @~)
+	# * Or stash rebase unstash.
+	# Two ways of spelling the same thing. With this option turned on, git
+	# will automatically stash before a rebase and unstash after
+	autoStash = true
+	autosquash = true

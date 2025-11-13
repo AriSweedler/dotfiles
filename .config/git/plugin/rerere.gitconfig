@@ -1,0 +1,8 @@
+[rerere]
+	# Reuse recorded resolution: record hand-resolved results to merge
+	# conflicts. To get use of this feature, you have to enable it and then
+	# it gets invoked in the following 3 unique situations:
+	# * A new merge conflict (REcords the conflicted working tree files)
+	# * Resolving the merge conflict (REcords the REsolution)
+	# * An old merge conflict (REuses the resolution)
+	enabled = true

@@ -5,3 +5,6 @@
 	patch = add --patch
 	reword = commit --amend
 	unadd = !"f() { echo git restore --staged ${1:-.} ; }; f"
+
+[interactive]
+	singleKey = true

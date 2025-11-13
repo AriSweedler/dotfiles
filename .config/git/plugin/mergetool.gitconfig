@@ -1,10 +1,18 @@
 [merge]
-	tool = vim_mergetool
+	tool = nvimdiff
 	conflictstyle = zdiff3
 
-[mergetool "vim_mergetool"]
+[mergetool]
 	# After performing a merge, the original file with conflict markers can
 	# be saved as a file with a .orig extension. I do not want that
 	keepBackup = false
-	cmd = nvim -f -c "MergetoolStart" "$MERGED" "$BASE" "$LOCAL" "$REMOTE"
-	trustExitCode = true
+	# Don't prompt before each invocation of the merge resolution program
+	prompt = false
+	# Use temporary directory for cleaner file names
+	writeToTemp = true
+
+[mergetool "nvimdiff"]
+	# Multi-tab layout: 1) REMOTE only, 2) REMOTE vs LOCAL, 3) 4-way view
+	# Use ':cquit' to exit with an error code of 1 to abort the merge
+	# Use ':wqall' to accept the changes
+	layout = "@REMOTE + REMOTE,LOCAL + REMOTE,MERGED,LOCAL / BASE"
