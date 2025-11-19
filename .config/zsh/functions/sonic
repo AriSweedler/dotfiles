@@ -58,7 +58,7 @@ if ! invoice="$(sonic::_file)"; then
 fi
 
 # Open up splitwise then the sonic folder. Return to this terminal window
-local -r splitwise_group_url="https://secure.splitwise.com/#/groups/20951549"
+local -r splitwise_group_url="https://secure.splitwise.com/#/groups/89295682"
 run_cmd sonic::browser "$splitwise_group_url"
 run_cmd open "$invoice"
 run_cmd open "$(sonic::dir)"
