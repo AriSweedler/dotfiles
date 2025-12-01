@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+IFS=$'\n\t'
+
+# Log lib
+c_red='\033[31m'; c_green='\033[32m'; c_rst='\033[0m'
+log::err()    { echo -e "${c_red}[ERROR]${c_rst}" "$@" >&2 ; }
+log::info()   { echo -e "${c_green}[INFO]${c_rst}" "$@" >&2 ; }
+function run_cmd() {
+  log::info "$@"
+  "$@" && return
+  rc=$?
+  # Log the failure with th ecommand quoted. Forward the rc
+  set -- $(printf "'%s' " "$@")
+  log::err "cmd failed | rc=$rc cmd_quoted=|$*|"
+  return $rc
+}
+
+function usage() {
+    cat <<EOF
+Usage: $(basename "${0}") --file <input-file> [--prepare-input-strat [ffmpeg|none]]
+
+Options:
+  --file                    the input file to convert
+  --prepare-input-strat     prepares the input for PNG -> ICNS conversion
+                              Options: [ffmpeg|none]
+                              Default: ffmpeg
+  -h, --help                Show this help message
+
+Example:
+  $(basename "${0}") --file ./my-img.jpg
+  $(basename "${0}") --file ./my-img.png --prepare-input-strat none
+EOF
+}
+
+function preflight() {
+    if ! command -v iconutil &>/dev/null; then
+        log::err "iconutil is required but not found."
+        exit 1
+    fi
+}
+
+# Just move the file, assume it's already a good 1024x1024 PNG
+function prepare_input::none() {
+    cp "${file:?}" "${iconset_dir:?}/icon_1024x1024.png"
+}
+
+# Prepare a single 1024x1024 PNG using ffmpeg
+function prepare_input::ffmpeg() {
+    local cmd=("ffmpeg")
+    if ! command -v ffmpeg &>/dev/null; then
+        cmd=("docker" "run" "--rm" "-v" "$PWD:$PWD" "-w" "$PWD" "ffmpeg:6.1")
+    fi
+    local args=(
+        "-y"
+        "-i" "${file:?}"
+        "-frames:v" "1"
+        "-vf" "scale=1024:1024:force_original_aspect_ratio=decrease,pad=1024:1024:(ow-iw)/2:(oh-ih)/2"
+        "${iconset_dir:?}/icon_1024x1024.png"
+    )
+    log::info "Running cmd with args | cmd='${cmd[@]}' args='${args[@]}'"
+    "${cmd[@]}" "${args[@]}" &>/dev/null
+}
+
+# Generate the 10 required PNGs from the 1024x1024 source
+function generate_iconset() {
+    local src="${iconset_dir:?}/icon_1024x1024.png"
+    local sz sizes=(16 32 128 256 512)
+    for sz in "${sizes[@]}"; do
+        sips -z $sz $sz "$src" --out "${iconset_dir:?}/icon_${sz}x${sz}.png" >/dev/null
+        sips -z $((sz*2)) $((sz*2)) "$src" --out "${iconset_dir:?}/icon_${sz}x${sz}@2x.png" >/dev/null
+    done
+}
+
+function main() {
+    preflight
+    local prepare_input_strat=ffmpeg
+    local file=""
+    while (( $# > 0 )); do
+        case "${1:?}" in
+            --prepare-input-strat) prepare_input_strat="${2:?}"; shift;;
+            -h|--help) usage; exit 0;;
+            --file) file="${2:?}"; shift 2;;
+            *) log::err "Unknown arg: ${1}"; usage; exit 1;;
+        esac
+    done
+
+    # Validate input file
+    if [ -z "${file}" ]; then
+        log::err "No input file specified."
+        usage
+        exit 1
+    fi
+    if [[ ! -f "${file}" ]]; then
+        log::err "File does not exist | file='${file}'"
+        exit 1
+    fi
+
+    # Create temporary iconset folder
+    iconset_dir=$(mktemp -d).iconset
+    mkdir -p "${iconset_dir:?}"
+    log::info "Made iconset_dir | iconset_dir='${iconset_dir}'"
+    trap 'rm -rf "${iconset_dir}"' EXIT
+
+    # Prepare the input according to the selected strat
+    "prepare_input::${prepare_input_strat}"
+
+    # Generate all required PNG sizes
+    generate_iconset
+
+    # Convert to ICNS
+    run_cmd iconutil -c icns "${iconset_dir}" -o "${file}.icns"
+
+    # User convenience
+    local dest="${HOME}/Pictures/favicons"
+    mkdir -p "${dest}/icns" "${dest}/originals"
+    mv "${file}" "${dest}/originals"
+    mv "${file}.icns" "${dest}/icns"
+    open "${dest}"
+
+    # Return success
+    log::info "✅ ICNS created | output='${dest}/${file}.icns'"
+}
+
+main "$@"
