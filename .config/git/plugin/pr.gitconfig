@@ -1,3 +1,8 @@
 [alias]
 	pr = "!gh pr create --fill; git pro"
-	pro = "!gh pr view --web"
+	pro = "!f() { branch=\"${1:-$(git branch --show-current)}\"; gh pr list --head \"$branch\" --state all --json url -q '.[0].url' | xargs open; }; f"
+	# Aggressively vibe-coded. A cleaner way to do this would be to create a
+	# full executable git-delete-if-merged-one
+	delete-if-merged-one = "!f() { branch=\"${1:-$(git branch --show-current)}\"; pr_num=$(gh pr list --head \"$branch\" --state merged --json number -q '.[0].number' 2>/dev/null); [ -n \"$pr_num\" ] && git branch -D \"$branch\"; }; f"
+	delete-if-merged-all = "!f() { pattern=\"${1:?provide a branch pattern}\"; git branch --format='%(refname:short)' | grep \"$pattern\" | while IFS= read -r branch; do printf 'Checking %s... ' \"$branch\"; git delete-if-merged-one \"$branch\" >/dev/null 2>&1 && echo '✓ Deleted' || echo '- Kept'; done; }; f"
+	dim = "!git delete-if-merged-all '^ariSweedler/'"

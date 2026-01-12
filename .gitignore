@@ -80,6 +80,7 @@ Music/
 Pictures/
 Public/
 bazel-cache
+bazel-repo-cache
 go/
 h/
 non-interactive-bazel-output-base/
