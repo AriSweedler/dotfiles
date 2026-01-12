@@ -29,6 +29,10 @@ autoload edit-command-line
 zle -N edit-command-line
 bindkey "^X^E" edit-command-line
 
+# Ctrl+_ to undo (built-in)
+# Ctrl+X Ctrl+_ to redo
+bindkey '^X^_' redo
+
 # Easily edit my machine's setup script. This script makes sure I have
 # everything I expect on a machine. I have to update it if I install new
 # permanent applications (language servers, command-line utilities, apps via

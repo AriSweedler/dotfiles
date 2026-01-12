@@ -15,14 +15,14 @@ local bufmap = function(lhs, rhs, desc, opts)
 end
 
 local function ftplugin()
-	vim.wo.winbar = "%{%v:lua.require'yaml_nvim'.get_yaml_key()%}"
+	vim.wo.winbar = "%{%v:lua.require'ari.yaml_utils'.get_yaml_key_at_cursor()%}"
 
 	bufmap("I", function()
 		vim.cmd("InspectTree")
 	end, "Open InspectTree")
 
 	bufmap("Y", function()
-		local path = require("yaml_nvim").get_yaml_key()
+		local path = require("ari.yaml_utils").get_yaml_key_at_cursor()
 		vim.fn.setreg("+", path)
 		vim.notify("Copied YAML path: '" .. path .. "'", vim.log.levels.INFO)
 	end, "copy yaml path")

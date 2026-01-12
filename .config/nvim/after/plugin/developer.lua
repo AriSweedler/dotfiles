@@ -91,7 +91,7 @@ local function ts_mappings()
 	-- Use the grammar to create all the mappings
 	for _, target in pairs(treesitter_cmds) do
 		local lhs = string.format("<Leader>ts%s", target.key)
-		local desc = "[ari] [developer] [treesitter]: Compare and tabedit treesitter query files for " .. target.scm
+		local desc = "[ari] [developer] [treesitter]: tabedit query files for " .. target.scm
 		vim.keymap.set("n", lhs, function()
 			-- Find all runtime files that match this stub
 			local stub = string.format("queries/%s/%s.scm", vim.bo.filetype, target.scm)

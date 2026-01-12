@@ -1,6 +1,18 @@
 local M = {}
 local ns = vim.api.nvim_create_namespace("cronex-virtual-text")
 local cache = {}
+local cronstrue_available = nil
+
+M.check_cronstrue = function()
+	-- Return cached result if we've already checked
+	if cronstrue_available ~= nil then
+		return cronstrue_available
+	end
+
+	-- Check if cronstrue is executable (works cross-platform)
+	cronstrue_available = vim.fn.executable("cronstrue") == 1
+	return cronstrue_available
+end
 
 local set_virtual_text = function(bufnr, lnum, text)
 	vim.api.nvim_buf_set_extmark(bufnr, ns, lnum, 0, {

@@ -63,6 +63,7 @@
 	path = ~/.config/git/plugin/rebase.gitconfig
 	path = ~/.config/git/plugin/rerere.gitconfig
 	path = ~/.config/git/plugin/submodules.gitconfig
+	path = ~/.config/git/plugin/pr.gitconfig
 
 [includeIf "gitdir:~/"]
 	# Include computer-specific git configuration. Put this last so we can
