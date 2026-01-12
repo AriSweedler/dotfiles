@@ -20,22 +20,29 @@ end
 M.init = function()
 	vim.api.nvim_create_user_command("ToggleCronEx", function()
 		if not require("ari.cronex").check_cronstrue() then
-			vim.notify("Cron Explainer requires cronstrue. Install with: npm install -g cronstrue", vim.log.levels.ERROR)
+			vim.notify("[Cron Explainer] requires cronstrue. Install with: npm install -g cronstrue", vim.log.levels.ERROR)
 			return
 		end
 
 		vim.api.nvim_buf_clear_namespace(0, ns, 0, -1)
-		if cronex_enabled then
-			require("cronex").disable()
-			cronex_enabled = false
-			vim.notify("Cron Explainer disabled")
-			return
-		end
 
-		require("cronex").enable()
-		cronex_enabled = true
-		vim.notify("Cron Explainer enabled")
-	end, { desc = "Cron Explainer: toggle for current buffer" })
+		cronex_enabled = not cronex_enabled
+		vim.notify(string.format("[Cron Explainer] plugin %s", cronex_enabled and "enabled" or "disabled"))
+		if cronex_enabled then
+			require("cronex").enable()
+		else
+			require("cronex").disable()
+		end
+	end, { desc = "[Cron Explainer] toggle for current buffer" })
+
+	-- Auto-enable for file types that commonly have cron expressions
+	vim.api.nvim_create_autocmd("FileType", {
+		pattern = { "yaml", "terraform", "conf", "config", "typescriptreact" },
+		callback = function()
+			vim.cmd("ToggleCronEx")
+		end,
+		desc = "Auto-enable Cron Explainer for config files",
+	})
 end
 
 return M

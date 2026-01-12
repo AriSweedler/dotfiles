@@ -32,27 +32,22 @@ local hydra_config = {
 			end,
 			{ desc = "Prev hunk" },
 		},
-
-		-- P for preview
 		{
-			"P",
+			"p",
 			function()
 				require("gitsigns").preview_hunk()
 			end,
 			{ desc = "Preview hunk" },
 		},
-
-		-- S for stage. U for undo. R for reset
-		-- Capitalized letters imply changing stage
 		{
-			"S",
+			"s",
 			function()
 				require("gitsigns").stage_hunk()
 			end,
 			{ desc = "Stage hunk" },
 		},
 		{
-			"R",
+			"r",
 			function()
 				require("gitsigns").reset_hunk()
 			end,

@@ -14,7 +14,7 @@ local setup_inlay_hits = function(args)
 	end, { desc = "LSP: Toggle [I]nlay [H]ints", buffer = args.buf })
 
 	-- Highlight a nice dark green color
-	vim.api.nvim_set_hl(0, "LspInlayHint", { fg = "#008f40" })
+	vim.api.nvim_set_hl(0, "LspInlayHint", { fg = "#008f40", italic = true })
 end
 
 local lsp_attched_callback = function(args)

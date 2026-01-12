@@ -5,7 +5,7 @@ local function disable_ts_highlight_fxn(_, buf)
 		return true
 	end
 
-	local max_filesize = 100 * 1024 -- 100 KB
+	local max_filesize = 200 * 1024 -- 200 KB
 	local filename = vim.api.nvim_buf_get_name(buf)
 	local ok, stats = pcall(vim.loop.fs_stat, filename)
 	if ok and stats and stats.size > max_filesize then
@@ -125,21 +125,21 @@ local M = {
 	},
 	config = function(_, opts)
 		-- My first instinct is to say 'TreeSitter' in order to Inspect the
-		-- Treesitter Tree.
+		-- TreeSitter Tree.
 		vim.api.nvim_create_user_command("TreeSitter", function()
 			vim.api.nvim_command("InspectTree")
 		end, {})
 
-		-- Defer Treesitter setup after first render to improve startup time of
+		-- Defer TreeSitter setup after first render to improve startup time of
 		-- 'nvim {filename}'
 		vim.defer_fn(function()
 			require("nvim-treesitter.configs").setup(opts)
 		end, 0)
 
-		-- For every file, set the foldmethod to 'expr' and use Treesitter's
+		-- For every file, set the foldmethod to 'expr' and use TreeSitter's
 		-- foldexpr as the foldmethod
 		vim.api.nvim_create_autocmd("FileType", {
-			group = vim.api.nvim_create_augroup("TreesitterFileType", { clear = true }),
+			group = vim.api.nvim_create_augroup("TreeSitterFileType", { clear = true }),
 			pattern = "*",
 			callback = function()
 				if require("nvim-treesitter.parsers").has_parser() then
