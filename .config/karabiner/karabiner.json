@@ -122,7 +122,7 @@
             ]
           },
           {
-            "description": "(hyper + a): Open application\n\n• `b` → open app: Google Chrome\n• `m` → open app: Spotify\n• `t` → open app: Terminal\n• `z` → open app: Zoom",
+            "description": "(hyper + a): Open application\n\n• `b` → open app: Google Chrome\n• `m` → open app: Spotify\n• `c` → open app: Slack\n• `t` → open app: Terminal\n• `z` → open app: Zoom",
             "manipulators": [
               {
                 "type": "basic",
@@ -153,7 +153,7 @@
                   {
                     "set_notification_message": {
                       "id": "layer-application-mode",
-                      "text": "(hyper + a): Open application\n\n• `b` → open app: Google Chrome\n• `m` → open app: Spotify\n• `t` → open app: Terminal\n• `z` → open app: Zoom"
+                      "text": "(hyper + a): Open application\n\n• `b` → open app: Google Chrome\n• `m` → open app: Spotify\n• `c` → open app: Slack\n• `t` → open app: Terminal\n• `z` → open app: Zoom"
                     }
                   }
                 ],
@@ -224,6 +224,47 @@
                 "to": [
                   {
                     "shell_command": "open -a \"Spotify\".app"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "application-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-application-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "conditions": [
+                  {
+                    "type": "variable_if",
+                    "name": "application-mode",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "type": "basic",
+                "from": {
+                  "key_code": "c",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -a \"Slack\".app"
                   },
                   {
                     "set_variable": {
@@ -514,7 +555,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/script-example\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/script-example \n} &> \"/tmp/karabiner.script-example.txt\"\n"
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/script-example\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/script-example\n} &> \"/tmp/karabiner.script-example.txt\"\n"
                   },
                   {
                     "set_variable": {
@@ -555,7 +596,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index \n} &> \"/tmp/karabiner.karabiner-edit-index.txt\"\n"
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index\n} &> \"/tmp/karabiner.karabiner-edit-index.txt\"\n"
                   },
                   {
                     "set_variable": {
@@ -596,7 +637,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile \n} &> \"/tmp/karabiner.karabiner-recompile.txt\"\n"
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile\n} &> \"/tmp/karabiner.karabiner-recompile.txt\"\n"
                   },
                   {
                     "set_variable": {
@@ -637,7 +678,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-logs\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-logs \n} &> \"/tmp/karabiner.karabiner-logs.txt\"\n"
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-logs\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-logs\n} &> \"/tmp/karabiner.karabiner-logs.txt\"\n"
                   },
                   {
                     "set_variable": {
@@ -678,7 +719,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-hello-world\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-hello-world \n} &> \"/tmp/karabiner.karabiner-hello-world.txt\"\n"
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-hello-world\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-hello-world\n} &> \"/tmp/karabiner.karabiner-hello-world.txt\"\n"
                   },
                   {
                     "set_variable": {
@@ -1893,7 +1934,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/osascript-google-drive-codeblock-shell\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/osascript-google-drive-codeblock-shell \n} &> \"/tmp/karabiner.osascript-google-drive-codeblock-shell.txt\"\n"
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/osascript-google-drive-codeblock-shell\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/osascript-google-drive-codeblock-shell\n} &> \"/tmp/karabiner.osascript-google-drive-codeblock-shell.txt\"\n"
                   },
                   {
                     "set_variable": {
@@ -1934,7 +1975,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/osascript-google-drive-codeblock-javascript\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/osascript-google-drive-codeblock-javascript \n} &> \"/tmp/karabiner.osascript-google-drive-codeblock-javascript.txt\"\n"
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/osascript-google-drive-codeblock-javascript\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/osascript-google-drive-codeblock-javascript\n} &> \"/tmp/karabiner.osascript-google-drive-codeblock-javascript.txt\"\n"
                   },
                   {
                     "set_variable": {

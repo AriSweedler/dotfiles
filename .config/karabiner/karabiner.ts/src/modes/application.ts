@@ -9,6 +9,7 @@ const meta = {
 const dict = {
   "b": app("Google Chrome"), // browser
   "m": app("Spotify"), // music
+  "c": app("Slack"), // chat
   "t": app("Terminal"),
   "z": app("Zoom"),
 }
