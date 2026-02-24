@@ -11,13 +11,13 @@ c_rst='\033[0m'
 
 # Colorize and send to stderr.
 # Send err to OTTO_ERR_LOGFILE if that env var is set
-log::dev()      { echo -e "${c_cyan}[DEV] $(log::preamble)${c_rst}" "$@" >&2 ; }
-log::_err()    { echo -e "${c_red}[ERROR] $(log::preamble)${c_rst}" "$@" >&2 ; }
+log::dev()      { echo -e "${c_cyan}[DEV]$(log::preamble)${c_rst}" "$@" >&2 ; }
+log::_err()    { echo -e "${c_red}[ERROR]$(log::preamble)${c_rst}" "$@" >&2 ; }
 log::err()    { log::_err "$@"; [ -n "${OTTO_ERR_LOGFILE:-}" ] && echo "$@" >> "${OTTO_ERR_LOGFILE}"; return 0; }
-log::warn()  { echo -e "${c_yellow}[WARN] $(log::preamble)${c_rst}" "$@" >&2 ; }
-log::info()   { echo -e "${c_green}[INFO] $(log::preamble)${c_rst}" "$@" >&2 ; }
-log::_debug() { echo -e "${c_grey}[DEBUG] $(log::preamble)${c_rst}" "$@" >&2 ; }
-log::debug() { test -f "${OTTO_DEBUG:-}" || return 0; log::_debug "$@" ; }
+log::warn()  { echo -e "${c_yellow}[WARN]$(log::preamble)${c_rst}" "$@" >&2 ; }
+log::info()   { echo -e "${c_green}[INFO]$(log::preamble)${c_rst}" "$@" >&2 ; }
+log::_debug() { echo -e "${c_grey}[DEBUG]$(log::preamble)${c_rst}" "$@" >&2 ; }
+log::debug() { test -n "${OTTO_DEBUG:-}" || return 0; log::_debug "$@" ; }
 
 # Multiline logs
 log::DEV()   { (while IFS= read -r line; do log::dev   "| $line"; done <<< "$*") ; }
@@ -25,9 +25,10 @@ log::ERR()   { (while IFS= read -r line; do log::err   "| $line"; done <<< "$*")
 log::WARN()  { (while IFS= read -r line; do log::warn  "| $line"; done <<< "$*") ; }
 log::INFO()  { (while IFS= read -r line; do log::info  "| $line"; done <<< "$*") ; }
 log::DEBUG() { (while IFS= read -r line; do log::debug "| $line"; done <<< "$*") ; }
+log::colorize_each_line() { local color="${1:-}"; while IFS= read -r line; do echo "${color}${line}${c_rst}"; done; }
 
 # Nicer preamble
-log::preamble()       { echo -n "[$(date "+%Y-%m-%dT%T.000Z")] [$(log::_caller)]" ; }
+log::preamble()       { test -n "${OTTO_NO_PREAMBLE:-}" && return; echo -n " [$(date "+%Y-%m-%dT%T.000Z")] [$(log::_caller)]" ; }
 log::is_irrelevant_fxn() {
   [ -z "${1:-}" ] && return 0 # empty function: irrelevant
   case "$1" in

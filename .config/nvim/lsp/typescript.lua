@@ -1,39 +1,38 @@
+-- /Users/arisweedler/.config/nvim/lsp/typescript.lua
 local format_settings = {
   insertSpaceAfterOpeningAndBeforeClosingNonemptyBraces = false,
 }
 
 return {
-  -- Command to start the language server
   cmd = { "typescript-language-server", "--stdio" },
-
-  -- Filetypes this LSP should attach to
   filetypes = {
     "javascript",
     "javascriptreact",
     "typescript",
-    "typescriptreact"
+    "typescriptreact",
   },
-
-  -- Root directory markers - LSP will look for these to determine project root
   root_markers = {
     "package.json",
     "tsconfig.json",
     "jsconfig.json",
-    ".git"
+    ".git",
   },
-
-  -- Allow single file support (no project needed)
   single_file_support = true,
+  -- 🚫 Ensure tsserver never claims formatting
+  on_attach = function(client, _)
+    client.server_capabilities.documentFormattingProvider = false
+    client.server_capabilities.documentRangeFormattingProvider = false
+  end,
   settings = {
     typescript = {
-      format = format_settings,
+      format = format_settings, -- harmless; ignored since formatting is disabled
       preferences = {
-        importModuleSpecifierPreference = "relative",
+        importModuleSpecifierPreference = "non-relative",
         includePackageJsonAutoImports = "auto",
       },
     },
     javascript = {
-      format = format_settings,
+      format = format_settings, -- harmless; ignored since formatting is disabled
     },
   },
 }

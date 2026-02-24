@@ -4,6 +4,12 @@ local M = {
 	opts = {
 		columns = { "icon" },
 		default_file_explorer = true,
+		float = {
+			get_win_title = function()
+				return " " .. require("oil").get_current_dir()
+			end,
+			border = "rounded",
+		},
 		keymaps = {
 			["<Esc>"] = {
 				"actions.close",

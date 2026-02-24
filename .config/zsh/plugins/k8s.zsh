@@ -3,20 +3,17 @@ eval "$(kubectl completion zsh)"
 # brew install kubectx
 alias kns="kubens"
 alias kctx="kubectx"
-alias kx="kubectx"
 alias k="kubectl"
 
-function kxx() {
-  # get current context and namespace
-  local ctx ns
-  ctx="$(kubectl config current-context)"
-  ns="$(kubectl config view --minify --output 'jsonpath={..namespace}')"
+function kwhoami() {
+  local context
+  context=$(kubectl config view --minify --output 'jsonpath={.current-context}')
 
-  # if namespace is empty, default to 'default'
-  if [[ -z "$ns" ]]; then
-    ns="default"
-  fi
+  local namespace
+  namespace=$(kubectl config view --minify --output 'jsonpath={.contexts[0].context.namespace}')
+  : "${namespace:=default}"
 
-  echo -n "kubectl --context $ctx --namespace $ns" | tee >(cat) | pbcopy
-  echo
+  log::info "Inspected active context | context='${c_cyan}${context}${c_rst}' namespace='${c_cyan}${namespace}${c_rst}'"
+  echo -n "kubectl --context '${context}' --namespace '${namespace}'" | pbcopy
+  pbpaste
 }

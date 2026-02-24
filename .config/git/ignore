@@ -18,9 +18,11 @@ dotfiles
 
 # Python
 .env
+.env.local
 .venv
 
 # delve
 __debug_bin*
 
 **/.claude/settings.local.json
+.worktrees

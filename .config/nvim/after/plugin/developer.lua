@@ -136,6 +136,7 @@ local function cb_mappings()
 		local d = "[ari] [developer]: Copy file path to clipboard"
 		vim.keymap.set("n", lhs, function()
 			vim.fn.setreg("+", vim.fn.expand("%:" .. fname_modifier))
+			vim.notify(d .. ": " .. fname_modifier, vim.log.levels.INFO)
 		end, { desc = d })
 	end
 

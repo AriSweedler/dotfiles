@@ -34,6 +34,12 @@ local M = { -- Autoformat
 			typescript = { 'prettierd', 'prettier', stop_after_first = true },
 			javascriptreact = { 'prettierd', 'prettier', stop_after_first = true },
 			typescriptreact = { 'prettierd', 'prettier', stop_after_first = true },
+			python = { 'autopep8' },
+		},
+		formatters = {
+			autopep8 = {
+				args = { '--aggressive', '--aggressive', '-' },
+			},
 		},
 	},
 }

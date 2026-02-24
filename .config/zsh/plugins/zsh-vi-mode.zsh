@@ -11,8 +11,6 @@ function zvm_config() {
 function zvm_after_init() {
   fzf::init
 
-  # TODO: Can we configure changing the cursor when we enter 'menu select' mode?
-
   function delete-entire-line {
     zle beginning-of-line
     zle kill-line

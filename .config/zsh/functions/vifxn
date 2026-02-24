@@ -4,6 +4,15 @@ local -r func_name="${1:?}"
 local type
 type="$(type "${func_name}")"
 
+# Handle aliases by re-running for the first word of the expanded alias
+if grep -q "is an alias for" <<< "${type}"; then
+  local alias_target
+  alias_target="$(awk -F 'is an alias for ' '{print $2}' <<< "${type}" | awk '{print $1}')"
+  log::info "Resolving alias to function | alias='${func_name}' target='${alias_target}'"
+  vifxn "${alias_target}"
+  return $?
+fi
+
 # Ensure we have a shell function
 if ! grep -q "shell function" <<< "${type}"; then
   log::err "Function does not exist | func_name='${func_name}'"
