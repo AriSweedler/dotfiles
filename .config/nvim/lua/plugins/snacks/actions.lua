@@ -26,6 +26,7 @@ M.edit_register = function(picker)
 	local contents = item.data or ""
 
 	local buf = vim.api.nvim_create_buf(false, true)
+	vim.api.nvim_buf_set_name(buf, "register://" .. reg)
 	local lines = vim.split(contents, "\n", { plain = true })
 	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 
