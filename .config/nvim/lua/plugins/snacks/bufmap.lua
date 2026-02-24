@@ -51,19 +51,17 @@ function M.block(desc_prefix, leader, callback)
 	--- @param desc? string Human-readable description; falls back to `opts.args.title` or `"UNKNOWN"`
 	--- @param opts? BufmapOpts Optional configuration table
 	local function bufmap(lhs, rhs, desc, opts)
-		desc = desc or opts.args.title or "UNKNOWN"
 		opts = opts or {}
+		desc = desc or (opts.args and opts.args.title) or "UNKNOWN"
 		local keymapOpts = opts.keymapOpts or {}
 
 		-- Exit early if not enabled
 		if opts.enabled_fxn then
-			local enabled_verdict = true
-			if type(opts.enabled_fxn) == "function" then
-				enabled_verdict = opts.enabled_fxn()
-			elseif type(opts.enabled_fxn) == "boolean" then
-				enabled_verdict = opts.enabled_fxn
+			local enabled = opts.enabled_fxn
+			if type(enabled) == "function" then
+				enabled = enabled()
 			end
-			if not enabled_verdict then
+			if not enabled then
 				return
 			end
 		end
@@ -75,12 +73,15 @@ function M.block(desc_prefix, leader, callback)
 		-- Expand `wik_min` into nested args.win.input.keys with { "i", "n" } mode
 		-- wik_min stands for: With Input Key: Mode Insert Normal
 		if opts.wik_min then
-			opts.args = opts.args or {}
-			local args = opts.args
-			args.win = args.win or {}
-			args.win.input = args.win.input or {}
-			args.win.input.keys = args.win.input.keys or {}
-			args.actions = args.actions or {}
+			local args = opts.args or {}
+			opts.args = args
+			local win = args.win or {}
+			args.win = win
+			local input = win.input or {}
+			win.input = input
+			input.keys = input.keys or {}
+			local actions = args.actions or {}
+			args.actions = actions
 
 			for key, action in pairs(opts.wik_min) do
 				local action_name = desc:lower():gsub("[^a-z]", "_")
@@ -89,11 +90,11 @@ function M.block(desc_prefix, leader, callback)
 				if type(action) == "string" then
 					action_name = action
 				elseif type(action) == "function" then
-					args.actions[action_name] = action
+					actions[action_name] = action
 				end
 
 				if action_name then
-					args.win.input.keys[key] = {
+					input.keys[key] = {
 						action_name,
 						mode = { "i", "n" },
 					}

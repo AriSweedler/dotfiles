@@ -125,7 +125,7 @@ end
 local function load_hydra_config_file(file)
 	local module = "plugins.hydra.hydras." .. file:match("([^/]+)%.lua$")
 	local hydra_config = require(module)
-	if not hydra_config then
+	if not hydra_config or not hydra_config.heads then
 		return
 	end
 	-- Collect mapping info
