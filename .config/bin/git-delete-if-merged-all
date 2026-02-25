@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+c_green=$'\e[32m'
+c_dim=$'\e[2m'
+c_rst=$'\e[0m'
+
+log::info() { echo "${c_green}[INFO]${c_rst} $*" >&2; }
+
+MAX_PARALLEL=10
+
+function check_branch() {
+  local idx="$1" branch="$2" fd="$3"
+  if git delete-if-merged-one "${branch}" >/dev/null 2>&1; then
+    printf "%d deleted %s\n" "${idx}" "${branch}" >&"${fd}"
+  else
+    printf "%d kept %s\n" "${idx}" "${branch}" >&"${fd}"
+  fi
+}
+
+function main() {
+  local pattern="${1:?Usage: git delete-if-merged-all <branch-pattern>}"
+
+  local branches=()
+  while IFS= read -r branch; do
+    branches+=("${branch}")
+  done < <(git branch --format='%(refname:short)' | grep "${pattern}" | LC_ALL=C sort || true)
+
+  if [[ ${#branches[@]} -eq 0 ]]; then
+    log::info "No branches matching '${pattern}'"
+    return
+  fi
+
+  log::info "Checking ${#branches[@]} branches matching '${pattern}'"
+
+  # `pipe` is global (not local) so the EXIT trap can see it under set -u.
+  pipe=$(mktemp -u)
+  mkfifo "${pipe}"
+  trap 'rm -f "${pipe}"' EXIT
+
+  # Single-threaded reader. Workers write "<idx> <status> <branch>" into the
+  # pipe concurrently; awk buffers out-of-order results and flushes them in
+  # sorted order as soon as the next expected index arrives.
+  awk -v g="${c_green}" -v d="${c_dim}" -v r="${c_rst}" -v pat="${pattern}" '{
+    idx = $1; status = $2; branch = $3
+    sub(pat, "", branch)
+    if (status == "deleted") label = g "deleted" r
+    else                     label = d "kept" r
+    buf[idx] = sprintf("  %s %s", label, branch)
+    while (next_idx in buf) {
+      print buf[next_idx]
+      delete buf[next_idx]
+      next_idx++
+    }
+  } BEGIN { next_idx = 0 }' "${pipe}" &
+  local reader_pid=$!
+
+  # fd 3 keeps the pipe's write end open across all workers. Without it, the
+  # pipe would close (and the reader would EOF) as soon as the first worker
+  # exits. Workers inherit fd 3 and write to it; we close it after all workers
+  # are done so the reader gets EOF.
+  exec 3>"${pipe}"
+
+  # Dispatch workers, capping concurrency. We track PIDs explicitly (not bare
+  # `wait`) to avoid accidentally waiting on the reader, which would deadlock.
+  local pids=()
+  for i in "${!branches[@]}"; do
+    check_branch "${i}" "${branches[$i]}" 3 &
+    pids+=($!)
+    if (( ${#pids[@]} >= MAX_PARALLEL )); then
+      wait "${pids[0]}"
+      pids=("${pids[@]:1}")
+    fi
+  done
+  for pid in "${pids[@]}"; do wait "${pid}"; done
+
+  # Close write end → reader gets EOF → reader prints remaining buffered lines
+  exec 3>&-
+  wait "${reader_pid}"
+}
+main "$@"
