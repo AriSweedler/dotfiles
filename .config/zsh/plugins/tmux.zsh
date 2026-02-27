@@ -84,33 +84,34 @@ function tmux::_prompt_line_count() {
   echo "$total"
 }
 
-function tmux::_skip_history_entries() {
-  local history_num="${1:-1}"  # 1-indexed: 1=most recent, 2=2nd most recent, etc.
-  local prompt_re="${2:-❮|❯}"
+function tmux::_slice_history() {
+  local from="${1:-1}"  # 1-indexed inclusive start
+  local to="${2:-$from}"  # 1-indexed inclusive end
+  local prompt_re="${3:-❮|❯}"
   local extra_lines=$(($(tmux::_prompt_line_count) - 1))
 
   # After tac, structure is: output, prompt, [extra lines], blank, (repeat)
-  # To get command N, print the prompt line and output, skip extra prompt lines
+  # Print all commands whose prompt_count falls within [from, to] inclusive
   local output
-  output=$(cat | awk -v re="$prompt_re" -v target="$history_num" -v skip_count="$extra_lines" '
+  output=$(cat | awk -v re="$prompt_re" -v from="$from" -v to="$to" -v skip_count="$extra_lines" '
     $0 ~ re {
-      in_range = (prompt_count >= target - 1 && prompt_count < target)
+      in_range = (prompt_count >= from - 1 && prompt_count < to)
       prompt_count++
       if (in_range) {
         print  # Print the prompt line with command
       }
       for (i = 0; i < skip_count; i++) {
-        getline  # Read and skip additional lines before prompt_re
+        getline  # Read and skip extra prompt lines
       }
-      next     # Skip processing for extra lines
+      next
     }
-    prompt_count >= target - 1 && prompt_count < target {
+    prompt_count >= from - 1 && prompt_count < to {
       print  # Print the output lines
     }
   ')
 
   if [ -z "$output" ]; then
-    log::warn "No command found at history position ${history_num}"
+    log::warn "No command found in history range ${from}..${to}"
     return 1
   fi
 
@@ -122,39 +123,81 @@ function tmux::_debug_pbpaste() {
   printf "%b\n%s\n%b" "${d}" "$(pbpaste)" "${d}"
 }
 
-function tmux::cap_one() {
+function tmux::cap() {
   [ -z "$TMUX" ] && return
 
-  # Parse arguments: accept a number for how many commands back (1=most recent completed)
-  # Add 1 to skip the tcap command itself in the history
-  local commands_back="${1:-1}"
-  local history_num=$((commands_back + 1))
-
-  # Match your prompt line via an awk regex
   local prompt_re="${TMUX_PROMPT_RE:-❮|❯}"
+  local from to less_mode=false
 
-  # Pipeline: Reverse text, extract the Nth most recent command output
-  # (excluding prompt), un-reverse text, copy to clipboard
+  # Parse arguments:
+  #   tcap        → most recent 1 command        (slice 1..1)
+  #   tcap 3      → most recent 3 commands        (slice 1..3)
+  #   tcap -2     → just the 2nd most recent       (slice 2..2)
+  #   tcap 1 3    → commands 1 through 3           (slice 1..3)
+  #   tcap -l ... → open result in less (can combine with above)
+  local -a args=()
+  local past_opts=false
+  for arg in "$@"; do
+    if ! $past_opts && [[ "$arg" == "--" ]]; then
+      past_opts=true; continue
+    fi
+    if ! $past_opts && [[ "$arg" == "-l" ]]; then
+      less_mode=true
+    else
+      args+=("$arg")
+    fi
+  done
+
+  case ${#args[@]} in
+    0) from=1; to=1 ;;
+    1)
+      local n="${args[1]}"
+      if (( n < 0 )); then
+        from=$(( -n )); to=$from
+      else
+        from=1; to=$n
+      fi
+      ;;
+    2) from="${args[1]}"; to="${args[2]}" ;;
+    *) log::err "Usage: tcap [N | -N | FROM TO] [-l]"; return 1 ;;
+  esac
+
+  # Swap if reversed (e.g. tcap 3 1 → tcap 1 3)
+  if (( from > to )); then
+    local tmp=$from; from=$to; to=$tmp
+  fi
+
+  # +1 offset to skip the tcap command itself in the scrollback
+  local slice_from=$((from + 1))
+  local slice_to=$((to + 1))
+
   tmux capture-pane -p -S - \
     | tac \
-    | tmux::_skip_history_entries "$history_num" "$prompt_re" \
+    | tmux::_slice_history "$slice_from" "$slice_to" "$prompt_re" \
     | tac \
     | pbcopy
-  log::info "Copied command + output to clipboard | commands_back='${commands_back}' prompt_re_var='TMUX_PROMPT_RE' prompt_re='${prompt_re}'"
+
+  local label
+  if (( from == to )); then
+    label="command ${from}"
+  else
+    label="commands ${from}..${to}"
+  fi
+  log::info "Copied ${label} to clipboard"
   tmux::_debug_pbpaste
 
-  if [ "${1:-}" = '-l' ]; then
+  if $less_mode; then
     log::info "Opening clipboard in less"
-    tmp_file=$(mktemp)
+    local tmp_file=$(mktemp)
     TRAPEXIT() {
       rm -f -- "${tmp_file:?locally scoped variables do not penetrate into TRAPEXIT scope}"
     }
-    run_cmd pbpaste > "${tmp_file}"
-    run_cmd less "${tmp_file}"
+    pbpaste > "${tmp_file}"
+    less "${tmp_file}"
   fi
 }
 
 alias tmv='tmux::rename-window'
 alias tclear='tmux::clear'
-alias tcap='tmux::cap_one'
+alias tcap='tmux::cap'
 alias tcap_all='tmux::cap_all'
