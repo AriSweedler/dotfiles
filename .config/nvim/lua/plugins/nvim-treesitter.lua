@@ -117,7 +117,7 @@ local M = {
 		-- Defer TreeSitter setup after first render to improve startup time of
 		-- 'nvim {filename}'
 		vim.defer_fn(function()
-			require("nvim-treesitter.configs").setup(opts)
+			require("nvim-treesitter").setup(opts)
 		end, 0)
 
 		-- For every file, set the foldmethod to 'expr' and use TreeSitter's
@@ -126,10 +126,9 @@ local M = {
 			group = vim.api.nvim_create_augroup("TreeSitterFileType", { clear = true }),
 			pattern = "*",
 			callback = function()
-				if require("nvim-treesitter.parsers").has_parser() then
-					-- vim.notify("[nvim-treesitter] Using nvim_treesitter syntax folding", vim.log.levels.DEBUG)
+				if vim.treesitter.get_parser(0, nil, { error = false }) then
 					vim.opt.foldmethod = "expr"
-					vim.opt.foldexpr = "nvim_treesitter#foldexpr()"
+					vim.opt.foldexpr = "v:lua.vim.treesitter.foldexpr()"
 				end
 			end,
 		})
