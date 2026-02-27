@@ -1,5 +1,5 @@
 return {
-  dir = "/Users/arisweedler/h/source/airtable.nvim",
+  dir = vim.fn.expand("~/h/source/airtable.nvim"),
   name = "airtable.nvim",
   event = { "BufReadPre", "BufNewFile" },
   config = function()
