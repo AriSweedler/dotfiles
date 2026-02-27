@@ -24,5 +24,7 @@ dotfiles
 # delve
 __debug_bin*
 
+# Claude
 **/.claude/settings.local.json
 .worktrees
+thoughts
