@@ -64,7 +64,6 @@ local M = {
 	event = "BufReadPost",
 	dependencies = {
 		"nvim-treesitter/nvim-treesitter-textobjects",
-		"nvim-treesitter/nvim-treesitter-refactor",
 	},
 	opts = {
 		auto_install = true,
@@ -78,21 +77,6 @@ local M = {
 		indent = { enable = true },
 		autopairs = { enable = true },
 		autotag = { enable = true },
-		refactor = {
-			smart_rename = {
-				enable = true,
-				keymaps = {
-					smart_rename = "gR",
-				},
-			},
-			navigation = {
-				enable = true,
-				keymaps = {
-					goto_next_usage = "]gd",
-					goto_previous_usage = "[gd",
-				},
-			},
-		},
 		textobjects = {
 			select = {
 				enable = true,
