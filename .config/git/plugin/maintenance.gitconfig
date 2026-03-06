@@ -1,0 +1,13 @@
+[alias]
+	# Uses file mtime on the ref, not committerdate, because committerdate
+	# reflects when the commit was authored — not when it was fetched.
+
+	# Prefetch refs (updated by `git maintenance` on a schedule)
+	last-prefetched = "!f() { ref_file=\"$(git rev-parse --git-dir)/refs/prefetch/remotes/${1:?usage: git last-prefetched <remote/branch>}\"; if [ -f \"$ref_file\" ]; then stat -f '%Sm' \"$ref_file\"; else echo \"no prefetch ref for $1\"; fi; }; f"
+	last-prefetched-main = "!git last-prefetched origin/main"
+	lpfm = last-prefetched-main
+
+	# Regular refs (updated by `git fetch`)
+	last-fetched = "!f() { ref_file=\"$(git rev-parse --git-dir)/refs/remotes/${1:?usage: git last-fetched <remote/branch>}\"; if [ -f \"$ref_file\" ]; then stat -f '%Sm' \"$ref_file\"; else echo \"no ref for $1\"; fi; }; f"
+	last-fetched-main = "!git last-fetched origin/main"
+	lfm = last-fetched-main
