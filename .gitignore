@@ -61,6 +61,7 @@
 .python_history
 .rustup/
 .rye/
+.spacelift/
 .sqlite_history
 .swiftpm/
 .terraform.d/
