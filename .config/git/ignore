@@ -2,6 +2,7 @@
 .*.swp
 *.add.spl
 tags
+.codereview.nvim
 
 # OS generated files
 .DS_Store*
