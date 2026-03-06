@@ -39,6 +39,9 @@ M.init = function()
 	vim.api.nvim_create_autocmd("FileType", {
 		pattern = { "yaml", "terraform", "conf", "config", "typescriptreact" },
 		callback = function()
+			if not require("ari.cronex").check_cronstrue() then
+				return
+			end
 			vim.cmd("ToggleCronEx")
 		end,
 		desc = "Auto-enable Cron Explainer for config files",
