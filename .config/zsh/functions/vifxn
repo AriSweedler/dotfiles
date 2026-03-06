@@ -13,6 +13,19 @@ if grep -q "is an alias for" <<< "${type}"; then
   return $?
 fi
 
+# Handle commands on PATH (scripts, binaries)
+if grep -q "is /" <<< "${type}"; then
+  local cmd_path
+  cmd_path="$(awk '{print $NF}' <<< "${type}")"
+  if file -b "${cmd_path}" | grep -q text; then
+    run_cmd "$EDITOR" "${cmd_path}"
+    return $?
+  else
+    log::err "Not a text file | path='${cmd_path}'"
+    return 1
+  fi
+fi
+
 # Ensure we have a shell function
 if ! grep -q "shell function" <<< "${type}"; then
   log::err "Function does not exist | func_name='${func_name}'"
