@@ -41,9 +41,8 @@ function main() {
   # Single-threaded reader. Workers write "<idx> <status> <branch>" into the
   # pipe concurrently; awk buffers out-of-order results and flushes them in
   # sorted order as soon as the next expected index arrives.
-  awk -v g="${c_green}" -v d="${c_dim}" -v r="${c_rst}" -v pat="${pattern}" '{
+  awk -v g="${c_green}" -v d="${c_dim}" -v r="${c_rst}" '{
     idx = $1; status = $2; branch = $3
-    sub(pat, "", branch)
     if (status == "deleted") label = g "deleted" r
     else                     label = d "kept" r
     buf[idx] = sprintf("  %s %s", label, branch)
