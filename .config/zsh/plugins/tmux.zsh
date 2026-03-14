@@ -1,5 +1,5 @@
 # Change the install location of tpm. Keep these in sync with
-# ~/.config/tmux/plugin/tpm.conf
+# ~/.config/tmux/plugin/tpm.conf and ~/.config/tmux/tmux.conf
 export TMUX_DATA_DIR="$XDG_DATA_HOME/tmux"
 export TMUX_PLUGIN_MANAGER_ROOT="$TMUX_DATA_DIR/tpm"
 export TMUX_PLUGIN_MANAGER_PATH="$TMUX_DATA_DIR/tpm_plugins"
