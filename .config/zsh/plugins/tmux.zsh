@@ -115,7 +115,7 @@ function tmux::_slice_history() {
     return 1
   fi
 
-  echo "$output"
+  print -r -- "$output"
 }
 
 function tmux::_debug_pbpaste() {

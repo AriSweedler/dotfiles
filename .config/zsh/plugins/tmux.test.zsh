@@ -5,13 +5,35 @@
 # ---------------------------------------------------------------------------
 # Test framework
 # ---------------------------------------------------------------------------
-local _pass=0 _fail=0
+local _pass=0 _fail=0 _skip=0
+local _test_include="${OTTO_TEST__ZSH_PLUGINS_TMUX_INCLUDE:-}"
+local _test_exclude="${OTTO_TEST__ZSH_PLUGINS_TMUX_EXCLUDE:-}"
+local _test_list="${OTTO_TEST__ZSH_PLUGINS_TMUX_LIST:-false}"
 
 # Source log functions
 source "${0:h}/log.zsh"
 
+function _t_should_run() {
+  local name="$1"
+  if [[ -n "$_test_include" ]] && [[ "$name" != ${~_test_include} ]]; then
+    return 1
+  fi
+  if [[ -n "$_test_exclude" ]] && [[ "$name" == ${~_test_exclude} ]]; then
+    return 1
+  fi
+  return 0
+}
+
 function _t() {
   local name="$1" expected="$2" actual="$3"
+  if ! _t_should_run "$name"; then
+    ((_skip++))
+    return
+  fi
+  if [[ "$_test_list" == "true" ]]; then
+    print -r -- "$name"
+    return
+  fi
   if [[ "$expected" == "$actual" ]]; then
     log::info "PASS: ${name}"
     ((_pass++))
@@ -26,6 +48,14 @@ function _t() {
 function _t_rc() {
   local name="$1" expected_rc="$2"
   shift 2
+  if ! _t_should_run "$name"; then
+    ((_skip++))
+    return
+  fi
+  if [[ "$_test_list" == "true" ]]; then
+    print -r -- "$name"
+    return
+  fi
   "$@" >/dev/null 2>&1
   _t "$name" "$expected_rc" "$?"
 }
@@ -218,6 +248,14 @@ eval "${_orig_cap_body/\[ -z \"\$TMUX\" \] \&\& return/}"
 function _t_cap() {
   local name="$1" exp_from="$2" exp_to="$3"
   shift 3
+  if ! _t_should_run "$name"; then
+    ((_skip++))
+    return
+  fi
+  if [[ "$_test_list" == "true" ]]; then
+    print -r -- "$name"
+    return
+  fi
   print -r -- "" > "$_cap_tmp"
   tmux::cap "$@" 2>/dev/null
   local result=$(<"$_cap_tmp")
@@ -326,9 +364,32 @@ _t "e2e 2-line PS1, both" \
 function tmux::_prompt_line_count() { echo 1 }
 
 # ---------------------------------------------------------------------------
+# Edge case: output containing backslash sequences and /paths
+# The \n in tr "\n" must not be interpreted as a real newline
+# ---------------------------------------------------------------------------
+_REV_BSLASH=$'has \\n and /paths/to/file\n❯ crontab -l\nother output\n❯ echo hello'
+
+_t 'backslash+slashes, slice 1..1' \
+  $'has \\n and /paths/to/file\n❯ crontab -l' \
+  "$(_mock "$_REV_BSLASH" 1 1 '❯')"
+
+_t 'backslash+slashes, slice 2..2' \
+  $'other output\n❯ echo hello' \
+  "$(_mock "$_REV_BSLASH" 2 2 '❯')"
+
+_t 'backslash+slashes, slice 1..2' \
+  $'has \\n and /paths/to/file\n❯ crontab -l\nother output\n❯ echo hello' \
+  "$(_mock "$_REV_BSLASH" 1 2 '❯')"
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 print ""
-log::info "tmux.test.zsh: ${_pass} passed, ${_fail} failed"
+if [[ "$_test_list" == "true" ]]; then
+  return 0
+fi
+local _summary="${_pass} passed, ${_fail} failed"
+(( _skip > 0 )) && _summary+=", ${_skip} skipped"
+log::info "tmux.test.zsh: ${_summary}"
 (( _fail > 0 )) && return 1
 return 0
