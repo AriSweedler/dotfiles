@@ -29,11 +29,11 @@
 #   Prints the path to the help file, or nothing if not found.
 #######################################
 find_help_file() {
-  local name="$1"
+  local name="${1#typhon-}"  # strip prefix — help files use bare names
   local dir
   for dir in \
-    "${XDG_CONFIG_HOME:-${HOME}/.config}/tmux/plugin/help.bash.d" \
-    "${XDG_DATA_HOME:-${HOME}/.local/share}/tmux/plugin/help.bash.d"; do
+    "${XDG_CONFIG_HOME:-${HOME}/.config}/tmux/typhon-help" \
+    "${XDG_DATA_HOME:-${HOME}/.local/share}/tmux/typhon-help"; do
     if [[ -f "${dir}/${name}.sh" ]]; then
       echo "${dir}/${name}.sh"
       return
