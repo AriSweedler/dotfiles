@@ -93,6 +93,8 @@ function ensure_brew_pkgs() {
     # Lang: misc
     lua
     lua-language-server
+    tree-sitter
+    tree-sitter-cli
     # python@3.13
     # node
     shellcheck
