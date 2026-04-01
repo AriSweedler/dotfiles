@@ -6,9 +6,6 @@ vim.cmd("colorscheme evening")
 vim.o.number = true
 vim.o.relativenumber = true
 
--- Save undo history
-vim.o.undofile = true
-
 -- Set clipboard to use the system clipboard
 vim.o.clipboard = "unnamedplus"
 

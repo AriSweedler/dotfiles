@@ -70,5 +70,3 @@
 	# Include computer-specific git configuration. Put this last so we can
 	# override all of the above
 	path = ~/.local/share/git/config
-[maintenance]
-	repo = /Users/arisweedler/h/source/hyperbase
