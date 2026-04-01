@@ -68,7 +68,7 @@ block("Snacks Picker", "<Leader>p", function(bufmap)
 	bufmap("P", Snacks.picker.lazy, "Plugins from Lazy package manager")
 	bufmap("n", Snacks.picker.notifications, "Notification History")
 	bufmap("u", Snacks.picker.undo, "Undo History")
-bufmap("?", Snacks.picker.pickers, "All pickers")
+	bufmap("?", Snacks.picker.pickers, "All pickers")
 end)
 
 block("Snacks LSP Pickers", "gr", function(bufmap)
