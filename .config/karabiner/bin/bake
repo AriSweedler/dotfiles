@@ -1,6 +1,5 @@
 #!/bin/bash
 
-set -x
 set -euo pipefail
 
 function main() {
@@ -9,20 +8,38 @@ function main() {
 	local out_sorted="${repo_root}/karabiner.json.sorted"
 
 	bake::generate
-	bake::add_to_git
+	bake::sort
+	bake::stage
 }
 
 function bake::generate() (
 	cd "${repo_root}/karabiner.ts"
+
+	if [[ ! -d node_modules ]]; then
+		echo "Installing dependencies..." >&2
+		npm install --silent
+	fi
+
 	npm run build
 	echo "Generated raw output | out_raw='${out_raw}'" >&2
 )
 
-function bake::add_to_git() {
-	cat "${out_raw}" | jq --sort-keys > "${out_sorted}"
+function bake::sort() {
+	jq --sort-keys < "${out_raw}" > "${out_sorted}"
 	mv "${out_sorted}" "${out_raw}"
 	echo "Sorted output for better diffs" >&2
+}
 
+function bake::stage() {
+	if ! command -v git &>/dev/null; then
+		echo "git not found, skipping stage" >&2
+		return
+	fi
+	# git df may not be configured on a fresh machine
+	if ! git df rev-parse --git-dir &>/dev/null; then
+		echo "dotfiles repo not configured, skipping stage" >&2
+		return
+	fi
 	git df add "${out_raw}"
 	git df diff --staged "${out_raw}"
 }
