@@ -50,14 +50,14 @@ vim.api.nvim_create_autocmd("FileType", {
 	pattern = vim.tbl_keys(path_exprs),
 	callback = function()
 		local expr = path_exprs[vim.bo.filetype]
-		local get_path = assert(loadstring("return " .. expr))
+		local get_path = assert(load("return " .. expr))
 
 		bufmap("Q", function()
 			jq.open_seeded(jq.ensure_dot_prefix(get_path()))
 		end, "Open with jq query to path pre-seeded")
 		bufmap("<Leader>Q", vim.cmd.JqPlayground, "Open")
 
-		vim.wo.winbar = ("%{%%v:lua.%s%%}"):format(expr)
+		vim.wo.winbar = "%{%v:lua." .. expr .. "%}"
 		bufmap("I", function() vim.cmd("InspectTree") end, "Open InspectTree")
 		bufmap("Y", function()
 			local path = get_path()
