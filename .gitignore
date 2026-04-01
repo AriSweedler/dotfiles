@@ -16,7 +16,7 @@
 .config/AWSVPNClient
 .config/Google/
 .config/Microsoft\\VisualStudio Services/
-.config/atac/atac.log
+.config/aws-sso/
 .config/cagent/
 .config/containers/
 .config/dlv
