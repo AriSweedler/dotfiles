@@ -66,8 +66,5 @@ for _, opener in ipairs(double_tap_openers) do
 	}
 end
 
-vim.keymap.set("n", "-", function()
-	require("oil").setup(oil_opts)
-	require("oil").toggle_float()
-	vim.keymap.set("n", "-", require("oil").toggle_float, { desc = desc })
-end, { desc = desc })
+require("oil").setup(oil_opts)
+vim.keymap.set("n", "-", require("oil").toggle_float, { desc = desc })

@@ -2,6 +2,7 @@ vim.pack.add({ "https://github.com/echasnovski/mini.nvim" })
 
 require("mini.ai").setup({ n_lines = 500 })
 
+-- Default keymaps: sa (add), sd (delete), sr (replace), sf/sF (find), sh (highlight)
 require("mini.surround").setup({
 	highlight_duration = 1500,
 	mappings = {
