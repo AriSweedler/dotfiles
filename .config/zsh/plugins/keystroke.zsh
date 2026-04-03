@@ -46,9 +46,5 @@ function keystroke() {
 
 ################################################################################
 
-# Example usage - define functions then bind them
-function hello_world { echo "Hello world!"; }
-function cd_h { echo "jumping to hyperbase"; cd "$HOME/h/source/hyperbase" && tmux::rename-window "hyperbase" }
-
-keystroke '^z' hello_world
-keystroke '^o' cd_h
+# Machine-specific bindings go in ~/.local/share/zsh/plugins/keystroke.zsh
+# ctrl-o: jump to main repo and get ready to develop
