@@ -56,6 +56,7 @@
 .npm/
 .npmrc
 .nvs/
+.opensearch_cookies_prod.enc
 .opa_history
 .psql_history
 .python_history
