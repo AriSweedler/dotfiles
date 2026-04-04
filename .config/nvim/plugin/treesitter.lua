@@ -3,9 +3,18 @@ vim.pack.add({
 	"https://github.com/nvim-treesitter/nvim-treesitter-textobjects",
 })
 
-require("nvim-treesitter").setup({
-	auto_install = true,
-	ensure_installed = { "bash", "lua", "vim", "vimdoc", "query", "python", "javascript", "go", "yaml" },
+local ts = require("nvim-treesitter")
+
+local ensure_installed = { "bash", "lua", "vim", "vimdoc", "query", "python", "javascript", "typescript", "tsx", "go", "yaml" }
+local installed = ts.get_installed()
+local missing = vim.tbl_filter(function(lang)
+	return not vim.list_contains(installed, lang)
+end, ensure_installed)
+if #missing > 0 then
+	ts.install(missing)
+end
+
+ts.setup({
 	textobjects = {
 		select = {
 			enable = true,
