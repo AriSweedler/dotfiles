@@ -37,6 +37,32 @@
             ]
           },
           {
+            "description": "Globe → Hyper",
+            "manipulators": [
+              {
+                "from": {
+                  "apple_vendor_top_case_key_code": "keyboard_fn",
+                  "modifiers": {
+                    "optional": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "left_shift",
+                    "modifiers": [
+                      "left_command",
+                      "left_control",
+                      "left_option"
+                    ]
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
             "description": "Kinesis swaps command and option",
             "manipulators": [
               {
@@ -1637,7 +1663,7 @@
                 "to": [
                   {
                     "description": "previous-display",
-                    "key_code": ",",
+                    "key_code": "comma",
                     "modifiers": [
                       "control",
                       "option"
@@ -1683,7 +1709,7 @@
                 "to": [
                   {
                     "description": "next-display",
-                    "key_code": ".",
+                    "key_code": "period",
                     "modifiers": [
                       "control",
                       "option"
@@ -1729,7 +1755,7 @@
                 "to": [
                   {
                     "description": "previous-desktop",
-                    "key_code": "[",
+                    "key_code": "open_bracket",
                     "modifiers": [
                       "control",
                       "option"
@@ -1775,7 +1801,7 @@
                 "to": [
                   {
                     "description": "next-desktop",
-                    "key_code": "]",
+                    "key_code": "close_bracket",
                     "modifiers": [
                       "control",
                       "option"

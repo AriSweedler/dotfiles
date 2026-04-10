@@ -46,6 +46,23 @@ export const homeRow = [
       map('right_option').toHyper().toIfAlone('right_option'),
     ]),
 
+  // NOTE: Set "Press 🌐 key to" → "Do Nothing" in System Settings → Keyboard
+  // so macOS doesn't intercept the Globe key before Karabiner sees it.
+  rule('Globe → Hyper')
+    .manipulators([
+      {
+        type: 'basic',
+        from: {
+          apple_vendor_top_case_key_code: 'keyboard_fn',
+          modifiers: { optional: ['any'] },
+        },
+        to: [{
+          key_code: 'left_shift',
+          modifiers: ['left_command', 'left_control', 'left_option'],
+        }],
+      } as unknown as Manipulator,
+    ]),
+
   rule('Kinesis swaps command and option')
     .condition({
       type: 'device_if',

@@ -5,7 +5,20 @@ vim.pack.add({
 
 local ts = require("nvim-treesitter")
 
-local ensure_installed = { "bash", "lua", "vim", "vimdoc", "query", "python", "javascript", "typescript", "tsx", "go", "yaml" }
+local ensure_installed = {
+	"bash",
+	"go",
+	"javascript",
+	"json",
+	"lua",
+	"python",
+	"query",
+	"tsx",
+	"typescript",
+	"vim",
+	"vimdoc",
+	"yaml",
+}
 local installed = ts.get_installed()
 local missing = vim.tbl_filter(function(lang)
 	return not vim.list_contains(installed, lang)
@@ -33,8 +46,8 @@ ts.setup({
 			swap_previous = { ["<Leader>[a"] = "@parameter.inner" },
 		},
 		move = {
-			enable = true,
-			set_jumps = true,
+			enable              = true,
+			set_jumps           = true,
 			goto_previous_start = { ["[m"] = "@function.outer", ["[a"] = "@parameter.outer" },
 			goto_previous_end   = { ["[M"] = "@function.outer", ["[A"] = "@parameter.outer" },
 			goto_next_start     = { ["]m"] = "@function.outer", ["]a"] = "@parameter.outer" },
@@ -53,5 +66,9 @@ vim.api.nvim_create_autocmd("FileType", {
 		vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
 		vim.wo.foldmethod = "expr"
 		vim.wo.foldexpr = "v:lua.vim.treesitter.foldexpr()"
+
+		vim.keymap.set("n", "<Leader>I", function()
+			vim.cmd("InspectTree")
+		end, { desc = "Open InspectTree" })
 	end,
 })

@@ -34,6 +34,14 @@ function to_key_code(key: string)  {
     return "return_or_enter"
   } else if (key == '⌫' || key == 'delete') { // karabiner doesn't like 'delete' as a key
     return "delete_or_backspace"
+  } else if (key == ',') {
+    return "comma"
+  } else if (key == '.') {
+    return "period"
+  } else if (key == '[') {
+    return "open_bracket"
+  } else if (key == ']') {
+    return "close_bracket"
   }
   return key
 }
