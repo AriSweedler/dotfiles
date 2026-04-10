@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+c_red=$'\e[31m'
 c_green=$'\e[32m'
 c_dim=$'\e[2m'
 c_rst=$'\e[0m'
 
+log::err()  { echo "${c_red}[ERROR]${c_rst} $*" >&2; }
 log::info() { echo "${c_green}[INFO]${c_rst} $*" >&2; }
 
 MAX_PARALLEL=10
@@ -33,25 +35,28 @@ function main() {
 
   log::info "Checking ${#branches[@]} branches matching '${pattern}'"
 
-  # `pipe` is global (not local) so the EXIT trap can see it under set -u.
+  # `pipe` and `del_count_file` are global (not local) so the EXIT trap can
+  # see them under set -u.
   pipe=$(mktemp -u)
+  del_count_file=$(mktemp)
   mkfifo "${pipe}"
-  trap 'rm -f "${pipe}"' EXIT
+  trap 'rm -f "${pipe}" "${del_count_file}"' EXIT
 
   # Single-threaded reader. Workers write "<idx> <status> <branch>" into the
   # pipe concurrently; awk buffers out-of-order results and flushes them in
   # sorted order as soon as the next expected index arrives.
-  awk -v g="${c_green}" -v d="${c_dim}" -v r="${c_rst}" '{
+  awk -v g="${c_green}" -v d="${c_dim}" -v r="${c_rst}" -v dcf="${del_count_file}" '{
     idx = $1; status = $2; branch = $3
-    if (status == "deleted") label = g "deleted" r
-    else                     label = d "kept" r
+    if (status == "deleted") { label = g "deleted" r; del++ }
+    else                     { label = d "kept" r }
     buf[idx] = sprintf("  %s %s", label, branch)
     while (next_idx in buf) {
       print buf[next_idx]
       delete buf[next_idx]
       next_idx++
     }
-  } BEGIN { next_idx = 0 }' "${pipe}" &
+  } BEGIN { next_idx = 0 }
+  END { print del+0 > dcf }' "${pipe}" &
   local reader_pid=$!
 
   # fd 3 keeps the pipe's write end open across all workers. Without it, the
@@ -76,5 +81,13 @@ function main() {
   # Close write end → reader gets EOF → reader prints remaining buffered lines
   exec 3>&-
   wait "${reader_pid}"
+
+  if [[ "$(cat "${del_count_file}")" == "0" ]]; then
+    if gh auth status >/dev/null 2>&1; then
+      log::info "Nothing to clean up — no branches have merged or closed PRs"
+    else
+      log::err "No branches deleted — gh auth is broken. Run: gh auth login"
+    fi
+  fi
 }
 main "$@"
