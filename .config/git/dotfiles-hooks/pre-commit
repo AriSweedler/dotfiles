@@ -1,0 +1,22 @@
+#!/bin/bash
+
+set -euo pipefail
+
+karabiner=".config/karabiner/karabiner.json"
+
+# Only check if karabiner.json is staged
+if ! git diff --cached --name-only | grep -qx "${karabiner}"; then
+	exit 0
+fi
+
+sorted="$(git show ":${karabiner}" | jq --sort-keys)"
+staged="$(git show ":${karabiner}")"
+
+if [ "${sorted}" != "${staged}" ]; then
+	echo "ERROR: ${karabiner} is not sorted by key."
+	echo ""
+	echo "Karabiner rewrites this file with its own key ordering."
+	echo "Run 'bake' from ~/.config/karabiner to regenerate and sort, or manually:"
+	echo "  jq --sort-keys . ${karabiner} | sponge ${karabiner}"
+	exit 1
+fi
