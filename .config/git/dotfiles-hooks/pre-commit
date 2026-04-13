@@ -1,22 +1,45 @@
 #!/bin/bash
+#
+# Pre-commit hook for the dotfiles bare repo.
+# Ensures karabiner.json is sorted by key before committing.
+#
+# Setup (after fresh clone):
+#   git df config core.hooksPath ~/.config/git/dotfiles-hooks
 
 set -euo pipefail
 
-karabiner=".config/karabiner/karabiner.json"
+readonly C_RED='\033[31m'
+readonly C_GREEN='\033[32m'
+readonly C_YELLOW='\033[33m'
+readonly C_RST='\033[0m'
 
-# Only check if karabiner.json is staged
-if ! git diff --cached --name-only | grep -qx "${karabiner}"; then
-	exit 0
-fi
+log::err()  { echo -e "${C_RED}[ERROR]${C_RST} $*" >&2; }
+log::warn() { echo -e "${C_YELLOW}[WARN]${C_RST} $*" >&2; }
+log::info() { echo -e "${C_GREEN}[INFO]${C_RST} $*" >&2; }
 
-sorted="$(git show ":${karabiner}" | jq --sort-keys)"
-staged="$(git show ":${karabiner}")"
+main() {
+  local karabiner_json="$HOME/.config/karabiner/karabiner.json"
 
-if [ "${sorted}" != "${staged}" ]; then
-	echo "ERROR: ${karabiner} is not sorted by key."
-	echo ""
-	echo "Karabiner rewrites this file with its own key ordering."
-	echo "Run 'bake' from ~/.config/karabiner to regenerate and sort, or manually:"
-	echo "  jq --sort-keys . ${karabiner} | sponge ${karabiner}"
-	exit 1
-fi
+  # Only check if karabiner.json is staged.
+  if ! git diff --cached --name-only | grep -qx "${karabiner_json}"; then
+    return 0
+  fi
+
+  log::info "Checking ${karabiner_json} is sorted by key..."
+
+  local sorted staged
+  sorted="$(git show ":${karabiner_json}" | jq --sort-keys)"
+  staged="$(git show ":${karabiner_json}")"
+
+  if [[ "${sorted}" != "${staged}" ]]; then
+    log::err "${karabiner_json} is not sorted by key."
+    log::warn "Karabiner rewrites this file with its own key ordering."
+    log::warn "Run 'bake' from ~/.config/karabiner to regenerate and sort, or manually:"
+    log::warn "  jq --sort-keys . ${karabiner_json} | sponge ${karabiner_json}"
+    return 1
+  fi
+
+  log::info "karabiner.json is properly sorted."
+}
+
+main "$@"
