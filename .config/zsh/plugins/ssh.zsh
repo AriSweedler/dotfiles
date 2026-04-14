@@ -5,50 +5,6 @@ function ssh-conf() {
   "$EDITOR" "$base/$file"
 }
 
-# Invoke ssh on any machine in my config.
-#
-# Example:
-#
-#     shsh -- ls
-#
-# This will run fzf to select a machine & then 'ssh <machine> ls' on it
-function shsh() {
-  # Parse args.
-  # Everything before '--' is a --query to fzf.
-  # Everything after is the command to run.
-  local query="" arg
-  while arg="$1" && shift 1 &>/dev/null; do
-    [[ "$arg" == "--" ]] && break
-    query="$query$arg "
-  done
-
-  # If there's no command, do not allow multiple machines to be selected
-  local multi
-  if (( $# == 0 )); then
-    multi="--no-multi"
-  else
-    multi="--multi"
-  fi
-
-  # Invoke fzf to select a
-  local -r sshable_machines="$(awk '/Host / {print $2}' "$HOME/.ssh/conf.d/"*)"
-  local -r selected=( $(echo "$sshable_machines" | fzf "$multi" --query "$query") )
-  log::info "You selected: '${selected[*]}'"
-
-  # If there's no command, simply SSH into the machine and return
-  if (( $# == 0 )); then
-    ssh "$selected"
-    return
-  fi
-
-  # Invoke the command on each machine
-  for machine in "${selected[@]}"; do
-    log::info "On machine '$machine', running command '$*'"
-    ssh "$machine" /bin/bash <<< "$@"
-    echo
-  done
-}
-
 # Show the machine dashboard
 function machines() {
   b_echo "~~~"
@@ -77,9 +33,15 @@ function machines() {
 
 function ssh::load_agent() {
   local auth_socket="$HOME/.ssh/ssh_auth_sock"
+
+  # Always point SSH_AUTH_SOCK at the fixed symlink so every shell (and
+  # ForwardAgent) uses the same path regardless of session ordering.
+  export SSH_AUTH_SOCK="$auth_socket"
   [ -S "$auth_socket" ] && return
 
-  eval "$(ssh-agent)" &>/dev/null
+  # Apple's launchd ssh-agent (/usr/bin/ssh-agent) cannot perform FIDO2
+  # signing operations. Explicitly start Homebrew's agent.
+  eval "$(/opt/homebrew/bin/ssh-agent -s)" &>/dev/null
   ln -sf "$SSH_AUTH_SOCK" "$auth_socket"
   export SSH_AUTH_SOCK="$auth_socket"
 
