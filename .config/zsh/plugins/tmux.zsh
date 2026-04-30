@@ -121,6 +121,7 @@ function tmux::_slice_history() {
 function tmux::_debug_pbpaste() {
   local d="${c_grey}${(l:$COLUMNS::-:)}${c_rst}"
   printf "%b\n%s\n%b" "${d}" "$(pbpaste)" "${d}"
+  log::info "Placed N lines on clipboard | N='${c_cyan}$(pbpaste | wc -l | tr -d ' ')${c_rst}'"
 }
 
 function tmux::cap() {
