@@ -104,6 +104,7 @@ function ensure_brew_pkgs() {
     karabiner-elements
     raycast
     spotify
+    terminal-notifier  # used by Claude Code notification hook (see ~/.config/claude)
   )
 
   local pkg_installed
@@ -178,6 +179,15 @@ function ensure_karabiner() {
   "$HOME/.config/karabiner/bin/bake"
 }
 
+function ensure_claude_notifications() {
+  local init="$HOME/.config/claude/bin/initialize.sh"
+  if [[ ! -x "${init}" ]]; then
+    log::warn "claude initialize script missing at ${init}, skipping"
+    return
+  fi
+  run_cmd "${init}"
+}
+
 # Ensure we have crucial programs installed
 function main() {
   ensure_brew || return 1
@@ -186,6 +196,7 @@ function main() {
   ensure_claude
   ensure_terminal_nerdfont
   ensure_karabiner
+  ensure_claude_notifications
 }
 
 main "$@"

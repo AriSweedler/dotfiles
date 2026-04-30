@@ -1,4 +1,5 @@
 import { writeToProfile } from "karabiner.ts"
+import { claudeNotifications } from "./claude-notifications.ts"
 import { homeRow } from "./homerow.ts"
 import applicationMode from "./modes/application"
 import karabinerMode from "./modes/karabiner"
@@ -11,4 +12,5 @@ writeToProfile("Default", [
   karabinerMode,
   windowMode,
   ...shortcuts,
+  ...claudeNotifications,
 ])

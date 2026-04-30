@@ -1936,6 +1936,30 @@
                 "type": "basic"
               }
             ]
+          },
+          {
+            "description": "Hyper+N → simulate Claude notification click",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "n",
+                  "modifiers": {
+                    "mandatory": [
+                      "command",
+                      "option",
+                      "control",
+                      "shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/claude-notification-click\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/claude-notification-click\n} &> \"/tmp/karabiner.claude-notification-click.txt\"\n"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
           }
         ]
       },
