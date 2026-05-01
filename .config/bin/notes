@@ -1,214 +1,433 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+# notes — date-indexed git journal of daily notes.
+#
+# Files under $NOTE_BASE (default $HOME/Desktop/notes):
+#   .datekeeper             Append-only list of registered dates (YYYY/Mon/DD).
+#                           Source of truth for "which days have notes".
+#   <year>/<month>/<day>.md Per-day note. month = %b abbreviation, e.g. "Apr".
+#   today.md                Gitignored symlink to today's note.
+#   etc/tasks/daily.md      Template appended to every new note.
+#   etc/tasks/<weekday>.md  Optional day-of-week template (monday.md, ...).
+#
+# Git holds past notes; today's note is staged but uncommitted. Day rollover
+# is lazy — fires on the next `notes` invocation, not at midnight.
 
-# The classic log suite
-c_red='\e[31m'; c_green='\e[32m'; c_yellow='\e[33m'; c_rst='\e[0m'
-preamble() { echo -n "[$(date "+%Y-%m-%dT%T.000Z")] [${FUNCNAME[2]}]" ; }
-# shellcheck disable=SC2059
-log::err() { printf "$(echo -e "${c_red}[ERROR] $(preamble)${c_rst}" "$@")\n" >&2 ; }
-# shellcheck disable=SC2059
-log::info() { printf "$(echo -e "${c_green}[INFO] $(preamble)${c_rst}" "$@")\n" >&2 ; }
-# shellcheck disable=SC2059
-log::warn() { printf "$(echo -e "${c_yellow}[WARN] $(preamble)${c_rst}" "$@")\n" >&2 ; }
+set -euo pipefail
 
-# Define globals
-readonly root="${NOTE_BASE:-$HOME/Desktop/notes}"
-readonly NOTE_BASE="${root?}"
+# Preflight: we use associative arrays (bash 4+). Apple's /bin/bash is 3.2,
+# which doesn't support `declare -A`. Probe the feature directly.
+if ! declare -A __notes_preflight 2>/dev/null; then
+    echo "ERROR: bash 4+ required (have ${BASH_VERSION}). Run via /opt/homebrew/bin/bash or install GNU bash." >&2
+    exit 1
+fi
+
+# --- Logging ---
+
+c_red=$'\e[31m' c_green=$'\e[32m' c_yellow=$'\e[33m' c_rst=$'\e[0m'
+log::info() { echo "${c_green}[INFO]${c_rst} $*" >&2; }
+log::warn() { echo "${c_yellow}[WARN]${c_rst} $*" >&2; }
+log::err()  { echo "${c_red}[ERROR]${c_rst} $*" >&2; }
+
+#######################################
+# Like log::info, but a no-op when the caller has set `quiet=true` in its
+# scope. Used by cmd::healthcheck so the silent prelude only emits warnings.
+# Globals: quiet (read via bash dynamic scope; defaults to false)
+#######################################
+log::info_unless_quiet() {
+    [[ "${quiet:-false}" == "true" ]] && return 0
+    log::info "$*"
+}
+
+# --- Help ---
+
+help() {
+    cat <<EOF
+${c_green}notes${c_rst} — open or initialize today's daily notes file
+
+${c_green}Usage:${c_rst}
+  notes [open]        Initialize today's note and open the last few days in nvim.
+  notes path          Initialize today's note and print its path. Used by tools.
+  notes init          Initialize the notes repo only.
+  notes fix           Commit any uncommitted past notes (one commit per day).
+                      Warns about unrecognized files; never touches them.
+  notes healthcheck   Verify on-disk and git invariants.
+  notes -h | --help   Show this help.
+
+Daily notes live under \$NOTE_BASE (default: \$HOME/Desktop/notes) at
+<year>/<month>/<day>.md, e.g. 2026/Apr/30.md.
+EOF
+}
+
+# --- Globals ---
+
+readonly NOTE_BASE="${NOTE_BASE:-${HOME}/Desktop/notes}"
 export NOTE_BASE
-readonly datekeeper_file="${root?}/.datekeeper"
-IFS='|' read -r year month day weekday < <(date '+%Y|%b|%d|%A')
-weekday="$(echo "$weekday" | tr '[:upper:]' '[:lower:]')"
-readonly git=( "git" "-C" "${root?}" )
-readonly ext="md"
+readonly DATEKEEPER="${NOTE_BASE}/.datekeeper"
+readonly TASK_ROOT="${NOTE_BASE}/etc/tasks"
+readonly TODAY_SYMLINK="${NOTE_BASE}/today.md"
+readonly GIT=( git -C "${NOTE_BASE}" )
 
-function note::from_date() {
-  # Arg parsing
-  local base="${root?}/"
-  if [ "$1" == "--relative" ]; then
-    shift 1
-    base=""
-  fi
-  local -r date="$1"
+IFS='|' read -r YEAR MONTH DAY WEEKDAY < <(date '+%Y|%b|%d|%A')
+WEEKDAY="${WEEKDAY,,}"
+readonly YEAR MONTH DAY WEEKDAY
+readonly TODAY_DATE="${YEAR}/${MONTH}/${DAY}"
 
-  # Respect changing extensions
-  local -r file="$(compgen -G "${base}${date?}.*")"
-  if [ ! -f "${file}" ]; then
-    # We have to come up with a name for a file that doesn't exist
-    echo "${base}${date?}.${ext}"
-    return
-  fi
+# --- Notes ---
 
-  # Be noisy if we've changed recently
-  local -r found_ext="${file##*.}"
-  if [ "$found_ext" != "$ext" ]; then
-    log::warn "The file '$file' has a different extension than what we create"
-  fi
+#######################################
+# Create a note file from templates if it does not exist.
+# Globals: TASK_ROOT, MONTH, DAY, YEAR, WEEKDAY
+# Arguments: $1 = note path
+#######################################
+note::ensure_exists() {
+    local note="${1:?note path required}"
+    [[ -e "${note}" ]] && return
 
-  # Redundant error check
-  if [ -z "$file" ]; then
-    log::err "${FUNCNAME[0]} '$@' failed - could not come up with an answer"
-    exit 1
-  fi
-
-  # return
-  echo "$file"
+    mkdir -p "$(dirname "${note}")"
+    {
+        echo "# ${MONTH} ${DAY}, ${YEAR}"
+        local template file
+        for template in daily "${WEEKDAY}"; do
+            file="${TASK_ROOT}/${template}.md"
+            [[ -f "${file}" ]] && cat "${file}"
+        done
+    } > "${note}"
 }
 
-function note::ensure_initialized() {
-  local -r note="${1?}"
+# --- Datekeeper ---
 
-  # Exit early if the note already exists
-  [ -e "$note" ] && return
-  if ! touch "$note"; then
-    log::err "Can't create note '$note'"
-    exit 1
-  fi
-
-  echo "# $month $day, $year" > "$note"
-  note::init::tasks "$note"
+#######################################
+# Return the date entry $1 lines back from the end of .datekeeper (1 = newest).
+# Globals: DATEKEEPER
+# Arguments: $1 = N
+# Outputs: date string, or empty if not enough entries
+#######################################
+datekeeper::nth_back() {
+    local n="${1:?N required}"
+    [[ -f "${DATEKEEPER}" ]] || return 0
+    tail -n "${n}" "${DATEKEEPER}" | head -n 1
 }
 
-function note::init::tasks() {
-  local -r note="${1?}"
-  readonly task_root="${root?}/etc/tasks"
-
-  # Append tasks to new note file
-  local task taskfile
-  local tasks=( "daily" "$weekday" )
-  for task in "${tasks[@]}"; do
-    taskfile="$task_root/$task.$ext"
-    test -f "$taskfile" || continue
-    cat "$taskfile" >> "$note"
-  done
+#######################################
+# Return 0 if the date is already in .datekeeper, 1 otherwise.
+# Globals: DATEKEEPER
+# Arguments: $1 = date
+#######################################
+datekeeper::contains() {
+    local date="${1:?date required}"
+    [[ -f "${DATEKEEPER}" ]] || return 1
+    grep -qFx "${date}" "${DATEKEEPER}"
 }
 
-function repo::is_initialized() {
-  # The repo is not initialized if the datekeeper file doesn't exist
-  [ ! -f "$datekeeper_file" ] && return 1
-
-  # The repo is not initialized if the datekeeper file doesn't show up in git
-  # Directly forward the return code of this command as the return code of this function
-  "${git[@]}" log -- "$(basename "$datekeeper_file")" &>/dev/null
+#######################################
+# Append a date entry to .datekeeper if not already present. Idempotent.
+# Globals: DATEKEEPER
+# Arguments: $1 = date
+#######################################
+datekeeper::add() {
+    local date="${1:?date required}"
+    datekeeper::contains "${date}" && return 0
+    echo "${date}" >> "${DATEKEEPER}"
 }
 
-function repo::ensure_initialized() {
-  repo::is_initialized && return
+# --- Repo lifecycle ---
 
-  log::info "Initializing repo"
-  set -x
-  "${git[@]}" init &>/dev/null
-  echo "today.$ext" > "${root?}/.gitignore"
-  touch "$datekeeper_file"
-  "${git[@]}" add ".gitignore" "$datekeeper_file"
-  "${git[@]}" commit -m 'first commit' &>/dev/null
+#######################################
+# Check whether the repo is initialized (.datekeeper tracked in git).
+# Returns: 0 if yes, 1 if no
+#######################################
+repo::is_initialized() {
+    [[ -f "${DATEKEEPER}" ]] || return 1
+    "${GIT[@]}" log -- "$(basename "${DATEKEEPER}")" &>/dev/null
 }
 
-function repo::history::note() {
-  # Return a notes file corresponding to the date
-  note::from_date "$(repo::history::date "$@")"
+#######################################
+# Initialize the notes git repo if not already initialized.
+#######################################
+repo::ensure_initialized() {
+    repo::is_initialized && return
+
+    log::info "Initializing repo at ${NOTE_BASE}"
+    mkdir -p "${NOTE_BASE}"
+    "${GIT[@]}" init &>/dev/null
+    echo "today.md" > "${NOTE_BASE}/.gitignore"
+    touch "${DATEKEEPER}"
+    "${GIT[@]}" add ".gitignore" "$(basename "${DATEKEEPER}")"
+    "${GIT[@]}" commit -m 'first commit' &>/dev/null
 }
 
-function repo::history::date() {
-  [ ! -f "$datekeeper_file" ] && return
-  local -r entries_back="${1?}"
-  local -r date="$(tail "-$entries_back" "$datekeeper_file" | head -1)"
+#######################################
+# Commit the most recent prior day's note, if any. Idempotent.
+#######################################
+repo::commit_previous() {
+    local prev_date prev_note
+    prev_date="$(datekeeper::nth_back 1)"
+    [[ -z "${prev_date}" ]] && return 0
+    prev_note="${NOTE_BASE}/${prev_date}.md"
+    [[ -f "${prev_note}" ]] || return 0
 
-  # Return the date recorded in the 'nth' spot of history
-  echo "$date"
+    "${GIT[@]}" add "${prev_note}"
+    "${GIT[@]}" commit -m "Journal entry for ${prev_date}" &>/dev/null || true
 }
 
-function repo::contains_date() {
-  # Check to see if the datekeeper_file already contains the date
-  local -r date="$1"
-  grep -q "${date?}" "$datekeeper_file" || return 1
+#######################################
+# Ensure today is registered: commit yesterday, scaffold today's note from
+# templates, refresh the today.md symlink, stage today's note + .datekeeper.
+# Idempotent.
+# Outputs: today's note path on stdout
+#######################################
+repo::register_today() {
+    local today_note="${NOTE_BASE}/${TODAY_DATE}.md"
 
-  # And check fit, too
-  local -r note="$(note::from_date --relative "$date")"
-  "${git[@]}" log -- "$note" &>/dev/null
+    if datekeeper::contains "${TODAY_DATE}" && [[ -f "${today_note}" ]]; then
+        echo "${today_note}"
+        return
+    fi
+
+    repo::commit_previous
+    datekeeper::add "${TODAY_DATE}"
+    note::ensure_exists "${today_note}"
+    ln -sfn "${today_note}" "${TODAY_SYMLINK}"
+    "${GIT[@]}" add "${today_note}" "$(basename "${DATEKEEPER}")"
+
+    echo "${today_note}"
 }
 
-function repo::register_today() {
-  # If we've already registered a file for today in datekeeper, then
-  # initialization is done
-  local -r date_today="$year/$month/$day"
-  if repo::contains_date "${date_today?}"; then
-    log::info "We already have a journal entry for '$date_today'"
-    return
-  fi
+# --- Git status iteration ---
 
-  # Today isn't in the datekeeper file!
-  # This means that we're done editing the previous notes file. Add/commit it
-  local -r prev_date="$(repo::history::date 1)"
-  local -r prev_note="$(note::from_date "$prev_date")"
-  if [ ! -f "$prev_note" ]; then
-    repo::journal::add_date "${prev_date?}"
-    log::err "Could not find file for datekeeper entry '$prev_date'. Something is wrong."
-    exit 1
-  fi
-  "${git[@]}" add "$prev_note"
-  "${git[@]}" commit -m "Journal entry for $prev_date" || true
-
-  # Create & prepopulate a notes file for today. Symlink to it, and add it to git.
-  local -r note="$(repo::journal::add_date "${date_today?}")"
-  local -r symlink_to_today="${root?}/today.$ext"
-  ln -f -s "$note" "$symlink_to_today"
-  "${git[@]}" add "$note" "$datekeeper_file"
+#######################################
+# Emit one line per file in `git status --short` that is NOT today.md or
+# today's note. Used by both healthcheck (warn on each) and fix (categorize).
+# Globals: GIT, TODAY_DATE
+# Outputs: relative paths, one per line
+#######################################
+git_status::list_past() {
+    local line status_path
+    while IFS= read -r line; do
+        [[ -z "${line}" ]] && continue
+        status_path="${line:3}"
+        case "${status_path}" in
+            today.md|"${TODAY_DATE}.md") continue ;;
+        esac
+        echo "${status_path}"
+    done < <("${GIT[@]}" status --short)
 }
 
-function repo::journal::add_date() {
-  local -r date="$1"
-  local -r note="$(note::from_date "${date?}")"
-  if [ -z "$note" ]; then
-    log::err "note::from_date FAILED"
-    exit 1
-  fi
-  log::info "Adding '$date' to journal - '$note'"
-  mkdir -p "$(dirname "$note")" || exit 1
+# --- Editor / Tmux ---
 
-  # Register with datekeeper
-  echo "$date" >> "$datekeeper_file"
+#######################################
+# Open the last 5 days' notes in nvim with a split layout.
+#######################################
+editor::open_journal() {
+    pushd "${NOTE_BASE}" &>/dev/null || return 1
+    local -a files=()
+    local date
+    while IFS= read -r date; do
+        [[ -z "${date}" ]] && continue
+        files+=("${NOTE_BASE}/${date}.md")
+    done < <(tail -n 5 "${DATEKEEPER}" 2>/dev/null)
 
-  # Ensure the note is initialized
-  note::ensure_initialized "$note"
-
-  # Return the created note
-  echo "$note"
+    local startup='1b | vsp | 2b | setlocal foldlevel=1 | wincmd h'
+    nvim "${files[@]}" -c "${startup}"
+    popd &>/dev/null || return 1
 }
 
-function repo::journal::open() {
-  pushd "${root?}" &>/dev/null || exit 1
-
-  # Open a week of notes in buffers.
-  local files_to_open=()
-  for i in {1..5}; do
-    files_to_open+=(
-      "$(repo::history::note "$i")"
-      "${files_to_open[@]}"
-    )
-  done
-
-  # Use the `Notes` command to get that nice view split
-  startup_cmd=(
-    "1b |"
-    "vsp |"
-    "2b |"
-    "setlocal foldlevel=1 |"
-    "wincmd h"
-  )
-  nvim "${files_to_open[@]}" -c"${startup_cmd[*]}"
-
-  popd &>/dev/null || exit 1
+#######################################
+# Rename the current tmux window to "notes" if running inside tmux.
+#######################################
+tmux::rename_window() {
+    [[ -n "${TMUX:-}" ]] || return 0
+    tmux rename-window "notes"
 }
 
-function repo::tmux() {
-  [ -z "$TMUX" ] && return
-  tmux rename-window "notes"
+# --- Prelude (auto-run before any "real" verb) ---
+
+#######################################
+# Ensure the repo is initialized and quietly run a healthcheck. Issues are
+# surfaced as warnings; clean runs print nothing. Failures don't abort —
+# the verb proceeds.
+#######################################
+prelude() {
+    repo::ensure_initialized
+    cmd::healthcheck --quiet || true
 }
 
-function main() {
-  log::info "$0: Root of notes = '${root?}'"
-  repo::ensure_initialized
-  repo::register_today
-  repo::journal::open
-  repo::tmux
+# --- Commands ---
+
+cmd::open() {
+    prelude
+    repo::register_today >/dev/null
+    editor::open_journal
+    tmux::rename_window
 }
+
+cmd::path() {
+    prelude
+    repo::register_today
+}
+
+cmd::init() {
+    repo::ensure_initialized
+}
+
+#######################################
+# Auto-resolve healthcheck issues we know how to handle:
+#   - Each uncommitted <year>/<month>/<day>.md (excluding today's) gets its own
+#     "Journal entry for <date>" commit.
+#   - .datekeeper is committed if still dirty afterward.
+# Anything else (orphan files, non-note files like *.txt, *.json) is logged and
+# left for the user to decide. We never delete or auto-gitignore.
+#######################################
+cmd::fix() {
+    repo::ensure_initialized
+
+    local datekeeper_name
+    datekeeper_name="$(basename "${DATEKEEPER}")"
+
+    local committed=0 unhandled=0
+    local status_path date
+    while IFS= read -r status_path; do
+        [[ "${status_path}" == "${datekeeper_name}" ]] && continue
+        if [[ "${status_path}" =~ ^[0-9]{4}/[A-Z][a-z]{2}/[0-9]{2}\.md$ ]]; then
+            date="${status_path%.md}"
+            "${GIT[@]}" add "${status_path}"
+            "${GIT[@]}" commit -m "Journal entry for ${date}" -- "${status_path}" &>/dev/null
+            log::info "committed ${date}"
+            committed=$((committed + 1))
+        else
+            log::warn "unhandled file: ${status_path} — gitignore or commit manually"
+            unhandled=$((unhandled + 1))
+        fi
+    done < <(git_status::list_past)
+
+    # If .datekeeper still has changes, commit it on its own.
+    if ! "${GIT[@]}" diff --quiet -- "${datekeeper_name}" \
+        || ! "${GIT[@]}" diff --cached --quiet -- "${datekeeper_name}"; then
+        "${GIT[@]}" add "${datekeeper_name}"
+        "${GIT[@]}" commit -m "Update .datekeeper" -- "${datekeeper_name}" &>/dev/null
+        log::info "committed ${datekeeper_name}"
+        committed=$((committed + 1))
+    fi
+
+    if (( committed > 0 )); then
+        log::info "${committed} commit(s) made"
+    else
+        log::info "nothing to fix"
+    fi
+    if (( unhandled > 0 )); then
+        log::warn "${unhandled} unhandled item(s) — run 'notes healthcheck' for details"
+    fi
+}
+
+#######################################
+# Verify on-disk and git invariants. Quiet mode hides per-check info lines
+# (only warnings/errors print) so this is safe to run as a silent prelude.
+# Arguments: optional --quiet
+# Returns: 0 if all checks pass, 1 if any failed
+#######################################
+cmd::healthcheck() {
+    local quiet=false
+    if [[ "${1:-}" == "--quiet" ]]; then
+        quiet=true
+        shift
+    fi
+
+    if ! repo::is_initialized; then
+        log::err ".datekeeper not tracked in git — run 'notes init'"
+        return 1
+    fi
+    log::info_unless_quiet ".datekeeper tracked in git"
+
+    # Read .datekeeper once into an assoc array for O(1) membership tests.
+    local -A registered=()
+    local date
+    while IFS= read -r date; do
+        [[ -z "${date}" ]] && continue
+        registered["${date}"]=1
+    done < "${DATEKEEPER}"
+    log::info_unless_quiet "${#registered[@]} dates in .datekeeper"
+
+    local issues=0
+
+    # Every registered date has its note file.
+    local missing=0 note
+    for date in "${!registered[@]}"; do
+        note="${NOTE_BASE}/${date}.md"
+        if [[ ! -f "${note}" ]]; then
+            log::err "missing note for ${date}"
+            missing=$((missing + 1))
+        fi
+    done
+    if (( missing == 0 )); then
+        log::info_unless_quiet "all registered note files present"
+    else
+        issues=$((issues + missing))
+    fi
+
+    # Every <year>/<month>/<day>.md is registered.
+    local orphans=0 path rel
+    while IFS= read -r path; do
+        rel="${path#${NOTE_BASE}/}"
+        date="${rel%.md}"
+        if [[ -z "${registered[${date}]:-}" ]]; then
+            log::warn "orphan note (not in .datekeeper): ${rel}"
+            orphans=$((orphans + 1))
+        fi
+    done < <(find "${NOTE_BASE}" -mindepth 3 -maxdepth 3 -name '*.md' -type f 2>/dev/null)
+    (( orphans > 0 )) && issues=$((issues + orphans))
+
+    # Past notes committed (today.md and today's note may be uncommitted).
+    local stragglers=0 status_path
+    while IFS= read -r status_path; do
+        log::warn "uncommitted past file: ${status_path}"
+        stragglers=$((stragglers + 1))
+    done < <(git_status::list_past)
+    if (( stragglers == 0 )); then
+        log::info_unless_quiet "no uncommitted past notes"
+    else
+        issues=$((issues + stragglers))
+    fi
+
+    # today.md symlink valid (only relevant if today is registered).
+    if [[ -L "${TODAY_SYMLINK}" ]] && [[ -e "${TODAY_SYMLINK}" ]]; then
+        log::info_unless_quiet "today.md -> $(readlink "${TODAY_SYMLINK}")"
+    elif [[ -L "${TODAY_SYMLINK}" ]]; then
+        log::warn "today.md is a dangling symlink"
+        issues=$((issues + 1))
+    elif [[ -n "${registered[${TODAY_DATE}]:-}" ]]; then
+        log::warn "today.md does not exist"
+        issues=$((issues + 1))
+    fi
+
+    if (( issues == 0 )); then
+        log::info_unless_quiet "all checks passed"
+        return 0
+    fi
+    log::err "${issues} issue(s) found"
+    return 1
+}
+
+# --- Main ---
+
+main() {
+    # === PARSE ===
+    local verb="open"
+    if (( $# > 0 )); then
+        case "${1}" in
+            -h|--help) help; return 0 ;;
+            -*)        log::err "Unknown flag: ${1}"; help; return 1 ;;
+            *)         verb="${1}"; shift ;;
+        esac
+    fi
+
+    # === DISPATCH ===
+    # Auto-discovery: any function named cmd::<verb> is a valid command.
+    if ! declare -F "cmd::${verb}" >/dev/null; then
+        log::err "Unknown command: ${verb}"
+        help
+        return 1
+    fi
+    "cmd::${verb}" "$@"
+}
+
 main "$@"
