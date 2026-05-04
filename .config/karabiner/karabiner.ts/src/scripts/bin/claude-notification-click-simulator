@@ -13,7 +13,6 @@ set -u
 
 readonly NOTIFIER="/opt/homebrew/bin/terminal-notifier"
 readonly CLICK_SIM="${HOME}/.config/claude/bin/notification-click-simulator.sh"
-readonly CONFETTI_URL="raycast://extensions/raycast/raycast/confetti"
 readonly ALERT_GROUP="claude-no-catch"
 # Set to your terminal of choice (iTerm, kitty, Ghostty, ...).
 readonly TERMINAL_APP="Terminal"
@@ -31,5 +30,4 @@ if ! "${CLICK_SIM}"; then
   notify_no_catch
   exit
 fi
-open "${CONFETTI_URL}"
 open -a "${TERMINAL_APP}"
