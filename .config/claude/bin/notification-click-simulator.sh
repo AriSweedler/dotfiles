@@ -15,16 +15,15 @@ main() {
   log_init "$0"
   log "simulating click"
 
-  if ! notification_is_active; then
+  local target
+  target=$(most_recent_claude_target)
+  if [[ -z "${target}" ]]; then
     log "nothing to catch — no active claude-notification"
     return 1
   fi
-
-  local target
-  target=$(read_last_target)
   log "target='${target}'"
 
-  dismiss_notification
+  dismiss_notification "${NOTIFICATION_GROUP}-${target}"
   "${CLICK_SCRIPT}" "${target}"
 
   log "end"

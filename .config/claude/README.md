@@ -15,6 +15,7 @@ and run the click action without finding it on screen, plus a
 │   ├── notification-fire-simulator.sh  # post a notification with a chosen target
 │   ├── notification-click-handler.sh   # invoked when the banner is clicked
 │   ├── notification-click-simulator.sh # invoke the click action programmatically
+│   ├── quickchat.sh                    # random Rocket League quickchat (CLI toy / fallback msg)
 │   └── initialize.sh                   # idempotent setup (brew + settings.json)
 └── lib/                                # implementation layer (sourced)
     ├── notification-lib.sh             # constants, log, helpers
@@ -34,11 +35,11 @@ handler.
 event to the hook configured in `~/.claude/settings.json`. The hook runs
 `bin/notification-fire.sh`, which resolves a message body, looks up the
 current tmux pane via `tmux_target_pane`, and calls `post_notification`.
-That records the target to `/tmp/claude-notification/last-target` (so the
-click-simulator can find it later), then builds a `terminal-notifier`
-invocation with `-group claude-notification` (so the banner is removable
-and replaceable) and `-execute` wired to the click handler with the target
-baked in. macOS shows the banner.
+That builds a `terminal-notifier` invocation with `-group claude-notification-<target>`
+(per-pane group, so notifications from different panes stack instead of
+dismissing each other; a second notification from the same pane still
+replaces the first) and `-execute` wired to the click handler with the
+target baked in. macOS shows the banner.
 
 **Fire simulation** (manual testing).
 `bin/notification-fire-simulator.sh '<target>' '<msg>'` calls the same
@@ -51,16 +52,17 @@ real Notification event.
 `-execute` command, which is `bin/notification-click-handler.sh '<target>'`.
 The handler activates Terminal.app via `osascript` and calls `tmux_jump`,
 which is one `tmux select-window … \; select-pane …` invocation that sets
-both the active window and active pane in a single round trip. Because the
-target was baked into `-execute` at fire time, the click handler does not
-read `last-target`.
+both the active window and active pane in a single round trip. The target
+was baked into `-execute` at fire time, so the handler is stateless.
 
 **Click simulation** (Karabiner / Raycast / hotkey).
-`bin/notification-click-simulator.sh` reads `last-target`, dismisses the
-banner via `terminal-notifier -remove claude-notification`, then invokes
-`bin/notification-click-handler.sh` with the recorded target. The handler
-is the single source of truth for "what does a click do" — both real and
-simulated clicks go through it.
+`bin/notification-click-simulator.sh` queries `terminal-notifier -list ALL`
+for the most-recently-delivered `claude-notification-*` group, dismisses
+that one specifically, then invokes `bin/notification-click-handler.sh`
+with the target parsed from the group ID. Older claude notifications from
+other panes stay in the tray and can be caught by subsequent invocations.
+The handler is the single source of truth for "what does a click do" —
+both real and simulated clicks go through it.
 
 ## Logs
 
@@ -88,10 +90,10 @@ hand any time:
 ## Karabiner integration
 
 Hyper+N is bound in `~/.config/karabiner/karabiner.ts/src/claude-notifications.ts`
-to invoke the click simulator (and shoot Raycast confetti). The absolute
-path to the simulator is baked at build time, since Karabiner's
-`shell_command` runs in a minimal sh context where `$HOME` expansion is
-unreliable. Re-run `~/.config/karabiner/bin/bake` after editing.
+to invoke the click simulator. The absolute path to the simulator is baked
+at build time, since Karabiner's `shell_command` runs in a minimal sh
+context where `$HOME` expansion is unreliable. Re-run `npm run build` (or
+`~/.config/karabiner/bin/karabiner-recompile`) after editing.
 
 ## Raycast integration
 

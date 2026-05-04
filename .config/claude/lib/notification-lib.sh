@@ -13,17 +13,13 @@
 
 readonly CLAUDE_BIN_DIR="${CLAUDE_SCRIPT_ROOT}/bin"
 readonly CLAUDE_LIB_DIR="${CLAUDE_SCRIPT_ROOT}/lib"
-
-readonly NOTIFIER="/opt/homebrew/bin/terminal-notifier"
-readonly TMUX_BIN="/opt/homebrew/bin/tmux"
-readonly NOTIFICATION_GROUP="claude-notification"
-
 readonly CLICK_SCRIPT="${CLAUDE_BIN_DIR}/notification-click-handler.sh"
 readonly QUICKCHAT_SCRIPT="${CLAUDE_BIN_DIR}/quickchat.sh"
 readonly TMUX_PANE_LIB="${CLAUDE_LIB_DIR}/tmux-pane.sh"
-
+readonly NOTIFIER="/opt/homebrew/bin/terminal-notifier"
+readonly TMUX_BIN="/opt/homebrew/bin/tmux"
+readonly NOTIFICATION_GROUP="claude-notification"
 readonly LOG_DIR="/tmp/claude-notification"
-readonly LAST_TARGET_FILE="${LOG_DIR}/last-target"
 
 # shellcheck source=/dev/null
 . "${TMUX_PANE_LIB}"
@@ -52,25 +48,6 @@ log() {
 }
 
 #######################################
-# Persists the most recent tmux target so the click-simulator can find it.
-# Arguments:
-#   $1 - tmux target-pane (session:window.pane), may be empty
-#######################################
-record_target() {
-  printf '%s' "${1:-}" >"${LAST_TARGET_FILE}"
-}
-
-#######################################
-# Reads the most recent tmux target. Empty if none recorded.
-# Outputs:
-#   target string to stdout
-#######################################
-read_last_target() {
-  [[ -f "${LAST_TARGET_FILE}" ]] || return 0
-  cat "${LAST_TARGET_FILE}"
-}
-
-#######################################
 # Brings Terminal.app to the foreground.
 #######################################
 activate_terminal() {
@@ -78,23 +55,30 @@ activate_terminal() {
 }
 
 #######################################
-# Removes the active Claude Code notification from Notification Center.
+# Removes a notification from Notification Center.
+# Arguments:
+#   $1 - group ID (default: base NOTIFICATION_GROUP)
 #######################################
 dismiss_notification() {
-  "${NOTIFIER}" -remove "${NOTIFICATION_GROUP}" >>"${LOG_FILE}" 2>&1
+  local group="${1:-${NOTIFICATION_GROUP}}"
+  "${NOTIFIER}" -remove "${group}" >>"${LOG_FILE}" 2>&1
 }
 
 #######################################
-# Reports whether a Claude Code notification is currently in Notification
-# Center. terminal-notifier -list always exits 0; emptiness is detected by
-# the absence of the group ID on a non-header line.
-# Returns:
-#   0 if a notification is active, 1 if none.
+# Prints the tmux target of the most-recently-delivered active Claude
+# notification, or nothing if none. Group IDs use NOTIFICATION_GROUP-<target>
+# (per-pane stacking); -list ALL's "Delivered At" column is an ISO-ish
+# timestamp that string-sorts chronologically.
+# Outputs:
+#   target string to stdout, or empty
 #######################################
-notification_is_active() {
-  "${NOTIFIER}" -list "${NOTIFICATION_GROUP}" 2>>"${LOG_FILE}" \
+most_recent_claude_target() {
+  "${NOTIFIER}" -list ALL 2>>"${LOG_FILE}" \
     | tail -n +2 \
-    | grep -q "^${NOTIFICATION_GROUP}\b"
+    | awk -F'\t' -v p="${NOTIFICATION_GROUP}-" 'index($1, p) == 1' \
+    | sort -t$'\t' -k5,5 -r \
+    | head -n 1 \
+    | awk -F'\t' -v p="${NOTIFICATION_GROUP}-" '{ sub("^" p, "", $1); print $1 }'
 }
 
 #######################################
@@ -134,9 +118,10 @@ resolve_message() {
 }
 
 #######################################
-# Posts the notification via terminal-notifier and records the target so
-# the click-simulator can find it later. When target is non-empty, wires
-# -execute to the click handler; otherwise falls back to -activate.
+# Posts the notification via terminal-notifier with a per-pane group so
+# concurrent Claude waits stack in Notification Center instead of dismissing
+# each other. When target is non-empty, wires -execute to the click handler;
+# otherwise falls back to -activate.
 # Arguments:
 #   $1 - message
 #   $2 - tmux target-pane (optional)
@@ -144,7 +129,7 @@ resolve_message() {
 post_notification() {
   local msg="${1:?post_notification: message required}"
   local target="${2:-}"
-  record_target "${target}"
+  local group="${NOTIFICATION_GROUP}${target:+-${target}}"
   local title="Claude Code"
   if [[ -n "${target}" ]]; then
     local win="${target#*:}"
@@ -154,7 +139,7 @@ post_notification() {
     -title "${title}"
     -message "${msg}"
     -sound Glass
-    -group "${NOTIFICATION_GROUP}"
+    -group "${group}"
   )
   if [[ -n "${target}" ]]; then
     args+=(-execute "${CLICK_SCRIPT} '${target}'")
