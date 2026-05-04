@@ -19,12 +19,11 @@ readonly TMUX_BIN="/opt/homebrew/bin/tmux"
 readonly NOTIFICATION_GROUP="claude-notification"
 
 readonly CLICK_SCRIPT="${CLAUDE_BIN_DIR}/notification-click-handler.sh"
+readonly QUICKCHAT_SCRIPT="${CLAUDE_BIN_DIR}/quickchat.sh"
 readonly TMUX_PANE_LIB="${CLAUDE_LIB_DIR}/tmux-pane.sh"
 
 readonly LOG_DIR="/tmp/claude-notification"
 readonly LAST_TARGET_FILE="${LOG_DIR}/last-target"
-
-readonly QUICKCHATS="${HOME}/.claude/state/rocket_league/quickchats.txt"
 
 # shellcheck source=/dev/null
 . "${TMUX_PANE_LIB}"
@@ -110,23 +109,6 @@ tmux_jump() {
 }
 
 #######################################
-# Picks a random Rocket League quickchat with two emoji bookends.
-# Outputs:
-#   formatted quickchat to stdout, or empty if file missing/empty
-#######################################
-format_quickchat() {
-  [[ -f "${QUICKCHATS}" ]] || return 0
-  local chat
-  chat=$(sort -R "${QUICKCHATS}" | head -n 1)
-  [[ -n "${chat}" ]] || return 0
-  local shuffled left right
-  shuffled=$(printf '🚗\n⚽\n🚀\n🏆\n' | sort -R)
-  left=$(printf '%s\n' "${shuffled}" | sed -n '1,2p' | tr -d '\n')
-  right=$(printf '%s\n' "${shuffled}" | sed -n '3,4p' | tr -d '\n')
-  printf '%s %s %s\n' "${left}" "${chat}" "${right}"
-}
-
-#######################################
 # Resolves the notification message body. Source order: stdin JSON .message
 # > $1 fallback > random Rocket League quickchat > static placeholder.
 # Arguments:
@@ -143,7 +125,7 @@ resolve_message() {
     msg="$1"
   fi
   if [[ -z "${msg}" ]]; then
-    msg=$(format_quickchat)
+    msg=$("${QUICKCHAT_SCRIPT}" 2>/dev/null || true)
   fi
   if [[ -z "${msg}" ]]; then
     msg="Claude Code needs your input"
