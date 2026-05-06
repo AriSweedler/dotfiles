@@ -1,12 +1,14 @@
 import { hyperLayer, toApp, map, FromKeyCode, Modifier } from "karabiner.ts"
 import { karabiner_script } from "./macros"
+import { allDevices } from "./devices"
 
 // --- Types ---
 type Deeplink = { kind: "deeplink"; path: string }
 type Script = { kind: "script"; name: string }
 type App = { kind: "app"; name: string }
 type KeyCode = { kind: "key_code"; key_code: string; modifiers?: Modifier[]; description: string }
-type Action = Deeplink | Script | KeyCode | App
+type WhichKeyboard = { kind: "which_keyboard" }
+type Action = Deeplink | Script | KeyCode | App | WhichKeyboard
 
 type Meta = {
   entrypoint: string
@@ -18,11 +20,16 @@ type Meta = {
 export const deeplink = (path: string): Deeplink => ({ kind: "deeplink", path })
 export const script = (name: string): Script => ({ kind: "script", name })
 export const app = (name: string): App => ({ kind: "app", name })
+export const which_keyboard = (): WhichKeyboard => ({ kind: "which_keyboard" })
 export const key_code = (key: string, modifiers: Modifier[], description: string): KeyCode => ({
   kind: "key_code",
   key_code: to_key_code(key),
   modifiers: modifiers,
   description: description,
+})
+
+const notify = (message: string) => ({
+  shell_command: `osascript -e 'display notification ${JSON.stringify(message)} with title "Keyboard"'`,
 })
 
 function to_key_code(key: string)  {
@@ -71,6 +78,8 @@ export class AriMode {
           return `run script: ${val.name}`
         case "deeplink":
           return `deeplink: ${val.path}`
+        case "which_keyboard":
+          return `notify keyboard name`
         default:
           return "unknown"
       }
@@ -93,19 +102,31 @@ export class AriMode {
       case "app":
         return map(key).to(toApp(action.name))
       case "key_code":
-        let x = map(key).to({
+        return map(key).to({
           key_code: action.key_code,
           modifiers: action.modifiers || [],
           description: action.description || `key_code: ${action.key_code}`,
         })
-        return x
+      case "which_keyboard":
+        const known = allDevices.map(d =>
+          map(key)
+            .to(notify(d.label))
+            .condition({ type: 'device_if', identifiers: [d.identifier] })
+        )
+        const fallback = map(key)
+          .to(notify("Unknown keyboard"))
+          .condition({ type: 'device_unless', identifiers: allDevices.map(d => d.identifier) })
+        return [...known, fallback]
     }
 
     throw new Error(`Unknown action type: ${JSON.stringify(action)}`)
   }
 
   private toManipulators() {
-    return Object.entries(this.actionDict).map(this.toManipulator)
+    return Object.entries(this.actionDict).flatMap(entry => {
+      const result = this.toManipulator(entry as [FromKeyCode, Action])
+      return Array.isArray(result) ? result : [result]
+    })
   }
 
   asRule() {

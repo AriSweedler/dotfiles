@@ -1,24 +1,5 @@
-import { DeviceIdentifier, FromAndToKeyCode, Manipulator, map, rule } from "karabiner.ts"
-
-// Device identifiers
-//
-// To find a new one, go to karabiner-EventViewer > Devices & find your device.
-// It may be helpful to use jq to search through the JSON blob
-//
-//     jq '.[] | select(.manufacturer == "Kinesis")'
-//
-const kinesisDevices: Record<string, DeviceIdentifier> = {
-  freestylePro: { // TODO: Should we just switch to mac layout?
-    is_keyboard: true,
-    product_id: 258,
-    vendor_id: 10730,
-  },
-  freestyle2: {
-    is_keyboard: true,
-    product_id: 37904,
-    vendor_id: 1423,
-  }
-}
+import { FromAndToKeyCode, Manipulator, map, rule } from "karabiner.ts"
+import { devices, kinesisDevices } from "./utils/devices"
 
 // Helper to swap two keys, preserving any modifiers
 const swapKeys = (keyA: FromAndToKeyCode, keyB: FromAndToKeyCode): Manipulator[] => [
@@ -63,10 +44,21 @@ export const homeRow = [
       } as unknown as Manipulator,
     ]),
 
+  // Mirrors the Globe → Hyper rule above so the Mac and Kinesis behave the
+  // same. 'Menu' key emits `application` on the Freestyle Pro.
+  rule('Kinesis Freestyle Pro menu → Hyper')
+    .condition({
+      type: 'device_if',
+      identifiers: [devices.freestylePro.identifier],
+    })
+    .manipulators([
+      map('application').toHyper(),
+    ]),
+
   rule('Kinesis swaps command and option')
     .condition({
       type: 'device_if',
-      identifiers: Object.values(kinesisDevices),
+      identifiers: kinesisDevices.map(d => d.identifier),
     })
     .manipulators([
       ...swapKeys('left_command', 'left_option'),

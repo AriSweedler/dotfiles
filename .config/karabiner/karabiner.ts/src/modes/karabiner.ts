@@ -1,4 +1,4 @@
-import { AriMode, deeplink, script } from "../utils/mode"
+import { AriMode, deeplink, script, which_keyboard } from "../utils/mode"
 
 const meta = {
   entrypoint: "k",
@@ -13,6 +13,7 @@ const dict = {
   r: script("karabiner-recompile"),
   l: script("karabiner-logs"),
   x: script("karabiner-hello-world"),
+  n: which_keyboard(),
 }
 
 // --- Export Final Rule ---

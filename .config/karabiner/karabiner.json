@@ -2,12 +2,18 @@
   "profiles": [
     {
       "complex_modifications": {
+        "parameters": {
+          "basic.simultaneous_threshold_milliseconds": 50,
+          "basic.to_delayed_action_delay_milliseconds": 500,
+          "basic.to_if_alone_timeout_milliseconds": 1000,
+          "basic.to_if_held_down_threshold_milliseconds": 500,
+          "mouse_motion_to_scroll.speed": 100
+        },
         "rules": [
           {
             "description": "Right option → Hyper",
             "manipulators": [
               {
-                "type": "basic",
                 "from": {
                   "key_code": "right_option"
                 },
@@ -25,7 +31,8 @@
                   {
                     "key_code": "right_option"
                   }
-                ]
+                ],
+                "type": "basic"
               }
             ]
           },
@@ -33,7 +40,6 @@
             "description": "Globe → Hyper",
             "manipulators": [
               {
-                "type": "basic",
                 "from": {
                   "apple_vendor_top_case_key_code": "keyboard_fn",
                   "modifiers": {
@@ -51,7 +57,41 @@
                       "left_option"
                     ]
                   }
-                ]
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "Kinesis Freestyle Pro menu → Hyper",
+            "manipulators": [
+              {
+                "conditions": [
+                  {
+                    "identifiers": [
+                      {
+                        "is_keyboard": true,
+                        "product_id": 258,
+                        "vendor_id": 10730
+                      }
+                    ],
+                    "type": "device_if"
+                  }
+                ],
+                "from": {
+                  "key_code": "application"
+                },
+                "to": [
+                  {
+                    "key_code": "left_command",
+                    "modifiers": [
+                      "option",
+                      "control",
+                      "shift"
+                    ]
+                  }
+                ],
+                "type": "basic"
               }
             ]
           },
@@ -59,7 +99,23 @@
             "description": "Kinesis swaps command and option",
             "manipulators": [
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "identifiers": [
+                      {
+                        "is_keyboard": true,
+                        "product_id": 258,
+                        "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 37904,
+                        "vendor_id": 1423
+                      }
+                    ],
+                    "type": "device_if"
+                  }
+                ],
                 "from": {
                   "key_code": "left_command",
                   "modifiers": {
@@ -73,9 +129,11 @@
                     "key_code": "left_option"
                   }
                 ],
+                "type": "basic"
+              },
+              {
                 "conditions": [
                   {
-                    "type": "device_if",
                     "identifiers": [
                       {
                         "is_keyboard": true,
@@ -87,12 +145,10 @@
                         "product_id": 37904,
                         "vendor_id": 1423
                       }
-                    ]
+                    ],
+                    "type": "device_if"
                   }
-                ]
-              },
-              {
-                "type": "basic",
+                ],
                 "from": {
                   "key_code": "left_option",
                   "modifiers": {
@@ -106,23 +162,7 @@
                     "key_code": "left_command"
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "device_if",
-                    "identifiers": [
-                      {
-                        "is_keyboard": true,
-                        "product_id": 258,
-                        "vendor_id": 10730
-                      },
-                      {
-                        "is_keyboard": true,
-                        "product_id": 37904,
-                        "vendor_id": 1423
-                      }
-                    ]
-                  }
-                ]
+                "type": "basic"
               }
             ]
           },
@@ -130,7 +170,6 @@
             "description": "Caps locks is ctrl",
             "manipulators": [
               {
-                "type": "basic",
                 "from": {
                   "key_code": "caps_lock",
                   "modifiers": {
@@ -143,7 +182,8 @@
                   {
                     "key_code": "left_control"
                   }
-                ]
+                ],
+                "type": "basic"
               }
             ]
           },
@@ -151,7 +191,18 @@
             "description": "(hyper + a): Open application\n\n• `b` → open app: Google Chrome\n• `m` → open app: Spotify\n• `c` → open app: Slack\n• `t` → open app: Terminal\n• `z` → open app: Zoom",
             "manipulators": [
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_unless",
+                    "value": 1
+                  },
+                  {
+                    "name": "__layer",
+                    "type": "variable_unless",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "a",
                   "modifiers": {
@@ -183,21 +234,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_unless",
-                    "name": "application-mode",
-                    "value": 1
-                  },
-                  {
-                    "type": "variable_unless",
-                    "name": "__layer",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "b",
                   "modifiers": {
@@ -229,16 +275,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "application-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "m",
                   "modifiers": {
@@ -270,16 +316,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "application-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "c",
                   "modifiers": {
@@ -311,16 +357,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "application-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "t",
                   "modifiers": {
@@ -352,16 +398,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "application-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "z",
                   "modifiers": {
@@ -393,16 +439,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "application-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "escape",
                   "modifiers": {
@@ -411,13 +457,6 @@
                     ]
                   }
                 },
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "application-mode",
-                    "value": 1
-                  }
-                ],
                 "to": [
                   {
                     "set_variable": {
@@ -437,10 +476,17 @@
                       "text": ""
                     }
                   }
-                ]
+                ],
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "caps_lock",
                   "modifiers": {
@@ -449,13 +495,6 @@
                     ]
                   }
                 },
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "application-mode",
-                    "value": 1
-                  }
-                ],
                 "to": [
                   {
                     "set_variable": {
@@ -475,15 +514,27 @@
                       "text": ""
                     }
                   }
-                ]
+                ],
+                "type": "basic"
               }
             ]
           },
           {
-            "description": "(hyper + k): Karabiner development helpers\n\n• `d` → deeplink: extensions/raycast/raycast/confetti\n• `s` → run script: script-example\n• `e` → run script: karabiner-edit-index\n• `r` → run script: karabiner-recompile\n• `l` → run script: karabiner-logs\n• `x` → run script: karabiner-hello-world",
+            "description": "(hyper + k): Karabiner development helpers\n\n• `d` → deeplink: extensions/raycast/raycast/confetti\n• `s` → run script: script-example\n• `e` → run script: karabiner-edit-index\n• `r` → run script: karabiner-recompile\n• `l` → run script: karabiner-logs\n• `x` → run script: karabiner-hello-world\n• `n` → notify keyboard name",
             "manipulators": [
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_unless",
+                    "value": 1
+                  },
+                  {
+                    "name": "__layer",
+                    "type": "variable_unless",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "k",
                   "modifiers": {
@@ -511,25 +562,20 @@
                   {
                     "set_notification_message": {
                       "id": "layer-karabiner-mode",
-                      "text": "(hyper + k): Karabiner development helpers\n\n• `d` → deeplink: extensions/raycast/raycast/confetti\n• `s` → run script: script-example\n• `e` → run script: karabiner-edit-index\n• `r` → run script: karabiner-recompile\n• `l` → run script: karabiner-logs\n• `x` → run script: karabiner-hello-world"
+                      "text": "(hyper + k): Karabiner development helpers\n\n• `d` → deeplink: extensions/raycast/raycast/confetti\n• `s` → run script: script-example\n• `e` → run script: karabiner-edit-index\n• `r` → run script: karabiner-recompile\n• `l` → run script: karabiner-logs\n• `x` → run script: karabiner-hello-world\n• `n` → notify keyboard name"
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_unless",
-                    "name": "karabiner-mode",
-                    "value": 1
-                  },
-                  {
-                    "type": "variable_unless",
-                    "name": "__layer",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "d",
                   "modifiers": {
@@ -561,16 +607,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "karabiner-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "s",
                   "modifiers": {
@@ -602,16 +648,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "karabiner-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "e",
                   "modifiers": {
@@ -643,16 +689,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "karabiner-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "r",
                   "modifiers": {
@@ -684,16 +730,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "karabiner-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "l",
                   "modifiers": {
@@ -725,16 +771,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "karabiner-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "x",
                   "modifiers": {
@@ -766,16 +812,228 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "karabiner-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "identifiers": [
+                      {
+                        "is_keyboard": true,
+                        "product_id": 258,
+                        "vendor_id": 10730
+                      }
+                    ],
+                    "type": "device_if"
+                  },
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "n",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "osascript -e 'display notification \"Kinesis Freestyle Pro\" with title \"Keyboard\"'"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "identifiers": [
+                      {
+                        "is_keyboard": true,
+                        "product_id": 37904,
+                        "vendor_id": 1423
+                      }
+                    ],
+                    "type": "device_if"
+                  },
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "n",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "osascript -e 'display notification \"Kinesis Freestyle 2\" with title \"Keyboard\"'"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "identifiers": [
+                      {
+                        "is_built_in_keyboard": true,
+                        "is_keyboard": true
+                      }
+                    ],
+                    "type": "device_if"
+                  },
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "n",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "osascript -e 'display notification \"Apple Internal Keyboard\" with title \"Keyboard\"'"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "identifiers": [
+                      {
+                        "is_keyboard": true,
+                        "product_id": 258,
+                        "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 37904,
+                        "vendor_id": 1423
+                      },
+                      {
+                        "is_built_in_keyboard": true,
+                        "is_keyboard": true
+                      }
+                    ],
+                    "type": "device_unless"
+                  },
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "n",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "osascript -e 'display notification \"Unknown keyboard\" with title \"Keyboard\"'"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "escape",
                   "modifiers": {
@@ -784,13 +1042,6 @@
                     ]
                   }
                 },
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "karabiner-mode",
-                    "value": 1
-                  }
-                ],
                 "to": [
                   {
                     "set_variable": {
@@ -810,10 +1061,17 @@
                       "text": ""
                     }
                   }
-                ]
+                ],
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "caps_lock",
                   "modifiers": {
@@ -822,13 +1080,6 @@
                     ]
                   }
                 },
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "karabiner-mode",
-                    "value": 1
-                  }
-                ],
                 "to": [
                   {
                     "set_variable": {
@@ -848,7 +1099,8 @@
                       "text": ""
                     }
                   }
-                ]
+                ],
+                "type": "basic"
               }
             ]
           },
@@ -856,7 +1108,18 @@
             "description": "(hyper + w): Window management\n\n• `⌫` → restore\n• `⏎` → almost-maximize\n• `h` → left-half\n• `l` → right-half\n• `q` → left-third\n• `w` → center-third\n• `e` → right-third\n• `u` → top-left-quarter\n• `i` → top-right-quarter\n• `j` → bottom-left-quarter\n• `k` → bottom-right-quarter\n• `c` → center\n• `r` → reasonable-size\n• `f` → toggle-fullscreen\n• `-` → make-smaller\n• `=` → make-larger\n• `,` → previous-display\n• `.` → next-display\n• `[` → previous-desktop\n• `]` → next-desktop",
             "manipulators": [
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_unless",
+                    "value": 1
+                  },
+                  {
+                    "name": "__layer",
+                    "type": "variable_unless",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "w",
                   "modifiers": {
@@ -888,21 +1151,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_unless",
-                    "name": "window-mode",
-                    "value": 1
-                  },
-                  {
-                    "type": "variable_unless",
-                    "name": "__layer",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "delete_or_backspace",
                   "modifiers": {
@@ -913,12 +1171,12 @@
                 },
                 "to": [
                   {
+                    "description": "restore",
                     "key_code": "delete_or_backspace",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "restore"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -939,16 +1197,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "return_or_enter",
                   "modifiers": {
@@ -959,12 +1217,12 @@
                 },
                 "to": [
                   {
+                    "description": "almost-maximize",
                     "key_code": "return_or_enter",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "almost-maximize"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -985,16 +1243,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "h",
                   "modifiers": {
@@ -1005,12 +1263,12 @@
                 },
                 "to": [
                   {
+                    "description": "left-half",
                     "key_code": "h",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "left-half"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1031,16 +1289,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "l",
                   "modifiers": {
@@ -1051,12 +1309,12 @@
                 },
                 "to": [
                   {
+                    "description": "right-half",
                     "key_code": "l",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "right-half"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1077,16 +1335,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "q",
                   "modifiers": {
@@ -1097,12 +1355,12 @@
                 },
                 "to": [
                   {
+                    "description": "left-third",
                     "key_code": "q",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "left-third"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1123,16 +1381,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "w",
                   "modifiers": {
@@ -1143,12 +1401,12 @@
                 },
                 "to": [
                   {
+                    "description": "center-third",
                     "key_code": "w",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "center-third"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1169,16 +1427,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "e",
                   "modifiers": {
@@ -1189,12 +1447,12 @@
                 },
                 "to": [
                   {
+                    "description": "right-third",
                     "key_code": "e",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "right-third"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1215,16 +1473,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "u",
                   "modifiers": {
@@ -1235,12 +1493,12 @@
                 },
                 "to": [
                   {
+                    "description": "top-left-quarter",
                     "key_code": "u",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "top-left-quarter"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1261,16 +1519,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "i",
                   "modifiers": {
@@ -1281,12 +1539,12 @@
                 },
                 "to": [
                   {
+                    "description": "top-right-quarter",
                     "key_code": "i",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "top-right-quarter"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1307,16 +1565,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "j",
                   "modifiers": {
@@ -1327,12 +1585,12 @@
                 },
                 "to": [
                   {
+                    "description": "bottom-left-quarter",
                     "key_code": "j",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "bottom-left-quarter"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1353,16 +1611,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "k",
                   "modifiers": {
@@ -1373,12 +1631,12 @@
                 },
                 "to": [
                   {
+                    "description": "bottom-right-quarter",
                     "key_code": "k",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "bottom-right-quarter"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1399,16 +1657,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "c",
                   "modifiers": {
@@ -1419,12 +1677,12 @@
                 },
                 "to": [
                   {
+                    "description": "center",
                     "key_code": "c",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "center"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1445,16 +1703,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "r",
                   "modifiers": {
@@ -1465,12 +1723,12 @@
                 },
                 "to": [
                   {
+                    "description": "reasonable-size",
                     "key_code": "r",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "reasonable-size"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1491,16 +1749,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "f",
                   "modifiers": {
@@ -1511,12 +1769,12 @@
                 },
                 "to": [
                   {
+                    "description": "toggle-fullscreen",
                     "key_code": "f",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "toggle-fullscreen"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1537,16 +1795,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "hyphen",
                   "modifiers": {
@@ -1557,12 +1815,12 @@
                 },
                 "to": [
                   {
+                    "description": "make-smaller",
                     "key_code": "hyphen",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "make-smaller"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1583,16 +1841,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "equal_sign",
                   "modifiers": {
@@ -1603,12 +1861,12 @@
                 },
                 "to": [
                   {
+                    "description": "make-larger",
                     "key_code": "equal_sign",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "make-larger"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1629,16 +1887,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "comma",
                   "modifiers": {
@@ -1649,12 +1907,12 @@
                 },
                 "to": [
                   {
+                    "description": "previous-display",
                     "key_code": "comma",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "previous-display"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1675,16 +1933,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "period",
                   "modifiers": {
@@ -1695,12 +1953,12 @@
                 },
                 "to": [
                   {
+                    "description": "next-display",
                     "key_code": "period",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "next-display"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1721,16 +1979,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "open_bracket",
                   "modifiers": {
@@ -1741,12 +1999,12 @@
                 },
                 "to": [
                   {
+                    "description": "previous-desktop",
                     "key_code": "open_bracket",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "previous-desktop"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1767,16 +2025,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "close_bracket",
                   "modifiers": {
@@ -1787,12 +2045,12 @@
                 },
                 "to": [
                   {
+                    "description": "next-desktop",
                     "key_code": "close_bracket",
                     "modifiers": [
                       "control",
                       "option"
-                    ],
-                    "description": "next-desktop"
+                    ]
                   },
                   {
                     "set_variable": {
@@ -1813,16 +2071,16 @@
                     }
                   }
                 ],
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ]
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "escape",
                   "modifiers": {
@@ -1831,13 +2089,6 @@
                     ]
                   }
                 },
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ],
                 "to": [
                   {
                     "set_variable": {
@@ -1857,10 +2108,17 @@
                       "text": ""
                     }
                   }
-                ]
+                ],
+                "type": "basic"
               },
               {
-                "type": "basic",
+                "conditions": [
+                  {
+                    "name": "window-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
                 "from": {
                   "key_code": "caps_lock",
                   "modifiers": {
@@ -1869,13 +2127,6 @@
                     ]
                   }
                 },
-                "conditions": [
-                  {
-                    "type": "variable_if",
-                    "name": "window-mode",
-                    "value": 1
-                  }
-                ],
                 "to": [
                   {
                     "set_variable": {
@@ -1895,7 +2146,8 @@
                       "text": ""
                     }
                   }
-                ]
+                ],
+                "type": "basic"
               }
             ]
           },
@@ -1903,7 +2155,6 @@
             "description": "Cmd+Ctrl+A → Ctrl+A twice",
             "manipulators": [
               {
-                "type": "basic",
                 "from": {
                   "key_code": "a",
                   "modifiers": {
@@ -1926,7 +2177,8 @@
                       "control"
                     ]
                   }
-                ]
+                ],
+                "type": "basic"
               }
             ]
           },
@@ -1934,7 +2186,6 @@
             "description": "Hyper+N → simulate Claude notification click",
             "manipulators": [
               {
-                "type": "basic",
                 "from": {
                   "key_code": "n",
                   "modifiers": {
@@ -1950,18 +2201,12 @@
                   {
                     "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/claude-notification-click-simulator\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/claude-notification-click-simulator\n} &> \"/tmp/karabiner.claude-notification-click-simulator.txt\"\n"
                   }
-                ]
+                ],
+                "type": "basic"
               }
             ]
           }
-        ],
-        "parameters": {
-          "basic.to_if_alone_timeout_milliseconds": 1000,
-          "basic.to_if_held_down_threshold_milliseconds": 500,
-          "basic.to_delayed_action_delay_milliseconds": 500,
-          "basic.simultaneous_threshold_milliseconds": 50,
-          "mouse_motion_to_scroll.speed": 100
-        }
+        ]
       },
       "name": "Default",
       "selected": true,
