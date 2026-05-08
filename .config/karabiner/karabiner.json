@@ -520,7 +520,7 @@
             ]
           },
           {
-            "description": "(hyper + k): Karabiner development helpers\n\n• `d` → deeplink: extensions/raycast/raycast/confetti\n• `s` → run script: script-example\n• `e` → run script: karabiner-edit-index\n• `r` → run script: karabiner-recompile\n• `l` → run script: karabiner-logs\n• `x` → run script: karabiner-hello-world\n• `n` → notify keyboard name",
+            "description": "(hyper + k): Karabiner development helpers\n\n• `d` → deeplink: extensions/raycast/raycast/confetti\n• `s` → run script: script-example\n• `e` → run script: karabiner-edit-index\n• `r` → run script: karabiner-recompile\n• `l` → run script: karabiner-logs\n• `x` → run script: karabiner-hello-world\n• `n` → notify keyboard name\n• `v` → open app: Karabiner-EventViewer",
             "manipulators": [
               {
                 "conditions": [
@@ -562,7 +562,7 @@
                   {
                     "set_notification_message": {
                       "id": "layer-karabiner-mode",
-                      "text": "(hyper + k): Karabiner development helpers\n\n• `d` → deeplink: extensions/raycast/raycast/confetti\n• `s` → run script: script-example\n• `e` → run script: karabiner-edit-index\n• `r` → run script: karabiner-recompile\n• `l` → run script: karabiner-logs\n• `x` → run script: karabiner-hello-world\n• `n` → notify keyboard name"
+                      "text": "(hyper + k): Karabiner development helpers\n\n• `d` → deeplink: extensions/raycast/raycast/confetti\n• `s` → run script: script-example\n• `e` → run script: karabiner-edit-index\n• `r` → run script: karabiner-recompile\n• `l` → run script: karabiner-logs\n• `x` → run script: karabiner-hello-world\n• `n` → notify keyboard name\n• `v` → open app: Karabiner-EventViewer"
                     }
                   }
                 ],
@@ -1004,6 +1004,47 @@
                 "to": [
                   {
                     "shell_command": "osascript -e 'display notification \"Unknown keyboard\" with title \"Keyboard\"'"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "v",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -a \"Karabiner-EventViewer\".app"
                   },
                   {
                     "set_variable": {
@@ -2176,6 +2217,30 @@
                     "modifiers": [
                       "control"
                     ]
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "Hyper+P → open go/pr/<clipboard>",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "p",
+                  "modifiers": {
+                    "mandatory": [
+                      "command",
+                      "option",
+                      "control",
+                      "shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-go-pr\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-go-pr\n} &> \"/tmp/karabiner.karabiner-go-pr.txt\"\n"
                   }
                 ],
                 "type": "basic"

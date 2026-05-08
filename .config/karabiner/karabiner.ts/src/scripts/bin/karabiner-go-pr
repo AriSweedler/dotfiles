@@ -1,0 +1,36 @@
+#!/bin/bash
+#
+# Karabiner Hyper+P handler. Opens http://go/pr/<clipboard> in the default
+# browser. Skips Raycast/UI entirely — go/ resolves via the Airtable
+# corporate DNS, so `open` lands on the same redirect Raycast would.
+
+set -u
+
+clip="$(pbpaste)"
+# Strip newlines and surrounding whitespace; clipboards from Slack/PRs often
+# include a trailing newline that breaks the URL.
+clip="${clip//$'\r'/}"
+clip="${clip//$'\n'/}"
+clip="$(printf '%s' "${clip}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+
+readonly NOTIFIER="/opt/homebrew/bin/terminal-notifier"
+readonly ALERT_GROUP="karabiner-go-pr"
+
+notify_transient() {
+  "${NOTIFIER}" -title "go/pr" -message "$1" -group "${ALERT_GROUP}"
+  ( sleep 1 && "${NOTIFIER}" -remove "${ALERT_GROUP}" >/dev/null 2>&1 ) &
+  wait
+}
+
+if [[ -z "${clip}" ]]; then
+  notify_transient "clipboard is empty"
+  exit 1
+fi
+
+pr="${clip#\#}"
+if [[ ! "${pr}" =~ ^[0-9]+$ ]]; then
+  notify_transient "${clip:0:20} is not a PR number"
+  exit 1
+fi
+
+open "http://go/pr/${pr}"
