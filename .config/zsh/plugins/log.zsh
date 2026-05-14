@@ -38,8 +38,8 @@ log::is_irrelevant_fxn() {
 }
 log::_caller() {
   local i=0
-  while log::is_irrelevant_fxn "${funcstack[$i]}" && (( i++ < 10 )); do :; done
-  echo -n "${funcstack[$i]}"
+  while log::is_irrelevant_fxn "${funcstack[$i]:-}" && (( i++ < 10 )); do :; done
+  echo -n "${funcstack[$i]:-main}"
 }
 
 # Log the running commands
