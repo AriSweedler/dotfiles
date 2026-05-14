@@ -41,47 +41,23 @@ function tmux::cap_all() {
   local capture_dir="${TMUX_CAPTURE_DIR:-$HOME/Desktop}"
 
   if [[ "$arg" == "-" ]]; then
-    tmux capture-pane -p -S - | pbcopy
+    tmux capture-pane -p -J -S - | pbcopy
     log::info "Captured scrollback buffer to clipboard"
   else
     # Use absolute path as-is, otherwise put in capture_dir
     local dest
     [[ "$arg" == /* ]] && dest="$arg" || dest="${capture_dir}/${arg}"
-    tmux capture-pane -p -S - > "${dest}"
+    tmux capture-pane -p -J -S - > "${dest}"
     log::info "Captured scrollback buffer to file | file='${c_grey}${dest}${c_rst}'"
   fi
 }
 
-function tmux::_visual_width() {
-  local str="$1"
-  local len=${#str}
-  local extra=0
-  # Add +1 for each wide character (emoji in U+1F300+ range)
-  for (( i=1; i<=len; i++ )); do
-    local c="${str[$i]}"
-    local codepoint=$(printf '%d' "'$c")
-    # Emoji ranges: U+1F300-U+1FAFF (127744-129535) and others
-    (( codepoint >= 127744 )) && ((extra++))
-  done
-  echo $((len + extra))
-}
-
 function tmux::_prompt_line_count() {
-  local expanded total=0
-  expanded=$(print -P "$PS1")
-
-  local line
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    # Strip ANSI escape codes to get visual width
-    # Handles SGR (colors), cursor movement, and other CSI sequences
-    local stripped=$(printf '%s' "$line" | sed $'s/\x1b\[[0-9;]*[a-zA-Z]//g')
-    local visual_width=$(tmux::_visual_width "$stripped")
-    # Ceiling division: (x-1)/n+1, with special case for empty lines
-    local wrapped=$(( visual_width ? (visual_width - 1) / COLUMNS + 1 : 1 ))
-    total=$((total + wrapped))
-  done <<< "$expanded"
-
-  echo "$total"
+  # capture-pane -J joins visually-wrapped lines, so we want logical newlines
+  # in the rendered PS1, not visual width / wrap count.
+  local expanded=$(print -P "$PS1")
+  local lines=("${(@f)expanded}")
+  echo ${#lines}
 }
 
 function tmux::_slice_history() {
@@ -172,7 +148,7 @@ function tmux::cap() {
   local slice_from=$((from + 1))
   local slice_to=$((to + 1))
 
-  tmux capture-pane -p -S - \
+  tmux capture-pane -p -J -S - \
     | tac \
     | tmux::_slice_history "$slice_from" "$slice_to" "$prompt_re" \
     | tac \

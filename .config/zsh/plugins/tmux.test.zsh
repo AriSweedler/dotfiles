@@ -83,6 +83,31 @@ two
 one
 ❯ echo one"
 
+# ---------------------------------------------------------------------------
+# _prompt_line_count — counts LOGICAL newlines in PS1.
+# Captured streams come from `tmux capture-pane -J`, which joins visually
+# wrapped lines, so a long single-line PS1 is 1 line in the stream regardless
+# of how it wraps on screen.
+# ---------------------------------------------------------------------------
+_t "_prompt_line_count: single line" \
+  "1" \
+  "$(PS1='single' tmux::_prompt_line_count)"
+
+_t "_prompt_line_count: two lines" \
+  "2" \
+  "$(PS1=$'first\nsecond' tmux::_prompt_line_count)"
+
+_t "_prompt_line_count: three lines" \
+  "3" \
+  "$(PS1=$'a\nb\nc' tmux::_prompt_line_count)"
+
+# Long single-line PS1: must still be 1 (capture-pane -J joins wraps).
+# Build a string longer than any plausible COLUMNS so a visual-width
+# implementation would count it as >1.
+_t "_prompt_line_count: long single line is still 1" \
+  "1" \
+  "$(PS1=${(l:1000::x:)} tmux::_prompt_line_count)"
+
 # Override prompt line count to 1 (no extra lines)
 function tmux::_prompt_line_count() { echo 1 }
 
