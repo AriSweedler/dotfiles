@@ -1,32 +1,234 @@
-#!/usr/bin/env bash
-# Expand rich-text links on the clipboard into plain "text url" lines,
-# then replace the clipboard with that flat text. Useful for pasting into
-# text-only destinations while keeping every hyperlink visible.
+#!/usr/bin/env zsh
+# Expand rich-text links on the clipboard into plain "text url" lines.
+# On success the clipboard is replaced with the flat output. On no-match
+# the clipboard is left untouched — overwriting empty would destroy work.
 set -euo pipefail
 
-html=$(pbpaste -Prefer html)
+readonly LOG_LIB="${HOME}/.config/zsh/plugins/log.zsh"
+[[ -r "${LOG_LIB}" ]] || { print -r -- "[pbpastelinks] missing log lib | path='${LOG_LIB}'" >&2; exit 1; }
+source "${LOG_LIB}"
 
-output=$(printf '%s' "$html" | perl -0777 -ne '
-  while (m{<a\b([^>]*)>(.*?)</a>}gis) {
-    my ($attrs, $text) = ($1, $2);
-    my $href;
-    if    ($attrs =~ /\bhref\s*=\s*"([^"]*)"/i) { $href = $1 }
-    elsif ($attrs =~ /\bhref\s*=\s*'\''([^'\'']*)'\''/i) { $href = $1 }
-    else  { next }
+readonly SNIPPET_MAX_DEFAULT=160
 
-    $text =~ s/<[^>]+>//g;
-    $text =~ s/&nbsp;/ /g;
-    $text =~ s/&amp;/&/g;
-    $text =~ s/&lt;/</g;
-    $text =~ s/&gt;/>/g;
-    $text =~ s/&quot;/"/g;
-    $text =~ s/&#39;/'\''/g;
-    $text =~ s/\s+/ /g;
-    $text =~ s/^\s+|\s+$//g;
+#######################################
+# Verify required binaries exist.
+# Globals: None
+# Arguments: None
+# Returns: 1 if any are missing
+#######################################
+check_prerequisites() {
+  local missing=()
+  local cmd
+  for cmd in pbpaste pbcopy osascript perl textutil; do
+    command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
+  done
+  if (( ${#missing} > 0 )); then
+    log::err "missing required commands | missing='${(j:, :)missing}'"
+    return 1
+  fi
+}
 
-    print "$text $href\n" if $text ne "" && $href ne "";
-  }
-')
+#######################################
+# Render a one-line, truncated, escape-free preview of a string for logging.
+# Arguments:
+#   $1 - string
+#   $2 - max length (default ${SNIPPET_MAX_DEFAULT})
+# Returns: prints preview to stdout
+#######################################
+snippet() {
+  local s="${1}"
+  local max="${2:-${SNIPPET_MAX_DEFAULT}}"
+  # log.zsh runs `echo -e` on its message, which would interpret \r \t \n etc.
+  # inside source bytes (RTF is full of backslash escapes). Double every backslash
+  # so the log layer prints one literal backslash instead of consuming it.
+  s="${s//\\/\\\\}"
+  s="${s//$'\n'/⏎}"
+  s="${s//$'\r'/⏎}"
+  s="${s//$'\t'/→}"
+  if (( ${#s} > max )); then
+    printf '%s' "${s[1,max]}…"
+    return
+  fi
+  printf '%s' "${s}"
+}
 
-printf '%s' "$output" | pbcopy
-printf '%s\n' "$output"
+#######################################
+# Decide which clipboard payload to feed the anchor extractor.
+# Prefers a real HTML flavor with <a> tags; falls back to RTF→HTML via
+# textutil; finally falls back to plain text (usually anchor-free).
+# Logs the chosen source.
+# Arguments:
+#   $1 - bytes from `pbpaste -Prefer html`
+#   $2 - bytes from `pbpaste -Prefer rtf`
+#   $3 - bytes from `pbpaste` (plain)
+# Returns: prints chosen HTML payload to stdout
+#######################################
+acquire_html_payload() {
+  local html_raw="${1}"
+  local rtf="${2}"
+  local plain="${3}"
+
+  if [[ "${html_raw}" == *"<a "* ]]; then
+    log::info "payload source | source='clipboard html flavor' html_bytes='${#html_raw}'"
+    printf '%s' "${html_raw}"
+    return
+  fi
+
+  if [[ -n "${rtf}" ]]; then
+    local converted
+    if converted="$(printf '%s' "${rtf}" | textutil -convert html -format rtf -stdin -stdout 2>/dev/null)"; then
+      log::info "payload source | source='clipboard rtf → textutil → html' rtf_bytes='${#rtf}' html_bytes='${#converted}'"
+      printf '%s' "${converted}"
+      return
+    fi
+    log::warn "rtf conversion failed | falling through to plain"
+  fi
+
+  log::warn "payload source | source='clipboard plain text (likely no anchors)' plain_bytes='${#plain}'"
+  printf '%s' "${plain}"
+}
+
+#######################################
+# Build a hint for the "no links extracted" bail.
+# Arguments:
+#   $1 - html_flavor classification (`yes`, `maybe`, `no`)
+# Returns: prints hint to stdout
+#######################################
+no_links_hint() {
+  local flavor="${1}"
+  if [[ "${flavor}" == "yes" ]]; then
+    printf '%s' "html flavor present but no <a href=...> matched; inspect html_preview"
+    return
+  fi
+  printf '%s' "clipboard has no html flavor; copy from a browser or rich-text source"
+}
+
+#######################################
+# Run the perl extractor against html bytes on stdin.
+# Emits one "text url" line per successful anchor on stdout.
+# Globals: None
+# Arguments: None (html bytes piped in)
+# Returns: 0 always
+#######################################
+extract_anchors() {
+  perl -0777 -ne '
+    while (m{<a\b([^>]*)>(.*?)</a>}gis) {
+      my ($attrs, $text) = ($1, $2);
+      my $href;
+      if    ($attrs =~ /\bhref\s*=\s*"([^"]*)"/i) { $href = $1 }
+      elsif ($attrs =~ /\bhref\s*=\s*'\''([^'\'']*)'\''/i) { $href = $1 }
+      else  { next }
+
+      $text =~ s/<[^>]+>//g;
+      $text =~ s/&nbsp;/ /g;
+      $text =~ s/&amp;/&/g;
+      $text =~ s/&lt;/</g;
+      $text =~ s/&gt;/>/g;
+      $text =~ s/&quot;/"/g;
+      $text =~ s/&#39;/'\''/g;
+      $text =~ s/\s+/ /g;
+      $text =~ s/^\s+|\s+$//g;
+
+      next if $text eq "" || $href eq "";
+      print "$text $href\n";
+    }
+  '
+}
+
+help() {
+  local cg=$'\e[32m' cc=$'\e[36m' cr=$'\e[0m'
+  cat <<EOF
+${cg}pbpastelinks${cr} — flatten clipboard rich-text links into plain "text url" lines
+
+When the clipboard holds HTML with <a href=...> anchors, each anchor becomes
+one "text url" line. The clipboard is then replaced with that flat output so
+you can paste links into text-only destinations (terminals, plain notes,
+Slack composer in plain-text mode).
+
+${cc}Usage:${cr}
+  pbpastelinks [--quiet]
+  pbpastelinks -h | --help
+
+${cc}Options:${cr}
+  --quiet      Suppress stderr logging (still prints flat output to stdout)
+  -h, --help   Show this help
+
+${cc}Behavior:${cr}
+  - Reads clipboard via 'pbpaste -Prefer html' and 'osascript clipboard info'.
+  - If no <a href=...> anchors are found, the clipboard is left untouched.
+  - Logs every step (clipboard inspection, html preview, each anchor matched,
+    final clipboard write) to stderr at INFO level.
+
+${cc}Examples:${cr}
+  pbpastelinks                # default verbose output to stderr
+  pbpastelinks --quiet        # only flat output on stdout
+EOF
+}
+
+main() {
+  check_prerequisites || return 1
+
+  # === PARSE ===
+  local quiet=false
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help) help; return 0 ;;
+    --quiet)   quiet=true; shift ;;
+    -*)        log::err "unknown flag | flag='${1}'"; help; return 1 ;;
+    *)         log::err "unexpected argument | argument='${1}'"; help; return 1 ;;
+  esac; done
+
+  # === MASSAGE ===
+  if [[ "${quiet}" == "true" ]]; then
+    export OTTO_NO_PREAMBLE=1
+    log::info() { :; }
+    log::warn() { :; }
+  fi
+
+  local flavors html_raw rtf plain
+  flavors="$(osascript -e 'clipboard info' 2>/dev/null || printf '%s' '<unavailable>')"
+  html_raw="$(pbpaste -Prefer html 2>/dev/null || true)"
+  rtf="$(pbpaste -Prefer rtf 2>/dev/null || true)"
+  plain="$(pbpaste 2>/dev/null || true)"
+
+  log::info "read clipboard | html_bytes='${#html_raw}' rtf_bytes='${#rtf}' plain_bytes='${#plain}'"
+  log::info "clipboard flavors | flavors='$(snippet "${flavors}" 240)'"
+  log::info "html preview | snippet='$(snippet "${html_raw}")'"
+  log::info "rtf preview | snippet='$(snippet "${rtf}")'"
+
+  local payload
+  payload="$(acquire_html_payload "${html_raw}" "${rtf}" "${plain}")"
+
+  # === VALIDATE ===
+  if [[ -z "${payload}" ]]; then
+    log::warn "bailing | reason='no clipboard payload to parse'"
+    return 0
+  fi
+
+  # === LOGIC ===
+  local -a links
+  local line
+  while IFS= read -r line; do
+    [[ -z "${line}" ]] && continue
+    links+=("${line}")
+    log::info "anchor matched | n='${#links}' entry='$(snippet "${line}" 200)'"
+  done < <(printf '%s' "${payload}" | extract_anchors)
+
+  if (( ${#links} == 0 )); then
+    local flavor="no"
+    [[ "${html_raw}" == *"<a "* ]] && flavor="yes"
+    local hint
+    hint="$(no_links_hint "${flavor}")"
+    log::warn "no links extracted | hint='${hint}'"
+    return 0
+  fi
+
+  local output
+  output="${(F)links}"
+  log::info "plain before | snippet='$(snippet "${plain}")'"
+  printf '%s' "${output}" | pbcopy
+  log::info "wrote clipboard | bytes='${#output}' count='${#links}' snippet='$(snippet "${output}")'"
+
+  printf '%s\n' "${output}"
+}
+
+main "${@}"
