@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Expand rich-text links on the clipboard into plain "text url" lines,
+# then replace the clipboard with that flat text. Useful for pasting into
+# text-only destinations while keeping every hyperlink visible.
+set -euo pipefail
+
+html=$(pbpaste -Prefer html)
+
+output=$(printf '%s' "$html" | perl -0777 -ne '
+  while (m{<a\b([^>]*)>(.*?)</a>}gis) {
+    my ($attrs, $text) = ($1, $2);
+    my $href;
+    if    ($attrs =~ /\bhref\s*=\s*"([^"]*)"/i) { $href = $1 }
+    elsif ($attrs =~ /\bhref\s*=\s*'\''([^'\'']*)'\''/i) { $href = $1 }
+    else  { next }
+
+    $text =~ s/<[^>]+>//g;
+    $text =~ s/&nbsp;/ /g;
+    $text =~ s/&amp;/&/g;
+    $text =~ s/&lt;/</g;
+    $text =~ s/&gt;/>/g;
+    $text =~ s/&quot;/"/g;
+    $text =~ s/&#39;/'\''/g;
+    $text =~ s/\s+/ /g;
+    $text =~ s/^\s+|\s+$//g;
+
+    print "$text $href\n" if $text ne "" && $href ne "";
+  }
+')
+
+printf '%s' "$output" | pbcopy
+printf '%s\n' "$output"
