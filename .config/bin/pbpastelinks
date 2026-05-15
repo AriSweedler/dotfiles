@@ -122,20 +122,22 @@ main() {
   ensure_extractor || return 1
 
   # === LOGIC ===
+  # Swift extractor emits its own diagnostic block to stderr on failure
+  # (FAIL/hint/flavor list/preview). On success it logs one "hit" line.
+  # The wrapper stays quiet on failure and only logs the post-extract steps.
   local html rc=0
   html="$("${SWIFT_BIN}")" || rc="${?}"
 
   if (( rc != 0 )); then
-    log::warn "extractor exited non-zero | rc='${rc}' (clipboard left untouched)"
-    return 0
+    # Swift already explained why; don't double-log. Pass exit code through
+    # so callers can branch on it.
+    return "${rc}"
   fi
 
   if [[ -z "${html}" ]]; then
-    log::warn "extractor returned empty html | clipboard left untouched"
+    log::warn "extractor returned rc=0 but no html — bug in extractor"
     return 0
   fi
-
-  log::info "extractor returned html | bytes='${#html}'"
 
   local -a links
   local line
@@ -146,7 +148,7 @@ main() {
   done < <(printf '%s' "${html}" | extract_anchors)
 
   if (( ${#links} == 0 )); then
-    log::warn "no anchors in extractor output | clipboard left untouched"
+    log::warn "extractor hit but perl found no <a> anchors | clipboard left untouched"
     return 0
   fi
 

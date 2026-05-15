@@ -2,7 +2,16 @@
 // flavor we know about and emit HTML to stdout. Each strategy is a separate
 // function so adding a new producer (Notion, Linear, etc.) is a one-liner.
 //
-// Logs every step to stderr in pbpastelinks's structured "key='value'" format.
+// Logging policy: silent on success-path strategies, ONE "hit" line on the
+// strategy that worked. If no strategy works, dump one consolidated diagnostic
+// block (clipboard flavors + classification + hint).
+//
+// Exit codes:
+//   0 — HTML emitted on stdout
+//   2 — clipboard is empty
+//   3 — only plain-text flavors present (no rich text on clipboard)
+//   4 — rich flavors present but no <a> anchors found in any strategy
+//   5 — clipboard appears to be pbpastelinks' own previous output
 
 import Cocoa
 import Foundation
@@ -11,6 +20,16 @@ let pb = NSPasteboard.general
 
 func log(_ msg: String) {
     FileHandle.standardError.write("[pbpastelinks-extract] \(msg)\n".data(using: .utf8)!)
+}
+
+func quote(_ s: String, max: Int = 160) -> String {
+    var t = s
+    t = t.replacingOccurrences(of: "\n", with: "⏎")
+    t = t.replacingOccurrences(of: "\r", with: "⏎")
+    t = t.replacingOccurrences(of: "\t", with: "→")
+    t = t.replacingOccurrences(of: "'",  with: "ʼ")
+    if t.count > max { t = String(t.prefix(max)) + "…" }
+    return t
 }
 
 func htmlEscape(_ s: String) -> String {
@@ -26,77 +45,49 @@ func hasAnchor(_ html: String) -> Bool {
 }
 
 // ---------------------------------------------------------------------------
-// Strategy 1: public.html — plain HTML flavor
-// Used by: Apple apps (TextEdit, Mail, Notes), some web pages copied in Chrome
+// Strategies: each returns HTML on success, nil otherwise. They never log
+// on miss — the bail block summarizes what was on the clipboard if nothing
+// works.
 // ---------------------------------------------------------------------------
+
+// Apple apps (TextEdit, Mail, Notes), Google Docs (in Chrome), web pages.
 func tryPublicHTML() -> String? {
-    guard let s = pb.string(forType: NSPasteboard.PasteboardType("public.html")) else { return nil }
-    guard hasAnchor(s) else {
-        log("strategy='public.html' result='no anchors in payload' bytes='\(s.utf8.count)'")
-        return nil
-    }
-    log("strategy='public.html' result='hit' bytes='\(s.utf8.count)'")
+    let s = pb.string(forType: NSPasteboard.PasteboardType("public.html"))
+    guard let s = s, !s.isEmpty, hasAnchor(s) else { return nil }
     return s
 }
 
-// ---------------------------------------------------------------------------
-// Strategy 2: org.chromium.web-custom-data
-// Format: Chromium Pickle of (UTF-16 key, UTF-16 value) pairs. Inside we may
-// find `text/html` (standard), `slack/text` (Quill delta JSON), or others.
-// Used by: Chrome, Slack desktop, VS Code, Electron apps in general.
-// ---------------------------------------------------------------------------
+// Chrome, Slack desktop, VS Code, Electron apps.
 func tryChromiumWebCustomData() -> String? {
     let type = NSPasteboard.PasteboardType("org.chromium.web-custom-data")
-    guard let data = pb.data(forType: type) else { return nil }
-    log("strategy='chromium-web-custom-data' bytes='\(data.count)' decoding=...")
+    guard let data = pb.data(forType: type),
+          let decoded = String(data: data, encoding: .utf16LittleEndian)
+    else { return nil }
 
-    // Best-effort: decode entire blob as UTF-16-LE, then scan for known patterns.
-    // Chromium's exact Pickle layout is fiddly and varies; pattern-scanning is
-    // robust to layout drift.
-    guard let decoded = String(data: data, encoding: .utf16LittleEndian) else {
-        log("strategy='chromium-web-custom-data' result='not utf16-le decodable'")
-        return nil
+    // 2a. Embedded HTML — payload often contains 'text/html' followed by raw markup.
+    if let r = decoded.range(of: "<html", options: .caseInsensitive) ??
+               decoded.range(of: "<body", options: .caseInsensitive) ??
+               decoded.range(of: "<a ",   options: .caseInsensitive) {
+        let html = String(decoded[r.lowerBound...])
+        if hasAnchor(html) { return html }
     }
 
-    // 2a. Embedded text/html (key) followed by HTML payload
-    if let htmlRange = decoded.range(of: "<html", options: .caseInsensitive) ??
-                       decoded.range(of: "<body", options: .caseInsensitive) ??
-                       decoded.range(of: "<a ",   options: .caseInsensitive) {
-        // Walk from htmlRange forward; emit everything to end (perl will only
-        // match real anchors).
-        let html = String(decoded[htmlRange.lowerBound...])
-        if hasAnchor(html) {
-            log("strategy='chromium-web-custom-data/text-html' result='hit' bytes='\(html.utf8.count)'")
-            return html
-        }
+    // 2b. Slack Quill delta JSON.
+    if let json = findJSONObject(in: decoded, containing: "\"ops\":["),
+       let html = quillDeltaToHTML(json),
+       hasAnchor(html) {
+        return html
     }
 
-    // 2b. Slack Quill delta JSON: {"ops":[{"insert":"...","attributes":{"link":"..."}}, ...]}
-    if let json = findJSONObject(in: decoded, after: "{\"ops\":[") {
-        if let html = quillDeltaToHTML(json) {
-            if hasAnchor(html) {
-                log("strategy='chromium-web-custom-data/slack-quill' result='hit' bytes='\(html.utf8.count)'")
-                return html
-            }
-            log("strategy='chromium-web-custom-data/slack-quill' result='no link attributes in delta'")
-        }
-    }
-
-    log("strategy='chromium-web-custom-data' result='no recognized payload'")
     return nil
 }
 
-// Find a balanced JSON object starting at the first occurrence of `prefix`.
-// Walks brace depth; ignores braces inside JSON strings.
-func findJSONObject(in s: String, after prefix: String) -> String? {
-    guard let pr = s.range(of: prefix) else { return nil }
-    // Walk backwards from pr.lowerBound to find the opening `{`
-    var start = pr.lowerBound
-    while start > s.startIndex {
-        let prev = s.index(before: start)
-        if s[prev] == "{" { start = prev; break }
-        start = prev
-    }
+func findJSONObject(in s: String, containing needle: String) -> String? {
+    guard let n = s.range(of: needle) else { return nil }
+    var start = n.lowerBound
+    while s[start] != "{" && start > s.startIndex { start = s.index(before: start) }
+    if s[start] != "{" { return nil }
+
     var depth = 0
     var inString = false
     var escape = false
@@ -118,7 +109,6 @@ func findJSONObject(in s: String, after prefix: String) -> String? {
     return nil
 }
 
-// Quill delta → minimal HTML: text runs with `attributes.link` become anchors.
 func quillDeltaToHTML(_ json: String) -> String? {
     guard let data = json.data(using: .utf8),
           let obj  = try? JSONSerialization.jsonObject(with: data),
@@ -140,72 +130,86 @@ func quillDeltaToHTML(_ json: String) -> String? {
     return html
 }
 
-// ---------------------------------------------------------------------------
-// Strategy 3: public.rtf → NSAttributedString → HTML
-// Used by: Google Docs (when not in Chrome custom mode), TextEdit, Mail, Word.
-// ---------------------------------------------------------------------------
+// Google Docs (non-Chrome), TextEdit, Mail, Word.
 func tryPublicRTF() -> String? {
     guard let data = pb.data(forType: NSPasteboard.PasteboardType("public.rtf")) else { return nil }
     guard let attr = try? NSAttributedString(
         data: data,
         options: [.documentType: NSAttributedString.DocumentType.rtf],
         documentAttributes: nil
-    ) else {
-        log("strategy='public.rtf' result='NSAttributedString init failed'")
-        return nil
-    }
+    ) else { return nil }
     guard let htmlData = try? attr.data(
         from: NSRange(location: 0, length: attr.length),
         documentAttributes: [.documentType: NSAttributedString.DocumentType.html]
-    ), let html = String(data: htmlData, encoding: .utf8) else {
-        log("strategy='public.rtf' result='HTML export failed'")
-        return nil
-    }
-    guard hasAnchor(html) else {
-        log("strategy='public.rtf' result='no anchors after RTF→HTML' bytes='\(html.utf8.count)'")
-        return nil
-    }
-    log("strategy='public.rtf' result='hit' bytes='\(html.utf8.count)'")
+    ), let html = String(data: htmlData, encoding: .utf8),
+       hasAnchor(html)
+    else { return nil }
     return html
 }
 
-// ---------------------------------------------------------------------------
-// Strategy 4: Apple Web Archive — plist containing HTML + resources
-// Used by: Safari and apps that round-trip via Safari.
-// ---------------------------------------------------------------------------
+// Safari and apps that round-trip via Safari.
 func tryAppleWebArchive() -> String? {
     let type = NSPasteboard.PasteboardType("Apple Web Archive pasteboard type")
-    guard let data = pb.data(forType: type) else { return nil }
-    guard let plist = try? PropertyListSerialization.propertyList(
-        from: data, options: [], format: nil
-    ) as? [String: Any] else {
-        log("strategy='apple-web-archive' result='plist parse failed'")
-        return nil
-    }
-    guard let main = plist["WebMainResource"] as? [String: Any],
+    guard let data = pb.data(forType: type),
+          let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
+          let main = plist["WebMainResource"] as? [String: Any],
           let body = main["WebResourceData"] as? Data,
-          let html = String(data: body, encoding: .utf8) else {
-        log("strategy='apple-web-archive' result='no WebResourceData')")
-        return nil
-    }
-    guard hasAnchor(html) else {
-        log("strategy='apple-web-archive' result='no anchors' bytes='\(html.utf8.count)'")
-        return nil
-    }
-    log("strategy='apple-web-archive' result='hit' bytes='\(html.utf8.count)'")
+          let html = String(data: body, encoding: .utf8),
+          hasAnchor(html)
+    else { return nil }
     return html
 }
 
 // ---------------------------------------------------------------------------
-// Driver: list all flavors (for debugging), then try strategies in priority
-// order. Print HTML to stdout if any hits; exit 3 with diagnostics otherwise.
+// Diagnostics for the bail block
 // ---------------------------------------------------------------------------
-let types = pb.types ?? []
-for t in types {
-    let n = pb.data(forType: t)?.count ?? 0
-    log("clipboard flavor | name='\(t.rawValue)' bytes='\(n)'")
+let plainOnlyMarkers: Set<String> = [
+    "public.utf8-plain-text",
+    "public.utf16-plain-text",
+    "public.utf16-external-plain-text",
+    "NSStringPboardType",
+    "org.chromium.internal.source-rfh-token",
+    "org.chromium.source-url",
+]
+
+func looksSelfReferential(_ text: String) -> Bool {
+    let lines = text.split(separator: "\n").map { String($0) }
+    guard lines.count >= 2 else { return false }
+    let urlPattern = try! NSRegularExpression(pattern: "^.+ https?://\\S+$")
+    var matches = 0
+    for line in lines {
+        let s = line.trimmingCharacters(in: .whitespaces)
+        if s.isEmpty { continue }
+        let range = NSRange(location: 0, length: (s as NSString).length)
+        if urlPattern.firstMatch(in: s, range: range) != nil { matches += 1 }
+        else { return false }
+    }
+    return matches >= 2
 }
 
+func emitBailDiagnostic(exitCode: Int32, reason: String, hint: String) {
+    log("FAIL: \(reason)")
+    log("hint: \(hint)")
+    log("clipboard had these flavors:")
+    let types = pb.types ?? []
+    if types.isEmpty {
+        log("  (none — clipboard is empty)")
+    } else {
+        for t in types {
+            let n = pb.data(forType: t)?.count ?? 0
+            log("  \(t.rawValue) (\(n) bytes)")
+        }
+    }
+    let plain = pb.string(forType: NSPasteboard.PasteboardType("public.utf8-plain-text"))
+    if let p = plain, !p.isEmpty {
+        log("plain text preview: '\(quote(p, max: 200))'")
+    }
+    exit(exitCode)
+}
+
+// ---------------------------------------------------------------------------
+// Driver — try strategies in priority order. First hit wins.
+// ---------------------------------------------------------------------------
 let strategies: [(String, () -> String?)] = [
     ("public.html",                 tryPublicHTML),
     ("chromium-web-custom-data",    tryChromiumWebCustomData),
@@ -215,11 +219,33 @@ let strategies: [(String, () -> String?)] = [
 
 for (name, fn) in strategies {
     if let html = fn() {
-        log("picked | strategy='\(name)' bytes='\(html.utf8.count)'")
+        log("strategy='\(name)' result='hit' html_bytes='\(html.utf8.count)'")
         print(html)
         exit(0)
     }
 }
 
-log("no anchors extractable from any known flavor | hint='paste into TextEdit to confirm rich text exists; if not, re-copy from rendered view (not terminal/plain-text)'")
-exit(3)
+// No strategy worked — figure out why and tell the user something useful.
+let types = pb.types ?? []
+let typeNames = Set(types.map { $0.rawValue })
+let hasRich = typeNames.contains { !plainOnlyMarkers.contains($0) }
+let plain = pb.string(forType: NSPasteboard.PasteboardType("public.utf8-plain-text")) ?? ""
+
+if types.isEmpty {
+    emitBailDiagnostic(exitCode: 2,
+        reason: "clipboard is empty",
+        hint: "copy something first")
+}
+if !hasRich {
+    if looksSelfReferential(plain) {
+        emitBailDiagnostic(exitCode: 5,
+            reason: "clipboard looks like pbpastelinks own previous output (every line is 'text url')",
+            hint: "re-copy from the original source to extract links again")
+    }
+    emitBailDiagnostic(exitCode: 3,
+        reason: "no rich-text flavor on clipboard — only plain text",
+        hint: "the source app did not export rich text. re-copy from the rendered view (browser, doc, Slack) — not a terminal or plain-text editor")
+}
+emitBailDiagnostic(exitCode: 4,
+    reason: "rich-text flavor(s) present but no <a> anchors recognized",
+    hint: "the clipboard has rich content but none of the known strategies found <a> anchors. check the flavor list above — if you see something not handled (e.g. com.notion.x, application/x-vnd.google-docs-...), tell pbpastelinks to add a strategy for it")
