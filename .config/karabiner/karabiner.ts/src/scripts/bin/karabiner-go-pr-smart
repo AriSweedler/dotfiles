@@ -1,0 +1,213 @@
+#!/usr/bin/env zsh
+# Karabiner Hyper+Q handler. Resolve the PR for the focused Claude session and
+# open go/pr/<N>; fall back to the clipboard if no claude session is focused.
+# If a claude session IS focused but has no active PR, bail terminally (do
+# not fall through to the clipboard). Every outcome surfaces a transient
+# terminal-notifier banner.
+
+set -euo pipefail
+
+readonly NOTIFIER="/opt/homebrew/bin/terminal-notifier"
+readonly ALERT_GROUP="karabiner-go-pr-smart"
+readonly SESSION_FROM_FOCUS="${HOME}/.config/bin/claude-session-from-focus"
+readonly SESSION_PR="${HOME}/.config/bin/claude-session-pr"
+
+# How long transient notifications stick around before the cleanup process
+# removes them. Override via env (e.g. KARABINER_GO_PR_NOTIFY_SECS=3).
+readonly NOTIFY_SECS="${KARABINER_GO_PR_NOTIFY_SECS:-5}"
+
+# Max length for truncated values in notifications (raw clipboard, etc).
+# Override via env. Strings longer than this are cut to TRUNCATE_LEN-3 chars
+# plus a "…" suffix.
+readonly TRUNCATE_LEN="${KARABINER_GO_PR_TRUNCATE_LEN:-20}"
+
+# Per-run logfile. Truncated immediately so each invocation produces a
+# self-contained trace. Karabiner separately captures all stdout/stderr to
+# /tmp/karabiner.karabiner-go-pr-smart.txt.
+readonly LOG_FILE="/tmp/karabiner-go-pr-smart.log"
+: > "${LOG_FILE}"
+exec 2> >(tee -a "${LOG_FILE}" >&2)
+
+# Ari's standard log helpers (log::info/warn/err/debug, run_cmd, preamble).
+export OTTO_DEBUG=1
+source "${HOME}/.config/zsh/plugins/log.zsh"
+
+# --- Prerequisites ---
+
+check_prerequisites() {
+  local -a missing
+  for cmd in "${NOTIFIER}" "${SESSION_FROM_FOCUS}" "${SESSION_PR}" pbpaste open awk nohup; do
+    if [[ "${cmd}" == /* ]]; then
+      [[ -x "${cmd}" ]] || missing+=("${cmd}")
+    else
+      command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
+    fi
+  done
+  if (( ${#missing} > 0 )); then
+    log::err "Missing required commands | missing='${(j:, :)missing}'"
+    return 1
+  fi
+}
+
+# --- Help ---
+
+help() {
+  cat <<EOF
+${c_green}karabiner-go-pr-smart${c_rst} — Karabiner Hyper+Q handler
+
+${c_cyan}Behavior:${c_rst}
+  1) Focused claude session with a pr-link → open go/pr/<N>.
+  2) Focused claude session without an active PR → terminal bail.
+  3) No claude session focused → fall back to clipboard.
+
+${c_cyan}Env:${c_rst}
+  KARABINER_GO_PR_NOTIFY_SECS    How long notifications stay (default: 5)
+  KARABINER_GO_PR_TRUNCATE_LEN   Max length for truncated values (default: 20)
+
+${c_cyan}Options:${c_rst}
+  --verbose   Enable debug logging
+  -h, --help  Show this help
+EOF
+}
+
+# --- Helpers ---
+
+#######################################
+# Truncate a string to at most N chars; if cut, replace the last 3 chars with
+# "...". Returns the input unchanged if already within budget.
+# Globals: TRUNCATE_LEN
+# Arguments:
+#   $1 - string
+#   $2 - (optional) max length; defaults to TRUNCATE_LEN
+# Stdout: possibly-truncated string
+#######################################
+truncate_string() {
+  local s="${1}"
+  local maxlen="${2:-${TRUNCATE_LEN}}"
+  if (( ${#s} <= maxlen )); then
+    echo "${s}"
+    return
+  fi
+  echo "${s:0:$((maxlen - 3))}..."
+}
+
+# --- Notifications ---
+
+#######################################
+# Show a notification and schedule its removal after NOTIFY_SECS. The cleanup
+# is spawned via `nohup` + I/O detachment so it survives this script's exit —
+# we don't have to block on `wait`.
+# Globals: NOTIFIER, ALERT_GROUP, NOTIFY_SECS
+# Arguments:
+#   $1 - message
+#######################################
+notify_transient() {
+  local message="${1}"
+  log::info "notify | secs='${NOTIFY_SECS}' message='${message}'"
+  "${NOTIFIER}" -title "go/pr" -message "${message}" -group "${ALERT_GROUP}" >/dev/null
+  nohup zsh -c "sleep ${NOTIFY_SECS} && '${NOTIFIER}' -remove '${ALERT_GROUP}' >/dev/null 2>&1" \
+    </dev/null >/dev/null 2>&1 &
+}
+
+# --- Sources ---
+
+#######################################
+# Try to open the PR for the focused Claude session. Distinguishes "no claude
+# session detected at all" (caller may fall back to clipboard) from "found a
+# claude session but it has no active PR" (terminal bail; do NOT fall back).
+# Globals: SESSION_FROM_FOCUS, SESSION_PR
+# Returns:
+#   0 — PR was opened
+#   1 — no claude session detected on the focused pane (fall back is OK)
+#   2 — claude session detected but it has no active PR (do NOT fall back)
+#######################################
+try_from_focus() {
+  local uuid
+  if ! uuid="$("${SESSION_FROM_FOCUS}")"; then
+    log::info "No claude session detected on focused pane"
+    return 1
+  fi
+  log::debug "Focus resolved | uuid='${uuid}'"
+
+  local pr
+  if ! pr="$("${SESSION_PR}" "${uuid}")" || [[ -z "${pr}" ]]; then
+    notify_transient "no active PR | claude_session='${uuid:0:8}'"
+    return 2
+  fi
+
+  notify_transient "opening PR | pr='${pr}' claude_session='${uuid:0:8}'"
+  open "http://go/pr/${pr}"
+}
+
+#######################################
+# Sanitize the clipboard for a PR-shaped value.
+# Stdout: numeric PR string, or empty if not a valid PR
+#######################################
+clipboard_pr() {
+  local clip="$(pbpaste)"
+  clip="${clip//$'\r'/}"
+  clip="${clip//$'\n'/}"
+  clip="$(printf '%s' "${clip}" | awk '{ gsub(/^[[:space:]]+|[[:space:]]+$/, ""); print }')"
+  clip="${clip#\#}"
+  [[ "${clip}" =~ ^[0-9]+$ ]] || { echo ""; return; }
+  echo "${clip}"
+}
+
+#######################################
+# Try to open the PR named by the clipboard.
+# Returns: 0 on success; 1 if clipboard is empty or not a PR number.
+#######################################
+try_from_clipboard() {
+  local raw="$(pbpaste)"
+  local pr="$(clipboard_pr)"
+  if [[ -z "${pr}" ]]; then
+    notify_transient "clipboard is not a PR number | raw='$(truncate_string "${raw}")'"
+    return 1
+  fi
+  notify_transient "opening PR | pr='${pr}' source='clipboard'"
+  open "http://go/pr/${pr}"
+}
+
+# --- Main ---
+
+main() {
+  log::debug "=== run started | pid=$$ args='${*}' ==="
+
+  check_prerequisites || exit 1
+
+  # === PARSE ===
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)  help; return 0 ;;
+    --verbose)  shift ;;
+    -*)         log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)          log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
+  esac; done
+
+  # === LOGIC ===
+  log::info "Starting | notify_secs='${NOTIFY_SECS}'"
+  # Capture try_from_focus's rc without tripping `set -e`. A bare call would
+  # exit immediately on non-zero; `|| rc=$?` short-circuits before set -e sees.
+  local focus_rc=0
+  try_from_focus || focus_rc=$?
+  case "${focus_rc}" in
+    0)
+      log::info "Done | source='focus'"
+      return 0
+      ;;
+    2)
+      log::info "Claude session has no active PR — bailing (NOT trying clipboard)"
+      return 1
+      ;;
+    *)
+      log::info "No claude session focused; trying clipboard"
+      ;;
+  esac
+  if try_from_clipboard; then
+    log::info "Done | source='clipboard'"
+    return 0
+  fi
+  log::err "Both sources bailed"
+  return 1
+}
+
+main "${@}"
