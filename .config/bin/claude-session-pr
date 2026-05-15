@@ -1,0 +1,170 @@
+#!/usr/bin/env zsh
+#
+# Given a Claude Code session UUID, print the PR number for that session.
+# The PR number comes from the `pr-link` metadata record claude writes into
+# the session's JSONL when the session is started via `claude --from-pr <N>`
+# or by pasting a PR URL into /resume. That metadata is the ONLY source of
+# truth used here — if it's absent, there is no active PR for the session.
+#
+# stdout: bare PR number (e.g. `209018`) on success.
+# stderr: log lines (also tee'd to LOG_FILE).
+# exit  : 0 on success; non-zero if no active PR is bound to the session.
+
+set -euo pipefail
+
+readonly PROJECTS_DIR="${HOME}/.claude/projects"
+readonly CLAUDE_SESSIONS_DIR="${HOME}/.claude/sessions"
+
+# Per-run logfile. Truncated immediately so each invocation produces a
+# self-contained trace. All log:: output goes here via the tee redirect below.
+readonly LOG_FILE="/tmp/claude-session-pr.log"
+: > "${LOG_FILE}"
+exec 2> >(tee -a "${LOG_FILE}" >&2)
+
+# Ari's standard log helpers (log::info/warn/err/debug, run_cmd, preamble).
+export OTTO_DEBUG=1
+source "${HOME}/.config/zsh/plugins/log.zsh"
+
+# --- Prerequisites ---
+
+check_prerequisites() {
+  local -a missing
+  for cmd in jq; do
+    command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
+  done
+  if (( ${#missing} > 0 )); then
+    log::err "Missing required commands | missing='${(j:, :)missing}'"
+    return 1
+  fi
+}
+
+# --- Help ---
+
+help() {
+  cat <<EOF
+${c_green}claude-session-pr${c_rst} — print the PR number for a Claude Code session
+
+${c_cyan}Usage:${c_rst}
+  claude-session-pr <session-uuid>
+  claude-session-pr --session <session-uuid>
+
+${c_cyan}Source of truth:${c_rst}
+  The most recent {"type":"pr-link", "prNumber":N, ...} record in
+  ~/.claude/projects/*/<uuid>.jsonl. Claude writes this when the session
+  is bound to a PR via \`claude --from-pr\` or a /resume PR URL paste.
+
+${c_cyan}Options:${c_rst}
+  --verbose   Enable debug logging
+  -h, --help  Show this help
+
+${c_cyan}Output:${c_rst}
+  stdout: bare PR number (one line) on success.
+  exit 0 if a pr-link binding exists; non-zero if the session has no
+  active PR (in which case nothing is written to stdout).
+EOF
+}
+
+#######################################
+# Find the JSONL file for a session UUID under ~/.claude/projects/*/.
+# Arguments:
+#   $1 - session UUID
+# Stdout: absolute path to the JSONL file
+# Returns: 1 if not found
+#######################################
+find_session_file() {
+  local uuid="${1}"
+  local -a hits
+  hits=("${(@f)$(find "${PROJECTS_DIR}" -maxdepth 2 -name "${uuid}.jsonl" -type f 2>/dev/null)}")
+  hits=("${hits[@]:#}")
+  if (( ${#hits} == 0 )); then
+    log::err "No session file found | uuid='${uuid}' projects_dir='${PROJECTS_DIR}'"
+    return 1
+  fi
+  if (( ${#hits} > 1 )); then
+    log::warn "Multiple session files for UUID; using first | uuid='${uuid}' count='${#hits}'"
+  fi
+  echo "${hits[1]}"
+}
+
+#######################################
+# Return the PR number from the most recent `pr-link` metadata record in a
+# session JSONL.
+# Arguments:
+#   $1 - session JSONL path
+# Stdout: PR number, or empty if no pr-link record exists
+#######################################
+pr_from_jsonl() {
+  local jsonl="${1}"
+  tail -r "${jsonl}" 2>/dev/null \
+    | jq -r 'select(.type == "pr-link") | .prNumber // empty' 2>/dev/null \
+    | head -1
+}
+
+#######################################
+# Find ~/.claude/sessions/<pid>.json for a given session UUID — used purely
+# for an informative error message when no pr-link exists, so the user can
+# look at the right file to confirm there's no active PR binding.
+# Arguments:
+#   $1 - session UUID
+# Stdout: absolute path, or empty if no matching PID file is currently live
+#######################################
+session_pid_file_for_uuid() {
+  local uuid="${1}"
+  [[ -d "${CLAUDE_SESSIONS_DIR}" ]] || return 0
+  local f
+  for f in "${CLAUDE_SESSIONS_DIR}"/*.json(N); do
+    if jq -e --arg uuid "${uuid}" '.sessionId == $uuid' "${f}" >/dev/null 2>&1; then
+      echo "${f}"
+      return 0
+    fi
+  done
+}
+
+# --- Main ---
+
+main() {
+  log::debug "=== run started | pid=$$ args='${*}' ==="
+
+  check_prerequisites || exit 1
+
+  # === PARSE ===
+  local uuid=""
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)  help; return 0 ;;
+    --verbose)  shift ;;
+    --session)  uuid="${2:?--session requires a value}"; shift 2 ;;
+    -*)         log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)          [[ -z "${uuid}" ]] || { log::err "Multiple UUIDs given | first='${uuid}' second='${1}'"; return 1; }
+                uuid="${1}"; shift ;;
+  esac; done
+
+  # === MASSAGE ===
+  uuid="${uuid:l}"
+
+  # === VALIDATE ===
+  if [[ -z "${uuid}" ]]; then
+    log::err "Missing session UUID"
+    help
+    return 1
+  fi
+  if [[ ! "${uuid}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+    log::err "Not a valid UUID | uuid='${uuid}'"
+    return 1
+  fi
+
+  # === LOGIC ===
+  local jsonl pr
+  jsonl="$(find_session_file "${uuid}")" || return 1
+  log::debug "Session file | jsonl='${jsonl}'"
+
+  pr="$(pr_from_jsonl "${jsonl}")"
+  if [[ -z "${pr}" ]]; then
+    local pid_file="$(session_pid_file_for_uuid "${uuid}")"
+    log::err "no active PR | uuid='${uuid}' pid_file='${pid_file:-<not running>}' jsonl='${jsonl}'"
+    return 1
+  fi
+  log::info "Found PR from pr-link metadata | pr='${pr}' uuid='${uuid}'"
+  echo "${pr}"
+}
+
+main "${@}"
