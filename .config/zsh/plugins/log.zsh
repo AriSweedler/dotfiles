@@ -17,7 +17,7 @@ log::err()    { log::_err "$@"; [ -n "${OTTO_ERR_LOGFILE:-}" ] && echo "$@" >> "
 log::warn()  { echo -e "${c_yellow}[WARN]$(log::preamble)${c_rst}" "$@" >&2 ; }
 log::info()   { echo -e "${c_green}[INFO]$(log::preamble)${c_rst}" "$@" >&2 ; }
 log::_debug() { echo -e "${c_grey}[DEBUG]$(log::preamble)${c_rst}" "$@" >&2 ; }
-log::debug() { test -n "${OTTO_DEBUG:-}" || return 0; log::_debug "$@" ; }
+log::debug() { case "${OTTO_DEBUG:-}" in ""|0) return 0 ;; esac; log::_debug "$@" ; }
 
 # Multiline logs
 log::DEV()   { (while IFS= read -r line; do log::dev   "| $line"; done <<< "$*") ; }
@@ -56,6 +56,16 @@ function run_cmd() {
   return $rc
 }
 
+# Truncate $1 (or /tmp/${OTTO_LOG_NOTIF_GROUP}.log if no arg) and tee stderr
+# to it for the rest of the script. Captures every log::* call into a per-run
+# logfile while still letting the caller's stderr pass through. tee path is
+# absolute because zsh's command hash can be stale in script-sourced contexts.
+function log::redirect_all_output_to_logfile() {
+  local path="${1:-/tmp/${OTTO_LOG_NOTIF_GROUP:-log}.log}"
+  : > "${path}"
+  exec 2> >(/usr/bin/tee -a "${path}" >&2)
+}
+
 # Log the running command and capture the stdout only (allow stderr - which
 # probably contains logs - through)
 function run_cmd_cap() {
@@ -64,4 +74,32 @@ function run_cmd_cap() {
   (( rc == 0 )) && log::${lvl} "${o}"
   (( rc != 0 )) && log::${lvl_fail} "${o}"
   return $rc
+}
+
+#######################################
+# Show a terminal-notifier banner, auto-removed after a delay. Cleanup is
+# spawned via `nohup` so it survives the caller's exit — no `wait` needed.
+# Requires `terminal-notifier` on PATH.
+# Usage: log::notify "<message>"
+# Globals (all read at call time — pass via env or export at script top):
+#   OTTO_LOG_NOTIF_TITLE  — title (default "notification")
+#   OTTO_LOG_NOTIF_GROUP  — group ID for replacement / removal (default "default")
+#   OTTO_LOG_NOTIFY_SECS  — auto-remove delay in seconds (default 5)
+#   notif_lvl             — log level to also fire (info/warn/err/debug). Named
+#                           distinct from `lvl` so it doesn't collide with
+#                           run_cmd's level. Default: debug.
+#                           Example: `notif_lvl=err log::notify "msg"`
+# Returns: 1 if message is missing or terminal-notifier is not installed
+#######################################
+function log::notify() {
+  local message="${1:?log::notify requires a message}"
+  local title="${OTTO_LOG_NOTIF_TITLE:-notification}"
+  local group="${OTTO_LOG_NOTIF_GROUP:-default}"
+  local secs="${OTTO_LOG_NOTIFY_SECS:-5}"
+  local lvl="${notif_lvl:-debug}"
+  command -v terminal-notifier >/dev/null 2>&1 || { log::warn "terminal-notifier not on PATH"; return 1; }
+  "log::${lvl}" "notify | secs='${secs}' group='${group}' title='${title}' message='${message}'"
+  terminal-notifier -title "${title}" -message "${message}" -group "${group}" >/dev/null
+  nohup zsh -c "sleep ${secs} && terminal-notifier -remove '${group}' >/dev/null 2>&1" \
+    </dev/null >/dev/null 2>&1 &
 }
