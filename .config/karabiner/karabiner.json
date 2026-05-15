@@ -2248,7 +2248,7 @@
             ]
           },
           {
-            "description": "Hyper+Q → open go/pr/<focused-claude-session-or-clipboard>",
+            "description": "Hyper+Q → open PR for focused claude session (no fallback)",
             "manipulators": [
               {
                 "from": {
