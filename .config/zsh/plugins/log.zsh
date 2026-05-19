@@ -28,7 +28,15 @@ log::DEBUG() { (while IFS= read -r line; do log::debug "| $line"; done <<< "$*")
 log::colorize_each_line() { local color="${1:-}"; while IFS= read -r line; do echo "${color}${line}${c_rst}"; done; }
 
 # Nicer preamble
-log::preamble()       { test -n "${OTTO_NO_PREAMBLE:-}" && return; echo -n " [$(date "+%Y-%m-%dT%T.000Z")] [$(log::_caller)]" ; }
+# zsh's built-in datetime module gives us $epochtime ([secs, nanosecs]) and
+# `strftime`, so the preamble doesn't fork `date` on every log line.
+zmodload -F zsh/datetime b:strftime p:epochtime 2>/dev/null
+log::preamble() {
+  test -n "${OTTO_NO_PREAMBLE:-}" && return
+  local ts
+  strftime -s ts "%Y-%m-%dT%H:%M:%S" "${epochtime[1]}"
+  printf ' [%s.%09dZ] [%s]' "${ts}" "${epochtime[2]}" "$(log::_caller)"
+}
 log::is_irrelevant_fxn() {
   [ -z "${1:-}" ] && return 0 # empty function: irrelevant
   case "$1" in
