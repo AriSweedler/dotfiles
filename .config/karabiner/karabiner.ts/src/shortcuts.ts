@@ -16,6 +16,6 @@ export const shortcuts = [
 
   rule('Hyper+Q → open PR for focused claude session (no fallback)')
     .manipulators([
-      map('q', 'Hyper').to(karabiner_script("karabiner-go-pr-smart")),
+      map('q', 'Hyper').to(karabiner_script("karabiner-open-pr-from-focussed-claude")),
     ]),
 ]

@@ -627,7 +627,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/script-example\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/script-example\n} &> \"/tmp/karabiner.script-example.txt\"\n"
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/script-example\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/script-example\n} &> \"/tmp/karabiner.script-example.txt\"\n"
                   },
                   {
                     "set_variable": {
@@ -668,7 +668,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index\n} &> \"/tmp/karabiner.karabiner-edit-index.txt\"\n"
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index\n} &> \"/tmp/karabiner.karabiner-edit-index.txt\"\n"
                   },
                   {
                     "set_variable": {
@@ -709,7 +709,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile\n} &> \"/tmp/karabiner.karabiner-recompile.txt\"\n"
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile\n} &> \"/tmp/karabiner.karabiner-recompile.txt\"\n"
                   },
                   {
                     "set_variable": {
@@ -750,7 +750,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-logs\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-logs\n} &> \"/tmp/karabiner.karabiner-logs.txt\"\n"
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-logs\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-logs\n} &> \"/tmp/karabiner.karabiner-logs.txt\"\n"
                   },
                   {
                     "set_variable": {
@@ -791,7 +791,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-hello-world\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-hello-world\n} &> \"/tmp/karabiner.karabiner-hello-world.txt\"\n"
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-hello-world\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-hello-world\n} &> \"/tmp/karabiner.karabiner-hello-world.txt\"\n"
                   },
                   {
                     "set_variable": {
@@ -2240,7 +2240,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-go-pr\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-go-pr\n} &> \"/tmp/karabiner.karabiner-go-pr.txt\"\n"
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-go-pr\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-go-pr\n} &> \"/tmp/karabiner.karabiner-go-pr.txt\"\n"
                   }
                 ],
                 "type": "basic"
@@ -2264,7 +2264,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-go-pr-smart\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-go-pr-smart\n} &> \"/tmp/karabiner.karabiner-go-pr-smart.txt\"\n"
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-open-pr-from-focussed-claude\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-open-pr-from-focussed-claude\n} &> \"/tmp/karabiner.karabiner-open-pr-from-focussed-claude.txt\"\n"
                   }
                 ],
                 "type": "basic"
@@ -2288,7 +2288,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/claude-notification-click-simulator\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/claude-notification-click-simulator\n} &> \"/tmp/karabiner.claude-notification-click-simulator.txt\"\n"
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/claude-notification-click-simulator\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/claude-notification-click-simulator\n} &> \"/tmp/karabiner.claude-notification-click-simulator.txt\"\n"
                   }
                 ],
                 "type": "basic"

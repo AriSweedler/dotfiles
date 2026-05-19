@@ -12,6 +12,16 @@ const npmPath = execSync('which npm', { encoding: 'utf8' }).trim()
 const npmDir = path.dirname(npmPath)
 console.log("npm path...........:", npmDir)
 
+// Directories prepended to PATH for every karabiner-invoked shell_command.
+// Karabiner-Elements inherits launchd's minimal PATH, so we re-prepend the
+// places where user-installed scripts and tooling actually live.
+const PATH_PREFIX_DIRS = [
+  "$HOME/.config/bin",   // user CLI helpers
+  npmDir,                // active node toolchain
+  "/opt/homebrew/bin",   // Homebrew (Apple Silicon)
+  "/usr/local/bin",      // Homebrew (Intel) + manual installs
+]
+
 // Local script runner
 export const karabiner_script = (scriptPathRel: string) => {
   const scriptPathAbs = path.resolve(karabinerRoot, `src/scripts/bin/${scriptPathRel}`)
@@ -25,12 +35,14 @@ export const karabiner_script = (scriptPathRel: string) => {
     throw new Error(`Script is not executable or not found | scriptPathRel=${scriptPathRel}, scriptPathAbs=${scriptPathAbs} scriptPathAbsEnv=${scriptPathAbsEnv}`)
   }
 
+  const pathPrefix = PATH_PREFIX_DIRS.join(":")
+
   return {
     shell_command: `
 {
   export REPO_ROOT="${karabinerRoot.replace(os.homedir(), "$HOME")}"
   export REPO_LIB="\${REPO_ROOT}/src/scripts/lib"
-  export PATH="${npmDir}:/opt/homebrew/bin:/usr/local/bin:\${PATH}"
+  export PATH="${pathPrefix}:\${PATH}"
   set -x
   date
   cd "\${REPO_ROOT:?}"
