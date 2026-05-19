@@ -2,7 +2,6 @@ bindkey -v
 bindkey '^R' history-incremental-search-backward
 
 # Set history stuff. https://zsh.sourceforge.io/Doc/Release/Options.html#History
-setopt HIST_IGNORE_SPACE      # ignore commands that start with space
 setopt HIST_EXPIRE_DUPS_FIRST # delete duplicates first when HISTFILE size exceeds HISTSIZE
 setopt EXTENDED_HISTORY       # Add timestamps to history files
 setopt HIST_REDUCE_BLANKS     # Trim silly whitespace from history
@@ -10,7 +9,26 @@ export HISTFILE="$XDG_STATE_HOME/zsh/history"
 mkdir -p "$(dirname "$HISTFILE")"
 export HISTSIZE=500000
 export SAVEHIST=$HISTSIZE
+
+# Commands that should never be saved to history. Each entry matches the
+# command alone or the command followed by any args.
+typeset -ga HIST_IGNORED_CMDS=(
+  tcap
+)
+typeset -a _hist_ignore_patterns=($HIST_IGNORED_CMDS ${HIST_IGNORED_CMDS/%/ *})
+HISTORY_IGNORE="(${(j:|:)_hist_ignore_patterns})"
 export HISTORY_IGNORE
+unset _hist_ignore_patterns
+
+# a built-in Zsh hook function that executes just before a command line is saved
+# to your history file
+#
+# Skip any command that starts with whitespace (space, tab, newline, …).
+# HIST_IGNORE_SPACE only catches a literal space, so we do it ourselves.
+zshaddhistory() {
+  [[ $1 == [[:space:]]* ]] && return 1
+  return 0
+}
 
 # Use a more modern way to lock the history file. Should be a net positive on
 # my shiny new machine
