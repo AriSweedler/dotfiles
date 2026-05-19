@@ -174,7 +174,17 @@ function tmux::cap() {
   fi
 }
 
+function tmux::cap_div() {
+  # Prefix with a TMUX_PROMPT_RE match so _slice_history treats this as a prompt boundary.
+  local prompt_re="${TMUX_PROMPT_RE:-❮|❯}"
+  local prompt_char="${prompt_re%%|*}"
+  local pad_width=$((COLUMNS - ${#prompt_char} - 1))
+  (( pad_width < 1 )) && pad_width=1
+  printf "%b\n" "${c_grey}${prompt_char} ${(l:$pad_width::-:)}${c_rst}"
+}
+
 alias tmv='tmux::rename-window'
 alias tclear='tmux::clear'
 alias tcap='tmux::cap'
+alias tcap_div='tmux::cap_div'
 alias tcap_all='tmux::cap_all'

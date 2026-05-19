@@ -407,6 +407,64 @@ _t 'backslash+slashes, slice 1..2' \
   "$(_mock "$_REV_BSLASH" 1 2 '❯')"
 
 # ---------------------------------------------------------------------------
+# tcap_div / _slice_history — divider acts as a prompt boundary
+# tmux::cap_div emits a line prefixed with the first alternative of
+# TMUX_PROMPT_RE (default ❮). _slice_history counts that line as a prompt —
+# no slicer changes needed.
+# ---------------------------------------------------------------------------
+
+# Separate commands: `echo hi; tcap_div; echo bye` as 3 prompts. Reversed
+# stream (no leading tcap line; _mock convention). Slice 1..1 → most recent
+# command (`echo bye`).
+_REV_DIV_SEPARATE="bye
+❯ echo bye
+❮ ----------
+❯ tcap_div
+hi
+❯ echo hi"
+
+_t "div: separate commands, slice 1..1 returns echo bye" \
+  "$(printf 'bye\n❯ echo bye')" \
+  "$(_mock "$_REV_DIV_SEPARATE" 1 1 '❮|❯')"
+
+# Slice 2..2 lands on the divider itself — proves it's counted as a prompt.
+_t "div: separate commands, slice 2..2 lands on divider" \
+  "❮ ----------" \
+  "$(_mock "$_REV_DIV_SEPARATE" 2 2 '❮|❯')"
+
+# Compound: `echo hi; tcap_div; echo bye` is ONE prompt; divider lands
+# mid-output. Slice 1..1 returns post-divider body ("bye") + the divider
+# line. After the outer tac in tmux::cap, the user sees "<divider>\nbye".
+_REV_DIV_COMPOUND="bye
+❮ ----------
+hi
+❯ echo hi; tcap_div; echo bye"
+
+_t "div: compound command, slice 1..1 stops at divider" \
+  "$(printf 'bye\n❮ ----------')" \
+  "$(_mock "$_REV_DIV_COMPOUND" 1 1 '❮|❯')"
+
+# Slice 2..2 skips past the divider, reaches the original compound prompt
+# with its pre-divider body ("hi").
+_t "div: compound command, slice 2..2 reaches original prompt" \
+  "$(printf 'hi\n❯ echo hi; tcap_div; echo bye')" \
+  "$(_mock "$_REV_DIV_COMPOUND" 2 2 '❮|❯')"
+
+# ---------------------------------------------------------------------------
+# tmux::cap_div — output shape
+# The divider line must match TMUX_PROMPT_RE so _slice_history treats it as
+# a prompt boundary. tmux capture-pane -p strips ANSI by default, so the
+# scrollback sees the raw prompt char.
+# ---------------------------------------------------------------------------
+_t "cap_div: output matches default TMUX_PROMPT_RE" \
+  "1" \
+  "$(COLUMNS=80 tmux::cap_div 2>/dev/null | sed $'s/\x1b\\[[0-9;]*m//g' | grep -cE '❮|❯')"
+
+_t "cap_div: respects TMUX_PROMPT_RE (custom prompt char)" \
+  "1" \
+  "$(COLUMNS=80 TMUX_PROMPT_RE='>' tmux::cap_div 2>/dev/null | sed $'s/\x1b\\[[0-9;]*m//g' | grep -cE '^> ')"
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 print ""
