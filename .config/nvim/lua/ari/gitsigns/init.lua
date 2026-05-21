@@ -1,3 +1,5 @@
+local open_relevant_pr = require("ari.gitsigns.open_relevant_pr")
+
 local M = {}
 
 local function set_colors()
@@ -76,6 +78,7 @@ function M.on_attach_hook(bufnr)
 	my_map("n", "<Leader>hr", gs.reset_hunk, { desc = "git reset hunk" })
 	my_map("n", "<Leader>hp", gs.preview_hunk, { desc = "preview git hunk" })
 	my_map("n", "<Leader>hb", gs.blame_line, { desc = "git blame line" })
+	my_map("n", "<Leader>hB", open_relevant_pr, { desc = "Open PR that most recently touched this line" })
 
 	-- Buffer hunk actions
 	my_map("n", "<Leader>hS", gs.stage_buffer, { desc = "git Stage buffer" })
