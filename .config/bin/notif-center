@@ -172,45 +172,89 @@ on run argv
       end try
 
       if targetN is 1 then
-        -- fast path: act on the first alert/stack child directly
+        -- Find the newest = first alert/stack child (skipping any leading chrome).
         set kc to count of UI elements of grp
+        set firstKind to ""
+        set firstIdx to 0
         repeat with i from 1 to kc
           set sr to ""
           try
             set sr to (subrole of UI element i of grp) as text
           end try
           if sr is "AXNotificationCenterAlert" then
-            try
-              perform action "AXPress" of (UI element i of grp)
-              return "ok"
-            on error e
-              return "fail: " & e
-            end try
+            set firstKind to "alert"
+            set firstIdx to i
+            exit repeat
           else if sr is "AXNotificationCenterAlertStack" then
-            -- expand, poll until the member appears at this slot, then press it
-            try
-              perform action "AXPress" of (UI element i of grp)
-            end try
-            set tries to 0
-            repeat
-              set tries to tries + 1
-              if tries > 25 then return "fail: stack did not expand"
-              set sr2 to ""
-              try
-                set sr2 to (subrole of UI element i of grp) as text
-              end try
-              if sr2 is "AXNotificationCenterAlert" then exit repeat
-              delay 0.02
-            end repeat
-            try
-              perform action "AXPress" of (UI element i of grp)
-              return "ok"
-            on error e
-              return "fail: " & e
-            end try
+            set firstKind to "stack"
+            set firstIdx to i
+            exit repeat
           end if
         end repeat
-        return "notfound:0"
+        if firstKind is "" then return "notfound:0"
+
+        -- Already an individual alert: press it. No group to expand or collapse.
+        if firstKind is "alert" then
+          try
+            perform action "AXPress" of (UI element firstIdx of grp)
+            return "ok"
+          on error e
+            return "fail: " & e
+          end try
+        end if
+
+        -- Stack: a member isn't pressable until the group is expanded. AXPress
+        -- expands it, but the layout then SHIFTS (a heading + Show Less / Clear
+        -- All buttons appear), so the member is NOT at firstIdx — re-scan the
+        -- whole container for the first individual alert.
+        try
+          perform action "AXPress" of (UI element firstIdx of grp)
+        end try
+        set memberIdx to 0
+        set tries to 0
+        repeat
+          set tries to tries + 1
+          if tries > 50 then return "fail: stack did not expand"
+          delay 0.02
+          set memberIdx to 0
+          set kc2 to count of UI elements of grp
+          repeat with j from 1 to kc2
+            set sr to ""
+            try
+              set sr to (subrole of UI element j of grp) as text
+            end try
+            if sr is "AXNotificationCenterAlert" then
+              set memberIdx to j
+              exit repeat
+            end if
+          end repeat
+          if memberIdx > 0 then exit repeat
+        end repeat
+
+        -- Press the newest member (top of the expanded group): opens + dismisses.
+        try
+          perform action "AXPress" of (UI element memberIdx of grp)
+        on error e
+          return "fail: " & e
+        end try
+
+        -- Close the group again: press the first AXButton (Show Less is the
+        -- left-most of the group's two buttons; Clear All is to its right).
+        delay 0.1
+        set kc3 to count of UI elements of grp
+        repeat with k from 1 to kc3
+          set r to ""
+          try
+            set r to (role of UI element k of grp) as text
+          end try
+          if r is "AXButton" then
+            try
+              perform action "AXPress" of (UI element k of grp)
+            end try
+            exit repeat
+          end if
+        end repeat
+        return "ok"
       end if
 
       -- general path (N>1, may be slower): expand every stack, then press Nth
@@ -382,6 +426,49 @@ _need_db() {
   return 0
 }
 
+# Notification Center is opened (to surface notifications a closed-tray scan can
+# miss) by clicking the menu-bar clock — which TOGGLES it. We only ever want it
+# transiently open, so _nc_open arms a trap that closes it again on ANY exit
+# (success, miss, or interrupt) — never leave the tray hanging open.
+typeset -g _NC_OPENED=0
+
+_nc_click_clock() {
+  /usr/bin/osascript -e 'tell application "System Events" to tell process "ControlCenter" to click (first menu bar item of menu bar 1 whose description is "Clock")' >/dev/null 2>&1 || true
+}
+
+_nc_open() {
+  _nc_click_clock
+  _NC_OPENED=1
+}
+
+# Closes NC iff we opened it. Wired to EXIT/INT/TERM so it runs no matter how the
+# script ends — even on a successful click (which leaves the tray open).
+_nc_cleanup() {
+  (( _NC_OPENED )) || return 0
+  _NC_OPENED=0
+  _nc_click_clock
+}
+
+# Transient terminal-notifier banner when a click finds nothing — so a miss is
+# visible from a Hyper+N keybind (mirrors the Claude click-simulator).
+_notify_empty() {
+  local app_pat="${1:-}" match_pat="${2:-}" what
+  if [[ -n "${app_pat}" ]]; then what="${app_pat} notification"
+  elif [[ -n "${match_pat}" ]]; then what="notification matching “${match_pat}”"
+  else what="notification"; fi
+  OTTO_LOG_NOTIFY_SECS=3 log::notify "No ${what} found to click"
+}
+
+# AXPress an already-resolved target. mode=match → _match <needle/pattern>;
+# mode=press → _press <n>. Pure AX, no DB — safe to retry inside the NC-open
+# window without re-querying.
+_do_press() {
+  case "${1}" in
+    match) _match "${2}" ;;
+    press) _press "${2}" ;;
+  esac
+}
+
 # --- subcommands ---
 
 cmd_list() {
@@ -394,38 +481,54 @@ cmd_list() {
 
 cmd_click() {
   local n="${1:?}" app_pat="${2:-}" match_pat="${3:-}"
-  local result
+  [[ -n "${app_pat}" ]] && { _need_db || return 1; }
 
+  # Resolve the AX target ONCE, before any NC toggling — the DB query for --app
+  # must not sit inside the NC-open window. Result is a (mode, arg) the pure-AX
+  # press can retry cheaply.
+  local mode arg
   if [[ -n "${match_pat}" ]]; then
-    # Pure AX: AXPress the newest live notification whose text contains the
-    # pattern. No DB → no Full Disk Access needed (this is the Karabiner path).
-    result="$(_match "${match_pat}")"
+    mode=match; arg="${match_pat}"
   elif [[ -n "${app_pat}" ]]; then
-    # App-targeted via the DB (the only thing that knows the posting app): get
-    # the newest matching notification's text, then AXPress the live alert that
-    # matches it. Precise, but needs Full Disk Access for the DB read.
-    _need_db || return 1
-    local json needle
-    json="$(_db "${app_pat}" "" 0 0 json)" || { log::err "query failed"; return 1; }
-    needle="$(print -r -- "${json}" | /usr/bin/python3 -c '
+    # show_all=1: query the newest app notification from the full record, NOT the
+    # active (`displayed`) set — that set lags delivery by seconds, so a fresh
+    # notification you can see isn't in it yet. The AX press below is the real
+    # "is it clickable" arbiter, so the active filter only causes false misses.
+    local json
+    json="$(_db "${app_pat}" "" 0 1 json)" || { log::err "query failed"; _notify_empty "${app_pat}" ""; return 1; }
+    arg="$(print -r -- "${json}" | /usr/bin/python3 -c '
 import sys, json, re
 a = json.load(sys.stdin); i = int(sys.argv[1]) - 1
 o = a[i] if 0 <= i < len(a) else {}
 print(re.sub(r"\s+", " ", (o.get("body") or o.get("subtitle") or o.get("title") or "")).strip()[:60])
 ' "${n}")"
-    [[ -z "${needle}" ]] && { log::err "No notification matched | app='${app_pat}' n='${n}'"; return 1; }
-    log::debug "matched needle | needle='${needle}'"
-    result="$(_match "${needle}")"
+    [[ -z "${arg}" ]] && { log::err "No ${app_pat} notification in the DB"; _notify_empty "${app_pat}" ""; return 1; }
+    mode=match
+    log::debug "needle | needle='${arg}'"
   else
-    # Fast positional path: AXPress the Nth notification (default 1 = newest).
-    result="$(_press "${n}")"
+    mode=press; arg="${n}"
   fi
 
-  log::debug "click | n='${n}' app='${app_pat}' match='${match_pat}' result='${result}'"
+  # 1) Try. 2) Miss → open NC, brief settle, 3) retry, then close NC *immediately*
+  # — the tray is only visible for the single re-scan, and the notify (below)
+  # happens after it's closed.
+  local result
+  result="$(_do_press "${mode}" "${arg}")"
+  if [[ "${result}" != ok ]]; then
+    log::debug "miss — opening Notification Center to refresh | result='${result}'"
+    _nc_open
+    sleep 0.2
+    result="$(_do_press "${mode}" "${arg}")"
+    _nc_cleanup            # close NC now; the EXIT trap is just the interrupt backstop
+  fi
+
+  log::debug "click | mode='${mode}' arg='${arg}' result='${result}'"
   case "${result}" in
     ok) return 0 ;;
-    notfound|notfound:*) log::err "Target not in the live tray | result='${result}'"; return 1 ;;
-    *) log::err "click failed | result='${result}'"; return 1 ;;
+    # 4) Still nothing → transient banner so the miss is visible from Hyper+C.
+    *) log::err "Target not in the live tray | result='${result}'"
+       _notify_empty "${app_pat}" "${match_pat}"
+       return 1 ;;
   esac
 }
 
@@ -510,4 +613,7 @@ main() {
   esac
 }
 
+# Close Notification Center on the way out if a click opened it (no-op
+# otherwise). Top-level so it fires on shell exit regardless of how main ends.
+trap '_nc_cleanup' EXIT INT TERM
 main "${@}"
