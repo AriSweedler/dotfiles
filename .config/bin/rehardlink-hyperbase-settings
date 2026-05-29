@@ -1,0 +1,207 @@
+#!/usr/bin/env zsh
+set -euo pipefail
+
+# rehardlink-hyperbase-settings — sync .claude/settings.local.json across
+# hyperbase / secondary-hyperbase / tertiary-hyperbase worktrees via hardlinks.
+# Always invoke as: zsh ~/.config/bin/rehardlink-hyperbase-settings [...]
+
+readonly WORKTREE_ROOT="${HOME}/h/source"
+readonly WORKTREES=(hyperbase secondary-hyperbase tertiary-hyperbase)
+readonly CANONICAL_NAME="secondary-hyperbase"
+readonly SETTINGS_REL_PATH=".claude/settings.local.json"
+
+readonly c_green=$'\e[32m'
+readonly c_red=$'\e[31m'
+readonly c_yellow=$'\e[33m'
+readonly c_blue=$'\e[34m'
+readonly c_bold=$'\e[1m'
+readonly c_rst=$'\e[0m'
+
+log::info() { print -u2 -- "${c_blue}INFO${c_rst}  $*"; }
+log::warn() { print -u2 -- "${c_yellow}WARN${c_rst}  $*"; }
+log::err()  { print -u2 -- "${c_red}ERR${c_rst}   $*"; }
+log::ok()   { print -u2 -- "${c_green}OK${c_rst}    $*"; }
+
+help() {
+    cat <<EOF
+${c_green}rehardlink-hyperbase-settings${c_rst} — hardlink the three hyperbase worktree settings files together
+
+${c_bold}Usage:${c_rst}
+  zsh ~/.config/bin/rehardlink-hyperbase-settings [--dry-run] [--force]
+
+${c_bold}Description:${c_rst}
+  Links \${WORKTREE_ROOT}/<name>/${SETTINGS_REL_PATH} for:
+    ${WORKTREES}
+  using ${CANONICAL_NAME} as the canonical source.
+
+  Idempotent: a no-op when all three already share one inode.
+
+  Refuses to clobber a worktree whose file has UNIQUE content (byte-diff vs.
+  canonical), unless --force is passed. With --force, divergent files are
+  copied to <path>.bak.<timestamp> before being replaced. Existing backup
+  paths are never overwritten.
+
+${c_bold}Options:${c_rst}
+  --dry-run   Show what would happen; make no filesystem changes
+  --force     Back up divergent files to .bak.<timestamp> then re-link
+  -h, --help  Show this help
+
+${c_bold}Exit codes:${c_rst}
+  0   All three in sync (or dry-run completed without diff issues)
+  1   At least one worktree could not be reconciled
+  2   Argument parse error
+EOF
+}
+
+# ---- parse ----
+dry_run="false"
+force="false"
+while (( $# > 0 )); do
+    case "${1}" in
+        -h|--help) help; exit 0 ;;
+        --dry-run) dry_run="true"; shift ;;
+        --force)   force="true"; shift ;;
+        *) log::err "Unknown flag | flag='${1}'"; help; exit 2 ;;
+    esac
+done
+readonly dry_run force
+
+# ---- validate ----
+required_tools=(ls awk ln rm cp diff date)
+missing_tools=()
+for tool in "${required_tools[@]}"; do
+    command -v "${tool}" >/dev/null 2>&1 || missing_tools+=("${tool}")
+done
+if (( ${#missing_tools[@]} > 0 )); then
+    log::err "Missing tools | missing='${(j:, :)missing_tools}'"
+    exit 1
+fi
+
+readonly canonical_path="${WORKTREE_ROOT}/${CANONICAL_NAME}/${SETTINGS_REL_PATH}"
+if [[ ! -f "${canonical_path}" ]]; then
+    log::err "Canonical missing | canonical_path='${canonical_path}'"
+    exit 1
+fi
+
+#######
+# stat_inode — print the inode number of a path.
+# Uses `ls -di` instead of `stat` so darwin and linux behave identically
+# and we don't depend on `stat` being on PATH (zsh sometimes shadows it).
+# Arguments:
+#   $1 path
+# Returns: inode (stdout)
+#######
+stat_inode() {
+    local path="${1}"
+    ls -di -- "${path}" | awk '{print $1}'
+}
+
+#######
+# files_identical — true (0) if two files are byte-identical.
+#######
+files_identical() {
+    diff -q "${1}" "${2}" >/dev/null 2>&1
+}
+
+#######
+# do_link — replace target with a hardlink to the canonical file.
+# Honors dry_run.
+# Arguments:
+#   $1 target_path
+#######
+do_link() {
+    local target="${1}"
+    if [[ "${dry_run}" == "true" ]]; then
+        log::info "Would link | target='${target}' canonical='${canonical_path}'"
+        return
+    fi
+    rm -f -- "${target}"
+    ln "${canonical_path}" "${target}"
+    log::ok "Linked | target='${target}'"
+}
+
+#######
+# back_up_unique — copy target to <target>.bak.<ts>.
+# Refuses to overwrite an existing backup. Honors dry_run.
+# Arguments:
+#   $1 target_path
+# Returns: 0 on success, 1 if a backup name already exists.
+#######
+back_up_unique() {
+    local target="${1}"
+    local ts
+    ts="$(date +%Y%m%d-%H%M%S)"
+    local bak="${target}.bak.${ts}"
+    if [[ -e "${bak}" ]]; then
+        log::err "Backup already exists | bak='${bak}'"
+        return 1
+    fi
+    if [[ "${dry_run}" == "true" ]]; then
+        log::info "Would back up | target='${target}' bak='${bak}'"
+        return 0
+    fi
+    cp -p -- "${target}" "${bak}"
+    log::ok "Backed up | bak='${bak}'"
+}
+
+#######
+# reconcile_worktree — pick + run the right action for one worktree.
+# Each branch returns early with a log line; the divergent-content case is
+# the only one that can fail.
+# Arguments:
+#   $1 worktree_name
+# Returns: 0 on success, 1 if divergent and --force was not set.
+#######
+reconcile_worktree() {
+    local name="${1}"
+    local target="${WORKTREE_ROOT}/${name}/${SETTINGS_REL_PATH}"
+
+    if [[ "${name}" == "${CANONICAL_NAME}" ]]; then
+        log::info "Skip canonical | name='${name}'"
+        return 0
+    fi
+
+    if [[ ! -e "${target}" ]]; then
+        log::info "Target missing, creating link | name='${name}' target='${target}'"
+        do_link "${target}"
+        return 0
+    fi
+
+    local canonical_inode target_inode
+    canonical_inode="$(stat_inode "${canonical_path}")"
+    target_inode="$(stat_inode "${target}")"
+    if [[ "${canonical_inode}" == "${target_inode}" ]]; then
+        log::ok "Already linked | name='${name}' inode='${target_inode}'"
+        return 0
+    fi
+
+    if files_identical "${canonical_path}" "${target}"; then
+        log::info "Same content, different inode, re-linking | name='${name}'"
+        do_link "${target}"
+        return 0
+    fi
+
+    if [[ "${force}" != "true" ]]; then
+        log::err "Divergent content, refusing to clobber | name='${name}' target='${target}'"
+        log::err "Re-run with --force to back up + link, or resolve manually"
+        diff -u "${canonical_path}" "${target}" >&2 || true
+        return 1
+    fi
+
+    log::warn "Divergent content, --force set | name='${name}'"
+    back_up_unique "${target}" || return 1
+    do_link "${target}"
+}
+
+# ---- logic ----
+exit_code=0
+for name in "${WORKTREES[@]}"; do
+    if ! reconcile_worktree "${name}"; then
+        exit_code=1
+    fi
+done
+
+if (( exit_code == 0 )); then
+    log::ok "All worktrees in sync | canonical='${CANONICAL_NAME}'"
+fi
+exit "${exit_code}"
