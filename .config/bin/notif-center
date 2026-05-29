@@ -26,6 +26,14 @@ source "${HOME}/.config/zsh/plugins/log.zsh"
 
 readonly DB_DIR="${HOME}/Library/Group Containers/group.com.apple.usernoted/db2"
 
+# The Notification Center DB schema (the bplist layout decoded below) and the AX
+# subrole names are private macOS internals that shift between releases. Pinned
+# to the macOS this was built and verified against; warn_if_macos_changed() flags
+# drift, since a bump may require updating the DB reader (the DECODE block) or
+# the AX engines. Query the running version with `notif-center os`.
+readonly EXPECTED_MACOS_VERSION="26.5"   # macOS Tahoe
+readonly EXPECTED_MACOS_BUILD="25F71"    # Darwin 25.5.0 (xnu)
+
 # --- DB reader (sqlite) ---
 #
 # Joins record→app, decodes each bplist, applies the active/app/match filters,
@@ -317,6 +325,19 @@ APPLESCRIPT
 
 # --- helpers ---
 
+# os_version — the running macOS, e.g. "26.5 (25F71)".
+os_version() { printf '%s (%s)' "$(/usr/bin/sw_vers -productVersion)" "$(/usr/bin/sw_vers -buildVersion)"; }
+
+# warn_if_macos_changed — the DB schema and AX tree are version-specific, so warn
+# when the running macOS no longer matches the pinned one and reads may need
+# re-verifying. Soft warning: the tool still tries (the layout often survives).
+warn_if_macos_changed() {
+  local got
+  got="$(os_version)"
+  [[ "${got}" == "${EXPECTED_MACOS_VERSION} (${EXPECTED_MACOS_BUILD})" ]] && return 0
+  log::warn "macOS changed since this was verified — DB/AX reads may need updating | expected='${EXPECTED_MACOS_VERSION} (${EXPECTED_MACOS_BUILD})' got='${got}'"
+}
+
 _press() { /usr/bin/osascript - "$@" <<<"${AS_PRESS}"; }
 _match() { /usr/bin/osascript - "$@" <<<"${AS_MATCH}"; }
 
@@ -357,6 +378,7 @@ _need_db() {
     command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
   done
   (( ${#missing} > 0 )) && { log::err "Missing required commands | missing='${(j:, :)missing}'"; return 1; }
+  warn_if_macos_changed
   return 0
 }
 
@@ -407,6 +429,12 @@ print(re.sub(r"\s+", " ", (o.get("body") or o.get("subtitle") or o.get("title") 
   esac
 }
 
+cmd_os() {
+  print -r -- "running:  $(os_version)"
+  print -r -- "expected: ${EXPECTED_MACOS_VERSION} (${EXPECTED_MACOS_BUILD})"
+  warn_if_macos_changed
+}
+
 # --- help / main ---
 
 help() {
@@ -416,6 +444,7 @@ ${c_green}notif-center${c_rst} — read and click macOS notifications
 ${c_cyan}Usage:${c_rst}
   notif-center list  [--app PAT] [--match PAT] [--limit N] [--all] [--output FMT]
   notif-center click [N] [--app PAT] [--match PAT]
+  notif-center os
 
 ${c_cyan}list${c_rst} (reads the DB — fast, knows the posting app):
   --output human|json  human: \`# time app_name title | subtitle | body\` (TSV)
@@ -433,6 +462,10 @@ ${c_cyan}click [N]${c_rst} (default N=1, the newest / first on the stack):
   Stacked targets are expanded first. N>1 is slower (must expand to count).
   --app/--match: click the newest notification from that app / matching that
   text (e.g. \`click --app slack\`). Uses the DB to target, then AX-clicks it.
+
+${c_cyan}os${c_rst} (running vs pinned macOS):
+  Reports the running macOS against the version this tool was verified on, and
+  warns on drift — the notification DB schema and AX tree are version-specific.
 
 ${c_cyan}Options:${c_rst}
   --verbose     OTTO_DEBUG=1 (debug logs to stderr)
@@ -471,6 +504,7 @@ main() {
   case "${subcmd}" in
     list)    cmd_list "${app_pat}" "${match_pat}" "${limit}" "${show_all}" "${fmt}" ;;
     click)   cmd_click "${n}" "${app_pat}" "${match_pat}" ;;
+    os)      cmd_os ;;
     ""|help) help ;;
     *)       log::err "Unknown command | command='${subcmd}'"; help; return 1 ;;
   esac
