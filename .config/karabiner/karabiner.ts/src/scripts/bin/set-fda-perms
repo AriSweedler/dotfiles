@@ -1,0 +1,37 @@
+#!/usr/bin/env zsh
+#
+# set-fda-perms — stage a Full Disk Access grant for a binary.
+#
+# macOS exposes no API to grant Full Disk Access (TCC is protected), so this
+# does everything up to the paste: copies the binary's path to the clipboard,
+# reveals it in Finder, and opens the Full Disk Access settings pane. Then it's:
+# click +, Cmd+Shift+G, Cmd+V, Return, Open, toggle ON.
+#
+# Defaults to the Karabiner process that runs keybinding shell_commands; it
+# needs FDA to read the Notification Center DB. See notif-click-slack.
+set -euo pipefail
+
+export OTTO_LOG_NOTIF_GROUP="set-fda-perms"
+export OTTO_LOG_NOTIF_TITLE="set-fda-perms"
+export OTTO_DEBUG="${OTTO_DEBUG:-0}"
+source "${HOME}/.config/zsh/plugins/log.zsh"
+
+readonly DEFAULT_BIN="/Library/Application Support/org.pqrs/Karabiner-Elements/bin/karabiner_console_user_server"
+bin="${1:-${DEFAULT_BIN}}"
+
+if [[ ! -e "${bin}" ]]; then
+  log::err "Binary not found | bin='${bin}'"
+  exit 1
+fi
+
+printf '%s' "${bin}" | /usr/bin/pbcopy
+log::info "Copied path to clipboard | bin='${bin}'"
+
+/usr/bin/open -R "${bin}"
+log::info "Revealed binary in Finder"
+
+/usr/bin/open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+log::info "Opened Full Disk Access settings pane"
+
+log::info "Grant: click +, Cmd+Shift+G, Cmd+V, Return, Open, toggle ON"
+log::info "Then restart the process | restart='pkill -x ${bin:t}'"
