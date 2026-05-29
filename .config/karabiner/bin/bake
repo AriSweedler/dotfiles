@@ -6,8 +6,10 @@ function main() {
 	local repo_root="${XDG_CONFIG_HOME:?}/karabiner"
 	local out_raw="${repo_root}/karabiner.json"
 	local out_sorted="${repo_root}/karabiner.json.sorted"
+	local out_tmp="${repo_root}/karabiner.json.tmp"
 
 	bake::generate
+	bake::parameters
 	bake::sort
 	bake::stage
 }
@@ -23,6 +25,25 @@ function bake::generate() (
 	npm run build
 	echo "Generated raw output | out_raw='${out_raw}'" >&2
 )
+
+function bake::parameters() {
+	# karabiner.ts omits complex_modifications.parameters, but Karabiner-Elements
+	# rewrites the file to add these defaults whenever it loads. Emit them here so
+	# the committed file already matches and Karabiner has nothing to rewrite.
+	# bake::sort orders them canonically afterward.
+	local params='{
+		"basic.simultaneous_threshold_milliseconds": 50,
+		"basic.to_delayed_action_delay_milliseconds": 500,
+		"basic.to_if_alone_timeout_milliseconds": 1000,
+		"basic.to_if_held_down_threshold_milliseconds": 500,
+		"mouse_motion_to_scroll.speed": 100
+	}'
+	jq --argjson params "${params}" \
+		'.profiles[].complex_modifications.parameters = $params' \
+		< "${out_raw}" > "${out_tmp}"
+	mv "${out_tmp}" "${out_raw}"
+	echo "Injected complex_modifications.parameters defaults" >&2
+}
 
 function bake::sort() {
 	jq --sort-keys < "${out_raw}" > "${out_sorted}"
