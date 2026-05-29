@@ -1,0 +1,9 @@
+#!/usr/bin/env zsh
+#
+# Karabiner Hyper+C handler: click the newest chat (Slack) notification.
+#
+# Match by app, not text. Slack's title/subtitle/body carry the channel and
+# message — never the workspace name — so --match Airtable never hit anything.
+# --app matches the bundle id / app name (com.tinyspeck.slackmacgap / Slack).
+set -euo pipefail
+exec notif-center click --app slack

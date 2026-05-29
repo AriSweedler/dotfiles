@@ -2272,7 +2272,7 @@
             ]
           },
           {
-            "description": "Hyper+N → simulate Claude notification click",
+            "description": "Hyper+N → jump to the Claude notification (terminal-notifier, fast)",
             "manipulators": [
               {
                 "from": {
@@ -2289,6 +2289,30 @@
                 "to": [
                   {
                     "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/claude-notification-click-simulator\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/claude-notification-click-simulator\n} &> \"/tmp/karabiner.claude-notification-click-simulator.txt\"\n"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "Hyper+C → click newest chat (Slack) notification",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "c",
+                  "modifiers": {
+                    "mandatory": [
+                      "command",
+                      "option",
+                      "control",
+                      "shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/notif-click-slack\"\n  /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/notif-click-slack\n} &> \"/tmp/karabiner.notif-click-slack.txt\"\n"
                   }
                 ],
                 "type": "basic"
