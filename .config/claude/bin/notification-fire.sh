@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env zsh
 #
 # Claude Code Notification hook → macOS notification (orchestrator).
 # Resolves a message body and the current tmux pane, then posts the
@@ -11,7 +11,7 @@ readonly CLAUDE_SCRIPT_ROOT="$(cd -- "$(dirname -- "$0")/.." && pwd)"
 . "${CLAUDE_SCRIPT_ROOT}/lib/notification-lib.sh"
 
 main() {
-  log_init "$0"
+  log_init
 
   local msg target
   msg=$(resolve_message "${1:-}")

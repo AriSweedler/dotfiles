@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env zsh
 #
 # Idempotent setup for Claude Code notifications:
 #   1. Ensures terminal-notifier is installed (via Homebrew).
@@ -65,7 +65,7 @@ ensure_claude_hook() {
 }
 
 main() {
-  log_init "$0"
+  log_init
   log "initialize start"
   ensure_terminal_notifier || { log "ensure_terminal_notifier failed"; return 1; }
   ensure_claude_hook || { log "ensure_claude_hook failed"; return 1; }

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env zsh
 #
 # Programmatically "click" the most recent Claude Code notification
 # (orchestrator). Dismisses it from Notification Center and invokes the same
@@ -12,7 +12,7 @@ readonly CLAUDE_SCRIPT_ROOT="$(cd -- "$(dirname -- "$0")/.." && pwd)"
 . "${CLAUDE_SCRIPT_ROOT}/lib/notification-lib.sh"
 
 main() {
-  log_init "$0"
+  log_init
   log "simulating click"
 
   local target

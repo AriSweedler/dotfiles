@@ -39,3 +39,22 @@ function log_rotate() {
   done
   mv -f "${logfile}" "${logfile}.bak.1"
 }
+
+# log_init [name] [keep=5] — set $LOG_FILE for a per-script log and rotate the
+# previous run aside (via log_rotate) instead of truncating, so each run is
+# preserved. Call once at the start of a script; later writes append to
+# $LOG_FILE.
+#
+#   name  defaults to this script ($ZSH_ARGZERO) — robust inside functions,
+#         where $0 is the function name. The log basename is `name` with its
+#         directory and extension stripped.
+#   dir   $LOG_DIR if set, else /tmp.
+#
+# Pass an explicit name for a log not tied to the script filename.
+function log_init() {
+  emulate -L zsh
+  local name="${1:-$ZSH_ARGZERO}"
+  local keep="${2:-5}"
+  typeset -g LOG_FILE="${LOG_DIR:-/tmp}/${name:t:r}.log"
+  log_rotate "${LOG_FILE}" "${keep}"
+}

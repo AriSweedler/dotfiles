@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env zsh
 #
 # Fires a Claude Code notification with a chosen target and message,
 # bypassing tmux-pane auto-detection. Useful for testing the click and
@@ -16,7 +16,7 @@ readonly CLAUDE_SCRIPT_ROOT="$(cd -- "$(dirname -- "$0")/.." && pwd)"
 . "${CLAUDE_SCRIPT_ROOT}/lib/notification-lib.sh"
 
 main() {
-  log_init "$0"
+  log_init
 
   local target="${1:-$(tmux_target_pane)}"
   local msg="${2:-fire-simulator test}"

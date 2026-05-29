@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env zsh
 #
 # Implementation layer for the Claude Code notification scripts. Sourced by
 # bin/notification.sh, bin/notification-click-handler.sh, and
@@ -7,7 +7,7 @@
 # Caller contract:
 #   - Caller MUST set CLAUDE_SCRIPT_ROOT before sourcing (typically derived
 #     from "$0"). All paths below are computed relative to that.
-#   - Caller MUST call `log_init "$0"` once at start of main().
+#   - Caller MUST call `log_init` once at start of main().
 
 : "${CLAUDE_SCRIPT_ROOT:?notification-lib: caller must set CLAUDE_SCRIPT_ROOT}"
 
@@ -24,21 +24,9 @@ readonly LOG_DIR="/tmp/claude-notification"
 # shellcheck source=/dev/null
 . "${TMUX_PANE_LIB}"
 
-#######################################
-# Sets LOG_FILE to ${LOG_DIR}/<script-basename>.log, ensures the dir exists,
-# and truncates the file. Call once at the start of main().
-# Arguments:
-#   $1 - "$0" from the caller
-# Globals:
-#   LOG_FILE - set
-#######################################
-log_init() {
-  local script_path="${1:?log_init: pass \"\$0\"}"
-  local base="${script_path##*/}"
-  LOG_FILE="${LOG_DIR}/${base%.sh}.log"
-  mkdir -p "${LOG_DIR}"
-  : >"${LOG_FILE}"
-}
+# log_init / log_rotate: per-run logs under $LOG_DIR, rotated (not truncated).
+# shellcheck source=/dev/null
+. "${HOME}/.config/zsh/plugins/log_rotate.zsh"
 
 #######################################
 # Appends a timestamped line to LOG_FILE.
