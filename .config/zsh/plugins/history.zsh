@@ -10,23 +10,24 @@ mkdir -p "$(dirname "$HISTFILE")"
 export HISTSIZE=500000
 export SAVEHIST=$HISTSIZE
 
-# Commands that should never be saved to history. Each entry matches the
-# command alone or the command followed by any args.
+# Commands that should never enter history, matched on the first word so both
+# `tcap` and `tcap <args>` are caught.
 typeset -ga HIST_IGNORED_CMDS=(
   tcap
 )
-typeset -a _hist_ignore_patterns=($HIST_IGNORED_CMDS ${HIST_IGNORED_CMDS/%/ *})
-HISTORY_IGNORE="(${(j:|:)_hist_ignore_patterns})"
-export HISTORY_IGNORE
-unset _hist_ignore_patterns
 
-# a built-in Zsh hook function that executes just before a command line is saved
-# to your history file
-#
-# Skip any command that starts with whitespace (space, tab, newline, …).
-# HIST_IGNORE_SPACE only catches a literal space, so we do it ourselves.
+# A built-in Zsh hook that runs just before a line is saved. A non-zero return
+# drops the line from both the on-disk file AND this shell's live history, so
+# `echo hi; tcap; <Up>` recalls `echo hi`. HISTORY_IGNORE only filters the disk
+# write and leaves the command in up-arrow, which is the bug we're avoiding.
 zshaddhistory() {
+  # Skip any command that starts with whitespace (space, tab, newline, …).
+  # HIST_IGNORE_SPACE only catches a literal space, so we do it ourselves.
   [[ $1 == [[:space:]]* ]] && return 1
+
+  local -a words; words=(${(z)1})
+  (( ${HIST_IGNORED_CMDS[(Ie)$words[1]]} )) && return 1
+
   return 0
 }
 
