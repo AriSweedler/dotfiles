@@ -1,0 +1,20 @@
+#!/usr/bin/env zsh
+#
+# Karabiner Hyper+N handler: click the newest (top) notification.
+#
+# Positional (`notif-center click`, i.e. the 1st/top alert) rather than
+# `--app slack`, for speed:
+#   • no DB read       → no Full Disk Access needed
+#   • no O(tray) content scan → fast even when the tray is full of #spinnaker
+# When Slack is the chatty app, the top notification IS the newest Slack one,
+# which is "good enough". (The slack-app-targeted variant lives in git history.)
+set -euo pipefail
+
+export OTTO_LOG_NOTIF_GROUP="notif-click"
+export OTTO_LOG_NOTIF_TITLE="Hyper+N → notif"
+# Debug ON so the full click flow lands in the rotated handler log
+# (/tmp/karabiner.notif-click/log.txt — see macros.ts).
+export OTTO_DEBUG="${OTTO_DEBUG:-1}"
+source "${HOME}/.config/zsh/plugins/log.zsh"
+
+exec notif-center click

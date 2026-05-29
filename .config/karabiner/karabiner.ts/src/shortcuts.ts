@@ -19,13 +19,14 @@ export const shortcuts = [
       map('q', 'Hyper').to(karabiner_script("karabiner-open-pr-from-focussed-claude")),
     ]),
 
-  rule('Hyper+N → jump to the Claude notification (terminal-notifier, fast)')
+  rule('Hyper+N → click the newest notification (fast, positional)')
     .manipulators([
-      map('n', 'Hyper').to(karabiner_script("claude-notification-click-simulator")),
+      // logKeep: 50 — keep more runs of this handler's log while debugging it.
+      map('n', 'Hyper').to(karabiner_script("notif-click", { logKeep: 50 })),
     ]),
 
-  rule('Hyper+C → click newest chat (Slack) notification')
+  rule('Hyper+C → jump to the Claude notification (terminal-notifier, fast)')
     .manipulators([
-      map('c', 'Hyper').to(karabiner_script("notif-click-slack")),
+      map('c', 'Hyper').to(karabiner_script("claude-notification-click-simulator")),
     ]),
 ]

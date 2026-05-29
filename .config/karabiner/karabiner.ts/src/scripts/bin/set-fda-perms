@@ -8,7 +8,7 @@
 # click +, Cmd+Shift+G, Cmd+V, Return, Open, toggle ON.
 #
 # Defaults to the Karabiner process that runs keybinding shell_commands; it
-# needs FDA to read the Notification Center DB. See notif-click-slack.
+# needs FDA to read the Notification Center DB. See notif-click.
 set -euo pipefail
 
 export OTTO_LOG_NOTIF_GROUP="set-fda-perms"
