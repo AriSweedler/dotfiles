@@ -40,13 +40,17 @@ function log_rotate() {
   mv -f "${logfile}" "${logfile}.bak.1"
 }
 
-# log_init [name] [keep=5] — set $LOG_FILE for a per-script log and rotate the
+# log_init [name] [keep=4] — set $LOG_FILE for a per-script log and rotate the
 # previous run aside (via log_rotate) instead of truncating, so each run is
 # preserved. Call once at the start of a script; later writes append to
-# $LOG_FILE.
+# $LOG_FILE. keep defaults to 4, so the current log plus 4 backups = 5 runs.
+#
+# Each script gets its own directory — ${dir}/<name>/log.txt — so a script's
+# log and its rotated .bak.N backups stay grouped together, making successive
+# runs easy to correlate.
 #
 #   name  defaults to this script ($ZSH_ARGZERO) — robust inside functions,
-#         where $0 is the function name. The log basename is `name` with its
+#         where $0 is the function name. The dir is named `name` with its
 #         directory and extension stripped.
 #   dir   $LOG_DIR if set, else /tmp.
 #
@@ -54,7 +58,7 @@ function log_rotate() {
 function log_init() {
   emulate -L zsh
   local name="${1:-$ZSH_ARGZERO}"
-  local keep="${2:-5}"
-  typeset -g LOG_FILE="${LOG_DIR:-/tmp}/${name:t:r}.log"
+  local keep="${2:-4}"
+  typeset -g LOG_FILE="${LOG_DIR:-/tmp}/${name:t:r}/log.txt"
   log_rotate "${LOG_FILE}" "${keep}"
 }

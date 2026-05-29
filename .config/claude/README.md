@@ -66,12 +66,13 @@ both real and simulated clicks go through it.
 
 ## Logs
 
-Each script writes a log on every run to
-`/tmp/claude-notification/<script-basename>.log` (e.g.
-`notification-fire.log`, `notification-click-handler.log`). `log_init`
+Each script writes a log on every run to its own directory,
+`/tmp/claude-notification/<script-basename>/log.txt` (e.g.
+`notification-fire/log.txt`, `notification-click-handler/log.txt`). `log_init`
 (from `~/.config/zsh/plugins/log_rotate.zsh`) rotates the previous run aside
-to `<log>.bak.1` … `.bak.5` at the start of each run, so the last several
-invocations are preserved for comparison instead of truncated.
+to `log.txt.bak.1` … `.bak.4` at the start of each run, so the current log plus
+4 backups (5 runs) are preserved for comparison instead of truncated. Grouping
+each script's runs in their own directory keeps them easy to correlate.
 
 ## Setup
 
