@@ -24,7 +24,11 @@ local missing = vim.tbl_filter(function(lang)
 	return not vim.list_contains(installed, lang)
 end, ensure_installed)
 if #missing > 0 then
-	ts.install(missing)
+	local task = ts.install(missing)
+	-- Block when pre-warming headless (e.g. cloud-home init), so the install
+	-- finishes in the background tick instead of paying the cost on the first
+	-- interactive launch. Interactive launches keep the async behavior.
+	if #vim.api.nvim_list_uis() == 0 then task:wait() end
 end
 
 ts.setup({
