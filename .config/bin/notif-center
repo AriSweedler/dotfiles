@@ -432,6 +432,9 @@ _need_db() {
 # (success, miss, or interrupt) — never leave the tray hanging open.
 typeset -g _NC_OPENED=0
 
+# When set, _notify_empty is suppressed (caller will chain its own fallback).
+typeset -g _QUIET_EMPTY=0
+
 _nc_click_clock() {
   /usr/bin/osascript -e 'tell application "System Events" to tell process "ControlCenter" to click (first menu bar item of menu bar 1 whose description is "Clock")' >/dev/null 2>&1 || true
 }
@@ -450,8 +453,10 @@ _nc_cleanup() {
 }
 
 # Transient terminal-notifier banner when a click finds nothing — so a miss is
-# visible from a Hyper+N keybind (mirrors the Claude click-simulator).
+# visible from a Hyper+N keybind (mirrors the Claude click-simulator). Skipped
+# under --quiet, so a caller can chain a fallback before announcing a miss.
 _notify_empty() {
+  (( ${_QUIET_EMPTY:-0} )) && return 0
   local app_pat="${1:-}" match_pat="${2:-}" what
   if [[ -n "${app_pat}" ]]; then what="${app_pat} notification"
   elif [[ -n "${match_pat}" ]]; then what="notification matching “${match_pat}”"
@@ -572,6 +577,8 @@ ${c_cyan}os${c_rst} (running vs pinned macOS):
 
 ${c_cyan}Options:${c_rst}
   --verbose     OTTO_DEBUG=1 (debug logs to stderr)
+  --quiet       on a click miss, skip the "nothing to click" banner (for
+                callers that chain their own fallback)
   -h, --help    Show this help
 EOF
 )"
@@ -587,6 +594,7 @@ main() {
   while (( $# > 0 )); do case "${1}" in
     -h|--help)  help; return 0 ;;
     --verbose)  export OTTO_DEBUG=1; shift ;;
+    --quiet)    _QUIET_EMPTY=1; shift ;;
     --app)      app_pat="${2:?--app needs a pattern}"; shift 2 ;;
     --match)    match_pat="${2:?--match needs a pattern}"; shift 2 ;;
     --limit)    limit="${2:?--limit needs a number}"; shift 2 ;;

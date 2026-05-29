@@ -8,6 +8,12 @@
 #   • no O(tray) content scan → fast even when the tray is full of #spinnaker
 # When Slack is the chatty app, the top notification IS the newest Slack one,
 # which is "good enough". (The slack-app-targeted variant lives in git history.)
+#
+# notif-center's AX tray scan can't reach Claude Code notifications once their
+# banner auto-dismisses (terminal-notifier notifs don't sit in the scanned tray
+# the way Slack's do). So before giving up, fall back to the Claude
+# click-simulator, which finds them by terminal-notifier group and jumps to the
+# tmux pane.
 set -euo pipefail
 
 export OTTO_LOG_NOTIF_GROUP="notif-click"
@@ -17,4 +23,20 @@ export OTTO_LOG_NOTIF_TITLE="Hyper+N → notif"
 export OTTO_DEBUG="${OTTO_DEBUG:-1}"
 source "${HOME}/.config/zsh/plugins/log.zsh"
 
-exec notif-center click
+readonly CLAUDE_CLICK_SIM="${HOME}/.config/claude/bin/notification-click-simulator.sh"
+
+# 1) Generic positional click (Slack, Calendar, on-screen Claude banners).
+#    --quiet so notif-center doesn't announce a miss before we try the fallback.
+if notif-center click --quiet; then
+  exit 0
+fi
+
+# 2) Fallback: the Claude click-simulator catches Claude notifs by group.
+log::info "notif-center found nothing — falling back to claude click-simulator"
+if "${CLAUDE_CLICK_SIM}"; then
+  exit 0
+fi
+
+# 3) Both missed → now it's a real miss; say so.
+OTTO_LOG_NOTIFY_SECS=3 log::notify "No notification to click"
+exit 1
