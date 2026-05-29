@@ -26,6 +26,7 @@
 .config/gcloud/
 .config/gh/hosts.yml
 .config/github-copilot/
+.config/gws/
 .config/helm/
 .config/k9s/
 .config/karabiner/automatic_backups
@@ -59,7 +60,7 @@
 .npm/
 .npmrc
 .nvs/
-.opensearch_cookies_prod.enc
+.opensearch_cookies_*.enc
 .opensearch_query_state.json
 .opa_history
 .psql_history
@@ -67,6 +68,7 @@
 .rustup/
 .rye/
 .spacelift/
+.spinnaker_cookies_*.enc
 .sqlite_history
 .swiftpm/
 .terraform.d/
