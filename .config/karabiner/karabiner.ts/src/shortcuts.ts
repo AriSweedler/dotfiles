@@ -18,4 +18,14 @@ export const shortcuts = [
     .manipulators([
       map('q', 'Hyper').to(karabiner_script("karabiner-open-pr-from-focussed-claude")),
     ]),
+
+  rule('Hyper+N → jump to the Claude notification (terminal-notifier, fast)')
+    .manipulators([
+      map('n', 'Hyper').to(karabiner_script("claude-notification-click-simulator")),
+    ]),
+
+  rule('Hyper+C → click newest chat (Slack) notification')
+    .manipulators([
+      map('c', 'Hyper').to(karabiner_script("notif-click-slack")),
+    ]),
 ]
