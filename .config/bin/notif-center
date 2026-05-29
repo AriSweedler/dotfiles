@@ -1,0 +1,479 @@
+#!/usr/bin/env zsh
+#
+# notif-center — read and click macOS notifications.
+#
+# One tool, two engines, fast path chosen automatically:
+#   • list  → reads the Notification Center SQLite DB (READ-ONLY). Fast (~0.1s),
+#             and the only source of the posting app's bundle id + history.
+#   • click → if the target notification stores a URL (Calendar's ical://, web
+#             pushes…), just `open` it — fast. Otherwise (Slack & co. store no
+#             URL) fall back to AX: expand the stack, then AXPress the target,
+#             which opens AND dismisses it.
+#   • dump / tree → AX debugging of the live tray.
+#
+# Supersedes the earlier notif-center / notif-center-sqlite / notif-center-click.
+# READ-ONLY DB guarantee: never touches the original DB — copies db+wal+shm to a
+# temp dir and queries the copy. See DESIGN.md for the schema/version caveats.
+#
+# stdout carries data; stderr carries logs.
+
+set -euo pipefail
+
+export OTTO_LOG_NOTIF_GROUP="notif-center"
+export OTTO_LOG_NOTIF_TITLE="notif-center"
+export OTTO_DEBUG="${OTTO_DEBUG:-0}"
+source "${HOME}/.config/zsh/plugins/log.zsh"
+
+readonly DB_DIR="${HOME}/Library/Group Containers/group.com.apple.usernoted/db2"
+
+# --- DB reader (sqlite) ---
+#
+# Joins record→app, decodes each bplist, applies the active/app/match filters,
+# emits human TSV or the JSON contract. Apple's /usr/bin/python3 (fast start,
+# ships plistlib + sqlite3). argv: db app match limit show_all fmt
+read -r -d '' DECODE <<'PYEOF' || true
+import sys, time, json, sqlite3, plistlib
+from datetime import datetime
+
+db, app_pat, match_pat, limit, show_all, fmt = sys.argv[1:7]
+limit = int(limit)
+show_all = show_all == "1"
+now_mac = time.time() - 978307200
+
+# Friendly-name layer: static bundle id → display name. Edit to add apps; an
+# unknown bundle id falls through to its raw id. Static on purpose — no Launch
+# Services / Spotlight lookups (deterministic, no perms, no latency).
+APP_NAMES = {
+    "com.tinyspeck.slackmacgap": "Slack",
+    "fr.julienxx.oss.terminal-notifier": "terminal-notifier",
+    "com.apple.ical": "Calendar",
+    "com.apple.iCal": "Calendar",
+    "us.zoom.xos": "Zoom",
+}
+
+def app_name(bundle_id):
+    return APP_NAMES.get(bundle_id, bundle_id)
+
+def oneline(s):
+    return str(s).replace("\n", " ").replace("\r", " ").replace("\t", " ")
+
+def mac_iso(t):
+    return datetime.fromtimestamp(t + 978307200).isoformat(timespec="seconds") if t else None
+
+def mac_epoch(t):
+    return int(t + 978307200) if t else None
+
+# Open the *copy* read-write (never the original). A read-only connection can't
+# build the WAL index, so it may miss the newest committed frames; opening rw
+# lets sqlite merge the full WAL and see fresh notifications.
+con = sqlite3.connect(db)
+
+# Active set = UUIDs currently shown in Notification Center. Each app's
+# displayed.list blob is a flat concatenation of 16-byte record UUIDs; a record
+# is active iff its uuid is in some app's list. (Use `displayed`, not
+# `delivered`: the latter accumulates all delivered history.) --all shows all.
+active_set = set()
+for (blob,) in con.execute("SELECT list FROM displayed WHERE list IS NOT NULL"):
+    for i in range(0, len(blob) - (len(blob) % 16), 16):
+        active_set.add(bytes(blob[i:i + 16]))
+
+# Past notifications only (delivered_date < now drops future-scheduled, e.g.
+# Calendar reminders). LIMIT pushed to SQL only when no post-query filter could
+# drop rows — i.e. only under --all with no filters.
+sql = ("SELECT r.rec_id, r.delivered_date, r.request_date, r.uuid, a.identifier, r.data "
+       "FROM record r LEFT JOIN app a ON a.app_id = r.app_id "
+       "WHERE r.delivered_date > 0 AND r.delivered_date < ? "
+       "ORDER BY r.delivered_date DESC")
+params = [now_mac]
+if limit and show_all and not app_pat and not match_pat:
+    sql += " LIMIT ?"
+    params.append(limit)
+rows = con.execute(sql, params)
+
+results = []
+shown = 0
+for rec_id, dd, rq, uuid, ident, data in rows:
+    is_active = bytes(uuid) in active_set
+    if not show_all and not is_active:
+        continue
+    ident = ident or "(unknown)"
+    name = app_name(ident)
+    if app_pat and app_pat.lower() not in ident.lower() and app_pat.lower() not in name.lower():
+        continue
+    # Decode the bplist only once a row survives the cheap (uuid/app) filters.
+    try:
+        req = plistlib.loads(data).get("req", {})
+    except Exception:
+        req = {}
+    title = str(req.get("titl") or "")
+    subtitle = str(req.get("subt") or "")
+    body = str(req.get("body") or "")
+    text = " | ".join(oneline(p) for p in (title, subtitle, body) if p)
+    if match_pat and match_pat.lower() not in text.lower():
+        continue
+    if fmt == "json":
+        # Stable contract: rename/extract on the DB side as macOS shifts; these
+        # keys (and body's real newlines) stay fixed for downstream consumers.
+        results.append({
+            "rec_id": rec_id,
+            "bundle_id": ident,
+            "app_name": name,
+            "title": title,
+            "subtitle": subtitle,
+            "body": body,
+            "category": str(req.get("cate") or ""),
+            "click_url": str(req.get("durl") or ""),
+            "delivered_at": mac_iso(dd),
+            "delivered_epoch": mac_epoch(dd),
+            "requested_at": mac_iso(rq),
+            "requested_epoch": mac_epoch(rq),
+            "active": is_active,
+        })
+    else:
+        when = datetime.fromtimestamp(dd + 978307200).strftime("%Y-%m-%d %H:%M:%S")
+        print(f"{shown + 1}\t{when}\t{name}\t{text}")
+    shown += 1
+    if limit and shown >= limit:
+        break
+
+if fmt == "json":
+    print(json.dumps(results, ensure_ascii=False, indent=2))
+    sys.exit(0)
+sys.exit(0 if shown else 3)
+PYEOF
+
+# --- AX click engine (System Events) ---
+#
+# argv: <n>  → AXPress the Nth notification (default-action click: opens AND
+# dismisses). Navigates the container DIRECTLY (group 1 of scroll area 1 of …)
+# rather than `entire contents of window 1`, which is O(tree) and chokes once
+# there are many notifications. AXPress on a stack only *expands* it, so a
+# stacked target is expand-then-press; N=1 takes a fast path that skips the
+# expand entirely when the newest is already an individual alert.
+read -r -d '' AS_PRESS <<'APPLESCRIPT' || true
+on run argv
+  set targetN to (item 1 of argv) as integer
+  tell application "System Events"
+    if not (exists process "NotificationCenter") then return "fail: no NotificationCenter process"
+    tell process "NotificationCenter"
+      if (count of windows) is 0 then return "fail: no notification tray"
+      try
+        set grp to group 1 of scroll area 1 of group 1 of group 1 of window 1
+      on error
+        return "fail: notification container not found"
+      end try
+
+      if targetN is 1 then
+        -- fast path: act on the first alert/stack child directly
+        set kc to count of UI elements of grp
+        repeat with i from 1 to kc
+          set sr to ""
+          try
+            set sr to (subrole of UI element i of grp) as text
+          end try
+          if sr is "AXNotificationCenterAlert" then
+            try
+              perform action "AXPress" of (UI element i of grp)
+              return "ok"
+            on error e
+              return "fail: " & e
+            end try
+          else if sr is "AXNotificationCenterAlertStack" then
+            -- expand, poll until the member appears at this slot, then press it
+            try
+              perform action "AXPress" of (UI element i of grp)
+            end try
+            set tries to 0
+            repeat
+              set tries to tries + 1
+              if tries > 25 then return "fail: stack did not expand"
+              set sr2 to ""
+              try
+                set sr2 to (subrole of UI element i of grp) as text
+              end try
+              if sr2 is "AXNotificationCenterAlert" then exit repeat
+              delay 0.02
+            end repeat
+            try
+              perform action "AXPress" of (UI element i of grp)
+              return "ok"
+            on error e
+              return "fail: " & e
+            end try
+          end if
+        end repeat
+        return "notfound:0"
+      end if
+
+      -- general path (N>1, may be slower): expand every stack, then press Nth
+      set guard to 0
+      repeat
+        set guard to guard + 1
+        if guard > 40 then exit repeat
+        set foundStack to false
+        set kc to count of UI elements of grp
+        repeat with i from 1 to kc
+          set sr to ""
+          try
+            set sr to (subrole of UI element i of grp) as text
+          end try
+          if sr is "AXNotificationCenterAlertStack" then
+            try
+              perform action "AXPress" of (UI element i of grp)
+            end try
+            set foundStack to true
+            exit repeat
+          end if
+        end repeat
+        if not foundStack then exit repeat
+        delay 0.08
+      end repeat
+      set idx to 0
+      set kc to count of UI elements of grp
+      repeat with i from 1 to kc
+        set sr to ""
+        try
+          set sr to (subrole of UI element i of grp) as text
+        end try
+        if sr is "AXNotificationCenterAlert" then
+          set idx to idx + 1
+          if idx is targetN then
+            try
+              perform action "AXPress" of (UI element i of grp)
+              return "ok"
+            on error e
+              return "fail: " & e
+            end try
+          end if
+        end if
+      end repeat
+      return "notfound:" & idx
+    end tell
+  end tell
+end run
+APPLESCRIPT
+
+# argv: <needle>  → AXPress the first notification whose text contains <needle>
+# (case-sensitive substring). Used for app-targeted clicks: the DB supplies the
+# newest matching notification's text, which equals the top of its stack, so we
+# match the collapsed stack directly and expand only that one.
+read -r -d '' AS_MATCH <<'APPLESCRIPT' || true
+on run argv
+  set needle to item 1 of argv
+  tell application "System Events"
+    if not (exists process "NotificationCenter") then return "fail: no NotificationCenter process"
+    tell process "NotificationCenter"
+      if (count of windows) is 0 then return "fail: no notification tray"
+      try
+        set grp to group 1 of scroll area 1 of group 1 of group 1 of window 1
+      on error
+        return "fail: notification container not found"
+      end try
+      set kc to count of UI elements of grp
+      repeat with i from 1 to kc
+        set sr to ""
+        try
+          set sr to (subrole of UI element i of grp) as text
+        end try
+        if sr is "AXNotificationCenterAlert" or sr is "AXNotificationCenterAlertStack" then
+          set txt to ""
+          try
+            set vs to value of every static text of (UI element i of grp)
+            repeat with v in vs
+              set txt to txt & (v as text) & " "
+            end repeat
+          end try
+          if txt contains needle then
+            if sr is "AXNotificationCenterAlertStack" then
+              try
+                perform action "AXPress" of (UI element i of grp)
+              end try
+              set tries to 0
+              repeat
+                set tries to tries + 1
+                if tries > 25 then return "fail: stack did not expand"
+                set sr2 to ""
+                try
+                  set sr2 to (subrole of UI element i of grp) as text
+                end try
+                if sr2 is "AXNotificationCenterAlert" then exit repeat
+                delay 0.02
+              end repeat
+            end if
+            try
+              perform action "AXPress" of (UI element i of grp)
+              return "ok"
+            on error e
+              return "fail: " & e
+            end try
+          end if
+        end if
+      end repeat
+      return "notfound"
+    end tell
+  end tell
+end run
+APPLESCRIPT
+
+# --- helpers ---
+
+_press() { /usr/bin/osascript - "$@" <<<"${AS_PRESS}"; }
+_match() { /usr/bin/osascript - "$@" <<<"${AS_MATCH}"; }
+
+# Copies db + sidecars to a fresh temp dir; echoes the copy's db path (returns
+# non-zero if the db can't be obtained). Read-only w.r.t. the original.
+#
+# The DB is in a TCC-protected group container, so the *caller* needs Full Disk
+# Access (a terminal does). The Karabiner keybindings deliberately don't touch
+# the DB — Hyper+N uses terminal-notifier, Hyper+C uses pure-AX --match — so no
+# FDA grant for Karabiner is needed.
+_copy_db() {
+  local tmp
+  tmp="$(mktemp -d /tmp/notif-center.XXXXXX)"
+  cp "${DB_DIR}/db" "${tmp}/db" 2>/dev/null || true
+  [[ -f "${DB_DIR}/db-wal" ]] && { cp "${DB_DIR}/db-wal" "${tmp}/db-wal" 2>/dev/null || true; }
+  [[ -f "${DB_DIR}/db-shm" ]] && { cp "${DB_DIR}/db-shm" "${tmp}/db-shm" 2>/dev/null || true; }
+  if [[ ! -s "${tmp}/db" ]]; then
+    rm -rf "${tmp}"
+    return 1
+  fi
+  printf '%s\n' "${tmp}"
+}
+
+# Runs the DB reader over a fresh copy. args: app match limit show_all fmt
+_db() {
+  local tmp rc=0
+  tmp="$(_copy_db)" || { log::err "Notification DB unreadable (grant Full Disk Access to notif-db-shim, or to the caller)"; return 1; }
+  /usr/bin/python3 - "${tmp}/db" "$@" <<<"${DECODE}" || rc=$?
+  rm -rf "${tmp}"
+  return ${rc}
+}
+
+# Preconditions for the DB-backed paths (list, click --app): just the tools.
+# DB readability (FDA) is handled by _copy_db (shim or direct cp).
+_need_db() {
+  local -a missing
+  for cmd in sqlite3 /usr/bin/python3; do
+    command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
+  done
+  (( ${#missing} > 0 )) && { log::err "Missing required commands | missing='${(j:, :)missing}'"; return 1; }
+  return 0
+}
+
+# --- subcommands ---
+
+cmd_list() {
+  _need_db || return 1
+  local rc=0
+  _db "${1:-}" "${2:-}" "${3:-30}" "${4:-0}" "${5:-human}" || rc=$?
+  (( rc == 3 )) && { log::debug "no notifications matched"; return 1; }  # json exits 0 even when empty
+  return ${rc}
+}
+
+cmd_click() {
+  local n="${1:?}" app_pat="${2:-}" match_pat="${3:-}"
+  local result
+
+  if [[ -n "${match_pat}" ]]; then
+    # Pure AX: AXPress the newest live notification whose text contains the
+    # pattern. No DB → no Full Disk Access needed (this is the Karabiner path).
+    result="$(_match "${match_pat}")"
+  elif [[ -n "${app_pat}" ]]; then
+    # App-targeted via the DB (the only thing that knows the posting app): get
+    # the newest matching notification's text, then AXPress the live alert that
+    # matches it. Precise, but needs Full Disk Access for the DB read.
+    _need_db || return 1
+    local json needle
+    json="$(_db "${app_pat}" "" 0 0 json)" || { log::err "query failed"; return 1; }
+    needle="$(print -r -- "${json}" | /usr/bin/python3 -c '
+import sys, json, re
+a = json.load(sys.stdin); i = int(sys.argv[1]) - 1
+o = a[i] if 0 <= i < len(a) else {}
+print(re.sub(r"\s+", " ", (o.get("body") or o.get("subtitle") or o.get("title") or "")).strip()[:60])
+' "${n}")"
+    [[ -z "${needle}" ]] && { log::err "No notification matched | app='${app_pat}' n='${n}'"; return 1; }
+    log::debug "matched needle | needle='${needle}'"
+    result="$(_match "${needle}")"
+  else
+    # Fast positional path: AXPress the Nth notification (default 1 = newest).
+    result="$(_press "${n}")"
+  fi
+
+  log::debug "click | n='${n}' app='${app_pat}' match='${match_pat}' result='${result}'"
+  case "${result}" in
+    ok) return 0 ;;
+    notfound|notfound:*) log::err "Target not in the live tray | result='${result}'"; return 1 ;;
+    *) log::err "click failed | result='${result}'"; return 1 ;;
+  esac
+}
+
+# --- help / main ---
+
+help() {
+  print -- "$(cat <<EOF
+${c_green}notif-center${c_rst} — read and click macOS notifications
+
+${c_cyan}Usage:${c_rst}
+  notif-center list  [--app PAT] [--match PAT] [--limit N] [--all] [--output FMT]
+  notif-center click [N] [--app PAT] [--match PAT]
+
+${c_cyan}list${c_rst} (reads the DB — fast, knows the posting app):
+  --output human|json  human: \`# time app_name title | subtitle | body\` (TSV)
+                       json:  array of { rec_id, bundle_id, app_name, title,
+                         subtitle, body, category, click_url, delivered_at,
+                         delivered_epoch, requested_at, requested_epoch, active }
+  --app PAT     keep rows whose bundle id OR app name matches PAT (e.g. slack)
+  --match PAT   keep rows whose text matches PAT
+  --limit N     cap at N rows (default 30; 0 = no cap)
+  --all         include dismissed history (default: only what's in the tray now)
+
+${c_cyan}click [N]${c_rst} (default N=1, the newest / first on the stack):
+  AXPress the Nth notification — opens AND dismisses, every app. Navigates the
+  tray directly (no full-tree read); N=1 reads just the first notification.
+  Stacked targets are expanded first. N>1 is slower (must expand to count).
+  --app/--match: click the newest notification from that app / matching that
+  text (e.g. \`click --app slack\`). Uses the DB to target, then AX-clicks it.
+
+${c_cyan}Options:${c_rst}
+  --verbose     OTTO_DEBUG=1 (debug logs to stderr)
+  -h, --help    Show this help
+EOF
+)"
+}
+
+main() {
+  # osascript is the only universal dependency (every click needs it). The DB
+  # tools + Full Disk Access are checked lazily by _need_db, so pure-AX clicks
+  # work even where the DB is unreadable (e.g. under Karabiner).
+  command -v /usr/bin/osascript >/dev/null 2>&1 || { log::err "Missing required command | command='/usr/bin/osascript'"; return 1; }
+
+  local subcmd="" n=1 app_pat="" match_pat="" limit=30 show_all=0 fmt="human"
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)  help; return 0 ;;
+    --verbose)  export OTTO_DEBUG=1; shift ;;
+    --app)      app_pat="${2:?--app needs a pattern}"; shift 2 ;;
+    --match)    match_pat="${2:?--match needs a pattern}"; shift 2 ;;
+    --limit)    limit="${2:?--limit needs a number}"; shift 2 ;;
+    --all)      show_all=1; shift ;;
+    --output)   fmt="${2:?--output needs json|human}"; shift 2 ;;
+    -*)         log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)
+      if [[ -z "${subcmd}" ]]; then subcmd="${1}"
+      elif [[ "${subcmd}" == "click" && "${1}" == <-> ]]; then n="${1}"
+      else log::err "Unexpected argument | argument='${1}'"; help; return 1; fi
+      shift ;;
+  esac; done
+
+  if [[ "${fmt}" != "json" && "${fmt}" != "human" ]]; then
+    log::err "Invalid --output | got='${fmt}' valid='json, human'"; return 1
+  fi
+
+  case "${subcmd}" in
+    list)    cmd_list "${app_pat}" "${match_pat}" "${limit}" "${show_all}" "${fmt}" ;;
+    click)   cmd_click "${n}" "${app_pat}" "${match_pat}" ;;
+    ""|help) help ;;
+    *)       log::err "Unknown command | command='${subcmd}'"; help; return 1 ;;
+  esac
+}
+
+main "${@}"
