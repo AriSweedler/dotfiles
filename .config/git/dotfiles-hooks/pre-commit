@@ -18,24 +18,26 @@ log::warn() { echo -e "${C_YELLOW}[WARN]${C_RST} $*" >&2; }
 log::info() { echo -e "${C_GREEN}[INFO]${C_RST} $*" >&2; }
 
 main() {
-  local karabiner_json="$HOME/.config/karabiner/karabiner.json"
+  # git diff --cached --name-only emits paths relative to the repo root, and
+  # the bare repo's worktree is $HOME — so match the repo-relative path, not an
+  # absolute one (grep -qx needs a full-line match).
+  local rel=".config/karabiner/karabiner.json"
 
   # Only check if karabiner.json is staged.
-  if ! git diff --cached --name-only | grep -qx "${karabiner_json}"; then
+  if ! git diff --cached --name-only | grep -qx "${rel}"; then
     return 0
   fi
 
-  log::info "Checking ${karabiner_json} is sorted by key..."
+  log::info "Checking ${rel} is sorted by key..."
 
   local sorted staged
-  sorted="$(git show ":${karabiner_json}" | jq --sort-keys)"
-  staged="$(git show ":${karabiner_json}")"
+  sorted="$(git show ":${rel}" | jq --sort-keys)"
+  staged="$(git show ":${rel}")"
 
   if [[ "${sorted}" != "${staged}" ]]; then
-    log::err "${karabiner_json} is not sorted by key."
-    log::warn "Karabiner rewrites this file with its own key ordering."
-    log::warn "Run 'bake' from ~/.config/karabiner to regenerate and sort, or manually:"
-    log::warn "  jq --sort-keys . ${karabiner_json} | sponge ${karabiner_json}"
+    log::err "${rel} is not sorted by key."
+    log::warn "The generator writes this file with non-canonical key ordering."
+    log::warn "Run 'bake' from ~/.config/karabiner to regenerate and sort, then re-stage."
     return 1
   fi
 
