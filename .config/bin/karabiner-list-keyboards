@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+"""List every attached keyboard with the vendor_id / product_id that
+Karabiner-Elements uses to match devices.
+
+Karabiner identifies a device by HID usage (PrimaryUsagePage=1, PrimaryUsage=6
+== "Generic Desktop / Keyboard") and matches it in karabiner.json by *decimal*
+vendor_id / product_id. This script surfaces exactly those numbers so they can
+be pasted into src/utils/devices.ts.
+
+Data source: `ioreg -a -r -c IOHIDDevice` (the same registry Karabiner reads).
+"""
+
+import argparse
+import json
+import plistlib
+import subprocess
+import sys
+
+
+def hid_devices():
+    out = subprocess.run(
+        ["ioreg", "-a", "-r", "-c", "IOHIDDevice"],
+        capture_output=True,
+    ).stdout
+    if not out:
+        return []
+    return plistlib.loads(out)
+
+
+def is_keyboard(dev):
+    # Primary usage says keyboard, OR any usage pair advertises one.
+    if dev.get("PrimaryUsagePage") == 1 and dev.get("PrimaryUsage") == 6:
+        return True
+    for pair in dev.get("DeviceUsagePairs", []) or []:
+        if pair.get("DeviceUsagePage") == 1 and pair.get("DeviceUsage") == 6:
+            return True
+    return False
+
+
+def collect():
+    rows = []
+    for d in hid_devices():
+        if not is_keyboard(d):
+            continue
+        vid = d.get("VendorID")
+        pid = d.get("ProductID")
+        built_in = bool(d.get("Built-In") or (vid is None and pid is None))
+        # Karabiner's own virtual keyboard — not a real device to configure.
+        virtual = vid == 1452 and "Karabiner" in (d.get("Product") or "")
+        rows.append(
+            {
+                "product": d.get("Product") or "(unknown)",
+                "vendor_id": vid,
+                "product_id": pid,
+                "built_in": built_in,
+                "virtual": virtual,
+            }
+        )
+    return rows
+
+
+def print_table(rows):
+    def fmt(n):
+        return "-" if n is None else f"{n} (0x{n:04x})"
+
+    def flags(r):
+        return ",".join(f for f, on in (("built-in", r["built_in"]),
+                                        ("virtual", r["virtual"])) if on)
+
+    wp = max(len(r["product"]) for r in rows)
+    wv = max(len(fmt(r["vendor_id"])) for r in rows)
+    wpi = max(len(fmt(r["product_id"])) for r in rows)
+    print(f"{'PRODUCT':<{wp}}  {'VENDOR_ID':<{wv}}  {'PRODUCT_ID':<{wpi}}  FLAGS")
+    for r in rows:
+        print(
+            f"{r['product']:<{wp}}  {fmt(r['vendor_id']):<{wv}}  "
+            f"{fmt(r['product_id']):<{wpi}}  {flags(r)}"
+        )
+
+
+# Hardcoded USB vendor IDs (decimal). These are stable and won't change.
+# Note: pqrs.org's Karabiner virtual device reuses Apple's vendor id (1452),
+# so "apple" and "karabiner" share a vendor_id.
+VENDOR_IDS = {
+    "apple": 1452,  # 0x05ac
+    "kinesis": 10730,  # 0x29ea
+    "karabiner": 1452,  # 0x05ac (pqrs.org reuses Apple's vendor id)
+}
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--json", action="store_true", help="emit JSON instead of a table")
+    group = ap.add_mutually_exclusive_group()
+    group.add_argument(
+        "--vendor",
+        choices=["all", *sorted(VENDOR_IDS)],
+        default="all",
+        help="only show keyboards with this vendor's vendor_id (default: all)",
+    )
+    group.add_argument(
+        "--vendor_id",
+        type=lambda x: int(x, 0),
+        metavar="ID",
+        help="only show keyboards with this vendor_id (decimal or 0x hex)",
+    )
+    args = ap.parse_args()
+
+    if args.vendor_id is not None:
+        vid = args.vendor_id
+    elif args.vendor != "all":
+        vid = VENDOR_IDS[args.vendor]
+    else:
+        vid = None
+
+    rows = collect()
+    if vid is not None:
+        rows = [r for r in rows if r["vendor_id"] == vid]
+    if not rows:
+        if args.json:
+            print("[]")
+        else:
+            print("No keyboards found.", file=sys.stderr)
+        return 1
+
+    if args.json:
+        print(json.dumps(rows, indent=2))
+    else:
+        print_table(rows)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
