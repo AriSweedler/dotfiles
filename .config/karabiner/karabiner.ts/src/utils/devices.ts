@@ -13,9 +13,16 @@ export type LabeledDevice = {
 export const devices = {
   // Physical label says "Freestyle Pro", but the device reports its product
   // name as "Freestyle Edge Keyboard" in karabiner-EventViewer.
+  //
+  // If these device-specific mappings aren't working, perhaps a layout change
+  // or firmware update has changed the product_id (observed as both 258 and
+  // 259). Observe the live product_id by running `karabiner-list-keyboards`
+  // (in ~/.config/bin) or via karabiner-EventViewer, then update it below.
+  // An LLM can use the `--json` flag to make parsing easier:
+  //     karabiner-list-keyboards --json --vendor_id 10730
   freestylePro: {
     label: "Kinesis Freestyle Pro",
-    identifier: { is_keyboard: true, product_id: 258, vendor_id: 10730 },
+    identifier: { is_keyboard: true, product_id: 259, vendor_id: 10730 },
   },
   freestyle2: {
     label: "Kinesis Freestyle 2",
