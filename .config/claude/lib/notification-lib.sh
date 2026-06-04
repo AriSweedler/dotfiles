@@ -120,8 +120,15 @@ post_notification() {
   local group="${NOTIFICATION_GROUP}${target:+-${target}}"
   local title="Claude Code"
   if [[ -n "${target}" ]]; then
-    local win="${target#*:}"
-    title="Claude Code (win${win%%.*})"
+    local target_window="${target%.*}"
+    local window_name
+    window_name=$("${TMUX_BIN}" display-message -p -t "${target_window}" '#{window_name}' 2>/dev/null)
+    # Fall back to the window index when the window has no resolvable name.
+    if [[ -z "${window_name}" ]]; then
+      local win="${target#*:}"
+      window_name="win${win%%.*}"
+    fi
+    title="Claude Code (${window_name})"
   fi
   local -a args=(
     -title "${title}"
