@@ -485,7 +485,7 @@ cmd_list() {
 }
 
 cmd_click() {
-  local n="${1:?}" app_pat="${2:-}" match_pat="${3:-}"
+  local n="${1:?}" app_pat="${2:-}" match_pat="${3:-}" no_refresh="${4:-0}"
   [[ -n "${app_pat}" ]] && { _need_db || return 1; }
 
   # Resolve the AX target ONCE, before any NC toggling — the DB query for --app
@@ -514,12 +514,12 @@ print(re.sub(r"\s+", " ", (o.get("body") or o.get("subtitle") or o.get("title") 
     mode=press; arg="${n}"
   fi
 
-  # 1) Try. 2) Miss → open NC, brief settle, 3) retry, then close NC *immediately*
-  # — the tray is only visible for the single re-scan, and the notify (below)
-  # happens after it's closed.
+  # Try once (pure AX). On a miss, open NC so faded notifs materialize, retry,
+  # close it again. --no-refresh skips that retry so a caller can chain a cheaper
+  # recovery first.
   local result
   result="$(_do_press "${mode}" "${arg}")"
-  if [[ "${result}" != ok ]]; then
+  if [[ "${result}" != ok ]] && (( ! no_refresh )); then
     log::debug "miss — opening Notification Center to refresh | result='${result}'"
     _nc_open
     sleep 0.2
@@ -579,6 +579,8 @@ ${c_cyan}Options:${c_rst}
   --verbose     OTTO_DEBUG=1 (debug logs to stderr)
   --quiet       on a click miss, skip the "nothing to click" banner (for
                 callers that chain their own fallback)
+  --no-refresh  on a click miss, skip opening Notification Center to retry — fail
+                fast so a caller can try a cheaper recovery first
   -h, --help    Show this help
 EOF
 )"
@@ -590,11 +592,12 @@ main() {
   # work even where the DB is unreadable (e.g. under Karabiner).
   command -v /usr/bin/osascript >/dev/null 2>&1 || { log::err "Missing required command | command='/usr/bin/osascript'"; return 1; }
 
-  local subcmd="" n=1 app_pat="" match_pat="" limit=30 show_all=0 fmt="human"
+  local subcmd="" n=1 app_pat="" match_pat="" limit=30 show_all=0 fmt="human" no_refresh=0
   while (( $# > 0 )); do case "${1}" in
-    -h|--help)  help; return 0 ;;
-    --verbose)  export OTTO_DEBUG=1; shift ;;
-    --quiet)    _QUIET_EMPTY=1; shift ;;
+    -h|--help)     help; return 0 ;;
+    --verbose)     export OTTO_DEBUG=1; shift ;;
+    --quiet)       _QUIET_EMPTY=1; shift ;;
+    --no-refresh)  no_refresh=1; shift ;;
     --app)      app_pat="${2:?--app needs a pattern}"; shift 2 ;;
     --match)    match_pat="${2:?--match needs a pattern}"; shift 2 ;;
     --limit)    limit="${2:?--limit needs a number}"; shift 2 ;;
@@ -614,7 +617,7 @@ main() {
 
   case "${subcmd}" in
     list)    cmd_list "${app_pat}" "${match_pat}" "${limit}" "${show_all}" "${fmt}" ;;
-    click)   cmd_click "${n}" "${app_pat}" "${match_pat}" ;;
+    click)   cmd_click "${n}" "${app_pat}" "${match_pat}" "${no_refresh}" ;;
     os)      cmd_os ;;
     ""|help) help ;;
     *)       log::err "Unknown command | command='${subcmd}'"; help; return 1 ;;

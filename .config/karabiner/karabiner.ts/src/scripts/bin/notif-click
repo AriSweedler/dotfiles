@@ -1,19 +1,16 @@
 #!/usr/bin/env zsh
 #
-# Karabiner Hyper+N handler: click the newest (top) notification.
+# Karabiner Hyper+N handler: jump to a waiting notification.
 #
-# Positional (`notif-center click`, i.e. the 1st/top alert) rather than
-# `--app slack`, for speed:
-#   • no DB read       → no Full Disk Access needed
-#   • no O(tray) content scan → fast even when the tray is full of #spinnaker
-# When Slack is the chatty app, the top notification IS the newest Slack one,
-# which is "good enough". (The slack-app-targeted variant lives in git history.)
-#
-# notif-center's AX tray scan can't reach Claude Code notifications once their
-# banner auto-dismisses (terminal-notifier notifs don't sit in the scanned tray
-# the way Slack's do). So before giving up, fall back to the Claude
-# click-simulator, which finds them by terminal-notifier group and jumps to the
-# tmux pane.
+# Claude-first for speed. A Claude notif is read from terminal-notifier (the same
+# fast, FDA-free, osascript-free path Hyper+C uses, ~60ms) and wins over other
+# apps — Hyper+C exists for Claude, so N favors it too. Only with no Claude notif
+# do we pay osascript to AX-press an on-screen banner of another app, and only
+# then, as a last resort, open Notification Center to recover a faded non-Claude
+# notif (terminal-notifier can't see those):
+#   1. terminal-notifier read (Claude)     — fast, == Hyper+C
+#   2. on-screen AX press (any app)         — osascript AX, ~160ms
+#   3. open-NC refresh (faded non-Claude)   — slow, last resort
 set -euo pipefail
 
 export OTTO_LOG_NOTIF_GROUP="notif-click"
@@ -25,18 +22,27 @@ source "${HOME}/.config/zsh/plugins/log.zsh"
 
 readonly CLAUDE_CLICK_SIM="${HOME}/.config/claude/bin/notification-click-simulator.sh"
 
-# 1) Generic positional click (Slack, Calendar, on-screen Claude banners).
-#    --quiet so notif-center doesn't announce a miss before we try the fallback.
-if notif-center click --quiet; then
-  exit 0
-fi
-
-# 2) Fallback: the Claude click-simulator catches Claude notifs by group.
-log::info "notif-center found nothing — falling back to claude click-simulator"
+# 1) terminal-notifier read (the Claude sim, same fast path as Hyper+C): a waiting
+#    Claude notif is caught with no osascript, and wins over a non-Claude banner.
 if "${CLAUDE_CLICK_SIM}"; then
   exit 0
 fi
 
-# 3) Both missed → now it's a real miss; say so.
+# 2) No Claude notif → osascript AX-press an on-screen banner of any app (Slack,
+#    Calendar). --no-refresh: skip the slow tray retry for now (step 3). --quiet:
+#    no miss banner yet.
+log::info "no claude notif — trying on-screen AX press (any app)"
+if notif-center click --quiet --no-refresh; then
+  exit 0
+fi
+
+# 3) Last resort: a faded non-Claude notif (e.g. an old Slack banner) lives only
+#    in Notification Center. Pay for the open-NC refresh skipped in step 2.
+log::warn "SLOW PATH (~800ms): no claude notif, no on-screen banner — opening Notification Center to recover a faded one"
+if notif-center click --quiet; then
+  exit 0
+fi
+
+# 4) Everything missed → real miss; say so.
 OTTO_LOG_NOTIFY_SECS=3 log::notify "No notification to click"
 exit 1
