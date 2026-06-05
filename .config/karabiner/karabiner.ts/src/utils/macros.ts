@@ -33,6 +33,8 @@ const PATH_PREFIX_DIRS = [
 // log_rotate, not truncated) so intermittent failures can be compared across
 // presses. logKeep defaults to 5; bump it per-binding for ones under active
 // debugging, e.g. karabiner_script("notif-click", { logKeep: 50 }).
+// Each run ends with an `elapsed_ms=<n> rc=<n>` line (zsh EPOCHREALTIME) so any
+// binding's latency is greppable across presses.
 export const karabiner_script = (
   scriptPathRel: string,
   { logKeep = 5 }: { logKeep?: number } = {},
@@ -63,7 +65,7 @@ zsh -c 'source "\$HOME/.config/zsh/plugins/log_rotate.zsh" && log_rotate "\$1" "
   date
   cd "\${REPO_ROOT:?}"
   echo "Invoking ${scriptPathAbs}"
-  ${scriptPathAbs}
+  zsh -c 'zmodload zsh/datetime; typeset -F _s=\$EPOCHREALTIME; "\$1"; _rc=\$?; typeset -F _e=\$EPOCHREALTIME; printf "elapsed_ms=%.0f rc=%d\\n" \$(( (_e - _s) * 1000 )) \$_rc; exit \$_rc' _ "${scriptPathAbs}"
 } &> "${logFile}"
 `
   }
