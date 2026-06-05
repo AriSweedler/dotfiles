@@ -520,7 +520,7 @@ print(re.sub(r"\s+", " ", (o.get("body") or o.get("subtitle") or o.get("title") 
   local result
   result="$(_do_press "${mode}" "${arg}")"
   if [[ "${result}" != ok ]] && (( ! no_refresh )); then
-    log::debug "miss — opening Notification Center to refresh | result='${result}'"
+    log::warn "SLOW PATH (~800ms): opening Notification Center to refresh | result='${result}'"
     _nc_open
     sleep 0.2
     result="$(_do_press "${mode}" "${arg}")"
