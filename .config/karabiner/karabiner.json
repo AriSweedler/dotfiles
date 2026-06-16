@@ -73,6 +73,11 @@
                         "is_keyboard": true,
                         "product_id": 258,
                         "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 259,
+                        "vendor_id": 10730
                       }
                     ],
                     "type": "device_if"
@@ -109,6 +114,11 @@
                       },
                       {
                         "is_keyboard": true,
+                        "product_id": 259,
+                        "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
                         "product_id": 37904,
                         "vendor_id": 1423
                       }
@@ -138,6 +148,11 @@
                       {
                         "is_keyboard": true,
                         "product_id": 258,
+                        "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 259,
                         "vendor_id": 10730
                       },
                       {
@@ -822,6 +837,11 @@
                         "is_keyboard": true,
                         "product_id": 258,
                         "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 259,
+                        "vendor_id": 10730
                       }
                     ],
                     "type": "device_if"
@@ -973,6 +993,11 @@
                       {
                         "is_keyboard": true,
                         "product_id": 258,
+                        "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 259,
                         "vendor_id": 10730
                       },
                       {
@@ -1212,7 +1237,6 @@
                 },
                 "to": [
                   {
-                    "description": "restore",
                     "key_code": "delete_or_backspace",
                     "modifiers": [
                       "control",
@@ -1258,7 +1282,6 @@
                 },
                 "to": [
                   {
-                    "description": "almost-maximize",
                     "key_code": "return_or_enter",
                     "modifiers": [
                       "control",
@@ -1304,7 +1327,6 @@
                 },
                 "to": [
                   {
-                    "description": "left-half",
                     "key_code": "h",
                     "modifiers": [
                       "control",
@@ -1350,7 +1372,6 @@
                 },
                 "to": [
                   {
-                    "description": "right-half",
                     "key_code": "l",
                     "modifiers": [
                       "control",
@@ -1396,7 +1417,6 @@
                 },
                 "to": [
                   {
-                    "description": "left-third",
                     "key_code": "q",
                     "modifiers": [
                       "control",
@@ -1442,7 +1462,6 @@
                 },
                 "to": [
                   {
-                    "description": "center-third",
                     "key_code": "w",
                     "modifiers": [
                       "control",
@@ -1488,7 +1507,6 @@
                 },
                 "to": [
                   {
-                    "description": "right-third",
                     "key_code": "e",
                     "modifiers": [
                       "control",
@@ -1534,7 +1552,6 @@
                 },
                 "to": [
                   {
-                    "description": "top-left-quarter",
                     "key_code": "u",
                     "modifiers": [
                       "control",
@@ -1580,7 +1597,6 @@
                 },
                 "to": [
                   {
-                    "description": "top-right-quarter",
                     "key_code": "i",
                     "modifiers": [
                       "control",
@@ -1626,7 +1642,6 @@
                 },
                 "to": [
                   {
-                    "description": "bottom-left-quarter",
                     "key_code": "j",
                     "modifiers": [
                       "control",
@@ -1672,7 +1687,6 @@
                 },
                 "to": [
                   {
-                    "description": "bottom-right-quarter",
                     "key_code": "k",
                     "modifiers": [
                       "control",
@@ -1718,7 +1732,6 @@
                 },
                 "to": [
                   {
-                    "description": "center",
                     "key_code": "c",
                     "modifiers": [
                       "control",
@@ -1764,7 +1777,6 @@
                 },
                 "to": [
                   {
-                    "description": "reasonable-size",
                     "key_code": "r",
                     "modifiers": [
                       "control",
@@ -1810,7 +1822,6 @@
                 },
                 "to": [
                   {
-                    "description": "toggle-fullscreen",
                     "key_code": "f",
                     "modifiers": [
                       "control",
@@ -1856,7 +1867,6 @@
                 },
                 "to": [
                   {
-                    "description": "make-smaller",
                     "key_code": "hyphen",
                     "modifiers": [
                       "control",
@@ -1902,7 +1912,6 @@
                 },
                 "to": [
                   {
-                    "description": "make-larger",
                     "key_code": "equal_sign",
                     "modifiers": [
                       "control",
@@ -1948,7 +1957,6 @@
                 },
                 "to": [
                   {
-                    "description": "previous-display",
                     "key_code": "comma",
                     "modifiers": [
                       "control",
@@ -1994,7 +2002,6 @@
                 },
                 "to": [
                   {
-                    "description": "next-display",
                     "key_code": "period",
                     "modifiers": [
                       "control",
@@ -2040,7 +2047,6 @@
                 },
                 "to": [
                   {
-                    "description": "previous-desktop",
                     "key_code": "open_bracket",
                     "modifiers": [
                       "control",
@@ -2086,7 +2092,6 @@
                 },
                 "to": [
                   {
-                    "description": "next-desktop",
                     "key_code": "close_bracket",
                     "modifiers": [
                       "control",

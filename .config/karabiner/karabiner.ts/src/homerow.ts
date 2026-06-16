@@ -49,7 +49,7 @@ export const homeRow = [
   rule('Kinesis Freestyle Pro menu → Hyper')
     .condition({
       type: 'device_if',
-      identifiers: [devices.freestylePro.identifier],
+      identifiers: devices.freestylePro.identifiers,
     })
     .manipulators([
       map('application').toHyper(),
@@ -58,7 +58,7 @@ export const homeRow = [
   rule('Kinesis swaps command and option')
     .condition({
       type: 'device_if',
-      identifiers: kinesisDevices.map(d => d.identifier),
+      identifiers: kinesisDevices.flatMap(d => d.identifiers),
     })
     .manipulators([
       ...swapKeys('left_command', 'left_option'),

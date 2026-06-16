@@ -1,4 +1,4 @@
-import { hyperLayer, toApp, map, FromKeyCode, Modifier } from "karabiner.ts"
+import { hyperLayer, toApp, map, FromKeyCode, Modifier, ToKeyCode, LayerKeyParam } from "karabiner.ts"
 import { karabiner_script } from "./macros"
 import { allDevices } from "./devices"
 
@@ -103,19 +103,18 @@ export class AriMode {
         return map(key).to(toApp(action.name))
       case "key_code":
         return map(key).to({
-          key_code: action.key_code,
+          key_code: action.key_code as ToKeyCode,
           modifiers: action.modifiers || [],
-          description: action.description || `key_code: ${action.key_code}`,
         })
       case "which_keyboard":
         const known = allDevices.map(d =>
           map(key)
             .to(notify(d.label))
-            .condition({ type: 'device_if', identifiers: [d.identifier] })
+            .condition({ type: 'device_if', identifiers: d.identifiers })
         )
         const fallback = map(key)
           .to(notify("Unknown keyboard"))
-          .condition({ type: 'device_unless', identifiers: allDevices.map(d => d.identifier) })
+          .condition({ type: 'device_unless', identifiers: allDevices.flatMap(d => d.identifiers) })
         return [...known, fallback]
     }
 
@@ -130,7 +129,7 @@ export class AriMode {
   }
 
   asRule() {
-    return hyperLayer(this.meta.entrypoint, this.meta.layerName)
+    return hyperLayer(this.meta.entrypoint as LayerKeyParam, this.meta.layerName)
       .description(this.toDescription())
       .leaderMode()
       .notification()
