@@ -96,14 +96,14 @@ function tmux::_slice_history() {
 
 function tmux::_debug_pbpaste() {
   local d="${c_grey}${(l:$COLUMNS::-:)}${c_rst}"
-  printf "%b\n%s\n%b" "${d}" "$(pbpaste)" "${d}"
+  printf "%b\n%s\n%b\n" "${d}" "$(pbpaste)" "${d}"
   log::info "Placed N lines on clipboard | N='${c_cyan}$(pbpaste | wc -l | tr -d ' ')${c_rst}'"
 }
 
 function tmux::cap() {
   [ -z "$TMUX" ] && return
 
-  local prompt_re="${TMUX_PROMPT_RE:-❮|❯}"
+  local prompt_re="${TMUX_PROMPT_RE:-❯|❮}"
   local from to less_mode=false
 
   # Parse arguments:
@@ -176,7 +176,7 @@ function tmux::cap() {
 
 function tmux::cap_div() {
   # Prefix with a TMUX_PROMPT_RE match so _slice_history treats this as a prompt boundary.
-  local prompt_re="${TMUX_PROMPT_RE:-❮|❯}"
+  local prompt_re="${TMUX_PROMPT_RE:-❯|❮}"
   local prompt_char="${prompt_re%%|*}"
   local pad_width=$((COLUMNS - ${#prompt_char} - 1))
   (( pad_width < 1 )) && pad_width=1
