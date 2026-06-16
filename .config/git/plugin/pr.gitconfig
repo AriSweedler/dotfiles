@@ -4,3 +4,4 @@
 
 [alias]
 	dim = delete-if-merged-all '^ariSweedler/'
+	dimc = delete-if-merged-all '^cloud-agent/'
