@@ -22,7 +22,7 @@ export const devices = {
   //     karabiner-list-keyboards --json --vendor_id 10730
   freestylePro: {
     label: "Kinesis Freestyle Pro",
-    identifier: { is_keyboard: true, product_id: 259, vendor_id: 10730 },
+    identifier: { is_keyboard: true, product_id: 258, vendor_id: 10730 },
   },
   freestyle2: {
     label: "Kinesis Freestyle 2",
