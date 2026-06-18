@@ -14,8 +14,27 @@
 
 emulate -L zsh
 
+function usage() {
+  cat <<'EOF'
+usage: irun <command> [args...]
+
+Run <command> in an interactive zsh so aliases, functions, and everything
+sourced from .zshrc are available (non-interactive shells source only
+.zshenv, so interactive-only goodies like `ap` are missing). Pays the
+~0.4s interactive startup cost.
+
+Examples:
+  irun ap --query hyperbase
+  irun 'aws_profile --query alpha && aws s3 ls'
+EOF
+}
+
+case "$1" in
+  -h|--help) usage; exit 0 ;;
+esac
+
 if (( $# == 0 )); then
-  print -u2 'usage: irun <command> [args...]'
+  usage >&2
   exit 2
 fi
 
