@@ -23,14 +23,32 @@ sourced from .zshrc are available (non-interactive shells source only
 .zshenv, so the plugins under $XDG_CONFIG_HOME/zsh/plugins and
 $XDG_DATA_HOME/zsh/plugins are missing). Pays the interactive startup cost.
 
+Options:
+  -h, --help       show this help
+  -b, --benchmark  compare interactive vs non-interactive startup (avg of 10 runs)
+
 Examples:
   irun ap --query hyperbase
   irun 'aws_profile --query alpha && aws s3 ls'
 EOF
 }
 
+function benchmark() {
+  zmodload zsh/datetime
+  integer runs=10 i
+  float ni=0 int=0 start
+  for (( i = 1; i <= runs; i++ )); do
+    start=$EPOCHREALTIME; zsh -c  : >/dev/null 2>&1; (( ni  += EPOCHREALTIME - start ))
+    start=$EPOCHREALTIME; zsh -ic : >/dev/null 2>&1; (( int += EPOCHREALTIME - start ))
+  done
+  (( ni /= runs, int /= runs ))
+  printf 'avg of %d runs:\n  non-interactive (zsh -c):  ~%.2fs\n  interactive (zsh -ic):     ~%.2fs\n  overhead irun pays:        ~%.2fs\n' \
+    "$runs" "$ni" "$int" "$(( int - ni ))"
+}
+
 case "$1" in
   -h|--help) usage; exit 0 ;;
+  -b|--benchmark) benchmark; exit 0 ;;
 esac
 
 if (( $# == 0 )); then
