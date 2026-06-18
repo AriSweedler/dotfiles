@@ -37,10 +37,13 @@ function benchmark() {
   zmodload zsh/datetime
   integer runs=10 i
   float ni=0 int=0 start
+  print -u2 "benchmarking: ${runs} interactive + ${runs} non-interactive startups..."
   for (( i = 1; i <= runs; i++ )); do
     start=$EPOCHREALTIME; zsh -c  : >/dev/null 2>&1; (( ni  += EPOCHREALTIME - start ))
     start=$EPOCHREALTIME; zsh -ic : >/dev/null 2>&1; (( int += EPOCHREALTIME - start ))
+    print -nu2 "\r  ${i}/${runs}\e[K"
   done
+  print -u2 ""
   (( ni /= runs, int /= runs ))
   printf 'avg of %d runs:\n  non-interactive (zsh -c):  ~%.2fs\n  interactive (zsh -ic):     ~%.2fs\n  overhead irun pays:        ~%.2fs\n' \
     "$runs" "$ni" "$int" "$(( int - ni ))"
