@@ -6,7 +6,7 @@
 # Non-interactive shells (e.g. `zsh -c`, as spawned by Claude's Bash tool or
 # any script) source only .zshenv, so interactive-only goodies like `ap`
 # (alias -> aws_profile) are missing. This wrapper pays the interactive
-# startup cost (~0.4s) to get them.
+# startup cost to get them.
 #
 # Usage:
 #   irun ap --query hyperbase
@@ -20,8 +20,8 @@ usage: irun <command> [args...]
 
 Run <command> in an interactive zsh so aliases, functions, and everything
 sourced from .zshrc are available (non-interactive shells source only
-.zshenv, so interactive-only goodies like `ap` are missing). Pays the
-~0.4s interactive startup cost.
+.zshenv, so the plugins under $XDG_CONFIG_HOME/zsh/plugins and
+$XDG_DATA_HOME/zsh/plugins are missing). Pays the interactive startup cost.
 
 Examples:
   irun ap --query hyperbase
