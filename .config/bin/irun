@@ -1,0 +1,22 @@
+#!/bin/zsh
+# irun — run a command in an *interactive* zsh so the full interactive
+# environment is available: aliases, functions, and everything sourced from
+# .zshrc (plugins under $ZDOTDIR/plugins and $XDG_DATA_HOME/zsh/plugins).
+#
+# Non-interactive shells (e.g. `zsh -c`, as spawned by Claude's Bash tool or
+# any script) source only .zshenv, so interactive-only goodies like `ap`
+# (alias -> aws_profile) are missing. This wrapper pays the interactive
+# startup cost (~0.4s) to get them.
+#
+# Usage:
+#   irun ap --query hyperbase
+#   irun 'aws_profile --query alpha && aws s3 ls'
+
+emulate -L zsh
+
+if (( $# == 0 )); then
+  print -u2 'usage: irun <command> [args...]'
+  exit 2
+fi
+
+exec zsh -ic "$*"
