@@ -5,6 +5,7 @@ import karabinerMode from "./modes/karabiner"
 import windowMode from "./modes/window"
 import { shortcuts } from "./shortcuts.ts"
 import { validateClaudeKeybindings } from "./claude/validate.ts"
+import { claudeLeaderMode } from "./claude/rule.ts"
 
 // Cross-check declared Claude Code leader chords against ~/.claude/keybindings.json
 // before writing the profile; fails the bake (unless KARABINER_SKIP_CLAUDE_CHECK).
@@ -15,5 +16,6 @@ writeToProfile("Default", [
   applicationMode,
   karabinerMode,
   windowMode,
+  claudeLeaderMode,
   ...shortcuts,
 ])

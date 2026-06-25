@@ -102,7 +102,7 @@ function buildReport(failures: Failure[], preamble?: string): string {
   if (orphans.length) {
     out.push("", `  Add to src/claude/actions.ts (claudeActions[]):`)
     for (const o of orphans) {
-      const suffix = o.chord.slice(CHORD_PREFIX.length)
+      const suffix = o.chord.slice(CHORD_PREFIX.length).replace(/^alt\+/, "")
       out.push(`    { suffix: ${JSON.stringify(suffix)}, ccContext: ${JSON.stringify(o.ccContext)}, ccAction: ${JSON.stringify(o.ccAction)}, desc: "TODO" },`)
     }
   }

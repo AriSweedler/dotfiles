@@ -2203,6 +2203,857 @@
             ]
           },
           {
+            "description": "(hyper + l): Claude agent nav\n\n• `j` → next agent\n• `k` → prev agent",
+            "manipulators": [
+              {
+                "conditions": [
+                  {
+                    "name": "claude-leader",
+                    "type": "variable_unless",
+                    "value": 1
+                  },
+                  {
+                    "name": "__layer",
+                    "type": "variable_unless",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "l",
+                  "modifiers": {
+                    "mandatory": [
+                      "command",
+                      "option",
+                      "control",
+                      "shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "claude-leader",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-claude-leader",
+                      "text": "(hyper + l): Claude agent nav\n\n• `j` → next agent\n• `k` → prev agent"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "claude-leader",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "j",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "e",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "down_arrow"
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "j",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "return_or_enter"
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "claude-leader",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-claude-leader",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "claude-leader",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "k",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "n",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "e",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "down_arrow"
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "return_or_enter"
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "l",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "key_code": "k",
+                    "modifiers": [
+                      "option"
+                    ]
+                  },
+                  {
+                    "set_variable": {
+                      "name": "claude-leader",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-claude-leader",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "claude-leader",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "escape",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "claude-leader",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-claude-leader",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "claude-leader",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "caps_lock",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "claude-leader",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-claude-leader",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
             "description": "Cmd+Ctrl+A → Ctrl+A twice",
             "manipulators": [
               {

@@ -1,14 +1,16 @@
 // Single source of truth for the Claude Code "leader" chords.
 //
-// This array drives everything: the Karabiner manipulators (generated elsewhere)
-// AND the bake-time validation that the matching chords exist in
-// ~/.claude/keybindings.json. Add a binding here and the bake will tell you
-// exactly what to add to keybindings.json if it's missing.
+// This array drives everything: the Karabiner hyper+l mode (src/claude/rule.ts)
+// AND the bake-time validation (src/claude/validate.ts) that the matching chords
+// exist in ~/.claude/keybindings.json. Add a binding here and the bake tells you
+// exactly what to add to keybindings.json if it's missing (and vice-versa).
+
+import { type FromAndToKeyCode } from "karabiner.ts"
 
 export const LEADER = "alt+l" // global leader; every chord is LEADER + suffix
 
 export type ClaudeAction = {
-  suffix: string // key pressed after the leader (e.g. "j")
+  suffix: FromAndToKeyCode // key pressed after the leader (e.g. "j")
   ccContext: string // Claude Code keybinding context the chord lives in
   ccAction: string // Claude Code action the chord maps to
   desc: string // human description
@@ -19,5 +21,6 @@ export const claudeActions: ClaudeAction[] = [
   { suffix: "k", ccContext: "Footer", ccAction: "footer:up", desc: "prev agent" },
 ]
 
-// The chord exactly as it appears as a key in keybindings.json, e.g. "alt+l j".
-export const chordFor = (a: ClaudeAction): string => `${LEADER} ${a.suffix}`
+// The chord exactly as it appears as a key in keybindings.json, e.g. "alt+l alt+j".
+// The second key is alt-modified so a mistimed/stray press never types a literal letter.
+export const chordFor = (a: ClaudeAction): string => `${LEADER} alt+${a.suffix}`
