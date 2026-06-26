@@ -17,4 +17,12 @@ windows:
 
 - hyperbase:
     root: "~/h/source/hyperbase/"
-    panes: ls -1
+    panes: hyp-ready
+
+- secondary-hyperbase:
+    root: "~/h/source/secondary-hyperbase/"
+    panes: hyp-ready
+
+- tertiary-hyperbase:
+    root: "~/h/source/tertiary-hyperbase/"
+    panes: hyp-ready
