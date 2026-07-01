@@ -1,5 +1,5 @@
 import { FromAndToKeyCode, Manipulator, map, rule } from "karabiner.ts"
-import { devices, kinesisDevices } from "./utils/devices"
+import { kinesisDevices } from "./utils/devices"
 
 // Helper to swap two keys, preserving any modifiers
 const swapKeys = (keyA: FromAndToKeyCode, keyB: FromAndToKeyCode): Manipulator[] => [
@@ -46,15 +46,18 @@ export const homeRow = [
 
   // Mirrors the Globe → Hyper rule above so the Mac and Kinesis behave the
   // same. 'Menu' key emits `application` on the Freestyle Pro.
-  rule('Kinesis Freestyle Pro menu → Hyper')
+  rule('Kinesis menu → Hyper')
     .condition({
       type: 'device_if',
-      identifiers: devices.freestylePro.identifiers,
+      identifiers: kinesisDevices.flatMap(d => d.identifiers),
     })
     .manipulators([
       map('application').toHyper(),
     ]),
 
+  // I only have the windows layout on my Freestyle 2, may as well use the
+  // windows layout on my Freestyle Pro, as well (keeps config local to
+  // karabiner
   rule('Kinesis swaps command and option')
     .condition({
       type: 'device_if',

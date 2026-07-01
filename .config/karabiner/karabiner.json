@@ -78,6 +78,11 @@
                         "is_keyboard": true,
                         "product_id": 259,
                         "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 37904,
+                        "vendor_id": 1423
                       }
                     ],
                     "type": "device_if"
@@ -642,7 +647,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\nmkdir -p \"/tmp/karabiner.script-example\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.script-example/log.txt\" \"5\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/script-example\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/script-example\"\n} &> \"/tmp/karabiner.script-example/log.txt\"\n"
+                    "shell_command": "\nmkdir -p \"/tmp/karabiner.script-example\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.script-example/log.txt\" \"5\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/opt/homebrew/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/script-example\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/script-example\"\n} &> \"/tmp/karabiner.script-example/log.txt\"\n"
                   },
                   {
                     "set_variable": {
@@ -683,7 +688,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\nmkdir -p \"/tmp/karabiner.karabiner-edit-index\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.karabiner-edit-index/log.txt\" \"5\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index\"\n} &> \"/tmp/karabiner.karabiner-edit-index/log.txt\"\n"
+                    "shell_command": "\nmkdir -p \"/tmp/karabiner.karabiner-edit-index\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.karabiner-edit-index/log.txt\" \"5\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/opt/homebrew/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index\"\n} &> \"/tmp/karabiner.karabiner-edit-index/log.txt\"\n"
                   },
                   {
                     "set_variable": {
@@ -724,7 +729,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\nmkdir -p \"/tmp/karabiner.karabiner-recompile\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.karabiner-recompile/log.txt\" \"5\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile\"\n} &> \"/tmp/karabiner.karabiner-recompile/log.txt\"\n"
+                    "shell_command": "\nmkdir -p \"/tmp/karabiner.karabiner-recompile\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.karabiner-recompile/log.txt\" \"5\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/opt/homebrew/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile\"\n} &> \"/tmp/karabiner.karabiner-recompile/log.txt\"\n"
                   },
                   {
                     "set_variable": {
@@ -765,7 +770,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\nmkdir -p \"/tmp/karabiner.karabiner-logs\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.karabiner-logs/log.txt\" \"5\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-logs\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-logs\"\n} &> \"/tmp/karabiner.karabiner-logs/log.txt\"\n"
+                    "shell_command": "\nmkdir -p \"/tmp/karabiner.karabiner-logs\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.karabiner-logs/log.txt\" \"5\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/opt/homebrew/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-logs\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-logs\"\n} &> \"/tmp/karabiner.karabiner-logs/log.txt\"\n"
                   },
                   {
                     "set_variable": {
@@ -806,7 +811,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\nmkdir -p \"/tmp/karabiner.karabiner-hello-world\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.karabiner-hello-world/log.txt\" \"5\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-hello-world\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-hello-world\"\n} &> \"/tmp/karabiner.karabiner-hello-world/log.txt\"\n"
+                    "shell_command": "\nmkdir -p \"/tmp/karabiner.karabiner-hello-world\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.karabiner-hello-world/log.txt\" \"5\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/opt/homebrew/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-hello-world\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-hello-world\"\n} &> \"/tmp/karabiner.karabiner-hello-world/log.txt\"\n"
                   },
                   {
                     "set_variable": {
@@ -2245,7 +2250,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\nmkdir -p \"/tmp/karabiner.karabiner-go-pr\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.karabiner-go-pr/log.txt\" \"5\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-go-pr\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-go-pr\"\n} &> \"/tmp/karabiner.karabiner-go-pr/log.txt\"\n"
+                    "shell_command": "\nmkdir -p \"/tmp/karabiner.karabiner-go-pr\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.karabiner-go-pr/log.txt\" \"5\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/opt/homebrew/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-go-pr\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-go-pr\"\n} &> \"/tmp/karabiner.karabiner-go-pr/log.txt\"\n"
                   }
                 ],
                 "type": "basic"
@@ -2269,7 +2274,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\nmkdir -p \"/tmp/karabiner.karabiner-open-pr-from-focussed-claude\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.karabiner-open-pr-from-focussed-claude/log.txt\" \"5\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-open-pr-from-focussed-claude\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-open-pr-from-focussed-claude\"\n} &> \"/tmp/karabiner.karabiner-open-pr-from-focussed-claude/log.txt\"\n"
+                    "shell_command": "\nmkdir -p \"/tmp/karabiner.karabiner-open-pr-from-focussed-claude\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.karabiner-open-pr-from-focussed-claude/log.txt\" \"5\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/opt/homebrew/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-open-pr-from-focussed-claude\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-open-pr-from-focussed-claude\"\n} &> \"/tmp/karabiner.karabiner-open-pr-from-focussed-claude/log.txt\"\n"
                   }
                 ],
                 "type": "basic"
@@ -2293,7 +2298,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\nmkdir -p \"/tmp/karabiner.notif-click\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.notif-click/log.txt\" \"50\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/notif-click\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/notif-click\"\n} &> \"/tmp/karabiner.notif-click/log.txt\"\n"
+                    "shell_command": "\nmkdir -p \"/tmp/karabiner.notif-click\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.notif-click/log.txt\" \"50\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/opt/homebrew/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/notif-click\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/notif-click\"\n} &> \"/tmp/karabiner.notif-click/log.txt\"\n"
                   }
                 ],
                 "type": "basic"
@@ -2317,7 +2322,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\nmkdir -p \"/tmp/karabiner.claude-notification-click-simulator\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.claude-notification-click-simulator/log.txt\" \"5\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/claude-notification-click-simulator\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/claude-notification-click-simulator\"\n} &> \"/tmp/karabiner.claude-notification-click-simulator/log.txt\"\n"
+                    "shell_command": "\nmkdir -p \"/tmp/karabiner.claude-notification-click-simulator\"\nzsh -c 'source \"$HOME/.config/zsh/plugins/log_rotate.zsh\" && log_rotate \"$1\" \"$2\"' _ \"/tmp/karabiner.claude-notification-click-simulator/log.txt\" \"5\" 2>/dev/null || true\n{\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/opt/homebrew/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  set -x\n  date\n  cd \"${REPO_ROOT:?}\"\n  echo \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/claude-notification-click-simulator\"\n  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; \"$1\"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/claude-notification-click-simulator\"\n} &> \"/tmp/karabiner.claude-notification-click-simulator/log.txt\"\n"
                   }
                 ],
                 "type": "basic"
@@ -2326,6 +2331,16 @@
           }
         ]
       },
+      "devices": [
+        {
+          "identifiers": {
+            "is_keyboard": true,
+            "product_id": 37904,
+            "vendor_id": 1423
+          },
+          "ignore_vendor_events": true
+        }
+      ],
       "name": "Default",
       "selected": true,
       "virtual_hid_keyboard": {
