@@ -41,7 +41,7 @@ function ssh::load_agent() {
 
   # Apple's launchd ssh-agent (/usr/bin/ssh-agent) cannot perform FIDO2
   # signing operations. Explicitly start Homebrew's agent.
-  eval "$(/opt/homebrew/bin/ssh-agent -s)" &>/dev/null
+  eval "$(ssh-agent -s)" &>/dev/null
   ln -sf "$SSH_AUTH_SOCK" "$auth_socket"
   export SSH_AUTH_SOCK="$auth_socket"
 
