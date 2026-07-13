@@ -1,0 +1,36 @@
+#!/usr/bin/env zsh
+#
+# Karabiner Hyper+T handler. Opens a Monkeytype custom typing test seeded with
+# the next unread passage of Paradise Lost, advancing the bookmark kept by the
+# `passage` CLI. Output goes to /tmp/karabiner.karabiner-typing-test/log.txt
+# via the karabiner_script wrapper, which also sets REPO_LIB.
+
+set -euo pipefail
+
+readonly PASSAGE_BIN="${HOME}/Documents/paradise-lost-txt/bin/passage"
+readonly ENCODER="${REPO_LIB:?REPO_LIB must be set by the karabiner_script wrapper}/monkeytype_url.cjs"
+readonly NOTIFIER="/opt/homebrew/bin/terminal-notifier"
+
+notify_failure() {
+  if [[ -x "${NOTIFIER}" ]]; then
+    "${NOTIFIER}" -title "Hyper+T typing test" -message "${1}"
+  fi
+}
+
+main() {
+  local passage url
+  if ! passage="$(zsh "${PASSAGE_BIN}" next)"; then
+    notify_failure "passage failed — is the poem finished? See the log."
+    return 1
+  fi
+
+  if ! url="$(printf '%s' "${passage}" | node "${ENCODER}")"; then
+    notify_failure "URL encoding failed. See the log."
+    return 1
+  fi
+  echo "url_length=${#url}"
+
+  open "${url}"
+}
+
+main "${@}"
