@@ -9,6 +9,7 @@ set -euo pipefail
 
 readonly PASSAGE_BIN="${HOME}/Documents/paradise-lost-txt/bin/passage"
 readonly ENCODER="${REPO_LIB:?REPO_LIB must be set by the karabiner_script wrapper}/monkeytype_url.cjs"
+readonly PASSAGE_LOGGING_LIB="${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
 readonly NOTIFIER="/opt/homebrew/bin/terminal-notifier"
 
 notify_failure() {
@@ -17,7 +18,41 @@ notify_failure() {
   fi
 }
 
+#######################################
+# Check every dependency up front and name each missing one, so the log from a
+# fresh machine says exactly what to install/copy instead of a bare exit code.
+# The paradise-lost-txt folder is NOT in the dotfiles repo — it must be copied
+# over separately (it holds the text, the passage CLI, and the bookmark state).
+#######################################
+check_prerequisites() {
+  local -a problems
+
+  if [[ ! -x "${PASSAGE_BIN}" ]]; then
+    problems+=("passage CLI missing | expected='${PASSAGE_BIN}' fix='copy ~/Documents/paradise-lost-txt/ (text + bin/passage + state) from another machine; it is not tracked in dotfiles'")
+  fi
+  if [[ ! -r "${PASSAGE_LOGGING_LIB}" ]]; then
+    problems+=("passage's logging lib missing | expected='${PASSAGE_LOGGING_LIB}' fix='install the ari-skill-shellscripts Claude skill (passage sources its lib/logging.zsh)'")
+  fi
+  if [[ ! -r "${ENCODER}" ]]; then
+    problems+=("monkeytype URL encoder missing | expected='${ENCODER}' fix='pull dotfiles; it lives in karabiner.ts/src/scripts/lib/'")
+  fi
+  if ! command -v node >/dev/null 2>&1; then
+    problems+=("node not on PATH | path='${PATH}' fix='install node, or re-run bake so the wrapper PATH picks up the node toolchain'")
+  fi
+
+  if (( ${#problems} > 0 )); then
+    local problem
+    for problem in "${problems[@]}"; do
+      echo "[PREREQ-FAIL] ${problem}" >&2
+    done
+    notify_failure "${#problems} missing prereq(s) — see /tmp/karabiner.karabiner-typing-test/log.txt"
+    return 1
+  fi
+}
+
 main() {
+  check_prerequisites
+
   local passage url
   if ! passage="$(zsh "${PASSAGE_BIN}" next)"; then
     notify_failure "passage failed — is the poem finished? See the log."
