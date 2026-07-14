@@ -1,0 +1,661 @@
+#!/usr/bin/env zsh
+#
+# passage — walk through typing-practice books one passage at a time.
+#
+# Books are plain-text files dropped into TYPING_BOOK_DIR (XDG data). Each
+# book gets a state file in TYPING_STATE_DIR (XDG state): a stack of line
+# pointers, one per passage read, whose last line is that book's bookmark.
+# Passage i spans [pointer i-1, pointer i), which is what makes `current` and
+# `previous` possible. `last_opened` in the state dir remembers which book
+# you're reading.
+#
+# Passages are whole lines, newlines intact, continuing until the line on
+# which the word budget is crossed ends — verse meter is never split mid-line.
+# A wordless remainder (trailing blank lines) is absorbed silently and reading
+# falls through to the next incomplete book.
+#
+# `current --words N` / `previous --words N` re-anchor: pop one (or two)
+# passages off the stack, then read N words from that start line.
+#
+# Exit codes: 0 success (possibly with no output), 1 error, 2 nothing to do
+# (e.g. current/previous on an unread book).
+
+set -euo pipefail
+
+# --- Environment variables ---
+
+readonly TYPING_BOOK_DIR="${TYPING_BOOK_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/typing-books}"
+readonly TYPING_STATE_DIR="${TYPING_STATE_DIR:-${XDG_STATE_HOME:-${HOME}/.local/state}/typing-books}"
+
+# --- Constants ---
+
+readonly LAST_OPENED_FILE="${TYPING_STATE_DIR}/last_opened"
+readonly LOCK_DIR="${TYPING_STATE_DIR}/.lock"
+readonly DEFAULT_WORDS=50
+readonly VALID_ACTIONS=(next current previous pickup putdown list)
+readonly RC_NOTHING_TO_DO=2
+
+# --- Logging (source the canonical lib — never re-define log::* inline) ---
+
+readonly LIB_LOGGING="${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+
+# --- Locking (Karabiner can fire concurrent keypresses; serialize mutations) ---
+
+LOCK_HELD=false
+
+acquire_lock() {
+  local attempt
+  for attempt in {1..50}; do
+    if mkdir "${LOCK_DIR}" 2>/dev/null; then
+      LOCK_HELD=true
+      trap 'release_lock' EXIT INT TERM
+      return 0
+    fi
+    sleep 0.1
+  done
+  log::err "Could not acquire state lock — is another passage running? | lock_dir='${LOCK_DIR}'"
+  return 1
+}
+
+release_lock() {
+  if [[ "${LOCK_HELD}" == "true" ]]; then
+    rmdir "${LOCK_DIR}" 2>/dev/null || true
+    LOCK_HELD=false
+  fi
+}
+
+# --- Book helpers ---
+
+# The shelf, populated once by load_books.
+typeset -ga BOOKS
+
+#######################################
+# Populate BOOKS with readable plain files in sorted filename order,
+# warning about (and skipping) unreadable ones.
+# Globals: BOOKS, TYPING_BOOK_DIR
+# Returns: 1 if the shelf has no readable books
+#######################################
+load_books() {
+  BOOKS=()
+  local candidate
+  for candidate in "${TYPING_BOOK_DIR}"/*(N.on); do
+    if [[ ! -r "${candidate}" ]]; then
+      log::warn "Skipping unreadable book | book='${candidate:t}'"
+      continue
+    fi
+    BOOKS+=("${candidate}")
+  done
+  if (( ${#BOOKS} == 0 )); then
+    log::err "No readable books on the shelf — drop plain-text files in | book_dir='${TYPING_BOOK_DIR}'"
+    return 1
+  fi
+}
+
+#######################################
+# State file path for a book.
+# Globals: TYPING_STATE_DIR
+# Arguments:
+#   $1 - book file path
+#######################################
+state_file_for() {
+  echo "${TYPING_STATE_DIR}/${1:t}.state"
+}
+
+#######################################
+# Total lines in a book. awk counts a final unterminated line, unlike wc -l,
+# keeping this consistent with the awk that emits passages.
+# Arguments:
+#   $1 - book file path
+#######################################
+book_total_lines() {
+  awk 'END { print NR }' "${1}"
+}
+
+#######################################
+# Read a book's bookmark: the last line of its state stack, or 1 when unread.
+# Arguments:
+#   $1 - state file path
+# Returns: bookmark line number via stdout; exits 1 on corrupt state
+#######################################
+read_bookmark() {
+  local state_file="${1}"
+  if [[ ! -s "${state_file}" ]]; then
+    echo 1
+    return
+  fi
+  local ptr
+  ptr="$(tail -n 1 "${state_file}")"
+  if [[ ! "${ptr}" =~ ^[0-9]+$ ]]; then
+    log::err "State file is corrupt, expected line numbers | state_file='${state_file}' last_line='${ptr}'"
+    exit 1
+  fi
+  echo "${ptr}"
+}
+
+#######################################
+# Whether a book's bookmark has passed its final line.
+# Arguments:
+#   $1 - book file path
+# Returns: 0 if complete, 1 if not
+#######################################
+book_is_complete() {
+  local book="${1}" bookmark total
+  bookmark="$(read_bookmark "$(state_file_for "${book}")")"
+  total="$(book_total_lines "${book}")"
+  (( bookmark > total ))
+}
+
+#######################################
+# First (sorted) book that is not complete.
+# Globals: BOOKS
+# Returns: book path via stdout; 1 (with error logged) when all are finished
+#######################################
+first_incomplete_book() {
+  local book
+  for book in "${BOOKS[@]}"; do
+    if ! book_is_complete "${book}"; then
+      echo "${book}"
+      return
+    fi
+  done
+  log::err "Every book on the shelf is finished — add more or --reset | book_dir='${TYPING_BOOK_DIR}'"
+  return 1
+}
+
+#######################################
+# Resolve which book to operate on: an explicit --book choice wins, then the
+# last opened book, then the first incomplete one on the shelf. Each branch
+# logs so the chosen path is visible in the run log.
+# Globals: BOOKS, LAST_OPENED_FILE, TYPING_BOOK_DIR
+# Arguments:
+#   $1 - --book value ("" when not given)
+# Returns: book path via stdout; 1 on an unknown/unreadable --book name
+#######################################
+resolve_book() {
+  local requested="${1}"
+  if [[ -n "${requested}" ]]; then
+    local candidate="${TYPING_BOOK_DIR}/${requested}"
+    if [[ ! -f "${candidate}" || ! -r "${candidate}" ]]; then
+      log::err "Book not found or unreadable | book='${requested}' shelf='${(j:, :)${(@)BOOKS:t}}'"
+      return 1
+    fi
+    log::info "Using requested book | book='${requested}'"
+    echo "${candidate}"
+    return
+  fi
+
+  if [[ -s "${LAST_OPENED_FILE}" ]]; then
+    local last candidate
+    last="$(<"${LAST_OPENED_FILE}")"
+    candidate="${TYPING_BOOK_DIR}/${last}"
+    if [[ -f "${candidate}" && -r "${candidate}" ]]; then
+      log::info "Using last opened book | book='${last}'"
+      echo "${candidate}"
+      return
+    fi
+    log::warn "Last opened book is gone from the shelf, falling back | last_opened='${last}'"
+  fi
+
+  local book
+  book="$(first_incomplete_book)" || return 1
+  log::info "No last opened book — using first incomplete | book='${book:t}'"
+  echo "${book}"
+}
+
+#######################################
+# Remember a book as the last one opened.
+# Globals: LAST_OPENED_FILE
+# Arguments:
+#   $1 - book file path
+#######################################
+record_last_opened() {
+  echo "${1:t}" > "${LAST_OPENED_FILE}"
+}
+
+#######################################
+# Start line of a book's most recently read passage: the second-to-last stack
+# entry, or 1 when only one passage has been read.
+# Arguments:
+#   $1 - state file path
+# Returns: line number via stdout
+#######################################
+read_current_start() {
+  local state_file="${1}" depth
+  depth="$(wc -l < "${state_file}" | tr -d ' ')"
+  if (( depth < 2 )); then
+    echo 1
+    return
+  fi
+  tail -n 2 "${state_file}" | head -n 1
+}
+
+#######################################
+# Pop entries off a state stack (fewer if the stack is shallower).
+# Arguments:
+#   $1 - state file path
+#   $2 - how many to pop
+#######################################
+trim_stack() {
+  local state_file="${1}" pop="${2}" depth keep tmp_file
+  depth="$(wc -l < "${state_file}" | tr -d ' ')"
+  keep=$(( depth > pop ? depth - pop : 0 ))
+  if (( keep == 0 )); then
+    : > "${state_file}"  # BSD head rejects -n 0
+  else
+    tmp_file="$(mktemp)"
+    head -n "${keep}" "${state_file}" > "${tmp_file}"
+    mv "${tmp_file}" "${state_file}"
+  fi
+  log::info "Popped stack entries | state_file='${state_file:t}' popped='$(( depth - keep ))' depth='${keep}'"
+}
+
+#######################################
+# Percent of a book before the given line, for progress logging. An empty
+# book reads as 100 (there is nothing left to type).
+# Arguments:
+#   $1 - bookmark line number
+#   $2 - total lines in the book
+# Returns: percentage (one decimal) via stdout
+#######################################
+progress_pct() {
+  awk -v ptr="${1}" -v total="${2}" \
+    'BEGIN { if (total <= 0) { print "100.0" } else { printf "%.1f", (ptr - 1) * 100 / total } }'
+}
+
+# --- Text helpers ---
+
+#######################################
+# Emit lines [start, end] of a book verbatim (newlines intact).
+# Arguments:
+#   $1 - book file path
+#   $2 - start line (inclusive)
+#   $3 - end line (inclusive)
+#######################################
+emit_lines() {
+  awk -v start="${2}" -v end="${3}" 'NR >= start && NR <= end' "${1}"
+}
+
+#######################################
+# Where a passage starting at a line would end: the line on which the
+# cumulative word count crosses the budget, or the last line of the book if
+# the budget is never met. Computed in awk (not from captured text) so
+# trailing blank lines and unterminated final lines are counted correctly.
+# Arguments:
+#   $1 - book file path
+#   $2 - start line
+#   $3 - word budget
+# Returns: "end_line word_count" via stdout ("0 0" for an empty book)
+#######################################
+passage_span() {
+  awk -v start="${2}" -v budget="${3}" '
+    NR < start { next }
+    { words += NF; if (words >= budget) { print NR, words; found = 1; exit } }
+    END { if (!found) print NR, words + 0 }
+  ' "${1}"
+}
+
+# --- Actions ---
+
+#######################################
+# Emit the next unread passage and push its end pointer onto the book's
+# stack. A wordless remainder (trailing blanks) is absorbed and reading falls
+# through to the next incomplete book — unless the book was an explicit
+# --book choice, which is refused rather than silently substituted.
+# Globals: BOOKS
+# Arguments:
+#   $1 - resolved book path
+#   $2 - word budget
+#   $3 - dry_run (true/false)
+#   $4 - explicit (true when the book came from --book)
+#######################################
+action_next() {
+  local book="${1}" words="${2}" dry_run="${3}" explicit="${4}"
+  local attempt state_file bookmark total end_line word_count next_bookmark
+
+  for attempt in {1..${#BOOKS}}; do
+    if book_is_complete "${book}"; then
+      if [[ "${explicit}" == "true" ]]; then
+        log::err "Book is finished — pick another or --reset | book='${book:t}'"
+        return 1
+      fi
+      log::info "Book is finished, moving on | book='${book:t}'"
+      book="$(first_incomplete_book)" || return 1
+    fi
+
+    state_file="$(state_file_for "${book}")"
+    bookmark="$(read_bookmark "${state_file}")"
+    total="$(book_total_lines "${book}")"
+    read -r end_line word_count <<< "$(passage_span "${book}" "${bookmark}" "${words}")"
+
+    if (( end_line >= bookmark && word_count > 0 )); then
+      next_bookmark=$(( end_line + 1 ))
+      if [[ "${dry_run}" == "true" ]]; then
+        log::info "Dry run, bookmark not advanced | book='${book:t}' bookmark='${bookmark}' would_be_next='${next_bookmark}'"
+      else
+        echo "${next_bookmark}" >> "${state_file}"
+        record_last_opened "${book}"
+        log::info "Bookmark advanced | book='${book:t}' bookmark='${bookmark}' next_bookmark='${next_bookmark}' word_count='${word_count}' progress_pct='$(progress_pct "${next_bookmark}" "${total}")'"
+        if (( next_bookmark > total )); then
+          log::info "Book finished | book='${book:t}'"
+        fi
+      fi
+      emit_lines "${book}" "${bookmark}" "${end_line}"
+      return 0
+    fi
+
+    # No words left in this book (empty remainder or trailing blank lines).
+    if [[ "${dry_run}" == "true" ]]; then
+      log::info "Dry run — only blank lines remain in this book | book='${book:t}'"
+      return 0
+    fi
+    if [[ "${explicit}" == "true" ]]; then
+      log::err "Only blank lines remain — book is effectively finished | book='${book:t}'"
+      return 1
+    fi
+    echo $(( total + 1 )) >> "${state_file}"
+    log::info "Absorbed wordless remainder, book finished | book='${book:t}' bookmark='${bookmark}' total='${total}'"
+    book="$(first_incomplete_book)" || return 1
+  done
+
+  log::err "No typeable passage found on the shelf | attempts='${#BOOKS}'"
+  return 1
+}
+
+#######################################
+# Re-emit the book's most recently read passage (bookmark unchanged), or with
+# --words re-anchor: pop one passage and read a fresh N-word passage from its
+# start line.
+# Arguments:
+#   $1 - resolved book path
+#   $2 - word budget
+#   $3 - words_given (true when --words was explicit)
+#######################################
+action_current() {
+  local book="${1}" words="${2}" words_given="${3}"
+  local state_file bookmark total start
+  state_file="$(state_file_for "${book}")"
+  if [[ ! -s "${state_file}" ]]; then
+    log::warn "No passage read in this book yet — run 'next' first | book='${book:t}'"
+    return "${RC_NOTHING_TO_DO}"
+  fi
+
+  if [[ "${words_given}" == "true" ]]; then
+    trim_stack "${state_file}" 1
+    action_next "${book}" "${words}" false true
+    return
+  fi
+
+  bookmark="$(read_bookmark "${state_file}")"
+  total="$(book_total_lines "${book}")"
+  start="$(read_current_start "${state_file}")"
+  record_last_opened "${book}"
+  log::info "Re-emitting current passage | book='${book:t}' start='${start}' end='$(( bookmark - 1 ))' progress_pct='$(progress_pct "${bookmark}" "${total}")'"
+  emit_lines "${book}" "${start}" "$(( bookmark - 1 ))"
+}
+
+#######################################
+# Pop the last passage off the stack and emit the one before it, or with
+# --words re-anchor: pop two passages and read a fresh N-word passage.
+# Arguments:
+#   $1 - resolved book path
+#   $2 - word budget
+#   $3 - words_given (true when --words was explicit)
+#######################################
+action_previous() {
+  local book="${1}" words="${2}" words_given="${3}"
+  local state_file bookmark total new_bookmark start
+  state_file="$(state_file_for "${book}")"
+  if [[ ! -s "${state_file}" ]]; then
+    log::warn "Nothing to rewind, book is unread | book='${book:t}'"
+    return "${RC_NOTHING_TO_DO}"
+  fi
+
+  if [[ "${words_given}" == "true" ]]; then
+    trim_stack "${state_file}" 2
+    action_next "${book}" "${words}" false true
+    return
+  fi
+
+  bookmark="$(read_bookmark "${state_file}")"
+  total="$(book_total_lines "${book}")"
+  trim_stack "${state_file}" 1
+  new_bookmark="$(read_bookmark "${state_file}")"
+  record_last_opened "${book}"
+  log::info "Rewound one passage | book='${book:t}' bookmark='${bookmark}' new_bookmark='${new_bookmark}' progress_pct='$(progress_pct "${new_bookmark}" "${total}")'"
+
+  if [[ ! -s "${state_file}" ]]; then
+    log::warn "Bookmark is back at the start of the book — run 'next' to read its first passage | book='${book:t}'"
+    return 0
+  fi
+  start="$(read_current_start "${state_file}")"
+  emit_lines "${book}" "${start}" "$(( new_bookmark - 1 ))"
+}
+
+#######################################
+# Print the shelf: one book filename per line.
+# Globals: BOOKS
+#######################################
+action_list() {
+  local book
+  for book in "${BOOKS[@]}"; do
+    echo "${book:t}"
+  done
+}
+
+#######################################
+# Set the last opened book — an explicit --book choice, else the most
+# recently read one (newest state-file mtime), else the first incomplete.
+# Globals: BOOKS, TYPING_STATE_DIR, TYPING_BOOK_DIR
+# Arguments:
+#   $1 - --book value ("" when not given)
+#######################################
+action_pickup() {
+  local requested="${1}" book=""
+  if [[ -n "${requested}" ]]; then
+    book="$(resolve_book "${requested}")" || return 1
+  else
+    local state_file
+    for state_file in "${TYPING_STATE_DIR}"/*.state(N.om); do
+      if [[ -r "${TYPING_BOOK_DIR}/${${state_file:t}%.state}" ]]; then
+        book="${TYPING_BOOK_DIR}/${${state_file:t}%.state}"
+        break
+      fi
+    done
+    if [[ -z "${book}" ]]; then
+      book="$(first_incomplete_book)" || return 1
+      log::info "No book read yet — picking up the first incomplete | book='${book:t}'"
+    fi
+  fi
+  record_last_opened "${book}"
+  log::info "Picked up | book='${book:t}'"
+}
+
+#######################################
+# Forget the last opened book, so the next read falls back to the shelf.
+# Globals: LAST_OPENED_FILE
+#######################################
+action_putdown() {
+  if [[ ! -s "${LAST_OPENED_FILE}" ]]; then
+    log::warn "No book in hand — nothing to put down | last_opened_file='${LAST_OPENED_FILE}'"
+    return 0
+  fi
+  local last
+  last="$(<"${LAST_OPENED_FILE}")"
+  rm -f "${LAST_OPENED_FILE}"
+  log::info "Put down | book='${last}'"
+}
+
+#######################################
+# Truncate every book's state stack and forget the last opened book.
+# Globals: BOOKS, TYPING_STATE_DIR, LAST_OPENED_FILE
+#######################################
+action_reset() {
+  local book state_file
+  for book in "${BOOKS[@]}"; do
+    state_file="$(state_file_for "${book}")"
+    if [[ -s "${state_file}" ]]; then
+      : > "${state_file}"
+      log::info "Bookmark reset | book='${book:t}' state_file='${state_file}'"
+    fi
+  done
+  rm -f "${LAST_OPENED_FILE}"
+  log::info "All bookmarks reset to the beginning | state_dir='${TYPING_STATE_DIR}'"
+}
+
+#######################################
+# Print the last opened book, then one tab-separated key=value line per book.
+# Tabs delimit fields (not spaces) so filenames with spaces stay parseable.
+# Globals: BOOKS, LAST_OPENED_FILE
+#######################################
+action_status() {
+  local last_opened=""
+  if [[ -s "${LAST_OPENED_FILE}" ]]; then
+    last_opened="$(<"${LAST_OPENED_FILE}")"
+  fi
+  echo "last_opened=${last_opened}"
+
+  local book state_file bookmark total passages
+  for book in "${BOOKS[@]}"; do
+    state_file="$(state_file_for "${book}")"
+    bookmark="$(read_bookmark "${state_file}")"
+    total="$(book_total_lines "${book}")"
+    passages=0
+    if [[ -s "${state_file}" ]]; then
+      passages="$(wc -l < "${state_file}" | tr -d ' ')"
+    fi
+    printf 'book=%s\tbookmark=%s\ttotal_lines=%s\tpassages_read=%s\tprogress_pct=%s\n' \
+      "${book:t}" "${bookmark}" "${total}" "${passages}" "$(progress_pct "${bookmark}" "${total}")"
+  done
+}
+
+# --- Help ---
+
+help() {
+  cat <<EOF
+${c_green}passage${c_rst} — walk through typing-practice books one passage at a time
+
+${c_bold}Usage:${c_rst}
+  passage [ACTION] [OPTIONS]
+
+${c_bold}Actions:${c_rst}
+  ${c_bold}next${c_rst}        Emit the next unread passage and advance the bookmark (default)
+  ${c_bold}current${c_rst}     Re-emit the most recently read passage; with --words N,
+              re-anchor: re-read from the same start at a new length
+  ${c_bold}previous${c_rst}    Move the bookmark back one passage and emit it; with --words N,
+              re-anchor one passage further back at a new length
+  ${c_bold}pickup${c_rst}      Make a book the one in hand (--book NAME, else most recently read)
+  ${c_bold}putdown${c_rst}     Put the book in hand down; reads fall back to the shelf order
+  ${c_bold}list${c_rst}        List the books on the shelf
+
+${c_bold}Options:${c_rst}
+  ${c_bold}--book NAME${c_rst} Book filename to read; default is the last opened book,
+              falling back to the first incomplete book on the shelf
+  ${c_bold}--words N${c_rst}   Word budget; the passage finishes the line that crosses N
+              words (default for 'next': ${DEFAULT_WORDS})
+  ${c_bold}--dry-run${c_rst}   'next' only: print the passage without advancing the bookmark
+  ${c_bold}--reset${c_rst}     Reset every book's bookmark to the beginning
+  ${c_bold}--status${c_rst}    Show each book's bookmark, passages read, and progress
+              (tab-separated key=value fields)
+  ${c_bold}-h, --help${c_rst}  Show this help
+
+${c_bold}Exit codes:${c_rst} 0 success, 1 error, 2 nothing to do (soft no-op)
+
+${c_bold}Examples:${c_rst}
+  passage
+  passage next --words 300
+  passage current --words 5
+  passage next --book paradise-lost-complete.txt
+  passage pickup --book paradise-lost-complete.txt
+  passage list
+  passage --status
+
+${c_bold}Layout (XDG):${c_rst}
+  Books:  ${TYPING_BOOK_DIR}
+          (drop plain-text files in; override with TYPING_BOOK_DIR)
+  State:  ${TYPING_STATE_DIR}
+          (bookmarks + last_opened, program-written; override with TYPING_STATE_DIR)
+
+Whole lines are emitted verbatim so verse meter is never split mid-line.
+EOF
+}
+
+# --- Main ---
+
+main() {
+  # === PARSE ===
+  local action="" book_arg="" words="${DEFAULT_WORDS}" words_given=false dry_run=false mode="passage"
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)  help; return 0 ;;
+    --book)     book_arg="${2:?--book requires a value}"; shift 2 ;;
+    --words)    words="${2:?--words requires a value}"; words_given=true; shift 2 ;;
+    --dry-run)  dry_run=true; shift ;;
+    --reset)    mode="reset"; shift ;;
+    --status)   mode="status"; shift ;;
+    -*)         log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)          action="${1}"; shift ;;
+  esac; done
+
+  # === MASSAGE ===
+  action="${action:l}"
+  if [[ -z "${action}" ]]; then
+    action="next"
+  fi
+
+  # === VALIDATE ===
+  if [[ ! " ${VALID_ACTIONS[*]} " == *" ${action} "* ]]; then
+    log::err "Invalid action | action='${action}' valid_actions='${(j:, :)VALID_ACTIONS}'"
+    help
+    return 1
+  fi
+  if [[ ! "${words}" =~ ^[0-9]+$ ]] || (( words < 1 )); then
+    log::err "Invalid word count | words='${words}' expected='positive integer'"
+    return 1
+  fi
+  if [[ "${dry_run}" == "true" && ( "${mode}" != "passage" || "${action}" != "next" ) ]]; then
+    log::err "--dry-run only applies to 'next' | action='${action}' mode='${mode}'"
+    return 1
+  fi
+  if [[ ! -d "${TYPING_BOOK_DIR}" ]]; then
+    log::err "Book directory not found — create it and drop books in | book_dir='${TYPING_BOOK_DIR}'"
+    return 1
+  fi
+  mkdir -p "${TYPING_STATE_DIR}"
+  load_books || return 1
+
+  # === LOGIC ===
+  # Reads don't need the lock; everything else mutates state files.
+  case "${mode}:${action}" in
+    status:*) action_status; return ;;
+    *:list)   action_list; return ;;
+  esac
+  acquire_lock || return 1
+
+  if [[ "${mode}" == "reset" ]]; then
+    action_reset
+    return
+  fi
+
+  case "${action}" in
+    pickup)  action_pickup "${book_arg}"; return ;;
+    putdown) action_putdown; return ;;
+  esac
+
+  local book explicit=false
+  book="$(resolve_book "${book_arg}")" || return 1
+  if [[ -n "${book_arg}" ]]; then
+    explicit=true
+  fi
+
+  case "${action}" in
+    next)     action_next "${book}" "${words}" "${dry_run}" "${explicit}" ;;
+    current)  action_current "${book}" "${words}" "${words_given}" ;;
+    previous) action_previous "${book}" "${words}" "${words_given}" ;;
+  esac
+}
+
+main "${@}"
