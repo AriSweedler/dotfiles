@@ -1,40 +1,72 @@
 #!/usr/bin/env zsh
 #
-# Karabiner Hyper+T handler. Opens a Monkeytype custom typing test seeded with
-# the next unread passage of Paradise Lost, advancing the bookmark kept by the
-# `passage` CLI. Output goes to /tmp/karabiner.karabiner-typing-test/log.txt
-# via the karabiner_script wrapper, which also sets REPO_LIB.
+# Karabiner typing-mode handler. Opens a Monkeytype custom typing test seeded
+# by the `passage` CLI (per-book bookmarks under XDG state) and narrates via
+# Notification Center. Logs one CSV line per test for stats. Output goes to
+# /tmp/karabiner.karabiner-typing-test/log.txt via the karabiner_script
+# wrapper, which also sets REPO_LIB.
+#
+# Usage: karabiner-typing-test [ACTION] [--words N]
+#   next (default)  next unread passage, advancing the bookmark
+#   current         retype the last passage (--words N re-anchors at N words)
+#   previous        rewind one passage and retype it (--words N re-anchors)
+#   status          notify progress; no test opened
 
 set -euo pipefail
 
-readonly PASSAGE_BIN="${HOME}/Documents/paradise-lost-txt/bin/passage"
-readonly ENCODER="${REPO_LIB:?REPO_LIB must be set by the karabiner_script wrapper}/monkeytype_url.cjs"
+readonly PASSAGE_BIN="${HOME}/.config/bin/passage"
+readonly REPO_LIB="${REPO_LIB:?REPO_LIB must be set by the karabiner_script wrapper}"
+readonly ENCODER="${REPO_LIB}/monkeytype_url.cjs"
+readonly LZ_STRING="${REPO_LIB}/lz-string.js"
 readonly PASSAGE_LOGGING_LIB="${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
+readonly BOOK_DIR="${TYPING_BOOK_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/typing-books}"
+readonly STATE_DIR="${TYPING_STATE_DIR:-${XDG_STATE_HOME:-${HOME}/.local/state}/typing-books}"
+readonly TEST_LOG_CSV="${STATE_DIR}/typing_sessions.csv"
 readonly NOTIFIER="/opt/homebrew/bin/terminal-notifier"
+readonly NOTIFY_GROUP_OK="karabiner-typing-test-ok"
+readonly NOTIFY_GROUP_ERR="karabiner-typing-test-err"
+readonly NOTIFY_DISMISS_SECONDS=5
+readonly VALID_ACTIONS=(next current previous status)
+readonly RC_NOTHING_TO_DO=2
 
-notify_failure() {
+# Failure notifications persist until seen (their own group, never
+# auto-removed); success ones self-dismiss without touching failures.
+notify_err() {
   if [[ -x "${NOTIFIER}" ]]; then
-    "${NOTIFIER}" -title "Hyper+T typing test" -message "${1}"
+    "${NOTIFIER}" -title "Typing test" -message "${1}" -group "${NOTIFY_GROUP_ERR}"
   fi
+}
+
+notify_transient() {
+  if [[ -x "${NOTIFIER}" ]]; then
+    "${NOTIFIER}" -title "Typing test" -message "${1}" -group "${NOTIFY_GROUP_OK}"
+  fi
+  # Disowned with fds closed so the handler (and anything reading its output)
+  # never waits out the dismiss window.
+  ( sleep "${NOTIFY_DISMISS_SECONDS}" && "${NOTIFIER}" -remove "${NOTIFY_GROUP_OK}" ) >/dev/null 2>&1 &!
 }
 
 #######################################
 # Check every dependency up front and name each missing one, so the log from a
 # fresh machine says exactly what to install/copy instead of a bare exit code.
-# The paradise-lost-txt folder is NOT in the dotfiles repo — it must be copied
-# over separately (it holds the text, the passage CLI, and the bookmark state).
 #######################################
 check_prerequisites() {
   local -a problems
 
   if [[ ! -x "${PASSAGE_BIN}" ]]; then
-    problems+=("passage CLI missing | expected='${PASSAGE_BIN}' fix='copy ~/Documents/paradise-lost-txt/ (text + bin/passage + state) from another machine; it is not tracked in dotfiles'")
+    problems+=("passage CLI missing | expected='${PASSAGE_BIN}' fix='pull dotfiles; passage is tracked in ~/.config/bin/'")
   fi
   if [[ ! -r "${PASSAGE_LOGGING_LIB}" ]]; then
     problems+=("passage's logging lib missing | expected='${PASSAGE_LOGGING_LIB}' fix='install the ari-skill-shellscripts Claude skill (passage sources its lib/logging.zsh)'")
   fi
+  if [[ -z "$(print -l "${BOOK_DIR}"/*(N.) 2>/dev/null)" ]]; then
+    problems+=("no books on the shelf | expected='text files in ${BOOK_DIR}' fix='mkdir -p it and drop plain-text books in (XDG data, not tracked in dotfiles)'")
+  fi
   if [[ ! -r "${ENCODER}" ]]; then
     problems+=("monkeytype URL encoder missing | expected='${ENCODER}' fix='pull dotfiles; it lives in karabiner.ts/src/scripts/lib/'")
+  fi
+  if [[ ! -r "${LZ_STRING}" ]]; then
+    problems+=("vendored lz-string missing (encoder's only dependency) | expected='${LZ_STRING}' fix='pull dotfiles; it lives beside the encoder'")
   fi
   if ! command -v node >/dev/null 2>&1; then
     problems+=("node not on PATH | path='${PATH}' fix='install node, or re-run bake so the wrapper PATH picks up the node toolchain'")
@@ -45,27 +77,163 @@ check_prerequisites() {
     for problem in "${problems[@]}"; do
       echo "[PREREQ-FAIL] ${problem}" >&2
     done
-    notify_failure "${#problems} missing prereq(s) — see /tmp/karabiner.karabiner-typing-test/log.txt"
+    notify_err "${#problems} missing prereq(s) — see /tmp/karabiner.karabiner-typing-test/log.txt"
     return 1
   fi
 }
 
-main() {
-  check_prerequisites
+#######################################
+# Status of the book in hand, from `passage --status` (tab-separated fields,
+# so filenames with spaces survive). passage stderr flows to the run log.
+# Returns: "book<TAB>bookmark<TAB>total_lines<TAB>progress_pct<TAB>passages_read";
+# empty when no book has been opened yet
+#######################################
+book_status() {
+  zsh "${PASSAGE_BIN}" --status | awk -F'\t' '
+    NR == 1 { sub(/^last_opened=/, ""); last = $0; next }
+    {
+      split("", kv)
+      for (i = 1; i <= NF; i++) { n = index($i, "="); kv[substr($i, 1, n - 1)] = substr($i, n + 1) }
+      if (kv["book"] == last && last != "")
+        printf "%s\t%s\t%s\t%s\t%s\n", kv["book"], kv["bookmark"], kv["total_lines"], kv["progress_pct"], kv["passages_read"]
+    }'
+}
 
-  local passage url
-  if ! passage="$(zsh "${PASSAGE_BIN}" next)"; then
-    notify_failure "passage failed — is the poem finished? See the log."
+#######################################
+# Undo the bookmark advance of a successful `passage next` after a downstream
+# failure, so the passage isn't silently consumed unseen.
+#######################################
+rollback_next() {
+  if zsh "${PASSAGE_BIN}" previous >/dev/null 2>&1; then
+    echo "rolled back bookmark after downstream failure" >&2
+    return
+  fi
+  echo "rollback failed — bookmark may have skipped a passage" >&2
+}
+
+#######################################
+# Append one CSV line per opened test, creating the header on first write.
+# Globals: TEST_LOG_CSV
+# Arguments:
+#   $1 - action
+#   $2 - words requested ("" when no --words given)
+#   $3 - words actually in the test
+#   $4 - book filename
+#   $5 - bookmark after the action
+#   $6 - total lines in the book
+#   $7 - progress percent after the action
+#######################################
+record_test() {
+  if [[ ! -s "${TEST_LOG_CSV}" ]]; then
+    echo "timestamp,action,book,words_requested,words_actual,bookmark,total_lines,progress_pct" > "${TEST_LOG_CSV}"
+  fi
+  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ),${1},${4},${2},${3},${5},${6},${7}" >> "${TEST_LOG_CSV}"
+}
+
+#######################################
+# Notification lead-in for an action, e.g. "typing test 50 words".
+# Arguments:
+#   $1 - action
+#   $2 - word count
+#######################################
+describe_action() {
+  case "${1}" in
+    next)     echo "typing test ${2} words" ;;
+    current)  echo "retype ${2} words" ;;
+    previous) echo "rewound — retype ${2} words" ;;
+  esac
+}
+
+main() {
+  # === PARSE ===
+  local action="next" words_requested=""
+  local -a passage_flags
+  while (( $# > 0 )); do case "${1}" in
+    --words) words_requested="${2:?--words requires a value}"; passage_flags+=("--words" "${2}"); shift 2 ;;
+    -*)      echo "[ERROR] Unknown flag | flag='${1}'" >&2; return 1 ;;
+    *)       action="${1}"; shift ;;
+  esac; done
+
+  # === VALIDATE ===
+  if [[ ! " ${VALID_ACTIONS[*]} " == *" ${action} "* ]]; then
+    echo "[ERROR] Invalid action | action='${action}' valid_actions='${(j:, :)VALID_ACTIONS}'" >&2
     return 1
   fi
+  check_prerequisites
 
+  # === LOGIC ===
+  local status_line book bookmark total_lines progress_pct passages_read
+
+  if [[ "${action}" == "status" ]]; then
+    if ! status_line="$(book_status)"; then
+      notify_err "status failed — see the log"
+      return 1
+    fi
+    if [[ -z "${status_line}" ]]; then
+      notify_transient "no book in hand yet — press 1 to start"
+      return 0
+    fi
+    IFS=$'\t' read -r book bookmark total_lines progress_pct passages_read <<< "${status_line}"
+    notify_transient "${book:r}: ${progress_pct}%, ${passages_read} passages typed"
+    return 0
+  fi
+
+  local passage rc=0
+  passage="$(zsh "${PASSAGE_BIN}" "${action}" "${passage_flags[@]}")" || rc=$?
+  if (( rc == RC_NOTHING_TO_DO )); then
+    notify_transient "nothing to retype yet — type a passage first (1/2/3)"
+    return 0
+  elif (( rc != 0 )); then
+    notify_err "passage ${action} failed — see the log"
+    return 1
+  fi
+  if [[ -z "${passage//[[:space:]]/}" ]]; then
+    notify_transient "nothing to type — bookmark is at the start of the book"
+    return 0
+  fi
+
+  local url
   if ! url="$(printf '%s' "${passage}" | node "${ENCODER}")"; then
-    notify_failure "URL encoding failed. See the log."
+    if [[ "${action}" == "next" ]]; then
+      rollback_next
+    fi
+    notify_err "URL encoding failed — see the log"
     return 1
   fi
   echo "url_length=${#url}"
 
-  open "${url}"
+  if ! status_line="$(book_status)" || [[ -z "${status_line}" ]]; then
+    book="unknown" bookmark=0 total_lines=0 progress_pct="?" passages_read=0
+  else
+    IFS=$'\t' read -r book bookmark total_lines progress_pct passages_read <<< "${status_line}"
+  fi
+  local words_actual finished=false
+  words_actual="$(printf '%s' "${passage}" | wc -w | tr -d ' ')"
+  if [[ "${action}" == "next" ]] && (( bookmark > total_lines )); then
+    finished=true
+  fi
+
+  # Confetti before the browser grabs focus, so it plays over the new test.
+  # Best-effort: a machine without Raycast must not abort the press.
+  if [[ "${finished}" == "true" ]]; then
+    open "raycast://confetti" 2>/dev/null || true
+  fi
+  if ! open "${url}"; then
+    if [[ "${action}" == "next" ]]; then
+      rollback_next
+    fi
+    notify_err "could not open the browser — see the log"
+    return 1
+  fi
+
+  local message
+  message="$(describe_action "${action}" "${words_actual}"), ${book:r} (${progress_pct}%)"
+  if [[ "${finished}" == "true" ]]; then
+    message="${message} — book finished!"
+  fi
+  notify_transient "${message}"
+
+  record_test "${action}" "${words_requested}" "${words_actual}" "${book}" "${bookmark}" "${total_lines}" "${progress_pct}"
 }
 
 main "${@}"

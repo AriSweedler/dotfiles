@@ -37,7 +37,7 @@ const PATH_PREFIX_DIRS = [
 // binding's latency is greppable across presses.
 export const karabiner_script = (
   scriptPathRel: string,
-  { logKeep = 5 }: { logKeep?: number } = {},
+  { logKeep = 5, args = [] }: { logKeep?: number; args?: string[] } = {},
 ) => {
   const scriptPathAbs = path.resolve(karabinerRoot, `src/scripts/bin/${scriptPathRel}`)
   const scriptPathAbsEnv = scriptPathAbs.replace(os.homedir(), "$HOME")
@@ -48,6 +48,15 @@ export const karabiner_script = (
   } catch {
     throw new Error(`Script is not executable or not found | scriptPathRel=${scriptPathRel} scriptPathAbs=${scriptPathAbs} scriptPathAbsEnv=${scriptPathAbsEnv}`)
   }
+
+  // Args are baked into the generated shell_command; keep them shell-simple
+  // (no quotes/dollars) so the double-quoted embedding below can't be escaped.
+  for (const arg of args) {
+    if (!/^[A-Za-z0-9_.\/=-]+$/.test(arg)) {
+      throw new Error(`Unsafe script arg | scriptPathRel=${scriptPathRel} arg=${arg}`)
+    }
+  }
+  const argsSuffix = args.map((a) => ` "${a}"`).join("")
 
   const pathPrefix = PATH_PREFIX_DIRS.join(":")
   const logDir = `/tmp/karabiner.${scriptPathRel}`
@@ -64,8 +73,8 @@ zsh -c 'source "\$HOME/.config/zsh/plugins/log_rotate.zsh" && log_rotate "\$1" "
   set -x
   date
   cd "\${REPO_ROOT:?}"
-  echo "Invoking ${scriptPathAbs}"
-  zsh -c 'zmodload zsh/datetime; typeset -F _s=\$EPOCHREALTIME; "\$1"; _rc=\$?; typeset -F _e=\$EPOCHREALTIME; printf "elapsed_ms=%.0f rc=%d\\n" \$(( (_e - _s) * 1000 )) \$_rc; exit \$_rc' _ "${scriptPathAbs}"
+  echo "Invoking ${scriptPathAbs}${argsSuffix}"
+  zsh -c 'zmodload zsh/datetime; typeset -F _s=\$EPOCHREALTIME; "\$@"; _rc=\$?; typeset -F _e=\$EPOCHREALTIME; printf "elapsed_ms=%.0f rc=%d\\n" \$(( (_e - _s) * 1000 )) \$_rc; exit \$_rc' _ "${scriptPathAbs}"${argsSuffix}
 } &> "${logFile}"
 `
   }

@@ -1,14 +1,12 @@
-import { hyperLayer, toApp, map, FromKeyCode, Modifier, ToKeyCode, LayerKeyParam } from "karabiner.ts"
-import { karabiner_script } from "./macros"
+import { hyperLayer, map, FromKeyCode, LayerKeyParam } from "karabiner.ts"
+import { Action, actionToTos, describeAction } from "./actions"
+import { argBuilderOpenEvents } from "./argbuilder"
+import { submenuOpenEvents } from "./submenu"
 import { allDevices } from "./devices"
 
-// --- Types ---
-type Deeplink = { kind: "deeplink"; path: string }
-type Script = { kind: "script"; name: string }
-type App = { kind: "app"; name: string }
-type KeyCode = { kind: "key_code"; key_code: string; modifiers?: Modifier[]; description: string }
-type WhichKeyboard = { kind: "which_keyboard" }
-type Action = Deeplink | Script | KeyCode | App | WhichKeyboard
+// Re-export the action vocabulary so mode files keep a single import site.
+export { app, deeplink, key_code, script, which_keyboard } from "./actions"
+export type { Action } from "./actions"
 
 type Meta = {
   entrypoint: string
@@ -16,42 +14,9 @@ type Meta = {
   description: string
 }
 
-// --- Helpers ---
-export const deeplink = (path: string): Deeplink => ({ kind: "deeplink", path })
-export const script = (name: string): Script => ({ kind: "script", name })
-export const app = (name: string): App => ({ kind: "app", name })
-export const which_keyboard = (): WhichKeyboard => ({ kind: "which_keyboard" })
-export const key_code = (key: string, modifiers: Modifier[], description: string): KeyCode => ({
-  kind: "key_code",
-  key_code: to_key_code(key),
-  modifiers: modifiers,
-  description: description,
-})
-
 const notify = (message: string) => ({
   shell_command: `osascript -e 'display notification ${JSON.stringify(message)} with title "Keyboard"'`,
 })
-
-function to_key_code(key: string)  {
-  if (key == '=') { // karabiner doesn't like '=' as a key
-    return "equal_sign"
-  } else if (key == '-' || key == 'minus') { // karabiner doesn't like '-' as a key
-    return "hyphen"
-  } else if (key == '⏎' || key == 'return') { // karabiner doesn't like 'return' as a key
-    return "return_or_enter"
-  } else if (key == '⌫' || key == 'delete') { // karabiner doesn't like 'delete' as a key
-    return "delete_or_backspace"
-  } else if (key == ',') {
-    return "comma"
-  } else if (key == '.') {
-    return "period"
-  } else if (key == '[') {
-    return "open_bracket"
-  } else if (key == ']') {
-    return "close_bracket"
-  }
-  return key
-}
 
 type ActionDict = Record<string, Action>
 export class AriMode {
@@ -65,48 +30,19 @@ export class AriMode {
 
   private toDescription() {
     const entries = Object.entries(this.actionDict)
-    .map(([_, val]) => {
-      if (typeof val === "string") {
-        return val
-      }
-      switch (val.kind) {
-        case "key_code":
-          return val.description || `key_code: ${val.key_code}`
-        case "app":
-          return `open app: ${val.name}`
-        case "script":
-          return `run script: ${val.name}`
-        case "deeplink":
-          return `deeplink: ${val.path}`
-        case "which_keyboard":
-          return `notify keyboard name`
-        default:
-          return "unknown"
-      }
-    })
-    .map((rhs, i) => {
-      const key = Object.keys(this.actionDict)[i]
-      return `• \`${key}\` → ${rhs}`
-    })
-    .join("\n")
+      .map(([key, action]) => `• \`${key}\` → ${describeAction(action)}`)
+      .join("\n")
 
     return `(hyper + ${this.meta.entrypoint}): ${this.meta.description}\n\n${entries}`
   }
 
   private toManipulator = ([key, action]: [FromKeyCode, Action]) => {
     switch (action.kind) {
-      case "deeplink":
-        return map(key).to({shell_command: `open raycast://${action.path}`})
-      case "script":
-        return map(key).to(karabiner_script(action.name))
-      case "app":
-        return map(key).to(toApp(action.name))
-      case "key_code":
-        return map(key).to({
-          key_code: action.key_code as ToKeyCode,
-          modifiers: action.modifiers || [],
-        })
-      case "which_keyboard":
+      case "submenu":
+        return map(key).to(submenuOpenEvents(action))
+      case "argbuilder":
+        return map(key).to(argBuilderOpenEvents(action))
+      case "which_keyboard": {
         const known = allDevices.map(d =>
           map(key)
             .to(notify(d.label))
@@ -116,9 +52,10 @@ export class AriMode {
           .to(notify("Unknown keyboard"))
           .condition({ type: 'device_unless', identifiers: allDevices.flatMap(d => d.identifiers) })
         return [...known, fallback]
+      }
+      default:
+        return map(key).to(actionToTos(action))
     }
-
-    throw new Error(`Unknown action type: ${JSON.stringify(action)}`)
   }
 
   private toManipulators() {

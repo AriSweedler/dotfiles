@@ -25,11 +25,6 @@ export const shortcuts = [
       map('n', 'Hyper').to(karabiner_script("notif-click", { logKeep: 50 })),
     ]),
 
-  rule('Hyper+T → Monkeytype test seeded with the next Paradise Lost passage')
-    .manipulators([
-      map('t', 'Hyper').to(karabiner_script("karabiner-typing-test")),
-    ]),
-
   rule('Hyper+C → jump to the Claude notification (terminal-notifier, fast)')
     .manipulators([
       map('c', 'Hyper').to(karabiner_script("claude-notification-click-simulator")),
