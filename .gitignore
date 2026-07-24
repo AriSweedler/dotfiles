@@ -14,6 +14,8 @@
 .cdk8s-cli.version
 .cisco/
 .claude*
+.codex/
+.config/1Password/
 .config/AWSVPNClient
 .config/Google/
 .config/Microsoft\\VisualStudio Services/
@@ -28,6 +30,7 @@
 .config/github-copilot/
 .config/gws/
 .config/helm/
+.config/homebrew/
 .config/k9s/
 .config/karabiner/automatic_backups
 .config/karabiner/karabiner.ts/node_modules
@@ -61,6 +64,7 @@
 .npmrc
 .nvs/
 .opensearch_cookies_*.enc
+.opensearch_mcp_*
 .opensearch_query_state.json
 .opa_history
 .psql_history
