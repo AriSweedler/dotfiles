@@ -33,7 +33,7 @@ function main() {
     return
   fi
 
-  log::info "Checking ${#branches[@]} branches matching '${pattern}'"
+  log::info "Branches found | pattern='${pattern}' count='${#branches[@]}'"
 
   # `pipe` and `del_count_file` are global (not local) so the EXIT trap can
   # see them under set -u.
@@ -82,12 +82,15 @@ function main() {
   exec 3>&-
   wait "${reader_pid}"
 
-  if [[ "$(cat "${del_count_file}")" == "0" ]]; then
+  local deleted
+  deleted="$(cat "${del_count_file}")"
+  if [[ "${deleted}" == "0" ]]; then
     if gh auth status >/dev/null 2>&1; then
       log::info "Nothing to clean up — no branches have merged or closed PRs"
     else
       log::err "No branches deleted — gh auth is broken. Run: gh auth login"
     fi
   fi
+  log::info "Branches left | count='$(( ${#branches[@]} - deleted ))'"
 }
 main "$@"
