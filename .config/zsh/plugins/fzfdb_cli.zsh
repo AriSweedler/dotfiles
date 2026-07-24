@@ -56,6 +56,7 @@ ACTIONS:
 PRESEARCH
   -g|--grep
     * Grep the list of items to filter it down
+    * Takes a single grep pattern; quote it if it contains spaces
   -q|--query
     * Start fzf with this query
 
@@ -92,7 +93,7 @@ function fzfdb() {
     case "${1}" in
       --dir|--list|--edit|--help) fzfdb::_dispatch "action::${1#--}" "$@"; return 0;;
       --key::value|--key::menuitem) fzfdb::_dispatch "${1#--}" "${2:?}"; return 0;;
-      -g|--grep) grep_pat=(${(s/ /)2}); shift 2;;
+      -g|--grep) grep_pat="${2}"; shift 2;;
       -q|--query) fzf_args+=(--query "${2}"); shift 2;;
       *) break;;
     esac
@@ -118,7 +119,7 @@ function fzfdb() {
   fi
 
   # Make sure there are elements in fzfdb_ks
-  local fzfdb_ks=(${(@f)$(fzfdb::_dispatch action::list | grep "${(@)grep_pat}")})
+  local fzfdb_ks=(${(@f)$(fzfdb::_dispatch action::list | grep -- "${grep_pat}")})
   if (( ${#fzfdb_ks[@]} == 0 )); then
     log::err "No fzfdb items found | ${logw}"
     return 1
@@ -126,6 +127,8 @@ function fzfdb() {
 
   # Generate the fzf menu
   local tmpdir="$(mktemp -d "/tmp/fzfdb.${fzfdb_name}.XXXXX")"
+  # Function-local EXIT trap: cleans up even when fzf is cancelled or we error out.
+  trap "rm -rf '${tmpdir}'" EXIT
   setopt LOCAL_OPTIONS NO_MONITOR
   for fzfdb_k in "${fzfdb_ks[@]}"; do
     fzfdb::_dispatch key::menuitem "${fzfdb_k}" > "${tmpdir}/${fzfdb_k}" &
@@ -136,6 +139,24 @@ function fzfdb() {
   for fzfdb_k in "${fzfdb_ks[@]}"; do
     fzfdb_m_items+=("$(cat "${tmpdir}/${fzfdb_k}")")
   done
+
+  # Pad keys to a common width so the " | " separators line up across the
+  # menu. fzfdb::menuitem::key strips this padding when recovering the key.
+  local fzfdb_m_item max_key_len=0
+  for fzfdb_m_item in "${fzfdb_m_items[@]}"; do
+    local item_key="${fzfdb_m_item%% | *}"
+    (( ${#item_key} > max_key_len )) && max_key_len=${#item_key}
+  done
+  local fzfdb_m_aligned=()
+  for fzfdb_m_item in "${fzfdb_m_items[@]}"; do
+    if [[ "${fzfdb_m_item}" != *" | "* ]]; then
+      fzfdb_m_aligned+=("${fzfdb_m_item}")
+      continue
+    fi
+    local item_key="${fzfdb_m_item%% | *}"
+    fzfdb_m_aligned+=("${(r:${max_key_len}:)item_key} | ${fzfdb_m_item#* | }")
+  done
+  fzfdb_m_items=("${fzfdb_m_aligned[@]}")
 
   # Generate the fzf command
   local preview_cmd=(
@@ -166,7 +187,7 @@ function fzfdb() {
   # Find the selected key from the menuitem
   fzfdb_k="$(fzfdb::_dispatch menuitem::key "${fzfdb_m_selected}")"
   if ! fzfdb::key::_validate "${fzfdb_k}" &>/dev/null; then
-    log::err "Failed to recover valid key from selected menuitem | menuitem='${fzfdb_m_selected}' invalid_key='${invalid_key}' ${logw}"
+    log::err "Failed to recover valid key from selected menuitem | menuitem='${fzfdb_m_selected}' invalid_key='${fzfdb_k}' ${logw}"
     return 1
   fi
 
@@ -233,7 +254,10 @@ function fzfdb::action::dir() {
 function fzfdb::action::list() {
   local dir
   dir="$(fzfdb::action::dir)"
-  ls -1 "${dir}" | sort
+  # Keys are plain files; subdirectories (e.g. go_aws/profiles/) are not keys.
+  local keys=("${dir}"/*(N-.))
+  (( ${#keys[@]} == 0 )) && return 0
+  printf '%s\n' "${keys[@]:t}" | sort
 }
 
 ############## Clients are encouraged to override these functions. ##############
@@ -255,7 +279,9 @@ function fzfdb::menuitem::key() {
   local menuitem="${1:?}"
   shift
 
-  echo "${menuitem%% | *}"
+  # Strip column-alignment padding appended to the key.
+  setopt LOCAL_OPTIONS EXTENDED_GLOB
+  echo "${${menuitem%% | *}%%\ #}"
 }
 
 # Input: fzfdb key
