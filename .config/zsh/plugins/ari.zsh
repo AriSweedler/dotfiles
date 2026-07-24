@@ -40,3 +40,5 @@ bindkey '^X^_' redo
 function vnew() {
   vi "${HOME}/.config/new-machine.sh"
 }
+
+alias pbl=pbpastelinks
