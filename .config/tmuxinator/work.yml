@@ -4,9 +4,14 @@ name: airtable
 root: ~/
 
 windows:
-- notepad:
-    root: "~/Desktop/notes"
-    panes: notes
+- hyperbase:
+    root: "~/h/source/hyperbase/"
+
+- secondary-hyperbase:
+    root: "~/h/source/secondary-hyperbase/"
+
+- tertiary-hyperbase:
+    root: "~/h/source/tertiary-hyperbase/"
 
 - transpiler:
     root: "~/h/source/"
@@ -15,14 +20,6 @@ windows:
         - cd secondary-hyperbase; node bin/transpile.js
         - cd tertiary-hyperbase; node bin/transpile.js
 
-- hyperbase:
-    root: "~/h/source/hyperbase/"
-    panes: hyp-ready
-
-- secondary-hyperbase:
-    root: "~/h/source/secondary-hyperbase/"
-    panes: hyp-ready
-
-- tertiary-hyperbase:
-    root: "~/h/source/tertiary-hyperbase/"
-    panes: hyp-ready
+- notepad:
+    root: "~/Desktop/notes"
+    panes: notes
