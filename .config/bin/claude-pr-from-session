@@ -3,18 +3,17 @@
 # Print the PR number bound to a Claude Code session.
 #
 # Source of truth: the most recent {"type":"pr-link","prNumber":N,...} record
-# in ~/.claude/projects/*/<uuid>.jsonl. Claude writes this when the session is
-# started via `claude --from-pr <N>` or a /resume PR URL paste. No binding →
-# non-zero exit, no stdout.
+# in ~/.claude/projects/*/<uuid>.jsonl. The JSONL walk lives in
+# claude_parsers.zsh, dispatched per the installed claude version. No
+# binding → non-zero exit, no stdout.
 
 set -euo pipefail
-
-readonly PROJECTS_DIR="${HOME}/.claude/projects"
 
 export OTTO_LOG_NOTIF_GROUP="claude-pr-from-session"
 export OTTO_LOG_NOTIF_TITLE="claude: pr-from-session"
 export OTTO_DEBUG="${OTTO_DEBUG:-1}"
 source "${HOME}/.config/zsh/plugins/log.zsh"
+source "${HOME}/.config/zsh/plugins/claude_parsers.zsh"
 log::redirect_all_output_to_logfile
 
 # --- Help ---
@@ -67,29 +66,13 @@ main() {
   fi
 
   # === LOGIC ===
-  local jsonl
-  jsonl="$(find "${PROJECTS_DIR}" -maxdepth 2 -name "${uuid}.jsonl" -type f 2>/dev/null | head -1)"
-  if [[ -z "${jsonl}" ]]; then
-    log::err "No session file found | uuid='${uuid}' projects_dir='${PROJECTS_DIR}'"
+  local runtime_version
+  if ! runtime_version="$(claude::best_known_version)"; then
+    log::err "Cannot determine claude version"
     return 1
   fi
-  log::debug "Session file | jsonl='${jsonl}'"
-
-  # Reverse-walk + grep -m1: stops at the most recent pr-link record
-  # regardless of file size. `|| true` swallows the SIGPIPE that grep -m1
-  # forces on tail -r under `set -o pipefail`.
   local pr
-  pr="$(tail -r "${jsonl}" 2>/dev/null \
-    | grep -m1 '"type":"pr-link"' \
-    | jq -r '.prNumber // empty' 2>/dev/null || true)"
-  if [[ -z "${pr}" ]]; then
-    # Forked sessions deliberately not handled: claude UI may show a PR for
-    # them (probably from in-memory state inherited at fork time), but we want
-    # the bail to surface that this session's own JSONL has no binding.
-    local forked_from
-    forked_from="$(head -1 "${jsonl}" 2>/dev/null \
-      | jq -r '.forkedFrom.sessionId // empty' 2>/dev/null)"
-    log::err "no active PR | uuid='${uuid}' jsonl='${jsonl}' forked_from='${forked_from:-<none>}'"
+  if ! pr="$(claude::dispatch pr_from_session "${runtime_version}" "${uuid}")"; then
     return 1
   fi
   log::debug "PR resolved | pr='${pr}' uuid='${uuid}'"
