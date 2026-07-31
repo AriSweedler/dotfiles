@@ -41,6 +41,10 @@ function ssh::load_agent() {
 
   # Apple's launchd ssh-agent (/usr/bin/ssh-agent) cannot perform FIDO2
   # signing operations. Explicitly start Homebrew's agent.
+  # The agent execs ssh-sk-helper from a Cellar-version-pinned path compiled
+  # into its binary; a brew upgrade deletes that path and every sk signature
+  # fails with "agent refused operation". The opt/ symlink survives upgrades.
+  export SSH_SK_HELPER="/opt/homebrew/opt/openssh/libexec/ssh-sk-helper"
   eval "$(ssh-agent -s)" &>/dev/null
   ln -sf "$SSH_AUTH_SOCK" "$auth_socket"
   export SSH_AUTH_SOCK="$auth_socket"
