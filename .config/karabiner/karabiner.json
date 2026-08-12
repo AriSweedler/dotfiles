@@ -1176,8 +1176,49 @@
             ]
           },
           {
-            "description": "(hyper + t): Typing practice\n\n• `0` → run script: karabiner-typing-test --words 5\n• `1` → run script: karabiner-typing-test --words 50\n• `2` → run script: karabiner-typing-test --words 100\n• `3` → run script: karabiner-typing-test --words 300\n• `s` → run script: karabiner-typing-test status\n• `x` → builder: typing test builder\n• `r` → deeplink: extensions/raycast/typing-practice/start-typing-practice",
+            "description": "(hyper + t): Typing practice\n\n• `0` → run script: karabiner-typing-test --words 5\n• `1` → run script: karabiner-typing-test --words 50\n• `2` → run script: karabiner-typing-test --words 100\n• `3` → run script: karabiner-typing-test --words 300\n• `s` → run script: karabiner-typing-test status\n• `#` → open url: monkeytype numbers (58008 funbox)\n• `x` → builder: typing test builder\n• `r` → deeplink: extensions/raycast/typing-practice/start-typing-practice",
             "manipulators": [
+              {
+                "conditions": [
+                  {
+                    "name": "typing-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "3",
+                  "modifiers": {
+                    "mandatory": [
+                      "shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open \"https://monkeytype.com?testSettings=NoIgLglgtgpiA0A7ArgG1UtGBmBDVAzjPHocSDIgOaoQEAWCIiA9gE5T4KgCsAHAAYBfEAF1RQA\""
+                  },
+                  {
+                    "set_variable": {
+                      "name": "typing-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-typing-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
               {
                 "conditions": [
                   {
@@ -1218,7 +1259,7 @@
                   {
                     "set_notification_message": {
                       "id": "layer-typing-mode",
-                      "text": "(hyper + t): Typing practice\n\n• `0` → run script: karabiner-typing-test --words 5\n• `1` → run script: karabiner-typing-test --words 50\n• `2` → run script: karabiner-typing-test --words 100\n• `3` → run script: karabiner-typing-test --words 300\n• `s` → run script: karabiner-typing-test status\n• `x` → builder: typing test builder\n• `r` → deeplink: extensions/raycast/typing-practice/start-typing-practice"
+                      "text": "(hyper + t): Typing practice\n\n• `0` → run script: karabiner-typing-test --words 5\n• `1` → run script: karabiner-typing-test --words 50\n• `2` → run script: karabiner-typing-test --words 100\n• `3` → run script: karabiner-typing-test --words 300\n• `s` → run script: karabiner-typing-test status\n• `#` → open url: monkeytype numbers (58008 funbox)\n• `x` → builder: typing test builder\n• `r` → deeplink: extensions/raycast/typing-practice/start-typing-practice"
                     }
                   }
                 ],

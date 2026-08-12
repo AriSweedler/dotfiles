@@ -8,6 +8,7 @@ import { karabiner_script } from "./macros"
 
 // --- Types ---
 export type Deeplink = { kind: "deeplink"; path: string }
+export type Url = { kind: "url"; url: string; label?: string }
 export type Script = { kind: "script"; name: string; args?: string[] }
 export type App = { kind: "app"; name: string }
 export type KeyCode = { kind: "key_code"; key_code: string; modifiers?: Modifier[]; description: string }
@@ -24,10 +25,11 @@ export type ArgBuilder = {
   fire: (selection: Record<string, string>) => Action
 }
 
-export type Action = Deeplink | Script | App | KeyCode | WhichKeyboard | Submenu | ArgBuilder
+export type Action = Deeplink | Url | Script | App | KeyCode | WhichKeyboard | Submenu | ArgBuilder
 
 // --- Constructors (submenu/argbuilder constructors live with their engines) ---
 export const deeplink = (path: string): Deeplink => ({ kind: "deeplink", path })
+export const url = (u: string, label?: string): Url => ({ kind: "url", url: u, label })
 export const script = (name: string, args?: string[]): Script => ({ kind: "script", name, args })
 export const app = (name: string): App => ({ kind: "app", name })
 export const which_keyboard = (): WhichKeyboard => ({ kind: "which_keyboard" })
@@ -68,6 +70,8 @@ export const actionToTos = (action: Action): ToEvent[] => {
   switch (action.kind) {
     case "deeplink":
       return [{ shell_command: `open raycast://${action.path}` }]
+    case "url":
+      return [{ shell_command: `open ${JSON.stringify(action.url)}` }]
     case "script":
       return [karabiner_script(action.name, { args: action.args })]
     case "app":
@@ -89,6 +93,8 @@ export const describeAction = (action: Action): string => {
       return `run script: ${[action.name, ...(action.args ?? [])].join(" ")}`
     case "deeplink":
       return `deeplink: ${action.path}`
+    case "url":
+      return `open url: ${action.label ?? action.url}`
     case "which_keyboard":
       return `notify keyboard name`
     case "submenu":
