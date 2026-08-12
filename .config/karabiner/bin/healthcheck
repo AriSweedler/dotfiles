@@ -1,0 +1,361 @@
+#!/usr/bin/env zsh
+# Karabiner-Elements health check: processes, config, device grab state,
+# daemon↔agent link, and recent log errors. Read-only.
+set -euo pipefail
+
+readonly SCRIPT_DIR="${0:A:h}"
+readonly LIB_LOGGING="${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+    print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+    exit 1
+fi
+source "${LIB_LOGGING}"
+
+readonly KARABINER_DIR="${SCRIPT_DIR:h}"
+readonly CONFIG_JSON="${KARABINER_DIR}/karabiner.json"
+readonly TS_SRC_DIR="${KARABINER_DIR}/karabiner.ts/src"
+readonly DAEMON_LOG="/var/log/karabiner/core_service.log"
+readonly AGENT_LOG="${HOME}/.local/share/karabiner/log/core_service.log"
+
+# Mutated by check_* functions; read by the final summary.
+ISSUES=0
+SELECTED_PROFILE=""
+TOTAL_RULES=0
+HYPER_RULES=0
+CONFIG_LAST_LOADED=""
+VIRTUAL_KEYBOARD_READY="unknown"
+AGENT_TIMEOUTS_RECENT=0
+DEVICES_GRABBED=0
+DEVICES_OBSERVED=0
+
+help() {
+    cat <<EOF
+${c_green}healthcheck${c_rst} — diagnose why Karabiner-Elements (e.g. the hyper key) is not working
+
+Checks, in order:
+  1. Required processes (root daemon, user agent, console_user_server,
+     VirtualHIDDevice daemon, DriverKit dext)
+  2. karabiner.json validity, selected profile, rule counts, per-device
+     ignore flags, and staleness vs karabiner.ts sources
+  3. Which physical devices the daemon grabbed vs merely observed
+     (grabbed = events are being remapped; observed = watched only)
+  4. Daemon↔agent IPC health (recent "Operation timed out" errors —
+     the usual cause of "config looks fine but nothing remaps")
+  5. Last successful config load and virtual keyboard readiness
+
+Logs findings to stderr; emits a key=value summary on stdout.
+Exits 0 when healthy, 1 when any issue was found.
+
+${c_bold}Usage:${c_rst}
+  zsh \$HOME/.config/karabiner/bin/healthcheck [--minutes N] [--verbose]
+
+${c_bold}Options:${c_rst}
+  ${c_cyan}--minutes N${c_rst}   Window for "recent" log errors (default: 15)
+  ${c_cyan}--verbose${c_rst}     Enable debug logging
+  ${c_cyan}-h, --help${c_rst}    Show this help
+EOF
+}
+
+note_issue() {
+    ISSUES=$(( ISSUES + 1 ))
+    log::err "$@"
+}
+
+#######################################
+# Verify required external commands exist.
+# Globals: none
+# Arguments: none
+# Returns: 0, or exits 1 listing every missing command
+#######################################
+check_prerequisites() {
+    local -a missing=()
+    local cmd
+    for cmd in jq ps awk date; do
+        if ! command -v "${cmd}" > /dev/null; then
+            missing+=("${cmd}")
+        fi
+    done
+    if (( ${#missing[@]} > 0 )); then
+        log::err "missing prerequisites | missing='${(j:, :)missing}'"
+        exit 1
+    fi
+}
+
+#######################################
+# Check one expected process is running for the given user.
+# Globals: ISSUES (via note_issue)
+# Arguments:
+#   1: human label
+#   2: expected process owner
+#   3: command pattern to match
+# Returns: 0 always (issues are counted, not fatal)
+#######################################
+check_process() {
+    local label="${1}" owner="${2}" cmd_pat="${3}"
+    local line
+    # awk must not `exit` early: killing ps mid-pipe raises SIGPIPE under pipefail.
+    line="$(ps -axo user,pid,command | awk -v owner="${owner}" -v pat="${cmd_pat}" \
+        '$1 == owner && $0 ~ pat && !found { print $2; found = 1 }')"
+    if [[ -z "${line}" ]]; then
+        note_issue "process missing | label='${label}' owner='${owner}' cmd_pat='${cmd_pat}'"
+        return 0
+    fi
+    log::ok "process running | label='${label}' owner='${owner}' pid='${line}'"
+}
+
+#######################################
+# Check all Karabiner processes expected on a healthy 15.x install.
+# Globals: USER, ISSUES
+# Arguments: none
+#######################################
+check_processes() {
+    log::info "checking processes | expected='5 karabiner processes'"
+    check_process "core service (root daemon)"    "root"        "Karabiner-Core-Service"
+    check_process "core service (user agent)"     "${USER}"     "Karabiner-Core-Service"
+    check_process "console_user_server"           "${USER}"     "karabiner_console_user_server"
+    check_process "VirtualHIDDevice daemon"       "root"        "Karabiner-VirtualHIDDevice-Daemon"
+    check_process "VirtualHIDDevice driver (dext)" "_driverkit" "org.pqrs.Karabiner-DriverKit-VirtualHIDDevice"
+}
+
+#######################################
+# Validate karabiner.json, report profile/rules, flag ignored keyboards,
+# and warn if karabiner.ts sources are newer than the baked output.
+# Globals: CONFIG_JSON, TS_SRC_DIR, SELECTED_PROFILE, TOTAL_RULES, HYPER_RULES, ISSUES
+# Arguments: none
+#######################################
+check_config() {
+    log::info "checking config | config_json='${CONFIG_JSON}'"
+    if [[ ! -r "${CONFIG_JSON}" ]]; then
+        note_issue "config missing or unreadable | config_json='${CONFIG_JSON}'"
+        return 0
+    fi
+    if ! jq empty "${CONFIG_JSON}" 2> /dev/null; then
+        note_issue "config is not valid JSON | config_json='${CONFIG_JSON}'"
+        return 0
+    fi
+
+    SELECTED_PROFILE="$(jq -r '[.profiles[] | select(.selected == true)][0].name // empty' "${CONFIG_JSON}")"
+    if [[ -z "${SELECTED_PROFILE}" ]]; then
+        note_issue "no profile is selected | config_json='${CONFIG_JSON}'"
+        return 0
+    fi
+    TOTAL_RULES="$(jq -r '[.profiles[] | select(.selected == true)][0].complex_modifications.rules | length' "${CONFIG_JSON}")"
+    HYPER_RULES="$(jq -r '[[.profiles[] | select(.selected == true)][0].complex_modifications.rules[] | select(.description | test("hyper"; "i"))] | length' "${CONFIG_JSON}")"
+    log::ok "config valid | selected_profile='${SELECTED_PROFILE}' total_rules='${TOTAL_RULES}' hyper_rules='${HYPER_RULES}'"
+
+    # Per-device settings in the profile: an ignored keyboard silently stops remapping.
+    local device_line
+    while IFS= read -r device_line; do
+        [[ -z "${device_line}" ]] && continue
+        if [[ "${device_line}" == *'"ignore":true'* ]]; then
+            note_issue "device is ignored in profile | device='${device_line}'"
+        else
+            log::ok "profile device entry | device='${device_line}'"
+        fi
+    done <<< "$(jq -c '[.profiles[] | select(.selected == true)][0].devices[]? |
+        {vendor_id: .identifiers.vendor_id, product_id: .identifiers.product_id,
+         is_keyboard: .identifiers.is_keyboard, ignore: (.ignore // false)}' "${CONFIG_JSON}")"
+
+    check_config_freshness
+}
+
+#######################################
+# Warn when karabiner.ts sources are newer than the baked karabiner.json.
+# Globals: TS_SRC_DIR, CONFIG_JSON
+# Arguments: none
+#######################################
+check_config_freshness() {
+    if [[ ! -d "${TS_SRC_DIR}" ]]; then
+        log::debug "no karabiner.ts sources, skipping freshness check | ts_src_dir='${TS_SRC_DIR}'"
+        return 0
+    fi
+    local -a newer=()
+    newer=("${(@f)$(find "${TS_SRC_DIR}" -type f -newer "${CONFIG_JSON}" 2> /dev/null)}")
+    newer=("${(@)newer:#}")
+    if (( ${#newer[@]} > 0 )); then
+        log::warn "karabiner.ts sources newer than baked config, run bin/bake | stale_count='${#newer[@]}' first='${newer[1]}'"
+        return 0
+    fi
+    log::ok "baked config is up to date with karabiner.ts sources"
+}
+
+#######################################
+# Report which devices the daemon grabbed vs observed, from the daemon log
+# since the last device_grabber start. grabbed = events remapped.
+# Globals: DAEMON_LOG, DEVICES_GRABBED, DEVICES_OBSERVED, ISSUES
+# Arguments: none
+#######################################
+check_device_grab() {
+    log::info "checking device grab state | daemon_log='${DAEMON_LOG}'"
+    if [[ ! -r "${DAEMON_LOG}" ]]; then
+        note_issue "daemon log unreadable | daemon_log='${DAEMON_LOG}'"
+        return 0
+    fi
+
+    # Last state per device_id since the most recent grabber start.
+    local devices
+    devices="$(awk '
+        /device_grabber is started/ { start = NR }
+        { line[NR] = $0 }
+        END {
+            if (start == 0) start = 1
+            for (i = start; i <= NR; i++) {
+                s = line[i]
+                if (s !~ /hid queue value monitor is started/) continue
+                state = (s ~ /\(grabbed\)/) ? "grabbed" : "observed"
+                sub(/^.*\(daemon\)\] /, "", s)
+                name = s; sub(/ \(device_id:.*$/, "", name)
+                id = s; sub(/^.*device_id:/, "", id); sub(/\).*$/, "", id)
+                last[id] = name "\t" id "\t" state
+            }
+            for (id in last) print last[id]
+        }' "${DAEMON_LOG}")"
+
+    if [[ -z "${devices}" ]]; then
+        note_issue "no devices grabbed or observed since last grabber start | daemon_log='${DAEMON_LOG}'"
+        return 0
+    fi
+
+    local name id state device_line
+    while IFS=$'\t' read -r name id state; do
+        if [[ "${state}" == "grabbed" ]]; then
+            DEVICES_GRABBED=$(( DEVICES_GRABBED + 1 ))
+            log::ok "device grabbed (events are remapped) | name='${name}' device_id='${id}'"
+        else
+            DEVICES_OBSERVED=$(( DEVICES_OBSERVED + 1 ))
+            log::info "device observed only (not remapped) | name='${name}' device_id='${id}'"
+        fi
+    done <<< "${devices}"
+
+    # The virtual keyboard itself is always observed; a real keyboard should be grabbed.
+    if (( DEVICES_GRABBED == 0 )); then
+        note_issue "no device is grabbed, remapping cannot work | devices_grabbed='${DEVICES_GRABBED}'"
+    fi
+}
+
+#######################################
+# Check the daemon↔agent IPC link for recent timeouts, and find the last
+# successful config load + virtual keyboard readiness in the daemon log.
+# Globals: AGENT_LOG, DAEMON_LOG, AGENT_TIMEOUTS_RECENT, CONFIG_LAST_LOADED,
+#          VIRTUAL_KEYBOARD_READY, ISSUES
+# Arguments:
+#   1: recency window in minutes
+#######################################
+check_daemon_link() {
+    local minutes="${1}"
+    local cutoff
+    cutoff="$(date -v -"${minutes}"M "+%Y-%m-%d %H:%M:%S")"
+    log::info "checking daemon↔agent link | agent_log='${AGENT_LOG}' window_min='${minutes}' cutoff='${cutoff}'"
+
+    if [[ -r "${AGENT_LOG}" ]]; then
+        AGENT_TIMEOUTS_RECENT="$(awk -v cutoff="${cutoff}" '
+            /core_service_daemon_client error/ {
+                ts = substr($0, 2, 19)
+                if (ts >= cutoff) n++
+            }
+            END { print n + 0 }' "${AGENT_LOG}")"
+        if (( AGENT_TIMEOUTS_RECENT > 0 )); then
+            note_issue "agent cannot reach daemon (this breaks remapping while config looks fine) | timeouts='${AGENT_TIMEOUTS_RECENT}' window_min='${minutes}' fix='launchctl kickstart -k system/org.pqrs.service.daemon.Karabiner-Core-Service'"
+        else
+            log::ok "no recent daemon↔agent timeouts | window_min='${minutes}'"
+        fi
+    else
+        log::warn "agent log unreadable, skipping link check | agent_log='${AGENT_LOG}'"
+    fi
+
+    if [[ -r "${DAEMON_LOG}" ]]; then
+        CONFIG_LAST_LOADED="$(awk '/Load .*karabiner.json/ { ts = substr($0, 2, 23) } END { print ts }' "${DAEMON_LOG}")"
+        if [[ -n "${CONFIG_LAST_LOADED}" ]]; then
+            log::ok "config last loaded by daemon | config_last_loaded='${CONFIG_LAST_LOADED}'"
+        else
+            log::warn "no config load found in current daemon log (may have rotated)"
+        fi
+        VIRTUAL_KEYBOARD_READY="$(awk '
+            /virtual_hid_keyboard_ready_response: true/ { r = "true" }
+            /virtual_hid_keyboard is not ready/ { r = "false" }
+            END { print (r == "") ? "unknown" : r }' "${DAEMON_LOG}")"
+        if [[ "${VIRTUAL_KEYBOARD_READY}" == "false" ]]; then
+            note_issue "virtual keyboard not ready | virtual_keyboard_ready='${VIRTUAL_KEYBOARD_READY}'"
+        else
+            log::ok "virtual keyboard state | virtual_keyboard_ready='${VIRTUAL_KEYBOARD_READY}'"
+        fi
+    fi
+}
+
+#######################################
+# Surface recent [error]/[warning] lines from daemon + agent logs.
+# Globals: DAEMON_LOG, AGENT_LOG
+# Arguments:
+#   1: recency window in minutes
+#######################################
+check_recent_log_errors() {
+    local minutes="${1}"
+    local cutoff
+    cutoff="$(date -v -"${minutes}"M "+%Y-%m-%d %H:%M:%S")"
+    log::info "checking recent log errors and warnings | window_min='${minutes}'"
+    local f recent
+    for f in "${DAEMON_LOG}" "${AGENT_LOG}"; do
+        [[ -r "${f}" ]] || continue
+        recent="$(awk -v cutoff="${cutoff}" '
+            /\[(error|warning)\]/ {
+                ts = substr($0, 2, 19)
+                if (ts >= cutoff) print
+            }' "${f}" | tail -10)"
+        if [[ -n "${recent}" ]]; then
+            log::warn "recent errors/warnings | log='${f}'"
+            log::WARN "${recent}"
+        else
+            log::ok "no recent errors or warnings | log='${f}'"
+        fi
+    done
+}
+
+main() {
+    local minutes=15
+
+    while (( $# > 0 )); do
+        case "${1}" in
+            -h|--help) help; exit 0 ;;
+            --minutes) minutes="${2:?--minutes requires a value}"; shift 2 ;;
+            --verbose) VERBOSE=true; shift ;;
+            *) log::err "unknown flag | flag='${1}'"; help; exit 1 ;;
+        esac
+    done
+
+    if [[ ! "${minutes}" == <-> ]]; then
+        log::err "invalid --minutes value | minutes='${minutes}' expected='positive integer'"
+        exit 1
+    fi
+
+    check_prerequisites
+    check_processes
+    check_config
+    check_device_grab
+    check_daemon_link "${minutes}"
+    check_recent_log_errors "${minutes}"
+
+    local overall_status="healthy"
+    if (( ISSUES > 0 )); then
+        overall_status="degraded"
+        log::err "health check found problems | issues='${ISSUES}'"
+    else
+        log::ok "all checks passed"
+    fi
+
+    cat <<EOF
+status=${overall_status}
+issues=${ISSUES}
+selected_profile=${SELECTED_PROFILE}
+total_rules=${TOTAL_RULES}
+hyper_rules=${HYPER_RULES}
+devices_grabbed=${DEVICES_GRABBED}
+devices_observed=${DEVICES_OBSERVED}
+agent_daemon_timeouts_recent=${AGENT_TIMEOUTS_RECENT}
+config_last_loaded=${CONFIG_LAST_LOADED}
+virtual_keyboard_ready=${VIRTUAL_KEYBOARD_READY}
+EOF
+
+    (( ISSUES == 0 ))
+}
+
+main "$@"
