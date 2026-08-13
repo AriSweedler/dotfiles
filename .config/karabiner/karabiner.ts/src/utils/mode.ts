@@ -73,11 +73,8 @@ export class AriMode {
     })
   }
 
-  // The layer builder gives every key from.modifiers mandatory ['any'] (hyper
-  // is held when the layer opens), so a shifted dict key like '#' builds as an
-  // indistinguishable duplicate of its base key. Rewrite it to mandatory
-  // ['shift'] and hoist it above the bare-key manipulator, which would
-  // otherwise swallow shift+base via its ['any'] match.
+  // The bare key matches with mandatory ['any'], so the shifted manipulator
+  // must sit above it or shift+base would never fire.
   private patchShiftedKeys(rule: Rule) {
     for (const [key, action] of Object.entries(this.actionDict)) {
       const base = SHIFTED_KEYS[key]

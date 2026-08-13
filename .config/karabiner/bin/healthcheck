@@ -17,7 +17,7 @@ readonly TS_SRC_DIR="${KARABINER_DIR}/karabiner.ts/src"
 readonly DAEMON_LOG="/var/log/karabiner/core_service.log"
 readonly AGENT_LOG="${HOME}/.local/share/karabiner/log/core_service.log"
 
-# Mutated by check_* functions; read by the final summary.
+# Mutated by check_* functions and read by the final summary.
 ISSUES=0
 SELECTED_PROFILE=""
 TOTAL_RULES=0
@@ -192,7 +192,8 @@ check_device_grab() {
         return 0
     fi
 
-    # Last state per device_id since the most recent grabber start.
+    # A device can stop and restart within one session. Only its last
+    # state since the most recent grabber start counts.
     local devices
     devices="$(awk '
         /device_grabber is started/ { start = NR }
@@ -227,7 +228,7 @@ check_device_grab() {
         fi
     done <<< "${devices}"
 
-    # The virtual keyboard itself is always observed; a real keyboard should be grabbed.
+    # The virtual keyboard is always observed. A real keyboard should be grabbed.
     if (( DEVICES_GRABBED == 0 )); then
         note_issue "no device is grabbed, remapping cannot work | devices_grabbed='${DEVICES_GRABBED}'"
     fi

@@ -70,8 +70,6 @@ class BitWriter {
 export function compressToEncodedURIComponent(input: string): string {
   const writer = new BitWriter()
   const dictionary = new Map<string, number>()
-  // Characters seen but not yet emitted; their first emission is a literal
-  // (marker + char code) that implicitly defines the dictionary entry.
   const pendingLiterals = new Set<string>()
   let dictSize = 3
   let numBits = 2
@@ -121,6 +119,6 @@ export function compressToEncodedURIComponent(input: string): string {
   if (w !== "") {
     writeSymbol(w)
   }
-  writer.writeBits(2, numBits) // End-of-stream marker.
+  writer.writeBits(2, numBits)
   return writer.flush()
 }
