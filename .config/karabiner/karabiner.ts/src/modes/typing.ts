@@ -1,5 +1,6 @@
 import { AriMode, deeplink, script, url } from "../utils/mode"
 import { argBuilder, argBuilderRules } from "../utils/argbuilder"
+import { monkeytypeTestUrl } from "../utils/monkeytype"
 
 // Monkeytype tests are seeded with the next unread passage of the current
 // book via the `passage` CLI (~/.config/bin/passage). Digits fire directly;
@@ -15,10 +16,10 @@ const meta = {
   description: "Typing practice",
 }
 
-// Shared test settings decode to ["time", null, null, false, false, "english",
-// "normal", ["58008"]] — the 58008 funbox generates number groups to type.
-const MONKEYTYPE_NUMBERS_URL =
-  "https://monkeytype.com?testSettings=NoIgLglgtgpiA0A7ArgG1UtGBmBDVAzjPHocSDIgOaoQEAWCIiA9gE5T4KgCsAHAAYBfEAF1RQA"
+// The 58008 funbox generates number groups to type.
+const MONKEYTYPE_NUMBERS_URL = monkeytypeTestUrl([
+  "time", null, null, false, false, "english", "normal", ["58008"],
+])
 
 const WORD_OPTIONS = [
   { key: "0", label: "5 words", value: "5" },
