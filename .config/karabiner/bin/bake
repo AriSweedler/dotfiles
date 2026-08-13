@@ -2,11 +2,16 @@
 
 set -euo pipefail
 
+readonly REPO_ROOT="${XDG_CONFIG_HOME:?}/karabiner"
+readonly OUT_RAW="${REPO_ROOT}/karabiner.json"
+readonly OUT_SORTED="${REPO_ROOT}/karabiner.json.sorted"
+readonly OUT_TMP="${REPO_ROOT}/karabiner.json.tmp"
+
 function main() {
-	local repo_root="${XDG_CONFIG_HOME:?}/karabiner"
-	local out_raw="${repo_root}/karabiner.json"
-	local out_sorted="${repo_root}/karabiner.json.sorted"
-	local out_tmp="${repo_root}/karabiner.json.tmp"
+	if ! command -v jq &>/dev/null; then
+		echo "jq not found, refusing to bake" >&2
+		exit 1
+	fi
 
 	bake::generate
 	bake::parameters
@@ -15,7 +20,7 @@ function main() {
 }
 
 function bake::generate() (
-	cd "${repo_root}/karabiner.ts"
+	cd "${REPO_ROOT}/karabiner.ts"
 
 	if [[ ! -d node_modules ]]; then
 		echo "Installing dependencies..." >&2
@@ -23,7 +28,7 @@ function bake::generate() (
 	fi
 
 	npm run build
-	echo "Generated raw output | out_raw='${out_raw}'" >&2
+	echo "Generated raw output | OUT_RAW='${OUT_RAW}'" >&2
 )
 
 function bake::parameters() {
@@ -40,14 +45,14 @@ function bake::parameters() {
 	}'
 	jq --argjson params "${params}" \
 		'.profiles[].complex_modifications.parameters = $params' \
-		< "${out_raw}" > "${out_tmp}"
-	mv "${out_tmp}" "${out_raw}"
+		< "${OUT_RAW}" > "${OUT_TMP}"
+	mv "${OUT_TMP}" "${OUT_RAW}"
 	echo "Injected complex_modifications.parameters defaults" >&2
 }
 
 function bake::sort() {
-	jq --sort-keys < "${out_raw}" > "${out_sorted}"
-	mv "${out_sorted}" "${out_raw}"
+	jq --sort-keys < "${OUT_RAW}" > "${OUT_SORTED}"
+	mv "${OUT_SORTED}" "${OUT_RAW}"
 	echo "Sorted output for better diffs" >&2
 }
 
@@ -61,8 +66,8 @@ function bake::stage() {
 		echo "dotfiles repo not configured, skipping stage" >&2
 		return
 	fi
-	git df add "${out_raw}"
-	git df diff --staged "${out_raw}"
+	git df add "${OUT_RAW}"
+	git df diff --staged "${OUT_RAW}"
 }
 
 main "$@"

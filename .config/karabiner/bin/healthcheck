@@ -61,6 +61,11 @@ note_issue() {
     log::err "$@"
 }
 
+# The format must match the substr($0, 2, 19) extraction in the awk log filters.
+cutoff_timestamp() {
+    date -v -"${1}"M "+%Y-%m-%d %H:%M:%S"
+}
+
 #######################################
 # Verify required external commands exist.
 # Globals: none
@@ -92,15 +97,17 @@ check_prerequisites() {
 #######################################
 check_process() {
     local label="${1}" owner="${2}" cmd_pat="${3}"
-    local line
+    local pid
+    # Bracket the first char so the pattern never matches this awk's own argv in ps.
+    local pat_safe="[${cmd_pat[1]}]${cmd_pat[2,-1]}"
     # awk must not `exit` early: killing ps mid-pipe raises SIGPIPE under pipefail.
-    line="$(ps -axo user,pid,command | awk -v owner="${owner}" -v pat="${cmd_pat}" \
+    pid="$(ps -axo user,pid,command | awk -v owner="${owner}" -v pat="${pat_safe}" \
         '$1 == owner && $0 ~ pat && !found { print $2; found = 1 }')"
-    if [[ -z "${line}" ]]; then
+    if [[ -z "${pid}" ]]; then
         note_issue "process missing | label='${label}' owner='${owner}' cmd_pat='${cmd_pat}'"
         return 0
     fi
-    log::ok "process running | label='${label}' owner='${owner}' pid='${line}'"
+    log::ok "process running | label='${label}' owner='${owner}' pid='${pid}'"
 }
 
 #######################################
@@ -140,7 +147,7 @@ check_config() {
         return 0
     fi
     TOTAL_RULES="$(jq -r '[.profiles[] | select(.selected == true)][0].complex_modifications.rules | length' "${CONFIG_JSON}")"
-    HYPER_RULES="$(jq -r '[[.profiles[] | select(.selected == true)][0].complex_modifications.rules[] | select(.description | test("hyper"; "i"))] | length' "${CONFIG_JSON}")"
+    HYPER_RULES="$(jq -r '[[.profiles[] | select(.selected == true)][0].complex_modifications.rules[] | select(.description // "" | test("hyper"; "i"))] | length' "${CONFIG_JSON}")"
     log::ok "config valid | selected_profile='${SELECTED_PROFILE}' total_rules='${TOTAL_RULES}' hyper_rules='${HYPER_RULES}'"
 
     # Per-device settings in the profile: an ignored keyboard silently stops remapping.
@@ -245,7 +252,7 @@ check_device_grab() {
 check_daemon_link() {
     local minutes="${1}"
     local cutoff
-    cutoff="$(date -v -"${minutes}"M "+%Y-%m-%d %H:%M:%S")"
+    cutoff="$(cutoff_timestamp "${minutes}")"
     log::info "checking daemon↔agent link | agent_log='${AGENT_LOG}' window_min='${minutes}' cutoff='${cutoff}'"
 
     if [[ -r "${AGENT_LOG}" ]]; then
@@ -280,6 +287,8 @@ check_daemon_link() {
         else
             log::ok "virtual keyboard state | virtual_keyboard_ready='${VIRTUAL_KEYBOARD_READY}'"
         fi
+    else
+        log::warn "daemon log unreadable, skipping config-load and virtual-keyboard checks | daemon_log='${DAEMON_LOG}'"
     fi
 }
 
@@ -292,7 +301,7 @@ check_daemon_link() {
 check_recent_log_errors() {
     local minutes="${1}"
     local cutoff
-    cutoff="$(date -v -"${minutes}"M "+%Y-%m-%d %H:%M:%S")"
+    cutoff="$(cutoff_timestamp "${minutes}")"
     log::info "checking recent log errors and warnings | window_min='${minutes}'"
     local f recent
     for f in "${DAEMON_LOG}" "${AGENT_LOG}"; do
