@@ -2,7 +2,6 @@
 
 set -e
 
-# Load in library commands
 source "${REPO_LIB:?}/tmux_session_window.bash"
 
 function ksl() {
@@ -18,6 +17,5 @@ function ksl() {
 
 export -f ksl
 
-# Compile the function into a command string
 cmd="$(tmux_session_window::cmd::from_exported_fxn 'ksl')"
 tmux_session_window::run_cmd "karabiner" "karabiner-script-logs" "$cmd"

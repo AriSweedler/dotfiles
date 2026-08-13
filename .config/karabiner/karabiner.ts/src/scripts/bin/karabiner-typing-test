@@ -22,28 +22,20 @@ readonly PASSAGE_LOGGING_LIB="${HOME}/.claude/skills/ari-skill-shellscripts/lib/
 readonly BOOK_DIR="${TYPING_BOOK_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/typing-books}"
 readonly STATE_DIR="${TYPING_STATE_DIR:-${XDG_STATE_HOME:-${HOME}/.local/state}/typing-books}"
 readonly TEST_LOG_CSV="${STATE_DIR}/typing_sessions.csv"
-readonly NOTIFIER="/opt/homebrew/bin/terminal-notifier"
 readonly NOTIFY_GROUP_OK="karabiner-typing-test-ok"
 readonly NOTIFY_GROUP_ERR="karabiner-typing-test-err"
 readonly NOTIFY_DISMISS_SECONDS=5
 readonly VALID_ACTIONS=(next current previous status)
 readonly RC_NOTHING_TO_DO=2
 
+source "${REPO_LIB}/notify.bash"
+
 # Failure notifications persist until seen (their own group, never
-# auto-removed); success ones self-dismiss without touching failures.
+# auto-removed). Success ones self-dismiss without touching failures.
 notify_err() {
   if [[ -x "${NOTIFIER}" ]]; then
     "${NOTIFIER}" -title "Typing test" -message "${1}" -group "${NOTIFY_GROUP_ERR}"
   fi
-}
-
-notify_transient() {
-  if [[ -x "${NOTIFIER}" ]]; then
-    "${NOTIFIER}" -title "Typing test" -message "${1}" -group "${NOTIFY_GROUP_OK}"
-  fi
-  # Disowned with fds closed so the handler (and anything reading its output)
-  # never waits out the dismiss window.
-  ( sleep "${NOTIFY_DISMISS_SECONDS}" && "${NOTIFIER}" -remove "${NOTIFY_GROUP_OK}" ) >/dev/null 2>&1 &!
 }
 
 #######################################
@@ -85,8 +77,8 @@ check_prerequisites() {
 #######################################
 # Status of the book in hand, from `passage --status` (tab-separated fields,
 # so filenames with spaces survive). passage stderr flows to the run log.
-# Returns: "book<TAB>bookmark<TAB>total_lines<TAB>progress_pct<TAB>passages_read";
-# empty when no book has been opened yet
+# Returns: "book<TAB>bookmark<TAB>total_lines<TAB>progress_pct<TAB>passages_read".
+# Empty when no book has been opened yet.
 #######################################
 book_status() {
   zsh "${PASSAGE_BIN}" --status | awk -F'\t' '
@@ -170,25 +162,25 @@ main() {
       return 1
     fi
     if [[ -z "${status_line}" ]]; then
-      notify_transient "no book in hand yet — press 1 to start"
+      notify_transient "Typing test" "no book in hand yet — press 1 to start" "${NOTIFY_GROUP_OK}" "${NOTIFY_DISMISS_SECONDS}"
       return 0
     fi
     IFS=$'\t' read -r book bookmark total_lines progress_pct passages_read <<< "${status_line}"
-    notify_transient "${book:r}: ${progress_pct}%, ${passages_read} passages typed"
+    notify_transient "Typing test" "${book:r}: ${progress_pct}%, ${passages_read} passages typed" "${NOTIFY_GROUP_OK}" "${NOTIFY_DISMISS_SECONDS}"
     return 0
   fi
 
   local passage rc=0
   passage="$(zsh "${PASSAGE_BIN}" "${action}" "${passage_flags[@]}")" || rc=$?
   if (( rc == RC_NOTHING_TO_DO )); then
-    notify_transient "nothing to retype yet — type a passage first (1/2/3)"
+    notify_transient "Typing test" "nothing to retype yet — type a passage first (1/2/3)" "${NOTIFY_GROUP_OK}" "${NOTIFY_DISMISS_SECONDS}"
     return 0
   elif (( rc != 0 )); then
     notify_err "passage ${action} failed — see the log"
     return 1
   fi
   if [[ -z "${passage//[[:space:]]/}" ]]; then
-    notify_transient "nothing to type — bookmark is at the start of the book"
+    notify_transient "Typing test" "nothing to type — bookmark is at the start of the book" "${NOTIFY_GROUP_OK}" "${NOTIFY_DISMISS_SECONDS}"
     return 0
   fi
 
@@ -231,7 +223,7 @@ main() {
   if [[ "${finished}" == "true" ]]; then
     message="${message} — book finished!"
   fi
-  notify_transient "${message}"
+  notify_transient "Typing test" "${message}" "${NOTIFY_GROUP_OK}" "${NOTIFY_DISMISS_SECONDS}"
 
   record_test "${action}" "${words_requested}" "${words_actual}" "${book}" "${bookmark}" "${total_lines}" "${progress_pct}"
 }

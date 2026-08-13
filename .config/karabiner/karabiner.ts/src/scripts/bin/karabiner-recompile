@@ -2,5 +2,7 @@
 
 set -e
 echo "PATH='${PATH}'"
-npm run build
+# The karabiner_script wrapper cd's into karabiner.ts and exports REPO_ROOT,
+# so bake needs no cd here.
+XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-${HOME}/.config}" "${REPO_ROOT:?}/../bin/bake"
 open "raycast://extensions/raycast/raycast/confetti"

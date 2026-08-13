@@ -12,7 +12,7 @@ const path = require("path");
 const LZString = require(path.join(__dirname, "lz-string.js"));
 
 // Typographic characters from the Gutenberg text are miserable to type
-// literally; fold them to their ASCII equivalents.
+// literally. Fold them to their ASCII equivalents.
 const TYPOGRAPHY = [
   [/[‘’]/g, "'"],
   [/[“”]/g, '"'],

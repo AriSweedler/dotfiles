@@ -2,7 +2,6 @@
 
 set -e
 
-# Load in library commands"
 source "${REPO_LIB:?}/tmux_session_window.bash"
 
 cmd="echo 'hello world from tmux'"

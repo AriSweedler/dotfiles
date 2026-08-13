@@ -1,10 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Karabiner Hyper+Q handler.
-#
-# * Look at the active claude session. If none, bail
-# * Find the 'pr-link' metadata. If none, bail
-# * Open the pr
+# Karabiner Hyper+Q handler. Opens go/pr for the PR of the focused Claude session.
 
 set -euo pipefail
 

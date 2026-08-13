@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# Karabiner Hyper+N handler. Asks the Claude click-simulator to catch the
+# Karabiner Hyper+C handler. Asks the Claude click-simulator to catch the
 # latest notification:
-#   - exit 0 (caught one) → fire Raycast confetti
+#   - exit 0 (caught one) → focus the terminal
 #   - exit 1 (none active) → show a "no notifications to catch" alert
 #
 # Lives in the karabiner repo so the conditional UX stays close to the
@@ -11,23 +11,15 @@
 
 set -u
 
-readonly NOTIFIER="/opt/homebrew/bin/terminal-notifier"
+source "${REPO_LIB:?}/notify.bash"
+
 readonly CLICK_SIM="${HOME}/.config/claude/bin/notification-click-simulator.sh"
 readonly ALERT_GROUP="claude-no-catch"
 # Set to your terminal of choice (iTerm, kitty, Ghostty, ...).
 readonly TERMINAL_APP="Terminal"
 
-notify_no_catch() {
-  "${NOTIFIER}" \
-    -title "Claude" \
-    -message "no notifications to catch" \
-    -group "${ALERT_GROUP}"
-  ( sleep 1 && "${NOTIFIER}" -remove "${ALERT_GROUP}" >/dev/null 2>&1 ) &
-  wait
-}
-
 if ! "${CLICK_SIM}"; then
-  notify_no_catch
+  notify_transient "Claude" "no notifications to catch" "${ALERT_GROUP}"
   exit
 fi
 open -a "${TERMINAL_APP}"
