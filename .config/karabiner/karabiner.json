@@ -1196,7 +1196,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "open \"https://monkeytype.com?testSettings=NoIgLglgtgpiA0A7ArgG1UtGBmBDVAzjPHocSDIgOaoQEAWCIiA9gE5T4KgCsAHAAYBfEAF1RQA\""
+                    "shell_command": "open \"https://monkeytype.com/?testSettings=NoIgLglgtgpiA0A7ArgG1UtGBmBDVAzjPHocSDIgOaoQEAWCIiA9gE5T4KgCsAHAAYBfEAF1RQA\""
                   },
                   {
                     "set_variable": {

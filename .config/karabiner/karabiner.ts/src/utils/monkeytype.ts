@@ -29,4 +29,4 @@ export type MonkeytypeTestSettings = [
 ]
 
 export const monkeytypeTestUrl = (settings: MonkeytypeTestSettings): string =>
-  `https://monkeytype.com?testSettings=${compressToEncodedURIComponent(JSON.stringify(settings))}`
+  `https://monkeytype.com/?testSettings=${compressToEncodedURIComponent(JSON.stringify(settings))}`
