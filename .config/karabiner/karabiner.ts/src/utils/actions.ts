@@ -1,19 +1,17 @@
 import { Modifier, ToEvent, ToKeyCode, toApp } from "karabiner.ts"
-import { karabiner_script } from "./macros"
+import { karabiner_script } from "./macros.ts"
 
-// Shared action vocabulary for AriMode dicts, submenu entries, and argbuilder
-// fire targets. The interactive kinds (submenu, argbuilder) carry their own
-// definitions; their open/rule generation lives in submenu.ts / argbuilder.ts
-// so this module stays import-cycle-free.
+// Shared action vocabulary for AriMode dicts and argbuilder fire targets.
+// The interactive argbuilder kind carries its own definition; its open/rule
+// generation lives in argbuilder.ts so this module stays import-cycle-free.
 
 // --- Types ---
 export type Deeplink = { kind: "deeplink"; path: string }
 export type Url = { kind: "url"; url: string; label?: string }
 export type Script = { kind: "script"; name: string; args?: string[] }
 export type App = { kind: "app"; name: string }
-export type KeyCode = { kind: "key_code"; key_code: string; modifiers?: Modifier[]; description: string }
+export type KeyCode = { kind: "key_code"; key_code: ToKeyCode; modifiers?: Modifier[]; description: string }
 export type WhichKeyboard = { kind: "which_keyboard" }
-export type Submenu = { kind: "submenu"; id: string; title: string; entries: Record<string, Action> }
 
 export type ArgOption = { key: string; label: string; value: string }
 export type ArgGroup = { name: string; label: string; options: ArgOption[]; defaultKey: string }
@@ -25,9 +23,9 @@ export type ArgBuilder = {
   fire: (selection: Record<string, string>) => Action
 }
 
-export type Action = Deeplink | Url | Script | App | KeyCode | WhichKeyboard | Submenu | ArgBuilder
+export type Action = Deeplink | Url | Script | App | KeyCode | WhichKeyboard | ArgBuilder
 
-// --- Constructors (submenu/argbuilder constructors live with their engines) ---
+// --- Constructors (the argbuilder constructor lives with its engine) ---
 export const deeplink = (path: string): Deeplink => ({ kind: "deeplink", path })
 export const url = (u: string, label?: string): Url => ({ kind: "url", url: u, label })
 export const script = (name: string, args?: string[]): Script => ({ kind: "script", name, args })
@@ -40,32 +38,28 @@ export const key_code = (key: string, modifiers: Modifier[], description: string
   description: description,
 })
 
-export function to_key_code(key: string) {
-  if (key == '=') { // karabiner doesn't like '=' as a key
-    return "equal_sign"
-  } else if (key == '-' || key == 'minus') { // karabiner doesn't like '-' as a key
-    return "hyphen"
-  } else if (key == '⏎' || key == 'return') { // karabiner doesn't like 'return' as a key
-    return "return_or_enter"
-  } else if (key == '⌫' || key == 'delete') { // karabiner doesn't like 'delete' as a key
-    return "delete_or_backspace"
-  } else if (key == ',') {
-    return "comma"
-  } else if (key == '.') {
-    return "period"
-  } else if (key == '[') {
-    return "open_bracket"
-  } else if (key == ']') {
-    return "close_bracket"
-  }
-  return key
+// Karabiner key codes are names, not symbols. Map the symbols and aliases the
+// dicts use to their key code names.
+const KEY_CODE_ALIASES: Record<string, ToKeyCode> = {
+  "=": "equal_sign",
+  "-": "hyphen",
+  "minus": "hyphen",
+  "⏎": "return_or_enter",
+  "return": "return_or_enter",
+  "⌫": "delete_or_backspace",
+  "delete": "delete_or_backspace",
+  ",": "comma",
+  ".": "period",
+  "[": "open_bracket",
+  "]": "close_bracket",
 }
+const to_key_code = (key: string): ToKeyCode => KEY_CODE_ALIASES[key] ?? (key as ToKeyCode)
 
 // --- Rendering ---
 
-// To-events for the fire-and-forget kinds. The interactive kinds (submenu,
-// argbuilder) and which_keyboard (needs per-device conditions) don't reduce to
-// a plain to-list; callers dispatch those before falling through to here.
+// To-events for the fire-and-forget kinds. The interactive argbuilder kind
+// and which_keyboard (needs per-device conditions) don't reduce to a plain
+// to-list; callers dispatch those before falling through to here.
 export const actionToTos = (action: Action): ToEvent[] => {
   switch (action.kind) {
     case "deeplink":
@@ -77,7 +71,7 @@ export const actionToTos = (action: Action): ToEvent[] => {
     case "app":
       return [toApp(action.name)]
     case "key_code":
-      return [{ key_code: action.key_code as ToKeyCode, modifiers: action.modifiers || [] }]
+      return [{ key_code: action.key_code, modifiers: action.modifiers || [] }]
     default:
       throw new Error(`actionToTos cannot render this kind | kind=${action.kind}`)
   }
@@ -97,9 +91,11 @@ export const describeAction = (action: Action): string => {
       return `open url: ${action.label ?? action.url}`
     case "which_keyboard":
       return `notify keyboard name`
-    case "submenu":
-      return `menu: ${action.title}`
     case "argbuilder":
       return `builder: ${action.title}`
   }
 }
+
+// One owner for the notification help-bullet format, shared across layer
+// notifications so they stay visually consistent.
+export const helpLine = (key: string, desc: string) => `• \`${key}\` → ${desc}`

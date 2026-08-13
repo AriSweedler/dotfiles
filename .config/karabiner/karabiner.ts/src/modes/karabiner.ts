@@ -1,4 +1,4 @@
-import { AriMode, app, deeplink, script, which_keyboard } from "../utils/mode"
+import { AriMode, app, deeplink, script, which_keyboard } from "../utils/mode.ts"
 
 const meta = {
   entrypoint: "k",
@@ -17,6 +17,5 @@ const dict = {
   v: app("Karabiner-EventViewer"),
 }
 
-// --- Export Final Rule ---
 const karabinerMode = new AriMode(meta, dict)
 export default karabinerMode.asRule()

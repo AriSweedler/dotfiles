@@ -5,20 +5,19 @@
 //   validateActionsToKeybindings — every claudeActions entry must exist (right action) in keybindings.json
 //   validateKeybindingsToActions — every "alt+l …" leader chord in keybindings.json must have a claudeActions entry
 //
-// Failures are collected LAZILY (full report in one pass) and printed as a single
-// console.error block with paste-ready repair output. Exits non-zero unless
+// Failures are collected exhaustively — no fail-fast, full report in one pass —
+// and printed as a single console.error block with paste-ready repair output. Exits non-zero unless
 // KARABINER_SKIP_CLAUDE_CHECK is set. CC owns the alt+l chords; we never bind them here.
 
 import fs from "fs"
 import os from "os"
 import path from "path"
 import { fileURLToPath } from "url"
-import { LEADER, claudeActions, chordFor, type ClaudeAction } from "./actions.ts"
+import { CHORD_PREFIX, LEADER, claudeActions, chordFor, suffixFromChord, type ClaudeAction } from "./actions.ts"
 
 const KEYBINDINGS_PATH =
   process.env.CLAUDE_KEYBINDINGS_PATH ?? path.join(os.homedir(), ".claude", "keybindings.json")
 const SKIP_ENV = "KARABINER_SKIP_CLAUDE_CHECK"
-const CHORD_PREFIX = `${LEADER} ` // a leader chord key looks like "alt+l j"
 
 type KbEntry = { context?: string; bindings?: Record<string, string | null> }
 
@@ -70,10 +69,6 @@ function validateKeybindingsToActions(entries: KbEntry[]): Failure[] {
   return failures
 }
 
-function collectFailures(entries: KbEntry[]): Failure[] {
-  return [...validateActionsToKeybindings(entries), ...validateKeybindingsToActions(entries)]
-}
-
 function buildReport(failures: Failure[], preamble?: string): string {
   const out: string[] = ["", `✗ claude leader-chord check FAILED (leader = "${LEADER}")`]
   if (preamble) out.push(`  ${preamble}`)
@@ -92,8 +87,8 @@ function buildReport(failures: Failure[], preamble?: string): string {
   const kbFixes = failures.filter((f): f is Missing | Wrong => f.kind !== "orphan")
   const byContext = new Map<string, (Missing | Wrong)[]>()
   for (const f of kbFixes) byContext.set(f.action.ccContext, [...(byContext.get(f.action.ccContext) ?? []), f])
-  for (const [ctx, fs] of byContext) {
-    const bindings = fs.map((f) => `      ${JSON.stringify(chordFor(f.action))}: ${JSON.stringify(f.action.ccAction)}`).join(",\n")
+  for (const [ctx, ctxFailures] of byContext) {
+    const bindings = ctxFailures.map((f) => `      ${JSON.stringify(chordFor(f.action))}: ${JSON.stringify(f.action.ccAction)}`).join(",\n")
     out.push("", `  Add/fix in ${KEYBINDINGS_PATH} (context "${ctx}"):`, "  {", `    "context": ${JSON.stringify(ctx)},`, `    "bindings": {`, bindings, "    }", "  }")
   }
 
@@ -102,7 +97,7 @@ function buildReport(failures: Failure[], preamble?: string): string {
   if (orphans.length) {
     out.push("", `  Add to src/claude/actions.ts (claudeActions[]):`)
     for (const o of orphans) {
-      const suffix = o.chord.slice(CHORD_PREFIX.length).replace(/^alt\+/, "")
+      const suffix = suffixFromChord(o.chord)
       out.push(`    { suffix: ${JSON.stringify(suffix)}, ccContext: ${JSON.stringify(o.ccContext)}, ccAction: ${JSON.stringify(o.ccAction)}, desc: "TODO" },`)
     }
   }
@@ -133,7 +128,7 @@ export function validateClaudeKeybindings(): void {
     )
   }
 
-  const failures = collectFailures(entries)
+  const failures = [...validateActionsToKeybindings(entries), ...validateKeybindingsToActions(entries)]
   if (failures.length === 0) {
     console.log(`[claude-check] OK — ${claudeActions.length} leader chords match both ways with ${KEYBINDINGS_PATH}`)
     return

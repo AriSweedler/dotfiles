@@ -2,7 +2,9 @@
 
 import { hyperLayer, map, toKey, type FromAndToKeyCode } from "karabiner.ts"
 import { claudeActions } from "./actions.ts"
+import { helpLine } from "../utils/actions.ts"
 
+// Oversized on purpose — presses past the end are no-ops, so any buffer fits.
 const CURSOR_TO_BOTTOM_PRESSES = 30
 const FOOTER_EXIT_PRESSES = 10
 
@@ -23,7 +25,7 @@ const EXIT_TO_CHAT = Array.from({ length: FOOTER_EXIT_PRESSES }, () => [toKey("l
 const navAndOpen = (suffix: FromAndToKeyCode) => [toKey("l", "⌥"), toKey(suffix, "⌥"), toKey("return_or_enter"), ...EXIT_TO_CHAT]
 
 export const claudeLeaderMode = hyperLayer("l", "claude-leader")
-  .description(`(hyper + l): Claude agent nav\n\n${claudeActions.map((a) => `• \`${a.suffix}\` → ${a.desc}`).join("\n")}`)
+  .description(`(hyper + l): Claude agent nav\n\n${claudeActions.map((a) => helpLine(a.suffix, a.desc)).join("\n")}`)
   .leaderMode()
   .notification()
   .manipulators(claudeActions.map((a) => map(a.suffix).to([...ENTER_FOOTER, ...navAndOpen(a.suffix)])))

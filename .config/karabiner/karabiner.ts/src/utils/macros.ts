@@ -49,7 +49,7 @@ export const karabiner_script = (
     throw new Error(`Script is not executable or not found | scriptPathRel=${scriptPathRel} scriptPathAbs=${scriptPathAbs} scriptPathAbsEnv=${scriptPathAbsEnv}`)
   }
 
-  // Args are baked into the generated shell_command; keep them shell-simple
+  // Args are baked into the generated shell_command. Keep them shell-simple
   // (no quotes/dollars) so the double-quoted embedding below can't be escaped.
   for (const arg of args) {
     if (!/^[A-Za-z0-9_.\/=-]+$/.test(arg)) {
@@ -62,10 +62,11 @@ export const karabiner_script = (
   const logDir = `/tmp/karabiner.${scriptPathRel}`
   const logFile = `${logDir}/log.txt`
 
+  // \${...} escapes TS interpolation. Bare $VAR passes through to the shell untouched.
   return {
     shell_command: `
 mkdir -p "${logDir}"
-zsh -c 'source "\$HOME/.config/zsh/plugins/log_rotate.zsh" && log_rotate "\$1" "\$2"' _ "${logFile}" "${logKeep}" 2>/dev/null || true
+zsh -c 'source "$HOME/.config/zsh/plugins/log_rotate.zsh" && log_rotate "$1" "$2"' _ "${logFile}" "${logKeep}" 2>/dev/null || true
 {
   export REPO_ROOT="${karabinerRoot.replace(os.homedir(), "$HOME")}"
   export REPO_LIB="\${REPO_ROOT}/src/scripts/lib"
@@ -74,7 +75,7 @@ zsh -c 'source "\$HOME/.config/zsh/plugins/log_rotate.zsh" && log_rotate "\$1" "
   date
   cd "\${REPO_ROOT:?}"
   echo "Invoking ${scriptPathAbs}${argsSuffix}"
-  zsh -c 'zmodload zsh/datetime; typeset -F _s=\$EPOCHREALTIME; "\$@"; _rc=\$?; typeset -F _e=\$EPOCHREALTIME; printf "elapsed_ms=%.0f rc=%d\\n" \$(( (_e - _s) * 1000 )) \$_rc; exit \$_rc' _ "${scriptPathAbs}"${argsSuffix}
+  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; "$@"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf "elapsed_ms=%.0f rc=%d\\n" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ "${scriptPathAbs}"${argsSuffix}
 } &> "${logFile}"
 `
   }

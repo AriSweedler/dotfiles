@@ -1,12 +1,11 @@
-import { hyperLayer, map, BasicManipulator, FromKeyCode, LayerKeyParam, Rule } from "karabiner.ts"
-import { Action, actionToTos, describeAction } from "./actions"
-import { argBuilderOpenEvents } from "./argbuilder"
-import { submenuOpenEvents } from "./submenu"
-import { allDevices } from "./devices"
+import { hyperLayer, map, BasicManipulator, FromKeyCode, LayerKeyParam, Rule, ToEvent } from "karabiner.ts"
+import { Action, actionToTos, describeAction, helpLine } from "./actions.ts"
+import { argBuilderOpenEvents } from "./argbuilder.ts"
+import { allDevices } from "./devices.ts"
 
 // Re-export the action vocabulary so mode files keep a single import site.
-export { app, deeplink, key_code, script, url, which_keyboard } from "./actions"
-export type { Action } from "./actions"
+export { app, deeplink, key_code, script, url, which_keyboard } from "./actions.ts"
+export type { Action } from "./actions.ts"
 
 type Meta = {
   entrypoint: string
@@ -38,18 +37,27 @@ export class AriMode {
 
   private toDescription() {
     const entries = Object.entries(this.actionDict)
-      .map(([key, action]) => `• \`${key}\` → ${describeAction(action)}`)
+      .map(([key, action]) => helpLine(key, describeAction(action)))
       .join("\n")
 
     return `(hyper + ${this.meta.entrypoint}): ${this.meta.description}\n\n${entries}`
   }
 
+  // To-events that open/fire an action, for every kind except which_keyboard
+  // (which needs per-device conditions, not a single to-list).
+  private openTos(action: Action): ToEvent[] {
+    switch (action.kind) {
+      case "argbuilder":
+        return argBuilderOpenEvents(action)
+      case "which_keyboard":
+        throw new Error("shifted key cannot be which_keyboard")
+      default:
+        return actionToTos(action)
+    }
+  }
+
   private toManipulator = ([key, action]: [string, Action]) => {
     switch (action.kind) {
-      case "submenu":
-        return mapFrom(key).to(submenuOpenEvents(action))
-      case "argbuilder":
-        return mapFrom(key).to(argBuilderOpenEvents(action))
       case "which_keyboard": {
         const known = allDevices.map(d =>
           mapFrom(key)
@@ -62,15 +70,12 @@ export class AriMode {
         return [...known, fallback]
       }
       default:
-        return mapFrom(key).to(actionToTos(action))
+        return [mapFrom(key).to(this.openTos(action))]
     }
   }
 
   private toManipulators() {
-    return Object.entries(this.actionDict).flatMap(entry => {
-      const result = this.toManipulator(entry)
-      return Array.isArray(result) ? result : [result]
-    })
+    return Object.entries(this.actionDict).flatMap(this.toManipulator)
   }
 
   // The bare key matches with mandatory ['any'], so the shifted manipulator
@@ -79,13 +84,13 @@ export class AriMode {
     for (const [key, action] of Object.entries(this.actionDict)) {
       const base = SHIFTED_KEYS[key]
       if (!base) continue
-      const marker = (actionToTos(action)[0] as { shell_command?: string }).shell_command
+      const marker = JSON.stringify(this.openTos(action)[0])
       const idx = rule.manipulators.findIndex(
         m =>
           m.type === "basic" &&
           "key_code" in m.from &&
           m.from.key_code === base &&
-          !!m.to?.some(t => "shell_command" in t && t.shell_command === marker),
+          !!m.to?.some(t => JSON.stringify(t) === marker),
       )
       if (idx < 0) {
         throw new Error(`shifted-key manipulator not found | key=${key} base=${base}`)

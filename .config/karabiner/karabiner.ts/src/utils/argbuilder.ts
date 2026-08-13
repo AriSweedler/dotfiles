@@ -1,8 +1,8 @@
 import { FromKeyParam, ToEvent, ifVar, map, rule, toNotificationMessage, toRemoveNotificationMessage, toUnsetVar, toSetVar } from "karabiner.ts"
-import { ArgBuilder, ArgGroup, ArgOption, actionToTos } from "./actions"
+import { ArgBuilder, ArgGroup, ArgOption, actionToTos } from "./actions.ts"
 
 // Order-free "arg builder" menus: each exclusive group of options gets its
-// own Karabiner variable and its own notification line; pressing an option
+// own Karabiner variable and its own notification line. Pressing an option
 // key re-selects within that group (any order, any number of times), and ⏎
 // fires the built action. Because Karabiner shell commands are static, the ⏎
 // binding is generated once per combination — the cartesian product of all
@@ -10,9 +10,9 @@ import { ArgBuilder, ArgGroup, ArgOption, actionToTos } from "./actions"
 // groups (enforced at bake time). Implicit at every level: escape clears
 // builder state — deliberately absent from the help text.
 //
-// Caveats match submenu.ts: no variable timeout (an abandoned builder stays
-// armed until escape or ⏎), and these rules must be registered AFTER the
-// AriMode layers in writeToProfile so an active layer beats a stale builder.
+// Caveats: no variable timeout (an abandoned builder stays armed until escape
+// or ⏎), and these rules must be registered AFTER the AriMode layers in
+// writeToProfile so an active layer beats a stale builder.
 
 const openVar = (b: ArgBuilder) => `ari_argbuilder_${b.id}`
 const groupVar = (b: ArgBuilder, g: ArgGroup) => `ari_argbuilder_${b.id}_${g.name}`
@@ -41,6 +41,7 @@ export const argBuilder = (
   return { kind: "argbuilder", id, title, groups, fire }
 }
 
+// Only called with defaultKeys, which argBuilder validated at construction.
 const optionByKey = (g: ArgGroup, key: string): ArgOption =>
   g.options.find((o) => o.key === key)!
 

@@ -1,5 +1,5 @@
 import { map, rule } from "karabiner.ts"
-import { karabiner_script } from "./utils/macros"
+import { karabiner_script } from "./utils/macros.ts"
 
 export const shortcuts = [
   rule('Cmd+Ctrl+A → Ctrl+A twice')
@@ -21,7 +21,6 @@ export const shortcuts = [
 
   rule('Hyper+N → click the newest notification (fast, positional)')
     .manipulators([
-      // logKeep: 50 — keep more runs of this handler's log while debugging it.
       map('n', 'Hyper').to(karabiner_script("notif-click", { logKeep: 50 })),
     ]),
 

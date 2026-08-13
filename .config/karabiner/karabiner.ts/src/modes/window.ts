@@ -1,8 +1,7 @@
-import { AriMode, key_code } from "../utils/mode"
+import { AriMode, key_code } from "../utils/mode.ts"
 
-// To enable one-click usage, the user needs to check to see if all the raycast
-// shortcuts are set up properly. Go to `Raycast > Settings > Extensions` & make
-// sure all the `Window Management` hotkeys are set.
+// Each key sends ctrl+option+<key>, which Raycast must have configured as the
+// matching Window Management hotkey (Raycast > Settings > Extensions).
 //
 // TODO: On my 34 inch monitor, I may want a different set of entries for this.
 // For example, 'h' should maybe mean "left-third" instead of "left-half"
@@ -43,19 +42,13 @@ const dict = Object.fromEntries(
     "[": "previous-desktop",
     "]": "next-desktop"
   })
-    // NOTE: Deeplinks lose window focus, as they 'open' raycast. Rip... So I
-    // have to use a key_code that has been configured in raycast instead of a
-    // `deeplink`
-    //
-    // This key_code mapping requires raycast to be set up with the right
-    // keystroke shortcuts. It entirely bypasses the mapping of key to action
-    // (the action is the configured raycast keystroke matching the key)
+    // Deeplinks steal focus from the target window by opening Raycast, so
+    // each key replays the configured Raycast hotkey instead.
     .map(([key, value]) => [
       key,
       key_code(key, ["control", "option"], value)
     ])
 )
 
-// --- Export Final Rule ---
 const windowMode = new AriMode(meta, dict)
 export default windowMode.asRule()

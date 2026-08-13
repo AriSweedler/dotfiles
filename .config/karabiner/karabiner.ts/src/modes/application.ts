@@ -1,4 +1,4 @@
-import { AriMode, app } from "../utils/mode"
+import { AriMode, app } from "../utils/mode.ts"
 
 const meta = {
   entrypoint: "a",
@@ -14,6 +14,5 @@ const dict = {
   "z": app("Zoom"),
 }
 
-// --- Export Final Rule ---
 const applicationMode = new AriMode(meta, dict)
 export default applicationMode.asRule()

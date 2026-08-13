@@ -10,7 +10,7 @@ export type LabeledDevice = {
   identifiers: DeviceIdentifier[]
 }
 
-export const devices = {
+const devices = {
   // Physical label says "Freestyle Pro", but the device reports its product
   // name as "Freestyle Edge Keyboard" in karabiner-EventViewer.
   //
