@@ -4,16 +4,28 @@
 # it. Bound to <Prefix>C-k (see ~/.config/tmux/plugin/macros.conf), which
 # opens this in a tmux popup.
 #
-# The database is a JSON list; each element has a "cmd" and an optional "pwd":
+# The database is a JSON list. Minimal entry: {"cmd": "killall Dock"}. Full
+# schema (everything but one of cmd/subcommands is optional):
 #
-#   [
-#     {"cmd": "killall NotificationCenter"},
-#     {"pwd": "~/h/source/hyperbase", "cmd": "git fetch --prune"}
-#   ]
+#   cmd          command fragment
+#   pwd          cd here first (honored at the top level only)
+#   description  shown in menus after the cmd
+#   flags        multiselected at run time (tab: toggle, esc: none)
+#     flag         e.g. "--verbose", or an env var name like "ACTION"
+#     type         "bool" (default: emits just the flag) or "kv"
+#     style        kv only — how the value attaches:
+#                  space (default): --flag value
+#                  space-quoted:    --flag 'value'
+#                  equals:          --flag=value
+#                  equals-quoted:   --flag='value'
+#     options      kv only — fzf through these; absent means type the value
+#     description  shown in the flag menu
+#   subcommands  list of nested entries (recursive: cmd/flags/subcommands/
+#                description) — pick one, then its args resolve in turn
 #
-# Selecting an entry cds to its pwd (if set) and evals its cmd. Without a
-# pwd, the cmd runs wherever this script started (the popup binding passes
-# the current pane's path).
+# Assembly order per level: cmd, then selected flags, then the chosen
+# subcommand's assembly. The top-level menu shows only cmd/description plus a
+# "…" hint when an entry has flags or subcommands — never the options.
 #
 # Built on fzfdb (~/.config/zsh/plugins/fzfdb_cli.zsh). Keys are 1-based
 # indices into the JSON list. fzfdb's preview subshell *sources* this file to
@@ -59,9 +71,10 @@ function tmux_oneshot::action::help() {
   echo -e "$(cat << EOF
 USAGE: tmux-oneshot [key]
 
-Pick a oneshot command from the JSON database and run it. Each entry is
-{"cmd": ..., "pwd": ...} where pwd is optional; selecting an entry cds to
-pwd (if set) and runs cmd. Pass a key (1-based index) to skip the menu.
+Pick a oneshot command from the JSON database and run it. Selecting an entry
+cds to its pwd (if set), interactively resolves its flags/subcommands (if
+any), then evals the assembled command. Pass a key (1-based index) to skip
+the top-level menu. The entry schema is documented at the top of this script.
 
 Database: ${c_grey}${TMUX_ONESHOT_DB}${c_rst} (override with TMUX_ONESHOT_DB)
 
@@ -91,36 +104,139 @@ function tmux_oneshot::key::value() {
 }
 
 # Input: key
-# Output: "<key> | <cmd> @ <pwd>" (or just the cmd when there is no pwd)
+# Output: "<key> | <cmd>[ …][  # <description>][ @ <pwd>]"
 function tmux_oneshot::key::menuitem() {
   local key="${1:?}"
   local body
-  body="$(jq -r --argjson i "$(( key - 1 ))" \
-    '.[$i] | (.cmd // "<no cmd>") + (if .pwd then " @ " + .pwd else "" end)' \
+  body="$(jq -r --argjson i "$(( key - 1 ))" '.[$i]
+    | (.cmd // "")
+    + (if ((.flags // []) + (.subcommands // []) | length) > 0 then " …" else "" end)
+    + (if .description then "  # " + .description else "" end)
+    + (if .pwd then " @ " + .pwd else "" end)' \
     "${TMUX_ONESHOT_DB}")"
   echo "${key} | ${body}"
 }
 
-# Input: key
-# Runs the entry: cd to .pwd (if set), then eval .cmd
-function tmux_oneshot::key::_handle_selection() {
-  local key="${1:?}"
+# Seams: tests stub these two to drive the interactive paths headlessly.
+function tmux_oneshot::_fzf() {
+  fzf "$@"
+}
+function tmux_oneshot::_read_value() {
+  local value
+  read -r "value?${1:?} value: " < /dev/tty
+  echo "${value}"
+}
 
-  # Unit-separator delimited so a multi-word cmd survives `read` intact.
-  local us=$'\x1f' dir cmd
-  IFS="${us}" read -r dir cmd < <(jq -r --argjson i "$(( key - 1 ))" --arg us "${us}" \
-    '.[$i] | [(.pwd // ""), (.cmd // "")] | join($us)' "${TMUX_ONESHOT_DB}")
-  if [[ -z "${cmd}" ]]; then
-    log::err "Entry has no cmd | key='${key}' db='${TMUX_ONESHOT_DB}'"
-    return 1
+# Pure renderer. Input: <flag> <style> <value>. Output: the flag text.
+function tmux_oneshot::_render_kv() {
+  local flag="${1:?}" style="${2:?}" value="${3?}"
+  case "${style}" in
+    space)         echo "${flag} ${value}";;
+    space-quoted)  echo "${flag} ${(qq)value}";;
+    equals)        echo "${flag}=${value}";;
+    equals-quoted) echo "${flag}=${(qq)value}";;
+    *)
+      log::err "Unknown flag style | style='${style}' flag='${flag}'"
+      return 1
+      ;;
+  esac
+}
+
+# Input: one flag spec (JSON object)
+# Output: the rendered flag text. Non-zero means skip this flag.
+function tmux_oneshot::_flag() {
+  local spec="${1:?}"
+  local flag type
+  flag="$(jq -r '.flag' <<< "${spec}")"
+  type="$(jq -r '.type // "bool"' <<< "${spec}")"
+  if [[ "${type}" == "bool" ]]; then
+    echo "${flag}"
+    return 0
   fi
 
+  local value
+  if (( $(jq '.options // [] | length' <<< "${spec}") > 0 )); then
+    if ! value="$(jq -r '.options[]' <<< "${spec}" | tmux_oneshot::_fzf --prompt "${flag}> ")"; then
+      log::warn "No value picked; skipping flag | flag='${flag}'"
+      return 1
+    fi
+  else
+    value="$(tmux_oneshot::_read_value "${flag}")"
+    if [[ -z "${value}" ]]; then
+      log::warn "Empty value; skipping flag | flag='${flag}'"
+      return 1
+    fi
+  fi
+
+  tmux_oneshot::_render_kv "${flag}" "$(jq -r '.style // "space"' <<< "${spec}")" "${value}"
+}
+
+# Input: entry JSON object
+# Output: the assembled command string. Interactive: flag multiselect (esc =
+# no flags), kv value prompts, subcommand pick (esc = abort). Recurses
+# through subcommands.
+function tmux_oneshot::_assemble() {
+  local entry="${1:?}"
+  # Declared once: zsh's `local` on an already-local name prints var=value,
+  # which would leak into this function's captured stdout.
+  local out menu picked line idx rendered sub
+  out="$(jq -r '.cmd // ""' <<< "${entry}")"
+
+  if (( $(jq '.flags // [] | length' <<< "${entry}") > 0 )); then
+    menu="$(jq -r '.flags | to_entries[]
+      | "\(.key)\t\(.value.flag)\(if .value.description then "  # " + .value.description else "" end)"' \
+      <<< "${entry}")"
+    picked="$(tmux_oneshot::_fzf --multi --delimiter '\t' --with-nth '2..' \
+      --prompt "flags [${out}]> " \
+      --header 'tab: toggle several, enter: accept, esc: no flags' <<< "${menu}")"
+    for line in ${(f)picked}; do
+      idx="${line%%$'\t'*}"
+      rendered="$(tmux_oneshot::_flag "$(jq --argjson i "${idx}" '.flags[$i]' <<< "${entry}")")" || continue
+      out+=" ${rendered}"
+    done
+  fi
+
+  if (( $(jq '.subcommands // [] | length' <<< "${entry}") > 0 )); then
+    menu="$(jq -r '.subcommands | to_entries[]
+      | "\(.key)\t\(.value.cmd // "")\(if .value.description then "  # " + .value.description else "" end)"' \
+      <<< "${entry}")"
+    if ! picked="$(tmux_oneshot::_fzf --delimiter '\t' --with-nth '2..' \
+      --prompt "subcommand [${out}]> " <<< "${menu}")"; then
+      return 1
+    fi
+    idx="${picked%%$'\t'*}"
+    sub="$(tmux_oneshot::_assemble "$(jq --argjson i "${idx}" '.subcommands[$i]' <<< "${entry}")")" || return 1
+    out+=" ${sub}"
+  fi
+
+  echo "${out# }"
+}
+
+# Input: key
+# Runs the entry: cd to .pwd (if set), assemble args interactively, eval
+function tmux_oneshot::key::_handle_selection() {
+  local key="${1:?}"
+  local entry
+  entry="$(jq --argjson i "$(( key - 1 ))" '.[$i]' "${TMUX_ONESHOT_DB}")"
+
+  local dir
+  dir="$(jq -r '.pwd // ""' <<< "${entry}")"
   if [[ -n "${dir}" ]]; then
     dir="${dir/#\~/${HOME}}"
     if ! cd "${dir}"; then
       log::err "Failed to cd | pwd='${dir}'"
       return 1
     fi
+  fi
+
+  local cmd
+  if ! cmd="$(tmux_oneshot::_assemble "${entry}")"; then
+    log::warn "Aborted | key='${key}'"
+    return 1
+  fi
+  if [[ -z "${cmd// }" ]]; then
+    log::err "Entry assembled to an empty command | key='${key}' db='${TMUX_ONESHOT_DB}'"
+    return 1
   fi
 
   log::info "Running oneshot | cmd='${cmd}' pwd='${PWD}'"
