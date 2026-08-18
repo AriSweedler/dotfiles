@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cmdson.schema.json",
+  "title": "cmdson v1",
+  "description": "One document is a template for the invocation triple (env, argv, cwd) plus the typed choice space that fills its holes. A database file is an array of documents. This schema covers structure only; semantic rules it cannot express (uniqueness, cross-field exclusivity, typed defaults, positionals-xor-subcommands) are cmdson-lint's job — see docs/01-spec.md.",
+  "oneOf": [
+    { "$ref": "#/$defs/document" },
+    {
+      "type": "array",
+      "items": { "$ref": "#/$defs/document" },
+      "description": "Database file: an array of documents."
+    }
+  ],
+  "$defs": {
+    "document": {
+      "description": "The root Command plus the two root-only fields: the version tag and cwd.",
+      "allOf": [{ "$ref": "#/$defs/commandCore" }],
+      "properties": {
+        "cmdson": {
+          "const": "1",
+          "description": "Spec major version. Root only. Loaders reject unknown majors."
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory for the invocation (~ allowed) — the third slot of the triple. Root only."
+        }
+      },
+      "required": ["cmdson"],
+      "unevaluatedProperties": false
+    },
+    "command": {
+      "description": "A nested command node (no cmdson/cwd).",
+      "allOf": [{ "$ref": "#/$defs/commandCore" }],
+      "unevaluatedProperties": false
+    },
+    "commandCore": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Parse identity: what an SDK matches in argv and what menus display. Unique among siblings."
+        },
+        "exec": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "argv TOKENS to emit for this node; default [name]. Always tokens, never a shell string — quoting is a frontend duty."
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1,
+          "description": "Keycap when offered as a subcommand choice in one-key frontends."
+        },
+        "description": { "type": "string" },
+        "effect": {
+          "enum": ["read", "write", "destructive"],
+          "default": "write",
+          "description": "Max along the chosen path wins. Auto-firing frontends refuse destructive unless the operator opts in."
+        },
+        "params": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/param" },
+          "description": "ORDERED: emission order = document order. One list for flags, positionals, and env vars — bind discriminates."
+        },
+        "subcommands": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/command" },
+          "description": "If present, exactly one MUST be chosen (the mutual-exclusion operator). Mutually exclusive with positional-bound params on the same node (lint CMD020)."
+        },
+        "meta": { "$ref": "#/$defs/meta" }
+      }
+    },
+    "param": {
+      "type": "object",
+      "required": ["name", "bind"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Typed-result key (argparse `dest`) and generated-usage placeholder (<name>); never rendered into argv. Unique along any root-to-leaf path."
+        },
+        "bind": { "$ref": "#/$defs/bind" },
+        "description": { "type": "string" },
+        "required": {
+          "type": "boolean",
+          "description": "Asymmetric defaults matching CLI reality: flag=false, env=false, positional=true."
+        },
+        "value": {
+          "$ref": "#/$defs/value",
+          "description": "ABSENT = presence-only switch (legal only on flag binds; SDK result: boolean). PRESENT (even {}) = takes one value."
+        },
+        "meta": { "$ref": "#/$defs/meta" }
+      },
+      "additionalProperties": false
+    },
+    "bind": {
+      "description": "WHERE the value lands in the invocation triple.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "at": { "const": "flag" },
+            "token": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Exact spelling, dashes included — never implied. Dash-less tokens are legal (\"ACTION\")."
+            },
+            "join": {
+              "enum": ["space", "equals"],
+              "default": "space",
+              "description": "How the value attaches: '--f v' vs '--f=v'. A render preference of the target CLI; parsers accept both. Quoting is NOT here — argv has no quotes."
+            }
+          },
+          "required": ["at", "token"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "at": { "const": "positional" }
+          },
+          "required": ["at"],
+          "additionalProperties": false,
+          "description": "Order among positionals = document order."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "at": { "const": "env" },
+            "var": {
+              "type": "string",
+              "pattern": "^[A-Z_][A-Z0-9_]*$",
+              "description": "The value travels via the environment: frontends WRITE a VAR=value prefix hoisted to the line front; SDKs READ it via getenv. One declaration, both directions."
+            }
+          },
+          "required": ["at", "var"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": ["string", "int", "float"],
+          "default": "string",
+          "description": "Closed list. Booleans are switch-absence; enums are choices; everything else is `format`."
+        },
+        "format": {
+          "type": "string",
+          "description": "Free annotation (\"path\", \"url\", \"email\"): a hint for pickers/docs. Unknown formats degrade to the base type."
+        },
+        "pattern": {
+          "type": "string",
+          "format": "regex",
+          "description": "Anchored regex. Strings only."
+        },
+        "min": { "type": "number", "description": "Inclusive bound. int/float only." },
+        "max": { "type": "number", "description": "Inclusive bound. int/float only." },
+        "choices": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "oneOf": [{ "type": "string" }, { "$ref": "#/$defs/choice" }]
+          },
+          "description": "Enumerated values. Bare-string shorthand: \"s\" is {\"value\": \"s\"}; loaders canonicalize."
+        },
+        "open": {
+          "type": "boolean",
+          "description": "Default: true iff choices absent. true = values outside choices are legal (choices are suggestions); false requires choices."
+        },
+        "openPolicy": {
+          "enum": ["close", "exclude"],
+          "default": "close",
+          "description": "Consulted ONLY by no-free-text frontends when open=true. close = the listed choices become the whole set there; exclude = the list is mere examples, the param is unrenderable there."
+        },
+        "default": {
+          "type": ["string", "number"],
+          "description": "PARSE-TIME: injected when the param is absent. Contract: emitting it explicitly MUST equal omitting it — this licenses finite frontends to pre-emit it. Typed per `type`; must satisfy constraints and be in choices when open=false."
+        },
+        "initial": {
+          "type": ["string", "number"],
+          "description": "BUILD-TIME ONLY: interactive preselection. Parsers NEVER inject it. Use when the downstream tool owns the true default."
+        },
+        "meta": { "$ref": "#/$defs/meta" }
+      },
+      "additionalProperties": false
+    },
+    "choice": {
+      "type": "object",
+      "required": ["value"],
+      "properties": {
+        "value": {
+          "type": ["string", "number"],
+          "description": "What is emitted (canonical string form) and what SDKs return. Typed per the owning Value.type."
+        },
+        "label": { "type": "string", "description": "Display text; falls back to the value." },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1,
+          "description": "Keycap for one-key frontends. Unique across the node's whole key surface. `-` is reserved for synthesized options."
+        },
+        "description": { "type": "string" },
+        "meta": { "$ref": "#/$defs/meta" }
+      },
+      "additionalProperties": false
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": { "type": "object" },
+      "description": "Opaque bags namespaced by frontend id (OpenAPI x- convention); unknown namespaces are ignored. Known: \"tmux-oneshot\" {autodismiss, menuName, menuText}, \"karabiner\" {omitChoices, skipKey}."
+    }
+  }
+}

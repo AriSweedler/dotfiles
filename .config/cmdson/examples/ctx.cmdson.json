@@ -1,0 +1,40 @@
+{
+  "cmdson": "1",
+  "name": "ctx",
+  "exec": ["irun"],
+  "description": "context picker (ctx family)",
+  "effect": "read",
+  "params": [
+    {
+      "name": "action",
+      "bind": { "at": "env", "var": "ACTION" },
+      "description": "what to do with the picked context",
+      "value": {
+        "default": "copy_env",
+        "choices": [
+          { "value": "copy_env",  "key": "e", "description": "copy exported variables" },
+          { "value": "copy_flag", "key": "p", "description": "copy a --pick flag" },
+          { "value": "login",     "key": "l", "description": "sign in" }
+        ]
+      }
+    }
+  ],
+  "subcommands": [
+    { "name": "cx",  "key": "1", "description": "main contexts, all stages" },
+    { "name": "cX",  "key": "2", "description": "ALL contexts, all stages" },
+    { "name": "cxd", "key": "3", "description": "main, dev" },
+    { "name": "cxt", "key": "4", "description": "main, test" },
+    { "name": "cxp", "key": "5", "description": "main, prod" },
+    { "name": "cxl", "key": "6", "description": "main, lab" },
+    { "name": "cXd", "key": "7", "description": "all contexts, dev" },
+    { "name": "cXt", "key": "8", "description": "all contexts, test" },
+    { "name": "cXp", "key": "9", "description": "all contexts, prod" },
+    { "name": "cXl", "key": "0", "description": "all contexts, lab" }
+  ],
+  "meta": {
+    "tmux-oneshot": {
+      "menuName": "Set CONTEXT",
+      "menuText": "irun ctx… — context picker (dev/test/prod/lab; ACTION=copy_env/copy_flag/login)"
+    }
+  }
+}

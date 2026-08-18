@@ -1,0 +1,42 @@
+{
+  "cmdson": "1",
+  "name": "typing-test",
+  "exec": ["karabiner-typing-test"],
+  "description": "Open a Monkeytype test seeded by the passage CLI",
+  "effect": "write",
+  "params": [
+    {
+      "name": "action",
+      "bind": { "at": "positional" },
+      "required": false,
+      "value": {
+        "default": "next",
+        "choices": [
+          { "value": "next",     "key": "n", "description": "next unread passage, advancing the bookmark" },
+          { "value": "current",  "key": "c", "description": "retype the last passage (--words re-anchors)" },
+          { "value": "previous", "key": "p", "description": "rewind one passage and retype it (--words re-anchors)" },
+          { "value": "status",   "key": "s", "description": "notify progress; no test opened" }
+        ],
+        "meta": { "karabiner": { "omitChoices": ["status"] } }
+      }
+    },
+    {
+      "name": "words",
+      "bind": { "at": "flag", "token": "--words", "join": "space" },
+      "description": "passage length; re-anchors the bookmark for current/previous",
+      "value": {
+        "type": "int",
+        "min": 1,
+        "open": true,
+        "openPolicy": "close",
+        "initial": 50,
+        "choices": [
+          { "value": 5,   "key": "0", "label": "5 words" },
+          { "value": 50,  "key": "1", "label": "50 words" },
+          { "value": 100, "key": "2", "label": "100 words" },
+          { "value": 300, "key": "3", "label": "300 words" }
+        ]
+      }
+    }
+  ]
+}
