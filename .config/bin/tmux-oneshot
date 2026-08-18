@@ -1,0 +1,141 @@
+#!/usr/bin/env zsh
+#
+# tmux-oneshot — pick a oneshot command from a JSON database via fzf and run
+# it. Bound to <Prefix>C-k (see ~/.config/tmux/plugin/macros.conf), which
+# opens this in a tmux popup.
+#
+# The database is a JSON list; each element has a "cmd" and an optional "pwd":
+#
+#   [
+#     {"cmd": "killall NotificationCenter"},
+#     {"pwd": "~/h/source/hyperbase", "cmd": "git fetch --prune"}
+#   ]
+#
+# Selecting an entry cds to its pwd (if set) and evals its cmd. Without a
+# pwd, the cmd runs wherever this script started (the popup binding passes
+# the current pane's path).
+#
+# Built on fzfdb (~/.config/zsh/plugins/fzfdb_cli.zsh). Keys are 1-based
+# indices into the JSON list. fzfdb's preview subshell *sources* this file to
+# pick up the tmux_oneshot::* overrides — the ZSH_EVAL_CONTEXT guard at the
+# bottom keeps that from re-running the picker.
+
+source "${HOME}/.config/zsh/plugins/log.zsh"
+source "${HOME}/.config/zsh/plugins/arr.zsh"
+source "${HOME}/.config/zsh/plugins/fzfdb_cli.zsh"
+
+# Exported so the fzf preview subshell resolves the same database.
+export TMUX_ONESHOT_DB="${TMUX_ONESHOT_DB:-${XDG_DATA_HOME:-${HOME}/.local/share}/tmux_oneshot/commands.json}"
+
+function tmux_oneshot() {
+  local dep
+  for dep in jq fzf; do
+    if ! command -v "${dep}" &>/dev/null; then
+      log::err "Required command not found | cmd='${dep}'"
+      return 1
+    fi
+  done
+
+  if [[ ! -e "${TMUX_ONESHOT_DB}" ]]; then
+    mkdir -p "${TMUX_ONESHOT_DB:h}"
+    cat > "${TMUX_ONESHOT_DB}" << 'EOF'
+[
+  {"cmd": "killall NotificationCenter"},
+  {"pwd": "~", "cmd": "echo 'hello from tmux-oneshot (edit me: tmux-oneshot --edit)'"}
+]
+EOF
+    log::info "Seeded oneshot database | path='${TMUX_ONESHOT_DB}'"
+  fi
+
+  if ! jq -e 'type == "array"' "${TMUX_ONESHOT_DB}" &>/dev/null; then
+    log::err "Database is not a JSON list | path='${TMUX_ONESHOT_DB}'"
+    return 1
+  fi
+
+  fzfdb --fzfdb_dir "${TMUX_ONESHOT_DB:h:h}" -- "$@"
+}
+
+function tmux_oneshot::action::help() {
+  echo -e "$(cat << EOF
+USAGE: tmux-oneshot [key]
+
+Pick a oneshot command from the JSON database and run it. Each entry is
+{"cmd": ..., "pwd": ...} where pwd is optional; selecting an entry cds to
+pwd (if set) and runs cmd. Pass a key (1-based index) to skip the menu.
+
+Database: ${c_grey}${TMUX_ONESHOT_DB}${c_rst} (override with TMUX_ONESHOT_DB)
+
+$(fzfdb::help_common)
+EOF
+)"
+}
+
+# Input: none
+# Output: one key per line — 1-based indices into the JSON list
+function tmux_oneshot::action::list() {
+  local count
+  count="$(jq 'length' "${TMUX_ONESHOT_DB}")" || return 1
+  (( count == 0 )) && return 0
+  seq 1 "${count}"
+}
+
+function tmux_oneshot::action::edit() {
+  "${EDITOR:-vim}" "${TMUX_ONESHOT_DB}"
+}
+
+# Input: key
+# Output: the entry's JSON, shown in the fzf preview window
+function tmux_oneshot::key::value() {
+  local key="${1:?}"
+  jq --argjson i "$(( key - 1 ))" '.[$i]' "${TMUX_ONESHOT_DB}"
+}
+
+# Input: key
+# Output: "<key> | <cmd> @ <pwd>" (or just the cmd when there is no pwd)
+function tmux_oneshot::key::menuitem() {
+  local key="${1:?}"
+  local body
+  body="$(jq -r --argjson i "$(( key - 1 ))" \
+    '.[$i] | (.cmd // "<no cmd>") + (if .pwd then " @ " + .pwd else "" end)' \
+    "${TMUX_ONESHOT_DB}")"
+  echo "${key} | ${body}"
+}
+
+# Input: key
+# Runs the entry: cd to .pwd (if set), then eval .cmd
+function tmux_oneshot::key::_handle_selection() {
+  local key="${1:?}"
+
+  # Unit-separator delimited so a multi-word cmd survives `read` intact.
+  local us=$'\x1f' dir cmd
+  IFS="${us}" read -r dir cmd < <(jq -r --argjson i "$(( key - 1 ))" --arg us "${us}" \
+    '.[$i] | [(.pwd // ""), (.cmd // "")] | join($us)' "${TMUX_ONESHOT_DB}")
+  if [[ -z "${cmd}" ]]; then
+    log::err "Entry has no cmd | key='${key}' db='${TMUX_ONESHOT_DB}'"
+    return 1
+  fi
+
+  if [[ -n "${dir}" ]]; then
+    dir="${dir/#\~/${HOME}}"
+    if ! cd "${dir}"; then
+      log::err "Failed to cd | pwd='${dir}'"
+      return 1
+    fi
+  fi
+
+  log::info "Running oneshot | cmd='${cmd}' pwd='${PWD}'"
+  eval "${cmd}"
+  local rc=$?
+  if (( rc != 0 )); then
+    log::err "Oneshot command failed | rc='${rc}'"
+    # Hold the popup open so the failure is readable before it closes.
+    read -k 1 -s '?Press any key to close...'
+    return "${rc}"
+  fi
+}
+
+# Run the picker only when executed; the fzf preview sources this file just
+# for the function definitions (ZSH_EVAL_CONTEXT ends in ":file" then).
+if [[ "${ZSH_EVAL_CONTEXT}" == "toplevel" ]]; then
+  tmux_oneshot "$@"
+fi
