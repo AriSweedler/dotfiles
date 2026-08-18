@@ -13,6 +13,10 @@
 #   autodismiss  true: close the popup as soon as the command succeeds.
 #                Default false: hold the popup open (output stays readable)
 #                until Esc. Failures always hold.
+#   menu         menu-line override: {"name", "text"}. name replaces the
+#                numeric key before the " | " (it becomes the entry's key, so
+#                it must be unique and must not contain " | "); text replaces
+#                the auto-generated body after it.
 #   flags        multiselected at run time (tab: toggle, esc: none)
 #     flag         e.g. "--verbose", or an env var name like "ACTION"
 #     type         "bool" (default: emits just the flag) or "kv"
@@ -56,7 +60,8 @@ function tmux_oneshot() {
     cat > "${TMUX_ONESHOT_DB}" << 'EOF'
 [
   {"cmd": "killall NotificationCenter", "autodismiss": true},
-  {"pwd": "~", "cmd": "echo 'hello from tmux-oneshot (edit me: tmux-oneshot --edit)'"}
+  {"pwd": "~", "cmd": "echo 'hello from tmux-oneshot'",
+   "menu": {"name": "hello", "text": "demo entry — edit me: tmux-oneshot --edit"}}
 ]
 EOF
     log::info "Seeded oneshot database | path='${TMUX_ONESHOT_DB}'"
@@ -76,8 +81,9 @@ USAGE: tmux-oneshot [key]
 
 Pick a oneshot command from the JSON database and run it. Selecting an entry
 cds to its pwd (if set), interactively resolves its flags/subcommands (if
-any), then evals the assembled command. Pass a key (1-based index) to skip
-the top-level menu. The entry schema is documented at the top of this script.
+any), then evals the assembled command. Pass a key (an entry's menu.name, or
+its 1-based index when unnamed) to skip the top-level menu. The entry schema
+is documented at the top of this script.
 
 Database: ${c_grey}${TMUX_ONESHOT_DB}${c_rst} (override with TMUX_ONESHOT_DB)
 
@@ -87,12 +93,18 @@ EOF
 }
 
 # Input: none
-# Output: one key per line — 1-based indices into the JSON list
+# Output: one key per line — menu.name when set, else the 1-based index
 function tmux_oneshot::action::list() {
-  local count
-  count="$(jq 'length' "${TMUX_ONESHOT_DB}")" || return 1
-  (( count == 0 )) && return 0
-  seq 1 "${count}"
+  jq -r 'to_entries[] | .value.menu.name // ((.key + 1) | tostring)' "${TMUX_ONESHOT_DB}"
+}
+
+# Input: key (a menu.name, or a 1-based index for unnamed entries)
+# Output: the entry's 0-based index in the JSON list; empty if unknown
+function tmux_oneshot::_key_to_index() {
+  local key="${1:?}"
+  jq -r --arg k "${key}" 'to_entries
+    | map(select((.value.menu.name // ((.key + 1) | tostring)) == $k))
+    | .[0].key // empty' "${TMUX_ONESHOT_DB}"
 }
 
 function tmux_oneshot::action::edit() {
@@ -103,19 +115,20 @@ function tmux_oneshot::action::edit() {
 # Output: the entry's JSON, shown in the fzf preview window
 function tmux_oneshot::key::value() {
   local key="${1:?}"
-  jq --argjson i "$(( key - 1 ))" '.[$i]' "${TMUX_ONESHOT_DB}"
+  jq --argjson i "$(tmux_oneshot::_key_to_index "${key}")" '.[$i]' "${TMUX_ONESHOT_DB}"
 }
 
 # Input: key
-# Output: "<key> | <cmd>[ …][  # <description>][ @ <pwd>]"
+# Output: "<key> | <menu.text>" or "<key> | <cmd>[ …][  # <description>][ @ <pwd>]"
 function tmux_oneshot::key::menuitem() {
   local key="${1:?}"
   local body
-  body="$(jq -r --argjson i "$(( key - 1 ))" '.[$i]
-    | (.cmd // "")
-    + (if ((.flags // []) + (.subcommands // []) | length) > 0 then " …" else "" end)
-    + (if .description then "  # " + .description else "" end)
-    + (if .pwd then " @ " + .pwd else "" end)' \
+  body="$(jq -r --argjson i "$(tmux_oneshot::_key_to_index "${key}")" '.[$i]
+    | .menu.text
+    // ((.cmd // "")
+      + (if ((.flags // []) + (.subcommands // []) | length) > 0 then " …" else "" end)
+      + (if .description then "  # " + .description else "" end)
+      + (if .pwd then " @ " + .pwd else "" end))' \
     "${TMUX_ONESHOT_DB}")"
   echo "${key} | ${body}"
 }
@@ -220,7 +233,7 @@ function tmux_oneshot::_assemble() {
 function tmux_oneshot::key::_handle_selection() {
   local key="${1:?}"
   local entry
-  entry="$(jq --argjson i "$(( key - 1 ))" '.[$i]' "${TMUX_ONESHOT_DB}")"
+  entry="$(jq --argjson i "$(tmux_oneshot::_key_to_index "${key}")" '.[$i]' "${TMUX_ONESHOT_DB}")"
 
   local dir
   dir="$(jq -r '.pwd // ""' <<< "${entry}")"
