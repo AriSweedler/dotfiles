@@ -10,6 +10,9 @@
 #   cmd          command fragment
 #   pwd          cd here first (honored at the top level only)
 #   description  shown in menus after the cmd
+#   autodismiss  true: close the popup as soon as the command succeeds.
+#                Default false: hold the popup open (output stays readable)
+#                until Esc. Failures always hold.
 #   flags        multiselected at run time (tab: toggle, esc: none)
 #     flag         e.g. "--verbose", or an env var name like "ACTION"
 #     type         "bool" (default: emits just the flag) or "kv"
@@ -52,7 +55,7 @@ function tmux_oneshot() {
     mkdir -p "${TMUX_ONESHOT_DB:h}"
     cat > "${TMUX_ONESHOT_DB}" << 'EOF'
 [
-  {"cmd": "killall NotificationCenter"},
+  {"cmd": "killall NotificationCenter", "autodismiss": true},
   {"pwd": "~", "cmd": "echo 'hello from tmux-oneshot (edit me: tmux-oneshot --edit)'"}
 ]
 EOF
@@ -244,10 +247,22 @@ function tmux_oneshot::key::_handle_selection() {
   local rc=$?
   if (( rc != 0 )); then
     log::err "Oneshot command failed | rc='${rc}'"
-    # Hold the popup open so the failure is readable before it closes.
-    read -k 1 -s '?Press any key to close...'
-    return "${rc}"
+  elif [[ "$(jq -r '.autodismiss // false' <<< "${entry}")" == "true" ]]; then
+    return 0
   fi
+  tmux_oneshot::_hold_until_escape
+  return "${rc}"
+}
+
+# Keep the popup open so command output stays readable; Esc closes it.
+# Returns immediately when there is no tty (e.g. under tests).
+function tmux_oneshot::_hold_until_escape() {
+  local key
+  print -u2 "\n── esc to close ──"
+  while read -k 1 -s key < /dev/tty; do
+    [[ "${key}" == $'\e' ]] && return 0
+  done
+  return 0
 }
 
 # Run the picker only when executed; the fzf preview sources this file just
