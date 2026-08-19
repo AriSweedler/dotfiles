@@ -183,6 +183,31 @@ tmux_oneshot::action::debug > /dev/null 2>&1
 _t "debug mode clean on healthy db" "0" "$?"
 
 # ---------------------------------------------------------------------------
+# Error capture: executed runs persist stderr to TMUX_ONESHOT_LOG (rotated
+# per run), so popup errors survive the popup closing.
+# ---------------------------------------------------------------------------
+local _log_dir _log
+_log_dir="$(mktemp -d /tmp/tmux-oneshot-test-log.XXXXX)"
+_log="${_log_dir}/log.txt"
+export TMUX_ONESHOT_LOG="${_log}"
+
+zsh "${HOME}/.config/bin/tmux-oneshot" --list > /dev/null 2>&1
+_t "run logs its invocation header" "1" "$(grep -c 'tmux-oneshot --list' "${_log}")"
+_t "run logs its exit code" "── exit rc=0" "$(grep '── exit' "${_log}")"
+
+zsh "${HOME}/.config/bin/tmux-oneshot" bogus-key > /dev/null 2>&1
+_t "failed run: rc 1 logged" "── exit rc=1" "$(grep '── exit' "${_log}")"
+_t "failed run: stderr captured in log" "1" "$(grep -Ec 'Unknown key|does not exist' "${_log}")"
+_t "previous run rotated aside" "1" "$(grep -c 'tmux-oneshot --list' "${_log}.bak.1")"
+
+_t "--log prints path and content without rotating" "1" \
+  "$(zsh "${HOME}/.config/bin/tmux-oneshot" --log | grep -Ec 'Unknown key|does not exist')"
+_t "--log did not rotate" "── exit rc=1" "$(grep '── exit' "${_log}")"
+
+unset TMUX_ONESHOT_LOG
+rm -rf "${_log_dir}"
+
+# ---------------------------------------------------------------------------
 rm -f "${_picks_file}" "${_typed_file}" "${_db}"
 print
 if (( _fail > 0 )); then
