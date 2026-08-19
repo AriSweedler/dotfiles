@@ -176,6 +176,13 @@ _t "failure holds despite autodismiss" "HELD" \
   "$(tmux_oneshot::key::_handle_selection 4 2>/dev/null | grep HELD)"
 
 # ---------------------------------------------------------------------------
+# --debug: the non-interactive diagnostic passes on a healthy db and fails
+# (rc 1) when an entry is broken enough that rendering dies.
+# ---------------------------------------------------------------------------
+tmux_oneshot::action::debug > /dev/null 2>&1
+_t "debug mode clean on healthy db" "0" "$?"
+
+# ---------------------------------------------------------------------------
 rm -f "${_picks_file}" "${_typed_file}" "${_db}"
 print
 if (( _fail > 0 )); then

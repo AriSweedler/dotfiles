@@ -75,12 +75,60 @@ EOF
     return 1
   fi
 
+  if [[ "${1:-}" == "--debug" ]]; then
+    tmux_oneshot::action::debug
+    return $?
+  fi
+
   fzfdb --fzfdb_dir "${TMUX_ONESHOT_DB:h:h}" -- "$@"
+}
+
+# Non-interactive diagnostic: exercises every popup code path except the fzf
+# UI itself — menu render, menuitem::key round-trip, entry JSON, and the
+# exact preview subshell fzf would spawn. For agents/humans without a tty.
+function tmux_oneshot::action::debug() {
+  local rc=0 k line back preview_out
+  local -a keys
+  keys=(${(f)"$(tmux_oneshot::action::list)"})
+  log::info "Debug render | db='${TMUX_ONESHOT_DB}' entries='${#keys[@]}' name_width='$(tmux_oneshot::_name_width)'"
+  for k in "${keys[@]}"; do
+    if ! line="$(tmux_oneshot::key::menuitem "${k}")"; then
+      log::err "menuitem render failed | key='${k}'"
+      rc=1
+      continue
+    fi
+    print -r -- "  ${line}"
+    back="$(tmux_oneshot::menuitem::key "${line}")"
+    if [[ "${back}" != "${k}" ]]; then
+      log::err "menuitem::key round-trip failed | key='${k}' recovered='${back}'"
+      rc=1
+    fi
+    if ! tmux_oneshot::key::value "${k}" > /dev/null; then
+      log::err "key::value failed | key='${k}'"
+      rc=1
+    fi
+    # Reproduce the fzf preview subshell verbatim: fresh non-interactive zsh,
+    # fzfdb's source chain, then the dispatched preview action.
+    if ! preview_out="$(zsh -c "
+        source '${HOME}/.config/zsh/plugins/fzfdb_cli.zsh'
+        source '${HOME}/.config/bin/tmux-oneshot'
+        source '${HOME}/.config/zsh/plugins/log.zsh'
+        source '${HOME}/.config/zsh/plugins/arr.zsh'
+        fzfdb --fzfdb_name tmux_oneshot --fzfdb_dir ${(q)TMUX_ONESHOT_DB:h:h} -- --preview::menuitem ${(q)line}" 2>&1)"; then
+      log::err "preview subshell failed | key='${k}' output='${preview_out}'"
+      rc=1
+    fi
+  done
+  if (( rc == 0 )); then
+    log::info "Debug render clean | entries='${#keys[@]}'"
+  fi
+  return ${rc}
 }
 
 function tmux_oneshot::action::help() {
   echo -e "$(cat << EOF
 USAGE: tmux-oneshot [key]
+       tmux-oneshot --debug   # non-interactive: render + round-trip + preview every entry
 
 Pick a oneshot command from the JSON database and run it. Selecting an entry
 cds to its pwd (if set), interactively resolves its flags/subcommands (if
