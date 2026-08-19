@@ -13,10 +13,13 @@
 #   autodismiss  true: close the popup as soon as the command succeeds.
 #                Default false: hold the popup open (output stays readable)
 #                until Esc. Failures always hold.
-#   menu         menu-line override: {"name", "text"}. name replaces the
-#                numeric key before the " | " (it becomes the entry's key, so
-#                it must be unique and must not contain " | "); text replaces
-#                the auto-generated body after it.
+#   menu         menu-line override: {"name", "text"}, both optional. The
+#                menu line is "<name>  <text>": name defaults to cmd, padded
+#                to a common column and truncated past 40 chars so lines
+#                never wrap; text defaults to the auto-generated body (args
+#                hint, description, pwd). menu.name doubles as the entry's
+#                key (unnamed entries keep 1-based index keys), so it must
+#                be unique and must not contain "/".
 #   flags        multiselected at run time (tab: toggle, esc: none)
 #     flag         e.g. "--verbose", or an env var name like "ACTION"
 #     type         "bool" (default: emits just the flag) or "kv"
@@ -112,25 +115,75 @@ function tmux_oneshot::action::edit() {
 }
 
 # Input: key
-# Output: the entry's JSON, shown in the fzf preview window
-function tmux_oneshot::key::value() {
+# Output: the entry's 0-based index; errors cleanly on an unknown key so no
+# caller ever hands an empty string to jq --argjson.
+function tmux_oneshot::_index_or_die() {
   local key="${1:?}"
-  jq --argjson i "$(tmux_oneshot::_key_to_index "${key}")" '.[$i]' "${TMUX_ONESHOT_DB}"
+  local idx
+  idx="$(tmux_oneshot::_key_to_index "${key}")"
+  if [[ -z "${idx}" ]]; then
+    log::err "Unknown key | key='${key}' db='${TMUX_ONESHOT_DB}'"
+    return 1
+  fi
+  echo "${idx}"
 }
 
 # Input: key
-# Output: "<key> | <menu.text>" or "<key> | <cmd>[ …][  # <description>][ @ <pwd>]"
+# Output: the entry's JSON, shown in the fzf preview window
+function tmux_oneshot::key::value() {
+  local key="${1:?}"
+  local idx
+  idx="$(tmux_oneshot::_index_or_die "${key}")" || return 1
+  jq --argjson i "${idx}" '.[$i]' "${TMUX_ONESHOT_DB}"
+}
+
+# The display-name column width: longest name in the db, capped so long cmds
+# never push the menu line into wrapping territory. Not readonly — this file
+# is sourced by the fzf preview subshell and by tests, sometimes twice.
+: "${TMUX_ONESHOT_NAME_MAX:=40}"
+function tmux_oneshot::_name_width() {
+  jq -r --argjson cap "${TMUX_ONESHOT_NAME_MAX}" \
+    '[.[] | (.menu.name // .cmd // "?") | length] | (max // 1) | if . > $cap then $cap else . end' \
+    "${TMUX_ONESHOT_DB}"
+}
+
+# Input: key
+# Output: "<name>" or "<name><padding>  <text>" — no separator token. name =
+# menu.name // cmd, truncated to the column cap; text = menu.text, else the
+# auto body (cmd is included there only when a menu.name displaced it).
 function tmux_oneshot::key::menuitem() {
   local key="${1:?}"
-  local body
-  body="$(jq -r --argjson i "$(tmux_oneshot::_key_to_index "${key}")" '.[$i]
-    | .menu.text
-    // ((.cmd // "")
-      + (if ((.flags // []) + (.subcommands // []) | length) > 0 then " …" else "" end)
-      + (if .description then "  # " + .description else "" end)
-      + (if .pwd then " @ " + .pwd else "" end))' \
-    "${TMUX_ONESHOT_DB}")"
-  echo "${key} | ${body}"
+  local idx width
+  idx="$(tmux_oneshot::_index_or_die "${key}")" || return 1
+  width="$(tmux_oneshot::_name_width)"
+  jq -r --argjson i "${idx}" --argjson w "${width}" '
+    .[$i]
+    | ((.menu.name // .cmd // "?") | if length > $w then .[:$w-1] + "…" else . end) as $name
+    | ((.menu.text
+        // ((if .menu.name then (.cmd // "") else "" end)
+          + (if ((.flags // []) + (.subcommands // []) | length) > 0 then " …" else "" end)
+          + (if .description then "  # " + .description else "" end)
+          + (if .pwd then " @ " + .pwd else "" end)))
+       | ltrimstr(" ")) as $text
+    | if $text == "" then $name
+      else $name + (" " * ($w - ($name | length) + 2)) + $text
+      end' \
+    "${TMUX_ONESHOT_DB}"
+}
+
+# Input: a rendered menu line
+# Output: the key that generated it. Regenerate-and-compare, so key recovery
+# is format-agnostic (no separator-token parsing to drift out of sync).
+function tmux_oneshot::menuitem::key() {
+  local menuitem="${1:?}"
+  local k
+  for k in ${(f)"$(tmux_oneshot::action::list)"}; do
+    if [[ "$(tmux_oneshot::key::menuitem "${k}")" == "${menuitem}" ]]; then
+      echo "${k}"
+      return 0
+    fi
+  done
+  return 1
 }
 
 # Seams: tests stub these two to drive the interactive paths headlessly.
@@ -232,8 +285,9 @@ function tmux_oneshot::_assemble() {
 # Runs the entry: cd to .pwd (if set), assemble args interactively, eval
 function tmux_oneshot::key::_handle_selection() {
   local key="${1:?}"
-  local entry
-  entry="$(jq --argjson i "$(tmux_oneshot::_key_to_index "${key}")" '.[$i]' "${TMUX_ONESHOT_DB}")"
+  local idx entry
+  idx="$(tmux_oneshot::_index_or_die "${key}")" || return 1
+  entry="$(jq --argjson i "${idx}" '.[$i]' "${TMUX_ONESHOT_DB}")"
 
   local dir
   dir="$(jq -r '.pwd // ""' <<< "${entry}")"

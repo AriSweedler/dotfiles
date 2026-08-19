@@ -93,6 +93,17 @@ function fzfdb() {
     case "${1}" in
       --dir|--list|--edit|--help) fzfdb::_dispatch "action::${1#--}" "$@"; return 0;;
       --key::value|--key::menuitem) fzfdb::_dispatch "${1#--}" "${2:?}"; return 0;;
+      # Menuitem -> key -> value in one action, so the fzf preview goes through
+      # the client's own (dispatched) menuitem::key instead of the default.
+      --preview::menuitem)
+        local fzfdb_pk
+        if ! fzfdb_pk="$(fzfdb::_dispatch menuitem::key "${2:?}")"; then
+          log::err "Could not recover key from menuitem | menuitem='${2}'"
+          return 1
+        fi
+        fzfdb::_dispatch key::value "${fzfdb_pk}"
+        return $?
+        ;;
       -g|--grep) grep_pat="${2}"; shift 2;;
       -q|--query) fzf_args+=(--query "${2}"); shift 2;;
       *) break;;
@@ -168,7 +179,7 @@ function fzfdb() {
     --fzfdb_name "${fzfdb_name}"
     --fzfdb_dir "${fzfdb_dir}"
     --
-    --key::value '$(fzfdb::menuitem::key '{}')'
+    --preview::menuitem {}
   )
   fzf_args+=(
     --preview "${preview_cmd[*]}"
