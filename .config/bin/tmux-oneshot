@@ -64,7 +64,7 @@ function tmux_oneshot() {
 [
   {"cmd": "killall NotificationCenter", "autodismiss": true},
   {"pwd": "~", "cmd": "echo 'hello from tmux-oneshot'",
-   "menu": {"name": "hello", "text": "demo entry — edit me: tmux-oneshot --edit"}}
+   "menu": {"name": "hello world", "text": "demo entry — edit me: tmux-oneshot --edit"}}
 ]
 EOF
     log::info "Seeded oneshot database | path='${TMUX_ONESHOT_DB}'"
