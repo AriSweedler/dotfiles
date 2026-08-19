@@ -130,7 +130,9 @@ function fzfdb() {
   fi
 
   # Make sure there are elements in fzfdb_ks
-  local fzfdb_ks=(${(@f)$(fzfdb::_dispatch action::list | grep -- "${grep_pat}")})
+  # The inner substitution MUST be quoted: zsh IFS-splits unquoted $(...)
+  # even inside ${(@f)...}, shattering keys that contain spaces.
+  local fzfdb_ks=(${(@f)"$(fzfdb::_dispatch action::list | grep -- "${grep_pat}")"})
   if (( ${#fzfdb_ks[@]} == 0 )); then
     log::err "No fzfdb items found | ${logw}"
     return 1
@@ -227,8 +229,9 @@ function fzfdb::key::_validate() {
   shift
 
   # Dispatch so clients that override action::list (non-file-backed keys,
-  # e.g. tmux-oneshot's JSON list) validate against their own key set.
-  keys=(${(@f)$(fzfdb::_dispatch action::list)})
+  # e.g. tmux-oneshot's JSON list) validate against their own key set. The
+  # inner quotes keep zsh from IFS-splitting keys that contain spaces.
+  local keys=(${(@f)"$(fzfdb::_dispatch action::list)"})
   if ! arr::contains "${key}" "${keys[@]}"; then
     log::err "Key not found | key='${key}' ${logw}"
     return 1

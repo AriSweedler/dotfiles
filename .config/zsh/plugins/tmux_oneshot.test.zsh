@@ -191,6 +191,11 @@ _log_dir="$(mktemp -d /tmp/tmux-oneshot-test-log.XXXXX)"
 _log="${_log_dir}/log.txt"
 export TMUX_ONESHOT_LOG="${_log}"
 
+# Regression for the popup outage of 2026-08-19: a spaced key must survive
+# fzfdb's key collection and validate path (zsh IFS-splits unquoted $(...)).
+_t "CLI select by spaced name (fzfdb validate path)" "named-ran" \
+  "$(zsh "${HOME}/.config/bin/tmux-oneshot" "My Name" 2>/dev/null | grep -o named-ran)"
+
 zsh "${HOME}/.config/bin/tmux-oneshot" --list > /dev/null 2>&1
 _t "run logs its invocation header" "1" "$(grep -c 'tmux-oneshot --list' "${_log}")"
 _t "run logs its exit code" "── exit rc=0" "$(grep '── exit' "${_log}")"
