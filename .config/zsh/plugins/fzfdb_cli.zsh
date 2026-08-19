@@ -228,10 +228,8 @@ function fzfdb::key::_validate() {
   local key="${1:?}"
   shift
 
-  # Dispatch so clients that override action::list (non-file-backed keys,
-  # e.g. tmux-oneshot's JSON list) validate against their own key set. The
-  # inner quotes keep zsh from IFS-splitting keys that contain spaces.
-  local keys=(${(@f)"$(fzfdb::_dispatch action::list)"})
+  # The inner quotes keep zsh from IFS-splitting keys that contain spaces.
+  local keys=(${(@f)"$(fzfdb::action::list)"})
   if ! arr::contains "${key}" "${keys[@]}"; then
     log::err "Key not found | key='${key}' ${logw}"
     return 1
