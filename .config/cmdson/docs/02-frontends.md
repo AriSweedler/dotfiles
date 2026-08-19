@@ -197,8 +197,10 @@ fire closure) is replaced by a bake-time projection of the `typing-test` documen
 ### 3.2 tmux-oneshot consumes cmdson documents
 
 Target: `commands.json` becomes a cmdson **database file** (a JSON array of documents, per the
-data model); the interactive machinery is rebuilt around the render semantics. fzfdb stays —
-cmdson is standalone and says nothing about how a frontend indexes or previews its documents.
+data model); the interactive machinery is rebuilt around the render semantics. cmdson is
+standalone and says nothing about how a frontend indexes or previews its documents —
+tmux-oneshot dropped fzfdb on 2026-08-19 (it now drives fzf directly with a hidden index
+column), and that changes nothing here.
 
 1. **Dual-format db.** The loader distinguishes formats per element: an object with a `cmdson`
    key is a document; anything else is a legacy entry handled by today's code paths. The db
