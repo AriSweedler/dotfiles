@@ -3,5 +3,5 @@
 	pro = "!f() { branch=\"${1:-$(git branch --show-current)}\"; gh pr list --head \"$branch\" --state all --json url -q '.[0].url' | xargs open; }; f"
 
 [alias]
-	dim = delete-if-merged-all '^ariSweedler/'
+	dim = delete-if-merged-all '^ari-sweedler/'
 	dimc = delete-if-merged-all '^cloud-agent/'
