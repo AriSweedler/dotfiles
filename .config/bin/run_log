@@ -2,14 +2,18 @@
 # run_log — run a command and capture it into a per-command capture directory:
 #
 #   <root>/<seq>_<slug>/
-#     metadata   user=, timestamp=, command=, exit=
-#     stdout     the command's stdout, byte-for-byte
-#     stderr     the command's stderr, byte-for-byte
+#     metadata   user=, timestamp=, command=, mode=, exit=
+#     output     (tty mode, default) the terminal session, byte-for-byte
+#     stdout     (split mode) the command's stdout
+#     stderr     (split mode) the command's stderr
+#     <N>        one file per --fd N
 #
 # Like `irun`, the command executes in an interactive zsh so aliases,
-# functions, and everything sourced from .zshrc are available. Both streams
-# still interleave live on the terminal; the capture files get a copy each.
-# By default only fds 1 and 2 are captured — a command's fd 3+ writes bypass
+# functions, and everything sourced from .zshrc are available. By default it
+# runs under a pty (script(1)), so it behaves exactly as in a bare terminal —
+# colors, log pretty-printers, progress bars — while the session is captured.
+# `--split` trades that fidelity for separate stdout/stderr capture files.
+# Only fds 1 and 2 are captured by default — a command's fd 3+ writes bypass
 # the capture, because pre-opening fds changes the child's environment.
 # `--fd N` opts in per fd: the wrapper opens fd N onto <capture-dir>/<N>
 # (capture-only, never echoed to the terminal).
@@ -45,19 +49,25 @@ functions work. Each invocation creates one capture directory under the
 capture root:
 
   <root>/<seq>_<cmd-slug>/
-    metadata   user=, timestamp=, command=, exit=
-    stdout     the command's stdout
-    stderr     the command's stderr
+    metadata   user=, timestamp=, command=, mode=, exit=
+    output     (default tty mode) the terminal session, byte-for-byte
+    stdout     (--split mode) the command's stdout
+    stderr     (--split mode) the command's stderr
 
-Both streams still interleave live on the terminal. The command's fds 1/2 are
-pipes, so color-auto programs (git, ls, grep) print plain — in the capture
-AND on the terminal; force color (e.g. git -c color.ui=always) if you want it.
+By default the command runs under a pty, so it behaves exactly as in your
+terminal — colors, log pretty-printers, progress bars all work — and the
+session is captured byte-for-byte (ANSI escapes and CRLF included) to a
+single output file. With --split, stdout and stderr are captured as separate
+clean files instead, but the command sees pipes: color-auto programs (git,
+grunt pretty-printers) print plain unless forced (git -c color.ui=always).
 
 ${c_green}Options:${c_rst}
   --name NAME  Capture dir name (default: <seq>_<cmd-slug>). Absolute paths
                are used as-is; otherwise it lands under the capture root. A
                name already holding a capture gets a _2, _3, ... suffix.
   --file NAME  Compat alias for --name (a trailing .log is stripped).
+  --split      Capture stdout/stderr as separate files instead of one pty
+               output file. See paragraph above for the tradeoff.
   --fd N       Also capture fd N (3-9, repeatable) to <capture-dir>/<N>.
                The command sees fd N as an open non-tty descriptor.
                Capture-only: fd N output is not echoed to the terminal.
@@ -65,9 +75,17 @@ ${c_green}Options:${c_rst}
                Precedence: --dir > \$LOG_DIR > \$XDG_STATE_HOME/run_log
   -h, --help   Show this help
 
+${c_green}Argument handling:${c_rst}
+  Multiple args after the flags (or --) are an argv: each word reaches the
+  child byte-for-byte — no re-split, no glob, JSON args safe — and a bare
+  first word still expands as an alias. A single arg is a shell command
+  string, re-parsed by the interactive zsh: pipes, &&, redirections work.
+
 ${c_green}Examples:${c_rst}
   run_log kubectl get pods
   run_log --name step1 -- aws s3 ls
+  run_log -- grunt some:task --state='{"isDisabled":false}'
+  run_log 'aws_profile --query alpha && aws s3 ls'
   LOG_DIR=/tmp/investigation-42 run_log make build
 EOF
 )"
@@ -201,13 +219,62 @@ close_capture_fds() {
   done
 }
 
+#######################################
+# Run the command under a pty via script(1) so it behaves exactly as in a
+# bare terminal: color-auto and format-switching programs (git, grunt log
+# pretty-printers) see a tty. stdout/stderr merge into one `output` file —
+# inherent to a pty. macOS script(1) forwards the child's exit status.
+# Arguments: $1 = capture dir, $2 = command string
+# Returns: the command's exit status
+#######################################
+run_captured_tty() {
+  local capture_dir="${1}" cmd="${2}"
+  script -q "${capture_dir}/output" zsh -ic "${cmd}"
+}
+
+#######################################
+# Run the command with fds 1/2 as pipes, teeing each into its own capture
+# file while both still stream to the terminal. Piped fds mean color-auto
+# programs print plain — the price of the split.
+# zsh waits for a >(...) attached to an external command, so both capture
+# files are complete on return — no flush race.
+# Arguments: $1 = capture dir, $2 = command string
+# Returns: the command's exit status
+#######################################
+run_captured_split() {
+  local capture_dir="${1}" cmd="${2}"
+  zsh -ic "${cmd}" 2> >(tee -a "${capture_dir}/stderr" >&2) | tee -a "${capture_dir}/stdout"
+  return "${pipestatus[1]}"
+}
+
+#######################################
+# Build the string handed to `zsh -ic`. A single argument is a shell command
+# string, re-parsed by the interactive zsh (pipes, &&, redirection). Multiple
+# arguments are an argv: each word is requoted with (q-) so it reaches the
+# child byte-for-byte — no re-split, no glob — while a bare first word stays
+# unquoted and still gets alias expansion.
+# Arguments: the command args (after flags/--)
+# Outputs: command string on stdout
+#######################################
+build_command_string() {
+  if (( $# == 1 )); then
+    log::debug "Single-arg command string; interactive zsh re-parses it"
+    print -r -- "${1}"
+    return
+  fi
+  log::debug "Multi-arg command; requoting argv verbatim | argc='${#}'"
+  local -a quoted=("${(@q-)@}")
+  print -r -- "${(j: :)quoted}"
+}
+
 main() {
   # === PARSE ===
-  local name="" dir_flag=""
+  local name="" dir_flag="" mode="tty"
   local -a capture_fds=()
   while (( $# > 0 )); do
     case "${1}" in
       -h|--help) help; return 0 ;;
+      --split) mode="split"; shift ;;
       --name) name="${2:?--name requires a value}"; shift 2 ;;
       --file) name="${2:?--file requires a value}"; shift 2 ;;
       --fd) capture_fds+=("${2:?--fd requires a value}"); shift 2 ;;
@@ -234,9 +301,8 @@ main() {
   capture_fds=("${(u)capture_fds[@]}")
 
   # === MASSAGE ===
-  # Join like irun: the interactive zsh re-parses the string, so both
-  # `run_log ap --query x` and `run_log 'a && b'` work.
-  local cmd="$*"
+  local cmd
+  cmd="$(build_command_string "$@")"
   local root capture_dir
   root="$(resolve_capture_root "${dir_flag}")"
   capture_dir="$(resolve_capture_dir "${name}" "${root}" "${cmd}")"
@@ -248,15 +314,14 @@ main() {
 user=${USER:-$(whoami)}
 timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 command=${cmd}
+mode=${mode}
 EOF
-  log::info "Capturing | capture_dir='${capture_dir}'"
+  log::info "Capturing | capture_dir='${capture_dir}' mode='${mode}'"
   open_capture_fds "${capture_dir}" "${capture_fds[@]}"
 
-  # zsh waits for a >(...) attached to an external command, so both capture
-  # files are complete once the pipeline returns — no flush race.
   set +e
-  zsh -ic "${cmd}" 2> >(tee -a "${capture_dir}/stderr" >&2) | tee -a "${capture_dir}/stdout"
-  local rc="${pipestatus[1]}"
+  "run_captured_${mode}" "${capture_dir}" "${cmd}"
+  local rc=$?
   set -e
   close_capture_fds "${capture_fds[@]}"
 
