@@ -47,7 +47,9 @@ capture root:
     stdout     the command's stdout
     stderr     the command's stderr
 
-Both streams still interleave live on the terminal.
+Both streams still interleave live on the terminal. The command's fds 1/2 are
+pipes, so color-auto programs (git, ls, grep) print plain — in the capture
+AND on the terminal; force color (e.g. git -c color.ui=always) if you want it.
 
 ${c_green}Options:${c_rst}
   --name NAME  Capture dir name (default: <seq>_<cmd-slug>). Absolute paths
@@ -116,7 +118,10 @@ generate_slug() {
   setopt local_options extended_glob
   local cmd="${1}"
   local -a words=("${(z)cmd}")
-  local slug="${(j:_:)words[1,3]}"
+  words=("${(@)words[1,3]}")
+  # :t basenames path-like words so /tmp/x/bin/01_foo.zsh slugs as 01_foo_zsh.
+  words=("${(@)words:t}")
+  local slug="${(j:_:)words}"
   slug="${slug//[^A-Za-z0-9_-]/_}"
   print -r -- "${slug%%_#}"
 }
