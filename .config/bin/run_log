@@ -9,8 +9,10 @@
 # Like `irun`, the command executes in an interactive zsh so aliases,
 # functions, and everything sourced from .zshrc are available. Both streams
 # still interleave live on the terminal; the capture files get a copy each.
-# Capture is capped at fds 1 and 2 — intercepting fd 3+ would require
-# pre-opening those fds, changing the command's environment.
+# By default only fds 1 and 2 are captured — a command's fd 3+ writes bypass
+# the capture, because pre-opening fds changes the child's environment.
+# `--fd N` opts in per fd: the wrapper opens fd N onto <capture-dir>/<N>
+# (capture-only, never echoed to the terminal).
 #
 # Designed for agent workflows: an agent hands over a `run_log ...` command,
 # the human runs it, and the capture is already on disk at a deterministic
@@ -56,6 +58,9 @@ ${c_green}Options:${c_rst}
                are used as-is; otherwise it lands under the capture root. A
                name already holding a capture gets a _2, _3, ... suffix.
   --file NAME  Compat alias for --name (a trailing .log is stripped).
+  --fd N       Also capture fd N (3-9, repeatable) to <capture-dir>/<N>.
+               The command sees fd N as an open non-tty descriptor.
+               Capture-only: fd N output is not echoed to the terminal.
   --dir DIR    Capture root for relative/generated names.
                Precedence: --dir > \$LOG_DIR > \$XDG_STATE_HOME/run_log
   -h, --help   Show this help
@@ -169,14 +174,43 @@ uniquify_capture_dir() {
   print -r -- "${dir}_${n}"
 }
 
+#######################################
+# Open each requested fd in the current shell, pointed at <dir>/<n>, so the
+# command inherits it. Mutates shell fds — must NOT be called in a subshell.
+# The fd number is validated to a single digit 3-9 before reaching the eval.
+# Arguments: $1 = capture dir, rest = fd numbers
+#######################################
+open_capture_fds() {
+  local dir="${1}"
+  shift
+  local fd
+  for fd in "$@"; do
+    log::info "Capturing extra fd | fd='${fd}' file='${dir}/${fd}'"
+    eval "exec ${fd}>\"\${dir}/\${fd}\""
+  done
+}
+
+#######################################
+# Close fds opened by open_capture_fds. Mutates shell fds — no subshell.
+# Arguments: fd numbers
+#######################################
+close_capture_fds() {
+  local fd
+  for fd in "$@"; do
+    eval "exec ${fd}>&-"
+  done
+}
+
 main() {
   # === PARSE ===
   local name="" dir_flag=""
+  local -a capture_fds=()
   while (( $# > 0 )); do
     case "${1}" in
       -h|--help) help; return 0 ;;
       --name) name="${2:?--name requires a value}"; shift 2 ;;
       --file) name="${2:?--file requires a value}"; shift 2 ;;
+      --fd) capture_fds+=("${2:?--fd requires a value}"); shift 2 ;;
       --dir) dir_flag="${2:?--dir requires a value}"; shift 2 ;;
       --) shift; break ;;
       -*) log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
@@ -190,6 +224,14 @@ main() {
     help
     return 2
   fi
+  local fd
+  for fd in "${capture_fds[@]}"; do
+    if [[ "${fd}" != <3-9> ]]; then
+      log::err "Invalid --fd | fd='${fd}' valid='3..9 (fds 1/2 are always captured as stdout/stderr)'"
+      return 1
+    fi
+  done
+  capture_fds=("${(u)capture_fds[@]}")
 
   # === MASSAGE ===
   # Join like irun: the interactive zsh re-parses the string, so both
@@ -208,6 +250,7 @@ timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 command=${cmd}
 EOF
   log::info "Capturing | capture_dir='${capture_dir}'"
+  open_capture_fds "${capture_dir}" "${capture_fds[@]}"
 
   # zsh waits for a >(...) attached to an external command, so both capture
   # files are complete once the pipeline returns — no flush race.
@@ -215,6 +258,7 @@ EOF
   zsh -ic "${cmd}" 2> >(tee -a "${capture_dir}/stderr" >&2) | tee -a "${capture_dir}/stdout"
   local rc="${pipestatus[1]}"
   set -e
+  close_capture_fds "${capture_fds[@]}"
 
   print -r -- "exit=${rc}" >> "${capture_dir}/metadata"
   log::info "Captured command | capture_dir='${capture_dir}' rc='${rc}'"
