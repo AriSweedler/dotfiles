@@ -1,14 +1,21 @@
 #!/usr/bin/env zsh
-# run_log — run a command and capture it plus its output into a log file, in
-# the tcap format: a `❯ <cmd>` prompt line followed by the raw output.
+# run_log — run a command and capture it into a per-command capture directory:
+#
+#   <root>/<seq>_<slug>/
+#     metadata   user=, timestamp=, command=, exit=
+#     stdout     the command's stdout, byte-for-byte
+#     stderr     the command's stderr, byte-for-byte
 #
 # Like `irun`, the command executes in an interactive zsh so aliases,
-# functions, and everything sourced from .zshrc are available. Output still
-# streams to the terminal; the log file gets a copy.
+# functions, and everything sourced from .zshrc are available. Both streams
+# still interleave live on the terminal; the capture files get a copy each.
+# Capture is capped at fds 1 and 2 — intercepting fd 3+ would require
+# pre-opening those fds, changing the command's environment.
 #
 # Designed for agent workflows: an agent hands over a `run_log ...` command,
-# the human runs it, and the output is already on disk for the agent to read.
-# With $LOG_DIR exported, `run_log <cmd>` needs no flags at all.
+# the human runs it, and the capture is already on disk at a deterministic
+# path for the agent to read. With $LOG_DIR exported, `run_log <cmd>` needs
+# no flags at all; repeated runs make 001_*, 002_*, ... under the same root.
 
 set -euo pipefail
 
@@ -20,33 +27,40 @@ fi
 source "${LOG_LIB}"
 
 readonly DEFAULT_LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/run_log"
-readonly PROMPT_CHAR="❯"
 
 # log.zsh colors are literal-backslash strings for `echo -e`, so the heredoc
 # must be rendered with %b, not cat'd raw.
 help() {
   local text
   text="$(cat <<EOF
-${c_green}run_log${c_rst} — run a command and capture it + its output (tcap format) to a file
+${c_green}run_log${c_rst} — run a command, capture metadata/stdout/stderr to a capture dir
 
 ${c_green}Usage:${c_rst}
-  run_log [--file FILE] [--dir DIR] [--] CMD [ARGS...]
+  run_log [--name NAME] [--dir DIR] [--] CMD [ARGS...]
 
 The command runs in an interactive zsh (like irun) so aliases and .zshrc
-functions work. Output streams to the terminal and is teed into the log file
-under a \`${PROMPT_CHAR} CMD\` prompt line. Repeated runs against the same file
-append, so one file can hold a whole session of steps.
+functions work. Each invocation creates one capture directory under the
+capture root:
+
+  <root>/<seq>_<cmd-slug>/
+    metadata   user=, timestamp=, command=, exit=
+    stdout     the command's stdout
+    stderr     the command's stderr
+
+Both streams still interleave live on the terminal.
 
 ${c_green}Options:${c_rst}
-  --file FILE  Log file. Absolute paths are used as-is; relative paths land
-               under the log dir. Default: <utc-timestamp>_<cmd-slug>.log
-  --dir DIR    Log dir for relative/generated filenames.
+  --name NAME  Capture dir name (default: <seq>_<cmd-slug>). Absolute paths
+               are used as-is; otherwise it lands under the capture root. A
+               name already holding a capture gets a _2, _3, ... suffix.
+  --file NAME  Compat alias for --name (a trailing .log is stripped).
+  --dir DIR    Capture root for relative/generated names.
                Precedence: --dir > \$LOG_DIR > \$XDG_STATE_HOME/run_log
   -h, --help   Show this help
 
 ${c_green}Examples:${c_rst}
   run_log kubectl get pods
-  run_log --file step1.log -- aws s3 ls
+  run_log --name step1 -- aws s3 ls
   LOG_DIR=/tmp/investigation-42 run_log make build
 EOF
 )"
@@ -54,71 +68,110 @@ EOF
 }
 
 #######################################
-# Pick the log directory for relative/generated filenames.
+# Pick the capture root for relative/generated names.
 # Globals: LOG_DIR (env, optional), DEFAULT_LOG_DIR
 # Arguments: $1 = --dir flag value (may be empty)
 # Outputs: directory path on stdout
 #######################################
-resolve_log_dir() {
+resolve_capture_root() {
   local flag_dir="${1}"
   if [[ -n "${flag_dir}" ]]; then
-    log::debug "Using --dir | dir='${flag_dir}'"
+    log::debug "Using --dir | root='${flag_dir}'"
     print -r -- "${flag_dir}"
     return
   fi
   if [[ -n "${LOG_DIR:-}" ]]; then
-    log::debug "Using \$LOG_DIR | dir='${LOG_DIR}'"
+    log::debug "Using \$LOG_DIR | root='${LOG_DIR}'"
     print -r -- "${LOG_DIR}"
     return
   fi
-  log::debug "Using default log dir | dir='${DEFAULT_LOG_DIR}'"
+  log::debug "Using default capture root | root='${DEFAULT_LOG_DIR}'"
   print -r -- "${DEFAULT_LOG_DIR}"
 }
 
 #######################################
-# Build a generated filename: UTC timestamp + a slug of the command's first
-# few words, so files sort chronologically and stay greppable by command.
-# Arguments: $1 = full command string
-# Outputs: filename (no directory) on stdout
+# Next zero-padded sequence number for a generated capture dir, one past the
+# highest numeric prefix already present so captures sort chronologically.
+# Arguments: $1 = capture root
+# Outputs: e.g. "003" on stdout
 #######################################
-generate_log_name() {
+next_seq() {
+  local root="${1}"
+  local max=0 entry n
+  for entry in "${root}"/[0-9]*(N/:t); do
+    n="${${entry%%_*}//[^0-9]/}"
+    if [[ -n "${n}" ]] && (( n > max )); then
+      max="${n}"
+    fi
+  done
+  printf '%03d' "$((max + 1))"
+}
+
+#######################################
+# Slug of the command's first few words, so capture dirs stay greppable.
+# Arguments: $1 = full command string
+# Outputs: slug on stdout
+#######################################
+generate_slug() {
+  setopt local_options extended_glob
   local cmd="${1}"
   local -a words=("${(z)cmd}")
   local slug="${(j:_:)words[1,3]}"
   slug="${slug//[^A-Za-z0-9_-]/_}"
-  print -r -- "$(date -u +%Y%m%dT%H%M%SZ)_${slug}.log"
+  print -r -- "${slug%%_#}"
 }
 
 #######################################
-# Resolve the final log file path from --file, the log dir, and the command.
-# Arguments: $1 = --file flag value (may be empty), $2 = log dir, $3 = command
-# Outputs: absolute-or-relative file path on stdout
+# Resolve the capture dir from --name/--file, the capture root, and the
+# command. Does not create it or handle collisions.
+# Arguments: $1 = name flag value (may be empty), $2 = capture root, $3 = cmd
+# Outputs: capture dir path on stdout
 #######################################
-resolve_log_file() {
-  local file="${1}" dir="${2}" cmd="${3}"
-  if [[ -n "${file}" && "${file}" == /* ]]; then
-    log::debug "Using absolute --file | log_file='${file}'"
-    print -r -- "${file}"
+resolve_capture_dir() {
+  local name="${1%.log}" root="${2}" cmd="${3}"
+  if [[ -n "${name}" && "${name}" == /* ]]; then
+    log::debug "Using absolute capture dir | capture_dir='${name}'"
+    print -r -- "${name}"
     return
   fi
-  if [[ -n "${file}" ]]; then
-    log::debug "Placing relative --file under log dir | file='${file}' dir='${dir}'"
-    print -r -- "${dir}/${file}"
+  if [[ -n "${name}" ]]; then
+    log::debug "Placing named capture under root | name='${name}' root='${root}'"
+    print -r -- "${root}/${name}"
     return
   fi
-  local name
-  name="$(generate_log_name "${cmd}")"
-  log::debug "Generated log filename | name='${name}' dir='${dir}'"
-  print -r -- "${dir}/${name}"
+  local generated="$(next_seq "${root}")_$(generate_slug "${cmd}")"
+  log::debug "Generated capture dir name | name='${generated}' root='${root}'"
+  print -r -- "${root}/${generated}"
+}
+
+#######################################
+# A dir that already holds a capture (has a metadata file) is never reused —
+# each capture describes exactly one command. Suffix _2, _3, ... until free.
+# Arguments: $1 = candidate capture dir
+# Outputs: final capture dir path on stdout
+#######################################
+uniquify_capture_dir() {
+  local dir="${1}"
+  if [[ ! -e "${dir}/metadata" ]]; then
+    print -r -- "${dir}"
+    return
+  fi
+  local n=2
+  while [[ -e "${dir}_${n}/metadata" ]]; do
+    (( n++ ))
+  done
+  log::warn "Capture dir already used; suffixing | dir='${dir}' suffixed='${dir}_${n}'"
+  print -r -- "${dir}_${n}"
 }
 
 main() {
   # === PARSE ===
-  local file="" dir_flag=""
+  local name="" dir_flag=""
   while (( $# > 0 )); do
     case "${1}" in
       -h|--help) help; return 0 ;;
-      --file) file="${2:?--file requires a value}"; shift 2 ;;
+      --name) name="${2:?--name requires a value}"; shift 2 ;;
+      --file) name="${2:?--file requires a value}"; shift 2 ;;
       --dir) dir_flag="${2:?--dir requires a value}"; shift 2 ;;
       --) shift; break ;;
       -*) log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
@@ -137,29 +190,29 @@ main() {
   # Join like irun: the interactive zsh re-parses the string, so both
   # `run_log ap --query x` and `run_log 'a && b'` work.
   local cmd="$*"
-  local log_dir log_file
-  log_dir="$(resolve_log_dir "${dir_flag}")"
-  log_file="$(resolve_log_file "${file}" "${log_dir}" "${cmd}")"
+  local root capture_dir
+  root="$(resolve_capture_root "${dir_flag}")"
+  capture_dir="$(resolve_capture_dir "${name}" "${root}" "${cmd}")"
+  capture_dir="$(uniquify_capture_dir "${capture_dir}")"
 
   # === LOGIC ===
-  mkdir -p "${log_file:h}"
-  if [[ -s "${log_file}" ]]; then
-    log::info "Appending to existing log file | log_file='${log_file}'"
-    print -r -- "" >> "${log_file}"
-  else
-    log::info "Capturing to log file | log_file='${log_file}'"
-  fi
-  print -r -- "${PROMPT_CHAR} ${cmd}" >> "${log_file}"
+  mkdir -p "${capture_dir}"
+  cat > "${capture_dir}/metadata" <<EOF
+user=${USER:-$(whoami)}
+timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+command=${cmd}
+EOF
+  log::info "Capturing | capture_dir='${capture_dir}'"
 
+  # zsh waits for a >(...) attached to an external command, so both capture
+  # files are complete once the pipeline returns — no flush race.
   set +e
-  zsh -ic "${cmd}" 2>&1 | tee -a "${log_file}"
+  zsh -ic "${cmd}" 2> >(tee -a "${capture_dir}/stderr" >&2) | tee -a "${capture_dir}/stdout"
   local rc="${pipestatus[1]}"
   set -e
 
-  if (( rc != 0 )); then
-    print -r -- "[exit ${rc}]" >> "${log_file}"
-  fi
-  log::info "Captured command | log_file='${log_file}' rc='${rc}'"
+  print -r -- "exit=${rc}" >> "${capture_dir}/metadata"
+  log::info "Captured command | capture_dir='${capture_dir}' rc='${rc}'"
   return "${rc}"
 }
 
