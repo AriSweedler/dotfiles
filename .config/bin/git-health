@@ -1,0 +1,361 @@
+#!/usr/bin/env zsh
+# Self-contained maintenance runner + guardrail for git object stores. Owns the whole job
+# with explicit git commands — no git-maintenance machinery, no maintenance.repo
+# registration, no launchd jobs owned by git, no config prerequisites. Repos opt in via a
+# machine-local registry; one launchd job ticks them all hourly.
+#
+#   git health --register     # inside a repo: register it + tear out git-maintenance there
+#   git health --install      # once per machine: launchd job + machine-level teardown
+#   git health                # one manual tick for the current repo
+#
+# History, so nobody rebuilds this on top of git-maintenance again: pack consolidation via
+# `git maintenance` failed silently twice on a large monorepo. First as 4,451 packs / 331k
+# loose objects / 5-minute pushes (the daily incremental-repack died mid-run on laptop
+# sleep, and launchd discards its output). Then as 215 packs 8 days after that fix — git's
+# own launchd job runs `for-each-repo --config=maintenance.repo` from cwd /, and
+# maintenance.repo lived behind [includeIf "gitdir:~/"], so it resolved zero repos and
+# exited 0 forever. Any design that depends on where config lives or what cwd the scheduler
+# uses re-breaks on the next machine. This script depends on neither: launchd runs it, it
+# runs git -C <repo> with explicit tasks against an explicit registry.
+set -euo pipefail
+
+# The classic log suite
+c_red='\e[31m'
+c_green='\e[32m'
+c_yellow='\e[33m'
+c_bold='\e[1m'
+c_rst='\e[0m'
+log::err() { echo -e "${c_red}[ERROR]${c_rst}" "$@" >&2 ; }
+log::warn() { echo -e "${c_yellow}[WARN]${c_rst}" "$@" >&2 ; }
+log::info() { echo -e "${c_green}[INFO]${c_rst}" "$@" >&2 ; }
+
+readonly LABEL="com.$(id -un).git-health"
+readonly PLIST="${HOME}/Library/LaunchAgents/${LABEL}.plist"
+readonly STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/git-health"
+readonly REGISTRY="${STATE_DIR}/repos"
+readonly LOG_FILE="${STATE_DIR}/git-health.log"
+readonly MAX_PACKS=50
+readonly MAX_LOOSE=50000
+
+help() {
+    cat <<EOF
+${c_green}git-health${c_rst} — self-contained maintenance runner + guardrail for git object stores
+
+${c_bold}Usage:${c_rst}
+  git health [--repo PATH] [--dry-run]
+  git health --all [--dry-run]
+  git health --register|--unregister [--repo PATH]
+  git health --install [--dry-run]
+
+${c_bold}Modes:${c_rst}
+  (default)     One maintenance tick for the repo (geometric repack + commit-graph, weekly
+                pack-refs), then a health check that self-heals and notifies only if that
+                fails.
+  --all         Tick every registered repo (what the launchd job runs).
+  --register    Add the repo to ${REGISTRY}, tear out its git-maintenance
+                config (maintenance.*, refs/prefetch/*), and pin maintenance.auto=false +
+                gc.auto=0 so this script is the sole owner of the object store. Installs
+                the launchd job if missing.
+  --unregister  Remove the repo from the registry.
+  --install     Idempotent machine setup: installs the hourly launchd job and tears down
+                all legacy machinery (git maintenance stop, org.git-scm.git.* jobs).
+
+${c_bold}Options:${c_rst}
+  --repo PATH  Repository to act on (default: the repo containing cwd)
+  --dry-run    Log every mutating command instead of running it
+  -h, --help   Show this help
+EOF
+}
+
+# ── Parse ───────────────────────────────────────────────────────────────────────────────────
+mode=tick
+dry_run=0
+repo=""
+while (( $# > 0 )); do
+    case "${1}" in
+        -h|--help) help; exit 0 ;;
+        --all) mode=all; shift ;;
+        --install) mode=install; shift ;;
+        --register) mode=register; shift ;;
+        --unregister) mode=unregister; shift ;;
+        --dry-run) dry_run=1; shift ;;
+        --repo) repo="${2:?--repo requires a value}"; shift 2 ;;
+        *) log::err "Unknown flag | flag='${1}'"; help; exit 1 ;;
+    esac
+done
+
+mkdir -p "${STATE_DIR}"
+export GIT_TERMINAL_PROMPT=0
+
+# The health record lives in LOG_FILE (stdout too, for interactive runs); launchd captures
+# stderr separately. note() lines are the script's data trail — grep this file for history.
+note() { print -r -- "$(date '+%Y-%m-%d %H:%M:%S') [${repo:t}] $*" | tee -a "${LOG_FILE}" }
+
+#######################################
+# Resolve and validate the target repo into the `repo` global.
+# Globals: repo
+#######################################
+resolve_repo() {
+    if [[ -z "${repo}" ]]; then
+        repo=$(git rev-parse --show-toplevel 2>/dev/null) || {
+            log::err "Not inside a git repository and no --repo given"
+            exit 1
+        }
+    fi
+    if [[ ! -d "${repo}/.git" ]]; then
+        log::err "Not a git repository | repo='${repo}' expected='directory containing .git'"
+        exit 1
+    fi
+}
+
+#######################################
+# Run one mutating git step; honors --dry-run, logs failures without aborting the tick.
+# Globals: repo, dry_run
+# Arguments: step name, then the git subcommand and its args
+# Returns: the git exit code (0 under --dry-run)
+#######################################
+git_step() {
+    local step="${1}"
+    shift
+    if (( dry_run )); then
+        log::info "dry-run, would run | step='${step}' cmd='git -C ${repo} $*'"
+        return 0
+    fi
+    local out rc=0
+    out=$(git -C "${repo}" "$@" 2>&1) || rc=$?
+    if (( rc != 0 )); then
+        note "${step} rc=${rc} | ${out//$'\n'/ // }"
+    fi
+    return "${rc}"
+}
+
+#######################################
+# One maintenance tick. Geometric repack is the whole strategy: each run packs loose objects
+# and rolls the smallest packs up until pack sizes form a geometric progression, so hourly
+# runs stay cheap and the store never accumulates hundreds of fetch packs. --write-midx keeps
+# the multi-pack-index current for object-lookup speed.
+# Globals: repo, dry_run
+#######################################
+run_tick() {
+    git_step repack repack --geometric=2 -d --write-midx --quiet || true
+    git_step commit-graph commit-graph write --split --reachable || true
+    if [[ "$(date +%u)" == "1" && "$(date +%H)" == "10" ]]; then
+        # Weekly: packed refs keep ref reads fast; loose refs regrow constantly.
+        git_step pack-refs pack-refs --all --prune || true
+    fi
+}
+
+#######################################
+# Measure store health into globals.
+# Globals: repo, MAX_PACKS, MAX_LOOSE → pack_count, loose_count, problems
+#######################################
+measure() {
+    local pack_dir="${repo}/.git/objects/pack"
+    pack_count=$(find "${pack_dir}" -maxdepth 1 -name '*.pack' | wc -l)
+    pack_count=${pack_count// /}
+    # Plain count-objects output is "N objects, K kilobytes"; N counts loose objects only.
+    local loose_line
+    loose_line=$(git -C "${repo}" count-objects)
+    loose_count=${loose_line%% *}
+    # tmp_pack_* older than 2 days = an interrupted repack nothing will clean up.
+    local stale_tmp
+    stale_tmp=$(find "${pack_dir}" -maxdepth 1 -name 'tmp_pack_*' -mtime +2 | wc -l)
+    stale_tmp=${stale_tmp// /}
+
+    problems=()
+    if (( pack_count > MAX_PACKS )); then
+        problems+=("packs=${pack_count} (max ${MAX_PACKS})")
+    fi
+    if (( loose_count > MAX_LOOSE )); then
+        problems+=("loose=${loose_count} (max ${MAX_LOOSE})")
+    fi
+    if (( stale_tmp > 0 )); then
+        problems+=("stale tmp_pack files=${stale_tmp}")
+    fi
+    if [[ ! -f "${pack_dir}/multi-pack-index" ]]; then
+        problems+=("multi-pack-index missing")
+    fi
+}
+
+#######################################
+# Report health; self-heal on degradation; notify only when self-heal fails.
+# Globals: repo, pack_count, loose_count, problems, dry_run
+# Returns: 0 healthy or self-healed, 1 unhealthy after self-heal
+#######################################
+report_health() {
+    if (( ${#problems[@]} == 0 )); then
+        note "healthy | packs='${pack_count}' loose='${loose_count}'"
+        return 0
+    fi
+
+    note "degraded, self-healing | ${(j:, :)problems}"
+    git_step self-heal-repack repack --geometric=2 -d --write-midx || true
+
+    measure
+    if (( ${#problems[@]} == 0 )); then
+        note "self-healed | packs='${pack_count}' loose='${loose_count}'"
+        return 0
+    fi
+
+    local summary="${(j:, :)problems}"
+    note "UNHEALTHY after self-heal | ${summary}"
+    if (( ! dry_run )); then
+        osascript -e "display notification \"${summary} — self-heal failed, see ${LOG_FILE}\" with title \"${repo:t} .git needs manual maintenance\""
+    fi
+    return 1
+}
+
+#######################################
+# Tick + health-check one repo.
+# Globals: repo (set by caller)
+# Returns: report_health's exit code
+#######################################
+do_tick() {
+    run_tick
+    measure
+    report_health
+}
+
+#######################################
+# Emit the launchd plist through jq + plutil. jq escapes every interpolated value and
+# plutil rejects structurally invalid output, so a bad path fails the install instead
+# of writing malformed XML for launchd to choke on.
+# Globals: LABEL, PLIST, STATE_DIR
+#######################################
+write_plist() {
+    jq -n \
+        --arg label "${LABEL}" \
+        --arg script "${HOME}/.config/bin/git-health" \
+        --arg out "${STATE_DIR}/launchd.out.log" \
+        --arg err "${STATE_DIR}/launchd.err.log" \
+        '{
+            Label: $label,
+            ProgramArguments: ["/bin/zsh", $script, "--all"],
+            StartCalendarInterval: {Minute: 20},
+            StandardOutPath: $out,
+            StandardErrorPath: $err
+        }' | plutil -convert xml1 - -o "${PLIST}"
+    plutil -lint -s "${PLIST}"
+}
+
+#######################################
+# Idempotent machine setup + teardown of every trace of the git-maintenance approach.
+# Globals: dry_run, LABEL, PLIST
+#######################################
+do_install() {
+    print -r -- "$(date '+%Y-%m-%d %H:%M:%S') [machine] install" | tee -a "${LOG_FILE}"
+
+    local f job
+    for f in "${HOME}"/Library/LaunchAgents/org.git-scm.git.*.plist(N); do
+        job="${${f:t}%.plist}"
+        if (( dry_run )); then
+            log::info "dry-run, would remove legacy launchd job | job='${job}'"
+            continue
+        fi
+        launchctl bootout "gui/$(id -u)/${job}" 2>/dev/null || true
+        rm -f "${f}"
+        log::info "removed legacy launchd job | job='${job}'"
+    done
+
+    if (( dry_run )); then
+        log::info "dry-run, would write plist and bootstrap | plist='${PLIST}' label='${LABEL}'"
+        return 0
+    fi
+    write_plist
+    launchctl bootout "gui/$(id -u)/${LABEL}" 2>/dev/null || true
+    launchctl bootstrap "gui/$(id -u)" "${PLIST}"
+    log::info "installed launchd job | label='${LABEL}' schedule='hourly at :20'"
+}
+
+#######################################
+# Register the repo: add to the registry, tear out its git-maintenance config, pin this
+# script as the sole owner of the object store. Installs the launchd job if missing.
+# Globals: repo, dry_run, REGISTRY, PLIST
+#######################################
+do_register() {
+    # git maintenance unregister only edits config; stray maintenance.* keys survive it.
+    git_step maintenance-unregister maintenance unregister --force || true
+    if (( ! dry_run )); then
+        git -C "${repo}" config --local --remove-section maintenance 2>/dev/null || true
+    fi
+    # Foreground git must never run its own gc mid-command; this runner owns the object store.
+    git_step config-maintenance-auto config --local maintenance.auto false || true
+    git_step config-gc-auto config --local gc.auto 0 || true
+
+    # Old prefetch refs pin objects and serve nothing once prefetch is gone. One --stdin
+    # batch handles tens of thousands of refs in a single ref-transaction; a locked ref
+    # fails the batch and is swept on the next register run.
+    local prefetch_count
+    prefetch_count=$(git -C "${repo}" for-each-ref refs/prefetch --format='%(refname)' | wc -l)
+    prefetch_count=${prefetch_count// /}
+    if (( prefetch_count > 0 )); then
+        if (( dry_run )); then
+            log::info "dry-run, would batch-delete prefetch refs | count='${prefetch_count}'"
+        else
+            git -C "${repo}" for-each-ref refs/prefetch --format='delete %(refname)' \
+                | git -C "${repo}" update-ref --stdin \
+                || note "prefetch-ref-cleanup failed | count='${prefetch_count}'"
+            note "deleted prefetch refs | count='${prefetch_count}'"
+        fi
+    fi
+
+    if (( dry_run )); then
+        log::info "dry-run, would register | repo='${repo}' registry='${REGISTRY}'"
+        return 0
+    fi
+    touch "${REGISTRY}"
+    if ! grep -qxF "${repo}" "${REGISTRY}"; then
+        print -r -- "${repo}" >> "${REGISTRY}"
+    fi
+    note "registered"
+    if [[ ! -f "${PLIST}" ]]; then
+        do_install
+    fi
+}
+
+#######################################
+# Remove the repo from the registry.
+# Globals: repo, dry_run, REGISTRY
+#######################################
+do_unregister() {
+    if (( dry_run )); then
+        log::info "dry-run, would unregister | repo='${repo}' registry='${REGISTRY}'"
+        return 0
+    fi
+    if [[ -f "${REGISTRY}" ]]; then
+        grep -vxF "${repo}" "${REGISTRY}" > "${REGISTRY}.new" || true
+        mv "${REGISTRY}.new" "${REGISTRY}"
+    fi
+    note "unregistered"
+}
+
+#######################################
+# Tick every registered repo; a broken repo doesn't block the others.
+# Globals: REGISTRY → repo (per iteration)
+# Returns: 0 if every repo is healthy, 1 otherwise
+#######################################
+do_all() {
+    if [[ ! -s "${REGISTRY}" ]]; then
+        log::warn "No registered repos | registry='${REGISTRY}' fix='git health --register'"
+        return 0
+    fi
+    local rc=0
+    for repo in ${(f)"$(cat "${REGISTRY}")"}; do
+        if [[ ! -d "${repo}/.git" ]]; then
+            note "SKIP registered repo is gone | fix='git health --unregister --repo ${repo}'"
+            rc=1
+            continue
+        fi
+        do_tick || rc=1
+    done
+    return "${rc}"
+}
+
+# ── Dispatch ────────────────────────────────────────────────────────────────────────────────
+case "${mode}" in
+    all) do_all ;;
+    install) do_install ;;
+    register) resolve_repo; do_register ;;
+    unregister) resolve_repo; do_unregister ;;
+    tick) resolve_repo; do_tick ;;
+esac
