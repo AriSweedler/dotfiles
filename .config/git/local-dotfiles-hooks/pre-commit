@@ -1,0 +1,50 @@
+#!/bin/bash
+#
+# Pre-commit hook for the per-machine local-dotfiles bare repo (~/.local).
+# Refuses to commit secrets: any path containing '.secret.' and any staged
+# content matching a known token shape. info/exclude keeps *.secret.zsh out of
+# `add -A`; this catches `add -f` and literals pasted into tracked files.
+#
+# Setup (after bootstrapping the repo on a machine):
+#   git ldf config core.hooksPath ~/.config/git/local-dotfiles-hooks
+
+set -euo pipefail
+
+readonly C_RED='\033[31m'
+readonly C_GREEN='\033[32m'
+readonly C_RST='\033[0m'
+
+log::err()  { echo -e "${C_RED}[ERROR]${C_RST} $*" >&2; }
+log::info() { echo -e "${C_GREEN}[INFO]${C_RST} $*" >&2; }
+
+# Airtable PAT, Buildkite user token, GitHub classic PAT, AWS access key id,
+# and any *_SECRET= / *_TOKEN= assignment with a long literal value.
+readonly TOKEN_PATTERN='pat[A-Za-z0-9]{14}\.[a-f0-9]{16,}|bkua_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|_(SECRET|TOKEN|PAT)=["'"'"']?[A-Za-z0-9._-]{20,}'
+
+main() {
+  # macOS bash 3.2 has no mapfile; read the staged list line by line.
+  local -a staged=()
+  local line
+  while IFS= read -r line; do
+    staged+=("${line}")
+  done < <(git diff --cached --name-only --diff-filter=AM)
+  (( ${#staged[@]} )) || return 0
+
+  local rc=0 path
+  for path in "${staged[@]}"; do
+    if [[ "${path}" == *.secret.* ]]; then
+      log::err "refusing to commit a secret file | path='${path}'"
+      rc=1
+      continue
+    fi
+    if git show ":${path}" | grep -qE "${TOKEN_PATTERN}"; then
+      log::err "staged content looks like a credential | path='${path}'"
+      rc=1
+    fi
+  done
+
+  (( rc == 0 )) && log::info "no secrets in staged files"
+  return "${rc}"
+}
+
+main "$@"
