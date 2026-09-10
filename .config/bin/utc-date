@@ -1,0 +1,6 @@
+#!/bin/bash
+# Prints HH:MM in UTC, prefixed "+1d " when UTC is already on tomorrow's date.
+local_day=$(date +%d)
+utc=$(TZ=UTC date '+%d %H:%M')
+[ "$local_day" != "${utc%% *}" ] && printf "+1d "
+echo "${utc#* }"
