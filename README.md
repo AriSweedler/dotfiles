@@ -16,13 +16,18 @@ With this git repo, any machine can feel like home with a simple `git pull`.
 ```zsh
 git clone --bare git@github.com:AriSweedler/dotfiles.git ~/dotfiles.git
 git --git-dir=~/dotfiles.git --work-tree=~ checkout
-~/.config/new-machine/bin/setup-new-machine   # --dry-run to preview
+~/.config/new-machine/bin/new-machine setup   # --dry-run to preview
 ```
 
-`setup-new-machine` is idempotent: Homebrew, the packages in
-`~/.config/new-machine/Brewfile` (`brew bundle`), both dotfiles bare repos and
-their hooks, neovim, Claude Code, and the launchd jobs. `vnew` edits the
-Brewfile.
+`new-machine setup` is idempotent: Homebrew, the packages in the shared
+`~/.config/new-machine/Brewfile` plus this machine's
+`~/.local/share/new-machine/Brewfile` (`brew bundle`), both dotfiles bare repos
+and their hooks, neovim, Claude Code, and the launchd jobs. It also installs a
+weekly `new-machine verify` (Monday 10:05) that leaves one
+`~/Desktop/new-machine-FAILED.md` when the machine drifts from this baseline.
+`new-machine brew triage` lists brew packages no Brewfile declares;
+`new-machine brew decree <name> --global|--local` settles each one. `vnew`
+edits the shared Brewfile.
 
 There are many ways to modify the behavior of a program. Per machine, per user,
 per instance, etc. Dotfiles are generally per-user. 

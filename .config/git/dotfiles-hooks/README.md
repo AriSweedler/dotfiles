@@ -7,7 +7,7 @@ wired up after a fresh clone, since `core.hooksPath` is a repo-local setting.
 
 ## Setup
 
-`~/.config/new-machine/bin/setup-new-machine` does this. By hand, after cloning
+`new-machine setup` does this. By hand, after cloning
 the dotfiles bare repo:
 
 ```bash

@@ -43,7 +43,7 @@ brew "jenv"
 # cask "intellij-idea"
 
 # Editor
-brew "bob"          # nvim version manager; setup-new-machine installs neovim through it
+brew "bob"          # nvim version manager; new-machine setup installs neovim through it
 
 # Lang: misc
 brew "lua"

@@ -33,9 +33,9 @@ bindkey "^X^E" edit-command-line
 # Ctrl+X Ctrl+_ to redo
 bindkey '^X^_' redo
 
-# Edit the new-machine Brewfile: the list of everything I expect installed
-# permanently (language servers, CLI utilities, apps). Applied by
-# ~/.config/new-machine/bin/setup-new-machine.
+# Edit the shared new-machine Brewfile: everything every machine gets. Applied by
+# `new-machine setup` together with ~/.local/share/new-machine/Brewfile (this
+# machine only). Add lines with `new-machine brew decree <name> --global|--local`.
 function vnew() {
   vi "${HOME}/.config/new-machine/Brewfile"
 }
