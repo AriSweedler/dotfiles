@@ -8,6 +8,9 @@ them up once per machine after bootstrapping the repo.
 
 ## Setup
 
+`~/.config/new-machine/bin/setup-new-machine` bootstraps the repo, its
+`info/exclude` allowlist, and this hooks path. By hand:
+
 ```bash
 git ldf config core.hooksPath ~/.config/git/local-dotfiles-hooks
 ```

@@ -11,6 +11,19 @@ With this git repo, any machine can feel like home with a simple `git pull`.
 (Well, almost. I just need to get these dotfiles into my home directory. Read
 [this](https://www.atlassian.com/git/tutorials/dotfiles) for full details).
 
+## New machine
+
+```zsh
+git clone --bare git@github.com:AriSweedler/dotfiles.git ~/dotfiles.git
+git --git-dir=~/dotfiles.git --work-tree=~ checkout
+~/.config/new-machine/bin/setup-new-machine   # --dry-run to preview
+```
+
+`setup-new-machine` is idempotent: Homebrew, the packages in
+`~/.config/new-machine/Brewfile` (`brew bundle`), both dotfiles bare repos and
+their hooks, neovim, Claude Code, and the launchd jobs. `vnew` edits the
+Brewfile.
+
 There are many ways to modify the behavior of a program. Per machine, per user,
 per instance, etc. Dotfiles are generally per-user. 
 

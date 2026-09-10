@@ -7,7 +7,8 @@ wired up after a fresh clone, since `core.hooksPath` is a repo-local setting.
 
 ## Setup
 
-After cloning the dotfiles bare repo:
+`~/.config/new-machine/bin/setup-new-machine` does this. By hand, after cloning
+the dotfiles bare repo:
 
 ```bash
 git df config core.hooksPath ~/.config/git/dotfiles-hooks
