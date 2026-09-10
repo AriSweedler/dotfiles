@@ -3,3 +3,6 @@
 	dotfiles = "!git --git-dir=\"$HOME/dotfiles.git/\" --work-tree=\"$HOME\""
 	df = dotfiles
 	dfd = dotfiles-daily
+	# Per-machine bare repo for ~/.local; no remote, so machines never share it.
+	local-dotfiles = "!git --git-dir=\"$HOME/.local/ldf.git/\" --work-tree=\"$HOME/.local\""
+	ldf = local-dotfiles
