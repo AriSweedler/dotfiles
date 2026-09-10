@@ -73,7 +73,7 @@ dry_run=0
 repo=""
 while (( $# > 0 )); do
     case "${1}" in
-        -h|--help) help; exit 0 ;;
+        -h|--help|--usage) help; exit 0 ;;
         --all) mode=all; shift ;;
         --install) mode=install; shift ;;
         --register) mode=register; shift ;;
