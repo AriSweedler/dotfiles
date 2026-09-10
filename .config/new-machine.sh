@@ -188,6 +188,17 @@ function ensure_claude_notifications() {
   run_cmd "${init}"
 }
 
+function ensure_git_health() {
+  local script="$HOME/.config/bin/git-health"
+  if [[ ! -x "${script}" ]]; then
+    log::warn "git-health missing at ${script}, skipping"
+    return
+  fi
+  # Installs the hourly launchd job and removes git's own maintenance jobs. Repos
+  # opt in later: 'git health --register' inside each clone.
+  run_cmd "${script}" --install
+}
+
 # Ensure we have crucial programs installed
 function main() {
   ensure_brew || return 1
@@ -197,6 +208,7 @@ function main() {
   ensure_terminal_nerdfont
   ensure_karabiner
   ensure_claude_notifications
+  ensure_git_health
 }
 
 main "$@"
