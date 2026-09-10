@@ -18,4 +18,9 @@ export const shortcuts = [
     .manipulators([
       map('c', 'Hyper').to(karabiner_script("claude-notification-click-simulator")),
     ]),
+
+  rule('Hyper+O → oneshot picker (tmux popup on the active client; Terminal window without tmux)')
+    .manipulators([
+      map('o', 'Hyper').to(karabiner_script("oneshot-popup")),
+    ]),
 ]
