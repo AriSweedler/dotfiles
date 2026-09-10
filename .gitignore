@@ -9,6 +9,7 @@
 .azure/
 .bash_history
 .bashrc*
+.bundle/
 .cagent/
 .cargo/
 .cdk8s-cli.version
@@ -55,6 +56,7 @@
 .hyperbase/
 .jenv/
 .kube/
+.lesshsQ
 .lesshst
 .m2/
 .mono/
