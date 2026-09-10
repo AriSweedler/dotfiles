@@ -1,6 +1,6 @@
 # Dotfiles Hooks
 
-Git hooks for the dotfiles bare repo (`~/dotfiles`).
+Git hooks for the dotfiles bare repo (`~/dotfiles.git`).
 
 These hooks are versioned in the dotfiles working tree but must be explicitly
 wired up after a fresh clone, since `core.hooksPath` is a repo-local setting.

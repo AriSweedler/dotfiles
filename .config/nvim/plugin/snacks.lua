@@ -94,7 +94,7 @@ block("Snacks File Picker", "<C-T>", function(bufmap)
 	bufmap("d", function()
 		s.picker_git_files({
 			title = "Dotfiles",
-			git_dir = vim.fn.expand("$HOME/dotfiles"),
+			git_dir = vim.fn.expand("$HOME/dotfiles.git"),
 			work_tree = vim.fn.expand("$HOME"),
 		})
 	end, "Dotfiles")

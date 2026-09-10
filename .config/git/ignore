@@ -12,7 +12,7 @@ tags
 .local
 
 # Because of https://www.atlassian.com/git/tutorials/dotfiles
-dotfiles
+dotfiles.git
 
 # Misc utilities
 .cache
