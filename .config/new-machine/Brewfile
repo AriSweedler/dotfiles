@@ -1,0 +1,75 @@
+# Packages every machine gets. Installed by bin/setup-new-machine via
+# `brew bundle`. Work-specific tools (bazelisk, awscli, spr, ...) are installed
+# by company tooling, not here. Commented-out entries were deliberately
+# excluded; don't uncomment without asking.
+
+tap "homebrew/autoupdate"
+
+# Unix essentials
+brew "awk"
+brew "coreutils"
+brew "curl"
+brew "git"
+brew "watch"
+brew "wget"
+
+# Nicer CLI
+brew "bat"
+brew "fd"
+# brew "ffmpeg"
+brew "fzf"
+brew "git-delta"
+brew "jq"
+brew "ripgrep"
+brew "starship"     # shell prompt
+brew "tmux"
+brew "tmuxinator"
+brew "tmuxinator-completion"
+brew "tree"
+brew "yq"
+cask "font-caskaydia-mono-nerd-font"  # Nerd Font for the terminal
+
+# Shells. /bin/bash is 3.2; the local-dotfiles pre-commit hook needs bash 5 (mapfile).
+brew "bash"
+brew "zsh"
+brew "zsh-vi-mode"
+
+# Lang: Go
+brew "go"
+brew "gopls"        # Go language server
+# cask "goland"
+
+# Lang: Java
+brew "jenv"
+# cask "intellij-idea"
+
+# Editor
+brew "bob"          # nvim version manager; setup-new-machine installs neovim through it
+
+# Lang: misc
+brew "lua"
+brew "lua-language-server"
+brew "tree-sitter"
+brew "tree-sitter-cli"
+brew "pipx"
+brew "uv"           # fast Python package manager
+brew "python"
+# brew "node"       # managed by company tooling; karabiner bake needs npm from it
+brew "shellcheck"
+brew "terraform-ls" # Terraform language server
+# cask "visual-studio-code"
+
+# Data
+brew "redis"
+
+# Infra
+brew "kubectx"      # kx/knx: quick k8s context/namespace switching
+brew "kubectl"
+brew "terraform"
+
+# Personal
+cask "1password-cli"
+cask "karabiner-elements"
+cask "raycast"
+cask "spotify"
+brew "terminal-notifier"  # Claude Code notification hook (~/.config/claude) and git-health

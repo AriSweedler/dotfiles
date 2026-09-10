@@ -5,7 +5,7 @@
 #   2. Ensures ~/.claude/settings.json's Notification hook points at
 #      bin/notification.sh in this directory.
 #
-# Safe to re-run. Used by ~/.config/new-machine.sh and runnable on demand.
+# Safe to re-run. Used by ~/.config/new-machine/bin/setup-new-machine and runnable on demand.
 
 set -u
 

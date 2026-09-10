@@ -82,7 +82,7 @@ each script's runs in their own directory keeps them easy to correlate.
 2. Updates `~/.claude/settings.json` so the `Notification` hook points at
    `bin/notification-fire.sh`.
 
-It is wired into `~/.config/new-machine.sh` (`ensure_claude_notifications`)
+It is wired into `~/.config/new-machine/bin/setup-new-machine` (`ensure_claude_notifications`)
 so a fresh machine gets it as part of the regular bootstrap. Safe to run by
 hand any time:
 

@@ -33,12 +33,11 @@ bindkey "^X^E" edit-command-line
 # Ctrl+X Ctrl+_ to redo
 bindkey '^X^_' redo
 
-# Easily edit my machine's setup script. This script makes sure I have
-# everything I expect on a machine. I have to update it if I install new
-# permanent applications (language servers, command-line utilities, apps via
-# brew, etc.)
+# Edit the new-machine Brewfile: the list of everything I expect installed
+# permanently (language servers, CLI utilities, apps). Applied by
+# ~/.config/new-machine/bin/setup-new-machine.
 function vnew() {
-  vi "${HOME}/.config/new-machine.sh"
+  vi "${HOME}/.config/new-machine/Brewfile"
 }
 
 alias pbl=pbpastelinks

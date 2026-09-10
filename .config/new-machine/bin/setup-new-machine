@@ -1,0 +1,377 @@
+#!/usr/bin/env zsh
+#
+# Bring a fresh macOS machine up to the dotfiles baseline. Idempotent: every
+# step checks before it acts, so re-run it any time.
+#
+# Packages come from ../Brewfile (brew bundle). This script handles what brew
+# can't: brew itself, the two dotfiles bare repos and their hooks, neovim via
+# bob, Claude Code, and the launchd jobs.
+#
+# Resources needed before $HOME is checked out (the Brewfile, the logging lib,
+# the local-dotfiles allowlist) resolve relative to this file, so the script
+# runs from any checkout. Steps that act on the machine use $HOME/.config.
+#
+#   setup-new-machine            # bring the machine to baseline
+#   setup-new-machine --dry-run  # log every mutation instead of running it
+set -euo pipefail
+
+readonly SCRIPT_DIR="${0:A:h}"
+readonly NEW_MACHINE_DIR="${SCRIPT_DIR:h}"
+readonly CHECKOUT_CONFIG_DIR="${NEW_MACHINE_DIR:h}"
+readonly BREWFILE="${NEW_MACHINE_DIR}/Brewfile"
+readonly LDF_EXCLUDE_TEMPLATE="${NEW_MACHINE_DIR}/local-dotfiles-exclude"
+
+readonly LOG_LIB="${CHECKOUT_CONFIG_DIR}/zsh/plugins/log.zsh"
+if [[ ! -r "${LOG_LIB}" ]]; then
+  print -u2 "[ERROR] missing logging lib | path='${LOG_LIB}'"
+  exit 1
+fi
+source "${LOG_LIB}"
+
+# .zshenv exports these once $HOME is checked out; the first run predates that.
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-${HOME}/.config}"
+export XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"
+export XDG_STATE_HOME="${XDG_STATE_HOME:-${HOME}/.local/state}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${HOME}/.cache}"
+
+readonly BREW_INSTALLER="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
+readonly CLAUDE_INSTALLER="https://claude.ai/install.sh"
+readonly DF_REMOTE="${DOTFILES_REMOTE:-git@github.com:AriSweedler/dotfiles.git}"
+readonly DF_GIT_DIR="${HOME}/dotfiles.git"
+readonly DF_HOOKS="${HOME}/.config/git/dotfiles-hooks"
+readonly LDF_GIT_DIR="${HOME}/.local/local-dotfiles.git"
+readonly LDF_HOOKS="${HOME}/.config/git/local-dotfiles-hooks"
+
+help() {
+  # log.zsh keeps its colors as literal '\033' text for echo -e; a heredoc needs real escapes.
+  local green=$'\e[32m' bold=$'\e[1m' rst=$'\e[0m'
+  cat <<EOF
+${green}setup-new-machine${rst} — bring a fresh macOS machine up to the dotfiles baseline
+
+${bold}Usage:${rst}
+  setup-new-machine [--dry-run]
+
+${bold}Steps${rst} (in order; each is idempotent; a failed step does not stop the rest):
+  ensure_brew                  Install Homebrew (aborts the run if this fails)
+  ensure_brew_pkgs             brew bundle install --no-upgrade --file=${BREWFILE}
+  ensure_dotfiles_repo         Bare-clone the shared repo to ${DF_GIT_DIR}, check out into \$HOME,
+                               set core.hooksPath to ${DF_HOOKS}
+  ensure_local_dotfiles_repo   git init --bare ${LDF_GIT_DIR}, install the info/exclude allowlist,
+                               set core.hooksPath to ${LDF_HOOKS}; the remote is one private repo
+                               per machine, so it is printed as a manual step
+  ensure_bob_neovim            bob install latest && bob use latest
+  ensure_claude                Claude Code installer
+  ensure_terminal_nerdfont     Remind to set a Nerd Font as the terminal font (manual)
+  ensure_karabiner             Bake karabiner.json (skipped without npm)
+  ensure_claude_notifications  ~/.config/claude/bin/initialize.sh
+  ensure_git_health            git-health --install (hourly launchd job)
+
+${bold}Options:${rst}
+  --dry-run   Log every mutating command instead of running it
+  -h, --help  Show this help
+
+${bold}Environment:${rst}
+  DOTFILES_REMOTE   Shared dotfiles repo URL (default: ${DF_REMOTE})
+EOF
+}
+
+# ── Parse ────────────────────────────────────────────────────────────────────
+dry_run=0
+while (( $# > 0 )); do
+  case "${1}" in
+    -h|--help) help; exit 0 ;;
+    --dry-run) dry_run=1; shift ;;
+    *) log::err "Unknown flag | flag='${1}'"; help; exit 1 ;;
+  esac
+done
+
+#######################################
+# Run one mutating command, or log it under --dry-run. Named run_cmd_* so the
+# log preamble attributes the line to the calling ensure_* step.
+# Globals: dry_run
+# Returns: the command's exit code (0 under --dry-run)
+#######################################
+run_cmd_mutating() {
+  if (( dry_run )); then
+    log::info "dry-run, would run | cmd='$*'"
+    return 0
+  fi
+  run_cmd "$@"
+}
+
+ensure_brew() {
+  if command -v brew &> /dev/null; then
+    log::info "brew is installed | brew='$(command -v brew)'"
+    return 0
+  fi
+  if (( dry_run )); then
+    log::info "dry-run, would install brew | installer='${BREW_INSTALLER}'"
+    return 0
+  fi
+  log::info "Installing brew | installer='${BREW_INSTALLER}'"
+  /bin/bash -c "$(curl -fsSL "${BREW_INSTALLER}")"
+  # A fresh install is not on PATH until the shell is re-initialized.
+  local prefix
+  for prefix in /opt/homebrew /usr/local; do
+    if [[ -x "${prefix}/bin/brew" ]]; then
+      eval "$("${prefix}/bin/brew" shellenv)"
+      break
+    fi
+  done
+  if ! command -v brew &> /dev/null; then
+    log::err "brew install failed | expected='/opt/homebrew/bin/brew or /usr/local/bin/brew'"
+    return 1
+  fi
+}
+
+# --no-upgrade on both commands: an outdated package still satisfies the check,
+# and install never upgrades. Matches the old script, which only ever installed
+# what was missing.
+ensure_brew_pkgs() {
+  if [[ ! -f "${BREWFILE}" ]]; then
+    log::err "Brewfile missing | path='${BREWFILE}'"
+    return 1
+  fi
+  if ! command -v brew &> /dev/null; then
+    log::warn "brew not on PATH, skipping Brewfile | brewfile='${BREWFILE}'"
+    return 0
+  fi
+  if brew bundle check --no-upgrade --file="${BREWFILE}" &> /dev/null; then
+    log::info "Brewfile satisfied | brewfile='${BREWFILE}'"
+    return 0
+  fi
+  log::INFO "$(brew bundle check --no-upgrade --verbose --file="${BREWFILE}" 2>&1 || true)"
+  run_cmd_mutating brew bundle install --no-upgrade --file="${BREWFILE}"
+}
+
+#######################################
+# Populate $HOME from the bare clone. Fails, listing the conflicting files,
+# when $HOME already holds files the checkout would overwrite; nothing is
+# moved or deleted on the user's behalf.
+# Globals: DF_GIT_DIR, HOME, dry_run
+#######################################
+checkout_dotfiles_worktree() {
+  if (( dry_run )); then
+    log::info "dry-run, would check out dotfiles | git_dir='${DF_GIT_DIR}' work_tree='${HOME}'"
+    return 0
+  fi
+  local out
+  if out="$(git --git-dir="${DF_GIT_DIR}" --work-tree="${HOME}" checkout 2>&1)"; then
+    log::info "checked out dotfiles | work_tree='${HOME}'"
+    return 0
+  fi
+  log::err "checkout failed; move the listed files aside and re-run | work_tree='${HOME}'"
+  log::ERR "${out}"
+  return 1
+}
+
+#######################################
+# core.hooksPath is repo-local, so hooks versioned in the dotfiles tree must be
+# wired on every machine.
+# Arguments: git dir, hooks dir
+#######################################
+ensure_hooks_path() {
+  local git_dir="${1}" hooks_dir="${2}"
+  if [[ ! -d "${git_dir}" ]]; then
+    log::info "repo not created yet, hooks wired on a real run | git_dir='${git_dir}' hooks_dir='${hooks_dir}'"
+    return 0
+  fi
+  local current
+  current="$(git --git-dir="${git_dir}" config --local --get core.hooksPath 2> /dev/null || true)"
+  if [[ "${current}" == "${hooks_dir}" ]]; then
+    log::info "hooks wired | git_dir='${git_dir}' hooks_dir='${hooks_dir}'"
+    return 0
+  fi
+  run_cmd_mutating git --git-dir="${git_dir}" config --local core.hooksPath "${hooks_dir}"
+}
+
+ensure_dotfiles_repo() {
+  if [[ -d "${DF_GIT_DIR}" ]]; then
+    log::info "dotfiles bare repo present | git_dir='${DF_GIT_DIR}'"
+  else
+    run_cmd_mutating git clone --bare "${DF_REMOTE}" "${DF_GIT_DIR}" || return 1
+    checkout_dotfiles_worktree || return 1
+  fi
+  ensure_hooks_path "${DF_GIT_DIR}" "${DF_HOOKS}"
+}
+
+#######################################
+# The rules of an ignore file: comments and blank lines dropped, so two files
+# that differ only in commentary compare equal.
+# Arguments: path
+#######################################
+exclude_rules() {
+  grep -vE '^[[:space:]]*(#|$)' "${1}" || true
+}
+
+#######################################
+# info/exclude is the allowlist that makes `git ldf add -A` safe. Installed from
+# the versioned template over git's stock (comment-only) file; a machine whose
+# rules differ keeps its copy and is told how to diff.
+# Globals: LDF_GIT_DIR, LDF_EXCLUDE_TEMPLATE
+#######################################
+ensure_local_dotfiles_exclude() {
+  local exclude="${LDF_GIT_DIR}/info/exclude"
+  if [[ ! -r "${LDF_EXCLUDE_TEMPLATE}" ]]; then
+    log::err "allowlist template missing | path='${LDF_EXCLUDE_TEMPLATE}'"
+    return 1
+  fi
+  if [[ ! -d "${LDF_GIT_DIR}" ]]; then
+    log::info "repo not created yet, allowlist written on a real run | exclude='${exclude}' template='${LDF_EXCLUDE_TEMPLATE}'"
+    return 0
+  fi
+  local current_rules=""
+  if [[ -f "${exclude}" ]]; then
+    current_rules="$(exclude_rules "${exclude}")"
+  fi
+  if [[ -n "${current_rules}" && "${current_rules}" == "$(exclude_rules "${LDF_EXCLUDE_TEMPLATE}")" ]]; then
+    log::info "allowlist matches template | exclude='${exclude}'"
+    return 0
+  fi
+  if [[ -n "${current_rules}" ]]; then
+    log::warn "allowlist differs from template, keeping this machine's copy | exclude='${exclude}' diff='diff ${exclude} ${LDF_EXCLUDE_TEMPLATE}'"
+    return 0
+  fi
+  run_cmd_mutating mkdir -p "${exclude:h}"
+  run_cmd_mutating cp "${LDF_EXCLUDE_TEMPLATE}" "${exclude}"
+}
+
+report_local_dotfiles_remote() {
+  if [[ ! -d "${LDF_GIT_DIR}" ]]; then
+    return 0
+  fi
+  local url
+  url="$(git --git-dir="${LDF_GIT_DIR}" remote get-url origin 2> /dev/null || true)"
+  if [[ -n "${url}" ]]; then
+    log::info "local-dotfiles remote set | origin='${url}'"
+    return 0
+  fi
+  log::WARN "Manual step: the local-dotfiles remote is one private repo per machine
+  git ldf remote add origin <this machine's private repo>
+  git ldf push --set-upstream origin main   # after the first commit"
+}
+
+ensure_local_dotfiles_repo() {
+  if [[ -d "${LDF_GIT_DIR}" ]]; then
+    log::info "local-dotfiles bare repo present | git_dir='${LDF_GIT_DIR}'"
+  else
+    run_cmd_mutating git init --bare "${LDF_GIT_DIR}" || return 1
+  fi
+  local rc=0
+  ensure_local_dotfiles_exclude || rc=1
+  ensure_hooks_path "${LDF_GIT_DIR}" "${LDF_HOOKS}" || rc=1
+  report_local_dotfiles_remote
+  return "${rc}"
+}
+
+ensure_bob_neovim() {
+  if ! command -v bob &> /dev/null; then
+    log::err "bob not installed, cannot install neovim | fix='brew bundle (Brewfile lists bob)'"
+    return 1
+  fi
+  # Read all of `bob ls` rather than `| grep -q`: bob panics on a closed pipe.
+  if [[ "$(bob ls 2> /dev/null)" == *Used* ]]; then
+    log::info "neovim installed via bob"
+    return 0
+  fi
+  run_cmd_mutating bob install latest && run_cmd_mutating bob use latest
+}
+
+ensure_claude() {
+  if command -v claude &> /dev/null; then
+    log::info "Claude Code is installed | version='$(claude --version)'"
+    return 0
+  fi
+  if (( dry_run )); then
+    log::info "dry-run, would install Claude Code | installer='${CLAUDE_INSTALLER}'"
+    return 0
+  fi
+  log::info "Installing Claude Code | installer='${CLAUDE_INSTALLER}'"
+  curl -fsSL "${CLAUDE_INSTALLER}" | sh
+}
+
+ensure_terminal_nerdfont() {
+  if ! command -v brew &> /dev/null; then
+    log::warn "brew not on PATH, cannot check Nerd Fonts"
+    return 0
+  fi
+  local installed
+  if ! installed="$(brew list --cask 2> /dev/null | grep nerd-font)"; then
+    log::err "No Nerd Font installed via Homebrew | fix='brew bundle (Brewfile lists font-caskaydia-mono-nerd-font)'"
+    return 1
+  fi
+  # Setting the terminal font is manual.
+  log::WARN "Manual step: set a Nerd Font as the terminal font
+  * Terminal.app: Preferences -> Profiles -> Text -> Font
+  * iTerm2: Preferences -> Profiles -> Text -> Change Font
+Installed:
+$(printf "  * %s\n" "${installed}")"
+}
+
+ensure_karabiner() {
+  if ! command -v npm &> /dev/null; then
+    log::warn "npm not installed, skipping karabiner bake"
+    return 0
+  fi
+  run_cmd_mutating "${HOME}/.config/karabiner/bin/bake"
+}
+
+ensure_claude_notifications() {
+  local init="${HOME}/.config/claude/bin/initialize.sh"
+  if [[ ! -x "${init}" ]]; then
+    log::warn "claude initialize script missing, skipping | path='${init}'"
+    return 0
+  fi
+  run_cmd_mutating "${init}"
+}
+
+# Installs the hourly launchd job and removes git's own maintenance jobs.
+# Repos opt in later with 'git health --register' inside each clone.
+ensure_git_health() {
+  local script="${HOME}/.config/bin/git-health"
+  if [[ ! -x "${script}" ]]; then
+    log::warn "git-health missing, skipping | path='${script}'"
+    return 0
+  fi
+  if (( dry_run )); then
+    run_cmd "${script}" --install --dry-run
+    return 0
+  fi
+  run_cmd "${script}" --install
+}
+
+# Everything after brew is independent, so one failed step does not hide the
+# others; failures are collected and reported at the end.
+main() {
+  if (( dry_run )); then
+    log::warn "dry-run: no changes will be made"
+  fi
+  log::info "==> ensure_brew"
+  ensure_brew || return 1
+
+  local -a steps=(
+    ensure_brew_pkgs
+    ensure_dotfiles_repo
+    ensure_local_dotfiles_repo
+    ensure_bob_neovim
+    ensure_claude
+    ensure_terminal_nerdfont
+    ensure_karabiner
+    ensure_claude_notifications
+    ensure_git_health
+  )
+  local -a failed=()
+  local step
+  for step in "${steps[@]}"; do
+    log::info "==> ${step}"
+    "${step}" || failed+=("${step}")
+  done
+
+  if (( ${#failed[@]} > 0 )); then
+    log::err "steps failed | failed='${(j:, :)failed}'"
+    return 1
+  fi
+  log::info "machine is at baseline"
+}
+
+main "$@"
