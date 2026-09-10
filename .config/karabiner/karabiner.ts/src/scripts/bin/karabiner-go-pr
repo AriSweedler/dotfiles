@@ -21,10 +21,14 @@ if [[ -z "${clip}" ]]; then
   exit 1
 fi
 
-pr="${clip#\#}"
-if [[ ! "${pr}" =~ ^[0-9]+$ ]]; then
+# Accept the forms a PR number is usually copied in: "221676", "#221676",
+# "(#221676)" from a commit subject, or "221676." from the end of a sentence.
+# Kept in a variable: bash's [[ misparses the ';' in the bracket expression inline.
+readonly PR_NUMBER_REGEX='^\(?#?([0-9]+)[.,;:)]*$'
+if [[ ! "${clip}" =~ ${PR_NUMBER_REGEX} ]]; then
   notify_transient "go/pr" "${clip:0:20} is not a PR number" "${ALERT_GROUP}"
   exit 1
 fi
+pr="${BASH_REMATCH[1]}"
 
 open "http://go/pr/${pr}"
