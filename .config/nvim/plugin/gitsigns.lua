@@ -11,7 +11,7 @@ require("gitsigns").setup({
 		},
 		{
 			toplevel = vim.env.HOME .. "/.local",
-			gitdir = vim.env.HOME .. "/.local/ldf.git",
+			gitdir = vim.env.HOME .. "/.local/local-dotfiles.git",
 		},
 	},
 })

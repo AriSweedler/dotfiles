@@ -213,7 +213,7 @@ M.dotfiles_repo = {
 }
 
 M.local_dotfiles_repo = {
-	git_dir = vim.fn.expand("$HOME/.local/ldf.git"),
+	git_dir = vim.fn.expand("$HOME/.local/local-dotfiles.git"),
 	work_tree = vim.fn.expand("$HOME/.local"),
 	label = "[local]",
 }
