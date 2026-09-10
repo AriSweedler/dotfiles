@@ -7,7 +7,11 @@ require("gitsigns").setup({
 	worktrees = {
 		{
 			toplevel = vim.env.HOME,
-			gitdir = vim.env.HOME .. "/dotfiles",
+			gitdir = vim.env.HOME .. "/dotfiles.git",
+		},
+		{
+			toplevel = vim.env.HOME .. "/.local",
+			gitdir = vim.env.HOME .. "/.local/ldf.git",
 		},
 	},
 })

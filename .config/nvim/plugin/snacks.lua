@@ -93,11 +93,16 @@ block("Snacks File Picker", "<C-T>", function(bufmap)
 	})
 	bufmap("d", function()
 		s.picker_git_files({
-			title = "Dotfiles",
-			git_dir = vim.fn.expand("$HOME/dotfiles.git"),
-			work_tree = vim.fn.expand("$HOME"),
+			title = "Dotfiles + local dotfiles",
+			repos = { s.dotfiles_repo, s.local_dotfiles_repo },
 		})
-	end, "Dotfiles")
+	end, "Dotfiles (all)")
+	bufmap("ld", function()
+		s.picker_git_files({ title = "Local dotfiles", repos = { s.local_dotfiles_repo } })
+	end, "Local dotfiles only")
+	bufmap("Ld", function()
+		s.picker_git_files({ title = "Dotfiles", repos = { s.dotfiles_repo } })
+	end, "Dotfiles only (non-local)")
 	bufmap("l", Snacks.picker.files, nil, {
 		args = {
 			cwd = vim.fn.expand("$XDG_DATA_HOME"),

@@ -158,40 +158,64 @@ end
 -- Custom picker: git files from bare repo
 -- =============================================================================
 
---- @class GitFilesOpts
+--- @class BareRepo
 --- @field git_dir string
 --- @field work_tree string
---- @field title string
+--- @field label? string Shown before each filename when several repos are combined
 
---- Pick files tracked by a bare git repo (e.g. dotfiles).
+--- @class GitFilesOpts
+--- @field title string
+--- @field repos BareRepo[]
+
+--- Pick files tracked by one or more bare git repos (dotfiles, local dotfiles).
+--- A repo whose git_dir is missing (not bootstrapped on this machine) is skipped.
 --- @param opts GitFilesOpts
 function M.picker_git_files(opts)
 	local Snacks = require("snacks")
+	local prefix_labels = #opts.repos > 1
 	return Snacks.picker({
 		title = opts.title,
 		finder = function()
-			local cmd = {
-				"git",
-				"--git-dir=" .. opts.git_dir,
-				"--work-tree=" .. opts.work_tree,
-				"ls",
-				"-r",
-				"--name-only",
-			}
-			local filenames = vim.fn.systemlist(table.concat(cmd, " "))
-
 			local items = {}
-			for idx, filename in ipairs(filenames) do
-				table.insert(items, {
-					file = opts.work_tree .. "/" .. filename,
-					idx = idx,
-					score = 100,
-					text = filename,
-				})
+			for _, repo in ipairs(opts.repos) do
+				if vim.fn.isdirectory(repo.git_dir) == 1 then
+					local cmd = {
+						"git",
+						"--git-dir=" .. repo.git_dir,
+						"--work-tree=" .. repo.work_tree,
+						"ls",
+						"-r",
+						"--name-only",
+					}
+					for _, filename in ipairs(vim.fn.systemlist(table.concat(cmd, " "))) do
+						local text = filename
+						if prefix_labels and repo.label then
+							text = repo.label .. " " .. filename
+						end
+						table.insert(items, {
+							file = repo.work_tree .. "/" .. filename,
+							idx = #items + 1,
+							score = 100,
+							text = text,
+						})
+					end
+				end
 			end
 			return items
 		end,
 	})
 end
+
+M.dotfiles_repo = {
+	git_dir = vim.fn.expand("$HOME/dotfiles.git"),
+	work_tree = vim.fn.expand("$HOME"),
+	label = "[dotfiles]",
+}
+
+M.local_dotfiles_repo = {
+	git_dir = vim.fn.expand("$HOME/.local/ldf.git"),
+	work_tree = vim.fn.expand("$HOME/.local"),
+	label = "[local]",
+}
 
 return M
