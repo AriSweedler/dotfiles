@@ -140,7 +140,7 @@ Pick a oneshot command from the merged entry files and run it. Selecting an
 entry cds to its pwd (if set), asks its prompt (if set), interactively
 resolves its flags/subcommands (if any), then evals the assembled command —
 in the popup, or in a new tmux window for window entries. A direct key runs
-its entry at once; the picker header lists them. The entry schema is
+its entry at once; they are listed under "instant-triggers". The entry schema is
 documented at the top of this script.
 
 Sources (later wins on a duplicate name):
@@ -369,21 +369,27 @@ function tmux_oneshot::_menu() {
           + (if ((.flags // []) + (.subcommands // []) | length) > 0 then " …" else "" end)
           + (if .description then "  # " + .description else "" end)
           + (if .pwd then " @ " + .pwd else "" end))) | ltrimstr(" ");
+    def keylabel: .key | sub("^ctrl-"; "⌃") | sub("^alt-"; "⌥") | sub("^f(?<n>[0-9]+)$"; "F\(.n)");
     def render($w): (.name | if length > $w then .[:$w-1] + "…" else . end) as $n
       | "\(.idx)\t" + (if .text == "" then $n else $n + (" " * ($w - ($n | length) + 2)) + .text end);
-    (to_entries | map({idx: (.key | tostring), g: (.value | gname), leaf: (.value | leaf),
+    (to_entries | map({idx: (.key | tostring), g: (.value | gname), leaf: (.value | leaf), key: .value.key,
                        name: (.value.menu.name // .value.cmd // "?"), text: (.value | body)})) as $all
     | (if $group != "" then
          [$all[] | select(.g == $group) | .name = .leaf]
        else
-         reduce $all[] as $e ([];
+         (reduce ($all[] | select(.key == null)) as $e ([];
            if $e.g == "" then . + [$e]
            elif any(.[]; .idx == "g:" + $e.g) then map(if .idx == "g:" + $e.g then .leaves += [$e.leaf] else . end)
            else . + [{idx: ("g:" + $e.g), name: $e.g, leaves: [$e.leaf]}] end)
-         | map(if .leaves then .text = "▸ " + (.leaves | join(", ")) else . end)
+         | map(if .leaves then .text = "▸ " + (.leaves | join(", ")) else . end))
+         + ([$all[] | select(.key != null)] as $keyed
+            | if ($keyed | length) == 0 then []
+              else [{idx: "h:instant", name: "── instant-triggers ──", text: "", divider: true}]
+                   + [$keyed[] | .text = (if .text == "" then keylabel else .text + "   " + keylabel end)]
+              end)
        end) as $rows
-    | ([$rows[] | .name | length] | (max // 1) | if . > $cap then $cap else . end) as $w
-    | $rows[] | render($w)' \
+    | ([$rows[] | select(.divider | not) | .name | length] | (max // 1) | if . > $cap then $cap else . end) as $w
+    | $rows[] | if .divider then "\(.idx)\t\(.name)" else render($w) end' \
     "${TMUX_ONESHOT_DB}"
 }
 
@@ -430,8 +436,8 @@ function tmux_oneshot::_expect_keys() {
   return ${rc}
 }
 
-# Output: "ctrl-k→caffeinate   ctrl-g→go   ctrl-l→claude-link" — the picker header.
-function tmux_oneshot::_key_header() {
+# Output: "ctrl-k→caffeinate   ctrl-g→go" — the direct keys, for --debug.
+function tmux_oneshot::_key_list() {
   jq -r '[.[] | select(.key) | "\(.key)→\(.menu.name // .cmd)"] | join("   ")' "${TMUX_ONESHOT_DB}"
 }
 
@@ -442,7 +448,7 @@ function tmux_oneshot::_key_header() {
 # The per-row preview: "<tier> · <source file>", then the entry minus the
 # loader fields. One program for _pick and --debug, so the diagnostic runs
 # exactly what fzf runs.
-TMUX_ONESHOT_JQ_PREVIEW='if ($i | startswith("g:")) then ($i[2:]) as $g | "group · \($g)/", ([.[] | .menu.name // "" | select(startswith($g + "/")) | .[($g | length) + 1:]] | join("   ")) else .[($i | tonumber)] | "\(._tier // "db") · \(._src // env.TMUX_ONESHOT_DB)", (del(._tier, ._src) | tojson) end'
+TMUX_ONESHOT_JQ_PREVIEW='if ($i | startswith("g:")) then ($i[2:]) as $g | "group · \($g)/", ([.[] | .menu.name // "" | select(startswith($g + "/")) | .[($g | length) + 1:]] | join("   ")) elif ($i | startswith("h:")) then "instant-triggers: press the key instead of typing", ([.[] | select(.key) | "\(.key)→\(.menu.name // .cmd)"] | join("   ")) else .[($i | tonumber)] | "\(._tier // "db") · \(._src // env.TMUX_ONESHOT_DB)", (del(._tier, ._src) | tojson) end'
 
 # Interactive top-level picker. Args pass through to fzf (e.g. --query).
 # --sync completes the list before the first key is processed; a type-ahead
@@ -450,17 +456,15 @@ TMUX_ONESHOT_JQ_PREVIEW='if ($i | startswith("g:")) then ($i[2:]) as $g | "group
 # accepted against a stale list could run the wrong entry). The exact-name
 # rule in _resolve_pick is the determinism guarantee.
 function tmux_oneshot::_pick() {
-  local menu out rc keys header
+  local menu out rc keys
   menu="$(tmux_oneshot::_menu)"
   if [[ -z "${menu}" ]]; then
     log::err "No entries | db='${TMUX_ONESHOT_DB}'"
     return 1
   fi
   keys="$(tmux_oneshot::_expect_keys)"
-  header="$(tmux_oneshot::_key_header)"
   local -a key_args
   [[ -n "${keys}" ]] && key_args+=(--expect="${keys}")
-  [[ -n "${header}" ]] && key_args+=(--header="${header}")
   out="$(tmux_oneshot::_fzf --select-1 "$@" "${TMUX_ONESHOT_FZF_MATCH_ARGS[@]}" \
       --sync --print-query --bind 'ctrl-j:ignore' "${key_args[@]}" \
       --preview "jq -r --arg i {1} ${(qq)TMUX_ONESHOT_JQ_PREVIEW} ${(qq)TMUX_ONESHOT_DB}" \
@@ -541,7 +545,7 @@ function tmux_oneshot::_resolve_pick() {
     echo "${idx}"
     return 0
   fi
-  if [[ -n "${sel}" ]]; then
+  if [[ -n "${sel}" && "${sel}" != h:* ]]; then
     echo "${sel%%$'\t'*}"
     return 0
   fi
@@ -570,22 +574,32 @@ function tmux_oneshot::action::debug() {
     return 1
   fi
   log::info "Debug render | db='${TMUX_ONESHOT_DB}' entries='${entries}'"
-  # Top-level rows = ungrouped entries + one per group; every hidden idx must be
-  # a real entry index or a g:<group> the DB actually has.
+  # Top-level rows = unkeyed ungrouped entries + one per group + (when any entry has a key)
+  # the instant-triggers divider and one row per keyed entry; every hidden idx must be a real
+  # entry index, a g:<group> the DB has, or the divider.
   local -i expected_rows
-  expected_rows="$(jq '[.[] | (.menu.name // "") | if contains("/") then "g:" + split("/")[0] else null end]
+  expected_rows="$(jq '[.[] | select(.key == null) | (.menu.name // "") | if contains("/") then "g:" + split("/")[0] else null end]
     | (map(select(. == null)) | length) + (map(select(. != null)) | unique | length)' "${TMUX_ONESHOT_DB}")"
+  local -i keyed
+  keyed="$(jq '[.[] | select(.key)] | length' "${TMUX_ONESHOT_DB}")"
+  (( keyed > 0 )) && (( expected_rows += keyed + 1 ))
   local -i last=-1
   print -r -- "── menu"
   for line in ${(f)menu}; do
     idx="${line%%$'\t'*}"
     print -r -- "  ${line#*$'\t'}"
-    if [[ "${idx}" == g:* ]]; then
+    if [[ "${idx}" == h:instant ]]; then
+      :
+    elif [[ "${idx}" == g:* ]]; then
       if [[ "$(jq -r --arg g "${idx#g:}" '[.[] | .menu.name // "" | select(startswith($g + "/"))] | length' "${TMUX_ONESHOT_DB}")" == 0 ]]; then
         log::err "Group row without members | group='${idx#g:}'"
         rc=1
       fi
-    elif [[ "${idx}" != <-> ]] || (( idx <= last || idx >= entries )); then
+    elif [[ "${idx}" != <-> ]] || (( idx >= entries )); then
+      log::err "Hidden index invalid | got='${idx}' entries='${entries}'"
+      rc=1
+    elif (( idx <= last )) && [[ "${line}" != *$'\t'*"⌃"* && "${line}" != *$'\t'*"⌥"* && "${line}" != *$'\t'*" F"[0-9]* ]]; then
+      # Keyed rows sit after the divider and may restart the index sequence.
       log::err "Hidden index out of order | after='${last}' got='${idx}'"
       rc=1
     else
@@ -612,7 +626,7 @@ function tmux_oneshot::action::debug() {
   keys="$(tmux_oneshot::_expect_keys)" || rc=1
   print -r -- "── direct keys"
   print -r -- "  expect: ${keys}"
-  print -r -- "  header: $(tmux_oneshot::_key_header)"
+  print -r -- "  keys:   $(tmux_oneshot::_key_list)"
   if (( TMUX_ONESHOT_LOAD_SKIPPED + TMUX_ONESHOT_LOAD_SHADOWED + TMUX_ONESHOT_LOAD_KEYCLASH > 0 )); then
     log::err "Load collisions | skipped='${TMUX_ONESHOT_LOAD_SKIPPED}' shadowed='${TMUX_ONESHOT_LOAD_SHADOWED}' keyclash='${TMUX_ONESHOT_LOAD_KEYCLASH}'"
     rc=1
