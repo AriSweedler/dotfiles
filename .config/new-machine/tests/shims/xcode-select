@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Fake xcode-select: the Command Line Tools exist when $XCODE_SELECT_SHIM_STATE/installed does.
+# --install creates it at once, standing in for the user clicking Install and the pkg finishing,
+# so bootstrap's poll loop ends on its first probe.
+set -u
+printf '%s\n' "$*" >> "${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/xcode-select.log"
+state="${XCODE_SELECT_SHIM_STATE:?XCODE_SELECT_SHIM_STATE unset}"
+case "${1:-}" in
+  -p)
+    if [[ -e "${state}/installed" ]]; then
+      printf '/Library/Developer/CommandLineTools\n'
+    else
+      printf 'xcode-select: error: unable to get active developer directory\n' >&2
+      exit 2
+    fi ;;
+  --install)
+    mkdir -p "${state}"
+    touch "${state}/installed"
+    printf 'xcode-select: note: install requested for command line developer tools\n' >&2 ;;
+  *)
+    printf 'xcode-select shim: unsupported: %s\n' "$*" >&2
+    exit 64 ;;
+esac

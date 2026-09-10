@@ -100,7 +100,7 @@ world_new() {
   [[ -z "${FIX}" ]] || abort "world_new without world_teardown"
   local tmp_root fix_real home_real
   tmp_root="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
-  FIX="$(mktemp -d)"
+  FIX="$(mktemp -d "${tmp_root}/nm-test.XXXXXX")"
   fix_real="$(cd "${FIX}" && pwd -P)"
   [[ "${fix_real}" == "${tmp_root}/"* ]] || abort "mktemp dir is not under ${tmp_root}: ${fix_real}"
   [[ "${fix_real}" != "${ORIG_HOME}" && "${fix_real}" != "${ORIG_HOME}/"* ]] || abort "mktemp dir is inside the real home: ${fix_real}"
@@ -130,6 +130,7 @@ world_new() {
   # The default 60 s retry would stall every erroring verify test; the retry test sets its own.
   export NEW_MACHINE_RETRY_SECS=0
   export BREW_SHIM_LOG_DIR="${FIX}/shimlog" LAUNCHCTL_SHIM_STATE="${FIX}/launchctl"
+  export XCODE_SELECT_SHIM_STATE="${FIX}/xcode-select"
   export GIT_CONFIG_NOSYSTEM=1
   mkdir -p "${BREW_SHIM_LOG_DIR}" "${LAUNCHCTL_SHIM_STATE}"
   unset NEW_MACHINE_INVOKED_BY BREW_SHIM_ALLOW_MUTATION BREW_SHIM_FIXTURE BOB_SHIM_LS BOB_SHIM_RC
@@ -335,7 +336,7 @@ shim_log() { local f="${BREW_SHIM_LOG_DIR}/$1.log"; if [[ -f "${f}" ]]; then cat
 hermetic_env() {
   HERMETIC_ENV=("HOME=${HOME}" "PATH=${PATH}" "TZ=${TZ:-UTC}" "GIT_CONFIG_NOSYSTEM=1")
   local v
-  for v in "${!XDG_@}" "${!NEW_MACHINE_@}" "${!BREW_SHIM_@}" "${!BOB_SHIM_@}" "${!LAUNCHCTL_SHIM_@}"; do
+  for v in "${!XDG_@}" "${!NEW_MACHINE_@}" "${!BREW_SHIM_@}" "${!BOB_SHIM_@}" "${!LAUNCHCTL_SHIM_@}" "${!XCODE_SELECT_SHIM_@}"; do
     HERMETIC_ENV+=("${v}=${!v}")
   done
   if [[ -n "${DOTFILES_REMOTE+x}" ]]; then HERMETIC_ENV+=("DOTFILES_REMOTE=${DOTFILES_REMOTE}"); fi
@@ -349,6 +350,39 @@ nm_run() {
   hermetic_env
   RC=0
   env -i "${HERMETIC_ENV[@]}" "${FIX}/tools/zsh" "${script}" "$@" > "${FIX}/nm.out" 2> "${FIX}/nm.err" || RC=$?
+  OUT="$(cat "${FIX}/nm.out")"
+  ERR="$(cat "${FIX}/nm.err")"
+}
+
+# bs ARGS...: bin/bootstrap.sh as the one-liner runs it. NEW_MACHINE_SHARED_DIR is withheld so
+# the hand-off has to find new-machine in the checkout it just made; bs_argv and bs_pipe are the
+# `sh -c "$(curl …)"` and `curl … | sh` shapes.
+bs() { bs_run /bin/sh "${REPO_DIR}/bin/bootstrap.sh" "$@"; }
+bs_argv() { bs_run /bin/sh -c "$(cat "${REPO_DIR}/bin/bootstrap.sh")" bootstrap "$@"; }
+bs_pipe() { bs_run_stdin "${REPO_DIR}/bin/bootstrap.sh" /bin/sh; }
+
+bs_env() {
+  hermetic_env
+  BS_ENV=()
+  local v
+  for v in "${HERMETIC_ENV[@]}"; do
+    [[ "${v}" == NEW_MACHINE_SHARED_DIR=* ]] || BS_ENV+=("${v}")
+  done
+}
+
+bs_run() {
+  bs_env
+  RC=0
+  env -i "${BS_ENV[@]}" "$@" > "${FIX}/nm.out" 2> "${FIX}/nm.err" || RC=$?
+  OUT="$(cat "${FIX}/nm.out")"
+  ERR="$(cat "${FIX}/nm.err")"
+}
+
+bs_run_stdin() {
+  local script="$1"; shift
+  bs_env
+  RC=0
+  cat "${script}" | env -i "${BS_ENV[@]}" "$@" > "${FIX}/nm.out" 2> "${FIX}/nm.err" || RC=$?
   OUT="$(cat "${FIX}/nm.out")"
   ERR="$(cat "${FIX}/nm.err")"
 }

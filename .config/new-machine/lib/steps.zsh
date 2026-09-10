@@ -208,7 +208,10 @@ check::brew() {
 }
 
 apply::brew() {
-  # The installer prompts on stdin unless NONINTERACTIVE is set.
+  # NONINTERACTIVE skips the installer's RETURN prompt (its stdout is our log file, so a prompt
+  # would look like a hang) but also makes it run `sudo -n`, which aborts on a cold ticket. sudo
+  # prompts on /dev/tty, which the watchdog-backgrounded step can still read.
+  run_cmd_mutating sudo -v || return 1
   run_cmd_mutating zsh -c 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL "$1")"' _ "${BREW_INSTALLER}"
 }
 

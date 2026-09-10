@@ -22,7 +22,7 @@ if [[ "$(uname -s)" != Darwin ]]; then
   exit 3
 fi
 if ! command -v jq >/dev/null 2>&1; then
-  print -u2 "[ERROR] jq is required | fix='brew install jq' path='${PATH}'"
+  print -u2 "[ERROR] jq is required (macOS 15+ ships /usr/bin/jq) | fix='brew install jq' path='${PATH}'"
   exit 3
 fi
 export NEW_MACHINE_SHARED_DIR="${NEW_MACHINE_SHARED_DIR:-${0:A:h:h}}"

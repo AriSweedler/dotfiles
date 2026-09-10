@@ -13,6 +13,22 @@ With this git repo, any machine can feel like home with a simple `git pull`.
 
 ## New machine
 
+Open Terminal and paste:
+
+```sh
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/AriSweedler/dotfiles/main/.config/new-machine/bin/bootstrap.sh)"
+```
+
+(`git.io/.ari` lands on this page.) That is `~/.config/new-machine/bin/bootstrap.sh`:
+the Command Line Tools if missing (click Install in the dialog), the bare clone into
+`~/dotfiles.git` (https for fetch, ssh for push), the checkout into `~`, then
+`new-machine setup`, which asks for your password once for Homebrew. Safe to re-run.
+Flags pass through: `sh -c "$(curl …)" bootstrap --dry-run`. Pushing needs this
+machine's ssh key on GitHub; `git_df_push` handles the rest. `DOTFILES_REMOTE=…`
+clones from elsewhere.
+
+By hand instead:
+
 ```zsh
 git clone --bare git@github.com:AriSweedler/dotfiles.git ~/dotfiles.git
 git --git-dir=~/dotfiles.git --work-tree=~ checkout
