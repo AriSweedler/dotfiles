@@ -75,3 +75,9 @@ cask "spotify"
 tap "jurplel/tap", trusted: true
 cask "instant-space-switcher"
 brew "terminal-notifier"  # Claude Code notification hook (~/.config/claude) and git-health
+
+# ── decreed via 'new-machine brew decree'; move into a section when tidying ──
+brew "rust-analyzer"
+brew "rustup"
+cask "google-chrome"
+cask "monitorcontrol"
