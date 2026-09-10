@@ -1,26 +1,59 @@
 #!/usr/bin/env zsh
 #
-# tmux-oneshot — pick a oneshot command from a JSON database via fzf and run
+# tmux-oneshot — pick a oneshot command from JSON entry files via fzf and run
 # it. Bound to <Prefix>C-k (see ~/.config/tmux/plugin/macros.conf), which
-# opens this in a tmux popup.
+# opens this in a tmux popup; Hyper+O (Karabiner, src/scripts/bin/oneshot-popup)
+# opens the same popup from any app.
 #
-# The database is a JSON list. Minimal entry: {"cmd": "killall Dock"}. Full
-# schema (everything but one of cmd/subcommands is optional):
+# Sources, merged in this order (a later definition of a menu.name wins but
+# keeps the first occurrence's menu position):
+#   1. ${XDG_CONFIG_HOME}/tmux_oneshot/*.json  tier "global" (df, every machine)
+#   2. ${XDG_DATA_HOME}/tmux_oneshot/*.json    tier "local"  (ldf, this machine)
+#   3. each dir in $TMUX_ONESHOT_DIRS (colon-separated)  tier "extra"
+# Every file is a JSON list; a file that is not one is skipped with an error
+# and its siblings still load. TMUX_ONESHOT_IGNORE_DIR_GLOBAL / _LOCAL
+# (non-empty) skip a tier. The merge is written to
+# ${XDG_STATE_HOME}/tmux_oneshot/index.json and TMUX_ONESHOT_DB points at it;
+# a TMUX_ONESHOT_DB exported by the caller is used as-is instead (single-file
+# mode — tests, one-off debugging).
 #
-#   cmd          command fragment
+# Minimal entry: {"cmd": "killall Dock"}. Full schema (everything but one of
+# cmd/subcommands is optional):
+#
+#   cmd          command fragment, eval'd in the popup's zsh
 #   pwd          cd here first (honored at the top level only)
 #   description  shown in menus after the cmd
-#   autodismiss  true: close the popup as soon as the command succeeds.
-#                Default false: hold the popup open (output stays readable)
-#                until Esc. Failures always hold.
+#   autodismiss  true: close the popup as soon as the command succeeds and
+#                flash "✓ <name>" on the tmux status line. Default false:
+#                hold the popup open (output stays readable) until Esc.
+#                Failures always hold. Ignored for window entries.
 #   menu         menu-line override: {"name", "text"}, both optional. The
 #                menu line is "<name>  <text>": name defaults to cmd, padded
 #                to a common column and truncated past 40 chars so lines
 #                never wrap; text defaults to the auto-generated body (args
 #                hint, description, pwd). menu.name doubles as the entry's
-#                key (unnamed entries keep 1-based index keys), so it must
-#                be unique.
-#   flags        multiselected at run time (tab: toggle, esc: none)
+#                key (unnamed entries keep 1-based index keys): the fuzzy
+#                target, the CLI argument, the --edit/--dry-run argument and
+#                the exact-name rule's match. Unique across every loaded
+#                file; case-sensitive (ap ≠ aP).
+#   key          fzf key name ("ctrl-k", "alt-x", "f5"): pressing it in the
+#                picker runs this entry at once, whatever is typed. Unique
+#                across files (a later duplicate loses its key). Reserved
+#                names are dropped with an error: the keys fzf must keep
+#                (enter esc tab btab ctrl-c ctrl-j ctrl-m up down ctrl-n
+#                ctrl-p ctrl-y ctrl-e) and the termios specials the cooked
+#                tty eats when the key is typed before fzf starts (ctrl-u
+#                ctrl-w ctrl-d ctrl-z ctrl-s ctrl-q ctrl-v ctrl-r ctrl-o
+#                ctrl-t ctrl-h bspace).
+#   window       run cmd in a new tmux window with this name instead of in
+#                the popup; the popup returns at once. In the window, success
+#                closes it and failure holds ("press any key"). Outside tmux
+#                the cmd runs inline with a warning.
+#   prompt       ask one line before running; the string is the prompt text,
+#                shown verbatim ("go/ "). The answer is exported as
+#                $ONESHOT_INPUT and cmd references it as "${ONESHOT_INPUT}"
+#                (expanded once by eval, never re-parsed). Empty answer aborts.
+#   flags        the builder: multiselected at run time (tab: toggle, esc: none)
 #     flag         e.g. "--verbose", or an env var name like "ACTION"
 #     type         "bool" (default: emits just the flag) or "kv"
 #     style        kv only — how the value attaches:
@@ -32,22 +65,25 @@
 #     description  shown in the flag menu
 #   subcommands  list of nested entries (recursive: cmd/flags/subcommands/
 #                description) — pick one, then its args resolve in turn
+#   _src, _tier  injected by the loader, never authored: the defining file
+#                and its tier ("global" | "local" | "extra"). Shown in the
+#                preview; used by --edit, --debug and --dry-run.
 #
-# Assembly order per level: cmd, then selected flags, then the chosen
-# subcommand's assembly. The top-level menu shows only cmd/description plus a
-# "…" hint when an entry has flags or subcommands — never the options.
+# flags/subcommands are a builder and strictly opt-in: an entry without them
+# never prompts (beyond its own `prompt`). Assembly order per level: cmd,
+# then selected flags, then the chosen subcommand's assembly. The top-level
+# menu shows only cmd/description plus a "…" hint when an entry has flags or
+# subcommands — never the options.
 #
 # Drives fzf directly: the whole menu is ONE jq pass emitting
 # "<0-based idx>\t<line>" with the index column hidden (--with-nth 2..), so
 # selection recovery is a parameter strip and the preview is one jq on the
-# picked index. The ZSH_EVAL_CONTEXT guard at the bottom keeps sourcing
-# (tests, which stub the _fzf/_read_value/_hold_until_escape seams) from
-# running the picker.
+# picked index. Direct keys ride fzf's --expect and are listed in the picker
+# header. The ZSH_EVAL_CONTEXT guard at the bottom keeps sourcing (tests,
+# which stub the _fzf/_read_value/_hold_until_escape seams) from running the
+# picker.
 
 source "${HOME}/.config/zsh/plugins/log.zsh"
-
-# Exported so the fzf preview shell resolves the same database.
-export TMUX_ONESHOT_DB="${TMUX_ONESHOT_DB:-${XDG_DATA_HOME:-${HOME}/.local/share}/tmux_oneshot/commands.json}"
 
 function tmux_oneshot() {
   local dep
@@ -58,29 +94,17 @@ function tmux_oneshot() {
     fi
   done
 
-  if [[ ! -e "${TMUX_ONESHOT_DB}" ]]; then
-    mkdir -p "${TMUX_ONESHOT_DB:h}"
-    cat > "${TMUX_ONESHOT_DB}" << 'EOF'
-[
-  {"cmd": "killall NotificationCenter", "autodismiss": true},
-  {"pwd": "~", "cmd": "echo 'hello from tmux-oneshot'",
-   "menu": {"name": "hello world", "text": "demo entry — edit me: tmux-oneshot --edit"}}
-]
-EOF
-    log::info "Seeded oneshot database | path='${TMUX_ONESHOT_DB}'"
-  fi
-
-  if ! jq -e 'type == "array"' "${TMUX_ONESHOT_DB}" &>/dev/null; then
-    log::err "Database is not a JSON list | path='${TMUX_ONESHOT_DB}'"
-    return 1
-  fi
+  case "${1:-}" in
+    -h|--help) tmux_oneshot::action::help; return 0;;
+  esac
+  tmux_oneshot::_load || return 1
 
   local -a fzf_args
   case "${1:-}" in
-    -h|--help)  tmux_oneshot::action::help; return 0;;
     --list)     tmux_oneshot::action::list; return $?;;
-    --edit)     tmux_oneshot::action::edit; return $?;;
+    --edit)     shift; tmux_oneshot::action::edit "$@"; return $?;;
     --debug)    tmux_oneshot::action::debug; return $?;;
+    --dry-run)  tmux_oneshot::action::dry_run "${2:?--dry-run requires a name}"; return $?;;
     -q|--query) fzf_args=(--query "${2:?-q requires a value}"); shift 2;;
     -*)
       log::err "Unknown option | option='${1}'"
@@ -100,22 +124,176 @@ EOF
 
 function tmux_oneshot::action::help() {
   echo -e "$(cat << EOF
-USAGE: tmux-oneshot [key]        # run an entry by menu.name or 1-based index
-       tmux-oneshot -q <query>   # open the picker with a prefilled query
-       tmux-oneshot --list       # print the keys, one per line
-       tmux-oneshot --edit       # open the database in \$EDITOR
-       tmux-oneshot --debug      # non-interactive: render + index + preview checks
-       tmux-oneshot --log        # print the per-run stderr log (popup errors land here)
+USAGE: tmux-oneshot [name]            # run an entry by menu.name or 1-based index
+       tmux-oneshot -q <query>        # open the picker with a prefilled query
+       tmux-oneshot --list            # print the names, one per line
+       tmux-oneshot --dry-run <name>  # print the entry's surface fields + assembled cmd, no eval
+       tmux-oneshot --edit [name]     # \$EDITOR on every source file, or on the one defining <name>
+       tmux-oneshot --debug           # non-interactive: sources + render + index + preview + key checks
+       tmux-oneshot --log             # print the per-run stderr log (popup errors land here)
 
-Pick a oneshot command from the JSON database and run it. Selecting an entry
-cds to its pwd (if set), interactively resolves its flags/subcommands (if
-any), then evals the assembled command. The entry schema is documented at
-the top of this script.
+Pick a oneshot command from the merged entry files and run it. Selecting an
+entry cds to its pwd (if set), asks its prompt (if set), interactively
+resolves its flags/subcommands (if any), then evals the assembled command —
+in the popup, or in a new tmux window for window entries. A direct key runs
+its entry at once; the picker header lists them. The entry schema is
+documented at the top of this script.
 
-Database: ${c_grey}${TMUX_ONESHOT_DB}${c_rst} (override with TMUX_ONESHOT_DB)
+Sources (later wins on a duplicate name):
+  global  ${c_grey}${XDG_CONFIG_HOME:-${HOME}/.config}/tmux_oneshot/*.json${c_rst}   skip: TMUX_ONESHOT_IGNORE_DIR_GLOBAL=1
+  local   ${c_grey}${XDG_DATA_HOME:-${HOME}/.local/share}/tmux_oneshot/*.json${c_rst}   skip: TMUX_ONESHOT_IGNORE_DIR_LOCAL=1
+  extra   \$TMUX_ONESHOT_DIRS, colon-separated dirs (currently: ${c_grey}${TMUX_ONESHOT_DIRS:-unset}${c_rst})
+  index   ${c_grey}${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/index.json${c_rst}   rebuilt every launch
+  TMUX_ONESHOT_DB=<file> forces single-file mode: that file only, no index.
 EOF
 )"
 }
+
+# ---------------------------------------------------------------------------
+# Loading
+# ---------------------------------------------------------------------------
+
+# Output: "tier\tdir" per source dir, in load order (later dirs win on
+# duplicate names). Missing default dirs are silent; a missing
+# TMUX_ONESHOT_DIRS entry was typed by hand, so it warns.
+function tmux_oneshot::_dirs() {
+  [[ -z "${TMUX_ONESHOT_IGNORE_DIR_GLOBAL:-}" ]] && print -r -- "global	${XDG_CONFIG_HOME:-${HOME}/.config}/tmux_oneshot"
+  [[ -z "${TMUX_ONESHOT_IGNORE_DIR_LOCAL:-}" ]]  && print -r -- "local	${XDG_DATA_HOME:-${HOME}/.local/share}/tmux_oneshot"
+  local d
+  for d in ${(s.:.)${TMUX_ONESHOT_DIRS:-}}; do
+    d="${d/#\~/${HOME}}"
+    if [[ ! -d "${d}" ]]; then
+      log::warn "Oneshot dir missing | dir='${d}'"
+      continue
+    fi
+    print -r -- "extra	${d}"
+  done
+  return 0
+}
+
+# Output: "tier\tfile" for every *.json across the dirs, name-sorted within
+# a dir. The tier travels with the dir; it is never inferred from the path.
+function tmux_oneshot::_files() {
+  local tier dir f
+  while IFS=$'\t' read -r tier dir; do
+    for f in "${dir}"/*.json(N.on); do print -r -- "${tier}	${f}"; done
+  done < <(tmux_oneshot::_dirs)
+}
+
+# Fresh machine: no entry file anywhere → starter entries into the local dir.
+# The global dir is df-managed and never seeded.
+function tmux_oneshot::_seed() {
+  [[ -n "${TMUX_ONESHOT_IGNORE_DIR_LOCAL:-}" ]] && return 0
+  local f="${XDG_DATA_HOME:-${HOME}/.local/share}/tmux_oneshot/commands.json"
+  mkdir -p "${f:h}" || return 1
+  cat > "${f}" << 'EOF'
+[
+  {"cmd": "killall NotificationCenter", "autodismiss": true},
+  {"pwd": "~", "cmd": "echo 'hello from tmux-oneshot'",
+   "menu": {"name": "hello world", "text": "demo entry — edit me: tmux-oneshot --edit"}}
+]
+EOF
+  log::info "Seeded oneshot database | path='${f}'"
+}
+
+# Load counters read by --debug (a healthy tree has all three at 0).
+typeset -gi TMUX_ONESHOT_LOAD_SKIPPED=0 TMUX_ONESHOT_LOAD_SHADOWED=0 TMUX_ONESHOT_LOAD_KEYCLASH=0
+
+# jq defs shared by the index writer and the collision report, so both see
+# the same merge: later definition wins its name but keeps the first
+# occurrence's row; a key already claimed by an earlier row is dropped from
+# the later one (fzf --expect needs each key once).
+TMUX_ONESHOT_JQ_MERGEDEF='
+  def k: (.menu.name // .cmd // "?");
+  def loc: "\(._tier):\(._src)";
+  def merge_names: reduce .[] as $e ([]; ($e | k) as $n
+    | if any(.[]; k == $n) then map(if k == $n then $e else . end) else . + [$e] end);
+  def clashing_keys: [range(0; length) as $i | .[$i].key as $key
+    | select($key != null and (([.[:$i][] | .key // empty] | index($key)) != null)) | $i];
+  def drop_clashing_keys: . as $m | reduce clashing_keys[] as $i ($m; .[$i] |= del(.key));
+'
+
+# Merges every source into the state-dir index and exports
+# TMUX_ONESHOT_DB=<index>, so every reader keeps its one-file contract. A
+# caller-exported TMUX_ONESHOT_DB means single-file mode (tests, debugging):
+# nothing is loaded.
+function tmux_oneshot::_load() {
+  [[ -n "${TMUX_ONESHOT_DB:-}" ]] && return 0
+  local -a files
+  files=(${(f)"$(tmux_oneshot::_files)"})
+  if (( ${#files} == 0 )); then
+    tmux_oneshot::_seed || return 1
+    files=(${(f)"$(tmux_oneshot::_files)"})
+  fi
+  if (( ${#files} == 0 )); then
+    log::err "No oneshot files found | dirs='$(tmux_oneshot::_dirs | cut -f2 | paste -sd: -)'"
+    return 1
+  fi
+
+  local line tier f part
+  local -a parts
+  for line in "${files[@]}"; do
+    tier="${line%%$'\t'*}"; f="${line#*$'\t'}"
+    if ! part="$(jq -c --arg tier "${tier}" --arg src "${f}" \
+        'if type == "array" then map(. + {_src: $src, _tier: $tier}) else error("not a JSON list") end' \
+        "${f}" 2>/dev/null)"; then
+      log::err "Skipping oneshot file: not a JSON list | path='${f}'"
+      (( TMUX_ONESHOT_LOAD_SKIPPED += 1 ))
+      continue
+    fi
+    parts+=("${part}")
+  done
+  if (( ${#parts} == 0 )); then
+    log::err "No loadable oneshot files | dirs='$(tmux_oneshot::_dirs | cut -f2 | paste -sd: -)' skipped='${TMUX_ONESHOT_LOAD_SKIPPED}'"
+    return 1
+  fi
+
+  local index="${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/index.json"
+  # Checked up front so an unwritable state dir is one error, not mkdir's or
+  # the redirection's message plus ours.
+  if ! mkdir -p "${index:h}" 2>/dev/null || [[ ! -w "${index:h}" ]]; then
+    log::err "Index dir not writable | dir='${index:h}'"
+    return 1
+  fi
+  # Written beside, then mv'd: two concurrent popups never read a half file.
+  if ! printf '%s\n' "${parts[@]}" \
+      | jq -s "${TMUX_ONESHOT_JQ_MERGEDEF} add | merge_names | drop_clashing_keys" > "${index}.$$"; then
+    rm -f "${index}.$$"
+    log::err "Cannot write index | path='${index}'"
+    return 1
+  fi
+  mv "${index}.$$" "${index}"
+  export TMUX_ONESHOT_DB="${index}"
+  tmux_oneshot::_report_collisions "${parts[@]}"
+}
+
+# Input: the tagged per-file arrays. Logs one warn per shadowed name and one
+# error per dropped key; bumps the counters --debug fails on.
+function tmux_oneshot::_report_collisions() {
+  local kind name kept dropped
+  while IFS=$'\t' read -r kind name kept dropped; do
+    case "${kind}" in
+      shadow)
+        log::warn "Shadowed oneshot | name='${name}' kept='${kept}' dropped='${dropped}'"
+        (( TMUX_ONESHOT_LOAD_SHADOWED += 1 ))
+        ;;
+      key)
+        log::err "Duplicate direct key dropped | key='${name}' kept='${kept}' dropped='${dropped}'"
+        (( TMUX_ONESHOT_LOAD_KEYCLASH += 1 ))
+        ;;
+    esac
+  done < <(printf '%s\n' "$@" | jq -rs "${TMUX_ONESHOT_JQ_MERGEDEF}"'
+    add
+    | (group_by(k) | .[] | select(length > 1) | . as $g
+        | "shadow\t\($g[0] | k)\t\($g[-1] | loc)\t\($g[:-1][] | loc)"),
+      (merge_names | . as $m | clashing_keys[] as $i
+        | "key\t\($m[$i].key)\t\($m | map(select(.key == $m[$i].key))[0] | loc)\t\($m[$i] | loc)")')
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# Keys and menu
+# ---------------------------------------------------------------------------
 
 # The one home for the keying rule: an entry's key is its menu.name, else
 # its 1-based index. Interpolated into every jq program that keys entries.
@@ -127,8 +305,19 @@ function tmux_oneshot::action::list() {
   jq -r "${TMUX_ONESHOT_JQ_KEYDEF} to_entries[] | entrykey" "${TMUX_ONESHOT_DB}"
 }
 
+# Input: [name]. With a name: the file defining that entry. Without: every
+# distinct source, in load order (single-file mode: the DB itself).
 function tmux_oneshot::action::edit() {
-  "${EDITOR:-vim}" "${TMUX_ONESHOT_DB}"
+  local -a files
+  if (( $# > 0 )); then
+    local idx
+    idx="$(tmux_oneshot::_index_or_die "${1}")" || return 1
+    files=("$(jq -r --argjson i "${idx}" '.[$i]._src // env.TMUX_ONESHOT_DB' "${TMUX_ONESHOT_DB}")")
+  else
+    files=(${(f)"$(jq -r '[.[] | ._src // env.TMUX_ONESHOT_DB]
+      | reduce .[] as $s ([]; if index($s) != null then . else . + [$s] end) | .[]' "${TMUX_ONESHOT_DB}")"})
+  fi
+  "${EDITOR:-vim}" "${files[@]}"
 }
 
 # Input: key (a menu.name, or a 1-based index for unnamed entries)
@@ -173,36 +362,154 @@ function tmux_oneshot::_menu() {
     "${TMUX_ONESHOT_DB}"
 }
 
-# Interactive top-level picker. Args pass through to fzf (e.g. --query).
-function tmux_oneshot::_pick() {
-  local menu picked
-  menu="$(tmux_oneshot::_menu)"
-  if [[ -z "${menu}" ]]; then
-    log::err "No entries in database | db='${TMUX_ONESHOT_DB}'"
+# Static match flags, shared with the ranking regression test so the test
+# can never pass on flags the picker does not use. chunk,index: the default
+# tiebreak (line length) ranks "apa" over "ap" whenever "ap" has the longer
+# description. No --nth: it indexes the --with-nth-transformed line
+# (name-only matching would be --nth 1).
+TMUX_ONESHOT_FZF_MATCH_ARGS=(--delimiter $'\t' --with-nth '2..' --tiebreak=chunk,index)
+
+# Keys fzf must keep, plus the termios specials a cooked tty consumes when
+# the key is typed before fzf enters raw mode (ctrl-u = VKILL, ctrl-w = VWERASE …).
+TMUX_ONESHOT_RESERVED_KEYS=(enter esc tab btab ctrl-c ctrl-j ctrl-m up down ctrl-n ctrl-p ctrl-y ctrl-e
+                            ctrl-u ctrl-w ctrl-d ctrl-z ctrl-s ctrl-q ctrl-v ctrl-r ctrl-o ctrl-t ctrl-h bspace)
+
+# Output: the comma-joined --expect list. Reserved names are dropped with
+# log::err; the survivors are validated by fzf itself (an unknown name would
+# be fatal for the picker), in which case direct keys are disabled for this
+# run and the picker still works. rc 1 when anything was dropped (--debug
+# fails on it).
+function tmux_oneshot::_expect_keys() {
+  local -a keys good
+  local k rc=0
+  keys=("${(@f)$(jq -r '[.[] | .key // empty] | unique[]' "${TMUX_ONESHOT_DB}")}")
+  for k in "${keys[@]}"; do
+    [[ -z "${k}" ]] && continue
+    if (( ${TMUX_ONESHOT_RESERVED_KEYS[(Ie)${k}]} )); then
+      log::err "Reserved direct key ignored | key='${k}'"
+      rc=1
+      continue
+    fi
+    good+=("${k}")
+  done
+  (( ${#good} == 0 )) && return ${rc}
+  # fzf's rc alone is ambiguous here (1 = no match for "x", 2 = bad key);
+  # the message is not.
+  local err
+  err="$(fzf --expect="${(j:,:)good}" --filter=x </dev/null 2>&1 >/dev/null)"
+  if [[ "${err}" == *"unsupported key"* ]]; then
+    log::err "Direct keys disabled: ${err}"
     return 1
   fi
-  if ! picked="$(tmux_oneshot::_fzf --select-1 "$@" \
-      --delimiter $'\t' --with-nth '2..' \
-      --preview "jq --argjson i {1} '.[\$i]' ${(qq)TMUX_ONESHOT_DB}" \
-      --preview-window=up:3:wrap <<< "${menu}")"; then
-    log::warn "No entry selected"
-    return 1
-  fi
-  tmux_oneshot::_run "${picked%%$'\t'*}"
+  print -r -- "${(j:,:)good}"
+  return ${rc}
 }
 
+# Output: "ctrl-k→caffeinate   ctrl-g→go   ctrl-l→claude-link" — the picker header.
+function tmux_oneshot::_key_header() {
+  jq -r '[.[] | select(.key) | "\(.key)→\(.menu.name // .cmd)"] | join("   ")' "${TMUX_ONESHOT_DB}"
+}
+
+# ---------------------------------------------------------------------------
+# Picker
+# ---------------------------------------------------------------------------
+
+# The per-row preview: "<tier> · <source file>", then the entry minus the
+# loader fields. One program for _pick and --debug, so the diagnostic runs
+# exactly what fzf runs.
+TMUX_ONESHOT_JQ_PREVIEW='.[$i] | "\(._tier // "db") · \(._src // env.TMUX_ONESHOT_DB)", (del(._tier, ._src) | tojson)'
+
+# Interactive top-level picker. Args pass through to fzf (e.g. --query).
+# --sync completes the list before the first key is processed; a type-ahead
+# Enter arrives as ctrl-j, which is ignored (never bound to accept: a burst
+# accepted against a stale list could run the wrong entry). The exact-name
+# rule in _resolve_pick is the determinism guarantee.
+function tmux_oneshot::_pick() {
+  local menu out rc keys header
+  menu="$(tmux_oneshot::_menu)"
+  if [[ -z "${menu}" ]]; then
+    log::err "No entries | db='${TMUX_ONESHOT_DB}'"
+    return 1
+  fi
+  keys="$(tmux_oneshot::_expect_keys)"
+  header="$(tmux_oneshot::_key_header)"
+  local -a key_args
+  [[ -n "${keys}" ]] && key_args+=(--expect="${keys}")
+  [[ -n "${header}" ]] && key_args+=(--header="${header}")
+  out="$(tmux_oneshot::_fzf --select-1 "$@" "${TMUX_ONESHOT_FZF_MATCH_ARGS[@]}" \
+      --sync --print-query --bind 'ctrl-j:ignore' "${key_args[@]}" \
+      --preview "jq -r --argjson i {1} ${(qq)TMUX_ONESHOT_JQ_PREVIEW} ${(qq)TMUX_ONESHOT_DB}" \
+      --preview-window=up:3:wrap <<< "${menu}")"; rc=$?
+  # Quoted (@f) keeps a leading empty query line.
+  local -a lines=("${(@f)out}")
+  local query="${lines[1]-}" key='' sel=''
+  if [[ -n "${keys}" ]]; then
+    key="${lines[2]-}"; sel="${lines[3]-}"
+  else
+    sel="${lines[2]-}"
+  fi
+  local idx
+  idx="$(tmux_oneshot::_resolve_pick "${rc}" "${query}" "${key}" "${sel}")" || return 1
+  tmux_oneshot::_run "${idx}"
+}
+
+# Pure. Input: <fzf rc> <query> <expect key> <selected line>. Output: 0-based index.
+#   1. a direct key wins over everything typed, whatever rc was (fzf prints
+#      the key even with zero matches, and even when it was typed before fzf
+#      started)
+#   2. rc 130 (esc) aborts
+#   3. a query that equals an entry key exactly (case-sensitive) runs that
+#      entry — the guarantee behind "aps Enter runs aps" when fzf highlighted aPs
+#   4. otherwise the highlighted row
+function tmux_oneshot::_resolve_pick() {
+  local rc="${1:?}" query="${2-}" key="${3-}" sel="${4-}" idx
+  if [[ -n "${key}" ]]; then
+    idx="$(jq -r --arg k "${key}" 'to_entries | map(select(.value.key == $k)) | .[0].key // empty' "${TMUX_ONESHOT_DB}")"
+    if [[ -n "${idx}" ]]; then
+      echo "${idx}"
+      return 0
+    fi
+    log::err "Unbound direct key | key='${key}'"
+    return 1
+  fi
+  if (( rc == 130 )); then
+    log::warn "Aborted"
+    return 1
+  fi
+  if [[ -n "${query}" ]] && idx="$(tmux_oneshot::_index_or_die "${query}" 2>/dev/null)"; then
+    echo "${idx}"
+    return 0
+  fi
+  if [[ -n "${sel}" ]]; then
+    echo "${sel%%$'\t'*}"
+    return 0
+  fi
+  log::warn "No entry selected"
+  return 1
+}
+
+# ---------------------------------------------------------------------------
+# Diagnostics
+# ---------------------------------------------------------------------------
+
 # Non-interactive diagnostic: exercises every popup code path except the fzf
-# UI itself — the batch menu render, the hidden index column, and the exact
-# preview jq fzf would run per row. For agents/humans without a tty.
+# UI itself — the loaded sources, the batch menu render, the hidden index
+# column, the exact preview jq fzf would run per row, and the direct-key
+# list. Fails on anything the loader had to skip, shadow or de-key. For
+# agents/humans without a tty.
 function tmux_oneshot::action::debug() {
   local rc=0 menu line idx
   local -i row=0 entries
   entries="$(jq 'length' "${TMUX_ONESHOT_DB}")"
+  print -r -- "── sources (tier, entries, file)"
+  jq -r 'to_entries | group_by(.value._src) | sort_by(.[0].key) | .[]
+    | "  \(.[0].value._tier // "db")\t\(length)\t\(.[0].value._src // env.TMUX_ONESHOT_DB)"' "${TMUX_ONESHOT_DB}"
   if ! menu="$(tmux_oneshot::_menu)"; then
     log::err "Menu render failed | db='${TMUX_ONESHOT_DB}'"
     return 1
   fi
   log::info "Debug render | db='${TMUX_ONESHOT_DB}' entries='${entries}'"
+  print -r -- "── menu"
   for line in ${(f)menu}; do
     idx="${line%%$'\t'*}"
     print -r -- "  ${line#*$'\t'}"
@@ -210,7 +517,7 @@ function tmux_oneshot::action::debug() {
       log::err "Hidden index out of order | expected='${row}' got='${idx}'"
       rc=1
     fi
-    if ! jq -e --argjson i "${idx}" '.[$i]' "${TMUX_ONESHOT_DB}" > /dev/null; then
+    if ! jq -r --argjson i "${idx}" "${TMUX_ONESHOT_JQ_PREVIEW}" "${TMUX_ONESHOT_DB}" > /dev/null; then
       log::err "Preview jq failed | idx='${idx}'"
       rc=1
     fi
@@ -220,17 +527,46 @@ function tmux_oneshot::action::debug() {
     log::err "Menu row count mismatch | rows='${row}' entries='${entries}'"
     rc=1
   fi
+
+  local keys
+  keys="$(tmux_oneshot::_expect_keys)" || rc=1
+  print -r -- "── direct keys"
+  print -r -- "  expect: ${keys}"
+  print -r -- "  header: $(tmux_oneshot::_key_header)"
+  if (( TMUX_ONESHOT_LOAD_SKIPPED + TMUX_ONESHOT_LOAD_SHADOWED + TMUX_ONESHOT_LOAD_KEYCLASH > 0 )); then
+    log::err "Load collisions | skipped='${TMUX_ONESHOT_LOAD_SKIPPED}' shadowed='${TMUX_ONESHOT_LOAD_SHADOWED}' keyclash='${TMUX_ONESHOT_LOAD_KEYCLASH}'"
+    rc=1
+  fi
   (( rc == 0 )) && log::info "Debug render clean | entries='${entries}'"
   return ${rc}
 }
+
+# Input: name. Output: two lines — the surface fields, then the assembled
+# cmd — without eval. Builder entries still resolve their flags
+# interactively; prompt entries print "${ONESHOT_INPUT}" unexpanded. The seam
+# for tests and agents.
+function tmux_oneshot::action::dry_run() {
+  local idx entry cmd
+  idx="$(tmux_oneshot::_index_or_die "${1:?}")" || return 1
+  entry="$(jq --argjson i "${idx}" '.[$i]' "${TMUX_ONESHOT_DB}")"
+  cmd="$(tmux_oneshot::_assemble "${entry}")" || return 1
+  jq -r --arg cmd "${cmd}" '
+    "name=\(.menu.name // .cmd) tier=\(._tier // "db") src=\(._src // env.TMUX_ONESHOT_DB) surface=\(if .window then "window:" + .window else "popup" end) autodismiss=\(.autodismiss // false) key=\(.key // "-") prompt=\(.prompt // "-")",
+    "cmd=\($cmd)"' <<< "${entry}"
+}
+
+# ---------------------------------------------------------------------------
+# Seams and assembly
+# ---------------------------------------------------------------------------
 
 # Seams: tests stub these to drive the interactive paths headlessly.
 function tmux_oneshot::_fzf() {
   fzf "$@"
 }
+# Input: the prompt label, shown verbatim.
 function tmux_oneshot::_read_value() {
   local value
-  read -r "value?${1:?} value: " < /dev/tty
+  read -r "value?${1:?}" < /dev/tty
   echo "${value}"
 }
 
@@ -268,7 +604,7 @@ function tmux_oneshot::_flag() {
       return 1
     fi
   else
-    value="$(tmux_oneshot::_read_value "${flag}")"
+    value="$(tmux_oneshot::_read_value "${flag} value: ")"
     if [[ -z "${value}" ]]; then
       log::warn "Empty value; skipping flag | flag='${flag}'"
       return 1
@@ -319,8 +655,13 @@ function tmux_oneshot::_assemble() {
   echo "${out# }"
 }
 
+# ---------------------------------------------------------------------------
+# Running
+# ---------------------------------------------------------------------------
+
 # Input: the entry's 0-based index
-# Runs the entry: cd to .pwd (if set), assemble args interactively, eval
+# Runs the entry: cd to .pwd (if set), ask .prompt (if set), assemble args
+# interactively, then eval in the popup or hand off to a tmux window.
 function tmux_oneshot::_run() {
   local idx="${1:?}"
   local entry
@@ -336,6 +677,19 @@ function tmux_oneshot::_run() {
     fi
   fi
 
+  local prompt
+  prompt="$(jq -r '.prompt // ""' <<< "${entry}")"
+  if [[ -n "${prompt}" ]]; then
+    # Exported so eval's "${ONESHOT_INPUT}" and the window's -e both see it;
+    # local so it dies with this run.
+    local -x ONESHOT_INPUT
+    ONESHOT_INPUT="$(tmux_oneshot::_read_value "${prompt}")"
+    if [[ -z "${ONESHOT_INPUT}" ]]; then
+      log::warn "Aborted: empty input | idx='${idx}'"
+      return 1
+    fi
+  fi
+
   local cmd
   if ! cmd="$(tmux_oneshot::_assemble "${entry}")"; then
     log::warn "Aborted | idx='${idx}'"
@@ -346,16 +700,46 @@ function tmux_oneshot::_run() {
     return 1
   fi
 
+  local name window
+  name="$(jq -r '.menu.name // .cmd' <<< "${entry}")"
+  window="$(jq -r '.window // ""' <<< "${entry}")"
+  if [[ -n "${window}" ]]; then
+    tmux_oneshot::_new_window "${window}" "${cmd}"
+    return $?
+  fi
+
   log::info "Running oneshot | cmd='${cmd}' pwd='${PWD}'"
   eval "${cmd}"
   local rc=$?
   if (( rc != 0 )); then
     log::err "Oneshot command failed | rc='${rc}'"
   elif [[ "$(jq -r '.autodismiss // false' <<< "${entry}")" == "true" ]]; then
+    [[ -n "${TMUX:-}" ]] && tmux display-message -d 1500 "✓ ${name}"
     return 0
   fi
   tmux_oneshot::_hold_until_escape
   return "${rc}"
+}
+
+# Runs inside the new window: eval the entry; on failure hold so the error
+# stays readable.
+TMUX_ONESHOT_WINDOW_RUNNER='eval "$1"; rc=$?; (( rc == 0 )) || { print -u2 "\n── rc=${rc} · press any key ──"; read -sk1 }; exit ${rc}'
+
+# Input: <window name> <cmd>. The cmd travels as its own argv element (tmux
+# new-window takes [shell-command [argument ...]]), never interpolated into
+# one string. $ONESHOT_INPUT is forwarded with -e because the window's
+# environment is the server's, not the popup's. Without tmux: run inline.
+function tmux_oneshot::_new_window() {
+  local name="${1:?}" cmd="${2:?}"
+  if [[ -z "${TMUX:-}" ]]; then
+    log::warn "Not inside tmux; running inline | window='${name}'"
+    eval "${cmd}"
+    return $?
+  fi
+  local -a envargs
+  [[ -n "${ONESHOT_INPUT:-}" ]] && envargs=(-e "ONESHOT_INPUT=${ONESHOT_INPUT}")
+  log::info "Opening window | name='${name}' cmd='${cmd}' pwd='${PWD}'"
+  tmux new-window -n "${name}" -c "${PWD}" "${envargs[@]}" zsh -c "${TMUX_ONESHOT_WINDOW_RUNNER}" tmux-oneshot "${cmd}"
 }
 
 # Keep the popup open so command output stays readable; Esc closes it.

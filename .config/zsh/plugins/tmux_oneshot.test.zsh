@@ -1,6 +1,7 @@
-# Tests for ~/.config/bin/tmux-oneshot — menu rendering, key recovery, arg
-# assembly, autodismiss, error capture. Only runs when
-# OTTO_TEST__ZSH_PLUGINS_TMUX_ONESHOT=true
+# Tests for ~/.config/bin/tmux-oneshot — loading (global/local/extra dirs,
+# index, collisions), menu rendering, key recovery, picker resolution, arg
+# assembly, run modes (hold/autodismiss/window/prompt), error capture. Only
+# runs when OTTO_TEST__ZSH_PLUGINS_TMUX_ONESHOT=true
 [[ "$OTTO_TEST__ZSH_PLUGINS_TMUX_ONESHOT" == "true" ]] || return 0
 
 source "${0:h}/log.zsh"
@@ -27,18 +28,26 @@ function _t() {
 # ---------------------------------------------------------------------------
 source "${HOME}/.config/bin/tmux-oneshot"
 
-local _picks_file _typed_file _db
+local _picks_file _typed_file _calls_file _label_file _tmux_file _db
 _picks_file="$(mktemp /tmp/tmux-oneshot-test-picks.XXXXX)"
 _typed_file="$(mktemp /tmp/tmux-oneshot-test-typed.XXXXX)"
+_calls_file="$(mktemp /tmp/tmux-oneshot-test-calls.XXXXX)"
+_label_file="$(mktemp /tmp/tmux-oneshot-test-label.XXXXX)"
+_tmux_file="$(mktemp /tmp/tmux-oneshot-test-tmux.XXXXX)"
 _db="$(mktemp /tmp/tmux-oneshot-test-db.XXXXX.json)"
 
 function _set_picks() { printf '%s\n' "$@" > "${_picks_file}" }
 function _set_typed() { printf '%s' "${1}" > "${_typed_file}" }
 
-# Each _fzf call consumes one line of the picks file: "ESC" → rc 130 (esc),
-# else grep -E the menu on stdin (multi-line matches emulate multiselect).
+# Each _fzf call appends its argv to _calls_file and consumes one line of the
+# picks file: "ESC" → rc 130 (esc); a line with tabs speaks the picker's
+# --print-query/--expect protocol, "QUERY<TAB>KEY<TAB>PATTERN" → prints QUERY,
+# then KEY (only when argv carries --expect=), then grep -E PATTERN of the
+# menu (empty PATTERN: consume stdin, rc 1 = zero matches); any other line is
+# grep -E'd (multi-line matches emulate multiselect).
 function tmux_oneshot::_fzf() {
   local pat rest
+  print -r -- "$*" >> "${_calls_file}"
   pat="$(head -1 "${_picks_file}")"
   rest="$(tail -n +2 "${_picks_file}")"
   printf '%s\n' "${rest}" > "${_picks_file}"
@@ -46,10 +55,29 @@ function tmux_oneshot::_fzf() {
     cat > /dev/null
     return 130
   fi
+  if [[ "${pat}" == *$'\t'* ]]; then
+    local query key sel
+    query="${pat%%$'\t'*}"; rest="${pat#*$'\t'}"; key="${rest%%$'\t'*}"; sel="${rest#*$'\t'}"
+    print -r -- "${query}"
+    [[ "$*" == *--expect=* ]] && print -r -- "${key}"
+    if [[ -z "${sel}" ]]; then
+      cat > /dev/null
+      return 1
+    fi
+    grep -E "${sel}"
+    return $?
+  fi
   grep -E "${pat}"
 }
-function tmux_oneshot::_read_value() { cat "${_typed_file}" }
+# Records the prompt label so its wording is testable; answers from the typed file.
+function tmux_oneshot::_read_value() { print -r -- "${1}" > "${_label_file}"; cat "${_typed_file}" }
 function tmux_oneshot::_hold_until_escape() { echo "HELD" }
+# The suite runs inside tmux: a real `tmux` here would flash the user's status
+# line or open windows on the live server. Record argv joined by \x1f (a cmd
+# with spaces or pipes stays one field) and do nothing.
+function tmux() { print -r -- "${(pj:\x1f:)@}" >> "${_tmux_file}" }
+# The last recorded tmux argv, fields <range> (cut syntax, default all), |-joined.
+function _tmux_last() { tail -1 "${_tmux_file}" | cut -d $'\x1f' -f "${1:-1-}" | tr $'\x1f' '|' }
 
 # The menu line for 1-based row N, hidden index stripped.
 function _menu_line() { tmux_oneshot::_menu | cut -f2- | sed -n "${1}p" }
@@ -72,6 +100,32 @@ cat > "${_db}" << 'EOF'
 ]
 EOF
 export TMUX_ONESHOT_DB="${_db}"
+
+# Second DB: the AWS entries (§D) with the wrapper replaced by a stub script
+# that echoes its argv — a df test must not read ldf data, and a PATH shim
+# cannot intercept an absolute-path cmd — plus the keyed/window/prompt entries.
+# `ap` deliberately carries a longer text than `apa` (ranking regression).
+local _stub_dir _stub _db2
+_stub_dir="$(mktemp -d /tmp/tmux-oneshot-test-stub.XXXXX)"
+_stub="${_stub_dir}/aws_profile"
+print -rl -- '#!/usr/bin/env zsh' 'print -r -- "aws_profile $*"' > "${_stub}"
+chmod +x "${_stub}"
+_db2="$(mktemp /tmp/tmux-oneshot-test-db2.XXXXX.json)"
+jq --arg s "${_stub}" 'map(.cmd |= sub("STUB"; $s))' > "${_db2}" << 'EOF'
+[
+ {"menu": {"name": "ap",  "text": "AWS_PROFILE → clipboard · hyperbase, pick env (4)"}, "cmd": "STUB --query \"'hyperbase' \"", "autodismiss": true},
+ {"menu": {"name": "aP",  "text": "AWS_PROFILE → clipboard · ALL accounts, pick (7)"},  "cmd": "STUB", "autodismiss": true},
+ {"menu": {"name": "apa", "text": "hyperbase alpha"},      "cmd": "STUB --query \"'alpha' 'hyperbase' \"",      "autodismiss": true},
+ {"menu": {"name": "aps", "text": "hyperbase staging"},    "cmd": "STUB --query \"'staging' 'hyperbase' \"",    "autodismiss": true},
+ {"menu": {"name": "app", "text": "hyperbase production"}, "cmd": "STUB --query \"'production' 'hyperbase' \"", "autodismiss": true},
+ {"menu": {"name": "aPa", "text": "all accounts · alpha"},   "cmd": "STUB --query \"'alpha' \"",   "autodismiss": true},
+ {"menu": {"name": "aPs", "text": "all accounts · staging"}, "cmd": "STUB --query \"'staging' \"", "autodismiss": true},
+ {"menu": {"name": "ap login", "text": "aws sso login · hyperbase, pick env → window sso"}, "window": "sso", "cmd": "ACTION=login STUB --query \"'hyperbase' \""},
+ {"menu": {"name": "caffeinate", "text": "keep the display awake → window caf"}, "cmd": "echo caf-ran", "window": "caf", "key": "ctrl-k"},
+ {"menu": {"name": "go", "text": "open a go/ link (prompts for the short name)"}, "prompt": "go/ ", "key": "ctrl-g", "cmd": "echo \"https://go/${ONESHOT_INPUT}\"", "autodismiss": true},
+ {"menu": {"name": "claude-link", "text": "open the mermaid.ink URL on the clipboard"}, "key": "ctrl-l", "cmd": "echo link-ran", "autodismiss": true}
+]
+EOF
 
 # ---------------------------------------------------------------------------
 # Menu rendering: one batch jq pass; name = menu.name // cmd; capped column
@@ -149,6 +203,7 @@ _set_picks "env" "alpha"
 _t "kv flag with options" "mycmd --env=alpha" "$(tmux_oneshot::_assemble "${_entry}")"
 _set_picks "msg"; _set_typed "hello world"
 _t "kv flag free-text quoted" "mycmd --msg='hello world'" "$(tmux_oneshot::_assemble "${_entry}" 2>/dev/null)"
+_t "kv flag prompt label adds ' value: '" "--msg value: " "$(cat "${_label_file}")"
 _set_picks "ESC"
 _t "esc on flags = no flags" "mycmd" "$(tmux_oneshot::_assemble "${_entry}")"
 _set_picks "msg"; _set_typed ""
@@ -182,6 +237,12 @@ _t "autodismiss skips hold" "" \
   "$(_run_key 3 2>/dev/null | grep HELD)"
 _t "failure holds despite autodismiss" "HELD" \
   "$(_run_key 4 2>/dev/null | grep HELD)"
+: > "${_tmux_file}"
+( export TMUX=test-dummy; _run_key 3 > /dev/null 2>&1 )
+_t "autodismiss success flashes the entry name" "display-message|-d|1500|✓ true" "$(_tmux_last)"
+: > "${_tmux_file}"
+( unset TMUX; _run_key 3 > /dev/null 2>&1 )
+_t "autodismiss outside tmux does not call tmux" "" "$(_tmux_last)"
 
 # ---------------------------------------------------------------------------
 # --debug: the non-interactive diagnostic passes on a healthy db
@@ -190,8 +251,288 @@ tmux_oneshot::action::debug > /dev/null 2>&1
 _t "debug mode clean on healthy db" "0" "$?"
 
 # ---------------------------------------------------------------------------
+# Loading: global → local → TMUX_ONESHOT_DIRS, merged into an index under a
+# temp XDG_STATE_HOME. TMUX_ONESHOT_DB is unset per case (the fixture's export
+# is single-file mode) and re-exported at the end of the block.
+# ---------------------------------------------------------------------------
+local _xdg_c _xdg_d _xdg_s _extra1 _fake_home _editor
+_xdg_c="$(mktemp -d /tmp/tmux-oneshot-test-xdgc.XXXXX)"
+_xdg_d="$(mktemp -d /tmp/tmux-oneshot-test-xdgd.XXXXX)"
+_xdg_s="$(mktemp -d /tmp/tmux-oneshot-test-xdgs.XXXXX)"
+_extra1="$(mktemp -d /tmp/tmux-oneshot-test-extra1.XXXXX)"
+_fake_home="$(mktemp -d /tmp/tmux-oneshot-test-home.XXXXX)"
+local _saved_xdg_c="${XDG_CONFIG_HOME-}" _saved_xdg_d="${XDG_DATA_HOME-}" _saved_xdg_s="${XDG_STATE_HOME-}"
+local _real_index="${_saved_xdg_s:-${HOME}/.local/state}/tmux_oneshot/index.json" _real_index_before=''
+[[ -e "${_real_index}" ]] && _real_index_before="$(stat -f %m "${_real_index}")"
+export XDG_CONFIG_HOME="${_xdg_c}" XDG_DATA_HOME="${_xdg_d}" XDG_STATE_HOME="${_xdg_s}"
+local _index="${_xdg_s}/tmux_oneshot/index.json"
+mkdir -p "${_xdg_c}/tmux_oneshot" "${_xdg_d}/tmux_oneshot" "${_fake_home}/oneshots"
+_editor="${_xdg_s}/editor"
+print -rl -- '#!/usr/bin/env zsh' 'print -rl -- "$@"' > "${_editor}"
+chmod +x "${_editor}"
+
+# g1/l1 share ctrl-k (key clash: l1 loses it); dup is defined in both tiers
+# (shadow: local wins, keeps row 2).
+cat > "${_xdg_c}/tmux_oneshot/macos.json" << 'EOF'
+[
+  {"menu": {"name": "g1", "text": "global one"}, "cmd": "echo g1", "key": "ctrl-k"},
+  {"menu": {"name": "dup", "text": "global dup"}, "cmd": "echo global-dup"},
+  {"menu": {"name": "g3", "text": "global three"}, "cmd": "echo g3"}
+]
+EOF
+cat > "${_xdg_d}/tmux_oneshot/a.json" << 'EOF'
+[
+  {"menu": {"name": "l1", "text": "local one"}, "cmd": "echo l1", "key": "ctrl-k"},
+  {"menu": {"name": "dup", "text": "local dup"}, "cmd": "echo local-dup"}
+]
+EOF
+cat > "${_xdg_d}/tmux_oneshot/b.json" << 'EOF'
+[
+  {"menu": {"name": "l2", "text": "local two"}, "cmd": "echo l2", "key": "ctrl-g"}
+]
+EOF
+echo '[{"menu": {"name": "x1"}, "cmd": "echo x1"}]' > "${_extra1}/x.json"
+echo '[{"menu": {"name": "y1"}, "cmd": "echo y1"}]' > "${_fake_home}/oneshots/y.json"
+
+# A fresh launch: no caller override, counters zeroed. Run inside $(...) or
+# a subshell so the export _load performs never leaks into the suite.
+function _fresh() {
+  unset TMUX_ONESHOT_DB
+  TMUX_ONESHOT_LOAD_SKIPPED=0 TMUX_ONESHOT_LOAD_SHADOWED=0 TMUX_ONESHOT_LOAD_KEYCLASH=0
+  tmux_oneshot "$@"
+}
+
+_t "loads global then local, in file order" "g1
+dup
+g3
+l1
+l2" "$(_fresh --list 2>/dev/null)"
+# Row 2 is dup, whose surviving definition is the local one.
+_t "index carries each entry's tier" "global local global local local" "$(jq -r '[.[]._tier] | join(" ")' "${_index}")"
+_t "index carries each entry's source file" "${_xdg_c}/tmux_oneshot/macos.json ${_xdg_d}/tmux_oneshot/a.json" \
+  "$(jq -r '"\(.[0]._src) \(.[3]._src)"' "${_index}")"
+_t "index written under XDG_STATE_HOME" "yes" "$([[ -f "${_index}" ]] && echo yes)"
+_t "preview program: tier · source, then the entry without loader fields" "global · ${_xdg_c}/tmux_oneshot/macos.json
+{\"menu\":{\"name\":\"g1\",\"text\":\"global one\"},\"cmd\":\"echo g1\",\"key\":\"ctrl-k\"}" \
+  "$(jq -r --argjson i 0 "${TMUX_ONESHOT_JQ_PREVIEW}" "${_index}")"
+# The error must be ours alone: no mkdir or redirection message beside it.
+chmod 555 "${_xdg_s}/tmux_oneshot"
+_err_out="$(_fresh --list 2>&1 >/dev/null)"; _err_rc=$?
+chmod 755 "${_xdg_s}/tmux_oneshot"
+_t "read-only state dir: rc 1, exactly one error line" "1 1 Index dir not writable" \
+  "${_err_rc} $(print -r -- "${_err_out}" | grep -c .) $(print -r -- "${_err_out}" | grep -o 'Index dir not writable')"
+_t "TMUX_ONESHOT_DIRS appends in order and expands ~" "g1 dup g3 l1 l2 x1 y1" \
+  "$(export HOME="${_fake_home}"; TMUX_ONESHOT_DIRS="${_extra1}:~/oneshots" _fresh --list 2>/dev/null | paste -sd' ' -)"
+_t "TMUX_ONESHOT_DIRS entries are tier extra" "extra extra" "$(jq -r '"\(.[5]._tier) \(.[6]._tier)"' "${_index}")"
+_err_out="$(TMUX_ONESHOT_DIRS="/nonexistent/oneshots:${_extra1}" _fresh --list 2>&1)"; _err_rc=$?
+_t "missing TMUX_ONESHOT_DIRS dir: warns" "Oneshot dir missing" "$(print -r -- "${_err_out}" | grep -o 'Oneshot dir missing')"
+_t "missing TMUX_ONESHOT_DIRS dir: skipped, rc 0" "0" "${_err_rc}"
+_t "missing TMUX_ONESHOT_DIRS dir: siblings load" "x1" "$(print -r -- "${_err_out}" | grep -x x1)"
+_t "IGNORE_DIR_GLOBAL skips global only" "l1 dup l2" \
+  "$(TMUX_ONESHOT_IGNORE_DIR_GLOBAL=1 _fresh --list 2>/dev/null | paste -sd' ' -)"
+_t "IGNORE_DIR_LOCAL skips local only" "g1 dup g3" \
+  "$(TMUX_ONESHOT_IGNORE_DIR_LOCAL=1 _fresh --list 2>/dev/null | paste -sd' ' -)"
+_t "tier is carried, not inferred from the path" "extra" \
+  "$(mkdir -p "${_xdg_c}/extra_oneshots"; cp "${_extra1}/x.json" "${_xdg_c}/extra_oneshots/"; TMUX_ONESHOT_DIRS="${_xdg_c}/extra_oneshots" _fresh --list >/dev/null 2>&1; jq -r '.[-1]._tier' "${_index}")"
+
+# Collisions: the merge keeps working; --debug reports and fails.
+_err_out="$(_fresh --list 2>&1 >/dev/null)"
+_t "duplicate name: later wins" "cmd=echo local-dup" "$(_fresh --dry-run dup 2>/dev/null | sed -n 2p)"
+_t "duplicate name: keeps the first occurrence's row" "dup" "$(_fresh --list 2>/dev/null | sed -n 2p)"
+_t "duplicate name: one warning" "1" "$(print -r -- "${_err_out}" | grep -c 'Shadowed oneshot')"
+_t "duplicate name: warning names both sources" "kept='local:${_xdg_d}/tmux_oneshot/a.json' dropped='global:${_xdg_c}/tmux_oneshot/macos.json'" \
+  "$(print -r -- "${_err_out}" | grep 'Shadowed oneshot' | grep -o "kept='[^']*' dropped='[^']*'")"
+_t "duplicate key: later entry loses it" "null" "$(jq -r '.[] | select(.menu.name == "l1") | .key' "${_index}")"
+_t "duplicate key: first keeps it" "ctrl-k" "$(jq -r '.[] | select(.menu.name == "g1") | .key' "${_index}")"
+_t "duplicate key: error logged" "1" "$(print -r -- "${_err_out}" | grep -c 'Duplicate direct key dropped')"
+_t "duplicate key: expect list has the key once" "ctrl-g,ctrl-k" "$(_fresh --debug 2>/dev/null | grep -o 'expect: .*' | cut -d' ' -f2-)"
+( _fresh --debug > /dev/null 2>&1 )
+_t "--debug fails on shadow + key clash" "1" "$?"
+_t "many files per dir load name-sorted" "a.json b.json" \
+  "$(TMUX_ONESHOT_IGNORE_DIR_GLOBAL=1 _fresh --debug 2>/dev/null | grep -E '^  local' | cut -f3 | xargs -n1 basename | paste -sd' ' -)"
+( TMUX_ONESHOT_IGNORE_DIR_GLOBAL=1 _fresh --debug > /dev/null 2>&1 )
+_t "--debug clean on a healthy multi-file tree" "0" "$?"
+_t "--debug lists one line per source" "local	2	${_xdg_d}/tmux_oneshot/a.json
+local	1	${_xdg_d}/tmux_oneshot/b.json" \
+  "$(TMUX_ONESHOT_IGNORE_DIR_GLOBAL=1 _fresh --debug 2>/dev/null | grep -E '^  (global|local|extra)' | sed 's/^  //')"
+
+# One bad file must not hide its siblings.
+echo '{}' > "${_xdg_d}/tmux_oneshot/c.json"
+_err_out="$(_fresh --list 2>&1 >/dev/null)"
+_t "bad file skipped: siblings load" "g1 dup g3 l1 l2" "$(_fresh --list 2>/dev/null | paste -sd' ' -)"
+_t "bad file skipped: error names the file" "Skipping oneshot file: not a JSON list | path='${_xdg_d}/tmux_oneshot/c.json'" \
+  "$(print -r -- "${_err_out}" | grep -o "Skipping oneshot file.*")"
+_t "bad file skipped: _load rc 0, counter 1" "rc=0 skipped=1" \
+  "$(unset TMUX_ONESHOT_DB; TMUX_ONESHOT_LOAD_SKIPPED=0; tmux_oneshot::_load 2>/dev/null; echo "rc=$? skipped=${TMUX_ONESHOT_LOAD_SKIPPED}")"
+( TMUX_ONESHOT_IGNORE_DIR_GLOBAL=1 _fresh --debug > /dev/null 2>&1 )
+_t "bad file skipped: --debug rc 1" "1" "$?"
+rm -f "${_xdg_d}/tmux_oneshot/c.json"
+mkdir -p "${_extra1}/allbad"
+echo 'not json' > "${_extra1}/allbad/z.json"
+_err_out="$(TMUX_ONESHOT_IGNORE_DIR_GLOBAL=1 TMUX_ONESHOT_IGNORE_DIR_LOCAL=1 TMUX_ONESHOT_DIRS="${_extra1}/allbad" _fresh --list 2>&1)"; _err_rc=$?
+_t "all files bad: rc 1" "1" "${_err_rc}"
+_t "all files bad: says so" "No loadable oneshot files" "$(print -r -- "${_err_out}" | grep -o 'No loadable oneshot files')"
+
+# Single-file mode and seeding.
+rm -f "${_index}"
+_t "TMUX_ONESHOT_DB exported → single-file mode, no index" "rc=0 index=no" \
+  "$(export TMUX_ONESHOT_DB="${_db}"; tmux_oneshot::_load; echo "rc=$? index=$([[ -e "${_index}" ]] && echo yes || echo no)")"
+local _seed_c _seed_d
+_seed_c="$(mktemp -d /tmp/tmux-oneshot-test-seedc.XXXXX)"
+_seed_d="$(mktemp -d /tmp/tmux-oneshot-test-seedd.XXXXX)"
+_t "zero files → seeds local commands.json" "1
+hello world" "$(XDG_CONFIG_HOME="${_seed_c}" XDG_DATA_HOME="${_seed_d}" _fresh --list 2>/dev/null)"
+_t "seed lands in the local dir" "yes" "$([[ -f "${_seed_d}/tmux_oneshot/commands.json" ]] && echo yes)"
+_t "zero files with local ignored: no seed, rc 1" "1" \
+  "$(XDG_CONFIG_HOME="${_seed_c}" XDG_DATA_HOME="${_seed_c}" TMUX_ONESHOT_IGNORE_DIR_LOCAL=1 _fresh --list >/dev/null 2>&1; echo $?)"
+rm -rf "${_seed_c}" "${_seed_d}"
+
+# --edit opens the defining file(s).
+_t "--edit <local name> opens its file" "${_xdg_d}/tmux_oneshot/a.json" "$(EDITOR="${_editor}" _fresh --edit dup 2>/dev/null)"
+_t "--edit <global name> opens its file" "${_xdg_c}/tmux_oneshot/macos.json" "$(EDITOR="${_editor}" _fresh --edit g1 2>/dev/null)"
+_t "--edit opens every source, one per argument, in load order" "${_xdg_c}/tmux_oneshot/macos.json
+${_xdg_d}/tmux_oneshot/a.json
+${_xdg_d}/tmux_oneshot/b.json" "$(EDITOR="${_editor}" _fresh --edit 2>/dev/null)"
+_t "--edit unknown name: rc 1" "1" "$(EDITOR="${_editor}" _fresh --edit nope >/dev/null 2>&1; echo $?)"
+
+export XDG_CONFIG_HOME="${_saved_xdg_c}" XDG_DATA_HOME="${_saved_xdg_d}" XDG_STATE_HOME="${_saved_xdg_s}"
+export TMUX_ONESHOT_DB="${_db}"
+_t "real index untouched by the loading tests" "${_real_index_before}" \
+  "$([[ -e "${_real_index}" ]] && stat -f %m "${_real_index}")"
+_t "single-file --edit opens the DB itself" "${_db}" "$(EDITOR="${_editor}" tmux_oneshot --edit 2>/dev/null)"
+rm -rf "${_xdg_c}" "${_xdg_d}" "${_xdg_s}" "${_extra1}" "${_fake_home}"
+
+# ---------------------------------------------------------------------------
+# Picker: _resolve_pick (pure), the --expect key list, and _pick through the
+# stub. Uses the AWS/keys DB: ap=0 aP=1 apa=2 aps=3 app=4 aPa=5 aPs=6
+# "ap login"=7 caffeinate=8 go=9 claude-link=10.
+# ---------------------------------------------------------------------------
+export TMUX_ONESHOT_DB="${_db2}"
+local _row_aPs _row_ap _row_apa
+_row_aPs="$(tmux_oneshot::_menu | sed -n 7p)"
+_row_ap="$(tmux_oneshot::_menu | sed -n 1p)"
+_row_apa="$(tmux_oneshot::_menu | sed -n 3p)"
+_t "key beats query and selection" "8" "$(tmux_oneshot::_resolve_pick 0 "aps" "ctrl-k" "${_row_aPs}")"
+_t "key with rc 1 (zero matches) still resolves" "8" "$(tmux_oneshot::_resolve_pick 1 "zzz" "ctrl-k" "")"
+_err_out="$(tmux_oneshot::_resolve_pick 0 "" "ctrl-x" "" 2>&1)"; _err_rc=$?
+_t "unbound key: rc 1" "1" "${_err_rc}"
+_t "unbound key: names it" "Unbound direct key | key='ctrl-x'" "$(print -r -- "${_err_out}" | grep -o "Unbound direct key.*")"
+_t "exact query beats fuzzy selection" "3" "$(tmux_oneshot::_resolve_pick 0 "aps" "" "${_row_aPs}")"
+_t "exact query is case-sensitive" "1" "$(tmux_oneshot::_resolve_pick 0 "aP" "" "${_row_ap}")"
+_t "fuzzy: selection wins when query is not a name" "2" "$(tmux_oneshot::_resolve_pick 0 "alp" "" "${_row_apa}")"
+_err_out="$(tmux_oneshot::_resolve_pick 130 "ap" "" "" 2>&1)"; _err_rc=$?
+_t "rc 130 aborts" "1 Aborted" "${_err_rc} $(print -r -- "${_err_out}" | grep -o 'Aborted')"
+_err_out="$(tmux_oneshot::_resolve_pick 0 "" "" "" 2>&1)"; _err_rc=$?
+_t "nothing → rc 1, No entry selected" "1 No entry selected" "${_err_rc} $(print -r -- "${_err_out}" | grep -o 'No entry selected')"
+
+_t "expect list = unique non-reserved keys" "ctrl-g,ctrl-k,ctrl-l" "$(tmux_oneshot::_expect_keys 2>/dev/null)"
+_t "header lists key→name" "ctrl-k→caffeinate   ctrl-g→go   ctrl-l→claude-link" "$(tmux_oneshot::_key_header)"
+local _db_keys
+_db_keys="$(mktemp /tmp/tmux-oneshot-test-dbkeys.XXXXX.json)"
+echo '[{"cmd": "a", "key": "ctrl-u"}, {"cmd": "b", "key": "enter"}, {"cmd": "c", "key": "ctrl-k"}]' > "${_db_keys}"
+_err_out="$(TMUX_ONESHOT_DB="${_db_keys}" tmux_oneshot::_expect_keys 2>&1 >/dev/null)"; _err_rc=$?
+_t "reserved keys dropped: survivors listed" "ctrl-k" "$(TMUX_ONESHOT_DB="${_db_keys}" tmux_oneshot::_expect_keys 2>/dev/null)"
+_t "reserved keys dropped: rc 1, one error each" "1 2" "${_err_rc} $(print -r -- "${_err_out}" | grep -c 'Reserved direct key ignored')"
+echo '[{"cmd": "a", "key": "C-k"}]' > "${_db_keys}"
+_err_out="$(TMUX_ONESHOT_DB="${_db_keys}" tmux_oneshot::_expect_keys 2>&1 >/dev/null)"; _err_rc=$?
+_t "unsupported key name: direct keys disabled" "1 Direct keys disabled: unsupported key: C-k" \
+  "${_err_rc} $(print -r -- "${_err_out}" | grep -o 'Direct keys disabled.*')"
+_t "unsupported key name: expect list empty" "" "$(TMUX_ONESHOT_DB="${_db_keys}" tmux_oneshot::_expect_keys 2>/dev/null)"
+TMUX_ONESHOT_DB="${_db_keys}" tmux_oneshot::action::debug > /dev/null 2>&1
+_t "unsupported key name: --debug rc 1" "1" "$?"
+rm -f "${_db_keys}"
+
+: > "${_tmux_file}"
+_set_picks $'\tctrl-k\t'
+( export TMUX=test-dummy; tmux_oneshot::_pick > /dev/null 2>&1 )
+_t "_pick e2e: direct key with zero matches runs caffeinate in window caf" "new-window|-n|caf" \
+  "$(_tmux_last 1-3)"
+_t "_pick passes --expect and --header to fzf" "--expect=ctrl-g,ctrl-k,ctrl-l --header=ctrl-k→caffeinate   ctrl-g→go   ctrl-l→claude-link" \
+  "$(tail -1 "${_calls_file}" | grep -o -- '--expect=[^ ]* --header=.*' | sed 's/ --preview.*//')"
+_t "_pick preview is the shared program on the hidden index" "--preview jq -r --argjson i {1} ${(qq)TMUX_ONESHOT_JQ_PREVIEW} ${(qq)_db2}" \
+  "$(tail -1 "${_calls_file}" | grep -o -- '--preview .*' | sed 's/ --preview-window.*//')"
+_set_picks $'apa\t\taPa'
+_t "_pick e2e: exact name beats the highlighted row" "aws_profile --query 'alpha' 'hyperbase' " \
+  "$(tmux_oneshot::_pick 2>/dev/null)"
+_set_picks $'\t\t'"${_row_apa%%$'\t'*}"$'\t'
+_t "_pick e2e: highlighted row runs" "aws_profile --query 'alpha' 'hyperbase' " \
+  "$(tmux_oneshot::_pick 2>/dev/null)"
+_set_picks "ESC"
+_err_out="$(tmux_oneshot::_pick 2>&1)"; _err_rc=$?
+_t "_pick e2e: esc aborts" "1 Aborted" "${_err_rc} $(print -r -- "${_err_out}" | grep -o Aborted)"
+export TMUX_ONESHOT_DB="${_db}"
+_set_picks $'\t\tMy Name'
+_t "keyless DB: 2-line --print-query output parses" "named-ran" "$(tmux_oneshot::_pick 2>/dev/null)"
+_t "keyless DB: no --expect passed" "" "$(tail -1 "${_calls_file}" | grep -o -- '--expect=')"
+export TMUX_ONESHOT_DB="${_db2}"
+
+# Real fzf: the exact-prefix name must outrank a shorter line. Fails on the
+# default tiebreak (length) and on any --nth 2.
+_t "ranking regression (real fzf): 'ap' beats 'apa' despite the longer text" "0" \
+  "$(fzf --filter=ap "${TMUX_ONESHOT_FZF_MATCH_ARGS[@]}" <<< "$(tmux_oneshot::_menu)" | head -1 | cut -f1)"
+
+# ---------------------------------------------------------------------------
+# Run modes: flat entries never open the builder; window; prompt; flash
+# ---------------------------------------------------------------------------
+local _calls_before
+_calls_before="$(wc -l < "${_calls_file}")"
+_t "immediate entry runs its cmd" "aws_profile --query 'alpha' 'hyperbase' " "$(_run_key apa 2>/dev/null)"
+_t "immediate entry never calls _fzf" "${_calls_before}" "$(wc -l < "${_calls_file}")"
+: > "${_tmux_file}"
+( export TMUX=test-dummy; _run_key aPa > /dev/null 2>&1 )
+_t "autodismiss flashes '✓ <name>'" "display-message|-d|1500|✓ aPa" "$(_tmux_last)"
+
+: > "${_tmux_file}"
+_err_out="$(export TMUX=test-dummy; _run_key 'ap login' 2>/dev/null)"; _err_rc=$?
+_t "window entry: rc 0, no hold" "0 " "${_err_rc} $(print -r -- "${_err_out}" | grep HELD)"
+_t "window entry: opens its named window" "new-window|-n|sso" "$(_tmux_last 1-3)"
+_t "window entry: cmd travels as one argv element" "ACTION=login ${_stub} --query \"'hyperbase' \"" "$(_tmux_last 10-)"
+: > "${_tmux_file}"
+( export TMUX=test-dummy; _run_key caffeinate > /dev/null 2>&1 )
+_t "_new_window argv: -n name -c pwd zsh -c runner tmux-oneshot cmd" \
+  "new-window|-n|caf|-c|${PWD}|zsh|-c|${TMUX_ONESHOT_WINDOW_RUNNER}|tmux-oneshot|echo caf-ran" "$(_tmux_last)"
+: > "${_tmux_file}"
+( export TMUX=test-dummy ONESHOT_INPUT="foo bar"; tmux_oneshot::_new_window sso 'echo x' > /dev/null 2>&1 )
+_t "_new_window forwards ONESHOT_INPUT with -e" "-e|ONESHOT_INPUT=foo bar" "$(_tmux_last 6-7)"
+_err_out="$(unset TMUX; tmux_oneshot::_new_window caf 'echo inline-ran' 2>&1)"
+_t "_new_window outside tmux runs inline" "inline-ran" "$(print -r -- "${_err_out}" | grep -x inline-ran)"
+_t "_new_window outside tmux warns" "Not inside tmux" "$(print -r -- "${_err_out}" | grep -o 'Not inside tmux')"
+
+_set_typed "foo bar"
+_t "prompt entry exports ONESHOT_INPUT into cmd" "https://go/foo bar" "$(_run_key go 2>/dev/null)"
+_t "prompt label is shown verbatim" "go/ " "$(cat "${_label_file}")"
+_t "prompt value dies with the run" "" "${ONESHOT_INPUT-}"
+_set_typed ""
+_err_out="$(_run_key go 2>&1)"; _err_rc=$?
+_t "empty prompt aborts: rc 1" "1" "${_err_rc}"
+_t "empty prompt aborts: says so, nothing evaluated" "Aborted: empty input" \
+  "$(print -r -- "${_err_out}" | grep -o 'Aborted: empty input'; print -r -- "${_err_out}" | grep 'https://go/')"
+
+# ---------------------------------------------------------------------------
+# AWS sequences (inline fixture, stub script): the shipped aws_profile.json
+# entries assemble to exactly the alias bodies, with no builder.
+# ---------------------------------------------------------------------------
+_t "--dry-run app: surface fields" "name=app tier=db src=${_db2} surface=popup autodismiss=true key=- prompt=-" \
+  "$(tmux_oneshot --dry-run app 2>/dev/null | sed -n 1p)"
+_t "--dry-run app: cmd" "cmd=${_stub} --query \"'production' 'hyperbase' \"" \
+  "$(tmux_oneshot --dry-run app 2>/dev/null | sed -n 2p)"
+_t "--dry-run 'ap login': surface window:sso" "surface=window:sso autodismiss=false" \
+  "$(tmux_oneshot --dry-run 'ap login' 2>/dev/null | grep -o 'surface=[^ ]* autodismiss=[^ ]*')"
+_t "--dry-run 'ap login': cmd" "cmd=ACTION=login ${_stub} --query \"'hyperbase' \"" \
+  "$(tmux_oneshot --dry-run 'ap login' 2>/dev/null | sed -n 2p)"
+_t "--dry-run go: prompt left unexpanded" "cmd=echo \"https://go/\${ONESHOT_INPUT}\"" \
+  "$(tmux_oneshot --dry-run go 2>/dev/null | sed -n 2p)"
+_t "--dry-run caffeinate: key and window" "surface=window:caf autodismiss=false key=ctrl-k" \
+  "$(tmux_oneshot --dry-run caffeinate 2>/dev/null | grep -o 'surface=.*key=[^ ]*')"
+_t "--dry-run unknown: rc 1" "1" "$(tmux_oneshot --dry-run nope >/dev/null 2>&1; echo $?)"
+_t "apa and aPa resolve to different entries" "2 5" \
+  "$(tmux_oneshot::_index_or_die apa) $(tmux_oneshot::_index_or_die aPa)"
+export TMUX_ONESHOT_DB="${_db}"
+
+# ---------------------------------------------------------------------------
 # Error capture: executed runs persist stderr to TMUX_ONESHOT_LOG (rotated
-# per run), so popup errors survive the popup closing.
+# per run), so popup errors survive the popup closing. TMUX= keeps the
+# executed runs (separate processes, no tmux stub) off the live server.
 # ---------------------------------------------------------------------------
 local _log_dir _log
 _log_dir="$(mktemp -d /tmp/tmux-oneshot-test-log.XXXXX)"
@@ -201,7 +542,9 @@ export TMUX_ONESHOT_LOG="${_log}"
 # Regression for the popup outage of 2026-08-19: a spaced key must survive
 # the executed CLI path end to end.
 _t "CLI select by spaced name" "named-ran" \
-  "$(zsh "${HOME}/.config/bin/tmux-oneshot" "My Name" 2>/dev/null | grep -o named-ran)"
+  "$(TMUX= zsh "${HOME}/.config/bin/tmux-oneshot" "My Name" 2>/dev/null | grep -o named-ran)"
+_t "CLI: apa runs the stub with the alias body" "aws_profile --query 'alpha' 'hyperbase' " \
+  "$(TMUX_ONESHOT_DB="${_db2}" TMUX= zsh "${HOME}/.config/bin/tmux-oneshot" apa 2>/dev/null)"
 
 zsh "${HOME}/.config/bin/tmux-oneshot" --list > /dev/null 2>&1
 _t "run logs its invocation header" "1" "$(grep -c 'tmux-oneshot --list' "${_log}")"
@@ -220,7 +563,9 @@ unset TMUX_ONESHOT_LOG
 rm -rf "${_log_dir}"
 
 # ---------------------------------------------------------------------------
-rm -f "${_picks_file}" "${_typed_file}" "${_db}"
+rm -f "${_picks_file}" "${_typed_file}" "${_calls_file}" "${_label_file}" "${_tmux_file}" "${_db}" "${_db2}"
+rm -rf "${_stub_dir}"
+unfunction tmux _tmux_last _fresh 2>/dev/null
 print
 if (( _fail > 0 )); then
   log::err "tmux_oneshot: ${_pass} passed, ${_fail} failed"
