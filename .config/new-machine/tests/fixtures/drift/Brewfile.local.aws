@@ -1,0 +1,2 @@
+# local tier: one of the undeclared formulae declared here
+brew "python@3.10"

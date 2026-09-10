@@ -1,0 +1,13 @@
+[INFO] [2026-09-10T00:26:40.000112000Z] [verify] run started | run_id='20260910T002640' mode='check' host='testhost'
+[INFO] [2026-09-10T00:26:40.004881000Z] [step::run] ==> brew
+[INFO] [2026-09-10T00:26:40.093007000Z] [step::run] verdict | step='brew' status='ok' reason='brew_present'
+[INFO] [2026-09-10T00:26:40.094120000Z] [step::run] ==> brew_pkgs
+[INFO] [2026-09-10T00:26:41.071449000Z] [step::run] verdict | step='brew_pkgs' status='fail' reason='missing'
+[INFO] [2026-09-10T00:26:41.072301000Z] [step::run] ==> brew_drift
+[WARN] [2026-09-10T00:26:42.480900000Z] [brew::classify] untrusted tap declared | tap='hashicorp/tap'
+[INFO] [2026-09-10T00:26:42.484017000Z] [step::run] verdict | step='brew_drift' status='fail' reason='drift'
+[INFO] [2026-09-10T00:26:42.485002000Z] [step::run] ==> local_dotfiles_repo
+[INFO] [2026-09-10T00:26:42.543311000Z] [step::run] verdict | step='local_dotfiles_repo' status='warn' reason='unpushed'
+[INFO] [2026-09-10T00:26:42.544190000Z] [step::run] ==> karabiner
+[INFO] [2026-09-10T00:26:42.747788000Z] [step::run] verdict | step='karabiner' status='warn' reason='karabiner_healthcheck'
+[INFO] [2026-09-10T00:26:43.101266000Z] [verify] summary | status='fail' fail='2' warn='3' ok='7'

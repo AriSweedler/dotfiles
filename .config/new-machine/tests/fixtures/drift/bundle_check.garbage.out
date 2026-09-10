@@ -1,0 +1,3 @@
+brew bundle can't satisfy your Brewfile's dependencies.
+→ Something odd happened to foo.
+Satisfy missing dependencies with `brew bundle install`.

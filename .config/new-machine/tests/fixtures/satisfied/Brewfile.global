@@ -1,0 +1,7 @@
+# satisfied fixture: every declared item is installed, nothing extra
+brew "bob"
+brew "git"
+brew "jq"
+brew "terminal-notifier"
+cask "font-caskaydia-mono-nerd-font"
+vscode "golang.go"

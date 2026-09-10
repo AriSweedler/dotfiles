@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "run_id": "20260910T002640",
+  "ts": "2026-09-10T00:26:40Z",
+  "host": "testhost",
+  "mode": "check",
+  "status": "fail",
+  "counts": {"fail": 2, "ok": 7, "warn": 3},
+  "steps": [
+    {"step": "bob_neovim", "status": "ok", "reason": "installed", "detail": "neovim installed via bob", "fix": null,
+     "manual": false, "actionable": false, "items": [], "rc": 0, "duration_ms": 41,
+     "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/bob_neovim.log", "applied": false},
+    {"step": "brew", "status": "ok", "reason": "present", "detail": "Homebrew 6.0.22 | brew='/tmp/nmtest/shims/brew'", "fix": null,
+     "manual": false, "actionable": false, "items": [], "rc": 0, "duration_ms": 88,
+     "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/brew.log", "applied": false},
+    {"step": "brew_drift", "status": "fail", "reason": "drift", "detail": "undeclared=3 orphaned=1 declared_orphan=0 duplicate=0",
+     "fix": "new-machine brew triage", "manual": true, "actionable": false,
+     "items": [
+       {"kind": "formula", "name": "gh", "problem": "installed but undeclared"},
+       {"kind": "formula", "name": "python@3.10", "problem": "installed but undeclared"},
+       {"kind": "cask", "name": "codex", "problem": "installed but undeclared"},
+       {"kind": "formula", "name": "spacelift-io/spacelift/spacectl", "problem": "orphaned",
+        "hint": "the tap now ships cask spacelift-io/spacelift/spacectl"}
+     ],
+     "rc": 0, "duration_ms": 1412,
+     "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/brew_drift.log", "applied": false},
+    {"step": "brew_pkgs", "status": "fail", "reason": "missing", "detail": "1 declared item not installed",
+     "fix": "new-machine apply brew_pkgs", "manual": false, "actionable": true,
+     "items": [
+       {"kind": "formula", "name": "cowsay", "problem": "needs to be installed", "tier": "global"}
+     ],
+     "rc": 0, "duration_ms": 977,
+     "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/brew_pkgs.log", "applied": false},
+    {"step": "claude", "status": "ok", "reason": "present", "detail": "version='2.1.267' path='/tmp/nmtest/shims/claude'", "fix": null,
+     "manual": false, "actionable": false, "items": [], "rc": 0, "duration_ms": 35,
+     "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/claude.log", "applied": false},
+    {"step": "claude_notifications", "status": "ok", "reason": "configured",
+     "detail": "hook='/tmp/nmtest/home/.config/claude/bin/notification-fire.sh' notifier='/tmp/nmtest/shims/terminal-notifier'", "fix": null,
+     "manual": false, "actionable": false, "items": [], "rc": 0, "duration_ms": 22,
+     "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/claude_notifications.log", "applied": false},
+    {"step": "dotfiles_repo", "status": "ok", "reason": "clean",
+     "detail": "git_dir='/tmp/nmtest/home/dotfiles.git' hooks='/tmp/nmtest/home/.config/git/dotfiles-hooks'", "fix": null,
+     "manual": false, "actionable": false, "items": [], "rc": 0, "duration_ms": 60,
+     "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/dotfiles_repo.log", "applied": false},
+    {"step": "git_health", "status": "ok", "reason": "loaded", "detail": "label='com.testuser.git-health'", "fix": null,
+     "manual": false, "actionable": false, "items": [], "rc": 0, "duration_ms": 47,
+     "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/git_health.log", "applied": false},
+    {"step": "karabiner", "status": "warn", "reason": "karabiner_healthcheck", "detail": "status=degraded\nissues=2",
+     "fix": "/tmp/nmtest/home/.config/karabiner/bin/healthcheck", "manual": false, "actionable": false, "items": [], "rc": 0, "duration_ms": 203,
+     "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/karabiner.log", "applied": false},
+    {"step": "local_dotfiles_repo", "status": "warn", "reason": "unpushed", "detail": "1 unpushed commit",
+     "fix": "git ldf push", "manual": false, "actionable": false, "items": [], "rc": 0, "duration_ms": 58,
+     "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/local_dotfiles_repo.log", "applied": false},
+    {"step": "terminal_nerdfont", "status": "warn", "reason": "manual_font",
+     "detail": "Set a Nerd Font as the terminal font\n  * Terminal.app: Preferences -> Profiles -> Text -> Font\n  * iTerm2: Preferences -> Profiles -> Text -> Change Font\nInstalled: font-caskaydia-mono-nerd-font",
+     "fix": null, "manual": true, "actionable": false, "items": [], "rc": 0, "duration_ms": 310,
+     "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/terminal_nerdfont.log", "applied": false},
+    {"step": "weekly_verify", "status": "ok", "reason": "loaded", "detail": "label='com.testuser.new-machine-verify'", "fix": null,
+     "manual": false, "actionable": false, "items": [], "rc": 0, "duration_ms": 71,
+     "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/weekly_verify.log", "applied": false}
+  ],
+  "brew": {
+    "undeclared": [
+      {"kind": "formula", "name": "gh", "tap": "homebrew/core", "new": true},
+      {"kind": "formula", "name": "python@3.10", "tap": "homebrew/core", "new": false},
+      {"kind": "cask", "name": "codex", "tap": "homebrew/cask", "new": true}
+    ],
+    "orphan_keg": [
+      {"kind": "formula", "name": "spacelift-io/spacelift/spacectl", "problem": "orphaned",
+       "hint": "the tap now ships cask spacelift-io/spacelift/spacectl"}
+    ],
+    "declared_orphan": [],
+    "duplicate": [],
+    "ignored": [
+      {"kind": "formula", "name": "bazelisk", "tier": "local", "reason": "company tooling owns these",
+       "via": "include-declared /tmp/nmtest/home/h/source/hyperbase/admin/bin/Brewfile"}
+    ],
+    "unresolvable_ignore": [],
+    "redundant_ignore": [],
+    "include_declared_missing": [],
+    "ambiguous_alias": [],
+    "untrusted_taps": ["hashicorp/tap"],
+    "inventory_note": null,
+    "vscode_skipped": false,
+    "counts": {"satisfied": 57, "undeclared": 3, "ignored": 1}
+  }
+}

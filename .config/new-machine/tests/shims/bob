@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Fake bob: `ls` prints $BOB_SHIM_LS; BOB_SHIM_RC makes every call fail with that code.
+set -u
+printf '%s\n' "$*" >> "${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/bob.log"
+rc="${BOB_SHIM_RC:-0}"
+if (( rc != 0 )); then
+  printf 'bob shim: failing on purpose\n' >&2
+  exit "${rc}"
+fi
+if [[ "${1:-}" == ls ]]; then
+  printf '%s\n' "${BOB_SHIM_LS-}"
+fi
+exit 0

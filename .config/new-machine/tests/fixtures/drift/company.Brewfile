@@ -1,0 +1,17 @@
+# This file contains programs to be installed by `setup_engineering_laptop.sh`
+tap "buildkite/buildkite"
+
+brew "bazelisk"
+brew "jq"
+brew "yq"
+brew "ibazel"
+brew "watchman"
+brew "zstd"
+brew "openjdk@17"
+brew "openssh"
+brew "ykman"
+brew "git"
+brew "gh"
+brew "aws-sso-cli"
+brew "buildkite/buildkite/bk"
+brew "f1bonacc1/tap/process-compose"

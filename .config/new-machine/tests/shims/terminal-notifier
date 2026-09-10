@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Fake terminal-notifier: records every banner; the tests read the log.
+set -u
+printf '%s\n' "$*" >> "${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/terminal-notifier.log"
+exit 0

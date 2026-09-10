@@ -1,0 +1,2 @@
+# local tier: declares an orphaned keg a fresh machine cannot install
+brew "spacelift-io/spacelift/spacectl"

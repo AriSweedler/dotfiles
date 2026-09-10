@@ -1,0 +1,8 @@
+{
+  "installed_on_request": true,
+  "installed_as_dependency": false,
+  "source": {
+    "tap": "spacelift-io/spacelift",
+    "path": "__PREFIX__/Library/Taps/spacelift-io/homebrew-spacelift/spacectl.rb"
+  }
+}

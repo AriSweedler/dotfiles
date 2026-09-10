@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Fake Claude Code CLI: only --version is ever consulted.
+set -u
+printf '%s\n' "$*" >> "${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/claude.log"
+if [[ "${1:-}" == --version ]]; then
+  printf '2.1.267\n'
+fi
+exit 0

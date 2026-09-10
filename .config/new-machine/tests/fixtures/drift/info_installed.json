@@ -1,0 +1,75 @@
+{
+  "formulae": [
+    {
+      "name": "gh",
+      "full_name": "gh",
+      "tap": "homebrew/core",
+      "aliases": [],
+      "oldnames": []
+    },
+    {
+      "name": "kubernetes-cli",
+      "full_name": "kubernetes-cli",
+      "tap": "homebrew/core",
+      "aliases": [
+        "kubectl"
+      ],
+      "oldnames": []
+    },
+    {
+      "name": "python@3.14",
+      "full_name": "python@3.14",
+      "tap": "homebrew/core",
+      "aliases": [
+        "python",
+        "python3",
+        "python@3"
+      ],
+      "oldnames": []
+    },
+    {
+      "name": "python@3.10",
+      "full_name": "python@3.10",
+      "tap": "homebrew/core",
+      "aliases": [],
+      "oldnames": []
+    },
+    {
+      "name": "bk@3",
+      "full_name": "buildkite/buildkite/bk@3",
+      "tap": "buildkite/buildkite",
+      "aliases": [],
+      "oldnames": [
+        "bk"
+      ]
+    },
+    {
+      "name": "spacectl",
+      "full_name": "spacelift-io/spacelift/spacectl",
+      "tap": "spacelift-io/spacelift",
+      "aliases": [],
+      "oldnames": []
+    },
+    {
+      "name": "libtiff",
+      "full_name": "libtiff",
+      "tap": "homebrew/core",
+      "aliases": [],
+      "oldnames": []
+    }
+  ],
+  "casks": [
+    {
+      "token": "google-chrome",
+      "full_token": "google-chrome",
+      "tap": "homebrew/cask",
+      "old_tokens": []
+    },
+    {
+      "token": "instant-space-switcher",
+      "full_token": "instant-space-switcher",
+      "tap": null,
+      "old_tokens": []
+    }
+  ]
+}

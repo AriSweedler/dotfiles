@@ -1,0 +1,29 @@
+#!/usr/bin/env zsh
+# Test double for ~/.config/bin/git-health: --install writes the hourly plist and loads it
+# through launchctl (the shim); every other mode is out of scope for the new-machine tests.
+set -euo pipefail
+label="com.$(id -un).git-health"
+plist="${HOME}/Library/LaunchAgents/${label}.plist"
+dry_run=0
+install=0
+for arg in "$@"; do
+  case "${arg}" in
+    --install) install=1 ;;
+    --dry-run) dry_run=1 ;;
+    *) print -u2 "fake git-health: unsupported flag | flag='${arg}'"; exit 64 ;;
+  esac
+done
+if (( ! install )); then
+  print -u2 "fake git-health: only --install is supported"
+  exit 64
+fi
+if (( dry_run )); then
+  print -u2 "[INFO] dry-run, would write plist and bootstrap | plist='${plist}' label='${label}'"
+  exit 0
+fi
+mkdir -p "${plist:h}"
+jq -n --arg label "${label}" '{Label: $label, ProgramArguments: ["/bin/zsh", "git-health", "--all"], StartCalendarInterval: {Minute: 20}}' \
+  | plutil -convert xml1 - -o "${plist}"
+launchctl bootout "gui/$(id -u)/${label}" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "${plist}"
+print -u2 "[INFO] installed launchd job | label='${label}'"

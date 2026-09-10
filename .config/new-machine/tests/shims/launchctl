@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Fake launchctl: a loaded job is a marker file named after the plist's Label under
+# $LAUNCHCTL_SHIM_STATE. bootstrap creates it, bootout removes it, print succeeds iff it exists.
+set -u
+log="${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/launchctl.log"
+state="${LAUNCHCTL_SHIM_STATE:?LAUNCHCTL_SHIM_STATE unset}"
+printf '%s\n' "$*" >> "${log}"
+mkdir -p "${state}"
+
+case "${1:-}" in
+  bootstrap)
+    plist="${3:?bootstrap needs a plist}"
+    label="$(plutil -extract Label raw -o - "${plist}")" || exit 5
+    touch "${state}/${label}" ;;
+  bootout)
+    target="${2:?bootout needs a target}"
+    label="${target##*/}"
+    if [[ -e "${state}/${label}" ]]; then
+      rm -f "${state}/${label}"
+    else
+      printf 'Boot-out failed: 3: No such process\n' >&2
+      exit 3
+    fi ;;
+  print)
+    target="${2:?print needs a target}"
+    label="${target##*/}"
+    if [[ -e "${state}/${label}" ]]; then
+      printf '%s = {\n\tstate = waiting\n\tlast exit code = 0\n\truns = 1\n}\n' "${target}"
+    else
+      printf 'Could not find service "%s" in domain for user gui\n' "${label}" >&2
+      exit 113
+    fi ;;
+  *)
+    printf 'launchctl shim: unsupported: %s\n' "$*" >&2
+    exit 64 ;;
+esac

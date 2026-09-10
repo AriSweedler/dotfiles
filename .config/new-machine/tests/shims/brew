@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# Fake brew for the test harness: fixtures in, text out, so it can never agree with itself the
+# way real brew does. Every call is appended to $BREW_SHIM_LOG_DIR/brew.log. Anything outside
+# the read-only set §2.7 allows is logged as MUTATION and refused (exit 99) unless
+# BREW_SHIM_ALLOW_MUTATION=1, in which case it still only logs.
+set -u
+log="${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/brew.log"
+fixture="${BREW_SHIM_FIXTURE:?BREW_SHIM_FIXTURE unset}"
+printf '%s\n' "$*" >> "${log}"
+
+mutation() {
+  printf 'MUTATION %s\n' "$*" >> "${log}"
+  if [[ "${BREW_SHIM_ALLOW_MUTATION:-0}" == 1 ]]; then
+    exit 0
+  fi
+  printf 'brew shim: refusing mutating call: %s\n' "$*" >&2
+  exit 99
+}
+
+tap_dir() {
+  local user="${1%%/*}" repo="${1#*/}"
+  printf '%s/prefix/Library/Taps/%s/homebrew-%s\n' "${fixture}" "${user}" "${repo}"
+}
+
+# `brew bundle list --<kind> --file=F`: names as written, duplicates preserved, per kind.
+bundle_list() {
+  local kind="$1" file="$2" line
+  local re='^[[:space:]]*(brew|cask|tap|vscode)[[:space:]]+"([^"]+)"'
+  local src="${file}"
+  [[ "${file}" == - ]] && src=/dev/stdin
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    if [[ "${line}" =~ ${re} ]] && [[ "${BASH_REMATCH[1]}" == "${kind}" ]]; then
+      printf '%s\n' "${BASH_REMATCH[2]}"
+    fi
+  done < "${src}"
+}
+
+case "${1:-}" in
+  --version) printf 'Homebrew 6.0.22\n' ;;
+  --prefix) printf '%s/prefix\n' "${fixture}" ;;
+  --cellar) printf '%s/prefix/Cellar\n' "${fixture}" ;;
+  --caskroom) printf '%s/prefix/Caskroom\n' "${fixture}" ;;
+  --repository)
+    if [[ $# -eq 1 ]]; then printf '%s/prefix\n' "${fixture}"; else tap_dir "$2"; fi ;;
+  list)
+    case "$*" in
+      "list --formula --full-name") cat "${fixture}/list_formula.txt" ;;
+      "list --cask") cat "${fixture}/list_cask.txt" ;;
+      *) mutation "$@" ;;
+    esac ;;
+  tap)
+    if [[ $# -eq 1 ]]; then cat "${fixture}/taps.txt"; else mutation "$@"; fi ;;
+  tap-info)
+    if [[ "${2:-}" == --json && -n "${3:-}" && $# -eq 3 ]]; then
+      if [[ -e "${fixture}/tapinfo.hang" ]]; then exec sleep 30; fi
+      f="${fixture}/tap_info/${3%%/*}__${3#*/}.json"
+      if [[ -f "${f}" ]]; then cat "${f}"; else printf 'Error: No available tap %s.\n' "$3" >&2; exit 1; fi
+    else
+      mutation "$@"
+    fi ;;
+  info)
+    if [[ "$*" == "info --json=v2 --installed" ]]; then cat "${fixture}/info_installed.json"; else mutation "$@"; fi ;;
+  bundle)
+    sub="${2:-}"
+    shift 2
+    file="" kind="" no_upgrade=0 verbose=0 no_describe=0 other=0
+    has_formula=0 has_cask=0 has_tap=0 has_vscode=0
+    for a in "$@"; do
+      case "${a}" in
+        --file=*) file="${a#--file=}" ;;
+        --formula) kind=brew; has_formula=1 ;;
+        --cask) kind=cask; has_cask=1 ;;
+        --tap) kind=tap; has_tap=1 ;;
+        --vscode) kind=vscode; has_vscode=1 ;;
+        --no-upgrade) no_upgrade=1 ;;
+        --verbose) verbose=1 ;;
+        --no-describe) no_describe=1 ;;
+        *) other=1 ;;
+      esac
+    done
+    case "${sub}" in
+      list)
+        if [[ -n "${kind}" && -n "${file}" && ${other} -eq 0 ]] && (( has_formula + has_cask + has_tap + has_vscode == 1 )); then
+          bundle_list "${kind}" "${file}"
+        else
+          mutation bundle "${sub}" "$@"
+        fi ;;
+      check)
+        if [[ -n "${file}" && ${no_upgrade} -eq 1 && ${verbose} -eq 1 && ${other} -eq 0 ]]; then
+          if [[ "${file}" == - ]]; then cat > "${BREW_SHIM_LOG_DIR}/last_merged.brewfile"; else cp "${file}" "${BREW_SHIM_LOG_DIR}/last_merged.brewfile"; fi
+          if [[ -e "${fixture}/bundle_check.hang" ]]; then exec sleep 30; fi
+          cat "${fixture}/bundle_check.out"
+          exit "$(cat "${fixture}/bundle_check.rc")"
+        else
+          mutation bundle "${sub}" "$@"
+        fi ;;
+      dump)
+        if [[ "${file}" == - && ${no_describe} -eq 1 && ${other} -eq 0 ]] && (( has_formula + has_cask + has_tap + has_vscode == 4 )); then
+          cat "${fixture}/bundle_dump.out"
+        else
+          mutation bundle "${sub}" "$@"
+        fi ;;
+      *) mutation bundle "${sub}" "$@" ;;
+    esac ;;
+  *) mutation "$@" ;;
+esac

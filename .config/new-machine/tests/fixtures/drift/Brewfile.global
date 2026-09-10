@@ -1,0 +1,5 @@
+# drift fixture: the shared tier as it stands today (kubectl/python/terraform resolve through aliases and keg names)
+tap "homebrew/autoupdate"
+brew "kubectl"
+brew "python"
+brew "terraform"

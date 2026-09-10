@@ -1,0 +1,7 @@
+brew bundle can't satisfy your Brewfile's dependencies.
+→ Tap homebrew/autoupdate needs to be tapped.
+→ Cask nosuchcask-zzz needs to be installed.
+→ Cask spacectl needs to be installed.
+→ VSCode Extension nosuch.extension-zzz needs to be installed.
+→ Formula cowsay needs to be installed.
+Satisfy missing dependencies with `brew bundle install`.
