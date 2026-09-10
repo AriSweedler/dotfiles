@@ -314,7 +314,7 @@ _t "index carries each entry's source file" "${_xdg_c}/tmux_oneshot/macos.json $
 _t "index written under XDG_STATE_HOME" "yes" "$([[ -f "${_index}" ]] && echo yes)"
 _t "preview program: tier · source, then the entry without loader fields" "global · ${_xdg_c}/tmux_oneshot/macos.json
 {\"menu\":{\"name\":\"g1\",\"text\":\"global one\"},\"cmd\":\"echo g1\",\"key\":\"ctrl-k\"}" \
-  "$(jq -r --argjson i 0 "${TMUX_ONESHOT_JQ_PREVIEW}" "${_index}")"
+  "$(jq -r --arg i 0 "${TMUX_ONESHOT_JQ_PREVIEW}" "${_index}")"
 # The error must be ours alone: no mkdir or redirection message beside it.
 chmod 555 "${_xdg_s}/tmux_oneshot"
 _err_out="$(_fresh --list 2>&1 >/dev/null)"; _err_rc=$?
@@ -425,6 +425,31 @@ _t "rc 130 aborts" "1 Aborted" "${_err_rc} $(print -r -- "${_err_out}" | grep -o
 _err_out="$(tmux_oneshot::_resolve_pick 0 "" "" "" 2>&1)"; _err_rc=$?
 _t "nothing → rc 1, No entry selected" "1 No entry selected" "${_err_rc} $(print -r -- "${_err_out}" | grep -o 'No entry selected')"
 
+# Group prefixes: the bare leaf resolves when unique, never when two groups share it.
+local _db3 _saved_db
+_db3="$(mktemp /tmp/tmux-oneshot-test-db3.XXXXX.json)"
+cat > "${_db3}" << 'EOF'
+[
+ {"menu": {"name": "applepaste", "text": "type the clipboard"}, "cmd": "echo paste"},
+ {"menu": {"name": "aws/ap", "text": "pick env"}, "cmd": "echo ap"},
+ {"menu": {"name": "aws/app", "text": "production"}, "cmd": "echo app"},
+ {"menu": {"name": "aws/aPp", "text": "all production"}, "cmd": "echo aPp"},
+ {"menu": {"name": "aws/foo", "text": "a"}, "cmd": "echo a"},
+ {"menu": {"name": "gcp/foo", "text": "b"}, "cmd": "echo b"}
+]
+EOF
+_saved_db="${TMUX_ONESHOT_DB}"
+export TMUX_ONESHOT_DB="${_db3}"
+_t "leaf resolves through its group prefix" "2" "$(tmux_oneshot::_index_or_die app)"
+_t "leaf match is whole-segment, not a prefix of another name" "1" "$(tmux_oneshot::_index_or_die ap)"
+_t "full grouped name still resolves" "2" "$(tmux_oneshot::_index_or_die aws/app)"
+_t "leaf stays case-sensitive" "3" "$(tmux_oneshot::_index_or_die aPp)"
+_err_out="$(tmux_oneshot::_index_or_die foo 2>&1)"; _err_rc=$?
+_t "leaf shared by two groups is unknown" "1 Unknown key" "${_err_rc} $(print -r -- "${_err_out}" | grep -o 'Unknown key')"
+_t "picker: typed leaf beats the highlighted row" "2" "$(tmux_oneshot::_resolve_pick 0 "app" "" "$(tmux_oneshot::_menu | sed -n 1p)")"
+export TMUX_ONESHOT_DB="${_saved_db}"
+rm -f "${_db3}"
+
 _t "expect list = unique non-reserved keys" "ctrl-g,ctrl-k,ctrl-l" "$(tmux_oneshot::_expect_keys 2>/dev/null)"
 _t "header lists key→name" "ctrl-k→caffeinate   ctrl-g→go   ctrl-l→claude-link" "$(tmux_oneshot::_key_header)"
 local _db_keys
@@ -449,7 +474,7 @@ _t "_pick e2e: direct key with zero matches runs caffeinate in window caf" "new-
   "$(_tmux_last 1-3)"
 _t "_pick passes --expect and --header to fzf" "--expect=ctrl-g,ctrl-k,ctrl-l --header=ctrl-k→caffeinate   ctrl-g→go   ctrl-l→claude-link" \
   "$(tail -1 "${_calls_file}" | grep -o -- '--expect=[^ ]* --header=.*' | sed 's/ --preview.*//')"
-_t "_pick preview is the shared program on the hidden index" "--preview jq -r --argjson i {1} ${(qq)TMUX_ONESHOT_JQ_PREVIEW} ${(qq)_db2}" \
+_t "_pick preview is the shared program on the hidden index" "--preview jq -r --arg i {1} ${(qq)TMUX_ONESHOT_JQ_PREVIEW} ${(qq)_db2}" \
   "$(tail -1 "${_calls_file}" | grep -o -- '--preview .*' | sed 's/ --preview-window.*//')"
 _set_picks $'apa\t\taPa'
 _t "_pick e2e: exact name beats the highlighted row" "aws_profile --query 'alpha' 'hyperbase' " \
@@ -460,6 +485,38 @@ _t "_pick e2e: highlighted row runs" "aws_profile --query 'alpha' 'hyperbase' " 
 _set_picks "ESC"
 _err_out="$(tmux_oneshot::_pick 2>&1)"; _err_rc=$?
 _t "_pick e2e: esc aborts" "1 Aborted" "${_err_rc} $(print -r -- "${_err_out}" | grep -o Aborted)"
+
+# Groups: "g/leaf" names fold into one top-level row that opens a second picker.
+local _db4
+_db4="$(mktemp /tmp/tmux-oneshot-test-db4.XXXXX.json)"
+cat > "${_db4}" << 'EOF'
+[
+ {"menu": {"name": "misc", "text": "ungrouped"}, "cmd": "echo misc-ran", "autodismiss": true},
+ {"menu": {"name": "aws/apa", "text": "alpha"}, "cmd": "echo apa-ran", "autodismiss": true},
+ {"menu": {"name": "aws/aps", "text": "staging"}, "cmd": "echo aps-ran", "autodismiss": true}
+]
+EOF
+_saved_db="${TMUX_ONESHOT_DB}"
+export TMUX_ONESHOT_DB="${_db4}"
+_t "top menu folds the group into one row" "0|g:aws" "$(tmux_oneshot::_menu | cut -f1 | paste -sd'|' -)"
+_t "group row lists its leaves" "aws   ▸ apa, aps" "$(tmux_oneshot::_menu | sed -n 2p | cut -f2)"
+_t "group menu shows leaves with real indexes" "1|apa|2|aps" "$(tmux_oneshot::_menu --group aws | cut -f1-2 | sed 's/  .*//' | tr '\t' '|' | paste -sd'|' -)"
+_t "highlighted group row resolves to g:aws" "g:aws" "$(tmux_oneshot::_resolve_pick 0 "" "" "$(tmux_oneshot::_menu | sed -n 2p)")"
+_set_picks $'\t\t▸' $'\t\taps'
+_t "_pick e2e: group row opens the group picker and runs the leaf" "aps-ran" "$(tmux_oneshot::_pick 2>/dev/null)"
+_set_picks $'apa\t\t'
+_t "_pick e2e: typed leaf runs at once from the top level" "apa-ran" "$(tmux_oneshot::_pick 2>/dev/null)"
+_set_picks $'\t\t▸' "ESC" "ESC"
+: > "${_calls_file}"
+_err_out="$(tmux_oneshot::_pick 2>&1)"; _err_rc=$?
+_t "esc in the group picker goes back to the top level; esc again aborts" "1 Aborted 3" \
+  "${_err_rc} $(print -r -- "${_err_out}" | grep -o Aborted) $(wc -l < "${_calls_file}" | tr -d ' ')"
+_t "--dry-run of a group lists its members" "group=aws members=apa, aps" "$(tmux_oneshot::action::dry_run aws)"
+_t "--debug is clean with a folded group" "0" "$(tmux_oneshot::action::debug > /dev/null 2>&1; echo $?)"
+_t "preview for a group row names its leaves" "group · aws/
+apa   aps" "$(jq -r --arg i g:aws "${TMUX_ONESHOT_JQ_PREVIEW}" "${_db4}")"
+export TMUX_ONESHOT_DB="${_saved_db}"
+rm -f "${_db4}"
 export TMUX_ONESHOT_DB="${_db}"
 _set_picks $'\t\tMy Name'
 _t "keyless DB: 2-line --print-query output parses" "named-ran" "$(tmux_oneshot::_pick 2>/dev/null)"

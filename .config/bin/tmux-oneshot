@@ -35,7 +35,11 @@
 #                key (unnamed entries keep 1-based index keys): the fuzzy
 #                target, the CLI argument, the --edit/--dry-run argument and
 #                the exact-name rule's match. Unique across every loaded
-#                file; case-sensitive (ap ≠ aP).
+#                file; case-sensitive (ap ≠ aP). "group/leaf" names fold
+#                into one top-level row per group that opens a second picker
+#                of the group's leaves (esc goes back); a bare leaf typed at
+#                either level still runs at once when it is unique (app →
+#                ap/app). Name a group so no leaf collides with it.
 #   key          fzf key name ("ctrl-k", "alt-x", "f5"): pressing it in the
 #                picker runs this entry at once, whatever is typed. Unique
 #                across files (a later duplicate loses its key). Reserved
@@ -326,8 +330,14 @@ function tmux_oneshot::action::edit() {
 function tmux_oneshot::_index_or_die() {
   local key="${1:?}"
   local idx
+  # Exact name first; else the one entry whose last /-segment is the key, so a
+  # group prefix (aws/app) costs nothing at the keyboard (app). Two groups
+  # sharing a leaf stay ambiguous on purpose.
   idx="$(jq -r --arg k "${key}" \
-    "${TMUX_ONESHOT_JQ_KEYDEF} to_entries | map(select(entrykey == \$k)) | .[0].key // empty" \
+    "${TMUX_ONESHOT_JQ_KEYDEF} to_entries
+     | (map(select(entrykey == \$k)) | .[0].key)
+       // (map(select((entrykey | split(\"/\") | last) == \$k)) | if length == 1 then .[0].key else null end)
+       // empty" \
     "${TMUX_ONESHOT_DB}")"
   if [[ -z "${idx}" ]]; then
     log::err "Unknown key | key='${key}' db='${TMUX_ONESHOT_DB}'"
@@ -340,25 +350,40 @@ function tmux_oneshot::_index_or_die() {
 # wrapping territory. Not readonly — this file is sourced by tests.
 : "${TMUX_ONESHOT_NAME_MAX:=40}"
 
-# Output: the whole menu in ONE jq pass, one row per entry:
-# "<0-based idx>\t<name>[<padding>  <text>]". name = menu.name // cmd,
-# truncated to the column cap and padded to the (capped) column width; text =
-# menu.text, else the auto body (cmd is included there only when a menu.name
-# displaced it). The idx field is hidden by fzf (--with-nth 2..).
+# Output: the menu in ONE jq pass, "<idx>\t<name>[<padding>  <text>]" per
+# row; idx is hidden by fzf (--with-nth 2..). Top level: one row per ungrouped
+# entry (idx = 0-based entry index) plus one row per group (idx = g:<group>,
+# placed where its first member is, text = the member leaves). Entries named
+# "<group>/<leaf>" belong to <group>. --group G: only that group's entries,
+# shown by leaf. name = menu.name // cmd, truncated to the column cap; text =
+# menu.text, else the auto body (cmd is included only when a menu.name
+# displaced it).
 function tmux_oneshot::_menu() {
-  jq -r --argjson cap "${TMUX_ONESHOT_NAME_MAX}" '
-    ([.[] | (.menu.name // .cmd // "?") | length] | (max // 1)
-      | if . > $cap then $cap else . end) as $w
-    | to_entries[] | .value as $e
-    | (($e.menu.name // $e.cmd // "?") | if length > $w then .[:$w-1] + "…" else . end) as $name
-    | (($e.menu.text
-        // ((if $e.menu.name then ($e.cmd // "") else "" end)
-          + (if (($e.flags // []) + ($e.subcommands // []) | length) > 0 then " …" else "" end)
-          + (if $e.description then "  # " + $e.description else "" end)
-          + (if $e.pwd then " @ " + $e.pwd else "" end)))
-       | ltrimstr(" ")) as $text
-    | "\(.key)\t" + (if $text == "" then $name
-       else $name + (" " * ($w - ($name | length) + 2)) + $text end)' \
+  local group=''
+  [[ "${1-}" == --group ]] && group="${2:?--group needs a name}"
+  jq -r --argjson cap "${TMUX_ONESHOT_NAME_MAX}" --arg group "${group}" '
+    def gname: (.menu.name // "") | if contains("/") then split("/")[0] else "" end;
+    def leaf: (.menu.name // .cmd // "?") | if contains("/") then (split("/")[1:] | join("/")) else . end;
+    def body: (.menu.text
+        // ((if .menu.name then (.cmd // "") else "" end)
+          + (if ((.flags // []) + (.subcommands // []) | length) > 0 then " …" else "" end)
+          + (if .description then "  # " + .description else "" end)
+          + (if .pwd then " @ " + .pwd else "" end))) | ltrimstr(" ");
+    def render($w): (.name | if length > $w then .[:$w-1] + "…" else . end) as $n
+      | "\(.idx)\t" + (if .text == "" then $n else $n + (" " * ($w - ($n | length) + 2)) + .text end);
+    (to_entries | map({idx: (.key | tostring), g: (.value | gname), leaf: (.value | leaf),
+                       name: (.value.menu.name // .value.cmd // "?"), text: (.value | body)})) as $all
+    | (if $group != "" then
+         [$all[] | select(.g == $group) | .name = .leaf]
+       else
+         reduce $all[] as $e ([];
+           if $e.g == "" then . + [$e]
+           elif any(.[]; .idx == "g:" + $e.g) then map(if .idx == "g:" + $e.g then .leaves += [$e.leaf] else . end)
+           else . + [{idx: ("g:" + $e.g), name: $e.g, leaves: [$e.leaf]}] end)
+         | map(if .leaves then .text = "▸ " + (.leaves | join(", ")) else . end)
+       end) as $rows
+    | ([$rows[] | .name | length] | (max // 1) | if . > $cap then $cap else . end) as $w
+    | $rows[] | render($w)' \
     "${TMUX_ONESHOT_DB}"
 }
 
@@ -417,7 +442,7 @@ function tmux_oneshot::_key_header() {
 # The per-row preview: "<tier> · <source file>", then the entry minus the
 # loader fields. One program for _pick and --debug, so the diagnostic runs
 # exactly what fzf runs.
-TMUX_ONESHOT_JQ_PREVIEW='.[$i] | "\(._tier // "db") · \(._src // env.TMUX_ONESHOT_DB)", (del(._tier, ._src) | tojson)'
+TMUX_ONESHOT_JQ_PREVIEW='if ($i | startswith("g:")) then ($i[2:]) as $g | "group · \($g)/", ([.[] | .menu.name // "" | select(startswith($g + "/")) | .[($g | length) + 1:]] | join("   ")) else .[($i | tonumber)] | "\(._tier // "db") · \(._src // env.TMUX_ONESHOT_DB)", (del(._tier, ._src) | tojson) end'
 
 # Interactive top-level picker. Args pass through to fzf (e.g. --query).
 # --sync completes the list before the first key is processed; a type-ahead
@@ -438,7 +463,7 @@ function tmux_oneshot::_pick() {
   [[ -n "${header}" ]] && key_args+=(--header="${header}")
   out="$(tmux_oneshot::_fzf --select-1 "$@" "${TMUX_ONESHOT_FZF_MATCH_ARGS[@]}" \
       --sync --print-query --bind 'ctrl-j:ignore' "${key_args[@]}" \
-      --preview "jq -r --argjson i {1} ${(qq)TMUX_ONESHOT_JQ_PREVIEW} ${(qq)TMUX_ONESHOT_DB}" \
+      --preview "jq -r --arg i {1} ${(qq)TMUX_ONESHOT_JQ_PREVIEW} ${(qq)TMUX_ONESHOT_DB}" \
       --preview-window=up:3:wrap <<< "${menu}")"; rc=$?
   # Quoted (@f) keeps a leading empty query line.
   local -a lines=("${(@f)out}")
@@ -450,6 +475,42 @@ function tmux_oneshot::_pick() {
   fi
   local idx
   idx="$(tmux_oneshot::_resolve_pick "${rc}" "${query}" "${key}" "${sel}")" || return 1
+  if [[ "${idx}" == g:* ]]; then
+    tmux_oneshot::_pick_group "${idx#g:}"
+    return $?
+  fi
+  tmux_oneshot::_run "${idx}"
+}
+
+# Second level: one group's entries by leaf. A typed leaf (or full name) runs
+# exactly like at the top level; esc returns to the top-level picker rather
+# than closing the popup.
+function tmux_oneshot::_pick_group() {
+  local group="${1:?}" menu out rc
+  menu="$(tmux_oneshot::_menu --group "${group}")"
+  if [[ -z "${menu}" ]]; then
+    log::err "Empty group | group='${group}'"
+    return 1
+  fi
+  out="$(tmux_oneshot::_fzf --select-1 "${TMUX_ONESHOT_FZF_MATCH_ARGS[@]}" \
+      --sync --print-query --bind 'ctrl-j:ignore' --header="${group}/   esc: back" \
+      --preview "jq -r --arg i {1} ${(qq)TMUX_ONESHOT_JQ_PREVIEW} ${(qq)TMUX_ONESHOT_DB}" \
+      --preview-window=up:3:wrap <<< "${menu}")"; rc=$?
+  local -a lines=("${(@f)out}")
+  local query="${lines[1]-}" sel="${lines[2]-}" idx
+  if (( rc == 130 )); then
+    tmux_oneshot::_pick
+    return $?
+  fi
+  if [[ -n "${query}" ]] && idx="$(tmux_oneshot::_index_or_die "${group}/${query}" 2>/dev/null \
+                                    || tmux_oneshot::_index_or_die "${query}" 2>/dev/null)"; then
+    :
+  elif [[ -n "${sel}" ]]; then
+    idx="${sel%%$'\t'*}"
+  else
+    log::warn "No entry selected"
+    return 1
+  fi
   tmux_oneshot::_run "${idx}"
 }
 
@@ -509,23 +570,42 @@ function tmux_oneshot::action::debug() {
     return 1
   fi
   log::info "Debug render | db='${TMUX_ONESHOT_DB}' entries='${entries}'"
+  # Top-level rows = ungrouped entries + one per group; every hidden idx must be
+  # a real entry index or a g:<group> the DB actually has.
+  local -i expected_rows
+  expected_rows="$(jq '[.[] | (.menu.name // "") | if contains("/") then "g:" + split("/")[0] else null end]
+    | (map(select(. == null)) | length) + (map(select(. != null)) | unique | length)' "${TMUX_ONESHOT_DB}")"
+  local -i last=-1
   print -r -- "── menu"
   for line in ${(f)menu}; do
     idx="${line%%$'\t'*}"
     print -r -- "  ${line#*$'\t'}"
-    if [[ "${idx}" != "${row}" ]]; then
-      log::err "Hidden index out of order | expected='${row}' got='${idx}'"
+    if [[ "${idx}" == g:* ]]; then
+      if [[ "$(jq -r --arg g "${idx#g:}" '[.[] | .menu.name // "" | select(startswith($g + "/"))] | length' "${TMUX_ONESHOT_DB}")" == 0 ]]; then
+        log::err "Group row without members | group='${idx#g:}'"
+        rc=1
+      fi
+    elif [[ "${idx}" != <-> ]] || (( idx <= last || idx >= entries )); then
+      log::err "Hidden index out of order | after='${last}' got='${idx}'"
       rc=1
+    else
+      last=idx
     fi
-    if ! jq -r --argjson i "${idx}" "${TMUX_ONESHOT_JQ_PREVIEW}" "${TMUX_ONESHOT_DB}" > /dev/null; then
+    if ! jq -r --arg i "${idx}" "${TMUX_ONESHOT_JQ_PREVIEW}" "${TMUX_ONESHOT_DB}" > /dev/null; then
       log::err "Preview jq failed | idx='${idx}'"
       rc=1
     fi
-    (( row++ ))
+    (( row += 1 ))
   done
-  if (( row != entries )); then
-    log::err "Menu row count mismatch | rows='${row}' entries='${entries}'"
+  if (( row != expected_rows )); then
+    log::err "Menu row count mismatch | rows='${row}' expected='${expected_rows}' entries='${entries}'"
     rc=1
+  fi
+  local groups
+  groups="$(jq -r '[.[] | .menu.name // "" | select(contains("/")) | split("/")[0]] | unique | join(", ")' "${TMUX_ONESHOT_DB}")"
+  if [[ -n "${groups}" ]]; then
+    print -r -- "── groups"
+    print -r -- "  ${groups}"
   fi
 
   local keys
@@ -546,8 +626,13 @@ function tmux_oneshot::action::debug() {
 # interactively; prompt entries print "${ONESHOT_INPUT}" unexpanded. The seam
 # for tests and agents.
 function tmux_oneshot::action::dry_run() {
-  local idx entry cmd
-  idx="$(tmux_oneshot::_index_or_die "${1:?}")" || return 1
+  local idx entry cmd members
+  members="$(jq -r --arg g "${1:?}" '[.[] | .menu.name // "" | select(startswith($g + "/")) | .[($g | length) + 1:]] | join(", ")' "${TMUX_ONESHOT_DB}")"
+  if [[ -n "${members}" ]]; then
+    print -r -- "group=${1} members=${members}"
+    return 0
+  fi
+  idx="$(tmux_oneshot::_index_or_die "${1}")" || return 1
   entry="$(jq --argjson i "${idx}" '.[$i]' "${TMUX_ONESHOT_DB}")"
   cmd="$(tmux_oneshot::_assemble "${entry}")" || return 1
   jq -r --arg cmd "${cmd}" '
