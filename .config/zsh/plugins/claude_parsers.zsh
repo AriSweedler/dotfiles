@@ -2,7 +2,7 @@
 # interfaces (process names, ~/.claude/sessions pid map, session JSONLs).
 #
 # Claude updates change these interfaces without notice: 2.1.x's daemon
-# rewrote the pid→session semantics and broke Hyper+Q. Every version-sensitive
+# rewrote the pid→session semantics and broke the open-pr session lookup. Every version-sensitive
 # chunk lives here as a family of parser functions:
 #
 #   claude_parser__<family>__<M>_<m>_<p>
