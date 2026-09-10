@@ -47,6 +47,45 @@ brew::is_busy() {
   [[ -n "$(brew::busy_pids)" ]]
 }
 
+# Homebrew's repository root, resolved once per process: every `brew --repository` is a ~150 ms
+# shell start and the tap layout beneath it is fixed.
+brew::_repo_root() {
+  if [[ -z "${_BREW_REPO_ROOT:-}" ]]; then
+    local brew
+    brew="$(brew::bin)" || return 1
+    typeset -g _BREW_REPO_ROOT
+    _BREW_REPO_ROOT="$("${brew}" --repository)" || return 1
+  fi
+  print -r -- "${_BREW_REPO_ROOT}"
+}
+
+# Checkout directory of a tapped third-party tap; 1 when it is not on disk.
+brew::_tap_repo_dir() {
+  local tap="${1:?brew::_tap_repo_dir: tap required}" root
+  root="$(brew::_repo_root)" || return 1
+  local dir="${root}/Library/Taps/${tap%%/*}/homebrew-${tap#*/}"
+  [[ -d "${dir}" ]] || return 1
+  print -r -- "${dir}"
+}
+
+# brew::snapshot <inventory.json> <info_installed.json>: both producers at once; they are
+# independent one-second brew calls. Returns 2 when the inventory failed, 3 when brew's JSON did.
+brew::snapshot() {
+  local inventory="${1:?brew::snapshot: inventory path required}" info="${2:?brew::snapshot: info path required}"
+  local rc_dir
+  rc_dir="$(mktemp -d)" || return 1
+  ( brew::inventory > "${inventory}"; print -r -- $? > "${rc_dir}/inventory" ) &
+  ( brew::info_installed > "${info}"; print -r -- $? > "${rc_dir}/info" ) &
+  wait
+  local inventory_rc info_rc
+  inventory_rc="$(<"${rc_dir}/inventory")"
+  info_rc="$(<"${rc_dir}/info")"
+  rm -rf "${rc_dir}"
+  (( inventory_rc == 0 )) || return 2
+  (( info_rc == 0 )) || return 3
+  return 0
+}
+
 # Tier files as common.zsh resolved them: under HOME once it is checked out, else beside the script.
 brew::global_brewfile() { print -r -- "${GLOBAL_BREWFILE}"; }
 brew::global_ignore()   { print -r -- "${GLOBAL_BREWFILE_IGNORE}"; }
@@ -183,14 +222,24 @@ brew::declared() {
     log::err "brew not found"
     return 1
   fi
-  local kind listed
+  # One brew start per kind (~0.4 s each); the four are independent, so they run at once.
+  local tmp
+  tmp="$(mktemp -d)" || return 1
+  local kind
+  for kind in "${BREW_KINDS[@]}"; do
+    ( "${brew}" bundle list "--${kind}" --file="${file}" > "${tmp}/${kind}"; print -r -- $? > "${tmp}/${kind}.rc" ) &
+  done
+  wait
   local -a parts=()
   for kind in "${BREW_KINDS[@]}"; do
+    if [[ "$(<"${tmp}/${kind}.rc")" != 0 ]]; then
+      rm -rf "${tmp}"
+      return 1
+    fi
     # ohai chatter ("==> Auto-updating Homebrew...") goes to stdout; a name never starts with it.
-    listed="$("${brew}" bundle list "--${kind}" --file="${file}" \
-               | jq -R -s -c 'split("\n") | map(select(length > 0 and (startswith("==>") | not)))')" || return 1
-    parts+=("${listed}")
+    parts+=("$(jq -R -s -c 'split("\n") | map(select(length > 0 and (startswith("==>") | not)))' "${tmp}/${kind}")")
   done
+  rm -rf "${tmp}"
   jq -n -c --argjson formula "${parts[1]}" --argjson cask "${parts[2]}" \
            --argjson tap "${parts[3]}" --argjson vscode "${parts[4]}" \
     '{formula: $formula, cask: $cask, tap: $tap, vscode: $vscode}'
@@ -384,25 +433,74 @@ brew::_third_party_taps() {
 
 # {"<tap>": {formula_names, cask_tokens}} for every tapped third-party tap. Only per-tap
 # tap-info: `--installed` would pull homebrew/core and thousands of cask tokens.
+# Each tap-info is a ~2 s Ruby start, so the answer is cached under the state dir keyed on the
+# tap checkout's git HEAD (a tap's contents cannot change without it), and misses run at once.
+# A tap dir that is not a git checkout is fetched every time.
 brew::_tap_info_map() {
   local inventory="${1}"
   local brew
   brew="$(brew::bin)" || return 1
   local -a taps=(${(f)"$(brew::_third_party_taps "${inventory}")"})
-  local tap raw doc
+  if (( ${#taps} == 0 )); then
+    print -r -- '{}'
+    return 0
+  fi
+  local cache_dir="${NEW_MACHINE_STATE_DIR}/cache/tap-info"
+  local tmp
+  tmp="$(mktemp -d)" || return 1
+  local tap slug repo head
+  local -A cache_file=()
+  local -a misses=()
+  for tap in "${taps[@]}"; do
+    slug="${tap//\//--}"
+    head=""
+    if repo="$(brew::_tap_repo_dir "${tap}")"; then
+      head="$(git -C "${repo}" rev-parse HEAD 2>/dev/null || true)"
+    fi
+    if [[ -n "${head}" ]]; then
+      cache_file[${tap}]="${cache_dir}/${slug}.${head}.json"
+      if [[ -s "${cache_file[${tap}]}" ]]; then
+        cp "${cache_file[${tap}]}" "${tmp}/${slug}.json"
+        continue
+      fi
+    fi
+    misses+=("${tap}")
+  done
+  # exec keeps a hung brew as close to this process as the old $(...) did, for the watchdog's tree kill.
+  for tap in "${misses[@]}"; do
+    slug="${tap//\//--}"
+    ( exec "${brew}" tap-info --json "${tap}" > "${tmp}/${slug}.raw" 2>/dev/null ) &
+  done
+  wait
+  local doc
   local -a docs=()
   for tap in "${taps[@]}"; do
-    if ! raw="$("${brew}" tap-info --json "${tap}" 2>/dev/null)"; then
+    slug="${tap//\//--}"
+    if [[ -s "${tmp}/${slug}.json" ]]; then
+      docs+=("$(<"${tmp}/${slug}.json")")
+      continue
+    fi
+    if [[ ! -s "${tmp}/${slug}.raw" ]]; then
       log::warn "brew tap-info failed; orphan check for this tap uses the formula path only | tap='${tap}'"
       continue
     fi
     if doc="$(jq -c --arg tap "${tap}" 'if type == "array" then .[0] else . end
-               | {key: $tap, value: {formula_names: (.formula_names // []), cask_tokens: (.cask_tokens // [])}}' <<< "${raw}")"; then
+               | {key: $tap, value: {formula_names: (.formula_names // []), cask_tokens: (.cask_tokens // [])}}' "${tmp}/${slug}.raw")"; then
       docs+=("${doc}")
+      if [[ -n "${cache_file[${tap}]:-}" ]]; then
+        local -a stale=("${cache_dir}/${slug}."*.json(N))
+        if mkdir -p "${cache_dir}" && print -r -- "${doc}" > "${cache_file[${tap}]}.$$" \
+             && mv "${cache_file[${tap}]}.$$" "${cache_file[${tap}]}"; then
+          (( ${#stale} == 0 )) || rm -f "${stale[@]}"
+        else
+          log::warn "tap-info cache not written | path='${cache_file[${tap}]}'"
+        fi
+      fi
     else
       log::warn "brew tap-info printed non-JSON; ignored | tap='${tap}'"
     fi
   done
+  rm -rf "${tmp}"
   if (( ${#docs} == 0 )); then
     print -r -- '{}'
     return 0
@@ -420,7 +518,7 @@ brew::_tap_casks_on_disk() {
   local tap repo doc
   local -a docs=() tokens
   for tap in "${taps[@]}"; do
-    repo="$("${brew}" --repository "${tap}" 2>/dev/null)" || continue
+    repo="$(brew::_tap_repo_dir "${tap}")" || continue
     tokens=("${repo}"/Casks/**/*.rb(N:t:r))
     doc="$(jq -n -c --arg tap "${tap}" --args '{key: $tap, value: $ARGS.positional}' "${tokens[@]}")" || continue
     docs+=("${doc}")
@@ -673,11 +771,12 @@ brew::check_drift_verdict() {
   fi
   local inventory="${RUN_DIR}/inventory.json" info="${RUN_DIR}/info_installed.json"
   local drift="${RUN_DIR}/drift.json" previous="${RUN_DIR}/previous_undeclared.json"
-  if ! brew::inventory > "${inventory}"; then
+  local snapshot_rc=0
+  brew::snapshot "${inventory}" "${info}" || snapshot_rc=$?
+  if (( snapshot_rc == 2 )); then
     verdict error inventory_failed -d "receipt inventory failed; see the step log"
     return 0
-  fi
-  if ! brew::info_installed > "${info}"; then
+  elif (( snapshot_rc != 0 )); then
     verdict error info_failed -d "brew info --json=v2 --installed failed; see the step log"
     return 0
   fi

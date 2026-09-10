@@ -73,10 +73,14 @@ decree::snapshot() {  # [--no-classify]
   fi
   typeset -g DECREE_INVENTORY="${RUN_DIR}/inventory.json" DECREE_INFO="${RUN_DIR}/info_installed.json"
   typeset -g DECREE_ALIAS_MAP="${RUN_DIR}/alias_map.json" DECREE_DRIFT="${RUN_DIR}/drift.json"
-  brew::inventory > "${DECREE_INVENTORY}" || { log::err "brew::inventory failed"; return 2; }
   # brew's JSON does not change between the snapshot and the re-classification of one invocation.
-  if [[ ! -s "${DECREE_INFO}" ]]; then
-    brew::info_installed > "${DECREE_INFO}" || { log::err "brew info --json=v2 --installed failed"; return 2; }
+  if [[ -s "${DECREE_INFO}" ]]; then
+    brew::inventory > "${DECREE_INVENTORY}" || { log::err "brew::inventory failed"; return 2; }
+  else
+    local snapshot_rc=0
+    brew::snapshot "${DECREE_INVENTORY}" "${DECREE_INFO}" || snapshot_rc=$?
+    if (( snapshot_rc == 2 )); then log::err "brew::inventory failed"; return 2; fi
+    if (( snapshot_rc != 0 )); then log::err "brew info --json=v2 --installed failed"; return 2; fi
   fi
   brew::alias_map "${DECREE_INFO}" "${DECREE_INVENTORY}" > "${DECREE_ALIAS_MAP}" || { log::err "brew::alias_map failed"; return 2; }
   if [[ "${1:-}" == --no-classify ]]; then
