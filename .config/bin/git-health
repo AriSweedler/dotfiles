@@ -330,6 +330,25 @@ do_unregister() {
 }
 
 #######################################
+# Flash a notification for a fixed duration. macOS gives banners no duration control, but
+# terminal-notifier can remove a delivered notification by group, so post-sleep-remove
+# yields an exact lifetime. Synchronous on purpose: launchd's process-group cleanup would
+# kill a backgrounded remover and orphan the banner. Without terminal-notifier, degrade to
+# a standard banner (the system controls its dismissal).
+# Arguments: message, seconds (default 2)
+#######################################
+hud() {
+    local msg="${1}" seconds="${2:-2}"
+    if (( ${+commands[terminal-notifier]} )); then
+        terminal-notifier -group git-health -title git-health -message "${msg}" >/dev/null || return 0
+        sleep "${seconds}"
+        terminal-notifier -remove git-health >/dev/null || true
+    else
+        osascript -e "display notification \"${msg}\" with title \"git-health\"" || true
+    fi
+}
+
+#######################################
 # Tick every registered repo; a broken repo doesn't block the others.
 # Globals: REGISTRY → repo (per iteration)
 # Returns: 0 if every repo is healthy, 1 otherwise
@@ -353,7 +372,17 @@ do_all() {
 
 # ── Dispatch ────────────────────────────────────────────────────────────────────────────────
 case "${mode}" in
-    all) do_all ;;
+    all)
+        hud "git health: tick starting"
+        all_rc=0
+        do_all || all_rc=1
+        if (( all_rc == 0 )); then
+            hud "git health: healthy"
+        else
+            hud "git health: DEGRADED — see ${LOG_FILE}"
+        fi
+        exit "${all_rc}"
+        ;;
     install) do_install ;;
     register) resolve_repo; do_register ;;
     unregister) resolve_repo; do_unregister ;;

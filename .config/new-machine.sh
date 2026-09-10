@@ -104,7 +104,7 @@ function ensure_brew_pkgs() {
     karabiner-elements
     raycast
     spotify
-    terminal-notifier  # used by Claude Code notification hook (see ~/.config/claude)
+    terminal-notifier  # used by Claude Code notification hook (~/.config/claude) and git-health
   )
 
   local pkg_installed
