@@ -1,0 +1,482 @@
+#!/usr/bin/env zsh
+# new-machine — bring a macOS machine to the dotfiles baseline and keep it there.
+#
+# Every step is a pure check:: plus an apply:: that only mutates through run_cmd_mutating, each
+# run in its own zsh under a watchdog, so one crash never hides the others and --dry-run has no
+# second code path. `verify` is what launchd runs on Monday: check, dedup against the last
+# result, and file at most one report on the Desktop. Declared brew state lives in two
+# Brewfiles (shared tier ~/.config, local tier ~/.local/share); `brew triage`/`brew decree`
+# settle drift without ever touching brew's own state.
+#
+# Resources needed before HOME is checked out resolve relative to this file (${0:A} follows the
+# ~/.config/bin symlink), so the script runs from any checkout.
+set -euo pipefail
+
+# ── Preflight (exit 3) ───────────────────────────────────────────────────────
+if [[ -z "${HOME:-}" ]]; then
+  print -u2 "[ERROR] HOME is unset"
+  exit 3
+fi
+if [[ "$(uname -s)" != Darwin ]]; then
+  print -u2 "[ERROR] new-machine runs on macOS only | uname='$(uname -s)'"
+  exit 3
+fi
+if ! command -v jq >/dev/null 2>&1; then
+  print -u2 "[ERROR] jq is required | fix='brew install jq' path='${PATH}'"
+  exit 3
+fi
+export NEW_MACHINE_SHARED_DIR="${NEW_MACHINE_SHARED_DIR:-${0:A:h:h}}"
+if [[ ! -r "${NEW_MACHINE_SHARED_DIR:h}/zsh/plugins/log.zsh" ]]; then
+  print -u2 "[ERROR] missing logging lib | path='${NEW_MACHINE_SHARED_DIR:h}/zsh/plugins/log.zsh'"
+  exit 3
+fi
+# The run identity is this process's to derive (NEW_MACHINE_NOW under the state dir); only the
+# step subprocesses inherit it, never the caller's shell.
+unset RUN_ID RUN_DIR
+for lib in common brew launchd report dotfiles decree steps; do
+  if [[ ! -r "${NEW_MACHINE_SHARED_DIR}/lib/${lib}.zsh" ]]; then
+    print -u2 "[ERROR] missing lib | path='${NEW_MACHINE_SHARED_DIR}/lib/${lib}.zsh'"
+    exit 3
+  fi
+  source "${NEW_MACHINE_SHARED_DIR}/lib/${lib}.zsh" || exit 3
+done
+unset lib
+
+help() {
+  local green=$'\e[32m' bold=$'\e[1m' rst=$'\e[0m'
+  if [[ ! -t 1 ]]; then
+    green='' bold='' rst=''
+  fi
+  cat <<EOF
+${green}new-machine${rst} — bring a macOS machine to the dotfiles baseline and keep it there
+
+${bold}Usage:${rst}
+  new-machine setup    [--only STEP,...] [--dry-run] [--json]   check every step; apply where actionable; re-check
+  new-machine check    [--only STEP,...] [--json]               read-only; exit 0 ok|warn, 1 fail, 2 error
+  new-machine apply    STEP [--dry-run]                         = setup --only STEP
+  new-machine verify   [--force-report] [--no-notify] [--json]  what launchd runs: check + report + stamp + hud
+  new-machine verify   --install | --uninstall | --status [--dry-run]
+  new-machine steps                                             list steps: name, needs, has_apply, description
+  new-machine brew triage   [--json]                            describe undeclared/orphaned/duplicate brew items
+  new-machine brew decree   ITEM... (--global|--local|--ignore-global|--ignore-local) [--reason TEXT] [--dry-run] [--no-push]
+  new-machine brew undecree ITEM... [--dry-run] [--no-push]
+  new-machine brew merged                                       print the merged Brewfile (debugging)
+  new-machine brew inventory [--json]                           what is installed, from receipts
+  new-machine test                                              run tests/run.sh
+  setup-new-machine [--dry-run]                                 compat shim for 'new-machine setup'
+
+  ITEM = [formula:|cask:|tap:|vscode:]name; the kind prefix may be omitted when exactly one kind matches.
+
+${bold}Steps${rst} (in order; each is idempotent; 'new-machine steps' prints the details):
+  ${(j:, :)STEPS}
+
+${bold}Exit codes:${rst}
+  0  no fail/error (ok, warn, skip only)     1  at least one fail (or decree refused)
+  2  at least one error (a check could not run)    3  preflight (log lib, jq, macOS, HOME)
+  4  another run holds the lock              64  usage
+
+${bold}Files:${rst}
+  global tier  ${GLOBAL_BREWFILE} (+ Brewfile.ignore)   git df, never pushed by the tool
+  local tier   ${LOCAL_BREWFILE} (+ Brewfile.ignore)    git ldf, pushed after each commit
+  state        ${NEW_MACHINE_STATE_DIR}/  (runs/, last-check.json, last_result.json, verify.log, reports/)
+  report       ${REPORT_PATH}  (rewritten only when the set of problems changes; deleting it = acknowledged)
+
+${bold}Environment:${rst}
+  DOTFILES_REMOTE   shared dotfiles repo URL (default: ${DOTFILES_REMOTE})
+  NEW_MACHINE_*     seams for tests and launchd; see lib/common.zsh
+EOF
+}
+
+usage_error() {
+  log::err "$*"
+  help >&2
+  exit 64
+}
+
+# ── Lock (§4.3 step 1) ───────────────────────────────────────────────────────
+typeset -g LOCK_DIR="${NEW_MACHINE_STATE_DIR}/lock.d"
+typeset -g LOCK_HELD=0
+
+# verify.log is verify's data trail (one line per verify run); interactive runs only log.
+lock::trail() {
+  if [[ "${1}" == verify ]]; then note "${2}"; else log::warn "${2}"; fi
+}
+
+lock::acquire() {
+  local mode="${1}"
+  mkdir -p "${NEW_MACHINE_STATE_DIR}"
+  if ! mkdir "${LOCK_DIR}" 2>/dev/null; then
+    local pid=""
+    if [[ -s "${LOCK_DIR}/pid" ]]; then
+      pid="$(<"${LOCK_DIR}/pid")"
+    fi
+    if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+      local -i age
+      age=$(( EPOCHSECONDS - $(zstat +mtime "${LOCK_DIR}") ))
+      if (( age <= NEW_MACHINE_LOCK_MAX_AGE_SECS )); then
+        lock::trail "${mode}" "busy | pid='${pid}' age='${age}'"
+        hud "new-machine: skipped, another run holds the lock" 3
+        exit 4
+      fi
+      lock::trail "${mode}" "stale lock taken over | pid='${pid}' age='${age}'"
+    else
+      log::info "clearing lock of dead process | pid='${pid:-none}'"
+    fi
+    rm -rf -- "${LOCK_DIR}"
+    mkdir "${LOCK_DIR}"
+  fi
+  print -r -- "$$" > "${LOCK_DIR}/pid"
+  LOCK_HELD=1
+}
+
+lock::release() {
+  (( LOCK_HELD )) || return 0
+  if [[ -f "${LOCK_DIR}/pid" && "$(<"${LOCK_DIR}/pid")" == "$$" ]]; then
+    rm -rf -- "${LOCK_DIR}"
+  fi
+  LOCK_HELD=0
+}
+trap 'lock::release' EXIT
+
+# ── Run plumbing (§2.4, §2.6) ────────────────────────────────────────────────
+# RUN_ID derives from NEW_MACHINE_NOW alone (the report marker depends on it), so a rerun in the
+# same second reuses the directory; wiping it keeps stale artifacts out of the summary.
+run::prepare_run_dir() {
+  if [[ "${RUN_DIR}" == "${NEW_MACHINE_STATE_DIR}/runs/"?* ]]; then
+    rm -rf -- "${RUN_DIR}"
+  fi
+  mkdir -p "${RUN_DIR}"
+}
+
+run::prune_runs() {
+  local -a runs=("${NEW_MACHINE_STATE_DIR}"/runs/*(N/On))
+  local dir
+  for dir in "${runs[@]:8}"; do
+    rm -rf -- "${dir}"
+  done
+}
+
+# Fills the `selected` array from --only (or every step), in STEPS order.
+run::select_steps() {
+  local only="${1}"
+  selected=()
+  if [[ -z "${only}" ]]; then
+    selected=("${STEPS[@]}")
+    return 0
+  fi
+  local -a wanted=(${(s:,:)only})
+  local name
+  for name in "${wanted[@]}"; do
+    step::is_known "${name}" || usage_error "unknown step | step='${name}' known='${(j:,:)STEPS}'"
+  done
+  for name in "${STEPS[@]}"; do
+    if (( ${wanted[(Ie)${name}]} )); then
+      selected+=("${name}")
+    fi
+  done
+}
+
+run::steps() {
+  local aborted=0 name
+  for name in "${selected[@]}"; do
+    if (( aborted )); then
+      step::record_skip "${name}" aborted
+      continue
+    fi
+    step::run "${name}"
+    # brew is the one hard prerequisite: without it setup cannot go on.
+    if [[ "${name}" == brew && "${NM_MODE}" == setup && "$(step::result_status brew)" == (fail|error) ]]; then
+      aborted=1
+    fi
+  done
+}
+
+run::write_summary() {
+  local ts name
+  ts="$(nm::iso_ts)"
+  local -a result_files=()
+  for name in "${STEPS[@]}"; do
+    if [[ -f "${RUN_DIR}/${name}.result.json" ]]; then
+      result_files+=("${RUN_DIR}/${name}.result.json")
+    fi
+  done
+  local -a brew_arg=(--argjson brew '[null]')
+  if [[ -s "${RUN_DIR}/drift.json" ]]; then
+    brew_arg=(--slurpfile brew "${RUN_DIR}/drift.json")
+  fi
+  jq -n --arg run_id "${RUN_ID}" --arg host "${NEW_MACHINE_HOST}" --arg mode "${NM_MODE}" --arg ts "${ts}" \
+        --slurpfile steps <(cat -- "${result_files[@]}") "${brew_arg[@]}" '
+    ($steps | map(.status)) as $s
+    | {schema: 1, run_id: $run_id, ts: $ts, host: $host, mode: $mode,
+       status: (if any($s[]; .=="error") then "error" elif any($s[]; .=="fail") then "fail"
+                elif any($s[]; .=="warn") then "warn" else "ok" end),
+       counts: ($steps | group_by(.status) | map({(.[0].status): length}) | add // {}),
+       steps: $steps, brew: ($brew[0] // null)}' > "${RUN_DIR}/summary.json"
+  cp "${RUN_DIR}/summary.json" "${NEW_MACHINE_STATE_DIR}/last-${NM_MODE}.json"
+}
+
+run::print_human() {
+  local summary="${RUN_DIR}/summary.json"
+  local step_status step reason detail applied
+  while IFS=$'\t' read -r step_status step reason applied detail; do
+    if [[ "${applied}" == would_apply ]]; then
+      printf '%-6s %-22s %-26s would run apply::%s  %s\n' "${step_status}" "${step}" "${reason}" "${step}" "${detail}"
+    else
+      printf '%-6s %-22s %-26s %s\n' "${step_status}" "${step}" "${reason}" "${detail}"
+    fi
+  done < <(jq -r '.steps[] | [.status, .step, .reason, (.applied|tostring), (.detail | split("\n")[0])] | @tsv' "${summary}")
+  print -r -- "status: $(jq -r '.status' "${summary}") ($(jq -r '.counts | to_entries | map("\(.key)=\(.value)") | join(" ")' "${summary}"))"
+}
+
+# Manual items are told to the human once, at the end, where they will be read. Details span
+# lines, so each record travels as one JSON string per line.
+run::print_manual() {
+  local summary="${RUN_DIR}/summary.json"
+  local encoded
+  while IFS= read -r encoded; do
+    log::WARN "$(jq -rn --argjson block "${encoded}" '$block')"
+  done < <(jq -r '.steps[] | select(.manual and (.status=="warn" or .status=="fail")) | "Manual step (\(.step) \(.reason)):\n\(.detail)" | @json' "${summary}")
+}
+
+# Ends the process. The exit is explicit because zsh skips the EXIT trap when ERR_EXIT ends the
+# shell from inside a function, which would leak the lock on every fail/error run.
+run::finish() {
+  local json="${1}"
+  if (( json )); then
+    cat "${RUN_DIR}/summary.json"
+  else
+    run::print_human
+    run::print_manual
+  fi
+  local run_status rc=0
+  run_status="$(jq -r '.status' "${RUN_DIR}/summary.json")"
+  nm::status_exit_code "${run_status}" || rc=$?
+  exit "${rc}"
+}
+
+# check | setup (also apply, which is setup --only STEP)
+run::main() {
+  local mode="${1}" only="${2}" dry_run="${3}" json="${4}"
+  # A usage error must not take the lock or leave an empty run dir behind.
+  local -a selected
+  run::select_steps "${only}"
+  lock::acquire "${mode}"
+  run::prepare_run_dir
+  export NM_MODE="${mode}" NM_DRY_RUN="${dry_run}"
+  if (( dry_run )); then
+    log::warn "dry-run: no changes will be made"
+  fi
+  log::info "run | mode='${mode}' run_id='${RUN_ID}' run_dir='${RUN_DIR}' steps='${(j:,:)selected}'"
+  run::steps
+  run::write_summary
+  run::prune_runs
+  run::finish "${json}"
+}
+
+# ── verify (§4.3) ────────────────────────────────────────────────────────────
+# report::decide is pure and returns the whole plan, hud text included; report::write applies it
+# and prints the plan extended with {report: written|unchanged|archived|left_edited|none}.
+verify::decide_and_notify() {
+  local force_report="${1}"
+  local summary="${RUN_DIR}/summary.json" decision="${RUN_DIR}/decision.json" applied="${RUN_DIR}/decision.applied.json"
+  local -a decide_args=()
+  if (( force_report )); then
+    decide_args+=(--force-report)
+  fi
+  report::decide "${summary}" "${decide_args[@]}" > "${decision}"
+  report::write "${summary}" "${LOG_FILE}" "${decision}" > "${applied}"
+  local message seconds open_url
+  message="$(jq -r '.hud.message // ""' "${decision}")"
+  seconds="$(jq -r '.hud.seconds // 0' "${decision}")"
+  open_url="$(jq -r '.hud.open // ""' "${decision}")"
+  if [[ -n "${message}" ]]; then
+    hud "${message}" "${seconds}" "${open_url}"
+  fi
+  note "status='$(jq -r '.status' "${summary}")' fingerprint='$(jq -r '.fingerprint // ""' "${decision}")' report='$(jq -r '.report // "none"' "${applied}")' undeclared='$(jq -r '.undeclared_count // 0' "${decision}")'"
+}
+
+verify::run() {
+  local force_report="${1}" json="${2}"
+  lock::acquire verify
+  mkdir -p "${NEW_MACHINE_STATE_DIR}"
+  local LOG_DIR="${NEW_MACHINE_STATE_DIR}"
+  log_init verify 8
+  log::redirect_all_output_to_logfile "${LOG_FILE}"
+  run::prepare_run_dir
+  export NM_MODE=check NM_DRY_RUN=0
+  local -a selected=("${STEPS[@]}")
+  log::info "verify | run_id='${RUN_ID}' run_dir='${RUN_DIR}' invoked_by='${NEW_MACHINE_INVOKED_BY:-interactive}'"
+  run::steps
+  if (( NEW_MACHINE_RETRY_SECS > 0 )); then
+    local -a errored=()
+    local name
+    for name in "${STEPS[@]}"; do
+      if [[ "$(step::result_status "${name}")" == error ]]; then
+        errored+=("${name}")
+      fi
+    done
+    if (( ${#errored} > 0 )); then
+      # One retry absorbs the common transient: a brew that was busy when the check started.
+      log::warn "retrying errored steps | steps='${(j:,:)errored}' secs='${NEW_MACHINE_RETRY_SECS}'"
+      sleep "${NEW_MACHINE_RETRY_SECS}"
+      for name in "${errored[@]}"; do
+        step::run "${name}" 2
+      done
+    fi
+  fi
+  run::write_summary
+  run::prune_runs
+  verify::decide_and_notify "${force_report}"
+  run::finish "${json}"
+}
+
+# ── steps ────────────────────────────────────────────────────────────────────
+steps::list() {
+  local name has_apply
+  for name in "${STEPS[@]}"; do
+    has_apply=no
+    if step::has_apply "${name}"; then
+      has_apply=yes
+    fi
+    printf '%-22s %-8s %-9s %s\n' "${name}" "${STEP_NEEDS[${name}]:--}" "${has_apply}" "${STEP_DESC[${name}]}"
+  done
+}
+
+# ── brew subcommands (§2.7, §3) ──────────────────────────────────────────────
+brew_cmd::merged() {
+  local tmp
+  tmp="$(mktemp)"
+  brewfile::merge "${tmp}" "${GLOBAL_BREWFILE}" "${LOCAL_BREWFILE}"
+  cat -- "${tmp}"
+  rm -f -- "${tmp}"
+}
+
+brew_cmd::inventory() {
+  local json="${1}"
+  if (( json )); then
+    brew::inventory
+    return 0
+  fi
+  brew::inventory | jq -r '
+    ((.formulae // [])[] | select(.on_request) | "formula  \(.full_name)"),
+    ((.casks // [])[] | select(.on_request) | "cask     \(.full_token)"),
+    ((.taps // [])[] | "tap      \(.name)"),
+    ((.vscode // [])[] | "vscode   \(.id)")'
+}
+
+brew_cmd::main() {
+  local sub="${1:-}"
+  if [[ -z "${sub}" ]]; then
+    usage_error "brew needs a subcommand | known='triage decree undecree merged inventory'"
+  fi
+  shift
+  local arg
+  # triage/decree/undecree parse their own flags and print their own --help.
+  case "${sub}" in
+    triage) decree::triage "$@"; return ;;
+    decree) decree::decree "$@"; return ;;
+    undecree) decree::undecree "$@"; return ;;
+  esac
+  for arg in "$@"; do
+    if [[ "${arg}" == (-h|--help) ]]; then
+      help
+      exit 0
+    fi
+  done
+  case "${sub}" in
+    merged)
+      (( $# == 0 )) || usage_error "unknown flag | flag='${1}'"
+      brew_cmd::merged
+      ;;
+    inventory)
+      local json=0
+      for arg in "$@"; do
+        [[ "${arg}" == --json ]] || usage_error "unknown flag | flag='${arg}'"
+        json=1
+      done
+      brew_cmd::inventory "${json}"
+      ;;
+    *) usage_error "unknown brew subcommand | sub='${sub}'" ;;
+  esac
+}
+
+# ── Dispatch (§2.2) ──────────────────────────────────────────────────────────
+main() {
+  local sub="${1:-}"
+  if [[ -z "${sub}" ]]; then
+    help >&2
+    exit 64
+  fi
+  shift
+  case "${sub}" in
+    -h|--help|help) help; exit 0 ;;
+    brew) brew_cmd::main "$@"; return ;;
+  esac
+  local arg
+  for arg in "$@"; do
+    if [[ "${arg}" == (-h|--help) ]]; then
+      help
+      exit 0
+    fi
+  done
+
+  local only="" dry_run=0 json=0 force_report=0 verify_mode=run
+  case "${sub}" in
+    setup|check)
+      while (( $# > 0 )); do
+        case "${1}" in
+          --only) only="${2:-}"; [[ -n "${only}" ]] || usage_error "--only requires STEP,..."; shift 2 ;;
+          --only=*) only="${1#--only=}"; shift ;;
+          --dry-run) [[ "${sub}" == setup ]] || usage_error "--dry-run applies to setup only"; dry_run=1; shift ;;
+          --json) json=1; shift ;;
+          *) usage_error "unknown flag | flag='${1}'" ;;
+        esac
+      done
+      run::main "${sub}" "${only}" "${dry_run}" "${json}"
+      ;;
+    apply)
+      local step="${1:-}"
+      [[ -n "${step}" && "${step}" != -* ]] || usage_error "apply requires STEP"
+      shift
+      while (( $# > 0 )); do
+        case "${1}" in
+          --dry-run) dry_run=1; shift ;;
+          --json) json=1; shift ;;
+          *) usage_error "unknown flag | flag='${1}'" ;;
+        esac
+      done
+      run::main setup "${step}" "${dry_run}" "${json}"
+      ;;
+    verify)
+      while (( $# > 0 )); do
+        case "${1}" in
+          --install) verify_mode=install; shift ;;
+          --uninstall) verify_mode=uninstall; shift ;;
+          --status) verify_mode=status; shift ;;
+          --dry-run) dry_run=1; shift ;;
+          --force-report) force_report=1; shift ;;
+          --no-notify) export NM_NO_NOTIFY=1; shift ;;
+          --json) json=1; shift ;;
+          *) usage_error "unknown flag | flag='${1}'" ;;
+        esac
+      done
+      case "${verify_mode}" in
+        run)
+          (( ! dry_run )) || usage_error "--dry-run applies to --install/--uninstall only"
+          verify::run "${force_report}" "${json}"
+          ;;
+        install) export NM_DRY_RUN="${dry_run}"; launchd::install ;;
+        uninstall) export NM_DRY_RUN="${dry_run}"; launchd::uninstall ;;
+        status) launchd::status ;;
+      esac
+      ;;
+    steps)
+      (( $# == 0 )) || usage_error "unknown flag | flag='${1}'"
+      steps::list
+      ;;
+    test) exec bash "${NEW_MACHINE_SHARED_DIR}/tests/run.sh" ;;
+    *) usage_error "unknown subcommand | sub='${sub}'" ;;
+  esac
+}
+
+main "$@"

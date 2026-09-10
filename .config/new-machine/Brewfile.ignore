@@ -1,0 +1,7 @@
+# Ignore list for the brew drift check (shared tier, git df). Ignore means "installed here on
+# purpose, but dotfiles do not own it"; ignored items never count as undeclared. One entry per line:
+#   <kind> <canonical-name>   # reason      kind is formula|cask|tap|vscode; names are full names
+#   include-declared <path>   # reason      every entry of that Brewfile counts as ignored (local tier only)
+# Add entries with `new-machine brew decree <name> --ignore-global --reason "..."`.
+formula libtiff            # library brew marks on-request; not a tool
+formula python-setuptools  # library shim
