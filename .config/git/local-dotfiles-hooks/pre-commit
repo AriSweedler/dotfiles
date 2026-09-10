@@ -1,6 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Pre-commit hook for the per-machine local-dotfiles bare repo (~/.local).
+# Needs bash 5 (machine setup installs it via brew); /bin/bash is 3.2.
 # Refuses to commit secrets: any path containing '.secret.' and any staged
 # content matching a known token shape. info/exclude keeps *.secret.zsh out of
 # `add -A`; this catches `add -f` and literals pasted into tracked files.
@@ -21,13 +22,18 @@ log::info() { echo -e "${C_GREEN}[INFO]${C_RST} $*" >&2; }
 # and any *_SECRET= / *_TOKEN= assignment with a long literal value.
 readonly TOKEN_PATTERN='pat[A-Za-z0-9]{14}\.[a-f0-9]{16,}|bkua_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|_(SECRET|TOKEN|PAT)=["'"'"']?[A-Za-z0-9._-]{20,}'
 
+bash_has_mapfile() {
+  if ! type mapfile &> /dev/null; then
+    log::err "bash 5 required; this is macOS /bin/bash without mapfile | bash_version='${BASH_VERSION}' fix='brew install bash'"
+    return 1
+  fi
+}
+
 main() {
-  # macOS bash 3.2 has no mapfile; read the staged list line by line.
-  local -a staged=()
-  local line
-  while IFS= read -r line; do
-    staged+=("${line}")
-  done < <(git diff --cached --name-only --diff-filter=AM)
+  bash_has_mapfile || return 1
+
+  local -a staged
+  mapfile -t staged < <(git diff --cached --name-only --diff-filter=AM)
   (( ${#staged[@]} )) || return 0
 
   local rc=0 path
