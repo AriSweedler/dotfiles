@@ -46,5 +46,4 @@ function keystroke() {
 
 ################################################################################
 
-# Machine-specific bindings go in ~/.local/share/zsh/plugins/keystroke.zsh
-# ctrl-o: jump to main repo and get ready to develop
+# Machine-specific bindings go in $XDG_DATA_HOME/zsh/plugins/keystroke.zsh (gf jumps there).
