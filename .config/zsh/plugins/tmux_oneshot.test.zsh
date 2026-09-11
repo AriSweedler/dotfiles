@@ -624,6 +624,8 @@ _t "run logs its exit code" "── exit rc=0" "$(grep '── exit' "${_log}")"
 zsh "${HOME}/.config/bin/tmux-oneshot" bogus-key > /dev/null 2>&1
 _t "failed run: rc 1 logged" "── exit rc=1" "$(grep '── exit' "${_log}")"
 _t "failed run: stderr captured in log" "1" "$(grep -c 'Unknown key' "${_log}")"
+_t "log has no ANSI escapes (the tty copy keeps them)" "0" "$(grep -c $'\e' "${_log}")"
+_t "log still carries the level tag" "1" "$(grep -c '^\[ERROR\]' "${_log}")"
 _t "previous run rotated aside" "1" "$(grep -c 'tmux-oneshot --list' "${_log}.bak.1")"
 
 _t "--log prints path and content without rotating" "1" \

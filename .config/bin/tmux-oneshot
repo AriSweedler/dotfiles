@@ -405,7 +405,9 @@ function tmux_oneshot::_menu() {
 # tiebreak (line length) ranks "apa" over "ap" whenever "ap" has the longer
 # description. No --nth: it indexes the --with-nth-transformed line
 # (name-only matching would be --nth 1).
-TMUX_ONESHOT_FZF_MATCH_ARGS=(--delimiter $'\t' --with-nth '2..' --tiebreak=chunk,index)
+# begin first: a hit in the name column starts earlier on the line than one in the
+# description, so "open" ranks the entry named open above an entry described with it.
+TMUX_ONESHOT_FZF_MATCH_ARGS=(--delimiter $'\t' --with-nth '2..' --tiebreak=begin,chunk,index)
 
 # Keys fzf must keep, plus the termios specials a cooked tty consumes when
 # the key is typed before fzf enters raw mode (ctrl-u = VKILL, ctrl-w = VWERASE …).
@@ -926,9 +928,11 @@ if [[ "${ZSH_EVAL_CONTEXT}" == "toplevel" ]]; then
   # The rc travels via a file: zsh's pipestatus misreports when the first
   # pipeline member carries fd redirections (observed [0,0] for a failing
   # function).
+  # tee's file copy is the log, stripped of ANSI colors (the live tty copy keeps them);
+  # strip-ansi is a pipeline member too, so the log is complete when the pipeline returns.
   _tmux_oneshot_rcf="${TMUX_ONESHOT_LOG}.rc"
   { { tmux_oneshot "$@" 2>&1 >&3; print -rn -- "$?" > "${_tmux_oneshot_rcf}" } \
-    | tee -a "${TMUX_ONESHOT_LOG}" >&2 } 3>&1
+    | tee /dev/fd/2 | "${HOME}/.config/bin/strip-ansi" >> "${TMUX_ONESHOT_LOG}" } 3>&1
   _tmux_oneshot_rc="$(cat "${_tmux_oneshot_rcf}" 2>/dev/null)"
   rm -f "${_tmux_oneshot_rcf}"
   : "${_tmux_oneshot_rc:=1}"
