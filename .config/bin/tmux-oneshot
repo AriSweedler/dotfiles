@@ -350,9 +350,10 @@ function tmux_oneshot::_index_or_die() {
 # wrapping territory. Not readonly — this file is sourced by tests.
 : "${TMUX_ONESHOT_NAME_MAX:=40}"
 # ANSI for the leading key column and the instant-triggers divider (fzf runs with --ansi).
-# Tests set both empty for plain rows.
-: "${TMUX_ONESHOT_KEY_STYLE=$'\e[1;35m'}"
-: "${TMUX_ONESHOT_DIVIDER_STYLE=$'\e[2m'}"
+# Tests set both empty for plain rows. Assigned unquoted: inside "…" a $'…' stays literal.
+if (( ! ${+TMUX_ONESHOT_KEY_STYLE} )); then TMUX_ONESHOT_KEY_STYLE=$'\e[1;35m'; fi
+if (( ! ${+TMUX_ONESHOT_DIVIDER_STYLE} )); then TMUX_ONESHOT_DIVIDER_STYLE=$'\e[2m'; fi
+TMUX_ONESHOT_STYLE_OFF=$'\e[0m'
 
 # Output: the menu in ONE jq pass, "<idx>\t<name>[<padding>  <text>]" per
 # row; idx is hidden by fzf (--with-nth 2..). Top level: one row per ungrouped
@@ -367,7 +368,7 @@ function tmux_oneshot::_menu() {
   [[ "${1-}" == --group ]] && group="${2:?--group needs a name}"
   jq -r --argjson cap "${TMUX_ONESHOT_NAME_MAX}" --arg group "${group}" \
         --arg kon "${TMUX_ONESHOT_KEY_STYLE}" --arg don "${TMUX_ONESHOT_DIVIDER_STYLE}" \
-        --arg off "${TMUX_ONESHOT_KEY_STYLE:+$'\e[0m'}" '
+        --arg off "${TMUX_ONESHOT_KEY_STYLE:+${TMUX_ONESHOT_STYLE_OFF}}" '
     def gname: (.menu.name // "") | if contains("/") then split("/")[0] else "" end;
     def leaf: (.menu.name // .cmd // "?") | if contains("/") then (split("/")[1:] | join("/")) else . end;
     def body: (.menu.text

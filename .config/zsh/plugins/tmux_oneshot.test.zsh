@@ -460,6 +460,11 @@ _t "instant-triggers divider is the last row" "h:instant	── instant-triggers
 _t "keyed rows start with their key label" "8 ⌃k|9 ⌃g|10 ⌃l" \
   "$(tmux_oneshot::_menu | tail -4 | head -3 | while IFS=$'\t' read -r _idx _rest; do print -r -- "${_idx} ${_rest%% *}"; done | paste -sd'|' -)"
 _t "unkeyed rows keep the key column blank" "   ap" "$(tmux_oneshot::_menu | sed -n 1p | cut -f2 | cut -c1-5)"
+# The default styles must be real escape bytes, not the literal text $'\e[…'.
+_t "default key style is a real ESC sequence" "$(print -rn -- $'\e[1;35m' | od -An -c | tr -s ' ')" \
+  "$(zsh -c 'source "$1"; print -rn -- "${TMUX_ONESHOT_KEY_STYLE}" | od -An -c | tr -s " "' _ "${HOME}/.config/bin/tmux-oneshot" 2>/dev/null)"
+_t "styled key column carries the escape and the reset" "yes" \
+  "$(TMUX_ONESHOT_KEY_STYLE=$'\e[1m' tmux_oneshot::_menu | tail -4 | head -1 | cut -f2 | { IFS= read -r l; [[ "${l}" == $'\e[1m'*$'\e[0m'* ]] && echo yes; })"
 _t "unkeyed rows come first and hold no key label" "0" "$(tmux_oneshot::_menu | head -8 | grep -c '⌃')"
 local _db_keys
 _db_keys="$(mktemp /tmp/tmux-oneshot-test-dbkeys.XXXXX.json)"
