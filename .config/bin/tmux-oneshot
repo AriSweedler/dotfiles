@@ -827,7 +827,7 @@ function tmux_oneshot::_run() {
 
 # Runs inside the new window ($1 = cmd, $2 = window name): eval the entry; on failure hold so
 # the error stays readable, and notify — the click jumps to this window.
-TMUX_ONESHOT_WINDOW_RUNNER='eval "$1"; rc=$?; (( rc == 0 )) || { print -u2 "\n── rc=${rc} · press any key ──"; [[ "${TMUX_ONESHOT_NOTIFY:-1}" == 0 ]] || ! command -v terminal-notifier >/dev/null 2>&1 || terminal-notifier -title tmux-oneshot -group tmux-oneshot-error -message "$2 failed (rc ${rc}) — click to jump to its window" -execute "tmux select-window -t $2" >/dev/null 2>&1; read -sk1 }; exit ${rc}'
+TMUX_ONESHOT_WINDOW_RUNNER='eval "$1"; rc=$?; (( rc == 0 )) || { print -u2 "\n── rc=${rc} · press any key ──"; [[ "${TMUX_ONESHOT_NOTIFY:-1}" == 0 ]] || ! command -v terminal-notifier >/dev/null 2>&1 || terminal-notifier -title tmux-oneshot -group tmux-oneshot-error -message "$2 failed (rc ${rc}) — click to jump to its window" -execute "$(command -v tmux) select-window -t $2" >/dev/null 2>&1; read -sk1 }; exit ${rc}'
 
 # A failure the user must see: recorded for the exit hook, which copies this run's log to
 # last-error.log and posts a notification whose click opens it. Cancels (esc, empty input)
@@ -855,11 +855,14 @@ function tmux_oneshot::_notify_failure() {
   local summary="${1:?}" logfile="${2:?}"
   [[ "${TMUX_ONESHOT_NOTIFY:-1}" == 0 ]] && return 0
   command -v terminal-notifier > /dev/null 2>&1 || return 0
-  local sock="${TMUX%%,*}" click
-  if [[ -n "${sock}" ]]; then
-    click="tmux -S ${(q)sock} new-window -n oneshot-error ${(q)${EDITOR:-vi}} + ${(q)logfile}"
+  # The click runs under /bin/sh with launchd's PATH (no Homebrew), so every binary is absolute.
+  local sock="${TMUX%%,*}" click tmux_bin editor_bin
+  tmux_bin="$(command -v tmux)"
+  editor_bin="$(command -v "${${EDITOR:-vi}%% *}" 2>/dev/null || command -v vi)"
+  if [[ -n "${sock}" && -n "${tmux_bin}" ]]; then
+    click="${(q)tmux_bin} -S ${(q)sock} new-window -n oneshot-error ${(q)editor_bin} + ${(q)logfile}"
   else
-    click="open -a Terminal ${(q)logfile}"
+    click="/usr/bin/open -a Terminal ${(q)logfile}"
   fi
   tmux_oneshot::_notify -title tmux-oneshot -group tmux-oneshot-error \
     -message "${summary} — click to open the log" -execute "${click}"

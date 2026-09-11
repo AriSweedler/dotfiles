@@ -642,7 +642,7 @@ TMUX_ONESHOT_NOTIFY=1 TMUX=/tmp/fake-sock,1,0 PATH="${_ndir}:${PATH}" TMUX_ONESH
 _t "a failed entry names itself, cmd and rc in the log" "1" "$(grep -c "false failed | rc='1' cmd='false'" "${_log}")"
 _t "a failed run copies its log to last-error.log" "yes" "$(grep -q "false failed | rc='1'" "${_log:h}/last-error.log" && echo yes)"
 _t "a failed run notifies; the click opens the log in a new tmux window on this server" "yes" \
-  "$(grep -q -- "-execute tmux -S /tmp/fake-sock new-window -n oneshot-error .* + ${_log:h}/last-error.log" "${_ndir}/calls" && echo yes)"
+  "$(grep -q -E -- "-execute /[^ ]+/tmux -S /tmp/fake-sock new-window -n oneshot-error /[^ ]+ \+ ${_log:h}/last-error.log" "${_ndir}/calls" && echo yes)"
 _t "the notification carries the failure line" "1" "$(grep -c -- "-message false failed | rc='1'" "${_ndir}/calls")"
 _t "the failure marker is consumed" "no" "$([[ -f "${_log}.failed" ]] && echo yes || echo no)"
 : > "${_ndir}/calls"
