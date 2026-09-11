@@ -10,8 +10,8 @@ local _test_include="${OTTO_TEST__ZSH_PLUGINS_TMUX_INCLUDE:-}"
 local _test_exclude="${OTTO_TEST__ZSH_PLUGINS_TMUX_EXCLUDE:-}"
 local _test_list="${OTTO_TEST__ZSH_PLUGINS_TMUX_LIST:-false}"
 
-# Source log functions
 source "${0:h}/log.zsh"
+(( ${+functions[tmux::_slice_history]} )) || source "${0:h}/tmux.zsh"
 
 function _t_should_run() {
   local name="$1"
