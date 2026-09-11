@@ -333,19 +333,24 @@ do_unregister() {
 # Flash a notification for a fixed duration. macOS gives banners no duration control, but
 # terminal-notifier can remove a delivered notification by group, so post-sleep-remove
 # yields an exact lifetime. Synchronous on purpose: launchd's process-group cleanup would
-# kill a backgrounded remover and orphan the banner. Without terminal-notifier, degrade to
-# a standard banner (the system controls its dismissal).
+# kill a backgrounded remover and orphan the banner. launchd's PATH has no Homebrew, so the
+# binary is probed by absolute path; without it there is no banner at all — an osascript
+# banner cannot be removed and would sit in Notification Center forever.
 # Arguments: message, seconds (default 2)
 #######################################
 hud() {
-    local msg="${1}" seconds="${2:-2}"
-    if (( ${+commands[terminal-notifier]} )); then
-        terminal-notifier -group git-health -title git-health -message "${msg}" >/dev/null || return 0
-        sleep "${seconds}"
-        terminal-notifier -remove git-health >/dev/null || true
-    else
-        osascript -e "display notification \"${msg}\" with title \"git-health\"" || true
+    local msg="${1}" seconds="${2:-2}" tn
+    tn="$(command -v terminal-notifier 2>/dev/null || true)"
+    if [[ -z "${tn}" ]]; then
+        local p
+        for p in /opt/homebrew/bin/terminal-notifier /usr/local/bin/terminal-notifier; do
+            [[ -x "${p}" ]] && { tn="${p}"; break; }
+        done
     fi
+    [[ -n "${tn}" ]] || return 0
+    "${tn}" -group git-health -title git-health -message "${msg}" >/dev/null || return 0
+    sleep "${seconds}"
+    "${tn}" -remove git-health >/dev/null || true
 }
 
 #######################################
@@ -373,13 +378,13 @@ do_all() {
 # ── Dispatch ────────────────────────────────────────────────────────────────────────────────
 case "${mode}" in
     all)
-        hud "git health: tick starting"
+        # Only a healthy end posts a banner; a degraded repo already notified from report_health.
+        zmodload zsh/datetime
+        tick_started="${EPOCHREALTIME}"
         all_rc=0
         do_all || all_rc=1
         if (( all_rc == 0 )); then
-            hud "git health: healthy"
-        else
-            hud "git health: DEGRADED — see ${LOG_FILE}"
+            hud "$(printf 'git health: healthy in %.2fs' $(( EPOCHREALTIME - tick_started )))"
         fi
         exit "${all_rc}"
         ;;
