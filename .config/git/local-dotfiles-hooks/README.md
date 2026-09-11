@@ -18,6 +18,6 @@ git ldf config core.hooksPath ~/.config/git/local-dotfiles-hooks
 ## Hooks
 
 - **pre-commit** — Refuses to commit any path containing `.secret.` and any
-  staged content matching a known token shape (Airtable PAT, Buildkite token,
-  GitHub PAT, AWS key id, `*_SECRET=`/`*_TOKEN=` literals). Secrets live in
+  staged content matching a known token shape (`pat…`, `bkua_`, `ghp_` prefixes,
+  AWS key id, `*_SECRET=`/`*_TOKEN=` literals). Secrets live in
   `*.secret.zsh` beside the plugin that needs them and are never tracked.

@@ -9,7 +9,7 @@
 # startup cost to get them.
 #
 # Usage:
-#   irun ap --query hyperbase
+#   irun tmv scratch
 #   irun 'aws_profile --query alpha && aws s3 ls'
 
 emulate -L zsh
@@ -28,7 +28,7 @@ Options:
   -b, --benchmark  compare interactive vs non-interactive startup (avg of 10 runs)
 
 Examples:
-  irun ap --query hyperbase
+  irun tmv scratch
   irun 'aws_profile --query alpha && aws s3 ls'
 EOF
 }

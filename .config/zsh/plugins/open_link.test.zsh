@@ -48,6 +48,20 @@ _t "--check declines junk silently" "1:" "$(open_link --check 'junk' 2>/dev/null
 _t "--check declines with nothing on stderr" "" "$(open_link --check 'junk' 2>&1)"
 _t "open without a URL logs what it saw" "1" "$(open_link 'junk text' 2>&1 | grep -c "No URL found | text='junk text'")"
 
+# Shapes of Claude Code tool output when a diagram is baked: the URL sits on the ⎿ line under
+# the tool header, wraps over many lines, and the bake trailer ends the wrap.
+_t "URL on the ⎿ line under a tool header continues onto the next line" \
+  "https://mermaid.ink/img/base64:eyJjb2RlIjoiZmxvd2NoYXJ0" \
+  "$(open_link::url_from $'● Bash(bake /tmp/diagram.mmd)\n  ⎿  https://mermaid.ink/img/base64:eyJjb2Rl\n     IjoiZmxvd2NoYXJ0')"
+_t "doubled ⎿ marker is not part of the URL" "https://mermaid.ink/img/base64:dGVzdA" \
+  "$(open_link::url_from $'● Bash(bake diagram.mmd)\n  ⎿  ⎿  https://mermaid.ink/img/base64:dGVzdA')"
+_t "wrap over six lines joins them all, base64 punctuation included" \
+  "https://mermaid.ink/img/base64:eyJjb2RlIjoiZmxvd2NoYXJ0IExSXG4gICAg-_c3ViZ3JhcGg+/ZW5kXG4gICAgZW5kAo==" \
+  "$(open_link::url_from $'● Bash(bake diagram.mmd)\n  ⎿  https://mermaid.ink/img/base64:eyJjb2Rl\n     IjoiZmxvd2NoYXJ0\n     IExSXG4gICAg-_\n     c3ViZ3JhcGg+/\n     ZW5kXG4gICAg\n     ZW5kAo==')"
+_t "bake trailer line after the wrap is not a continuation" \
+  "https://mermaid.ink/img/base64:eyJjb2RlIjoiZmxvd2NoYXJ0IExS" \
+  "$(open_link::url_from $'● Bash(bake /tmp/old-routing.mmd)\n  ⎿  https://mermaid.ink/img/base64:eyJjb2Rl\n     IjoiZmxvd2NoYXJ0IExS\n     ==> Valid diagram — written to /tmp/old-routing.ink_url.url | format=\'ink_url\'')"
+
 if (( _fail == 0 )); then
   log::info "open_link: all ${_pass} passed"
 else

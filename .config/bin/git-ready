@@ -1,0 +1,44 @@
+#!/usr/bin/env zsh
+
+# `git ready`: switch to the branch named after this checkout's dir, fetch, and
+# hard-reset onto origin/main. Invokes `repo rename` first to label the
+# tmux window the same way `repo hop` does.
+
+source "${HOME}/.config/zsh/plugins/log.zsh"
+
+ready() {
+  local branch="$1"
+  git switch "${branch}" && git f && git reset --hard origin/main
+}
+
+# retry <cmd> [args...]: run cmd until it succeeds, up to ${RETRIES:-3} times,
+# backing off 1s longer each failure.
+retry() {
+  local attempts="${RETRIES:-3}"
+  local attempt
+  for attempt in {1..${attempts}}; do
+    "$@" && return 0
+    log::warn "command failed, retrying | attempt='${attempt}/${attempts}' cmd='$*'"
+    sleep "${attempt}"
+  done
+  return 1
+}
+
+main() {
+  local branch; branch="$(basename "$PWD")"
+  log::info "Switching to base branch on freshly pulled origin/main | branch='${branch}'"
+  repo rename
+
+  # Case-insensitive APFS can't hold both casings of a remote-tracking ref, so
+  # `git f`'s --prune deadlocks on its own lock file when a pair exists.
+  git dedupe-case-refs
+
+  # Parallel `git ready` runs across worktrees contend on shared ref locks
+  # (packed-refs.lock, FETCH_HEAD), so retry the fetch/reset chain.
+  if ! retry ready "${branch}"; then
+    log::err "git ready failed | branch='${branch}' attempts='${RETRIES:-3}'"
+    return 1
+  fi
+  log::info "Ready to develop | branch='${branch}'"
+}
+main "$@"

@@ -18,8 +18,8 @@ readonly C_RST='\033[0m'
 log::err()  { echo -e "${C_RED}[ERROR]${C_RST} $*" >&2; }
 log::info() { echo -e "${C_GREEN}[INFO]${C_RST} $*" >&2; }
 
-# Airtable PAT, Buildkite user token, GitHub classic PAT, AWS access key id,
-# and any *_SECRET= / *_TOKEN= assignment with a long literal value.
+# Vendor token prefixes (pat…, bkua_, ghp_), AWS access key ids, and any
+# *_SECRET= / *_TOKEN= assignment with a long literal value.
 readonly TOKEN_PATTERN='pat[A-Za-z0-9]{14}\.[a-f0-9]{16,}|bkua_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|_(SECRET|TOKEN|PAT)=["'"'"']?[A-Za-z0-9._-]{20,}'
 
 bash_has_mapfile() {
