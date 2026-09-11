@@ -1,0 +1,4 @@
+#!/usr/bin/env zsh
+# Thin wrapper for non-interactive callers (tmux-oneshot); logic lives in the plugin.
+source "${ZDOTDIR:-${HOME}/.config/zsh}/plugins/open_link.zsh"
+open_link "$@"

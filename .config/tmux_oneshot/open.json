@@ -1,0 +1,11 @@
+[
+  {
+    "menu": {
+      "name": "open",
+      "text": "open the clipboard with the one open-* that accepts it"
+    },
+    "key": "ctrl-l",
+    "cmd": "open-any",
+    "autodismiss": true
+  }
+]

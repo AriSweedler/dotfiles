@@ -1,0 +1,5 @@
+#!/usr/bin/env zsh
+# Thin wrapper for non-interactive callers (tmux-oneshot); logic and the open-* interface
+# live in the plugin.
+source "${ZDOTDIR:-${HOME}/.config/zsh}/plugins/open_any.zsh"
+open_any "$@"
