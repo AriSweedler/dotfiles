@@ -27,6 +27,9 @@ function _t() {
 # the seams get called inside $(...) subshells.
 # ---------------------------------------------------------------------------
 source "${HOME}/.config/bin/tmux-oneshot"
+# Plain rows: the assertions read the menu text, not its colors.
+TMUX_ONESHOT_KEY_STYLE=''
+TMUX_ONESHOT_DIVIDER_STYLE=''
 
 local _picks_file _typed_file _calls_file _label_file _tmux_file _db
 _picks_file="$(mktemp /tmp/tmux-oneshot-test-picks.XXXXX)"
@@ -452,9 +455,11 @@ rm -f "${_db3}"
 
 _t "expect list = unique non-reserved keys" "ctrl-g,ctrl-k,ctrl-l" "$(tmux_oneshot::_expect_keys 2>/dev/null)"
 _t "debug key list" "ctrl-k→caffeinate   ctrl-g→go   ctrl-l→claude-link" "$(tmux_oneshot::_key_list)"
-_t "instant-triggers divider precedes the keyed rows" "h:instant	── instant-triggers ──" "$(tmux_oneshot::_menu | tail -4 | head -1)"
-_t "keyed rows end with their key label" "8 ⌃k|9 ⌃g|10 ⌃l" \
-  "$(tmux_oneshot::_menu | tail -3 | while IFS=$'\t' read -r _idx _rest; do print -r -- "${_idx} ${_rest##* }"; done | paste -sd'|' -)"
+# fzf lists bottom-up: the divider is emitted last so it renders above the keyed rows.
+_t "instant-triggers divider is the last row" "h:instant	── instant-triggers ──" "$(tmux_oneshot::_menu | tail -1)"
+_t "keyed rows start with their key label" "8 ⌃k|9 ⌃g|10 ⌃l" \
+  "$(tmux_oneshot::_menu | tail -4 | head -3 | while IFS=$'\t' read -r _idx _rest; do print -r -- "${_idx} ${_rest%% *}"; done | paste -sd'|' -)"
+_t "unkeyed rows keep the key column blank" "   ap" "$(tmux_oneshot::_menu | sed -n 1p | cut -f2 | cut -c1-5)"
 _t "unkeyed rows come first and hold no key label" "0" "$(tmux_oneshot::_menu | head -8 | grep -c '⌃')"
 local _db_keys
 _db_keys="$(mktemp /tmp/tmux-oneshot-test-dbkeys.XXXXX.json)"

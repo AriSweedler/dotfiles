@@ -349,6 +349,10 @@ function tmux_oneshot::_index_or_die() {
 # The display-name column width cap: long cmds never push the menu line into
 # wrapping territory. Not readonly — this file is sourced by tests.
 : "${TMUX_ONESHOT_NAME_MAX:=40}"
+# ANSI for the leading key column and the instant-triggers divider (fzf runs with --ansi).
+# Tests set both empty for plain rows.
+: "${TMUX_ONESHOT_KEY_STYLE=$'\e[1;35m'}"
+: "${TMUX_ONESHOT_DIVIDER_STYLE=$'\e[2m'}"
 
 # Output: the menu in ONE jq pass, "<idx>\t<name>[<padding>  <text>]" per
 # row; idx is hidden by fzf (--with-nth 2..). Top level: one row per ungrouped
@@ -361,7 +365,9 @@ function tmux_oneshot::_index_or_die() {
 function tmux_oneshot::_menu() {
   local group=''
   [[ "${1-}" == --group ]] && group="${2:?--group needs a name}"
-  jq -r --argjson cap "${TMUX_ONESHOT_NAME_MAX}" --arg group "${group}" '
+  jq -r --argjson cap "${TMUX_ONESHOT_NAME_MAX}" --arg group "${group}" \
+        --arg kon "${TMUX_ONESHOT_KEY_STYLE}" --arg don "${TMUX_ONESHOT_DIVIDER_STYLE}" \
+        --arg off "${TMUX_ONESHOT_KEY_STYLE:+$'\e[0m'}" '
     def gname: (.menu.name // "") | if contains("/") then split("/")[0] else "" end;
     def leaf: (.menu.name // .cmd // "?") | if contains("/") then (split("/")[1:] | join("/")) else . end;
     def body: (.menu.text
@@ -370,8 +376,12 @@ function tmux_oneshot::_menu() {
           + (if .description then "  # " + .description else "" end)
           + (if .pwd then " @ " + .pwd else "" end))) | ltrimstr(" ");
     def keylabel: .key | sub("^ctrl-"; "⌃") | sub("^alt-"; "⌥") | sub("^f(?<n>[0-9]+)$"; "F\(.n)");
-    def render($w): (.name | if length > $w then .[:$w-1] + "…" else . end) as $n
-      | "\(.idx)\t" + (if .text == "" then $n else $n + (" " * ($w - ($n | length) + 2)) + .text end);
+    # The key is the first column so long text can never push it off screen.
+    def keycol($kw): if $kw == 0 then ""
+      elif .key then $kon + keylabel + $off + (" " * ($kw - (keylabel | length) + 1))
+      else " " * ($kw + 1) end;
+    def render($w; $kw): (.name | if length > $w then .[:$w-1] + "…" else . end) as $n
+      | "\(.idx)\t" + keycol($kw) + (if .text == "" then $n else $n + (" " * ($w - ($n | length) + 2)) + .text end);
     (to_entries | map({idx: (.key | tostring), g: (.value | gname), leaf: (.value | leaf), key: .value.key,
                        name: (.value.menu.name // .value.cmd // "?"), text: (.value | body)})) as $all
     | (if $group != "" then
@@ -382,14 +392,15 @@ function tmux_oneshot::_menu() {
            elif any(.[]; .idx == "g:" + $e.g) then map(if .idx == "g:" + $e.g then .leaves += [$e.leaf] else . end)
            else . + [{idx: ("g:" + $e.g), name: $e.g, leaves: [$e.leaf]}] end)
          | map(if .leaves then .text = "▸ " + (.leaves | join(", ")) else . end))
+         # fzf lists bottom-up, so the divider goes last to sit above the keyed rows.
          + ([$all[] | select(.key != null)] as $keyed
             | if ($keyed | length) == 0 then []
-              else [{idx: "h:instant", name: "── instant-triggers ──", text: "", divider: true}]
-                   + [$keyed[] | .text = (if .text == "" then keylabel else .text + "   " + keylabel end)]
+              else $keyed + [{idx: "h:instant", name: "── instant-triggers ──", text: "", divider: true}]
               end)
        end) as $rows
     | ([$rows[] | select(.divider | not) | .name | length] | (max // 1) | if . > $cap then $cap else . end) as $w
-    | $rows[] | if .divider then "\(.idx)\t\(.name)" else render($w) end' \
+    | ([$rows[] | select(.key) | keylabel | length] | max // 0) as $kw
+    | $rows[] | if .divider then "\(.idx)\t" + $don + .name + $off else render($w; $kw) end' \
     "${TMUX_ONESHOT_DB}"
 }
 
@@ -465,7 +476,7 @@ function tmux_oneshot::_pick() {
   keys="$(tmux_oneshot::_expect_keys)"
   local -a key_args
   [[ -n "${keys}" ]] && key_args+=(--expect="${keys}")
-  out="$(tmux_oneshot::_fzf --select-1 "$@" "${TMUX_ONESHOT_FZF_MATCH_ARGS[@]}" \
+  out="$(tmux_oneshot::_fzf --select-1 --ansi "$@" "${TMUX_ONESHOT_FZF_MATCH_ARGS[@]}" \
       --sync --print-query --bind 'ctrl-j:ignore' "${key_args[@]}" \
       --preview "jq -r --arg i {1} ${(qq)TMUX_ONESHOT_JQ_PREVIEW} ${(qq)TMUX_ONESHOT_DB}" \
       --preview-window=up:3:wrap <<< "${menu}")"; rc=$?
@@ -496,7 +507,7 @@ function tmux_oneshot::_pick_group() {
     log::err "Empty group | group='${group}'"
     return 1
   fi
-  out="$(tmux_oneshot::_fzf --select-1 "${TMUX_ONESHOT_FZF_MATCH_ARGS[@]}" \
+  out="$(tmux_oneshot::_fzf --select-1 --ansi "${TMUX_ONESHOT_FZF_MATCH_ARGS[@]}" \
       --sync --print-query --bind 'ctrl-j:ignore' --header="${group}/   esc: back" \
       --preview "jq -r --arg i {1} ${(qq)TMUX_ONESHOT_JQ_PREVIEW} ${(qq)TMUX_ONESHOT_DB}" \
       --preview-window=up:3:wrap <<< "${menu}")"; rc=$?
