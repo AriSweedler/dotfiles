@@ -1,0 +1,11 @@
+#!/usr/bin/env zsh
+# strip-ansi — copy stdin to stdout without ANSI escape sequences (colors, cursor moves,
+# erase). For writing a colored stream to a log file:  cmd 2>&1 | tee /dev/fd/2 | strip-ansi >> log
+# Usage: strip-ansi < file   |   producer | strip-ansi
+setopt extendedglob
+# CSI: ESC [ params final-byte. Also the bare two-byte forms (ESC c, ESC =), the common non-CSI escapes.
+local csi=$'\e\\[[0-9;?]#[@-~]'
+local line
+while IFS= read -r line || [[ -n "${line}" ]]; do
+  print -r -- "${${line//${~csi}/}//$'\e'[@-Z\\-_]/}"
+done
