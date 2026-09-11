@@ -349,10 +349,9 @@ function tmux_oneshot::_index_or_die() {
 # The display-name column width cap: long cmds never push the menu line into
 # wrapping territory. Not readonly — this file is sourced by tests.
 : "${TMUX_ONESHOT_NAME_MAX:=40}"
-# ANSI for the leading key column and the instant-triggers divider (fzf runs with --ansi).
-# Tests set both empty for plain rows. Assigned unquoted: inside "…" a $'…' stays literal.
+# ANSI for the leading key column (fzf runs with --ansi). Tests set it empty for plain rows.
+# Assigned unquoted: inside "…" a $'…' stays literal.
 if (( ! ${+TMUX_ONESHOT_KEY_STYLE} )); then TMUX_ONESHOT_KEY_STYLE=$'\e[1;35m'; fi
-if (( ! ${+TMUX_ONESHOT_DIVIDER_STYLE} )); then TMUX_ONESHOT_DIVIDER_STYLE=$'\e[2m'; fi
 TMUX_ONESHOT_STYLE_OFF=$'\e[0m'
 
 # Output: the menu in ONE jq pass, "<idx>\t<name>[<padding>  <text>]" per
@@ -367,8 +366,7 @@ function tmux_oneshot::_menu() {
   local group=''
   [[ "${1-}" == --group ]] && group="${2:?--group needs a name}"
   jq -r --argjson cap "${TMUX_ONESHOT_NAME_MAX}" --arg group "${group}" \
-        --arg kon "${TMUX_ONESHOT_KEY_STYLE}" --arg don "${TMUX_ONESHOT_DIVIDER_STYLE}" \
-        --arg off "${TMUX_ONESHOT_KEY_STYLE:+${TMUX_ONESHOT_STYLE_OFF}}" '
+        --arg kon "${TMUX_ONESHOT_KEY_STYLE}" --arg off "${TMUX_ONESHOT_KEY_STYLE:+${TMUX_ONESHOT_STYLE_OFF}}" '
     def gname: (.menu.name // "") | if contains("/") then split("/")[0] else "" end;
     def leaf: (.menu.name // .cmd // "?") | if contains("/") then (split("/")[1:] | join("/")) else . end;
     def body: (.menu.text
@@ -393,15 +391,12 @@ function tmux_oneshot::_menu() {
            elif any(.[]; .idx == "g:" + $e.g) then map(if .idx == "g:" + $e.g then .leaves += [$e.leaf] else . end)
            else . + [{idx: ("g:" + $e.g), name: $e.g, leaves: [$e.leaf]}] end)
          | map(if .leaves then .text = "▸ " + (.leaves | join(", ")) else . end))
-         # fzf lists bottom-up, so the divider goes last to sit above the keyed rows.
-         + ([$all[] | select(.key != null)] as $keyed
-            | if ($keyed | length) == 0 then []
-              else $keyed + [{idx: "h:instant", name: "── instant-triggers ──", text: "", divider: true}]
-              end)
+         # Keyed entries last: fzf lists bottom-up, so they sit at the top of the popup.
+         + [$all[] | select(.key != null)]
        end) as $rows
-    | ([$rows[] | select(.divider | not) | .name | length] | (max // 1) | if . > $cap then $cap else . end) as $w
+    | ([$rows[] | .name | length] | (max // 1) | if . > $cap then $cap else . end) as $w
     | ([$rows[] | select(.key) | keylabel | length] | max // 0) as $kw
-    | $rows[] | if .divider then "\(.idx)\t" + $don + .name + $off else render($w; $kw) end' \
+    | $rows[] | render($w; $kw)' \
     "${TMUX_ONESHOT_DB}"
 }
 
@@ -460,7 +455,7 @@ function tmux_oneshot::_key_list() {
 # The per-row preview: "<tier> · <source file>", then the entry minus the
 # loader fields. One program for _pick and --debug, so the diagnostic runs
 # exactly what fzf runs.
-TMUX_ONESHOT_JQ_PREVIEW='if ($i | startswith("g:")) then ($i[2:]) as $g | "group · \($g)/", ([.[] | .menu.name // "" | select(startswith($g + "/")) | .[($g | length) + 1:]] | join("   ")) elif ($i | startswith("h:")) then "instant-triggers: press the key instead of typing", ([.[] | select(.key) | "\(.key)→\(.menu.name // .cmd)"] | join("   ")) else .[($i | tonumber)] | "\(._tier // "db") · \(._src // env.TMUX_ONESHOT_DB)", (del(._tier, ._src) | tojson) end'
+TMUX_ONESHOT_JQ_PREVIEW='if ($i | startswith("g:")) then ($i[2:]) as $g | "group · \($g)/", ([.[] | .menu.name // "" | select(startswith($g + "/")) | .[($g | length) + 1:]] | join("   ")) else .[($i | tonumber)] | "\(._tier // "db") · \(._src // env.TMUX_ONESHOT_DB)", (del(._tier, ._src) | tojson) end'
 
 # Interactive top-level picker. Args pass through to fzf (e.g. --query).
 # --sync completes the list before the first key is processed; a type-ahead
@@ -557,7 +552,7 @@ function tmux_oneshot::_resolve_pick() {
     echo "${idx}"
     return 0
   fi
-  if [[ -n "${sel}" && "${sel}" != h:* ]]; then
+  if [[ -n "${sel}" ]]; then
     echo "${sel%%$'\t'*}"
     return 0
   fi
@@ -586,23 +581,21 @@ function tmux_oneshot::action::debug() {
     return 1
   fi
   log::info "Debug render | db='${TMUX_ONESHOT_DB}' entries='${entries}'"
-  # Top-level rows = unkeyed ungrouped entries + one per group + (when any entry has a key)
-  # the instant-triggers divider and one row per keyed entry; every hidden idx must be a real
-  # entry index, a g:<group> the DB has, or the divider.
+  # Top-level rows = unkeyed ungrouped entries + one per group + one per keyed entry; every
+  # hidden idx must be a real entry index or a g:<group> the DB has.
   local -i expected_rows
   expected_rows="$(jq '[.[] | select(.key == null) | (.menu.name // "") | if contains("/") then "g:" + split("/")[0] else null end]
-    | (map(select(. == null)) | length) + (map(select(. != null)) | unique | length)' "${TMUX_ONESHOT_DB}")"
+    | (map(select(. == null)) | length) + (map(select(. != null)) | unique | length)
+    + ([$__loc__] | length * 0)' "${TMUX_ONESHOT_DB}")"
   local -i keyed
   keyed="$(jq '[.[] | select(.key)] | length' "${TMUX_ONESHOT_DB}")"
-  (( keyed > 0 )) && (( expected_rows += keyed + 1 ))
+  (( expected_rows += keyed ))
   local -i last=-1
   print -r -- "── menu"
   for line in ${(f)menu}; do
     idx="${line%%$'\t'*}"
     print -r -- "  ${line#*$'\t'}"
-    if [[ "${idx}" == h:instant ]]; then
-      :
-    elif [[ "${idx}" == g:* ]]; then
+    if [[ "${idx}" == g:* ]]; then
       if [[ "$(jq -r --arg g "${idx#g:}" '[.[] | .menu.name // "" | select(startswith($g + "/"))] | length' "${TMUX_ONESHOT_DB}")" == 0 ]]; then
         log::err "Group row without members | group='${idx#g:}'"
         rc=1
