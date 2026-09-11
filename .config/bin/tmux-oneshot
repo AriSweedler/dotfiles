@@ -44,8 +44,9 @@
 #                picker runs this entry at once, whatever is typed. Unique
 #                across files (a later duplicate loses its key). Reserved
 #                names are dropped with an error: the keys fzf must keep
-#                (enter esc tab btab ctrl-c ctrl-j ctrl-m up down ctrl-n
-#                ctrl-p ctrl-y ctrl-e) and the termios specials the cooked
+#                (enter esc tab btab ctrl-c ctrl-j ctrl-m up down ctrl-p
+#                ctrl-y ctrl-e; ctrl-n is free, arrows still move) and the
+#                termios specials the cooked
 #                tty eats when the key is typed before fzf starts (ctrl-u
 #                ctrl-w ctrl-d ctrl-z ctrl-s ctrl-q ctrl-v ctrl-r ctrl-o
 #                ctrl-t ctrl-h bspace).
@@ -411,7 +412,7 @@ TMUX_ONESHOT_FZF_MATCH_ARGS=(--delimiter $'\t' --with-nth '2..' --tiebreak=begin
 
 # Keys fzf must keep, plus the termios specials a cooked tty consumes when
 # the key is typed before fzf enters raw mode (ctrl-u = VKILL, ctrl-w = VWERASE …).
-TMUX_ONESHOT_RESERVED_KEYS=(enter esc tab btab ctrl-c ctrl-j ctrl-m up down ctrl-n ctrl-p ctrl-y ctrl-e
+TMUX_ONESHOT_RESERVED_KEYS=(enter esc tab btab ctrl-c ctrl-j ctrl-m up down ctrl-p ctrl-y ctrl-e
                             ctrl-u ctrl-w ctrl-d ctrl-z ctrl-s ctrl-q ctrl-v ctrl-r ctrl-o ctrl-t ctrl-h bspace)
 
 # Output: the comma-joined --expect list. Reserved names are dropped with
