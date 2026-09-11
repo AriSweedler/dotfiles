@@ -17,6 +17,7 @@
 /share/tmux/*
 !/share/tmux/local-plugins/
 !/share/tmux_oneshot/
+!/share/double_cd/
 !/share/new-machine/
 # Secrets live in *.secret.zsh beside the plugin that needs them; never tracked.
 *.secret.zsh

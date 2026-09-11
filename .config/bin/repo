@@ -1,0 +1,140 @@
+#!/usr/bin/env zsh
+# repo — move among the N checkouts of one repo and label the tmux window after the
+# one $PWD is in. The checkouts come from a double_cd `dirs` entry (see double_cd.zsh):
+#   {"name": "h", "dirs": ["~/h/source/a", "~/h/source/b"], "label": "hyp", "default": true}
+#
+#   repo index  [--set NAME]   1-based position of $PWD among the set's checkouts, else 0
+#   repo cycle  [--set NAME]   the next checkout's path (wraps; the first when $PWD is outside)
+#   repo rename [--set NAME]   tmux window → <label><N>; silent no-op outside tmux or the set
+#   repo hop    [--set NAME]   cycle, rename, print the destination; from outside the set also
+#                              start `git ready` there in the background. `cd "$(repo hop)"`.
+#   repo ready                 rename; git ready; clear    (a tmuxinator pane's whole command)
+#   repo list   [--set NAME]   the set's checkouts, one per line
+#   repo sets                  every set: name, label, checkout count
+# The set is --set, else the one containing $PWD, else the entry marked default, else the first.
+
+source "${HOME}/.config/zsh/plugins/log.zsh"
+source "${HOME}/.config/zsh/plugins/double_cd.zsh"
+
+typeset -ga REPOS=()
+typeset -g LABEL="" SET=""
+
+function repo::sets_json() {
+  double_cd::entries | jq -c 'select(.dirs)'
+}
+
+function repo::in_set() {
+  local d
+  for d in "$@"; do
+    d="$(double_cd::expand "${d}")"; d="${d:a}"
+    [[ "${PWD}" == "${d}" || "${PWD}" == "${d}"/* ]] && return 0
+  done
+  return 1
+}
+
+# Sets REPOS, LABEL, SET. Exit 1 with a log when no set can be chosen.
+function repo::load() {
+  local wanted="${1:-}"
+  local -a sets=(${(f)"$(repo::sets_json)"})
+  if (( ${#sets} == 0 )); then
+    log::err "No double_cd entry with dirs | looked_in='${(j:, :)${(f)"$(double_cd::dirs)"}}'"
+    return 1
+  fi
+  local s chosen=""
+  if [[ -n "${wanted}" ]]; then
+    for s in "${sets[@]}"; do
+      [[ "$(jq -r .name <<< "${s}")" == "${wanted}" ]] && chosen="${s}"
+    done
+    if [[ -z "${chosen}" ]]; then
+      log::err "No such set | set='${wanted}'"
+      return 1
+    fi
+  else
+    for s in "${sets[@]}"; do
+      repo::in_set ${(f)"$(jq -r '.dirs[]' <<< "${s}")"} && { chosen="${s}"; break; }
+    done
+    [[ -z "${chosen}" ]] && for s in "${sets[@]}"; do
+      [[ "$(jq -r '.default // false' <<< "${s}")" == true ]] && { chosen="${s}"; break; }
+    done
+    [[ -z "${chosen}" ]] && chosen="${sets[1]}"
+  fi
+  SET="$(jq -r .name <<< "${chosen}")"
+  LABEL="$(jq -r '.label // .name' <<< "${chosen}")"
+  local d
+  for d in ${(f)"$(jq -r '.dirs[]' <<< "${chosen}")"}; do
+    d="$(double_cd::expand "${d}")"
+    REPOS+=("${d:a}")
+  done
+  (( ${#REPOS} ))
+}
+
+function repo::index() {
+  local i
+  for i in {1..${#REPOS}}; do
+    [[ "${PWD}" == "${REPOS[$i]}" || "${PWD}" == "${REPOS[$i]}"/* ]] && { print -r -- "$i"; return; }
+  done
+  print -r -- 0
+}
+
+function repo::cycle() {
+  local idx; idx="$(repo::index)"
+  (( idx )) && { print -r -- "${REPOS[$(( idx % ${#REPOS} + 1 ))]}"; return; }
+  print -r -- "${REPOS[1]}"
+}
+
+function repo::rename() {
+  [[ -n "${TMUX:-}" ]] || return 0
+  local idx; idx="$(repo::index)"
+  (( idx )) && tmux rename-window "${LABEL}${idx}"
+  return 0
+}
+
+# Prints the destination; the caller cd's (a subprocess cannot). We cd here so rename and
+# `git ready` see $PWD = dest.
+function repo::hop() {
+  local dest jumping=0
+  dest="$(repo::cycle)"
+  (( $(repo::index) )) || jumping=1
+  if ! cd "${dest}"; then
+    log::err "Checkout is missing | dest='${dest}'"
+    return 1
+  fi
+  repo::rename
+  (( jumping )) && { log::info "Jumping in | set='${SET}'"; git ready &>/dev/null &! }
+  print -r -- "${dest}"
+}
+
+function repo::sets() {
+  repo::sets_json | jq -r '"  \(.name)\t\(.label // .name)\t\(.dirs | length) checkouts"'
+}
+
+function main() {
+  local cmd="${1:-}" set_name=""
+  shift $(( $# > 0 ))
+  while (( $# > 0 )); do
+    case "${1}" in
+      --set) set_name="${2:?--set needs a name}"; shift 2 ;;
+      *) log::err "Unknown argument | arg='${1}'"; return 1 ;;
+    esac
+  done
+  case "${cmd}" in
+    sets) repo::sets ;;
+    rename)
+      # Silent when nothing is configured: git ready and tmuxinator panes call this everywhere.
+      repo::load "${set_name}" 2>/dev/null || return 0
+      repo::rename ;;
+    ready)
+      repo rename
+      git ready
+      clear ;;
+    index|cycle|hop|list)
+      repo::load "${set_name}" || return 1
+      case "${cmd}" in
+        list) print -rl -- "${REPOS[@]}" ;;
+        *) "repo::${cmd}" ;;
+      esac ;;
+    ''|-h|--help) sed -n '2,15p' "${functions_source[main]:A}" | cut -c3- ;;
+    *) log::err "Unknown command | cmd='${cmd}'"; return 1 ;;
+  esac
+}
+main "$@"
