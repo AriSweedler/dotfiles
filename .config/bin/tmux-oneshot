@@ -42,14 +42,9 @@
 #                ap/app). Name a group so no leaf collides with it.
 #   key          fzf key name ("ctrl-k", "alt-x", "f5"): pressing it in the
 #                picker runs this entry at once, whatever is typed. Unique
-#                across files (a later duplicate loses its key). Reserved
-#                names are dropped with an error: the keys fzf must keep
-#                (enter esc tab btab ctrl-c ctrl-j ctrl-m up down ctrl-p
-#                ctrl-y ctrl-e; ctrl-n is free, arrows still move) and the
-#                termios specials the cooked
-#                tty eats when the key is typed before fzf starts (ctrl-u
-#                ctrl-w ctrl-d ctrl-z ctrl-s ctrl-q ctrl-v ctrl-r ctrl-o
-#                ctrl-t ctrl-h bspace).
+#                across files (a later duplicate loses its key). Names in
+#                TMUX_ONESHOT_RESERVED_KEYS are dropped with an error;
+#                `tmux-oneshot --debug` prints that list.
 #   window       run cmd in a new tmux window with this name instead of in
 #                the popup; the popup returns at once. In the window, success
 #                closes it and failure holds ("press any key"). Outside tmux
@@ -633,8 +628,9 @@ function tmux_oneshot::action::debug() {
   local keys
   keys="$(tmux_oneshot::_expect_keys)" || rc=1
   print -r -- "── direct keys"
-  print -r -- "  expect: ${keys}"
-  print -r -- "  keys:   $(tmux_oneshot::_key_list)"
+  print -r -- "  expect:   ${keys}"
+  print -r -- "  keys:     $(tmux_oneshot::_key_list)"
+  print -r -- "  reserved: ${(j: :)TMUX_ONESHOT_RESERVED_KEYS}"
   if (( TMUX_ONESHOT_LOAD_SKIPPED + TMUX_ONESHOT_LOAD_SHADOWED + TMUX_ONESHOT_LOAD_KEYCLASH > 0 )); then
     log::err "Load collisions | skipped='${TMUX_ONESHOT_LOAD_SKIPPED}' shadowed='${TMUX_ONESHOT_LOAD_SHADOWED}' keyclash='${TMUX_ONESHOT_LOAD_KEYCLASH}'"
     rc=1
