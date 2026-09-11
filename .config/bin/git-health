@@ -200,7 +200,7 @@ report_health() {
     local summary="${(j:, :)problems}"
     note "UNHEALTHY after self-heal | ${summary}"
     if (( ! dry_run )); then
-        osascript -e "display notification \"${summary} — self-heal failed, see ${LOG_FILE}\" with title \"${repo:t} .git needs manual maintenance\""
+        alert "${repo:t} .git needs manual maintenance" "${summary} — self-heal failed; click to open the log"
     fi
     return 1
 }
@@ -338,19 +338,46 @@ do_unregister() {
 # banner cannot be removed and would sit in Notification Center forever.
 # Arguments: message, seconds (default 2)
 #######################################
-hud() {
-    local msg="${1}" seconds="${2:-2}" tn
+notifier_bin() {
+    local tn p
     tn="$(command -v terminal-notifier 2>/dev/null || true)"
     if [[ -z "${tn}" ]]; then
-        local p
         for p in /opt/homebrew/bin/terminal-notifier /usr/local/bin/terminal-notifier; do
             [[ -x "${p}" ]] && { tn="${p}"; break; }
         done
     fi
-    [[ -n "${tn}" ]] || return 0
+    [[ -n "${tn}" ]] || return 1
+    print -r -- "${tn}"
+}
+
+hud() {
+    local msg="${1}" seconds="${2:-2}" tn
+    tn="$(notifier_bin)" || return 0
     "${tn}" -group git-health -title git-health -message "${msg}" >/dev/null || return 0
     sleep "${seconds}"
     "${tn}" -remove git-health >/dev/null || true
+}
+
+#######################################
+# A persistent alert: stays in Notification Center until clicked or dismissed. The click
+# opens the log in a new tmux window on the user's default server (launchd has no $TMUX, so
+# the socket path is derived), or in Terminal when no server is running. Absolute paths
+# throughout: the click runs under /bin/sh with launchd's PATH.
+# Arguments: title, message
+#######################################
+alert() {
+    local title="${1}" msg="${2}" tn click
+    tn="$(notifier_bin)" || return 0
+    local sock="/private/tmp/tmux-$(id -u)/default" tmux_bin editor_bin
+    tmux_bin="$(command -v tmux 2>/dev/null || true)"
+    [[ -z "${tmux_bin}" && -x /opt/homebrew/bin/tmux ]] && tmux_bin=/opt/homebrew/bin/tmux
+    editor_bin="$(command -v "${${EDITOR:-vi}%% *}" 2>/dev/null || command -v vi)"
+    if [[ -S "${sock}" && -n "${tmux_bin}" ]]; then
+        click="${(q)tmux_bin} -S ${(q)sock} new-window -n git-health-error ${(q)editor_bin} + ${(q)LOG_FILE}"
+    else
+        click="/usr/bin/open -a Terminal ${(q)LOG_FILE}"
+    fi
+    "${tn}" -group "git-health-alert-${title// /-}" -title "${title}" -message "${msg}" -execute "${click}" >/dev/null || true
 }
 
 #######################################
