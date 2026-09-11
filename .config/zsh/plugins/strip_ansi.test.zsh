@@ -19,6 +19,20 @@ function _t() {
 }
 
 local _bin="${HOME}/.config/bin/strip-ansi"
+source "${HOME}/.config/zsh/plugins/strip_ansi.zsh"
+
+# The function, in-process.
+_t "strip_ansi function: color on and reset" "hello" "$(print -r -- $'\e[31mhello\e[0m' | strip_ansi)"
+local _tee_file
+_tee_file="$(mktemp /tmp/strip-ansi-test.XXXXX)"
+: > "${_tee_file}"
+_t "strip_ansi_tee: stderr keeps the colors" $'\e[31mred\e[0m' "$(print -r -- $'\e[31mred\e[0m' | strip_ansi_tee "${_tee_file}" 2>&1 >/dev/null)"
+_t "strip_ansi_tee: the file is stripped and appended" "red" "$(cat "${_tee_file}")"
+print -r -- $'\e[1mmore\e[0m' | strip_ansi_tee "${_tee_file}" 2>/dev/null
+_t "strip_ansi_tee: appends, never truncates" $'red\nmore' "$(cat "${_tee_file}")"
+rm -f "${_tee_file}"
+
+# The wrapper script.
 
 _t "color on and reset" "hello" "$(print -r -- $'\e[31mhello\e[0m' | "${_bin}")"
 _t "bold+color with multiple params" "[ERROR] x" "$(print -r -- $'\e[1;35m[ERROR]\e[0m x' | "${_bin}")"
