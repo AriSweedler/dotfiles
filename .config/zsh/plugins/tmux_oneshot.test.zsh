@@ -349,7 +349,7 @@ _t "duplicate name: warning names both sources" "kept='local:${_xdg_d}/tmux_ones
 _t "duplicate key: later entry loses it" "null" "$(jq -r '.[] | select(.menu.name == "l1") | .key' "${_index}")"
 _t "duplicate key: first keeps it" "ctrl-k" "$(jq -r '.[] | select(.menu.name == "g1") | .key' "${_index}")"
 _t "duplicate key: error logged" "1" "$(print -r -- "${_err_out}" | grep -c 'Duplicate direct key dropped')"
-_t "duplicate key: expect list has the key once" "ctrl-g,ctrl-k" "$(_fresh --debug 2>/dev/null | grep -o 'expect: .*' | cut -d' ' -f2-)"
+_t "duplicate key: expect list has the key once" "ctrl-g,ctrl-k" "$(_fresh --debug 2>/dev/null | grep -o 'expect: *.*' | sed -E 's/^expect: *//')"
 ( _fresh --debug > /dev/null 2>&1 )
 _t "--debug fails on shadow + key clash" "1" "$?"
 _t "many files per dir load name-sorted" "a.json b.json" \
