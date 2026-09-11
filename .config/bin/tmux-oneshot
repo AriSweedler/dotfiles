@@ -230,7 +230,7 @@ function tmux_oneshot::_load() {
     files=(${(f)"$(tmux_oneshot::_files)"})
   fi
   if (( ${#files} == 0 )); then
-    log::err "No oneshot files found | dirs='$(tmux_oneshot::_dirs | cut -f2 | paste -sd: -)'"
+    log::fail "No oneshot files found | dirs='$(tmux_oneshot::_dirs | cut -f2 | paste -sd: -)'"
     return 1
   fi
 
@@ -248,7 +248,7 @@ function tmux_oneshot::_load() {
     parts+=("${part}")
   done
   if (( ${#parts} == 0 )); then
-    log::err "No loadable oneshot files | dirs='$(tmux_oneshot::_dirs | cut -f2 | paste -sd: -)' skipped='${TMUX_ONESHOT_LOAD_SKIPPED}'"
+    log::fail "No loadable oneshot files | dirs='$(tmux_oneshot::_dirs | cut -f2 | paste -sd: -)' skipped='${TMUX_ONESHOT_LOAD_SKIPPED}'"
     return 1
   fi
 
@@ -256,14 +256,14 @@ function tmux_oneshot::_load() {
   # Checked up front so an unwritable state dir is one error, not mkdir's or
   # the redirection's message plus ours.
   if ! mkdir -p "${index:h}" 2>/dev/null || [[ ! -w "${index:h}" ]]; then
-    log::err "Index dir not writable | dir='${index:h}'"
+    log::fail "Index dir not writable | dir='${index:h}'"
     return 1
   fi
   # Written beside, then mv'd: two concurrent popups never read a half file.
   if ! printf '%s\n' "${parts[@]}" \
       | jq -s "${TMUX_ONESHOT_JQ_MERGEDEF} add | merge_names | drop_clashing_keys" > "${index}.$$"; then
     rm -f "${index}.$$"
-    log::err "Cannot write index | path='${index}'"
+    log::fail "Cannot write index | path='${index}'"
     return 1
   fi
   mv "${index}.$$" "${index}"
@@ -816,7 +816,7 @@ function tmux_oneshot::_run() {
   eval "${cmd}"
   local rc=$?
   if (( rc != 0 )); then
-    log::err "Oneshot command failed | rc='${rc}'"
+    log::fail "${name} failed | rc='${rc}' cmd='${cmd}'"
   elif [[ "$(jq -r '.autodismiss // false' <<< "${entry}")" == "true" ]]; then
     [[ -n "${TMUX:-}" ]] && tmux display-message -d 1500 "✓ ${name}"
     return 0
@@ -825,9 +825,45 @@ function tmux_oneshot::_run() {
   return "${rc}"
 }
 
-# Runs inside the new window: eval the entry; on failure hold so the error
-# stays readable.
-TMUX_ONESHOT_WINDOW_RUNNER='eval "$1"; rc=$?; (( rc == 0 )) || { print -u2 "\n── rc=${rc} · press any key ──"; read -sk1 }; exit ${rc}'
+# Runs inside the new window ($1 = cmd, $2 = window name): eval the entry; on failure hold so
+# the error stays readable, and notify — the click jumps to this window.
+TMUX_ONESHOT_WINDOW_RUNNER='eval "$1"; rc=$?; (( rc == 0 )) || { print -u2 "\n── rc=${rc} · press any key ──"; [[ "${TMUX_ONESHOT_NOTIFY:-1}" == 0 ]] || ! command -v terminal-notifier >/dev/null 2>&1 || terminal-notifier -title tmux-oneshot -group tmux-oneshot-error -message "$2 failed (rc ${rc}) — click to jump to its window" -execute "tmux select-window -t $2" >/dev/null 2>&1; read -sk1 }; exit ${rc}'
+
+# A failure the user must see: recorded for the exit hook, which copies this run's log to
+# last-error.log and posts a notification whose click opens it. Cancels (esc, empty input)
+# never mark, so they stay silent.
+function tmux_oneshot::_mark_failed() {
+  [[ -n "${TMUX_ONESHOT_LOG:-}" ]] || return 0
+  print -r -- "$*" >> "${TMUX_ONESHOT_LOG}.failed"
+}
+
+# log::err that also marks the run failed. Use it where the run is truly broken; plain
+# log::err stays for probes and diagnostics that must not raise a notification.
+function log::fail() {
+  log::err "$@"
+  tmux_oneshot::_mark_failed "$*"
+}
+
+# Seam: tests record the argv instead of posting.
+function tmux_oneshot::_notify() {
+  terminal-notifier "$@" > /dev/null 2>&1
+}
+
+# Input: <summary> <log file>. Click: a new tmux window on the server this popup belongs
+# to, editor on the log; without tmux, Terminal opens the file.
+function tmux_oneshot::_notify_failure() {
+  local summary="${1:?}" logfile="${2:?}"
+  [[ "${TMUX_ONESHOT_NOTIFY:-1}" == 0 ]] && return 0
+  command -v terminal-notifier > /dev/null 2>&1 || return 0
+  local sock="${TMUX%%,*}" click
+  if [[ -n "${sock}" ]]; then
+    click="tmux -S ${(q)sock} new-window -n oneshot-error ${(q)${EDITOR:-vi}} + ${(q)logfile}"
+  else
+    click="open -a Terminal ${(q)logfile}"
+  fi
+  tmux_oneshot::_notify -title tmux-oneshot -group tmux-oneshot-error \
+    -message "${summary} — click to open the log" -execute "${click}"
+}
 
 # Input: <window name> <cmd>. The cmd travels as its own argv element (tmux
 # new-window takes [shell-command [argument ...]]), never interpolated into
@@ -843,12 +879,13 @@ function tmux_oneshot::_new_window() {
   local -a envargs
   [[ -n "${ONESHOT_INPUT:-}" ]] && envargs=(-e "ONESHOT_INPUT=${ONESHOT_INPUT}")
   log::info "Opening window | name='${name}' cmd='${cmd}' pwd='${PWD}'"
-  tmux new-window -n "${name}" -c "${PWD}" "${envargs[@]}" zsh -c "${TMUX_ONESHOT_WINDOW_RUNNER}" tmux-oneshot "${cmd}"
+  tmux new-window -n "${name}" -c "${PWD}" "${envargs[@]}" zsh -c "${TMUX_ONESHOT_WINDOW_RUNNER}" tmux-oneshot "${cmd}" "${name}"
 }
 
 # Keep the popup open so command output stays readable; Esc closes it.
-# Returns immediately when there is no tty (e.g. under tests).
+# Returns immediately when there is no tty, or when TMUX_ONESHOT_HOLD=0 (tests).
 function tmux_oneshot::_hold_until_escape() {
+  [[ "${TMUX_ONESHOT_HOLD:-1}" == 0 ]] && return 0
   local key
   print -u2 "\n── esc to close ──"
   while read -k 1 -s key < /dev/tty; do
@@ -872,7 +909,7 @@ if [[ "${ZSH_EVAL_CONTEXT}" == "toplevel" ]]; then
   if [[ "${1:-}" == "--log" ]]; then
     print -r -- "── ${TMUX_ONESHOT_LOG}"
     [[ -f "${TMUX_ONESHOT_LOG}" ]] && cat "${TMUX_ONESHOT_LOG}"
-    ls "${TMUX_ONESHOT_LOG}".bak.* 2>/dev/null
+    ls "${TMUX_ONESHOT_LOG}".bak.* "${TMUX_ONESHOT_LOG:h}/last-error.log" 2>/dev/null
     exit 0
   fi
 
@@ -893,5 +930,11 @@ if [[ "${ZSH_EVAL_CONTEXT}" == "toplevel" ]]; then
   rm -f "${_tmux_oneshot_rcf}"
   : "${_tmux_oneshot_rc:=1}"
   print -r -- "── exit rc=${_tmux_oneshot_rc}" >> "${TMUX_ONESHOT_LOG}"
+  if [[ -f "${TMUX_ONESHOT_LOG}.failed" ]]; then
+    _tmux_oneshot_err="${TMUX_ONESHOT_LOG:h}/last-error.log"
+    cp "${TMUX_ONESHOT_LOG}" "${_tmux_oneshot_err}" 2>/dev/null
+    tmux_oneshot::_notify_failure "$(tail -1 "${TMUX_ONESHOT_LOG}.failed")" "${_tmux_oneshot_err}"
+    rm -f "${TMUX_ONESHOT_LOG}.failed"
+  fi
   exit "${_tmux_oneshot_rc}"
 fi

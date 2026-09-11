@@ -29,6 +29,8 @@ function _t() {
 source "${HOME}/.config/bin/tmux-oneshot"
 # Plain rows: the assertions read the menu text, not its colors.
 TMUX_ONESHOT_KEY_STYLE=''
+# CLI-run cases must not post real notifications or wait for a keypress on a real tty.
+export TMUX_ONESHOT_NOTIFY=0 TMUX_ONESHOT_HOLD=0
 
 local _picks_file _typed_file _calls_file _label_file _tmux_file _db
 _picks_file="$(mktemp /tmp/tmux-oneshot-test-picks.XXXXX)"
@@ -555,11 +557,11 @@ _t "autodismiss flashes '✓ <name>'" "display-message|-d|1500|✓ aPa" "$(_tmux
 _err_out="$(export TMUX=test-dummy; _run_key 'ap login' 2>/dev/null)"; _err_rc=$?
 _t "window entry: rc 0, no hold" "0 " "${_err_rc} $(print -r -- "${_err_out}" | grep HELD)"
 _t "window entry: opens its named window" "new-window|-n|sso" "$(_tmux_last 1-3)"
-_t "window entry: cmd travels as one argv element" "ACTION=login ${_stub} --query \"'hyperbase' \"" "$(_tmux_last 10-)"
+_t "window entry: cmd travels as one argv element, then the window name" "ACTION=login ${_stub} --query \"'hyperbase' \"|sso" "$(_tmux_last 10-)"
 : > "${_tmux_file}"
 ( export TMUX=test-dummy; _run_key caffeinate > /dev/null 2>&1 )
-_t "_new_window argv: -n name -c pwd zsh -c runner tmux-oneshot cmd" \
-  "new-window|-n|caf|-c|${PWD}|zsh|-c|${TMUX_ONESHOT_WINDOW_RUNNER}|tmux-oneshot|echo caf-ran" "$(_tmux_last)"
+_t "_new_window argv: -n name -c pwd zsh -c runner tmux-oneshot cmd name" \
+  "new-window|-n|caf|-c|${PWD}|zsh|-c|${TMUX_ONESHOT_WINDOW_RUNNER}|tmux-oneshot|echo caf-ran|caf" "$(_tmux_last)"
 : > "${_tmux_file}"
 ( export TMUX=test-dummy ONESHOT_INPUT="foo bar"; tmux_oneshot::_new_window sso 'echo x' > /dev/null 2>&1 )
 _t "_new_window forwards ONESHOT_INPUT with -e" "-e|ONESHOT_INPUT=foo bar" "$(_tmux_last 6-7)"
@@ -627,6 +629,31 @@ _t "previous run rotated aside" "1" "$(grep -c 'tmux-oneshot --list' "${_log}.ba
 _t "--log prints path and content without rotating" "1" \
   "$(zsh "${HOME}/.config/bin/tmux-oneshot" --log | grep -c 'Unknown key')"
 _t "--log did not rotate" "── exit rc=1" "$(grep '── exit' "${_log}")"
+
+# Failures notify; the click opens the log in a tmux window. Cancels stay silent.
+local _ndir
+_ndir="$(mktemp -d /tmp/tmux-oneshot-test-notif.XXXXX)"
+print -rl -- '#!/usr/bin/env zsh' "print -r -- \"\$*\" >> '${_ndir}/calls'" > "${_ndir}/terminal-notifier"
+chmod +x "${_ndir}/terminal-notifier"
+: > "${_ndir}/calls"
+# Entry 4 of the first DB is `false`.
+TMUX_ONESHOT_NOTIFY=1 TMUX=/tmp/fake-sock,1,0 PATH="${_ndir}:${PATH}" TMUX_ONESHOT_DB="${_db}" \
+  zsh "${HOME}/.config/bin/tmux-oneshot" 4 > /dev/null 2>&1
+_t "a failed entry names itself, cmd and rc in the log" "1" "$(grep -c "false failed | rc='1' cmd='false'" "${_log}")"
+_t "a failed run copies its log to last-error.log" "yes" "$(grep -q "false failed | rc='1'" "${_log:h}/last-error.log" && echo yes)"
+_t "a failed run notifies; the click opens the log in a new tmux window on this server" "yes" \
+  "$(grep -q -- "-execute tmux -S /tmp/fake-sock new-window -n oneshot-error .* + ${_log:h}/last-error.log" "${_ndir}/calls" && echo yes)"
+_t "the notification carries the failure line" "1" "$(grep -c -- "-message false failed | rc='1'" "${_ndir}/calls")"
+_t "the failure marker is consumed" "no" "$([[ -f "${_log}.failed" ]] && echo yes || echo no)"
+: > "${_ndir}/calls"
+TMUX_ONESHOT_NOTIFY=0 PATH="${_ndir}:${PATH}" TMUX_ONESHOT_DB="${_db}" zsh "${HOME}/.config/bin/tmux-oneshot" 4 > /dev/null 2>&1
+_t "TMUX_ONESHOT_NOTIFY=0 posts nothing" "0" "$(wc -l < "${_ndir}/calls" | tr -d ' ')"
+TMUX_ONESHOT_NOTIFY=1 PATH="${_ndir}:${PATH}" TMUX_ONESHOT_DB="${_db}" zsh "${HOME}/.config/bin/tmux-oneshot" 3 > /dev/null 2>&1
+_t "a successful run posts nothing" "0" "$(wc -l < "${_ndir}/calls" | tr -d ' ')"
+export TMUX_ONESHOT_LOG="${_log}"
+tmux_oneshot::_resolve_pick 130 "" "" "" > /dev/null 2>&1
+_t "esc is a cancel, never a failure" "no" "$([[ -f "${_log}.failed" ]] && echo yes || echo no)"
+rm -rf "${_ndir}"
 
 unset TMUX_ONESHOT_LOG
 rm -rf "${_log_dir}"
