@@ -31,3 +31,6 @@ __debug_bin*
 thoughts
 .bk.yaml
 bk.yaml
+
+# Datadog ddviz panel runtime state (socket lock, pid)
+.ddviz
