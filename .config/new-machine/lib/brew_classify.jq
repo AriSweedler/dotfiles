@@ -9,6 +9,7 @@
 #   tap_info            {"<tap>": {formula_names, cask_tokens}}   only taps `brew tap` lists
 #   tap_casks_on_disk   {"<tap>": ["<token>", ...]}   Casks/*.rb under `brew --repository <tap>`
 #   trusted_taps        taps declared with `trusted: true` in a tier, or in trust.json trustedtaps
+#   trusted_items       {formula: [...], cask: [...]} trust.json trustedformulae / trustedcasks
 #   previous_undeclared ["<kind>/<name>", ...] from the previous run's last_result.json
 #
 # `missing` is not computed here: brew_pkgs owns it through `brew bundle check`, so the two
@@ -23,6 +24,7 @@
 | ($in.tap_info // {}) as $tap_info
 | ($in.tap_casks_on_disk // {}) as $tap_casks_on_disk
 | ($in.trusted_taps // []) as $trusted_taps
+| ($in.trusted_items // {}) as $trusted_items
 | ($in.previous_undeclared // []) as $previous_undeclared
 
 | def kinds: ["formula", "cask", "tap", "vscode"];
@@ -82,6 +84,14 @@
          or has_item($tap_casks_on_disk[$f.tap] // []; $f.keg)
       then "the tap now ships cask " + $f.name
     else "formula removed from tap" end;
+  # The trust prompt fires per formula/cask, so a tap whose every declared item brew already
+  # trusts (trust.json trustedformulae/trustedcasks) needs no `trusted: true` on this machine.
+  def trusted_via_items($tap; $decl):
+    [ $decl[] | select((.kind == "formula" or .kind == "cask")
+        and ((.name | startswith($tap + "/")) or (.raw | startswith($tap + "/")))) ] as $items
+    | ($items | length) > 0
+      and all($items[]; . as $i
+              | any(($trusted_items[$i.kind] // [])[]; . == $i.name or . == $i.raw));
 
   candidates as $cands
 | installed as $installed
@@ -121,7 +131,7 @@
     ambiguous_alias: [ ["formula", "cask"][] as $k | ($alias_map[$k] // {}) | to_entries[]
       | select(.value | length > 1) | {kind: $k, name: .key, candidates: .value} ],
     untrusted_taps: ( [ $decl[] | select(.kind == "tap" and third_party(.name)
-      and (has_item($trusted_taps; .name) | not)) | .name ] | unique ),
+      and (has_item($trusted_taps; .name) | not) and (trusted_via_items(.name; $decl) | not)) | .name ] | unique ),
     inventory_note: (
       (($inventory.list_full_name // []) | length) as $listed
       | (($inventory.formulae // []) | length) as $kegs

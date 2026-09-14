@@ -554,6 +554,17 @@ brew::_trusted_taps() {
   print -rl -- "${names[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0)) | unique'
 }
 
+# trust.json's per-item trust, {formula: [...], cask: [...]}; empty lists when there is no file.
+brew::_trusted_items() {
+  local trust_json="${XDG_CONFIG_HOME}/homebrew/trust.json"
+  if [[ ! -f "${trust_json}" ]]; then
+    print -r -- '{"formula":[],"cask":[]}'
+    return 0
+  fi
+  jq -c '{formula: ([.trustedformulae[]? | strings] | unique), cask: ([.trustedcasks[]? | strings] | unique)}' \
+    "${trust_json}" 2>/dev/null || print -r -- '{"formula":[],"cask":[]}'
+}
+
 # brew::classify [<inventory.json>] [<info_installed.json>] [<global Brewfile>] [<local Brewfile>]
 #                [<global Brewfile.ignore>] [<local Brewfile.ignore>] [<previous_undeclared.json>]
 #   → drift.json on stdout (shape in §2.7). Every argument defaults to the run's file
@@ -582,7 +593,7 @@ brew::classify() {
   if (( $# < 5 )); then global_ignore="$(brew::global_ignore)"; fi
   if (( $# < 6 )); then local_ignore="$(brew::local_ignore)"; fi
   local alias_map declared_global declared_local ignore_global ignore_local
-  local include_declared tap_info tap_casks trusted previous_json
+  local include_declared tap_info tap_casks trusted trusted_items previous_json
   previous_json="$(brew::previous_undeclared)"
   alias_map="$(brew::alias_map "${info}" "${inventory}")" || return 1
   declared_global="$(brew::declared "${global_brewfile}")" || return 1
@@ -593,6 +604,7 @@ brew::classify() {
   tap_info="$(brew::_tap_info_map "${inventory}")" || return 1
   tap_casks="$(brew::_tap_casks_on_disk "${inventory}")" || return 1
   trusted="$(brew::_trusted_taps "${global_brewfile}" "${local_brewfile}")" || return 1
+  trusted_items="$(brew::_trusted_items)" || return 1
   if [[ -n "${previous}" && -f "${previous}" ]]; then
     previous_json="$(jq -c 'if type == "array" then map(strings) else [] end' "${previous}")" || return 1
   fi
@@ -606,12 +618,12 @@ brew::classify() {
     --argjson ignore_global "${ignore_global}" --argjson ignore_local "${ignore_local}" \
     --argjson include_declared "${include_declared}" --argjson tap_info "${tap_info}" \
     --argjson tap_casks_on_disk "${tap_casks}" --argjson trusted_taps "${trusted}" \
-    --argjson previous_undeclared "${previous_json}" '
+    --argjson trusted_items "${trusted_items}" --argjson previous_undeclared "${previous_json}" '
     {inventory: $inventory[0], alias_map: $alias_map[0],
      declared: {global: $declared_global, local: $declared_local},
      ignore: {global: $ignore_global, local: $ignore_local},
      include_declared: $include_declared, tap_info: $tap_info, tap_casks_on_disk: $tap_casks_on_disk,
-     trusted_taps: $trusted_taps, previous_undeclared: $previous_undeclared}' \
+     trusted_taps: $trusted_taps, trusted_items: $trusted_items, previous_undeclared: $previous_undeclared}' \
     | jq -c -f "${BREW_LIB_DIR}/brew_classify.jq"
 }
 
