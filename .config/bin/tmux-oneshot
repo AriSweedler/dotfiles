@@ -70,7 +70,7 @@
 #   subcommands  list of nested entries (recursive: cmd/flags/subcommands/
 #                description) — pick one, then its args resolve in turn
 #   _src, _tier  injected by the loader, never authored: the defining file
-#                and its tier ("global" | "local" | "extra"). Shown in the
+#                and its tier ("global" | "local" | "generated" | "extra"). Shown in the
 #                preview; used by --edit, --debug and --dry-run.
 #
 # flags/subcommands are a builder and strictly opt-in: an entry without them
@@ -100,18 +100,20 @@ function tmux_oneshot() {
 
   case "${1:-}" in
     -h|--help) tmux_oneshot::action::help; return 0;;
+    --files)   tmux_oneshot::action::files; return $?;;
   esac
   tmux_oneshot::_load || return 1
 
   local -a fzf_args
   case "${1:-}" in
-    --list)     tmux_oneshot::action::list; return $?;;
+    --list)     shift; tmux_oneshot::action::list "$@"; return $?;;
     --edit)     shift; tmux_oneshot::action::edit "$@"; return $?;;
     --debug)    tmux_oneshot::action::debug; return $?;;
     --dry-run)  tmux_oneshot::action::dry_run "${2:?--dry-run requires a name}"; return $?;;
     -q|--query) fzf_args=(--query "${2:?-q requires a value}"); shift 2;;
     -*)
       log::err "Unknown option | option='${1}'"
+      tmux_oneshot::action::help >&2
       return 1
       ;;
   esac
@@ -128,31 +130,43 @@ function tmux_oneshot() {
 
 function tmux_oneshot::action::help() {
   echo -e "$(cat << EOF
-USAGE: tmux-oneshot [name]            # run an entry by menu.name or 1-based index
-       tmux-oneshot -q <query>        # open the picker with a prefilled query
-       tmux-oneshot --list            # print the names, one per line
-       tmux-oneshot --dry-run <name>  # print the entry's surface fields + assembled cmd, no eval
-       tmux-oneshot --edit [name]     # \$EDITOR on every source file, or on the one defining <name>
-       tmux-oneshot --debug           # non-interactive: sources + render + index + preview + key checks
-       tmux-oneshot --log             # print the per-run stderr log (popup errors land here)
+${c_green}tmux-oneshot${c_rst} — pick a oneshot command from the merged entry files and run it
 
-Pick a oneshot command from the merged entry files and run it. Selecting an
-entry cds to its pwd (if set), asks its prompt (if set), interactively
-resolves its flags/subcommands (if any), then evals the assembled command —
-in the popup, or in a new tmux window for window entries. A direct key runs
-its entry at once; they are listed under "instant-triggers". The entry schema is
-documented at the top of this script.
+Selecting an entry cds to its pwd (if set), asks its prompt (if set), resolves its
+flags/subcommands (if any), then evals the assembled command in the popup, or in a
+new tmux window for window entries. A direct key (⌃x in the menu) runs its entry at
+once. The entry schema is documented at the top of this script.
 
-Sources (later wins on a duplicate name):
-  global  ${c_grey}${XDG_CONFIG_HOME:-${HOME}/.config}/tmux_oneshot/*.json${c_rst}   skip: TMUX_ONESHOT_IGNORE_DIR_GLOBAL=1
-  local   ${c_grey}${XDG_DATA_HOME:-${HOME}/.local/share}/tmux_oneshot/*.json${c_rst}   skip: TMUX_ONESHOT_IGNORE_DIR_LOCAL=1
-  generated ${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/generated/*.json${c_rst}   skip: TMUX_ONESHOT_IGNORE_DIR_GENERATED=1
-            written by shell plugins at startup (e.g. vi_.zsh publishes the vi_/ group); never edit by hand
-  extra   \$TMUX_ONESHOT_DIRS, colon-separated dirs (currently: ${c_grey}${TMUX_ONESHOT_DIRS:-unset}${c_rst})
-  index   ${c_grey}${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/index.json${c_rst}   rebuilt every launch
+${c_cyan}Usage:${c_rst}
+  tmux-oneshot [name]                 run an entry by menu.name or 1-based index
+  tmux-oneshot -q <query>             open the picker with a prefilled query
+
+${c_cyan}Options:${c_rst}
+  ${c_green}--list${c_rst}             print the entry names, one per line
+    ${c_green}--depth N${c_rst}        keep the first N /-segments (1: groups list once, as "ap")
+    ${c_green}--prefix P${c_rst}       only names starting with P
+  ${c_green}--files${c_rst}            print the source files that would load, as "tier<TAB>path"
+  ${c_green}--dry-run <name>${c_rst}   print the entry's surface fields and assembled cmd; no eval
+  ${c_green}--edit [name]${c_rst}      \$EDITOR on every source file, or on the one defining <name>
+  ${c_green}--debug${c_rst}            non-interactive: sources, render, index, preview and key checks
+  ${c_green}--log${c_rst}              print the per-run stderr log (popup errors land here)
+  ${c_green}-h, --help${c_rst}         show this help
+
+${c_cyan}Sources${c_rst} (later wins on a duplicate name):
+  global     ${c_grey}${XDG_CONFIG_HOME:-${HOME}/.config}/tmux_oneshot/*.json${c_rst}   skip: TMUX_ONESHOT_IGNORE_DIR_GLOBAL=1
+  local      ${c_grey}${XDG_DATA_HOME:-${HOME}/.local/share}/tmux_oneshot/*.json${c_rst}   skip: TMUX_ONESHOT_IGNORE_DIR_LOCAL=1
+  generated  ${c_grey}${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/generated/*.json${c_rst}   skip: TMUX_ONESHOT_IGNORE_DIR_GENERATED=1
+             written by shell plugins at startup (oneshot_group.zsh); never edit by hand
+  extra      \$TMUX_ONESHOT_DIRS, colon-separated dirs (currently: ${c_grey}${TMUX_ONESHOT_DIRS:-unset}${c_rst})
+  index      ${c_grey}${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/index.json${c_rst}   rebuilt every launch
   TMUX_ONESHOT_DB=<file> forces single-file mode: that file only, no index.
 EOF
 )"
+}
+
+# Output: "tier\tfile" for every source file the next launch would load.
+function tmux_oneshot::action::files() {
+  tmux_oneshot::_files
 }
 
 # ---------------------------------------------------------------------------
@@ -306,10 +320,28 @@ function tmux_oneshot::_report_collisions() {
 # its 1-based index. Interpolated into every jq program that keys entries.
 TMUX_ONESHOT_JQ_KEYDEF='def entrykey: .value.menu.name // ((.key + 1) | tostring);'
 
-# Input: none
-# Output: one key per line — menu.name when set, else the 1-based index
+# Input: [--depth N] [--prefix P]
+# Output: one key per line — menu.name when set, else the 1-based index. --depth N keeps
+# the first N /-segments (so groups list once, as "ap"); --prefix P keeps names starting
+# with P. Order is load order, duplicates collapsed.
 function tmux_oneshot::action::list() {
-  jq -r "${TMUX_ONESHOT_JQ_KEYDEF} to_entries[] | entrykey" "${TMUX_ONESHOT_DB}"
+  local depth=0 prefix=""
+  while (( $# > 0 )); do
+    case "${1}" in
+      --depth|--list-depth) depth="${2:?--depth requires a number}"; shift 2;;
+      --prefix)             prefix="${2:?--prefix requires a value}"; shift 2;;
+      *) log::err "Unknown --list option | option='${1}' valid='--depth N, --prefix P'"; return 1;;
+    esac
+  done
+  if [[ "${depth}" != <-> ]]; then
+    log::err "Depth must be a non-negative integer | depth='${depth}'"
+    return 1
+  fi
+  jq -r --argjson d "${depth}" --arg p "${prefix}" \
+    "${TMUX_ONESHOT_JQ_KEYDEF} [to_entries[] | entrykey | select(startswith(\$p))
+       | if \$d > 0 then (split(\"/\")[:\$d] | join(\"/\")) else . end]
+     | reduce .[] as \$k ([]; if index(\$k) != null then . else . + [\$k] end) | .[]" \
+    "${TMUX_ONESHOT_DB}"
 }
 
 # Input: [name]. With a name: the file defining that entry. Without: every
@@ -419,7 +451,7 @@ TMUX_ONESHOT_FZF_MATCH_ARGS=(--delimiter $'\t' --with-nth '2..' --tiebreak=begin
 
 # Keys fzf must keep, plus the termios specials a cooked tty consumes when
 # the key is typed before fzf enters raw mode (ctrl-u = VKILL, ctrl-w = VWERASE …).
-TMUX_ONESHOT_RESERVED_KEYS=(enter esc tab btab ctrl-c ctrl-j ctrl-m up down ctrl-p ctrl-y ctrl-e
+TMUX_ONESHOT_RESERVED_KEYS=(enter esc tab btab ctrl-c ctrl-j ctrl-m up down ctrl-y ctrl-e
                             ctrl-u ctrl-w ctrl-d ctrl-z ctrl-s ctrl-q ctrl-r ctrl-o ctrl-t ctrl-h bspace)
 
 # Output: the comma-joined --expect list. Reserved names are dropped with

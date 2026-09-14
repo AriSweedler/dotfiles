@@ -1,5 +1,29 @@
 [
- {"menu": {"name": "killall NotificationCenter", "text": "dismiss every stuck banner"}, "cmd": "killall NotificationCenter", "autodismiss": true, "key": "ctrl-n"},
- {"menu": {"name": "caffeinate", "text": "keep the display awake → window caf"}, "cmd": "echo 'Display will not sleep'; caffeinate -d", "window": "caf", "key": "ctrl-k"},
- {"menu": {"name": "applepaste", "text": "type the clipboard as keystrokes (AppleScript key codes)"}, "cmd": "applepaste \"$(pbpaste)\"", "autodismiss": true}
+  {
+    "menu": {
+      "name": "killall NotificationCenter",
+      "text": "dismiss every stuck banner"
+    },
+    "cmd": "killall NotificationCenter",
+    "autodismiss": true,
+    "key": "ctrl-n"
+  },
+  {
+    "menu": {
+      "name": "caffeinate",
+      "text": "keep the display awake → window caf"
+    },
+    "cmd": "echo 'Display will not sleep'; caffeinate -d",
+    "window": "caf",
+    "key": "ctrl-k"
+  },
+  {
+    "menu": {
+      "name": "applepaste",
+      "text": "type the clipboard as keystrokes (AppleScript key codes)"
+    },
+    "cmd": "applepaste \"$(pbpaste)\"",
+    "autodismiss": true,
+    "key": "ctrl-p"
+  }
 ]

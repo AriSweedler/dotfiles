@@ -344,6 +344,12 @@ _t "generated tier is tagged generated" "generated" "$(jq -r '.[] | select(.menu
 _t "IGNORE_DIR_GENERATED skips it" "g1 dup g3 l1 l2" \
   "$(TMUX_ONESHOT_IGNORE_DIR_GENERATED=1 _fresh --list 2>/dev/null | paste -sd' ' -)"
 rm -rf "${_xdg_s}/tmux_oneshot/generated"
+_t "--files lists tier and path for every file that would load" \
+  "global	${_xdg_c}/tmux_oneshot/macos.json
+local	${_xdg_d}/tmux_oneshot/a.json
+local	${_xdg_d}/tmux_oneshot/b.json" "$(_fresh --files 2>/dev/null)"
+_t "--files honors the ignore knobs" "1" "$(TMUX_ONESHOT_IGNORE_DIR_LOCAL=1 _fresh --files 2>/dev/null | wc -l | tr -d ' ')"
+_t "unknown option: error plus help" "1 1" "$(_fresh --bogus 2>&1 >/dev/null | grep -c 'Unknown option') $(_fresh --bogus 2>&1 >/dev/null | grep -c 'Usage:')"
 _t "tier is carried, not inferred from the path" "extra" \
   "$(mkdir -p "${_xdg_c}/extra_oneshots"; cp "${_extra1}/x.json" "${_xdg_c}/extra_oneshots/"; TMUX_ONESHOT_DIRS="${_xdg_c}/extra_oneshots" _fresh --list >/dev/null 2>&1; jq -r '.[-1]._tier' "${_index}")"
 
@@ -524,6 +530,11 @@ _t "top menu folds the group into one row" "0|g:aws" "$(tmux_oneshot::_menu | cu
 _t "group row lists its leaves" "aws   ▸ apa, aps" "$(tmux_oneshot::_menu | sed -n 2p | cut -f2)"
 _t "group menu shows leaves with real indexes" "1|apa|2|aps" "$(tmux_oneshot::_menu --group aws | cut -f1-2 | sed 's/  .*//' | tr '\t' '|' | paste -sd'|' -)"
 _t "highlighted group row resolves to g:aws" "g:aws" "$(tmux_oneshot::_resolve_pick 0 "" "" "$(tmux_oneshot::_menu | sed -n 2p)")"
+_t "--list prints every name" "misc aws/apa aws/aps" "$(tmux_oneshot --list | paste -sd' ' -)"
+_t "--list --depth 1 collapses groups to one name" "misc aws" "$(tmux_oneshot --list --depth 1 | paste -sd' ' -)"
+_t "--list --prefix keeps matching names" "aws/apa aws/aps" "$(tmux_oneshot --list --prefix aws | paste -sd' ' -)"
+_t "--list --list-depth and --prefix compose" "aws" "$(tmux_oneshot --list --list-depth 1 --prefix a | paste -sd' ' -)"
+_t "--list rejects a non-numeric depth" "1" "$(tmux_oneshot --list --depth x 2>/dev/null; print -rn -- $?)"
 _set_picks $'\t\t▸' $'\t\taps'
 _t "_pick e2e: group row opens the group picker and runs the leaf" "aps-ran" "$(tmux_oneshot::_pick 2>/dev/null)"
 _set_picks $'apa\t\t'
