@@ -8,13 +8,11 @@
 #   3. Names vi_::_<anything> are this file's machinery, never editors.
 #   4. `vi_?` lists the family, `vi_` picks one with fzf, `vi_::_verify` enforces 1 and 2. Run
 #      it after adding an editor.
-#   5. Hyper+O and C-a C-k reach the family through tmux-oneshot: at shell start this file
-#      publishes group vi_/ (one row per alias, text = long name, opens in a tmux window named
-#      vi) into the oneshot generated tier, rewriting it only when the family changed.
+#   5. Hyper+O and C-a C-k reach the family as oneshot group vi_/ (one row per alias, text =
+#      long name, opens in a tmux window named vi_), published by oneshot_group.zsh.
 
 (( ${+functions[log::info]} )) || source "${${(%):-%x}:A:h}/log.zsh"
-
-VI_ONESHOT_FILE="${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/generated/vi_.json"
+(( ${+functions[oneshot_group::aliases]} )) || source "${${(%):-%x}:A:h}/oneshot_group.zsh"
 
 # Output: "short\tlong" per editor, alias-sorted. Derived from the live aliases, so nothing
 # has to be registered twice.
@@ -74,32 +72,7 @@ function vi_::_verify() {
   return ${bad}
 }
 
-# Output: the oneshot JSON for the family. `irun` because aliases live in interactive shells.
-function vi_::_oneshot_json() {
-  vi_::_editors | jq -R -s 'split("\n") | map(select(length > 0) | split("\t")
-    | {menu: {name: ("vi_/" + .[0]), text: .[1]}, cmd: ("irun vi_" + .[0]), window: "vi_"})'
-}
-
-function vi_::_publish() {
-  local json
-  json="$(vi_::_oneshot_json)" || return 1
-  if [[ -f "${VI_ONESHOT_FILE}" ]] && [[ "$(< "${VI_ONESHOT_FILE}")" == "${json}" ]]; then
-    return 0
-  fi
-  mkdir -p "${VI_ONESHOT_FILE:h}" || return 1
-  print -r -- "${json}" > "${VI_ONESHOT_FILE}"
-}
-
-# Runs once, after every plugin (local ones included) has defined its aliases.
-function vi_::_publish_once() {
-  add-zsh-hook -d precmd vi_::_publish_once
-  vi_::_publish
-}
-
 alias 'vi_?'=vi_::_list
 alias vi_=vi_::_pick
 
-if [[ -o interactive ]]; then
-  autoload -Uz add-zsh-hook
-  add-zsh-hook precmd vi_::_publish_once
-fi
+oneshot_group::aliases vi_ vi_ --fn-prefix vi_:: --window vi_ --key ctrl-v --text "edit a common file"

@@ -42,14 +42,13 @@ _t "pick: runs the chosen editor" "beta" "$(vi_ >/dev/null 2>&1; cat "${_hit}")"
 function vi_::_fzf() { return 130 }
 _t "pick: cancel is rc 1, runs nothing" "1|" "$(: > "${_hit}"; vi_ >/dev/null 2>&1; print -rn -- "$?|$(cat "${_hit}")")"
 
-_t "oneshot json: one vi/ row per editor, opens in window vi" \
+# Sourcing vi_.zsh registered the family with oneshot_group; flushing publishes it.
+oneshot_group::flush
+_t "oneshot group: one vi_/ row per editor, opens in window vi_" \
   '{"menu":{"name":"vi_/zza","text":"zz_alpha"},"cmd":"irun vi_zza","window":"vi_"}' \
-  "$(vi_::_oneshot_json | jq -c '.[] | select(.menu.name == "vi_/zza")')"
-vi_::_publish
-_t "publish: writes the generated file" "1" "$(jq '[.[] | select(.menu.name == "vi_/zzb")] | length' "${XDG_STATE_HOME}/tmux_oneshot/generated/vi_.json")"
-local _mtime1; _mtime1="$(stat -f %m "${VI_ONESHOT_FILE}")"
-sleep 1; vi_::_publish
-_t "publish: unchanged family leaves the file alone" "${_mtime1}" "$(stat -f %m "${VI_ONESHOT_FILE}")"
+  "$(jq -c '.[] | select(.menu.name == "vi_/zza")' "${XDG_STATE_HOME}/tmux_oneshot/generated/vi_.json")"
+_t "oneshot group: machinery aliases are not rows" "0" \
+  "$(jq '[.[] | select(.menu.name == "vi_/?" or .menu.name == "vi_/vi_")] | length' "${XDG_STATE_HOME}/tmux_oneshot/generated/vi_.json")"
 
 alias vi_zzbad=vi_::zz_missing
 _t "verify: alias to a missing function fails" "1" "$(vi_::_verify 2>&1 >/dev/null | grep -c "missing function | alias='vi_zzbad'")"
@@ -68,7 +67,6 @@ _t "verify: machinery functions are not editors" "0" "$(vi_::_verify 2>&1 >/dev/
 unalias vi_zza vi_zzb
 unfunction vi_::zz_alpha vi_::zz_beta
 if [[ -n "${_saved_state}" ]]; then export XDG_STATE_HOME="${_saved_state}"; else unset XDG_STATE_HOME; fi
-VI_ONESHOT_FILE="${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/generated/vi_.json"
 rm -rf "${_root}"
 
 if (( _fail == 0 )); then

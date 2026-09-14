@@ -669,6 +669,35 @@ unset TMUX_ONESHOT_LOG
 rm -rf "${_log_dir}"
 
 # ---------------------------------------------------------------------------
+# Group header: a "<group>/" entry lends its key and text to the group row and
+# has no row of its own; its key opens the group.
+# ---------------------------------------------------------------------------
+local _db5; _db5="$(mktemp /tmp/tmux-oneshot-test-db5.XXXXX.json)"
+cat > "${_db5}" << 'EOF'
+[
+  {"menu": {"name": "vi_/", "text": "edit a common file"}, "key": "ctrl-v"},
+  {"menu": {"name": "vi_/cset", "text": "claude_settings_local"}, "cmd": "echo cset", "window": "vi_"},
+  {"menu": {"name": "vi_/kh", "text": "karabiner_home"}, "cmd": "echo kh", "window": "vi_"},
+  {"menu": {"name": "plain"}, "cmd": "echo plain"}
+]
+EOF
+export TMUX_ONESHOT_DB="${_db5}"
+_t "header: one plain row, then the group row keyed and described by its header" \
+  $'3\t   plain  echo plain\ng:vi_\t⌃v vi_    edit a common file' "$(tmux_oneshot::_menu)"
+_t "header: the group view lists only real leaves" "1 2" "$(tmux_oneshot::_menu --group vi_ | cut -f1 | paste -sd' ' -)"
+_t "header: its key resolves to the group" "g:vi_" "$(tmux_oneshot::_resolve_pick 0 "" "ctrl-v" "")"
+_t "header: ctrl-v is a usable direct key" "ctrl-v" "$(tmux_oneshot::_expect_keys 2>/dev/null)"
+_t "header: preview lists the leaves without an empty one" "cset   kh" "$(jq -r --arg i g:vi_ "${TMUX_ONESHOT_JQ_PREVIEW}" "${_db5}" | sed -n 2p)"
+( tmux_oneshot --debug > /dev/null 2>&1 )
+_t "header: --debug clean" "0" "$?"
+echo '[{"menu": {"name": "lonely/"}, "key": "ctrl-x"}, {"cmd": "echo x"}]' > "${_db5}"
+_err_out="$(tmux_oneshot --debug 2>&1 >/dev/null)"; _err_rc=$?
+_t "header without members: --debug fails and names it" "1 Group header without members | header='lonely/'" \
+  "${_err_rc} $(print -r -- "${_err_out}" | grep -o "Group header without members | header='[^']*'")"
+rm -f "${_db5}"
+export TMUX_ONESHOT_DB="${_db}"
+
+# ---------------------------------------------------------------------------
 rm -f "${_picks_file}" "${_typed_file}" "${_calls_file}" "${_label_file}" "${_tmux_file}" "${_db}" "${_db2}"
 rm -rf "${_stub_dir}"
 unfunction tmux _tmux_last _fresh 2>/dev/null

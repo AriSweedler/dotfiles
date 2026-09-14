@@ -40,7 +40,10 @@
 #                into one top-level row per group that opens a second picker
 #                of the group's leaves (esc goes back); a bare leaf typed at
 #                either level still runs at once when it is unique (app →
-#                ap/app). Name a group so no leaf collides with it.
+#                ap/app). Name a group so no leaf collides with it. An entry
+#                named "<group>/" with no cmd is the group's header: its text
+#                replaces the leaf list on the group row and its key opens the
+#                group's picker.
 #   key          fzf key name ("ctrl-k", "alt-x", "f5"): pressing it in the
 #                picker runs this entry at once, whatever is typed. Unique
 #                across files (a later duplicate loses its key). Names in
@@ -383,16 +386,21 @@ function tmux_oneshot::_menu() {
       | "\(.idx)\t" + keycol($kw) + (if .text == "" then $n else $n + (" " * ($w - ($n | length) + 2)) + .text end);
     (to_entries | map({idx: (.key | tostring), g: (.value | gname), leaf: (.value | leaf), key: .value.key,
                        name: (.value.menu.name // .value.cmd // "?"), text: (.value | body)})) as $all
+    # A "<group>/" entry is the group header: its key and text belong to the group row.
+    | ([$all[] | select(.g != "" and .leaf == "") | {key: .g, value: {key: .key, text: .text}}] | from_entries) as $headers
     | (if $group != "" then
-         [$all[] | select(.g == $group) | .name = .leaf]
+         [$all[] | select(.g == $group and .leaf != "") | .name = .leaf]
        else
-         (reduce ($all[] | select(.key == null)) as $e ([];
+         (reduce ($all[] | select(.key == null and .leaf != "")) as $e ([];
            if $e.g == "" then . + [$e]
            elif any(.[]; .idx == "g:" + $e.g) then map(if .idx == "g:" + $e.g then .leaves += [$e.leaf] else . end)
            else . + [{idx: ("g:" + $e.g), name: $e.g, leaves: [$e.leaf]}] end)
-         | map(if .leaves then .text = "▸ " + (.leaves | join(", ")) else . end))
-         # Keyed entries last: fzf lists bottom-up, so they sit at the top of the popup.
-         + [$all[] | select(.key != null)]
+         | map(if .leaves then .key = ($headers[.name].key // null)
+               | .text = (if ($headers[.name].text // "") != "" then $headers[.name].text else "▸ " + (.leaves | join(", ")) end)
+               else . end)) as $folded
+         # Keyed rows last: fzf lists bottom-up, so they sit at the top of the popup.
+         | [$folded[] | select(.key == null)] + [$folded[] | select(.key != null)]
+           + [$all[] | select(.key != null and .leaf != "")]
        end) as $rows
     | ([$rows[] | .name | length] | (max // 1) | if . > $cap then $cap else . end) as $w
     | ([$rows[] | select(.key) | keylabel | length] | max // 0) as $kw
@@ -412,7 +420,7 @@ TMUX_ONESHOT_FZF_MATCH_ARGS=(--delimiter $'\t' --with-nth '2..' --tiebreak=begin
 # Keys fzf must keep, plus the termios specials a cooked tty consumes when
 # the key is typed before fzf enters raw mode (ctrl-u = VKILL, ctrl-w = VWERASE …).
 TMUX_ONESHOT_RESERVED_KEYS=(enter esc tab btab ctrl-c ctrl-j ctrl-m up down ctrl-p ctrl-y ctrl-e
-                            ctrl-u ctrl-w ctrl-d ctrl-z ctrl-s ctrl-q ctrl-v ctrl-r ctrl-o ctrl-t ctrl-h bspace)
+                            ctrl-u ctrl-w ctrl-d ctrl-z ctrl-s ctrl-q ctrl-r ctrl-o ctrl-t ctrl-h bspace)
 
 # Output: the comma-joined --expect list. Reserved names are dropped with
 # log::err; the survivors are validated by fzf itself (an unknown name would
@@ -457,7 +465,7 @@ function tmux_oneshot::_key_list() {
 # The per-row preview: "<tier> · <source file>", then the entry minus the
 # loader fields. One program for _pick and --debug, so the diagnostic runs
 # exactly what fzf runs.
-TMUX_ONESHOT_JQ_PREVIEW='if ($i | startswith("g:")) then ($i[2:]) as $g | "group · \($g)/", ([.[] | .menu.name // "" | select(startswith($g + "/")) | .[($g | length) + 1:]] | join("   ")) else .[($i | tonumber)] | "\(._tier // "db") · \(._src // env.TMUX_ONESHOT_DB)", (del(._tier, ._src) | tojson) end'
+TMUX_ONESHOT_JQ_PREVIEW='if ($i | startswith("g:")) then ($i[2:]) as $g | "group · \($g)/", ([.[] | .menu.name // "" | select(startswith($g + "/")) | .[($g | length) + 1:] | select(length > 0)] | join("   ")) else .[($i | tonumber)] | "\(._tier // "db") · \(._src // env.TMUX_ONESHOT_DB)", (del(._tier, ._src) | tojson) end'
 
 # Interactive top-level picker. Args pass through to fzf (e.g. --query).
 # --sync completes the list before the first key is processed; a type-ahead
@@ -527,7 +535,8 @@ function tmux_oneshot::_pick_group() {
   tmux_oneshot::_run "${idx}"
 }
 
-# Pure. Input: <fzf rc> <query> <expect key> <selected line>. Output: 0-based index.
+# Pure. Input: <fzf rc> <query> <expect key> <selected line>. Output: 0-based index, or
+# g:<group> when the key belongs to a group header.
 #   1. a direct key wins over everything typed, whatever rc was (fzf prints
 #      the key even with zero matches, and even when it was typed before fzf
 #      started)
@@ -538,7 +547,10 @@ function tmux_oneshot::_pick_group() {
 function tmux_oneshot::_resolve_pick() {
   local rc="${1:?}" query="${2-}" key="${3-}" sel="${4-}" idx
   if [[ -n "${key}" ]]; then
-    idx="$(jq -r --arg k "${key}" 'to_entries | map(select(.value.key == $k)) | .[0].key // empty' "${TMUX_ONESHOT_DB}")"
+    idx="$(jq -r --arg k "${key}" 'to_entries | map(select(.value.key == $k)) | .[0]
+      | if . == null then empty
+        elif ((.value.menu.name // "") | endswith("/")) then "g:" + (.value.menu.name | rtrimstr("/"))
+        else .key end' "${TMUX_ONESHOT_DB}")"
     if [[ -n "${idx}" ]]; then
       echo "${idx}"
       return 0
@@ -589,9 +601,17 @@ function tmux_oneshot::action::debug() {
   expected_rows="$(jq '[.[] | select(.key == null) | (.menu.name // "") | if contains("/") then "g:" + split("/")[0] else null end]
     | (map(select(. == null)) | length) + (map(select(. != null)) | unique | length)
     + ([$__loc__] | length * 0)' "${TMUX_ONESHOT_DB}")"
+  # Group headers ("<group>/") render as their group's row, not as rows of their own.
   local -i keyed
-  keyed="$(jq '[.[] | select(.key)] | length' "${TMUX_ONESHOT_DB}")"
+  keyed="$(jq '[.[] | select(.key) | select((.menu.name // "") | endswith("/") | not)] | length' "${TMUX_ONESHOT_DB}")"
   (( expected_rows += keyed ))
+  local orphan_headers
+  orphan_headers="$(jq -r '[.[] | .menu.name // ""] as $names
+    | $names[] | select(endswith("/")) | select(. as $h | any($names[]; startswith($h) and . != $h) | not)' "${TMUX_ONESHOT_DB}")"
+  if [[ -n "${orphan_headers}" ]]; then
+    log::err "Group header without members | header='${orphan_headers//$'\n'/, }'"
+    rc=1
+  fi
   local -i last=-1
   print -r -- "── menu"
   for line in ${(f)menu}; do
