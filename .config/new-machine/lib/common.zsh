@@ -83,10 +83,14 @@ typeset -gxr NEW_MACHINE_BREW="${NEW_MACHINE_BREW:-$(nm::probe_tool brew)}"
 typeset -gxr NEW_MACHINE_NOTIFIER="${NEW_MACHINE_NOTIFIER:-$(nm::probe_tool terminal-notifier)}"
 typeset -gxr NEW_MACHINE_CODE="${NEW_MACHINE_CODE:-$(nm::probe_tool code)}"
 
-# PATH self-heal: brew's own helpers and `code` must resolve for `brew bundle check` under launchd.
+# PATH self-heal: brew's own helpers and `code` must resolve for `brew bundle check` under launchd,
+# and ~/.local/bin holds the claude installer's symlink. Local bin wins, as in the interactive shell.
 typeset -U path
 if [[ -n "${NEW_MACHINE_BREW}" ]]; then
   path=("${NEW_MACHINE_BREW:h}" $path)
+fi
+if [[ -d "${HOME}/.local/bin" ]]; then
+  path=("${HOME}/.local/bin" $path)
 fi
 
 # ── Run identity ─────────────────────────────────────────────────────────────

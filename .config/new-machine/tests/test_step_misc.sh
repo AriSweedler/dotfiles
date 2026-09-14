@@ -47,6 +47,14 @@ claude_plan="$(cat "$(newest_run_dir)/claude.log")"
 assert_contains "dry-run plan pipes the installer to sh" "${claude_plan}" "cmd='zsh -c curl -fsSL"
 assert_contains "dry-run plan names the installer URL" "${claude_plan}" "https://claude.ai/install.sh"
 assert_eq "curl never called" "" "$(shim_log curl)"
+# launchd's PATH lacks ~/.local/bin, where the installer puts claude; the checker must still see it.
+mkdir -p "${HOME}/.local/bin"
+cp "${TESTS_DIR}/shims/claude" "${HOME}/.local/bin/claude"
+chmod +x "${HOME}/.local/bin/claude"
+check_step claude
+assert_eq "claude only in ~/.local/bin → ok" ok "$(status_of claude)"
+assert_contains "detail names the ~/.local/bin path" "$(step_get claude .detail)" "${HOME}/.local/bin/claude"
+rm -f "${HOME}/.local/bin/claude"
 shim_add claude
 
 # ── terminal_nerdfont ─────────────────────────────────────────────────────────

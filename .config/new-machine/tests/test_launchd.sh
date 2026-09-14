@@ -20,7 +20,8 @@ J="${FIX}/rendered.json"
 assert_json "Label" "${J}" '.Label' "${LABEL}"
 assert_json "ProgramArguments" "${J}" '.ProgramArguments | join(" ")' "/bin/zsh ${HOME}/.config/new-machine/bin/new-machine verify"
 assert_json "StartCalendarInterval Monday 10:05" "${J}" '.StartCalendarInterval | "\(.Weekday) \(.Hour) \(.Minute)"' "1 10 5"
-assert_json "PATH starts with Homebrew" "${J}" '.EnvironmentVariables.PATH | startswith("/opt/homebrew/bin:/opt/homebrew/sbin")' true
+assert_json "PATH starts with ~/.local/bin then Homebrew" "${J}" '.EnvironmentVariables.PATH | startswith("'"${HOME}"'/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin")' true
+assert_json "PATH is absolute, no tilde" "${J}" '.EnvironmentVariables.PATH | contains("~")' false
 assert_json "HOMEBREW_NO_AUTO_UPDATE" "${J}" '.EnvironmentVariables.HOMEBREW_NO_AUTO_UPDATE' 1
 assert_json "HOMEBREW_NO_ANALYTICS" "${J}" '.EnvironmentVariables.HOMEBREW_NO_ANALYTICS' 1
 assert_json "HOMEBREW_NO_INSTALL_CLEANUP" "${J}" '.EnvironmentVariables.HOMEBREW_NO_INSTALL_CLEANUP' 1

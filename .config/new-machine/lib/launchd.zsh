@@ -30,7 +30,7 @@ launchd::render_plist() {
   label="$(launchd::label)"
   jq -n --arg label "${label}" --arg script "${HOME}/.config/new-machine/bin/new-machine" \
         --arg out "${state_dir}/launchd.out.log" --arg err "${state_dir}/launchd.err.log" \
-        --arg path "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" '{
+        --arg path "${HOME}/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" '{
     Label: $label,
     ProgramArguments: ["/bin/zsh", $script, "verify"],
     StartCalendarInterval: {Weekday: 1, Hour: 10, Minute: 5},
