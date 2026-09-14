@@ -144,7 +144,7 @@ Sources (later wins on a duplicate name):
   global  ${c_grey}${XDG_CONFIG_HOME:-${HOME}/.config}/tmux_oneshot/*.json${c_rst}   skip: TMUX_ONESHOT_IGNORE_DIR_GLOBAL=1
   local   ${c_grey}${XDG_DATA_HOME:-${HOME}/.local/share}/tmux_oneshot/*.json${c_rst}   skip: TMUX_ONESHOT_IGNORE_DIR_LOCAL=1
   generated ${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/generated/*.json${c_rst}   skip: TMUX_ONESHOT_IGNORE_DIR_GENERATED=1
-            written by shell plugins at startup (e.g. vi.zsh publishes the vi/ group); never edit by hand
+            written by shell plugins at startup (e.g. vi_.zsh publishes the vi_/ group); never edit by hand
   extra   \$TMUX_ONESHOT_DIRS, colon-separated dirs (currently: ${c_grey}${TMUX_ONESHOT_DIRS:-unset}${c_rst})
   index   ${c_grey}${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/index.json${c_rst}   rebuilt every launch
   TMUX_ONESHOT_DB=<file> forces single-file mode: that file only, no index.

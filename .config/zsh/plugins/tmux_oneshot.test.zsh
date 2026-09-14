@@ -338,9 +338,9 @@ _t "IGNORE_DIR_LOCAL skips local only" "g1 dup g3" \
   "$(TMUX_ONESHOT_IGNORE_DIR_LOCAL=1 _fresh --list 2>/dev/null | paste -sd' ' -)"
 # The generated tier lives under XDG_STATE_HOME and loads after local.
 mkdir -p "${_xdg_s}/tmux_oneshot/generated"
-echo '[{"menu": {"name": "vi/zz", "text": "zz_editor"}, "cmd": "irun vi_zz", "window": "vi"}]' > "${_xdg_s}/tmux_oneshot/generated/vi.json"
-_t "generated tier loads after local" "g1 dup g3 l1 l2 vi/zz" "$(_fresh --list 2>/dev/null | paste -sd' ' -)"
-_t "generated tier is tagged generated" "generated" "$(jq -r '.[] | select(.menu.name == "vi/zz") | ._tier' "${_index}")"
+echo '[{"menu": {"name": "vi_/zz", "text": "zz_editor"}, "cmd": "irun vi_zz", "window": "vi_"}]' > "${_xdg_s}/tmux_oneshot/generated/vi_.json"
+_t "generated tier loads after local" "g1 dup g3 l1 l2 vi_/zz" "$(_fresh --list 2>/dev/null | paste -sd' ' -)"
+_t "generated tier is tagged generated" "generated" "$(jq -r '.[] | select(.menu.name == "vi_/zz") | ._tier' "${_index}")"
 _t "IGNORE_DIR_GENERATED skips it" "g1 dup g3 l1 l2" \
   "$(TMUX_ONESHOT_IGNORE_DIR_GENERATED=1 _fresh --list 2>/dev/null | paste -sd' ' -)"
 rm -rf "${_xdg_s}/tmux_oneshot/generated"

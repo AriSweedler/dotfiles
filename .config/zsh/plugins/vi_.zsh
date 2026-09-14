@@ -9,12 +9,12 @@
 #   4. `vi_?` lists the family, `vi_` picks one with fzf, `vi_::_verify` enforces 1 and 2. Run
 #      it after adding an editor.
 #   5. Hyper+O and C-a C-k reach the family through tmux-oneshot: at shell start this file
-#      publishes group vi/ (one row per alias, text = long name, opens in a tmux window named
+#      publishes group vi_/ (one row per alias, text = long name, opens in a tmux window named
 #      vi) into the oneshot generated tier, rewriting it only when the family changed.
 
 (( ${+functions[log::info]} )) || source "${${(%):-%x}:A:h}/log.zsh"
 
-VI_ONESHOT_FILE="${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/generated/vi.json"
+VI_ONESHOT_FILE="${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/generated/vi_.json"
 
 # Output: "short\tlong" per editor, alias-sorted. Derived from the live aliases, so nothing
 # has to be registered twice.
@@ -77,7 +77,7 @@ function vi_::_verify() {
 # Output: the oneshot JSON for the family. `irun` because aliases live in interactive shells.
 function vi_::_oneshot_json() {
   vi_::_editors | jq -R -s 'split("\n") | map(select(length > 0) | split("\t")
-    | {menu: {name: ("vi/" + .[0]), text: .[1]}, cmd: ("irun vi_" + .[0]), window: "vi"})'
+    | {menu: {name: ("vi_/" + .[0]), text: .[1]}, cmd: ("irun vi_" + .[0]), window: "vi_"})'
 }
 
 function vi_::_publish() {

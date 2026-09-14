@@ -1,7 +1,7 @@
-# Tests for vi.zsh. Fake editors are defined here; no editor is launched and the real oneshot
+# Tests for vi_.zsh. Fake editors are defined here; no editor is launched and the real oneshot
 # state dir is never written (XDG_STATE_HOME points at a scratch dir).
-# Only runs when OTTO_TEST__ZSH_PLUGINS_VI=true
-[[ "$OTTO_TEST__ZSH_PLUGINS_VI" == "true" ]] || return 0
+# Only runs when OTTO_TEST__ZSH_PLUGINS_VI_=true
+[[ "$OTTO_TEST__ZSH_PLUGINS_VI_" == "true" ]] || return 0
 
 local _pass=0 _fail=0
 source "${HOME}/.config/zsh/plugins/log.zsh"
@@ -22,7 +22,7 @@ function _t() {
 local _root; _root="$(mktemp -d "${TMPDIR:-/tmp}/vi_test.XXXXXX")"
 local _saved_state="${XDG_STATE_HOME:-}"
 export XDG_STATE_HOME="${_root}/state"
-source "${HOME}/.config/zsh/plugins/vi.zsh"
+source "${HOME}/.config/zsh/plugins/vi_.zsh"
 
 # The real family is loaded in this shell too (run_tests sources the plugin dir when interactive),
 # so every assertion filters to the zz fakes.
@@ -43,10 +43,10 @@ function vi_::_fzf() { return 130 }
 _t "pick: cancel is rc 1, runs nothing" "1|" "$(: > "${_hit}"; vi_ >/dev/null 2>&1; print -rn -- "$?|$(cat "${_hit}")")"
 
 _t "oneshot json: one vi/ row per editor, opens in window vi" \
-  '{"menu":{"name":"vi/zza","text":"zz_alpha"},"cmd":"irun vi_zza","window":"vi"}' \
-  "$(vi_::_oneshot_json | jq -c '.[] | select(.menu.name == "vi/zza")')"
+  '{"menu":{"name":"vi_/zza","text":"zz_alpha"},"cmd":"irun vi_zza","window":"vi_"}' \
+  "$(vi_::_oneshot_json | jq -c '.[] | select(.menu.name == "vi_/zza")')"
 vi_::_publish
-_t "publish: writes the generated file" "1" "$(jq '[.[] | select(.menu.name == "vi/zzb")] | length' "${XDG_STATE_HOME}/tmux_oneshot/generated/vi.json")"
+_t "publish: writes the generated file" "1" "$(jq '[.[] | select(.menu.name == "vi_/zzb")] | length' "${XDG_STATE_HOME}/tmux_oneshot/generated/vi_.json")"
 local _mtime1; _mtime1="$(stat -f %m "${VI_ONESHOT_FILE}")"
 sleep 1; vi_::_publish
 _t "publish: unchanged family leaves the file alone" "${_mtime1}" "$(stat -f %m "${VI_ONESHOT_FILE}")"
@@ -68,12 +68,12 @@ _t "verify: machinery functions are not editors" "0" "$(vi_::_verify 2>&1 >/dev/
 unalias vi_zza vi_zzb
 unfunction vi_::zz_alpha vi_::zz_beta
 if [[ -n "${_saved_state}" ]]; then export XDG_STATE_HOME="${_saved_state}"; else unset XDG_STATE_HOME; fi
-VI_ONESHOT_FILE="${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/generated/vi.json"
+VI_ONESHOT_FILE="${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/generated/vi_.json"
 rm -rf "${_root}"
 
 if (( _fail == 0 )); then
-  log::info "vi: all ${_pass} passed"
+  log::info "vi_: all ${_pass} passed"
 else
-  log::err "vi: ${_pass} passed, ${_fail} failed"
+  log::err "vi_:  passed, ${_fail} failed"
   return 1
 fi
