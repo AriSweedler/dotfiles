@@ -111,7 +111,8 @@ check_process() {
 }
 
 #######################################
-# Check all Karabiner processes expected on a healthy 15.x install.
+# Check all Karabiner processes expected on a healthy 16.x install
+# (16.3 renamed karabiner_console_user_server to Karabiner-Console-User-Server).
 # Globals: USER, ISSUES
 # Arguments: none
 #######################################
@@ -119,7 +120,7 @@ check_processes() {
     log::info "checking processes | expected='5 karabiner processes'"
     check_process "core service (root daemon)"    "root"        "Karabiner-Core-Service"
     check_process "core service (user agent)"     "${USER}"     "Karabiner-Core-Service"
-    check_process "console_user_server"           "${USER}"     "karabiner_console_user_server"
+    check_process "console_user_server"           "${USER}"     "Karabiner-Console-User-Server"
     check_process "VirtualHIDDevice daemon"       "root"        "Karabiner-VirtualHIDDevice-Daemon"
     check_process "VirtualHIDDevice driver (dext)" "_driverkit" "org.pqrs.Karabiner-DriverKit-VirtualHIDDevice"
 }
@@ -209,7 +210,8 @@ check_device_grab() {
             if (start == 0) start = 1
             for (i = start; i <= NR; i++) {
                 s = line[i]
-                if (s !~ /hid queue value monitor is started/) continue
+                # Karabiner-Elements 16.3 renamed the monitor; older logs use the first spelling.
+                if (s !~ /hid (queue value|device events) monitor is started/) continue
                 state = (s ~ /\(grabbed\)/) ? "grabbed" : "observed"
                 sub(/^.*\(daemon\)\] /, "", s)
                 name = s; sub(/ \(device_id:.*$/, "", name)
