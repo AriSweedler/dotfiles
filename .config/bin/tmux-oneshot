@@ -41,9 +41,9 @@
 #                of the group's leaves (esc goes back); a bare leaf typed at
 #                either level still runs at once when it is unique (app →
 #                ap/app). Name a group so no leaf collides with it. An entry
-#                named "<group>/" with no cmd is the group's header: its text
-#                replaces the leaf list on the group row and its key opens the
-#                group's picker.
+#                named "<group>/" with no cmd is the group's header: the group
+#                row reads "▸ <its text> · <leaves>", so typing either matches,
+#                and its key opens the group's picker.
 #   key          fzf key name ("ctrl-k", "alt-x", "f5"): pressing it in the
 #                picker runs this entry at once, whatever is typed. Unique
 #                across files (a later duplicate loses its key). Names in
@@ -396,7 +396,7 @@ function tmux_oneshot::_menu() {
            elif any(.[]; .idx == "g:" + $e.g) then map(if .idx == "g:" + $e.g then .leaves += [$e.leaf] else . end)
            else . + [{idx: ("g:" + $e.g), name: $e.g, leaves: [$e.leaf]}] end)
          | map(if .leaves then .key = ($headers[.name].key // null)
-               | .text = (if ($headers[.name].text // "") != "" then $headers[.name].text else "▸ " + (.leaves | join(", ")) end)
+               | .text = ("▸ " + (if ($headers[.name].text // "") != "" then $headers[.name].text + " · " else "" end) + (.leaves | join(", ")))
                else . end)) as $folded
          # Keyed rows last: fzf lists bottom-up, so they sit at the top of the popup.
          | [$folded[] | select(.key == null)] + [$folded[] | select(.key != null)]

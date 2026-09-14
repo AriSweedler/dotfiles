@@ -7,8 +7,8 @@
 #     One row per alias named <alias-prefix>*: leaf = the alias minus the prefix (the whole
 #     alias when nothing is left), text = its target minus P, cmd = `irun <alias>` (aliases
 #     live in interactive shells). Aliases whose target starts with P followed by _ are
-#     machinery and skipped. --key K opens the group straight from the picker, --text T is the
-#     group row's description (default: its leaves). One line in a plugin, next to the family:
+#     machinery and skipped. --key K opens the group straight from the picker; --text T shows
+#     on the group row ahead of its leaves, "▸ T · a, b, c". One line in a plugin, next to the family:
 #       oneshot_group::aliases vi_ vi_ --fn-prefix vi_:: --window vi_ --key ctrl-v
 #   oneshot_group::rows <group> [--window W] [--autodismiss] [--key K] [--text T]
 #     The general form, rows on stdin as "leaf\ttext\tcmd" lines.

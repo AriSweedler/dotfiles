@@ -683,7 +683,7 @@ cat > "${_db5}" << 'EOF'
 EOF
 export TMUX_ONESHOT_DB="${_db5}"
 _t "header: one plain row, then the group row keyed and described by its header" \
-  $'3\t   plain  echo plain\ng:vi_\t⌃v vi_    edit a common file' "$(tmux_oneshot::_menu)"
+  $'3\t   plain  echo plain\ng:vi_\t⌃v vi_    ▸ edit a common file · cset, kh' "$(tmux_oneshot::_menu)"
 _t "header: the group view lists only real leaves" "1 2" "$(tmux_oneshot::_menu --group vi_ | cut -f1 | paste -sd' ' -)"
 _t "header: its key resolves to the group" "g:vi_" "$(tmux_oneshot::_resolve_pick 0 "" "ctrl-v" "")"
 _t "header: ctrl-v is a usable direct key" "ctrl-v" "$(tmux_oneshot::_expect_keys 2>/dev/null)"
