@@ -9,10 +9,11 @@
 # keeps the first occurrence's menu position):
 #   1. ${XDG_CONFIG_HOME}/tmux_oneshot/*.json  tier "global" (df, every machine)
 #   2. ${XDG_DATA_HOME}/tmux_oneshot/*.json    tier "local"  (ldf, this machine)
-#   3. each dir in $TMUX_ONESHOT_DIRS (colon-separated)  tier "extra"
+#   3. ${XDG_STATE_HOME}/tmux_oneshot/generated/*.json  tier "generated" (written by shell plugins)
+#   4. each dir in $TMUX_ONESHOT_DIRS (colon-separated)  tier "extra"
 # Every file is a JSON list; a file that is not one is skipped with an error
-# and its siblings still load. TMUX_ONESHOT_IGNORE_DIR_GLOBAL / _LOCAL
-# (non-empty) skip a tier. The merge is written to
+# and its siblings still load. TMUX_ONESHOT_IGNORE_DIR_GLOBAL / _LOCAL /
+# _GENERATED (non-empty) skip a tier. The merge is written to
 # ${XDG_STATE_HOME}/tmux_oneshot/index.json and TMUX_ONESHOT_DB points at it;
 # a TMUX_ONESHOT_DB exported by the caller is used as-is instead (single-file
 # mode — tests, one-off debugging).
@@ -142,6 +143,8 @@ documented at the top of this script.
 Sources (later wins on a duplicate name):
   global  ${c_grey}${XDG_CONFIG_HOME:-${HOME}/.config}/tmux_oneshot/*.json${c_rst}   skip: TMUX_ONESHOT_IGNORE_DIR_GLOBAL=1
   local   ${c_grey}${XDG_DATA_HOME:-${HOME}/.local/share}/tmux_oneshot/*.json${c_rst}   skip: TMUX_ONESHOT_IGNORE_DIR_LOCAL=1
+  generated ${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/generated/*.json${c_rst}   skip: TMUX_ONESHOT_IGNORE_DIR_GENERATED=1
+            written by shell plugins at startup (e.g. vi.zsh publishes the vi/ group); never edit by hand
   extra   \$TMUX_ONESHOT_DIRS, colon-separated dirs (currently: ${c_grey}${TMUX_ONESHOT_DIRS:-unset}${c_rst})
   index   ${c_grey}${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/index.json${c_rst}   rebuilt every launch
   TMUX_ONESHOT_DB=<file> forces single-file mode: that file only, no index.
@@ -159,6 +162,7 @@ EOF
 function tmux_oneshot::_dirs() {
   [[ -z "${TMUX_ONESHOT_IGNORE_DIR_GLOBAL:-}" ]] && print -r -- "global	${XDG_CONFIG_HOME:-${HOME}/.config}/tmux_oneshot"
   [[ -z "${TMUX_ONESHOT_IGNORE_DIR_LOCAL:-}" ]]  && print -r -- "local	${XDG_DATA_HOME:-${HOME}/.local/share}/tmux_oneshot"
+  [[ -z "${TMUX_ONESHOT_IGNORE_DIR_GENERATED:-}" ]] && print -r -- "generated	${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/generated"
   local d
   for d in ${(s.:.)${TMUX_ONESHOT_DIRS:-}}; do
     d="${d/#\~/${HOME}}"
