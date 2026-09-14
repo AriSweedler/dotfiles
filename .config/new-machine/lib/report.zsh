@@ -294,7 +294,7 @@ report::render() {
   if [[ "${kind}" == error ]]; then
     task="Diagnose why 'new-machine check' cannot run on this machine and fix it; do not silence the check."
   else
-    task="Fix every row under 'What failed'. For brew items run 'new-machine brew triage' and propose one 'new-machine brew decree ...' per item; I decide the tier."
+    task="Fix every row under 'What failed', following the rules below it (check prior fixes with git df log first; commit with the fix(new-machine/<step>) header). For brew items run 'new-machine brew triage' and propose one 'new-machine brew decree ...' per item; I decide the tier."
   fi
   cat <<EOF
 ## How to feed this to Claude
@@ -313,6 +313,13 @@ report::render() {
    - Never \`--no-verify\`; never commit a \`*.secret.zsh\`.
    - If a finding is a false alarm, fix the checker in ${HOME}/.config/new-machine/ and add a
      tests/test_*.sh case that reproduces it; \`bash ${HOME}/.config/new-machine/tests/run.sh\` must pass.
+   - Before fixing a row, read the prior fixes for that step; a repeat usually means the last fix's
+     assumption broke (a tool renamed a binary, launchd's PATH changed):
+       git df log --oneline --grep='fix(new-machine/<step>)'
+   - Commit each fix with the header \`fix(new-machine/<step>): <what was wrong, one line>\`, so the grep
+     above finds it. The body states the reason code from the report (e.g. \`claude_missing\`), whether
+     the checker or the machine was wrong, the root cause, and the test that reproduces it. Use the same
+     header when the checker lives elsewhere, like ${HOME}/.config/karabiner/bin/healthcheck.
 
 ## What "fixed" looks like
 

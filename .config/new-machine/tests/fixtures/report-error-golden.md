@@ -53,6 +53,13 @@ Trail:    /tmp/nmtest/home/.local/state/new-machine/verify.log
    - Never `--no-verify`; never commit a `*.secret.zsh`.
    - If a finding is a false alarm, fix the checker in /tmp/nmtest/home/.config/new-machine/ and add a
      tests/test_*.sh case that reproduces it; `bash /tmp/nmtest/home/.config/new-machine/tests/run.sh` must pass.
+   - Before fixing a row, read the prior fixes for that step; a repeat usually means the last fix's
+     assumption broke (a tool renamed a binary, launchd's PATH changed):
+       git df log --oneline --grep='fix(new-machine/<step>)'
+   - Commit each fix with the header `fix(new-machine/<step>): <what was wrong, one line>`, so the grep
+     above finds it. The body states the reason code from the report (e.g. `claude_missing`), whether
+     the checker or the machine was wrong, the root cause, and the test that reproduces it. Use the same
+     header when the checker lives elsewhere, like /tmp/nmtest/home/.config/karabiner/bin/healthcheck.
 
 ## What "fixed" looks like
 

@@ -57,6 +57,9 @@ assert_contains "fail: also noted" "${out}" "## Also noted"
 assert_contains "fail: raw log tail" "${out}" "## Raw log (last 40 lines)"
 assert_contains "fail: feed to Claude" "${out}" "## How to feed this to Claude"
 assert_contains "fail: the Claude line reads the report" "${out}" 'claude "Read /tmp/nmtest/home/Desktop/new-machine-FAILED.md'
+assert_contains "fail: prior-fix grep recipe" "${out}" "git df log --oneline --grep='fix(new-machine/<step>)'"
+assert_contains "fail: commit header rule" "${out}" 'fix(new-machine/<step>): <what was wrong, one line>'
+assert_contains "fail: the Claude line points at the rules" "${out}" 'check prior fixes with git df log first'
 assert_contains "fail: fixed section" "${out}" '## What "fixed" looks like'
 
 # The previous run's date reaches the render as -p; only the wording changes, never the rows.
