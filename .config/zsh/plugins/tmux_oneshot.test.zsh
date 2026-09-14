@@ -547,7 +547,7 @@ _t "esc in the group picker goes back to the top level; esc again aborts" "1 Abo
   "${_err_rc} $(print -r -- "${_err_out}" | grep -o Aborted) $(wc -l < "${_calls_file}" | tr -d ' ')"
 _t "--dry-run of a group lists its members" "group=aws members=apa, aps" "$(tmux_oneshot::action::dry_run aws)"
 _t "--debug is clean with a folded group" "0" "$(tmux_oneshot::action::debug > /dev/null 2>&1; echo $?)"
-_t "preview for a group row: colored group name, then its leaves" $'\e[36maws/\e[0m\napa   aps' \
+_t "preview for a group row: group · colored name, then its leaves" $'group · \e[36maws/\e[0m\napa   aps' \
   "$(jq -r --arg i g:aws "${TMUX_ONESHOT_JQ_PREVIEW}" "${_db4}")"
 export TMUX_ONESHOT_DB="${_saved_db}"
 rm -f "${_db4}"
