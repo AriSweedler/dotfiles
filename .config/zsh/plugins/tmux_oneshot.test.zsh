@@ -515,6 +515,27 @@ _set_picks "ESC"
 _err_out="$(tmux_oneshot::_pick 2>&1)"; _err_rc=$?
 _t "_pick e2e: esc aborts" "1 Aborted" "${_err_rc} $(print -r -- "${_err_out}" | grep -o Aborted)"
 
+# A command that exits FZF_GROUP_BACK_RC (esc inside its own picker) is "back", not a failure.
+local _db_back _out_back
+_db_back="$(mktemp /tmp/tmux-oneshot-test-dbback.XXXXX.json)"
+_out_back="$(mktemp /tmp/tmux-oneshot-test-outback.XXXXX)"
+cat > "${_db_back}" << 'EOF'
+[
+ {"menu": {"name": "inner", "text": "has its own picker"}, "cmd": "(exit 130)", "autodismiss": true},
+ {"menu": {"name": "plain", "text": "plain"}, "cmd": "echo plain-ran", "autodismiss": true}
+]
+EOF
+_saved_db="${TMUX_ONESHOT_DB}"
+export TMUX_ONESHOT_DB="${_db_back}"
+_set_picks $'inner\t\t' $'plain\t\t'
+: > "${_calls_file}"
+_err_out="$(tmux_oneshot::_pick 2>&1 > "${_out_back}")"; _err_rc=$?
+_t "_pick e2e: a command exiting 130 reopens the top-level picker, which runs the next pick" "0 plain-ran 2 Cancelled" \
+  "${_err_rc} $(cat "${_out_back}") $(wc -l < "${_calls_file}" | tr -d ' ') $(print -r -- "${_err_out}" | grep -o Cancelled)"
+_t "_pick e2e: the 130 exit is not marked as a failure" "0" "$(print -r -- "${_err_out}" | grep -c 'failed')"
+export TMUX_ONESHOT_DB="${_saved_db}"
+rm -f "${_db_back}" "${_out_back}"
+
 # Groups: "g/leaf" names fold into one top-level row that opens a second picker.
 local _db4
 _db4="$(mktemp /tmp/tmux-oneshot-test-db4.XXXXX.json)"
@@ -545,6 +566,10 @@ _set_picks $'\t\t▸' "ESC" "ESC"
 _err_out="$(tmux_oneshot::_pick 2>&1)"; _err_rc=$?
 _t "esc in the group picker goes back to the top level; esc again aborts" "1 Aborted 3" \
   "${_err_rc} $(print -r -- "${_err_out}" | grep -o Aborted) $(wc -l < "${_calls_file}" | tr -d ' ')"
+_t "the group picker is an fzf_group named aws (header, prompt, alt-enter verbatim)" "yes" \
+  "$([[ "$(sed -n 2p "${_calls_file}")" == *"--prompt=aws/  --header=aws/   esc: back   alt-enter: typed name verbatim --print-query --bind=alt-enter:print-query"* ]] && echo yes)"
+_set_picks $'\t\t▸' $'apa\t\t'
+_t "_pick e2e: alt-enter in the group picker runs the typed leaf, no row picked" "apa-ran" "$(tmux_oneshot::_pick 2>/dev/null)"
 _t "--dry-run of a group lists its members" "group=aws members=apa, aps" "$(tmux_oneshot::action::dry_run aws)"
 _t "--debug is clean with a folded group" "0" "$(tmux_oneshot::action::debug > /dev/null 2>&1; echo $?)"
 _t "preview for a group row: group · colored name, then its leaves" $'group · \e[36maws/\e[0m\napa   aps' \

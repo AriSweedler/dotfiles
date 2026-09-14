@@ -88,6 +88,7 @@
 # picker.
 
 source "${HOME}/.config/zsh/plugins/log.zsh"
+source "${HOME}/.config/zsh/plugins/fzf_group.zsh"
 
 function tmux_oneshot() {
   local dep
@@ -532,7 +533,7 @@ function tmux_oneshot::_pick() {
     tmux_oneshot::_pick_group "${idx#g:}"
     return $?
   fi
-  tmux_oneshot::_run "${idx}"
+  tmux_oneshot::_run_or_back "${idx}" tmux_oneshot::_pick
 }
 
 # Second level: one group's entries by leaf. A typed leaf (or full name) runs
@@ -545,13 +546,14 @@ function tmux_oneshot::_pick_group() {
     log::err "Empty group | group='${group}'"
     return 1
   fi
+  fzf_group::args "${group}"
   out="$(tmux_oneshot::_fzf --select-1 --ansi "${TMUX_ONESHOT_FZF_MATCH_ARGS[@]}" \
-      --sync --print-query --bind 'ctrl-j:ignore' --header="${group}/   esc: back" \
+      --sync --bind 'ctrl-j:ignore' "${reply[@]}" \
       --preview "jq -r --arg i {1} ${(qq)TMUX_ONESHOT_JQ_PREVIEW} ${(qq)TMUX_ONESHOT_DB}" \
       --preview-window=up:3:wrap <<< "${menu}")"; rc=$?
   local -a lines=("${(@f)out}")
   local query="${lines[1]-}" sel="${lines[2]-}" idx
-  if (( rc == 130 )); then
+  if (( rc == FZF_GROUP_BACK_RC )); then
     tmux_oneshot::_pick
     return $?
   fi
@@ -564,7 +566,21 @@ function tmux_oneshot::_pick_group() {
     log::warn "No entry selected"
     return 1
   fi
-  tmux_oneshot::_run "${idx}"
+  tmux_oneshot::_run_or_back "${idx}" tmux_oneshot::_pick_group "${group}"
+}
+
+# Runs an entry from a picker. A command that exits FZF_GROUP_BACK_RC (esc inside its
+# own picker, e.g. go-link; ctrl-c) is a cancel, not a failure: the picker that ran it
+# reopens — the same "esc: back" a group gives. Input: <idx> <reopen command...>.
+function tmux_oneshot::_run_or_back() {
+  local idx="${1:?}" rc
+  shift
+  tmux_oneshot::_run "${idx}"; rc=$?
+  if (( rc == FZF_GROUP_BACK_RC )); then
+    "$@"
+    return $?
+  fi
+  return "${rc}"
 }
 
 # Pure. Input: <fzf rc> <query> <expect key> <selected line>. Output: 0-based index, or
@@ -870,7 +886,10 @@ function tmux_oneshot::_run() {
   log::info "Running oneshot | cmd='${cmd}' pwd='${PWD}'"
   eval "${cmd}"
   local rc=$?
-  if (( rc != 0 )); then
+  if (( rc == FZF_GROUP_BACK_RC )); then
+    log::info "Cancelled | name='${name}'"
+    return "${rc}"
+  elif (( rc != 0 )); then
     log::fail "${name} failed | rc='${rc}' cmd='${cmd}'"
   elif [[ "$(jq -r '.autodismiss // false' <<< "${entry}")" == "true" ]]; then
     [[ -n "${TMUX:-}" ]] && tmux display-message -d 1500 "✓ ${name}"
