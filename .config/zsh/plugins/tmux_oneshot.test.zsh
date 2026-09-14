@@ -179,6 +179,8 @@ _t "unknown key: names the key" "Unknown key" "$(print -r -- "${_err_out}" | gre
 # The preview is one jq on the hidden index — resolve "My Name"'s row.
 _t "preview jq resolves a hidden index to its entry" "echo named-ran" \
   "$(jq -r --argjson i "$(tmux_oneshot::_menu | grep -F 'My Name' | cut -f1)" '.[$i].cmd' "${TMUX_ONESHOT_DB}")"
+_t "preview: command line then the description, nothing else" $'\e[36mecho\e[0m\ngreeter' \
+  "$(jq -r --arg i 1 "${TMUX_ONESHOT_JQ_PREVIEW}" "${TMUX_ONESHOT_DB}")"
 
 # ---------------------------------------------------------------------------
 # Render styles (pure)
@@ -316,8 +318,7 @@ _t "index carries each entry's tier" "global local global local local" "$(jq -r 
 _t "index carries each entry's source file" "${_xdg_c}/tmux_oneshot/macos.json ${_xdg_d}/tmux_oneshot/a.json" \
   "$(jq -r '"\(.[0]._src) \(.[3]._src)"' "${_index}")"
 _t "index written under XDG_STATE_HOME" "yes" "$([[ -f "${_index}" ]] && echo yes)"
-_t "preview program: tier · source, then the entry without loader fields" "global · ${_xdg_c}/tmux_oneshot/macos.json
-{\"menu\":{\"name\":\"g1\",\"text\":\"global one\"},\"cmd\":\"echo g1\",\"key\":\"ctrl-k\"}" \
+_t "preview program: the command, colored; no description line when there is none" $'\e[36mecho g1\e[0m' \
   "$(jq -r --arg i 0 "${TMUX_ONESHOT_JQ_PREVIEW}" "${_index}")"
 # The error must be ours alone: no mkdir or redirection message beside it.
 chmod 555 "${_xdg_s}/tmux_oneshot"
@@ -546,8 +547,8 @@ _t "esc in the group picker goes back to the top level; esc again aborts" "1 Abo
   "${_err_rc} $(print -r -- "${_err_out}" | grep -o Aborted) $(wc -l < "${_calls_file}" | tr -d ' ')"
 _t "--dry-run of a group lists its members" "group=aws members=apa, aps" "$(tmux_oneshot::action::dry_run aws)"
 _t "--debug is clean with a folded group" "0" "$(tmux_oneshot::action::debug > /dev/null 2>&1; echo $?)"
-_t "preview for a group row names its leaves" "group · aws/
-apa   aps" "$(jq -r --arg i g:aws "${TMUX_ONESHOT_JQ_PREVIEW}" "${_db4}")"
+_t "preview for a group row: colored group name, then its leaves" $'\e[36maws/\e[0m\napa   aps' \
+  "$(jq -r --arg i g:aws "${TMUX_ONESHOT_JQ_PREVIEW}" "${_db4}")"
 export TMUX_ONESHOT_DB="${_saved_db}"
 rm -f "${_db4}"
 export TMUX_ONESHOT_DB="${_db}"

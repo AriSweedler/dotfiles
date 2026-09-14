@@ -494,10 +494,10 @@ function tmux_oneshot::_key_list() {
 # Picker
 # ---------------------------------------------------------------------------
 
-# The per-row preview: "<tier> · <source file>", then the entry minus the
-# loader fields. One program for _pick and --debug, so the diagnostic runs
-# exactly what fzf runs.
-TMUX_ONESHOT_JQ_PREVIEW='if ($i | startswith("g:")) then ($i[2:]) as $g | "group · \($g)/", ([.[] | .menu.name // "" | select(startswith($g + "/")) | .[($g | length) + 1:] | select(length > 0)] | join("   ")) else .[($i | tonumber)] | "\(._tier // "db") · \(._src // env.TMUX_ONESHOT_DB)", (del(._tier, ._src) | tojson) end'
+# The per-row preview: the command, colored, then its description when it has
+# one; a group shows its name and leaves. One program for _pick and --debug, so
+# the diagnostic runs exactly what fzf runs.
+TMUX_ONESHOT_JQ_PREVIEW='if ($i | startswith("g:")) then ($i[2:]) as $g | "[36m" + $g + "/[0m", ([.[] | .menu.name // "" | select(startswith($g + "/")) | .[($g | length) + 1:] | select(length > 0)] | join("   ")) else .[($i | tonumber)] | "[36m" + (.cmd // "…") + "[0m", (.description // empty) end'
 
 # Interactive top-level picker. Args pass through to fzf (e.g. --query).
 # --sync completes the list before the first key is processed; a type-ahead
