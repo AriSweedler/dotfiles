@@ -1,42 +1,37 @@
 #!/usr/bin/env python3
+# applepaste — type text as keystrokes via an AppleScript that opens in Script Editor.
+# Press Run there, then focus the target within the 1s delay. Script Editor quits itself
+# when the typing is done.
 import sys
 import os
 
 my_script = "/tmp/applepaste.scpt"
 
-# Gotta special case some of these dumb codes.
+# Digits and a few symbols type unreliably through `keystroke` under some input sources, so
+# they go by key code. Never `using shift down`: System Events leaves shift latched for the
+# keystrokes that follow, which is what typed everything in capitals.
 # https://eastmanreference.com/complete-list-of-applescript-key-codes
-switcher= {
-"0": "key code 29",
-"1": "key code 18",
-"2": "key code 19",
-"3": "key code 20",
-"4": "key code 21",
-"5": "key code 23",
-"6": "key code 22",
-"7": "key code 26",
-"8": "key code 28",
-"9": "key code 25",
-"\"": "key code 39 using shift down",
-":": "key code 41 using shift down",
-".": "key code 47",
-"\\": "key code 42",
+switcher = {
+	"0": "key code 29",
+	"1": "key code 18",
+	"2": "key code 19",
+	"3": "key code 20",
+	"4": "key code 21",
+	"5": "key code 23",
+	"6": "key code 22",
+	"7": "key code 26",
+	"8": "key code 28",
+	"9": "key code 25",
+	".": "key code 47",
+	"\\": "key code 42",
+	'"': 'keystroke "\\""',
 }
+
 def transform(s):
-	x = switcher.get(s, "empty_value")
+	return switcher.get(s, f'keystroke "{s}"')
 
-	if x == "empty_value":
-		return f'keystroke "{s}"'
-	else:
-		return x
-
-# Input
 def main():
-	if len(sys.argv) <= 1:
-		my_input = ""
 	my_input = ' '.join(sys.argv[1:])
-
-	# Write to a file
 	with open(my_script, 'w') as f:
 		f.write('tell application "System Events"\n')
 		f.write('delay 1\n')
@@ -44,13 +39,13 @@ def main():
 			f.write(f'{transform(i)}\n')
 			f.write('delay 0.02\n')
 		f.write('end tell\n')
-		# Race condition in `open` if we don't flush here. I wish the context
-		# manager should do this for us, but I guess it just calls 'close'
+		# A running document cannot close itself, but the app can quit; the typing is done by now.
+		f.write('tell application "Script Editor" to quit saving no\n')
+		# Race condition in `open` if we don't flush here.
 		f.flush()
 
 def open_script_editor():
-	script_editor = "/System/Applications/Utilities/Script\ Editor.app"
-	os.system(f"open -a {script_editor} {my_script}")
+	os.system(f'open -a "/System/Applications/Utilities/Script Editor.app" {my_script}')
 
 if __name__ == "__main__":
 	main()
