@@ -14,6 +14,7 @@ typeset -gx NEW_MACHINE_SHARED_DIR="${NEW_MACHINE_SHARED_DIR:-${0:A:h:h}}"
 # ── Logging ──────────────────────────────────────────────────────────────────
 typeset -g NEW_MACHINE_LOG_LIB="${NEW_MACHINE_SHARED_DIR:h}/zsh/plugins/log.zsh"
 typeset -g NEW_MACHINE_LOG_ROTATE_LIB="${NEW_MACHINE_SHARED_DIR:h}/zsh/plugins/log_rotate.zsh"
+typeset -g NEW_MACHINE_EDIT_WINDOW="${NEW_MACHINE_SHARED_DIR:h}/bin/tmux-edit-window"
 if [[ ! -r "${NEW_MACHINE_LOG_LIB}" || ! -r "${NEW_MACHINE_LOG_ROTATE_LIB}" ]]; then
   print -u2 "[ERROR] missing logging lib | path='${NEW_MACHINE_LOG_LIB}' rotate='${NEW_MACHINE_LOG_ROTATE_LIB}'"
   return 3
@@ -206,7 +207,12 @@ hud() {
   fi
   if [[ -n "${NEW_MACHINE_NOTIFIER}" ]] && command -v "${NEW_MACHINE_NOTIFIER}" >/dev/null 2>&1; then
     local -a args=(-group new-machine -title new-machine -message "${msg}")
-    if [[ -n "${open_url}" ]]; then
+    # A file:// click via -open lands in the .md default app (Xcode); route it through the
+    # editor-in-tmux-window script instead. The click runs under /bin/sh, hence (q) quoting.
+    if [[ "${open_url}" == file://* ]]; then
+      local report_file="${open_url#file://}"
+      args+=(-execute "${(q)NEW_MACHINE_EDIT_WINDOW} -n new-machine ${(q)report_file}")
+    elif [[ -n "${open_url}" ]]; then
       args+=(-open "${open_url}")
     fi
     "${NEW_MACHINE_NOTIFIER}" "${args[@]}" >/dev/null || return 0

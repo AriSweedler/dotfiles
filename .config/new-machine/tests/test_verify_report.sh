@@ -58,7 +58,8 @@ assert_json "status fail" "${LR}" '.status' fail
 
 notif="$(shim_log terminal-notifier)"
 assert_contains "notifier announces problems" "${notif}" "problems"
-assert_contains "notifier opens the report" "${notif}" "-open file://${REPORT}"
+assert_contains "notifier click opens the report in a tmux editor window" "${notif}" "-execute ${HOME}/.config/bin/tmux-edit-window -n new-machine ${REPORT}"
+assert_not_contains "notifier never hands the report to -open (Xcode)" "${notif}" "-open file://"
 assert_no_mutation "verify is read-only"
 # One summary line per run; event notes (report written, archived, ...) may accompany it.
 assert_eq "verify.log has one status line for the run" 1 "$(grep -c "\[verify\] status=" "${STATE}/verify.log")"
