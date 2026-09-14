@@ -38,8 +38,9 @@ bindkey '^X^_' redo
 # Edit the shared new-machine Brewfile: everything every machine gets. Applied by
 # `new-machine setup` together with ~/.local/share/new-machine/Brewfile (this
 # machine only). Add lines with `new-machine brew decree <name> --global|--local`.
-function vnew() {
-  vi "${HOME}/.config/new-machine/Brewfile"
+function vi_::new_machine_brewfile() {
+  "${EDITOR}" "${HOME}/.config/new-machine/Brewfile"
 }
+alias vi_newmachbrew=vi_::new_machine_brewfile
 
 alias pbl=pbpastelinks

@@ -206,6 +206,13 @@ function M.picker_git_files(opts)
 	})
 end
 
+function M.pick_dotfiles()
+	return M.picker_git_files({
+		title = "Dotfiles + local dotfiles",
+		repos = { M.dotfiles_repo, M.local_dotfiles_repo },
+	})
+end
+
 M.dotfiles_repo = {
 	git_dir = vim.fn.expand("$HOME/dotfiles.git"),
 	work_tree = vim.fn.expand("$HOME"),

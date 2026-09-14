@@ -1,13 +1,13 @@
 KARABINER_HOME="${XDG_CONFIG_HOME}/karabiner"
 
-function v::karabiner_home() {
+function vi_::karabiner_home() {
   cd "${KARABINER_HOME}"
   "${EDITOR}" "${KARABINER_HOME}"
 }
-alias vi_kh=v::vkarabiner_home
+alias vi_kh=vi_::karabiner_home
 
-function v::vkarabiner_index() {
+function vi_::karabiner_index() {
   cd "${KARABINER_HOME}"
   "${EDITOR}" "${KARABINER_HOME}/karabiner.ts/src/index.ts"
 }
-alias vi_ki=v::vkarabiner_index
+alias vi_ki=vi_::karabiner_index

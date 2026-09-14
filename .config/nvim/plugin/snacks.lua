@@ -91,12 +91,7 @@ block("Snacks File Picker", "<C-T>", function(bufmap)
 	bufmap("v", Snacks.picker.files, "Vim config files", {
 		args = { cwd = vim.fn.stdpath("config") },
 	})
-	bufmap("d", function()
-		s.picker_git_files({
-			title = "Dotfiles + local dotfiles",
-			repos = { s.dotfiles_repo, s.local_dotfiles_repo },
-		})
-	end, "Dotfiles (all)")
+	bufmap("d", s.pick_dotfiles, "Dotfiles (all)")
 	bufmap("ld", function()
 		s.picker_git_files({ title = "Local dotfiles", repos = { s.local_dotfiles_repo } })
 	end, "Local dotfiles only")
@@ -112,6 +107,9 @@ block("Snacks File Picker", "<C-T>", function(bufmap)
 	bufmap("g", Snacks.picker.git_files, "Find git files")
 	bufmap("p", Snacks.picker.projects, "Projects")
 end)
+
+-- `nvim +Dotfiles`: the shell's vi_dotfiles lands in the same picker as <C-T>d.
+vim.api.nvim_create_user_command("Dotfiles", s.pick_dotfiles, {})
 
 block("Snacks Git Picker", "<Leader>pg", function(bufmap)
 	bufmap("b", Snacks.picker.git_branches, "Branches")

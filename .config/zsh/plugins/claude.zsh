@@ -4,7 +4,7 @@ function claude-link() {
   open_link "$@"
 }
 
-function v::claude_settings_local() {
+function vi_::claude_settings_local() {
   local f=.claude/settings.local.json
   # Land on the last entry of .permissions.allow[] so a new one is easy to append.
   local line
@@ -20,4 +20,4 @@ function v::claude_settings_local() {
   ' "$f" 2>/dev/null)
   "${EDITOR}" ${line:++$line} -c 'set foldlevel=99' "$f"
 }
-alias vi_cset=v::claude_settings_local
+alias vi_cset=vi_::claude_settings_local

@@ -42,7 +42,7 @@ and their hooks, neovim, Claude Code, and the launchd jobs. It also installs a
 weekly `new-machine verify` (Monday 10:05) that leaves one
 `~/Desktop/new-machine-FAILED.md` when the machine drifts from this baseline.
 `new-machine brew triage` lists brew packages no Brewfile declares;
-`new-machine brew decree <name> --global|--local` settles each one. `vnew`
+`new-machine brew decree <name> --global|--local` settles each one. `vi_newmachbrew`
 edits the shared Brewfile.
 
 There are many ways to modify the behavior of a program. Per machine, per user,
