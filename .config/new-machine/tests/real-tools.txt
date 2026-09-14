@@ -39,3 +39,4 @@ stat
 cmp
 diff
 cut
+base64

@@ -18,7 +18,7 @@ typeset -gA STEP_DESC=(
   [local_dotfiles_repo]="local dotfiles bare repo exists with the allowlist, hooks, and a remote"
   [bob_neovim]="neovim installed through bob"
   [claude]="Claude Code installed"
-  [terminal_nerdfont]="a Nerd Font cask is installed; setting the terminal font is manual"
+  [terminal_nerdfont]="a Nerd Font cask is installed and at least one Terminal.app profile uses a Nerd Font"
   [karabiner]="karabiner.json exists, is valid JSON, and is jq -S sorted; healthcheck runs when present"
   [claude_notifications]="Claude Code notification hook points at notification-fire.sh and terminal-notifier resolves"
   [git_health]="git-health launchd job installed and loaded"
@@ -426,8 +426,34 @@ check::terminal_nerdfont() {
       -f "new-machine apply brew_pkgs"
     return 0
   fi
-  # Setting the terminal font is manual; setup prints this detail at the end.
-  verdict warn manual_font -m -d "Set a Nerd Font as the terminal font"$'\n'"  * Terminal.app: Preferences -> Profiles -> Text -> Font"$'\n'"  * iTerm2: Preferences -> Profiles -> Text -> Change Font"$'\n'"Installed: ${(j:, :)fonts}"
+  local howto="Set a Nerd Font in Terminal.app: Settings -> Profiles -> Text -> Font"$'\n'"Installed: ${(j:, :)fonts}"
+  if [[ ! -r "${NEW_MACHINE_TERMINAL_PLIST}" ]]; then
+    verdict warn manual_font -m -d "no Terminal.app preferences yet | plist='${NEW_MACHINE_TERMINAL_PLIST}'"$'\n'"${howto}"
+    return 0
+  fi
+  local -a names=(${(f)"$(step::_terminal_nerd_font_names "${NEW_MACHINE_TERMINAL_PLIST}")"})
+  if (( ${#names} == 0 )); then
+    verdict fail font_not_set -m -d "no Terminal.app profile uses a Nerd Font | plist='${NEW_MACHINE_TERMINAL_PLIST}'"$'\n'"${howto}"
+    return 0
+  fi
+  verdict ok font_set -d "fonts='${(j:, :)names}' plist='${NEW_MACHINE_TERMINAL_PLIST}'"
+}
+
+# Terminal.app stores each profile's font as a base64 NSKeyedArchiver blob, so the PostScript
+# name is not greppable in the plist itself. Decode every <data> blob and pull Nerd Font names
+# (CaskaydiaMonoNFM-Regular, JetBrainsMonoNF-Bold, HackNerdFont-Regular) out of the bytes.
+# Prints unique names, one per line; nothing when no profile uses one.
+step::_terminal_nerd_font_names() {
+  local plist="${1}" xml joined blob
+  xml="$(plutil -convert xml1 -o - "${plist}" 2>/dev/null || true)"
+  joined="$(print -r -- "${xml}" | tr -d '\n\t ')"
+  local -a blobs=(${(s:<data>:)joined})
+  local -a names=()
+  for blob in "${blobs[@]:1}"; do
+    blob="${blob%%</data>*}"
+    names+=(${(f)"$(print -r -- "${blob}" | base64 -d 2>/dev/null | grep -aoE '[A-Za-z0-9]+(NerdFont|NF[MP]?)-[A-Za-z]+' || true)"})
+  done
+  print -rl -- "${(u)names[@]}"
 }
 
 # ── karabiner ────────────────────────────────────────────────────────────────

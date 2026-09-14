@@ -42,6 +42,7 @@ typeset -gxr NEW_MACHINE_LOCAL_DIR="${NEW_MACHINE_LOCAL_DIR:-${XDG_DATA_HOME}/ne
 typeset -gxr NEW_MACHINE_STATE_DIR="${NEW_MACHINE_STATE_DIR:-${XDG_STATE_HOME}/new-machine}"
 typeset -gxr NEW_MACHINE_DESKTOP_DIR="${NEW_MACHINE_DESKTOP_DIR:-${HOME}/Desktop}"
 typeset -gxr NEW_MACHINE_LAUNCH_AGENTS_DIR="${NEW_MACHINE_LAUNCH_AGENTS_DIR:-${HOME}/Library/LaunchAgents}"
+typeset -gxr NEW_MACHINE_TERMINAL_PLIST="${NEW_MACHINE_TERMINAL_PLIST:-${HOME}/Library/Preferences/com.apple.Terminal.plist}"
 typeset -gxr NEW_MACHINE_DF_GIT_DIR="${NEW_MACHINE_DF_GIT_DIR:-${HOME}/dotfiles.git}"
 typeset -gxr NEW_MACHINE_LDF_GIT_DIR="${NEW_MACHINE_LDF_GIT_DIR:-${HOME}/.local/local-dotfiles.git}"
 typeset -gxr NEW_MACHINE_DF_HOOKS="${NEW_MACHINE_DF_HOOKS:-${HOME}/.config/git/dotfiles-hooks}"

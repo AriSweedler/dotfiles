@@ -58,10 +58,58 @@ rm -f "${HOME}/.local/bin/claude"
 shim_add claude
 
 # ── terminal_nerdfont ─────────────────────────────────────────────────────────
+# Terminal.app keeps each profile's font as a base64 NSKeyedArchiver NSFont blob; build one.
+terminal_plist_with_font() {
+  local name="$1" dir="${HOME}/Library/Preferences"
+  mkdir -p "${dir}"
+  cat > "${FIX}/font.xml" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>\$archiver</key><string>NSKeyedArchiver</string>
+  <key>\$objects</key><array>
+    <string>\$null</string>
+    <dict><key>\$class</key><dict><key>CF\$UID</key><integer>3</integer></dict>
+          <key>NSName</key><dict><key>CF\$UID</key><integer>2</integer></dict>
+          <key>NSSize</key><real>18</real><key>NSfFlags</key><integer>16</integer></dict>
+    <string>${name}</string>
+    <dict><key>\$classes</key><array><string>NSFont</string><string>NSObject</string></array>
+          <key>\$classname</key><string>NSFont</string></dict>
+  </array>
+  <key>\$top</key><dict><key>root</key><dict><key>CF\$UID</key><integer>1</integer></dict></dict>
+  <key>\$version</key><integer>100000</integer>
+</dict></plist>
+EOF
+  local b64
+  b64="$(plutil -convert binary1 -o - "${FIX}/font.xml" | base64)"
+  cat > "${dir}/com.apple.Terminal.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Default Window Settings</key><string>Pro</string>
+  <key>Window Settings</key><dict>
+    <key>Basic</key><dict><key>name</key><string>Basic</string></dict>
+    <key>Pro</key><dict><key>Font</key><data>${b64}</data><key>name</key><string>Pro</string></dict>
+  </dict>
+</dict></plist>
+EOF
+  plutil -lint -s "${dir}/com.apple.Terminal.plist"
+}
+
 check_step brew,terminal_nerdfont
-assert_eq "nerd font present → warn" warn "$(status_of terminal_nerdfont)"
+assert_eq "no Terminal prefs → warn" warn "$(status_of terminal_nerdfont)"
 assert_eq "reason manual_font" manual_font "$(reason_of terminal_nerdfont)"
 assert_eq "manual_font is manual" true "$(step_get terminal_nerdfont .manual)"
+terminal_plist_with_font "Menlo-Regular"
+check_step brew,terminal_nerdfont
+assert_eq "no profile uses a Nerd Font → fail" fail "$(status_of terminal_nerdfont)"
+assert_eq "reason font_not_set" font_not_set "$(reason_of terminal_nerdfont)"
+assert_eq "font_not_set is manual" true "$(step_get terminal_nerdfont .manual)"
+terminal_plist_with_font "CaskaydiaMonoNFM-Regular"
+check_step brew,terminal_nerdfont
+assert_eq "one profile uses a Nerd Font → ok" ok "$(status_of terminal_nerdfont)"
+assert_eq "reason font_set" font_set "$(reason_of terminal_nerdfont)"
+assert_contains "detail names the font" "$(step_get terminal_nerdfont .detail)" "CaskaydiaMonoNFM-Regular"
 world_use_fixture drift
 check_step brew,terminal_nerdfont
 assert_eq "nerd font absent → fail" fail "$(status_of terminal_nerdfont)"
