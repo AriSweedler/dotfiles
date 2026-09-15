@@ -25,6 +25,7 @@ This skill covers zsh. For Python, use `/ari-skill-pythonscripts` (its mirror). 
 
 - **`readonly` for constants.** `ALL_CAPS` for globals, `snake_case` for locals.
 - **`snake_case` everywhere.** Functions, variables, file names.
+- **Never name a variable after a zsh special parameter.** `local path=` rebinds `PATH` (`path` is the array tied to it) and `local status=` shadows the last exit code; the failure surfaces far from the assignment as `command not found` or a wrong `$?`. Off limits: `path`, `status`, `cdpath`, `fpath`, `manpath`, `argv`, `pipestatus`, `reply`, `match`, `MATCH`, `options`, `functions`, `signals`, `prompt`, `watch`, `histchars`, `RANDOM`, `SECONDS`, `LINENO`, `PWD`, `OLDPWD`. Use `file`, `dir`, `exit_code`, `result` instead.
 - **Always `"${x}"`.** Never bare `$x`. Never unquoted `${x}`. Every variable expansion gets braces and double quotes.
 - **Function comments use `#######` headers.** Document Globals, Arguments, Returns.
 
