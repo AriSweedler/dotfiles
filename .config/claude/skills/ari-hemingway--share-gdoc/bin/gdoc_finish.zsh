@@ -1,8 +1,9 @@
 #!/usr/bin/env zsh
-# Finish a Google Doc created from markdown: style every table's header row (bold,
-# centered, grey #D9D9D9), verify every inline image fits inside one page, and verify
-# every inline image links to its editable mermaid.live source.
-# tableHeader (pin header row) is read-only in the Docs API and stays a manual step.
+# Finish a Google Doc created from markdown in one fix-up batch: convert every plain Drive link
+# into a smart chip and style every table's header row (bold, centered, grey #D9D9D9), then verify
+# from one re-read that every inline image fits one page and links to its editable mermaid.live
+# source and that no plain Drive link remains. tableHeader (pin header row) is read-only in the
+# Docs API and stays a manual step.
 
 set -euo pipefail
 
@@ -14,9 +15,14 @@ readonly SKILLS_DIR="${HOME}/.claude/skills"
 # --- Constants ---
 
 readonly HEADER_GREY="0.8509804"   # #D9D9D9, matches Docs' "light grey 1"
-readonly GET_FIELDS="documentStyle,inlineObjects,body.content"
+# tabs.* cannot share a field mask with body.content, so only the first tab is processed.
+readonly GET_FIELDS="revisionId,documentStyle,inlineObjects,body.content"
 # A diagram image must open its editable source; the markdown form [![alt](ink)](live) lands here.
 readonly IMAGE_LINK_PREFIX="https://mermaid.live/edit#"
+# Drive's markdown import lands a raw Drive URL as a plain hyperlink; insertRichLink (Docs API,
+# April 2026) turns it into a chip. It accepts Drive file and folder URLs only, so this is the
+# whole allowlist; the captured id is what the pre-flight files.get validates.
+readonly DRIVE_LINK_RE='^https://(docs|drive)\.google\.com/(.*/d/|drive/folders/)([A-Za-z0-9_-]+)'
 
 # --- Logging ---
 
@@ -55,6 +61,35 @@ doc_id_from() {
     doc="${doc%%/*}"
   fi
   echo "${doc}"
+}
+
+#######################################
+# Fetch the doc JSON the checks and requests are built from.
+# Globals: GET_FIELDS
+# Arguments: $1 - doc id, $2 - output path
+#######################################
+fetch_doc() {
+  local doc="${1}" out="${2}"
+  local params
+  params="$(jq -cn --arg id "${doc}" --arg f "${GET_FIELDS}" '{documentId: $id, fields: $f}')"
+  gws docs documents get --params "${params}" --format json > "${out}"
+}
+
+#######################################
+# Run one batchUpdate pinned to the revision the requests were built from, or validate it
+# locally under --dry-run.
+# Arguments: $1 - doc id, $2 - requests JSON array path, $3 - revision id, $4 - dry_run (true|false), $5 - reply path
+#######################################
+batch_update() {
+  local doc="${1}" requests="${2}" revision="${3}" dry_run="${4}" reply="${5}"
+  local params body
+  params="$(jq -cn --arg id "${doc}" '{documentId: $id}')"
+  body="$(jq -c --arg rev "${revision}" '{requests: ., writeControl: {requiredRevisionId: $rev}}' "${requests}")"
+  if [[ "${dry_run}" == "true" ]]; then
+    gws docs documents batchUpdate --dry-run --params "${params}" --json "${body}" > "${reply}"
+    return
+  fi
+  gws docs documents batchUpdate --params "${params}" --json "${body}" > "${reply}"
 }
 
 ########################################################################
@@ -105,7 +140,7 @@ check_images_link_to_source() {
   local rc=0 id url verdict
   local tsv
   tsv="$(jq -r --arg prefix "${IMAGE_LINK_PREFIX}" '
-    [.body.content[] | .paragraph? | select(. != null) | .elements[] | select(.inlineObjectElement != null)]
+    [.. | objects | select(.inlineObjectElement != null)]
     | .[]
     | (.inlineObjectElement.textStyle.link.url // "") as $url
     | [.inlineObjectElement.inlineObjectId, $url, (if ($url | startswith($prefix)) then "OK" else "FAIL" end)]
@@ -126,7 +161,64 @@ check_images_link_to_source() {
 }
 
 #######################################
-# Build the batchUpdate requests that style every table's header row.
+# List every plain Drive hyperlink as {start, end, url, file_id}, one entry per link, anywhere in
+# the body including table cells. Adjacent runs that share a URL are one link; a run's trailing
+# newline is excluded so deleting the text keeps the paragraph.
+# Globals: DRIVE_LINK_RE
+# Arguments: $1 - path to doc JSON
+# Outputs: JSON array on stdout
+#######################################
+plain_drive_links() {
+  local doc_json="${1}"
+  jq -c --arg re "${DRIVE_LINK_RE}" '
+    [.. | objects | select(.paragraph != null) | .paragraph.elements
+      | reduce .[] as $e ([];
+          if ($e.textRun? != null) and (($e.textRun.textStyle.link.url // "") | test($re)) then
+            ($e.textRun.textStyle.link.url) as $u
+            | (if ($e.textRun.content | endswith("\n")) then $e.endIndex - 1 else $e.endIndex end) as $end
+            | if (length > 0) and (.[-1].url == $u) and (.[-1].end == $e.startIndex)
+              then .[:-1] + [ .[-1] + {end: $end} ]
+              else . + [{start: $e.startIndex, end: $end, url: $u, file_id: ($u | match($re).captures[2].string)}] end
+          else . end)
+      | .[]]' "${doc_json}"
+}
+
+#######################################
+# Drop links whose target the caller cannot read: insertRichLink fails with "Error fetching chip
+# data" for those, and one failing request rolls back the whole batch.
+# Arguments: $1 - links JSON array path, $2 - output path for the validated array
+#######################################
+validate_link_targets() {
+  local links="${1}" out="${2}"
+  local file_id url
+  local -a keep
+  keep=()
+  while IFS=$'\t' read -r file_id url; do
+    [[ -n "${file_id}" ]] || continue
+    if gws drive files get --params "$(jq -cn --arg id "${file_id}" '{fileId: $id, fields: "id", supportsAllDrives: true}')" >/dev/null 2>&1; then
+      keep+=("${file_id}")
+    else
+      log::warn "Drive link target unreadable; left as a hyperlink | file_id='${file_id}' url='${url}'"
+    fi
+  done < <(jq -r '.[] | "\(.file_id)\t\(.url)"' "${links}")
+  jq -c --argjson ok "$(printf '%s\n' "${keep[@]:-}" | jq -R . | jq -s 'map(select(. != ""))')" '[.[] | select(.file_id as $f | $ok | index($f) != null)]' "${links}" > "${out}"
+}
+
+#######################################
+# Build the chip requests: delete the link text, then insertRichLink at the same index.
+# richLinkProperties carries only uri; the server resolves title and mimeType and rejects both.
+# Each request carries an `anchor` for ordering, stripped before sending.
+# Arguments: $1 - links JSON array path, $2 - output path for the requests JSON array
+#######################################
+build_chip_requests() {
+  local links="${1}" out="${2}"
+  jq -c '[.[]
+    | {anchor: .start, order: 0, request: {deleteContentRange: {range: {startIndex: .start, endIndex: .end}}}},
+      {anchor: .start, order: 1, request: {insertRichLink: {location: {index: .start}, richLinkProperties: {uri: .url}}}}]' "${links}" > "${out}"
+}
+
+#######################################
+# Build the header-style requests for every table, each carrying an `anchor` for ordering.
 # Arguments: $1 - path to doc JSON, $2 - output path for the requests JSON array
 #######################################
 build_header_style_requests() {
@@ -137,50 +229,78 @@ build_header_style_requests() {
         .startIndex as $t
         | .table.columns as $cols
         | [.table.tableRows[0].tableCells[].content[] | select(.paragraph) | {startIndex, endIndex}] as $paras
-        | [ {updateTableCellStyle: {
+        | [ {anchor: $t, order: 2, request: {updateTableCellStyle: {
               tableRange: {tableCellLocation: {tableStartLocation: {index: $t}, rowIndex: 0, columnIndex: 0}, rowSpan: 1, columnSpan: $cols},
               tableCellStyle: {backgroundColor: {color: {rgbColor: {red: $grey, green: $grey, blue: $grey}}}},
-              fields: "backgroundColor"}} ]
-          + [$paras[] | {updateParagraphStyle: {range: {startIndex: .startIndex, endIndex: .endIndex}, paragraphStyle: {alignment: "CENTER"}, fields: "alignment"}}]
-          + [$paras[] | select(.endIndex - .startIndex > 1) | {updateTextStyle: {range: {startIndex: .startIndex, endIndex: (.endIndex - 1)}, textStyle: {bold: true}, fields: "bold"}}]
+              fields: "backgroundColor"}}} ]
+          + [$paras[] | {anchor: .startIndex, order: 2, request: {updateParagraphStyle: {range: {startIndex: .startIndex, endIndex: .endIndex}, paragraphStyle: {alignment: "CENTER"}, fields: "alignment"}}}]
+          + [$paras[] | select(.endIndex - .startIndex > 1) | {anchor: .startIndex, order: 2, request: {updateTextStyle: {range: {startIndex: .startIndex, endIndex: (.endIndex - 1)}, textStyle: {bold: true}, fields: "bold"}}}]
       )
     | add // []' "${doc_json}" > "${out}"
 }
 
 #######################################
-# Apply or dry-run the header styling.
-# Arguments: $1 - doc id, $2 - requests JSON path, $3 - dry_run (true|false), $4 - work dir
+# Merge chip and style requests into the one batch. Descending anchor order means every request
+# runs before anything that would shift its indexes; within one anchor a link's delete precedes
+# its insert, and styles come last.
+# Arguments: $1 - chip requests path, $2 - style requests path, $3 - output path for the plain requests array
 #######################################
-apply_header_style() {
-  local doc="${1}" requests="${2}" dry_run="${3}" work="${4}"
-  local params body
-  params="$(jq -cn --arg id "${doc}" '{documentId: $id}')"
-  body="$(jq -c '{requests: .}' "${requests}")"
-  if [[ "${dry_run}" == "true" ]]; then
-    gws docs documents batchUpdate --dry-run --params "${params}" --json "${body}" > "${work}/batch_dry_run.json"
-    log::ok "Dry run valid | out='${work}/batch_dry_run.json'"
-    return
+merge_requests() {
+  local chips="${1}" styles="${2}" out="${3}"
+  jq -cs '.[0] + .[1] | sort_by([-.anchor, .order]) | map(.request)' "${chips}" "${styles}" > "${out}"
+}
+
+#######################################
+# Log one line per remaining plain Drive link; the fix-up batch should have left none.
+# Arguments: $1 - path to doc JSON
+# Returns: 1 if any plain Drive link remains
+#######################################
+check_drive_links_are_chips() {
+  local doc_json="${1}"
+  local n_chips n_plain
+  n_chips="$(jq '[.. | objects | select(.richLink != null)] | length' "${doc_json}")"
+  n_plain="$(plain_drive_links "${doc_json}" | jq 'length')"
+  if (( n_plain == 0 )); then
+    log::ok "Every Drive link is a chip | chips='${n_chips}'"
+    return 0
   fi
-  gws docs documents batchUpdate --params "${params}" --json "${body}" > "${work}/batch_reply.json"
-  log::ok "Styled header rows | out='${work}/batch_reply.json'"
+  plain_drive_links "${doc_json}" | jq -r '.[] | "\(.start)\t\(.url)"' | while IFS=$'\t' read -r start url; do
+    log::err "Drive link is not a chip | index='${start}' url='${url}'"
+  done
+  return 1
+}
+
+#######################################
+# Run every check against one doc JSON.
+# Arguments: $1 - path to doc JSON
+# Returns: 1 if any check fails
+#######################################
+run_checks() {
+  local doc_json="${1}"
+  local rc=0
+  check_images_fit_one_page "${doc_json}" || rc=1
+  check_images_link_to_source "${doc_json}" || rc=1
+  check_drive_links_are_chips "${doc_json}" || rc=1
+  return "${rc}"
 }
 
 # --- Help ---
 
 help() {
   cat <<EOH
-${c_green}gdoc_finish${c_rst} — style table header rows; check images fit one page and link to their mermaid.live source
+${c_green}gdoc_finish${c_rst} — one fix-up batch (Drive links to chips, styled table headers), then one verify read
 
 ${c_bold}Usage:${c_rst}
   zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_finish.zsh --doc ID_OR_URL [OPTIONS]
 
 ${c_bold}Options:${c_rst}
   --doc ID_OR_URL   Google Doc id or docs.google.com URL (required)
-  --check-only      Report images and would-be styling; change nothing
-  --dry-run         Validate the styling request locally; change nothing
+  --check-only      Run the checks against the doc as it is; change nothing
+  --dry-run         Validate the fix-up batch locally; change nothing
   -h, --help        Show this help
 
-${c_bold}Exit code:${c_rst} non-zero when any inline image exceeds the page content box or lacks a link to its mermaid.live source.
+${c_bold}Exit code:${c_rst} non-zero when any inline image exceeds the page content box or lacks a link to its
+mermaid.live source, or when any Drive link is still a plain hyperlink.
 EOH
 }
 
@@ -209,31 +329,41 @@ main() {
   # === LOGIC ===
   local work
   work="$(mktemp -d /tmp/gdoc_finish.XXXXXX)"
-  local params
-  params="$(jq -cn --arg id "${doc}" --arg f "${GET_FIELDS}" '{documentId: $id, fields: $f}')"
-  gws docs documents get --params "${params}" --format json > "${work}/doc.json"
+  fetch_doc "${doc}" "${work}/doc.json"
   log::info "Fetched doc | doc='${doc}' json='${work}/doc.json'"
 
-  local image_rc=0
-  check_images_fit_one_page "${work}/doc.json" || image_rc=1
-  check_images_link_to_source "${work}/doc.json" || image_rc=1
+  if [[ "${check_only}" == "true" ]]; then
+    run_checks "${work}/doc.json"
+    return
+  fi
 
-  build_header_style_requests "${work}/doc.json" "${work}/requests.json"
-  local n_tables n_requests
+  # One batch built from the one read: chips and header styles together.
+  plain_drive_links "${work}/doc.json" > "${work}/links.json"
+  validate_link_targets "${work}/links.json" "${work}/links.valid.json"
+  build_chip_requests "${work}/links.valid.json" "${work}/chip_requests.json"
+  build_header_style_requests "${work}/doc.json" "${work}/style_requests.json"
+  merge_requests "${work}/chip_requests.json" "${work}/style_requests.json" "${work}/requests.json"
+  local n_links n_tables n_requests revision
+  n_links="$(jq 'length' "${work}/links.valid.json")"
   n_tables="$(jq '[.body.content[] | select(.table)] | length' "${work}/doc.json")"
   n_requests="$(jq 'length' "${work}/requests.json")"
-  log::info "Built header-style requests | tables='${n_tables}' requests='${n_requests}' file='${work}/requests.json'"
+  revision="$(jq -r '.revisionId' "${work}/doc.json")"
+  log::info "Built fix-up batch | links='${n_links}' tables='${n_tables}' requests='${n_requests}' file='${work}/requests.json'"
 
-  if [[ "${check_only}" == "true" ]]; then
-    log::info "Check-only: not applying styles"
-    return "${image_rc}"
+  if (( n_requests > 0 )); then
+    batch_update "${doc}" "${work}/requests.json" "${revision}" "${dry_run}" "${work}/batch_reply.json"
+    if [[ "${dry_run}" == "true" ]]; then
+      log::ok "Fix-up batch dry run valid | out='${work}/batch_reply.json'"
+      log::info "Checks run against the unchanged doc under --dry-run"
+    else
+      log::ok "Applied fix-up batch | links='${n_links}' tables='${n_tables}' out='${work}/batch_reply.json'"
+      fetch_doc "${doc}" "${work}/doc.json"
+    fi
+  else
+    log::info "Nothing to fix up"
   fi
-  if (( n_requests == 0 )); then
-    log::info "No tables to style"
-    return "${image_rc}"
-  fi
-  apply_header_style "${doc}" "${work}/requests.json" "${dry_run}" "${work}"
-  return "${image_rc}"
+
+  run_checks "${work}/doc.json"
 }
 
 main "${@}"

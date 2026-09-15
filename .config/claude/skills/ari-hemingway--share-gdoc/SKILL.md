@@ -5,7 +5,7 @@ description: "Publish a markdown draft as a Google Doc in one command — create
 
 # Publish to Google Doc
 
-Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-gdoc`) into a Google Doc with one script call. The script uploads the markdown through Drive's Docs conversion, then applies what markdown cannot express: header rows on every table become bold, centered, and grey (`#D9D9D9`), and every inline image is checked against the page content box and for a link to its editable mermaid.live source, so a diagram never spills onto a second page and always opens its own source. Styling is part of publishing, never a follow-up.
+Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-gdoc`) into a Google Doc with one script call. The script uploads the markdown through Drive's Docs conversion, then runs one fix-up batch for what markdown cannot express: every raw Drive link becomes a smart chip (Docs API `insertRichLink`) and header rows on every table become bold, centered, and grey (`#D9D9D9`). One re-read then verifies that every inline image fits the page content box and links to its editable mermaid.live source, and that no plain Drive link remains. Import, one batch, one verify read: the fix-up is part of publishing, never a follow-up.
 
 ## Preconditions
 
@@ -17,7 +17,7 @@ Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-g
 ## File storage
 
 - `bin/gdoc_publish.zsh` — the one-shot publish: create or update, then finish. Prints the doc URL on stdout.
-- `bin/gdoc_finish.zsh` — the finishing half, runnable alone on any doc: styles table header rows and reports, per image, whether it fits one page and links to `https://mermaid.live/edit#...`. `--check-only` reports without styling. Exit is non-zero on either image failure.
+- `bin/gdoc_finish.zsh` — the finishing half, runnable alone on any doc: one `documents.get`, one `batchUpdate` (pinned to that revision) that converts every plain `docs.google.com` or `drive.google.com` link into a chip and styles table header rows, then one re-read that checks each image fits one page and links to `https://mermaid.live/edit#...` and that no plain Drive link remains. Link targets the caller cannot open are left as hyperlinks with a warning, since one failing request would roll back the whole batch. `--check-only` runs the checks and changes nothing. Exit is non-zero on any failed check.
 
 ## Workflow
 
@@ -39,7 +39,7 @@ Same call without `--dry-run`:
 zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_publish.zsh --file <path/to/output.md>
 ```
 
-The script creates (or updates) the doc, then runs `gdoc_finish.zsh` on it. A non-zero exit after "Doc created" means finishing failed: an image wider or taller than one page, or an image with no mermaid.live link. The doc exists at that point; record its URL, then fix the draft per the Diagrams rule in `/ari-hemingway--format-gdoc` (`[![alt](ink_url?width=620)](live_url)`; flatten or split a tall diagram) and re-run with `--doc <url>`.
+The script creates (or updates) the doc, then runs `gdoc_finish.zsh` on it. A non-zero exit after "Doc created" means finishing failed: an image wider or taller than one page, an image with no mermaid.live link, or a Drive link the chip pass could not convert (a URL the caller cannot open, or a non-Drive URL styled as a Drive link). The doc exists at that point; record its URL, then fix the draft per the Diagrams rule in `/ari-hemingway--format-gdoc` (`[![alt](ink_url?width=620)](live_url)`; flatten or split a tall diagram) and re-run with `--doc <url>`.
 
 ### Report
 
@@ -53,4 +53,4 @@ To verify a doc someone edited by hand, or to restyle after manual table edits:
 zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_finish.zsh --doc <id|url> --check-only
 ```
 
-Drop `--check-only` to apply the header styling. Both are idempotent.
+Drop `--check-only` to apply the fix-up batch. Both are idempotent: a chip is not a plain link, so a second run finds nothing to convert.

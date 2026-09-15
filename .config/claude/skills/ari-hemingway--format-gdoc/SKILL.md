@@ -175,7 +175,7 @@ Full title + number as link text. Escape `[]` in titles; keep `()` as-is.
 
 ### Google Workspace URLs
 
-Raw, not markdown links. Applies to any `docs.google.com/*` or `drive.google.com/*` URL (Docs, Sheets, Slides, Drive, Forms). Drive's markdown import lands a raw URL as a plain hyperlink that the reader converts to a smart chip in the Docs UI (select the link, then Convert to chip); a markdown-linked URL cannot be converted. The Docs API cannot create a chip, and an in-place republish reverts chips a reader made, so warn before updating a doc someone has touched.
+Raw, not markdown links. Applies to any `docs.google.com/*` or `drive.google.com/*` URL (Docs, Sheets, Slides, Drive, Forms). Drive's markdown import lands a raw URL as a plain hyperlink; `/ari-hemingway--share-gdoc` then converts every such link into a smart chip with the Docs API `insertRichLink` request (available since April 2026, Drive URLs only) and fails if any Drive URL is left as a plain link. A markdown-linked URL is not converted, which is why the URL stays raw. Chips show the target's title, so never append one.
 
 - GOOD: `see https://docs.google.com/document/d/1abc...`
 - BAD: `see [My Doc](https://docs.google.com/document/d/1abc...)`
