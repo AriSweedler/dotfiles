@@ -2,13 +2,12 @@
 #
 # Karabiner Hyper+N handler: jump to a waiting notification.
 #
-# Claude-first for speed. A Claude notif is read from terminal-notifier (the same
-# fast, FDA-free, osascript-free path Hyper+C uses, ~60ms) and wins over other
-# apps — Hyper+C exists for Claude, so N favors it too. Only with no Claude notif
-# do we pay osascript to AX-press an on-screen banner of another app, and only
-# then, as a last resort, open Notification Center to recover a faded non-Claude
-# notif (terminal-notifier can't see those):
-#   1. terminal-notifier read (Claude)     — fast, == Hyper+C
+# Claude-first for speed. A Claude notif is read from terminal-notifier (fast,
+# FDA-free, osascript-free, ~60ms) and wins over other apps. Only with no Claude
+# notif do we pay osascript to AX-press an on-screen banner of another app, and
+# only then, as a last resort, open Notification Center to recover a faded
+# non-Claude notif (terminal-notifier can't see those):
+#   1. terminal-notifier read (Claude)     — fast
 #   2. on-screen AX press (any app)         — osascript AX, ~160ms
 #   3. open-NC refresh (faded non-Claude)   — slow, last resort
 set -euo pipefail
@@ -43,8 +42,8 @@ if [[ -x /usr/bin/lsappinfo ]]; then
   } &!
 fi
 
-# 1) terminal-notifier read (the Claude sim, same fast path as Hyper+C): a waiting
-#    Claude notif is caught with no osascript, and wins over a non-Claude banner.
+# 1) terminal-notifier read (the Claude sim): a waiting Claude notif is caught
+#    with no osascript, and wins over a non-Claude banner.
 if "${CLAUDE_CLICK_SIM}"; then
   exit 0
 fi

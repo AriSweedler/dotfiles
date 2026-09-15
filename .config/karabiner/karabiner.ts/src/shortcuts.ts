@@ -14,11 +14,6 @@ export const shortcuts = [
       map('n', 'Hyper').to(karabiner_script("notif-click", { logKeep: 50 })),
     ]),
 
-  rule('Hyper+C → jump to the Claude notification (terminal-notifier, fast)')
-    .manipulators([
-      map('c', 'Hyper').to(karabiner_script("claude-notification-click-simulator")),
-    ]),
-
   rule('Hyper+O → oneshot picker (tmux popup on the active client; Terminal window without tmux)')
     .manipulators([
       map('o', 'Hyper').to(karabiner_script("oneshot-popup")),

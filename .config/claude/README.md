@@ -99,16 +99,14 @@ applies it (both in `~/.config/zsh/plugins/claude.zsh`).
 
 ## Karabiner integration
 
-Two bindings in `~/.config/karabiner/karabiner.ts/src/shortcuts.ts` reach the
-click simulator, each through a wrapper in `karabiner.ts/src/scripts/bin/`:
+Hyper+N is bound in `~/.config/karabiner/karabiner.ts/src/shortcuts.ts` to
+`karabiner.ts/src/scripts/bin/notif-click`, which tries the click simulator
+first and falls back to `notif-center` for on-screen and faded banners from
+other apps.
 
-- **Hyper+C** → `claude-notification-click-simulator`: the simulator alone.
-- **Hyper+N** → `notif-click`: tries the simulator first, then falls back to
-  `notif-center` for on-screen and faded banners from other apps.
-
-`karabiner_script` (in `src/utils/macros.ts`) wraps each so it runs with a
+`karabiner_script` (in `src/utils/macros.ts`) wraps it so it runs with a
 usable PATH under launchd and logs every press to
-`/tmp/karabiner.<script>/log.txt` with an `elapsed_ms` line. After editing,
+`/tmp/karabiner.notif-click/log.txt` with an `elapsed_ms` line. After editing,
 rebake with `~/.config/karabiner/bin/bake` (or the Hyper-bound
 `karabiner-recompile`).
 

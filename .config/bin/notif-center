@@ -389,9 +389,9 @@ _match() { /usr/bin/osascript - "$@" <<<"${AS_MATCH}"; }
 # non-zero if the db can't be obtained). Read-only w.r.t. the original.
 #
 # The DB is in a TCC-protected group container, so the *caller* needs Full Disk
-# Access (a terminal does). The Karabiner keybindings deliberately don't touch
-# the DB — Hyper+N uses terminal-notifier, Hyper+C uses pure-AX --match — so no
-# FDA grant for Karabiner is needed.
+# Access (a terminal does). The Karabiner Hyper+N binding deliberately doesn't
+# touch the DB — terminal-notifier first, then pure-AX — so no FDA grant for
+# Karabiner is needed.
 _copy_db() {
   local tmp
   tmp="$(mktemp -d /tmp/notif-center.XXXXXX)"
@@ -530,7 +530,7 @@ print(re.sub(r"\s+", " ", (o.get("body") or o.get("subtitle") or o.get("title") 
   log::debug "click | mode='${mode}' arg='${arg}' result='${result}'"
   case "${result}" in
     ok) return 0 ;;
-    # 4) Still nothing → transient banner so the miss is visible from Hyper+C.
+    # 4) Still nothing → transient banner so the miss is visible from a keybinding.
     *) log::err "Target not in the live tray | result='${result}'"
        _notify_empty "${app_pat}" "${match_pat}"
        return 1 ;;
