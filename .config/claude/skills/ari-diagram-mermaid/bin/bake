@@ -1,0 +1,103 @@
+#!/usr/bin/env zsh
+#
+# Bake a Mermaid diagram: validate, generate URL, copy to clipboard.
+#
+# Usage: bake <file.mmd>
+#
+# The rendered link is printed to stdout, copied to the clipboard, and written to a
+# sidecar file — so callers relay it verbatim and never hand-reproduce the base64.
+#
+# Environment variables:
+#   MERMAID_FORMAT        Output format (default: markdown_link)
+#     markdown_link       Clickable markdown image link: [![](img)](edit)
+#     ink_url             Direct PNG image URL via mermaid.ink
+#     live_url            Editable URL via mermaid.live
+#   MERMAID_VALIDATE_ONLY If set to "1", validate only (no URL, no clipboard)
+set -euo pipefail
+
+log() { printf '\033[1;34m==>\033[0m %s\n' "$*" >&2; }
+die() { printf '\033[1;31m==>\033[0m %s\n' "$*" >&2; exit 1; }
+
+copy_to_clipboard() {
+  if command -v pbcopy &>/dev/null; then
+    pbcopy
+  elif command -v xclip &>/dev/null; then
+    xclip -selection clipboard 2>/dev/null
+  elif command -v xsel &>/dev/null; then
+    xsel --clipboard --input 2>/dev/null
+  else
+    return 1
+  fi
+}
+
+encode_state() {
+  node -e "
+const fs = require('fs');
+const code = fs.readFileSync(process.argv[1], 'utf-8');
+const state = JSON.stringify({code, mermaid: {theme: 'default'}});
+process.stdout.write(Buffer.from(state).toString('base64url'));
+" "${file}"
+}
+
+pako_compress() {
+  node -e "
+const zlib = require('zlib');
+const fs = require('fs');
+const code = fs.readFileSync(process.argv[1], 'utf-8');
+const state = JSON.stringify({code, mermaid: {theme: 'default'}});
+const compressed = zlib.deflateSync(state, { level: 9 });
+process.stdout.write(compressed.toString('base64url'));
+" "${file}"
+}
+
+main() {
+  (( $# > 0 )) || die "Usage: bake <file.mmd>"
+
+  local file="$1"
+  [[ -f "${file}" ]] || die "File not found: ${file}"
+
+  local format="${MERMAID_FORMAT:-markdown_link}"
+  case "${format}" in
+    ink_url|live_url|markdown_link) ;;
+    *) die "Unknown MERMAID_FORMAT: ${format} (expected ink_url, live_url, or markdown_link)" ;;
+  esac
+
+  local url http_code
+  url="https://mermaid.ink/img/base64:$(encode_state)"
+  http_code=$(curl -s -o /dev/null -w "%{http_code}" "${url}")
+  [[ "${http_code}" == "200" ]] || die "Invalid mermaid diagram (HTTP ${http_code})\nDebug URL: ${url}"
+
+  if [[ "${MERMAID_VALIDATE_ONLY:-}" == "1" ]]; then
+    log "Valid mermaid diagram"
+    return 0
+  fi
+
+  local live_url output
+  live_url="https://mermaid.live/edit#pako:$(pako_compress)"
+
+  case "${format}" in
+    ink_url)
+      output="${url}"
+      ;;
+    live_url)
+      output="${live_url}"
+      ;;
+    markdown_link)
+      output="[![](${url})](${live_url})"
+      ;;
+  esac
+
+  local url_file="${file%.mmd}.${format}.url"
+  printf '%s' "${output}" > "${url_file}"
+
+  # Print verbatim so callers relay this exact value — never hand-reproduce the base64.
+  echo "${output}"
+
+  if printf '%s' "${output}" | copy_to_clipboard; then
+    log "Valid diagram — markdown link copied to clipboard | format='${format}' url_file='${url_file}'"
+  else
+    log "Valid diagram — clipboard unavailable; link written to file | format='${format}' url_file='${url_file}'"
+  fi
+}
+
+main "$@"
