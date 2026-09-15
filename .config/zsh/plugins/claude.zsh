@@ -21,3 +21,12 @@ function vi_::claude_settings_local() {
   "${EDITOR}" ${line:++$line} -c 'set foldlevel=99' "$f"
 }
 alias vi_cset=vi_::claude_settings_local
+
+# Notification hook wiring is new-machine's claude_notifications step; the Monday
+# launchd verify runs it in the background, so nothing here runs at shell startup.
+function claude::hook::check() {
+  new-machine check --only claude_notifications "$@"
+}
+function claude::hook::register() {
+  new-machine apply claude_notifications "$@"
+}
