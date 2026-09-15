@@ -13,9 +13,8 @@ type Meta = {
   description: string
 }
 
-// terminal-notifier, not osascript: osascript posts as Script Editor, so the
-// banner looks unlike every other binding's. Absolute path: Karabiner's
-// shell_command PATH is minimal.
+// Karabiner runs shell_command with launchd's minimal PATH, so the notifier
+// needs its absolute path.
 const notify = (message: string) => ({
   shell_command: `/opt/homebrew/bin/terminal-notifier -title Keyboard -message ${JSON.stringify(message)} -group karabiner-which-keyboard`,
 })
