@@ -19,6 +19,7 @@
 !/share/tmux_oneshot/
 !/share/double_cd/
 !/share/new-machine/
+!/share/claude-skills/
 # Secrets live in *.secret.zsh beside the plugin that needs them; never tracked.
 *.secret.zsh
 # Symlinks into tool-managed installs (claude version dir, pipx venv).

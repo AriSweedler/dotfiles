@@ -1,0 +1,101 @@
+#!/usr/bin/env zsh
+# Report where every Claude skill stands relative to the dotfiles tiers.
+# Read-only. Run: zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/status
+
+set -euo pipefail
+
+readonly SCRIPT_DIR="${0:A:h}"
+# Shared libs resolve through the symlink farm, not ${SCRIPT_DIR:h:h}: skills are
+# spread across tiers, so a relative hop lands in whichever tier this script sits in.
+readonly SKILLS_DIR="${HOME}/.claude/skills"
+
+readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+source "${SCRIPT_DIR:h}/lib/registry.zsh"
+
+# States that need no action; hidden unless --all.
+readonly QUIET_STATES=(linked ignored)
+
+help() {
+  cat <<EOF
+${c_green}status${c_rst} — classify every skill under \$HOME/.claude/skills against the dotfiles tiers
+
+${c_bold}Usage:${c_rst}
+  zsh \$HOME/.claude/skills/ari-dotfiles-skill-registry/bin/status [--skill NAME]... [--all]
+
+${c_bold}Options:${c_rst}
+  --skill NAME  Report only this skill (repeatable; default: every skill)
+  --all         Include healthy rows (linked, ignored); default shows actionable rows only
+  -h, --help    Show this help
+
+${c_bold}Output:${c_rst} one line per skill on stdout: state=<state> tier=<tier> name=<name>
+  linked    symlink into a tier root                   healthy
+  ignored   third-party skill listed in .gitignore     leave it
+  unlinked  real dir, no tier holds it                 adopt --skill NAME --tier df|ldf
+  missing   tier holds it, no symlink                  link
+  dangling  symlink target is gone                     link --prune
+  shadowed  real dir hides a tier copy                 resolve by hand
+  conflict  held by more than one tier                 resolve by hand
+  foreign   symlink outside every tier root            resolve by hand
+EOF
+}
+
+#######################################
+# True (0) if the state is one that needs no action.
+# Arguments:
+#   $1 - state
+#######################################
+is_quiet_state() {
+  local state="${1}" s
+  for s in "${QUIET_STATES[@]}"; do
+    [[ "${state}" == "${s}" ]] && return 0
+  done
+  return 1
+}
+
+main() {
+  # === PARSE ===
+  local show_all=false
+  local -a skills
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help) help; return 0 ;;
+    --all)     show_all=true; shift ;;
+    --skill)   skills+=("${2:?--skill requires a value}"); shift 2 ;;
+    -*)        log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)         log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
+  esac; done
+
+  # === MASSAGE ===
+  if (( ${#skills} == 0 )); then
+    skills=("${(@f)$(list_all_skills)}")
+  fi
+
+  # === LOGIC ===
+  local skill state tier
+  local -A counts
+  local shown=0
+  for skill in "${skills[@]}"; do
+    read -r state tier <<< "$(skill_state "${skill}")"
+    counts[${state}]=$(( ${counts[${state}]:-0} + 1 ))
+    if [[ "${show_all}" != "true" ]] && is_quiet_state "${state}"; then
+      continue
+    fi
+    echo "state=${state} tier=${tier} name=${skill}"
+    shown=$(( shown + 1 ))
+  done
+
+  local summary="" s
+  for s in "${(@ko)counts}"; do
+    summary+=" ${s}='${counts[${s}]}'"
+  done
+  log::info "skill states |${summary}"
+  if (( shown == 0 )); then
+    log::ok "nothing actionable | hint='--all lists healthy rows'"
+  fi
+}
+
+main "${@}"

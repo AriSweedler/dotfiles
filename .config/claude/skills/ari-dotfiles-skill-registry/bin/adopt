@@ -1,0 +1,171 @@
+#!/usr/bin/env zsh
+# Move a skill from $HOME/.claude/skills into a dotfiles tier, symlink it back, and
+# stage it in that tier's repo. Committing is the caller's job so the message can
+# say why. Run: zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/adopt --skill <name> --tier df|ldf
+
+set -euo pipefail
+
+readonly SCRIPT_DIR="${0:A:h}"
+# Shared libs resolve through the symlink farm, not ${SCRIPT_DIR:h:h}: skills are
+# spread across tiers, so a relative hop lands in whichever tier this script sits in.
+readonly SKILLS_DIR="${HOME}/.claude/skills"
+
+readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+source "${SCRIPT_DIR:h}/lib/registry.zsh"
+
+help() {
+  cat <<EOF
+${c_green}adopt${c_rst} — move a skill into a dotfiles tier, symlink it back, stage it (does not commit)
+
+${c_bold}Usage:${c_rst}
+  zsh \$HOME/.claude/skills/ari-dotfiles-skill-registry/bin/adopt --skill NAME [--skill NAME]... --tier df|ldf [--as NEW_NAME] [--dry-run]
+
+${c_bold}Options:${c_rst}
+  --skill NAME   Skill directory under \$HOME/.claude/skills to adopt (repeatable)
+  --tier TIER    df (shared, ~/.config/claude/skills) or ldf (local, ~/.local/share/claude-skills)
+  --as NEW_NAME  Adopt under a new directory name; allowed with exactly one --skill.
+                 The SKILL.md \`name:\` line and every caller still say the old name: fix them
+                 in the same commit (\`rg -n '<old>' \$HOME/.claude/skills\`).
+  --dry-run      Log what would change; touch nothing
+  -h, --help     Show this help
+
+Each skill must be in state ${c_bold}unlinked${c_rst} (or ${c_bold}ignored${c_rst}: naming it is the override). A skill
+already ${c_bold}linked${c_rst} to the requested tier is a no-op. Ends with key=value lines per skill and the
+commit the caller should make.
+EOF
+}
+
+#######################################
+# True (0) if the tier's repo would track a path under its root, i.e. the ldf
+# allowlist (info/exclude) has an entry for the skills root.
+# Arguments:
+#   $1 - tier
+#   $2 - path that will exist after the move
+#######################################
+tier_tracks_path() {
+  # Not `path`: in zsh that is the array tied to PATH, and a local one empties it.
+  local tier="${1}" probe_path="${2}"
+  ! tier_git "${tier}" check-ignore -q --no-index "${probe_path}"
+}
+
+#######################################
+# Decide whether one skill can be adopted into the tier. Prints nothing; logs the
+# reason and returns 1 when it cannot. Returns 2 when it is already adopted there.
+# Arguments:
+#   $1 - skill name
+#   $2 - tier
+#   $3 - destination name
+#######################################
+check_adoptable() {
+  local skill="${1}" tier="${2}" dest="${3}"
+  local state cur_tier
+  read -r state cur_tier <<< "$(skill_state "${skill}")"
+  local dest_dir="$(tier_root "${tier}")/${dest}"
+
+  if [[ "${state}" == "linked" && "${cur_tier}" == "${tier}" && "${skill}" == "${dest}" ]]; then
+    log::info "already adopted | skill='${skill}' tier='${tier}'"
+    return 2
+  fi
+  if [[ "${state}" != "unlinked" && "${state}" != "ignored" ]]; then
+    log::err "not adoptable | skill='${skill}' state='${state}' tier='${cur_tier}' expected_state='unlinked'"
+    return 1
+  fi
+  if [[ -e "${dest_dir}" ]]; then
+    log::err "destination exists | skill='${skill}' dest_dir='${dest_dir}'"
+    return 1
+  fi
+  if [[ -e "${SKILLS_DIR}/${dest}" && "${dest}" != "${skill}" ]]; then
+    log::err "new name already taken | dest='${dest}' path='${SKILLS_DIR}/${dest}'"
+    return 1
+  fi
+  if ! tier_tracks_path "${tier}" "${dest_dir}/SKILL.md"; then
+    log::err "tier ignores the skills root | tier='${tier}' dest_dir='${dest_dir}' hint='add !/share/claude-skills/ to the ldf allowlist (info/exclude)'"
+    return 1
+  fi
+  return 0
+}
+
+#######################################
+# Move, link, and stage one skill, or log the intent under --dry-run.
+# Arguments:
+#   $1 - skill name
+#   $2 - tier
+#   $3 - destination name
+#   $4 - dry_run (true|false)
+#######################################
+adopt_skill() {
+  local skill="${1}" tier="${2}" dest="${3}" dry_run="${4}"
+  local src="${SKILLS_DIR}/${skill}"
+  local root="$(tier_root "${tier}")"
+  local dest_dir="${root}/${dest}"
+  local link="${SKILLS_DIR}/${dest}"
+
+  if [[ "${dry_run}" == "true" ]]; then
+    log::info "dry-run: would move | src='${src}' dest_dir='${dest_dir}'"
+    log::info "dry-run: would link | link='${link}' target='${dest_dir}'"
+    log::info "dry-run: would stage | tier='${tier}' path='${dest_dir}'"
+    return 0
+  fi
+
+  mkdir -p "${root}"
+  run_cmd mv "${src}" "${dest_dir}"
+  run_cmd ln -s "${dest_dir}" "${link}"
+  run_cmd git "${tier}" add "${dest_dir}"
+}
+
+main() {
+  # === PARSE ===
+  local tier="" as="" dry_run=false
+  local -a skills
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help) help; return 0 ;;
+    --skill)   skills+=("${2:?--skill requires a value}"); shift 2 ;;
+    --tier)    tier="${2:?--tier requires a value}"; shift 2 ;;
+    --as)      as="${2:?--as requires a value}"; shift 2 ;;
+    --dry-run) dry_run=true; shift ;;
+    -*)        log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)         log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
+  esac; done
+
+  # === MASSAGE ===
+  tier="${tier:l}"
+
+  # === VALIDATE ===
+  if (( ${#skills} == 0 )); then
+    log::err "Missing --skill"; help; return 1
+  fi
+  if ! is_valid_tier "${tier}"; then
+    log::err "Invalid --tier | tier='${tier}' valid_tiers='${(j:, :)TIERS}'"; help; return 1
+  fi
+  if [[ -n "${as}" && ${#skills} -ne 1 ]]; then
+    log::err "--as needs exactly one --skill | skill_count='${#skills}'"; return 1
+  fi
+
+  # === LOGIC ===
+  local skill dest rc adopted=0
+  local -a rows
+  for skill in "${skills[@]}"; do
+    dest="${as:-${skill}}"
+    rc=0
+    check_adoptable "${skill}" "${tier}" "${dest}" || rc=$?
+    (( rc == 2 )) && continue
+    (( rc != 0 )) && return 1
+    adopt_skill "${skill}" "${tier}" "${dest}" "${dry_run}"
+    rows+=("skill=${skill} tier=${tier} path=$(tier_root "${tier}")/${dest} link=${SKILLS_DIR}/${dest}")
+    adopted=$(( adopted + 1 ))
+  done
+
+  log::info "adopt done | adopted='${adopted}' tier='${tier}' dry_run='${dry_run}'"
+  (( adopted > 0 )) && printf '%s\n' "${rows[@]}"
+  if (( adopted > 0 )) && [[ "${dry_run}" != "true" ]]; then
+    log::info "staged, not committed | next=\"git ${tier} commit -m 'claude: adopt the <name> skill into the ${tier} tier'\""
+  fi
+  return 0
+}
+
+main "${@}"

@@ -1,0 +1,118 @@
+#!/usr/bin/env zsh
+# Symlink every skill held by a dotfiles tier into $HOME/.claude/skills. Idempotent;
+# never clobbers a real directory or a symlink that points elsewhere.
+# Run: zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link [--prune] [--dry-run]
+
+set -euo pipefail
+
+readonly SCRIPT_DIR="${0:A:h}"
+# Shared libs resolve through the symlink farm, not ${SCRIPT_DIR:h:h}: skills are
+# spread across tiers, so a relative hop lands in whichever tier this script sits in.
+readonly SKILLS_DIR="${HOME}/.claude/skills"
+
+readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+source "${SCRIPT_DIR:h}/lib/registry.zsh"
+
+help() {
+  cat <<EOF
+${c_green}link${c_rst} — symlink tier-held skills into \$HOME/.claude/skills (new-machine step; safe to rerun)
+
+${c_bold}Usage:${c_rst}
+  zsh \$HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link [--prune] [--dry-run]
+
+${c_bold}Options:${c_rst}
+  --prune     Also remove symlinks in \$HOME/.claude/skills whose target no longer exists
+  --dry-run   Log what would change; touch nothing
+  -h, --help  Show this help
+
+Only skills in state ${c_bold}missing${c_rst} get a link. ${c_bold}shadowed${c_rst}, ${c_bold}foreign${c_rst}, and
+${c_bold}conflict${c_rst} rows are reported and left alone; fix those with bin/status in hand.
+EOF
+}
+
+#######################################
+# Create the symlink for one missing skill, or log the intent under --dry-run.
+# Arguments:
+#   $1 - skill name
+#   $2 - tier
+#   $3 - dry_run (true|false)
+#######################################
+link_skill() {
+  local skill="${1}" tier="${2}" dry_run="${3}"
+  local target="$(tier_root "${tier}")/${skill}"
+  local link="${SKILLS_DIR}/${skill}"
+  if [[ "${dry_run}" == "true" ]]; then
+    log::info "dry-run: would link | link='${link}' target='${target}'"
+    return 0
+  fi
+  run_cmd ln -s "${target}" "${link}"
+}
+
+#######################################
+# Remove one dangling symlink, or log the intent under --dry-run.
+# Arguments:
+#   $1 - skill name
+#   $2 - dry_run (true|false)
+#######################################
+prune_skill() {
+  local skill="${1}" dry_run="${2}"
+  local link="${SKILLS_DIR}/${skill}"
+  if [[ "${dry_run}" == "true" ]]; then
+    log::info "dry-run: would remove dangling link | link='${link}' target='$(readlink "${link}")'"
+    return 0
+  fi
+  run_cmd rm "${link}"
+}
+
+main() {
+  # === PARSE ===
+  local prune=false dry_run=false
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help) help; return 0 ;;
+    --prune)   prune=true; shift ;;
+    --dry-run) dry_run=true; shift ;;
+    -*)        log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)         log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
+  esac; done
+
+  # === LOGIC ===
+  mkdir -p "${SKILLS_DIR}"
+  local skill state tier
+  local linked=0 pruned=0 skipped=0
+  for skill in "${(@f)$(list_all_skills)}"; do
+    read -r state tier <<< "$(skill_state "${skill}")"
+    case "${state}" in
+      missing)
+        link_skill "${skill}" "${tier}" "${dry_run}"
+        linked=$(( linked + 1 ))
+        ;;
+      dangling)
+        if [[ "${prune}" != "true" ]]; then
+          log::warn "dangling link left in place | skill='${skill}' hint='--prune removes it'"
+          skipped=$(( skipped + 1 ))
+          continue
+        fi
+        prune_skill "${skill}" "${dry_run}"
+        pruned=$(( pruned + 1 ))
+        ;;
+      shadowed|foreign|conflict)
+        log::warn "needs a hand | skill='${skill}' state='${state}' tier='${tier}'"
+        skipped=$(( skipped + 1 ))
+        ;;
+    esac
+  done
+
+  log::info "link done | linked='${linked}' pruned='${pruned}' skipped='${skipped}' dry_run='${dry_run}'"
+  cat <<EOF
+linked=${linked}
+pruned=${pruned}
+skipped=${skipped}
+EOF
+}
+
+main "${@}"

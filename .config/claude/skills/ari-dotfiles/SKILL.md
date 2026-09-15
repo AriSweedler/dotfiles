@@ -71,7 +71,7 @@ cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
   wrappers.
 - **Claude skills follow the same split.** The real directory lives in the tier
   that owns it, `~/.config/claude/skills/<name>/` (df) or
-  `~/.local/share/claude/skills/<name>/` (ldf), and `~/.claude/skills/<name>` is a
+  `~/.local/share/claude-skills/<name>/` (ldf), and `~/.claude/skills/<name>` is a
   symlink to it. Edit through either path; commit through the tier. Linking,
   adopting, and drift are `/ari-dotfiles-skill-registry`'s job.
 - **Split mixed files.** Keep the generic mechanism in config and parameterize
@@ -134,7 +134,8 @@ rg -n 'plugins/airtable.zsh' ~/.config ~/.local/share   # edit every hit; re-run
   via `source_zsh_dir --optional "${XDG_DATA_HOME}/zsh/plugins"`
 - **Scripts**: `~/.local/bin/` and `~/.local/share/bin/`
 - **Data**: `~/.local/share/{go_aws,kuber,aws_profile,tmux_oneshot}/`
-- **Claude skills**: `~/.local/share/claude/skills/<name>/`, symlinked from `~/.claude/skills/<name>`
+- **Claude skills**: `~/.local/share/claude-skills/<name>/`, symlinked from `~/.claude/skills/<name>`
+  (`~/.local/share/claude/` is Claude Code's own install dir; hands off)
 
 ## Post-change sweep
 
