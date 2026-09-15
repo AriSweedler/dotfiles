@@ -92,13 +92,25 @@ hand any time:
 ~/.config/claude/bin/initialize.sh
 ```
 
+The `claude_notifications` step also runs in the Monday `new-machine verify`
+launchd job, so hook drift surfaces in the background. From a shell,
+`claude::hook::check` runs that one step read-only and `claude::hook::register`
+applies it (both in `~/.config/zsh/plugins/claude.zsh`).
+
 ## Karabiner integration
 
-Hyper+N is bound in `~/.config/karabiner/karabiner.ts/src/claude-notifications.ts`
-to invoke the click simulator. The absolute path to the simulator is baked
-at build time, since Karabiner's `shell_command` runs in a minimal sh
-context where `$HOME` expansion is unreliable. Re-run `npm run build` (or
-`~/.config/karabiner/bin/karabiner-recompile`) after editing.
+Two bindings in `~/.config/karabiner/karabiner.ts/src/shortcuts.ts` reach the
+click simulator, each through a wrapper in `karabiner.ts/src/scripts/bin/`:
+
+- **Hyper+C** → `claude-notification-click-simulator`: the simulator alone.
+- **Hyper+N** → `notif-click`: tries the simulator first, then falls back to
+  `notif-center` for on-screen and faded banners from other apps.
+
+`karabiner_script` (in `src/utils/macros.ts`) wraps each so it runs with a
+usable PATH under launchd and logs every press to
+`/tmp/karabiner.<script>/log.txt` with an `elapsed_ms` line. After editing,
+rebake with `~/.config/karabiner/bin/bake` (or the Hyper-bound
+`karabiner-recompile`).
 
 ## Raycast integration
 
