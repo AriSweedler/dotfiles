@@ -1,6 +1,7 @@
 #!/usr/bin/env zsh
 # Finish a Google Doc created from markdown: style every table's header row (bold,
-# centered, grey #D9D9D9) and verify every inline image fits inside one page.
+# centered, grey #D9D9D9), verify every inline image fits inside one page, and verify
+# every inline image links to its editable mermaid.live source.
 # tableHeader (pin header row) is read-only in the Docs API and stays a manual step.
 
 set -euo pipefail
@@ -14,6 +15,8 @@ readonly SKILLS_DIR="${HOME}/.claude/skills"
 
 readonly HEADER_GREY="0.8509804"   # #D9D9D9, matches Docs' "light grey 1"
 readonly GET_FIELDS="documentStyle,inlineObjects,body.content"
+# A diagram image must open its editable source; the markdown form [![alt](ink)](live) lands here.
+readonly IMAGE_LINK_PREFIX="https://mermaid.live/edit#"
 
 # --- Logging ---
 
@@ -92,6 +95,37 @@ check_images_fit_one_page() {
 }
 
 #######################################
+# Log one line per inline image saying whether it links to its mermaid.live source.
+# Globals: IMAGE_LINK_PREFIX
+# Arguments: $1 - path to doc JSON
+# Returns: 1 if any image has no link or a link outside mermaid.live
+#######################################
+check_images_link_to_source() {
+  local doc_json="${1}"
+  local rc=0 id url verdict
+  local tsv
+  tsv="$(jq -r --arg prefix "${IMAGE_LINK_PREFIX}" '
+    [.body.content[] | .paragraph? | select(. != null) | .elements[] | select(.inlineObjectElement != null)]
+    | .[]
+    | (.inlineObjectElement.textStyle.link.url // "") as $url
+    | [.inlineObjectElement.inlineObjectId, $url, (if ($url | startswith($prefix)) then "OK" else "FAIL" end)]
+    | @tsv' "${doc_json}")"
+  if [[ -z "${tsv}" ]]; then
+    log::info "No inline images in doc"
+    return 0
+  fi
+  while IFS=$'\t' read -r id url verdict; do
+    if [[ "${verdict}" == "OK" ]]; then
+      log::ok "Image links to its source | id='${id}' url='${url:0:60}...'"
+      continue
+    fi
+    log::err "Image does not link to its mermaid.live source | id='${id}' url='${url}' expected_prefix='${IMAGE_LINK_PREFIX}'"
+    rc=1
+  done <<< "${tsv}"
+  return "${rc}"
+}
+
+#######################################
 # Build the batchUpdate requests that style every table's header row.
 # Arguments: $1 - path to doc JSON, $2 - output path for the requests JSON array
 #######################################
@@ -135,7 +169,7 @@ apply_header_style() {
 
 help() {
   cat <<EOH
-${c_green}gdoc_finish${c_rst} — style table header rows and check images fit one page in a Google Doc
+${c_green}gdoc_finish${c_rst} — style table header rows; check images fit one page and link to their mermaid.live source
 
 ${c_bold}Usage:${c_rst}
   zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_finish.zsh --doc ID_OR_URL [OPTIONS]
@@ -146,7 +180,7 @@ ${c_bold}Options:${c_rst}
   --dry-run         Validate the styling request locally; change nothing
   -h, --help        Show this help
 
-${c_bold}Exit code:${c_rst} non-zero when any inline image exceeds the page content box.
+${c_bold}Exit code:${c_rst} non-zero when any inline image exceeds the page content box or lacks a link to its mermaid.live source.
 EOH
 }
 
@@ -182,6 +216,7 @@ main() {
 
   local image_rc=0
   check_images_fit_one_page "${work}/doc.json" || image_rc=1
+  check_images_link_to_source "${work}/doc.json" || image_rc=1
 
   build_header_style_requests "${work}/doc.json" "${work}/requests.json"
   local n_tables n_requests

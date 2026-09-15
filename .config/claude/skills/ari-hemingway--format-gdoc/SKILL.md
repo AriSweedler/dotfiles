@@ -254,12 +254,12 @@ All TODO markers follow the anchored form: `[TODO: verb — reason]`. Examples: 
 
 ### Diagrams
 
-Diagrams MUST be inline images, not clickable links, and MUST fit on one page.
+Every diagram is an inline image that links to its editable mermaid.live source and fits on one page. Drive's markdown import turns a linked image into an inline image whose link is the mermaid.live URL, so the link costs nothing.
 
-1. Invoke `/ari-diagram-mermaid` (default output is `ink_url`).
-2. Embed the returned URL with markdown image syntax: `![Request flow from CDN to worker](https://mermaid.ink/img/pako:eNp...)`.
-3. NEVER pass `MERMAID_FORMAT=markdown_link` — it produces a clickable link, not an inline image.
-4. Keep the rendered image inside the page content box (Letter with 1in margins: 468 × 648 pt). Docs shrinks wide images to the text width, so a tall diagram is the risk — a 6-to-8-node nested flowchart fits; flatten with `direction LR` or split before adding more. `/ari-hemingway--share-gdoc` measures every embedded image at publish time and fails on one that spills.
+1. Invoke `/ari-diagram-mermaid` twice on the same `.mmd`: `MERMAID_FORMAT=ink_url` and `MERMAID_FORMAT=live_url`. Read the two sidecars (`<name>.ink_url.url`, `<name>.live_url.url`); never retype the base64.
+2. Embed the image wrapped in the link, with the ink URL capped at 620 px: `[![Request flow from CDN to worker](https://mermaid.ink/img/base64:eNp...?width=620)](https://mermaid.live/edit#pako:eNp...)`.
+3. `?width=620` renders at 465 pt, inside the 468 pt text width (Letter, 1in margins: 468 × 648 pt). Without it the native PNG imports at 900 to 1400 pt wide and fails the one-page check. Height is still the author's job: a 6-to-8-node nested flowchart fits; flatten with `direction LR` or split before adding more.
+4. `/ari-hemingway--share-gdoc` checks both invariants at publish time and fails on an image that spills or lacks a mermaid.live link.
 
 See `/ari-hemingway--lib` for the failure contract when `/ari-diagram-mermaid` fails.
 

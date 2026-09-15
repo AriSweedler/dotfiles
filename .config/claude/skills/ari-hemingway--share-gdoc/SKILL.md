@@ -1,11 +1,11 @@
 ---
 name: ari-hemingway--share-gdoc
-description: "Publish a markdown draft as a Google Doc in one command — create, or update an existing doc in place — and finish it: table header rows styled (bold, centered, grey), every image checked to fit one page. Dry-runs first; the doc is created only on confirm."
+description: "Publish a markdown draft as a Google Doc in one command — create, or update an existing doc in place — and finish it: table header rows styled (bold, centered, grey), every image checked to fit one page and to link to its mermaid.live source. Dry-runs first; the doc is created only on confirm."
 ---
 
 # Publish to Google Doc
 
-Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-gdoc`) into a Google Doc with one script call. The script uploads the markdown through Drive's Docs conversion, then applies what markdown cannot express: header rows on every table become bold, centered, and grey (`#D9D9D9`), and every inline image is checked against the page content box so a diagram never spills onto a second page. Styling is part of publishing, never a follow-up.
+Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-gdoc`) into a Google Doc with one script call. The script uploads the markdown through Drive's Docs conversion, then applies what markdown cannot express: header rows on every table become bold, centered, and grey (`#D9D9D9`), and every inline image is checked against the page content box and for a link to its editable mermaid.live source, so a diagram never spills onto a second page and always opens its own source. Styling is part of publishing, never a follow-up.
 
 ## Preconditions
 
@@ -17,7 +17,7 @@ Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-g
 ## File storage
 
 - `bin/gdoc_publish.zsh` — the one-shot publish: create or update, then finish. Prints the doc URL on stdout.
-- `bin/gdoc_finish.zsh` — the finishing half, runnable alone on any doc: styles table header rows and reports whether each image fits one page. `--check-only` reports without styling.
+- `bin/gdoc_finish.zsh` — the finishing half, runnable alone on any doc: styles table header rows and reports, per image, whether it fits one page and links to `https://mermaid.live/edit#...`. `--check-only` reports without styling. Exit is non-zero on either image failure.
 
 ## Workflow
 
@@ -39,7 +39,7 @@ Same call without `--dry-run`:
 zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_publish.zsh --file <path/to/output.md>
 ```
 
-The script creates (or updates) the doc, then runs `gdoc_finish.zsh` on it. A non-zero exit after "Doc created" means finishing failed — most often an image taller than one page. Fix the draft (split or flatten the diagram) and re-run with `--doc <url>`.
+The script creates (or updates) the doc, then runs `gdoc_finish.zsh` on it. A non-zero exit after "Doc created" means finishing failed: an image wider or taller than one page, or an image with no mermaid.live link. The doc exists at that point; record its URL, then fix the draft per the Diagrams rule in `/ari-hemingway--format-gdoc` (`[![alt](ink_url?width=620)](live_url)`; flatten or split a tall diagram) and re-run with `--doc <url>`.
 
 ### Report
 

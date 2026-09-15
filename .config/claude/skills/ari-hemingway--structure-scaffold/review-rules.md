@@ -38,4 +38,4 @@ Sibling-specific rules that extend `/ari-hemingway--format-gdoc`. `/ari-hemingwa
 
 ## Diagram
 
-- At most one image directly after the table, per the Diagrams rule in `/ari-hemingway--format-gdoc`; it ties together terms that are all in the table.
+- At most one image directly after the table, per the Diagrams rule in `/ari-hemingway--format-gdoc`: `[![alt](ink_url?width=620)](live_url)`, so the image links to its mermaid.live source; it ties together terms that are all in the table.

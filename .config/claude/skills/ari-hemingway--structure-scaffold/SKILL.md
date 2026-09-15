@@ -86,7 +86,7 @@ When definitions still cycle after the layered rewrite, one term in the cycle be
 
 ### Diagrams
 
-One small diagram after the table is welcome when it ties several definitions together (the layout of the parts). Produce it with `/ari-diagram-mermaid` using `MERMAID_FORMAT=ink_url` and embed it as an inline image per `/ari-hemingway--format-gdoc`. It MUST fit on one page; `/ari-hemingway--share-gdoc` checks the rendered size at publish time and fails when it does not. Keep it compact: a tall nested flowchart of 6 to 8 nodes fit; flatten with `direction LR` or split before adding more.
+One small diagram after the table is welcome when it ties several definitions together (the layout of the parts). Produce it with `/ari-diagram-mermaid`, baking both `MERMAID_FORMAT=ink_url` and `MERMAID_FORMAT=live_url`, and embed it per the Diagrams rule in `/ari-hemingway--format-gdoc`: `[![alt](<ink_url>?width=620)](<live_url>)`, read from the two sidecars. The image MUST fit on one page and MUST link to its mermaid.live source; `/ari-hemingway--share-gdoc` checks both at publish time and fails otherwise. Keep it compact: a tall nested flowchart of 6 to 8 nodes fits; flatten with `direction LR` or split before adding more.
 
 ### Multi-agent workflows
 
@@ -100,7 +100,7 @@ Root path: `/tmp/hemingway/scaffold/{topic-slug}/{timestamp}/`. Structure, schem
 definitions_pass1.json     # discover result (.result of the workflow task output)
 definitions_refined.json   # refine result
 definitions_final.json     # rows after hand edits; what check_definitions_order.zsh validates
-diagram.mmd, diagram.ink_url.url
+diagram.mmd, diagram.ink_url.url, diagram.live_url.url
 ```
 
 Scratchpad fields appended after `Last phase`:
@@ -162,7 +162,7 @@ Print: `Refine complete — {n} rows, {k} axioms, 0 violations. Next: Diagram.`
 
 ### Diagram
 
-Optional. Pick the 5 to 8 terms whose relationship is spatial or sequential (containment, flow) and draw them per the Diagrams rule. Save the source and URL into the folder; embed the image after the table.
+Optional. Pick the 5 to 8 terms whose relationship is spatial or sequential (containment, flow) and draw them per the Diagrams rule. Save the `.mmd` and both `.url` sidecars into the folder; embed the linked, width-capped image after the table.
 
 ### Subsystems
 
