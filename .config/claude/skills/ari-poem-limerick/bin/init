@@ -1,0 +1,51 @@
+#!/usr/bin/env zsh
+# Create a fresh investigation folder for one limerick and print the grid file path.
+# Run: zsh $HOME/.claude/skills/ari-poem-limerick/bin/init
+
+set -euo pipefail
+
+# Shared libs resolve through the symlink farm, not a hop from ${0:A:h}: skills are spread
+# across dotfiles tiers, so a relative hop lands in whichever tier this script sits in.
+readonly SKILLS_DIR="${HOME}/.claude/skills"
+
+readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+source "${SKILLS_DIR}/ari-skill-shellscripts/lib/investigation_folder.zsh"
+
+readonly ROOT=/tmp/poem-limerick
+
+help() {
+  cat <<EOF
+${c_green}init${c_rst} — create a fresh limerick investigation folder and print the grid file path
+
+${c_bold}Usage:${c_rst}
+  zsh \$HOME/.claude/skills/ari-poem-limerick/bin/init
+
+${c_bold}Output:${c_rst}
+  grid_file=${ROOT}/<UTC timestamp>/grid.txt
+EOF
+}
+
+main() {
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help) help; return 0 ;;
+    -*)        log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)         log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
+  esac; done
+
+  local dir
+  dir="$(mk_investigation_dir "${ROOT}" .)"
+  dir="${dir%/./*}/${dir##*/}"
+  local grid_file="${dir}/grid.txt"
+  : > "${grid_file}"
+  log::info "grid ready | grid_file='${grid_file}'"
+  cat <<EOF
+grid_file=${grid_file}
+EOF
+}
+
+main "${@}"

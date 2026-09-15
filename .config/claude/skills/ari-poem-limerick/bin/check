@@ -1,0 +1,210 @@
+#!/usr/bin/env zsh
+# Verify a limerick grid: five lines, one token per syllable with stressed syllables in
+# UPPERCASE, a rhyme sound after " | ". Enforces AABBA, anapestic beat placement, ending
+# consistency, and rhyme agreement. The syllabification and stress marks are the writer's
+# claim; this script checks that the claim is a limerick.
+# Run: zsh $HOME/.claude/skills/ari-poem-limerick/bin/check --grid <file>
+
+set -euo pipefail
+
+# Shared libs resolve through the symlink farm, not a hop from ${0:A:h}: skills are spread
+# across dotfiles tiers, so a relative hop lands in whichever tier this script sits in.
+readonly SKILLS_DIR="${HOME}/.claude/skills"
+
+readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+
+# Beats per verse line, by position: A A B B A.
+readonly -a BEATS=(3 3 2 2 3)
+readonly -a GROUP=(A A B B A)
+# The first beat may land on syllable 2 (da DUM) or 3 (da da DUM).
+readonly -a FIRST_BEAT_OK=(2 3)
+readonly FOOT=3
+
+help() {
+  cat <<EOF
+${c_green}check${c_rst} — verify a limerick grid file against the form's mechanics
+
+${c_bold}Usage:${c_rst}
+  zsh \$HOME/.claude/skills/ari-poem-limerick/bin/check --grid FILE
+
+${c_bold}Grid format:${c_rst} five verse lines; each syllable one token, STRESSED in uppercase,
+unstressed in lowercase; then " | " and the ending's rhyme sound. Blank and # lines ignored.
+
+  there ONCE was a MAN from nan TUCK et | uk-it
+
+${c_bold}Checks:${c_rst}
+  lines      exactly five verse lines, each with a rhyme sound
+  tokens     every token is all-uppercase or all-lowercase
+  beats      A lines carry 3 beats, B lines 2; first beat on syllable 2 or 3; beats every
+             ${FOOT} syllables; at most one unstressed syllable after the last beat
+  endings    A lines agree on masculine/feminine; B lines likewise
+  rhyme      A lines share one sound, B lines another, and the two differ
+
+Prints one line per failure and exits 1; prints PASS and exits 0 when the grid is a limerick.
+EOF
+}
+
+# --- Checks (each prints failures to stdout, returns the failure count) ---
+
+#######################################
+# Classify one token as stressed (S), unstressed (u), or bad (?).
+# Arguments:
+#   $1 - token
+#######################################
+token_class() {
+  local tok="${1}"
+  # Regex, not a glob: the `#` repetition glob needs EXTENDED_GLOB, which is off here.
+  if [[ "${tok}" =~ "^[A-Z][A-Z'’-]*$" ]]; then echo S; return; fi
+  if [[ "${tok}" =~ "^[a-z][a-z'’-]*$" ]]; then echo u; return; fi
+  echo '?'
+}
+
+#######################################
+# Check one verse line's tokens and beat placement. Prints failures.
+# Arguments:
+#   $1 - verse line number (1-5)
+#   $2 - syllable string
+# Outputs (stderr-free): failures on stdout; sets REPLY to "<ending>" (m|f|-) via echo trailer
+#######################################
+check_line() {
+  local n="${1}" syl="${2}"
+  local -a toks
+  toks=(${=syl})
+  local want="${BEATS[${n}]}"
+  local fails=0
+  local -a beats
+  local i cls
+  for (( i = 1; i <= ${#toks}; i++ )); do
+    cls="$(token_class "${toks[${i}]}")"
+    if [[ "${cls}" == '?' ]]; then
+      echo "line ${n}: token '${toks[${i}]}' is neither all-UPPER (stressed) nor all-lower (unstressed)"
+      fails=$(( fails + 1 ))
+      continue
+    fi
+    [[ "${cls}" == S ]] && beats+=("${i}")
+  done
+  if (( ${#toks} == 0 )); then
+    echo "line ${n}: no syllables"
+    ENDING="-"
+    return 1
+  fi
+  if (( ${#beats} != want )); then
+    echo "line ${n}: ${#beats} beats, wants ${want} (${GROUP[${n}]} line) | stressed at syllables '${(j:,:)beats}' of ${#toks}"
+    fails=$(( fails + 1 ))
+  fi
+  if (( ${#beats} > 0 )); then
+    if (( ${FIRST_BEAT_OK[(Ie)${beats[1]}]} == 0 )); then
+      echo "line ${n}: first beat on syllable ${beats[1]}, wants 2 or 3"
+      fails=$(( fails + 1 ))
+    fi
+    local k
+    for (( k = 2; k <= ${#beats}; k++ )); do
+      if (( beats[k] - beats[k-1] != FOOT )); then
+        echo "line ${n}: beats on syllables ${beats[k-1]} and ${beats[k]} are $(( beats[k] - beats[k-1] )) apart, wants ${FOOT}"
+        fails=$(( fails + 1 ))
+      fi
+    done
+    local tail=$(( ${#toks} - beats[-1] ))
+    if (( tail > 1 )); then
+      echo "line ${n}: ${tail} unstressed syllables after the last beat, wants 0 or 1"
+      fails=$(( fails + 1 ))
+    fi
+    if (( tail == 0 )); then ENDING="m"; else ENDING="f"; fi
+  else
+    ENDING="-"
+  fi
+  return "${fails}"
+}
+
+main() {
+  # === PARSE ===
+  local grid=""
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help) help; return 0 ;;
+    --grid)    grid="${2:?--grid requires a value}"; shift 2 ;;
+    -*)        log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)         log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
+  esac; done
+
+  # === VALIDATE ===
+  if [[ -z "${grid}" ]]; then
+    log::err "Missing --grid"; help; return 1
+  fi
+  if [[ ! -r "${grid}" ]]; then
+    log::err "Grid file not readable | grid='${grid}'"; return 1
+  fi
+
+  # === MASSAGE ===
+  local -a verse
+  local raw
+  while IFS= read -r raw || [[ -n "${raw}" ]]; do
+    raw="${raw%%$'\r'}"
+    [[ -z "${raw// /}" || "${raw}" == \#* ]] && continue
+    verse+=("${raw}")
+  done < "${grid}"
+
+  # === LOGIC ===
+  local fails=0
+  if (( ${#verse} != 5 )); then
+    echo "grid: ${#verse} verse lines, wants 5"
+    fails=$(( fails + 1 ))
+  fi
+
+  local -a endings rhymes
+  local n line syl key
+  for (( n = 1; n <= ${#verse} && n <= 5; n++ )); do
+    line="${verse[${n}]}"
+    if [[ "${line}" != *"|"* ]]; then
+      echo "line ${n}: no ' | rhyme-sound' after the syllables"
+      fails=$(( fails + 1 ))
+      syl="${line}"; key=""
+    else
+      syl="${line%%|*}"; key="${line##*|}"
+      key="${${key## }%% }"
+      key="${key:l}"
+    fi
+    ENDING="-"
+    check_line "${n}" "${syl}" || fails=$(( fails + $? ))
+    endings+=("${ENDING}")
+    rhymes+=("${key}")
+  done
+
+  if (( ${#verse} == 5 )); then
+    # Declared once: a repeated `local` on an existing name prints it instead of resetting it.
+    local g e0 r0 i
+    local -a idx
+    for g in A B; do
+      idx=()
+      for (( n = 1; n <= 5; n++ )); do [[ "${GROUP[${n}]}" == "${g}" ]] && idx+=("${n}"); done
+      e0="${endings[${idx[1]}]}"; r0="${rhymes[${idx[1]}]}"
+      for i in "${idx[@]:1}"; do
+        if [[ "${endings[${i}]}" != "-" && "${e0}" != "-" && "${endings[${i}]}" != "${e0}" ]]; then
+          echo "line ${i}: ending is ${endings[${i}]} but line ${idx[1]} is ${e0} (${g} lines must agree: m=ends on a beat, f=one syllable after)"
+          fails=$(( fails + 1 ))
+        fi
+        if [[ -n "${r0}" && -n "${rhymes[${i}]}" && "${rhymes[${i}]}" != "${r0}" ]]; then
+          echo "line ${i}: rhyme sound '${rhymes[${i}]}' does not match line ${idx[1]} '${r0}' (${g} lines rhyme)"
+          fails=$(( fails + 1 ))
+        fi
+      done
+    done
+    if [[ -n "${rhymes[1]}" && "${rhymes[1]}" == "${rhymes[3]}" ]]; then
+      echo "lines 1 and 3: A and B share the rhyme sound '${rhymes[1]}'; they must differ"
+      fails=$(( fails + 1 ))
+    fi
+  fi
+
+  if (( fails > 0 )); then
+    log::err "grid is not a limerick | failures='${fails}' grid='${grid}'"
+    return 1
+  fi
+  echo PASS
+  log::ok "grid scans | grid='${grid}'"
+}
+
+main "${@}"
