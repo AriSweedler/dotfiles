@@ -27,18 +27,18 @@ assert_eq "decree without a tier flag exits 64" 64 "${RC}"
 
 nm steps
 assert_eq "steps exits 0" 0 "${RC}"
-names=(brew brew_pkgs brew_drift dotfiles_repo local_dotfiles_repo bob_neovim claude terminal_nerdfont karabiner claude_notifications git_health weekly_verify)
+names=(brew brew_pkgs brew_drift dotfiles_repo local_dotfiles_repo bob_neovim claude terminal_nerdfont karabiner claude_notifications claude_skills git_health weekly_verify)
 listed=0
 for s in "${names[@]}"; do
   if grep -qE "(^|[[:space:]])${s}([[:space:]]|$)" <<< "${OUT}"; then listed=$((listed + 1)); else fail "steps lists ${s}" "${OUT}"; fi
 done
-assert_eq "steps lists 12 names" 12 "${listed}"
+assert_eq "steps lists 13 names" 13 "${listed}"
 
 nm check --json
 f="$(out_json)"
 assert_eq "check --json prints one JSON object" 1 "$(jq -s 'map(select(type=="object")) | length' "${f}" 2>&1)"
 assert_json "schema == 1" "${f}" '.schema' 1
-assert_json "steps|length == 12" "${f}" '.steps|length' 12
+assert_json "steps|length == 13" "${f}" '.steps|length' 13
 
 nm_run "${HOME}/.config/new-machine/bin/setup-new-machine" --help
 assert_eq "setup-new-machine --help works through the symlinked \$0" 0 "${RC}"

@@ -9,7 +9,11 @@ readonly SCRIPT_DIR="${0:A:h}"
 # spread across tiers, so a relative hop lands in whichever tier this script sits in.
 readonly SKILLS_DIR="${HOME}/.claude/skills"
 
-readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
+LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
+# Bootstrap: before link has run on a machine the farm is empty, and the only reachable copy
+# is the sibling in this tier root (ari-skill-shellscripts is shared-tier too).
+[[ -r "${LIB_LOGGING}" ]] || LIB_LOGGING="${SCRIPT_DIR:h:h}/ari-skill-shellscripts/lib/logging.zsh"
+readonly LIB_LOGGING
 if [[ ! -r "${LIB_LOGGING}" ]]; then
   print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
   exit 1

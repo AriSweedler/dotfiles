@@ -14,7 +14,7 @@ export BOB_SHIM_LS="Installed: v0.11.2 Used"
 nm check --json
 assert_eq "check exits 0" 0 "${RC}"
 f="$(out_json)"
-assert_json "12 steps ran" "${f}" '.steps|length' 12
+assert_json "13 steps ran" "${f}" '.steps|length' 13
 assert_json "no step failed or errored" "${f}" '[.steps[] | select(.status=="fail" or .status=="error") | .step + "=" + .reason] | join(",")' ""
 # terminal_nerdfont's manual reminder is the one warn the spec lets a green machine carry.
 assert_json "status ok" "${f}" '.status=="ok" or (.status=="warn" and ([.steps[] | select(.status=="warn")] | all(.step=="terminal_nerdfont" and .reason=="manual_font")))' true

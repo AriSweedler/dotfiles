@@ -78,8 +78,10 @@ zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link
 ```
 
 Idempotent. Creates a symlink for every `missing` skill and touches nothing else;
-`--prune` also removes `dangling` links. Run it after both dotfiles repos are in
-place on a new machine, and after pulling shared dotfiles that added a skill.
+`--prune` also removes `dangling` links. `new-machine setup` runs it as the
+`claude_skills` step (`new-machine check --only claude_skills` reports; `apply` links),
+so on a new machine it happens with the rest of the bootstrap. Run it by hand after
+pulling shared dotfiles that added a skill.
 
 ## File storage
 

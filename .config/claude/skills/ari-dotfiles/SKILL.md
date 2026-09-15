@@ -160,8 +160,10 @@ with "Run `git_df_push` when ready." if anything landed in the shared repo.
 `new-machine setup` (`~/.config/new-machine/bin/new-machine`, idempotent, `--dry-run`) does this:
 Homebrew + `~/.config/new-machine/Brewfile` (includes `bash`; the ldf hook needs bash 5),
 bare-clone the shared repo to `~/dotfiles.git`, `git init --bare ~/.local/local-dotfiles.git`
-with the allowlist from `~/.config/new-machine/local-dotfiles-exclude`, and `core.hooksPath`
-for both repos. It prints the one manual step, since the remote is per machine:
+with the allowlist from `~/.config/new-machine/local-dotfiles-exclude`, `core.hooksPath`
+for both repos, and the `claude_skills` step, which symlinks every tier-held skill into
+`~/.claude/skills` (`/ari-dotfiles-skill-registry`'s `link --prune`). It prints the one
+manual step, since the remote is per machine:
 
 ```zsh
 git ldf remote add origin <this machine's private repo>

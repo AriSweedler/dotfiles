@@ -28,7 +28,7 @@ for step in brew_pkgs brew_drift terminal_nerdfont; do
   assert_eq "${step} skipped" skip "$(step_get "${step}" .status)"
   assert_eq "${step} reason prerequisite_fail" prerequisite_fail "$(step_get "${step}" .reason)"
 done
-assert_json "12 steps recorded" "${f}" '.steps|length' 12
+assert_json "13 steps recorded" "${f}" '.steps|length' 13
 
 if (( FAIL > 0 )); then jq -c '.steps[] | {step, status, reason, detail}' "${f}" >&2; fi
 report

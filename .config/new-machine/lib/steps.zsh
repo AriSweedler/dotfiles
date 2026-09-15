@@ -8,7 +8,7 @@
 typeset -g NEW_MACHINE_STEPS_LOADED=1
 
 typeset -gra STEPS=(brew brew_pkgs brew_drift dotfiles_repo local_dotfiles_repo bob_neovim claude
-                    terminal_nerdfont karabiner claude_notifications git_health weekly_verify)
+                    terminal_nerdfont karabiner claude_notifications claude_skills git_health weekly_verify)
 typeset -gA STEP_NEEDS=([brew_pkgs]=brew [brew_drift]=brew [terminal_nerdfont]=brew)
 typeset -gA STEP_DESC=(
   [brew]="Homebrew is installed"
@@ -21,6 +21,7 @@ typeset -gA STEP_DESC=(
   [terminal_nerdfont]="a Nerd Font cask is installed and at least one Terminal.app profile uses a Nerd Font"
   [karabiner]="karabiner.json exists, is valid JSON, and is jq -S sorted; healthcheck runs when present"
   [claude_notifications]="Claude Code notification hook points at notification-fire.sh and terminal-notifier resolves"
+  [claude_skills]="every skill a dotfiles tier holds is symlinked into ~/.claude/skills and no link dangles"
   [git_health]="git-health launchd job installed and loaded"
   [weekly_verify]="new-machine weekly verify launchd job installed, current, and loaded"
 )
@@ -528,6 +529,51 @@ check::claude_notifications() {
 
 apply::claude_notifications() {
   run_cmd_mutating "${HOME}/.config/claude/bin/initialize.sh"
+}
+
+# ── claude_skills ────────────────────────────────────────────────────────────
+# Skills are versioned in the dotfiles tiers and reached through ~/.claude/skills symlinks;
+# the registry skill owns the classification. Addressed by its shared-tier path, not the
+# symlink, because on a fresh machine the symlink is exactly what does not exist yet.
+steps::skill_registry_bin() {
+  print -r -- "${HOME}/.config/claude/skills/ari-dotfiles-skill-registry/bin"
+}
+
+check::claude_skills() {
+  local bin
+  bin="$(steps::skill_registry_bin)"
+  if [[ ! -r "${bin}/status" ]]; then
+    verdict skip no_registry -d "skill registry not checked out | path='${bin}/status'"
+    return 0
+  fi
+  local rows
+  rows="$(zsh "${bin}/status" --all 2>/dev/null || true)"
+  local -a missing dangling manual
+  local line state name linked=0
+  for line in "${(f)rows}"; do
+    [[ "${line}" == state=* ]] || continue
+    state="${${line#state=}%% *}"
+    name="${line##*name=}"
+    case "${state}" in
+      linked) linked=$(( linked + 1 )) ;;
+      missing) missing+=("${name}") ;;
+      dangling) dangling+=("${name}") ;;
+      shadowed|foreign|conflict) manual+=("${name}:${state}") ;;
+    esac
+  done
+  if (( ${#missing} + ${#dangling} > 0 )); then
+    verdict fail links_missing -d "missing='${(j:,:)missing}' dangling='${(j:,:)dangling}'" -f "new-machine apply claude_skills"
+    return 0
+  fi
+  if (( ${#manual} > 0 )); then
+    verdict warn needs_hand -d "${(j:,:)manual}" -f 'zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/status' -m
+    return 0
+  fi
+  verdict ok linked -d "$(nm::plural "${linked}" 'skill linked' 'skills linked')"
+}
+
+apply::claude_skills() {
+  run_cmd_mutating zsh "$(steps::skill_registry_bin)/link" --prune
 }
 
 # ── git_health ───────────────────────────────────────────────────────────────
