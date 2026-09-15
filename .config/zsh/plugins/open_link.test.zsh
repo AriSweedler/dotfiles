@@ -43,6 +43,25 @@ unset 'commands[open-pr]'
 _t "github pull URL is a link when no open-pr exists" "https://github.com/o/r/pull/12" "$(open_link::url_from 'https://github.com/o/r/pull/12')"
 [[ -n "${_saved_pr}" ]] && commands[open-pr]="${_saved_pr}"
 
+# Scheme-less: accepted only when the whole text is one hostname-shaped token, opened as https.
+_t "scheme-less host and path becomes https" "https://github.com/AriSweedler-at/dotfiles" \
+  "$(open_link::url_from 'github.com/AriSweedler-at/dotfiles')"
+_t "scheme-less bare host becomes https" "https://example.com" "$(open_link::url_from 'example.com')"
+_t "scheme-less with a query in the path" "https://x.io/p?a=1&b=2" "$(open_link::url_from 'x.io/p?a=1&b=2')"
+_t "scheme-less trailing newline from the clipboard is trimmed" "https://www.example.org/x" \
+  "$(open_link::url_from $'  www.example.org/x\n')"
+_t "scheme-less inside prose declines" "1" "$(open_link::url_from 'see github.com/o/r today'; print -- $?)"
+_t "version number declines" "1" "$(open_link::url_from '1.2.3'; print -- $?)"
+_t "bare PR number declines, it is open-pr's" "1" "$(open_link::url_from '12345'; print -- $?)"
+_t "underscore is not a hostname" "1" "$(open_link::url_from 'open_link.zsh'; print -- $?)"
+_t "single label declines" "1" "$(open_link::url_from 'localhost/x'; print -- $?)"
+commands[open-pr]=/usr/bin/true
+_t "scheme-less github pull URL is a link even with open-pr, which needs the scheme" \
+  "https://github.com/o/r/pull/12" "$(open_link::url_from 'github.com/o/r/pull/12')"
+unset 'commands[open-pr]'
+[[ -n "${_saved_pr}" ]] && commands[open-pr]="${_saved_pr}"
+_t "--check accepts a scheme-less URL silently" "0:" "$(open_link --check 'github.com/o/r'; print -n -- "$?:")"
+
 _t "--check accepts a URL silently" "0:" "$(open_link --check 'https://a.b'; print -n -- "$?:")"
 _t "--check declines junk silently" "1:" "$(open_link --check 'junk' 2>/dev/null; print -n -- "$?:")"
 _t "--check declines with nothing on stderr" "" "$(open_link --check 'junk' 2>&1)"

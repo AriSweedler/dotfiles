@@ -7,10 +7,21 @@
 # the following lines are appended; a line with a space or other prose stops that. A GitHub
 # pull request URL is ceded to open-pr when one is installed, so a PR link never satisfies
 # two openers.
+#
+# Without a scheme the text is a URL only when it is nothing but one: a hostname of dotted
+# labels ending in an alphabetic TLD, an optional /path, and whitespace around it. It opens
+# as https. Inside prose the same shape is every file name and version number, so there it
+# is not looked for. open-pr's shapes stay disjoint: a bare number has no alphabetic TLD,
+# and open-pr only claims a pull URL that carries its scheme.
 function open_link::url_from() {
-  local text="${1}"
-  [[ "${text}" =~ 'https?://[^[:space:]]+' ]] || return 1
-  local url="${MATCH}" rest="${text[MEND+1,-1]}"
+  local text="${1}" url rest scheme=1
+  if [[ "${text}" =~ 'https?://[^[:space:]]+' ]]; then
+    url="${MATCH}" rest="${text[MEND+1,-1]}"
+  elif [[ "${text}" =~ '^[[:space:]]*(([A-Za-z0-9-]+\.)+[A-Za-z][A-Za-z]+(/[^[:space:]]*)?)[[:space:]]*$' ]]; then
+    url="https://${match[1]}" rest="" scheme=0
+  else
+    return 1
+  fi
   if [[ "${text}" == *⎿* && "${rest}" == $'\n'* ]]; then
     local line
     for line in "${(@f)${rest#$'\n'}}"; do
@@ -18,7 +29,7 @@ function open_link::url_from() {
       url+="${match[1]}"
     done
   fi
-  if [[ "${url}" =~ 'https://github.com/[^[:space:]]+/pull/[0-9]+' ]] && (( ${+commands[open-pr]} )); then
+  if (( scheme )) && [[ "${url}" =~ 'https://github.com/[^[:space:]]+/pull/[0-9]+' ]] && (( ${+commands[open-pr]} )); then
     return 1
   fi
   print -r -- "${url}"
