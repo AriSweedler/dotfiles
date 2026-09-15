@@ -867,7 +867,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "osascript -e 'display notification \"Kinesis Freestyle Pro\" with title \"Keyboard\"'"
+                    "shell_command": "/opt/homebrew/bin/terminal-notifier -title Keyboard -message \"Kinesis Freestyle Pro\" -group karabiner-which-keyboard"
                   },
                   {
                     "set_variable": {
@@ -918,7 +918,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "osascript -e 'display notification \"Kinesis Freestyle 2\" with title \"Keyboard\"'"
+                    "shell_command": "/opt/homebrew/bin/terminal-notifier -title Keyboard -message \"Kinesis Freestyle 2\" -group karabiner-which-keyboard"
                   },
                   {
                     "set_variable": {
@@ -968,7 +968,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "osascript -e 'display notification \"Apple Internal Keyboard\" with title \"Keyboard\"'"
+                    "shell_command": "/opt/homebrew/bin/terminal-notifier -title Keyboard -message \"Apple Internal Keyboard\" -group karabiner-which-keyboard"
                   },
                   {
                     "set_variable": {
@@ -1033,7 +1033,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "osascript -e 'display notification \"Unknown keyboard\" with title \"Keyboard\"'"
+                    "shell_command": "/opt/homebrew/bin/terminal-notifier -title Keyboard -message \"Unknown keyboard\" -group karabiner-which-keyboard"
                   },
                   {
                     "set_variable": {
