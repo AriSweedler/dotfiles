@@ -1,0 +1,284 @@
+#!/usr/bin/env zsh
+set -euo pipefail
+
+# Shared libs resolve through the symlink farm, not a hop from ${0:A:h}: skills are spread
+# across dotfiles tiers, so a relative hop lands in whichever tier this script sits in.
+readonly LIB_LOGGING="${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+
+# --- Constants ---
+
+readonly DEFAULT_BASE="/tmp/hemingway"
+readonly CONCURRENT_THRESHOLD_SEC=300  # 5 minutes
+readonly SLUG_MAX_LEN=57
+
+# --- Help ---
+
+help() {
+    cat <<EOF
+${c_green}make-investigation-folder${c_rst} — derive topic-slug + timestamp, detect concurrent sessions, create the folder
+
+${c_bold}Usage:${c_rst}
+  zsh $HOME/.claude/skills/ari-hemingway--lib/bin/make-investigation-folder --skill-name NAME --subject SUBJECT [--base-path PATH]
+
+${c_bold}Options:${c_rst}
+  --skill-name NAME   Short name of the calling sibling (e.g., 'structure-design-doc')
+  --subject SUBJECT   Subject string (turned into a deterministic topic-slug)
+  --base-path PATH    Root for investigation folders (default: ${DEFAULT_BASE}; falls back to \${TMPDIR:-\$HOME/.cache}/hemingway if unwritable)
+  --force-new         Skip the concurrent-session check and create a new folder unconditionally
+  --dry-run           Show what would happen without creating any files or folders
+  -h, --help          Show this help
+
+${c_bold}Behavior:${c_rst}
+  1. Slugifies subject (lowercase, non-alphanumeric → -, trim ${SLUG_MAX_LEN} chars, append -<sha1[0:6]>).
+  2. Picks a writable base (default first, else fallback).
+  3. Lists existing sibling folders under <base>/<skill-name>/<topic-slug>/ with mtime
+     in the last ${CONCURRENT_THRESHOLD_SEC} seconds.
+  4. If any concurrent sessions exist, emits 'concurrent_sessions=path1|path2|...'
+     and exits 0 without creating a new folder. Caller decides what to do.
+  5. Otherwise generates a timestamped folder, stubs scratchpad.md + sources.md
+     from templates in the heredoc, and emits the new path.
+
+${c_bold}Exit codes:${c_rst}
+  0  success (folder created OR concurrent sessions detected)
+  1  usage error
+  2  no writable base path
+  3  required command missing (openssl)
+EOF
+}
+
+# --- Parse ---
+
+skill_name=""
+subject=""
+base_path="${DEFAULT_BASE}"
+force_new="false"
+dry_run="false"
+
+while (( $# > 0 )); do
+    case "${1}" in
+        -h|--help)
+            help
+            exit 0
+            ;;
+        --skill-name)
+            skill_name="${2:?--skill-name requires a value}"
+            shift 2
+            ;;
+        --subject)
+            subject="${2:?--subject requires a value}"
+            shift 2
+            ;;
+        --base-path)
+            base_path="${2:?--base-path requires a value}"
+            shift 2
+            ;;
+        --force-new)
+            force_new="true"
+            shift
+            ;;
+        --dry-run)
+            dry_run="true"
+            shift
+            ;;
+        *)
+            log::err "Unknown flag | flag='${1}'"
+            help
+            exit 1
+            ;;
+    esac
+done
+
+# --- Validate ---
+
+if [[ -z "${skill_name}" || -z "${subject}" ]]; then
+    log::err "Required flags missing | skill_name='${skill_name}' subject='${subject}'"
+    help >&2
+    exit 1
+fi
+
+if ! command -v openssl >/dev/null 2>&1; then
+    log::err "Missing required command | command='openssl'"
+    exit 3
+fi
+
+# --- Logic ---
+
+#######################################
+# Slugify the subject deterministically.
+# Arguments: $1 = subject string
+# Returns (echoes): topic slug (e.g., 'my-feature-ab3f9c')
+#######################################
+slugify() {
+    local raw="${1}"
+    local base
+    base="$(echo "${raw}" | awk -v maxlen="${SLUG_MAX_LEN}" '
+    {
+        s = tolower($0)
+        gsub(/[^a-z0-9]/, "-", s)
+        while (s ~ /--/) gsub(/--+/, "-", s)
+        sub(/^-+/, "", s)
+        sub(/-+$/, "", s)
+        print substr(s, 1, maxlen)
+    }')"
+    local hash
+    hash="$(echo -n "${raw}" | openssl dgst -sha1 | awk '{print $NF}' | cut -c1-6)"
+    echo "${base}-${hash}"
+}
+
+#######################################
+# Pick a writable base path. Falls back to TMPDIR-based path if default isn't writable.
+# Globals: base_path (initial choice)
+# Returns (echoes): resolved writable base path
+# Side effects: logs the fallback reason if used
+#######################################
+pick_writable_base() {
+    local first="${base_path}"
+    mkdir -p "${first}" 2>/dev/null || true
+    if [[ -w "${first}" ]]; then
+        echo "${first}"
+        return
+    fi
+    local fallback="${TMPDIR:-${HOME}/.cache}/hemingway"
+    fallback="${fallback%/}"  # strip trailing slash if TMPDIR had one
+    mkdir -p "${fallback}" 2>/dev/null || true
+    if [[ -w "${fallback}" ]]; then
+        log::warn "Base path not writable, using fallback | first='${first}' fallback='${fallback}'"
+        echo "${fallback}"
+        return
+    fi
+    log::err "No writable base path | first='${first}' fallback='${fallback}'"
+    exit 2
+}
+
+#######################################
+# List sibling folders under topic-slug dir with mtime in last CONCURRENT_THRESHOLD_SEC seconds.
+# Arguments: $1 = parent dir to scan
+# Returns (echoes): pipe-separated paths (empty if none)
+#######################################
+list_concurrent_sessions() {
+    local parent="${1}"
+    [[ -d "${parent}" ]] || { echo ""; return; }
+    local now found=""
+    now="$(date +%s)"
+    local entry mtime age
+    for entry in "${parent}"/*(/N); do
+        # %m gives mtime in seconds; -%m on macOS, --format=%Y on GNU stat. Use perl for portability.
+        mtime="$(perl -e 'print((stat($ARGV[0]))[9])' "${entry}" 2>/dev/null || echo 0)"
+        age=$(( now - mtime ))
+        if (( age < CONCURRENT_THRESHOLD_SEC )); then
+            if [[ -z "${found}" ]]; then
+                found="${entry}"
+            else
+                found="${found}|${entry}"
+            fi
+        fi
+    done
+    echo "${found}"
+}
+
+#######################################
+# Stub the scratchpad and sources files with schema-correct empty starting points.
+# Arguments: $1 = investigation folder
+# Side effects: writes files
+#######################################
+stub_files() {
+    local dir="${1}"
+    local subject_escaped="${subject//\"/\\\"}"
+    cat >"${dir}/scratchpad.md" <<EOF
+- **Subject**: ${subject_escaped}
+- **Mode**:
+- **Pointers**:
+- **Key findings**:
+- **Open questions**:
+- **Last phase**:
+EOF
+    cat >"${dir}/sources.md" <<'EOF'
+## Files read
+| Path | Relevant finding |
+|---|---|
+| _none yet_ | _none_ |
+
+## Grep queries
+| Pattern | Scope | Hits | Finding |
+|---|---|---|---|
+| _none yet_ | _none_ | 0 | _none_ |
+
+## Git log
+| Range | Finding |
+|---|---|
+| _none yet_ | _none_ |
+
+## External docs
+| Source | Finding |
+|---|---|
+| _none yet_ | _none_ |
+
+## Background ops
+| Command | Exit | Stderr (first line) | Action taken |
+|---|---|---|---|
+| _none yet_ | _none_ | _none_ | _none_ |
+
+## Call graphs (optional — populated when /code-trace runs)
+| Artifact path | Entry point | Notes |
+|---|---|---|
+| _none_ | _none_ | _none_ |
+EOF
+}
+
+topic_slug="$(slugify "${subject}")"
+resolved_base="$(pick_writable_base)"
+parent_dir="${resolved_base}/${skill_name}/${topic_slug}"
+if [[ "${force_new}" == "true" ]]; then
+    concurrent_sessions=""
+    log::info "Concurrent-session check bypassed (--force-new)"
+else
+    concurrent_sessions="$(list_concurrent_sessions "${parent_dir}")"
+fi
+
+if [[ -n "${concurrent_sessions}" ]]; then
+    concurrent_count="$(echo "${concurrent_sessions}" | awk -F'|' '{print NF}')"
+    log::info "Concurrent session(s) detected | parent='${parent_dir}' count='${concurrent_count}'"
+    cat <<EOF
+base_path=${resolved_base}
+topic_slug=${topic_slug}
+parent_dir=${parent_dir}
+investigation_folder=
+timestamp=
+concurrent_sessions=${concurrent_sessions}
+EOF
+    exit 0
+fi
+
+timestamp="$(date +%Y%m%d-%H%M%S)-$(openssl rand -hex 2)"
+investigation_folder="${parent_dir}/${timestamp}"
+
+if [[ "${dry_run}" == "true" ]]; then
+    log::info "Dry run — no folder created | path='${investigation_folder}'"
+    cat <<EOF
+base_path=${resolved_base}
+topic_slug=${topic_slug}
+parent_dir=${parent_dir}
+investigation_folder=${investigation_folder}
+timestamp=${timestamp}
+concurrent_sessions=
+EOF
+    exit 0
+fi
+
+mkdir -p "${investigation_folder}"
+stub_files "${investigation_folder}"
+log::info "Created investigation folder | path='${investigation_folder}'"
+
+cat <<EOF
+base_path=${resolved_base}
+topic_slug=${topic_slug}
+parent_dir=${parent_dir}
+investigation_folder=${investigation_folder}
+timestamp=${timestamp}
+concurrent_sessions=
+EOF

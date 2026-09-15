@@ -1,0 +1,252 @@
+#!/usr/bin/env zsh
+set -euo pipefail
+
+# Shared libs resolve through the symlink farm, not a hop from ${0:A:h}: skills are spread
+# across dotfiles tiers, so a relative hop lands in whichever tier this script sits in.
+readonly LIB_LOGGING="${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+
+readonly SCRIPT_DIR="${0:A:h}"
+source "${SCRIPT_DIR}/../lib/run_with_timeout.zsh"
+
+# --- Exit codes ---
+
+readonly EXIT_NOT_IN_REPO=2
+readonly EXIT_NO_REMOTE=3
+readonly EXIT_REF_UNRESOLVABLE=4
+readonly EXIT_PARSE_FAILURE=5
+
+# --- Help ---
+
+help() {
+    cat <<EOF
+${c_green}git-permalink-info${c_rst} — fetch + resolve a GitHub permalink SHA
+
+${c_bold}Usage:${c_rst}
+  zsh $HOME/.claude/skills/ari-hemingway--lib/bin/git-permalink-info [--ref REF] [--no-fetch]
+
+${c_bold}Options:${c_rst}
+  --ref REF   Git ref to resolve (default: origin/main; falls back to origin/HEAD, origin/master, HEAD)
+  --no-fetch  Skip the pre-resolve 'git fetch'. Use the existing local ref as-is.
+  -h, --help  Show this help
+
+${c_bold}Behavior:${c_rst}
+  By default, synchronously runs 'git fetch origin <branch>' before resolving so the SHA
+  reflects the current remote tip. Fetch failures are logged to stderr but do NOT abort —
+  resolution proceeds with whatever the local ref points at, and 'fetch_status=failed' is
+  emitted on stdout so the caller can surface freshness to the user.
+
+${c_bold}Exit codes:${c_rst}
+  0  success
+  1  usage error
+  ${EXIT_NOT_IN_REPO}  not inside a git work tree
+  ${EXIT_NO_REMOTE}  'origin' remote not configured
+  ${EXIT_REF_UNRESOLVABLE}  no candidate ref resolved
+  ${EXIT_PARSE_FAILURE}  could not parse owner/repo from remote URL
+EOF
+}
+
+# --- Parse ---
+
+readonly DEFAULT_REF="origin/main"
+ref="${DEFAULT_REF}"
+fetch_enabled="true"
+
+while (( $# > 0 )); do
+    case "${1}" in
+        -h|--help)
+            help
+            exit 0
+            ;;
+        --ref)
+            if [[ -z "${2:-}" || "${2}" == -* ]]; then
+                log::err "Invalid --ref value | value='${2:-}'"
+                help >&2
+                exit 1
+            fi
+            ref="${2}"
+            shift 2
+            ;;
+        --no-fetch)
+            fetch_enabled="false"
+            shift
+            ;;
+        *)
+            log::err "Unknown flag | flag='${1}'"
+            help >&2
+            exit 1
+            ;;
+    esac
+done
+
+# --- Validate preconditions ---
+
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    log::err "Not in a git work tree | cwd='${PWD}'"
+    exit "${EXIT_NOT_IN_REPO}"
+fi
+
+# --- Logic ---
+
+# Get remote URL for origin.
+if ! remote_url="$(git remote get-url origin 2>/dev/null)"; then
+    log::err "No 'origin' remote configured | hint='git remote add origin <url>'"
+    exit "${EXIT_NO_REMOTE}"
+fi
+readonly remote_url
+
+# Parse host + owner/repo from remote URL.
+# Handles:
+#   https://github.com/Owner/repo.git
+#   https://github.com/Owner/repo
+#   https://token@github.com/Owner/repo.git
+#   git@github.com:Owner/repo.git
+#   ssh://git@github.com:22/Owner/repo.git
+#   trailing slash variants
+# zsh's POSIX regex has no non-greedy quantifier — strip trailing slash/.git via parameter expansion instead.
+clean_url="${remote_url%/}"
+clean_url="${clean_url%.git}"
+
+# Extract host. Accept github.com and *.github.com (GHE instances are usually github.<corp>.com).
+if [[ "${clean_url}" =~ '(https?://|ssh://[^@]*@|[^@]*@)([^:/]+)[:/]' ]]; then
+    readonly host="${match[2]}"
+else
+    log::err "Could not parse host | remote_url='${remote_url}'"
+    exit "${EXIT_PARSE_FAILURE}"
+fi
+
+if [[ "${host}" != "github.com" && "${host}" != *".github."* ]]; then
+    log::err "Host not supported (only GitHub) | host='${host}'"
+    exit "${EXIT_PARSE_FAILURE}"
+fi
+
+if [[ "${clean_url}" =~ '[:/]([^:/]+)/([^/]+)$' ]]; then
+    readonly owner_repo="${match[1]}/${match[2]}"
+else
+    log::err "Could not parse owner/repo | remote_url='${remote_url}'"
+    exit "${EXIT_PARSE_FAILURE}"
+fi
+
+#######################################
+# Decide what remote branch to refresh, or skip.
+# Globals: ref, fetch_enabled
+# Returns (echoes): "skipped" | "origin <branch>"
+#######################################
+choose_fetch_target() {
+    if [[ "${fetch_enabled}" == "false" ]]; then
+        log::info "Fetch skipped (--no-fetch) | ref='${ref}'"
+        echo "skipped"
+        return
+    fi
+    if [[ "${ref}" != origin/* ]]; then
+        log::info "Fetch skipped (ref is not on origin) | ref='${ref}'"
+        echo "skipped"
+        return
+    fi
+    local branch="${ref#origin/}"
+    log::info "Fetching | remote='origin' branch='${branch}'"
+    echo "origin ${branch}"
+}
+
+#######################################
+# Refresh the requested branch from origin. Layered defenses against the common
+# ways `git fetch` can hang or fail noisily:
+#   * SSH BatchMode=yes — refuse interactive password/passphrase prompts. This is
+#     the actual fix for hangs where SSH was waiting on /dev/tty with no TTY.
+#   * SSH ConnectTimeout + ServerAlive* — cap the SSH handshake and mid-stream stalls.
+#   * http.lowSpeedLimit + http.lowSpeedTime — same idea for HTTPS remotes.
+#   * run_with_timeout — outer wall-clock cap for everything else (e.g., a remote
+#     that accepts the connection then never sends data).
+# A failed fetch is non-fatal: the caller proceeds with whatever the local ref
+# already points at, and `fetch_status=failed` is emitted on stdout so the caller
+# can surface the staleness to the user.
+# Globals: FETCH_HARD_TIMEOUT_SECS (default 30)
+# Arguments: $1 = fetch target string from choose_fetch_target
+# Returns (echoes): "ok" | "failed" | "skipped"
+#######################################
+run_fetch() {
+    local target="${1}"
+    if [[ "${target}" == "skipped" ]]; then
+        echo "skipped"
+        return
+    fi
+    local err_file timeout_secs exit_code=0 reason=""
+    err_file="$(mktemp -t git-permalink-info.XXXXXX)"
+    timeout_secs="${FETCH_HARD_TIMEOUT_SECS:-30}"
+    export GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=2'
+    run_with_timeout "${timeout_secs}" "${err_file}" \
+        git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=15 fetch ${=target} \
+        || exit_code=$?
+    unset GIT_SSH_COMMAND
+    if (( exit_code == 0 )); then
+        rm -f "${err_file}"
+        echo "ok"
+        return
+    fi
+    if (( exit_code == 124 )); then
+        reason="timed out (>${timeout_secs}s)"
+    else
+        reason="$(head -n 1 "${err_file}" 2>/dev/null || echo '(no stderr)')"
+    fi
+    log::warn "Fetch failed (continuing with local ref) | target='${target}' reason='${reason}'"
+    rm -f "${err_file}"
+    echo "failed"
+}
+
+fetch_target="$(choose_fetch_target)"
+fetch_status="$(run_fetch "${fetch_target}")"
+readonly fetch_status
+
+#######################################
+# Resolve a git ref to its full SHA.
+# Arguments: $1 = ref to resolve
+# Returns (echoes): full SHA; exit 1 if unresolvable
+#######################################
+resolve_ref() {
+    git rev-parse --verify "${1}" 2>/dev/null
+}
+
+sha=""
+used_ref=""
+for candidate in "${ref}" origin/HEAD origin/main origin/master HEAD; do
+    if sha="$(resolve_ref "${candidate}")"; then
+        used_ref="${candidate}"
+        break
+    fi
+done
+
+if [[ -z "${sha}" ]]; then
+    log::err "Could not resolve any ref | requested='${ref}' chain='origin/HEAD, origin/main, origin/master, HEAD'"
+    exit "${EXIT_REF_UNRESOLVABLE}"
+fi
+
+if [[ "${used_ref}" != "${ref}" ]]; then
+    log::warn "Requested ref unresolvable — using fallback | requested='${ref}' used='${used_ref}'"
+fi
+
+readonly sha
+readonly used_ref
+
+# Compute age of resolved commit (seconds since commit time). -1 if lookup fails.
+commit_ts="$(git log -1 --format=%ct "${sha}" 2>/dev/null || echo '')"
+if [[ -n "${commit_ts}" ]]; then
+    local_age_seconds=$(( $(date +%s) - commit_ts ))
+else
+    local_age_seconds=-1
+fi
+readonly local_age_seconds
+
+# --- Output ---
+
+cat <<EOF
+owner_repo=${owner_repo}
+sha=${sha}
+ref=${used_ref}
+host=${host}
+fetch_status=${fetch_status}
+local_age_seconds=${local_age_seconds}
+EOF

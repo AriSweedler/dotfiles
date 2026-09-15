@@ -1,0 +1,102 @@
+#!/usr/bin/env zsh
+set -euo pipefail
+
+# Shared libs resolve through the symlink farm, not a hop from ${0:A:h}: skills are spread
+# across dotfiles tiers, so a relative hop lands in whichever tier this script sits in.
+readonly LIB_LOGGING="${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+
+# --- Help ---
+
+help() {
+    cat <<EOF
+${c_green}detect-transfer${c_rst} — detect how to transfer file content to user's local machine
+
+${c_bold}Usage:${c_rst}
+  zsh $HOME/.claude/skills/ari-hemingway--lib/bin/detect-transfer
+
+${c_bold}Output (single line to stdout):${c_rst}
+  pbcopy | wl-copy | xclip | gh_gist | none
+
+${c_bold}Options:${c_rst}
+  -h, --help  Show this help
+EOF
+}
+
+# --- Parse ---
+
+while (( $# > 0 )); do
+    case "${1}" in
+        -h|--help)
+            help
+            exit 0
+            ;;
+        *)
+            log::err "Unknown flag | flag='${1}'"
+            help
+            exit 1
+            ;;
+    esac
+done
+
+# --- Logic ---
+
+readonly CLIPBOARD_TOOLS=(
+    "pbcopy"
+    "wl-copy"
+    "xclip -selection clipboard"
+)
+
+#######################################
+# Probe each clipboard tool and echo the first that works.
+# Globals: CLIPBOARD_TOOLS
+# Arguments: None
+# Returns (echoes): tool name; exit 1 if none work
+#######################################
+detect_clipboard() {
+    for entry in "${CLIPBOARD_TOOLS[@]}"; do
+        local tool="${entry%% *}"
+        if ! command -v "${tool}" >/dev/null 2>&1; then
+            log::info "Not found | tool='${tool}'"
+            continue
+        fi
+        if echo -n "probe" | eval "${entry}" >/dev/null 2>&1; then
+            echo "${tool}"
+            return 0
+        fi
+        log::info "Found but pipe failed | tool='${tool}'"
+    done
+    return 1
+}
+
+#######################################
+# Check whether gh CLI is installed and authenticated.
+# Globals: None
+# Arguments: None
+# Returns: 0 if gh gist upload is usable, 1 otherwise
+#######################################
+detect_gist() {
+    if ! command -v gh >/dev/null 2>&1; then
+        log::info "gh CLI not installed"
+        return 1
+    fi
+    if ! gh auth status >/dev/null 2>&1; then
+        log::info "gh not authenticated"
+        return 1
+    fi
+    return 0
+}
+
+# --- Detect and output ---
+
+if tool="$(detect_clipboard)"; then
+    echo "${tool}"
+elif detect_gist; then
+    echo "gh_gist"
+else
+    echo "none"
+fi

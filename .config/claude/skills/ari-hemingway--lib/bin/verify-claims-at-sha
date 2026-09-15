@@ -1,0 +1,231 @@
+#!/usr/bin/env zsh
+# Verify `path:line[:expected]` claims against a pinned git SHA.
+# Hemingway Fact-check helper: replaces the ad-hoc `git cat-file | sed -n` loop.
+# Read-only. Prints a PASS/FAIL table to stdout; exits non-zero if any claim fails.
+
+set -euo pipefail
+
+readonly SCRIPT_DIR="${0:A:h}"
+# Shared libs resolve through the symlink farm, not ${SCRIPT_DIR:h:h}: skills are spread
+# across dotfiles tiers, so a relative hop lands in whichever tier this script sits in.
+readonly SKILLS_DIR="${HOME}/.claude/skills"
+
+# --- Logging (source the canonical lib — never re-define log::* inline) ---
+
+readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+
+# --- Prerequisites ---
+
+#######################################
+# Check that required binaries are installed.
+# Returns: 1 if any are missing
+#######################################
+check_prerequisites() {
+  local missing=()
+  for cmd in git awk; do
+    command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
+  done
+  if (( ${#missing} > 0 )); then
+    log::err "Missing required commands | missing='${(j:, :)missing}'"
+    return 1
+  fi
+}
+
+# --- Claim parsing ---
+
+#######################################
+# Split a claim into path, line, expected-substring.
+# A claim is `path:line` or `path:line:expected` (expected may itself contain colons).
+# Arguments:
+#   $1 - claim string
+# Outputs: tab-separated `path<TAB>line<TAB>expected` on stdout
+# Returns: 1 if the claim has no colon (malformed)
+#######################################
+split_claim() {
+  local claim="${1}"
+  if [[ "${claim}" != *:* ]]; then
+    return 1
+  fi
+  local file_path="${claim%%:*}"
+  local rest="${claim#*:}"
+  local line="${rest%%:*}"
+  local expected=""
+  if [[ "${rest}" == *:* ]]; then
+    expected="${rest#*:}"
+  fi
+  printf '%s\t%s\t%s\n' "${file_path}" "${line}" "${expected}"
+}
+
+# --- Verification ---
+
+#######################################
+# Verify one claim against a resolved commit SHA.
+# Arguments:
+#   $1 - resolved full SHA
+#   $2 - path
+#   $3 - line number
+#   $4 - expected substring (empty = presence-only check)
+# Outputs: `STATUS<TAB>detail` on stdout (STATUS is PASS or FAIL)
+# Returns: 0 on PASS, 1 on FAIL
+#######################################
+verify_one_claim() {
+  local sha="${1}" file_path="${2}" line="${3}" expected="${4}"
+
+  local content rc=0
+  content="$(git cat-file -p "${sha}:${file_path}" 2>/dev/null)" || rc="${?}"
+  if (( rc != 0 )); then
+    echo "FAIL"$'\t'"path not present at sha"
+    return 1
+  fi
+
+  local line_text found=0
+  line_text="$(print -r -- "${content}" | awk -v n="${line}" 'NR==n{print; f=1} END{exit !f}')" && found=1 || found=0
+  if (( found == 0 )); then
+    echo "FAIL"$'\t'"line ${line} is beyond end of file"
+    return 1
+  fi
+
+  local trimmed
+  trimmed="$(print -r -- "${line_text}" | awk '{sub(/^[ \t]+/, ""); print}')"
+
+  if [[ -n "${expected}" && "${line_text}" != *"${expected}"* ]]; then
+    echo "FAIL"$'\t'"expected substring absent | expected='${expected}' got='${trimmed}'"
+    return 1
+  fi
+
+  echo "PASS"$'\t'"${trimmed}"
+  return 0
+}
+
+# --- Output ---
+
+print_row() {
+  printf '%-4s  %-5s  %-58s  %s\n' "${1}" "${2}" "${3}" "${4}"
+}
+
+# --- Help ---
+
+help() {
+  cat <<EOF
+${c_green}verify-claims-at-sha${c_rst} — verify path:line[:expected] claims against a pinned git SHA
+
+${c_bold}Usage:${c_rst}
+  zsh $HOME/.claude/skills/ari-hemingway--lib/bin/verify-claims-at-sha --sha SHA --claim path:line[:expected] [--claim ...]
+  zsh $HOME/.claude/skills/ari-hemingway--lib/bin/verify-claims-at-sha --sha SHA --claims-file FILE
+
+${c_bold}Options:${c_rst}
+  --sha SHA            Full or short commit SHA to verify against (required)
+  --claim CLAIM        A claim 'path:line' or 'path:line:expected' (repeatable)
+  --claims-file FILE   File with one claim per line (blank lines and #comments ignored)
+  -h, --help           Show this help
+
+${c_bold}Behavior:${c_rst}
+  For each claim, reads the file at SHA via 'git cat-file', confirms line N exists,
+  and (when given) that the expected substring appears on that line. Prints a
+  PASS/FAIL table to stdout. Exits 1 if any claim fails, 0 if all pass.
+
+${c_bold}Examples:${c_rst}
+  zsh $HOME/.claude/skills/ari-hemingway--lib/bin/verify-claims-at-sha \\
+    --sha 3f51d99 \\
+    --claim admin/eks/eksctl.tsx:140:getAllClusterNamesAsync \\
+    --claim services/cluster-registry/cluster-registry.tsx:59
+EOF
+}
+
+# --- Main ---
+
+main() {
+  check_prerequisites || exit 1
+
+  # === PARSE ===
+  local sha="" claims_file=""
+  local -a claims
+
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)      help; return 0 ;;
+    --sha)          sha="${2:?--sha requires a value}"; shift 2 ;;
+    --claim)        claims+=("${2:?--claim requires a value}"); shift 2 ;;
+    --claims-file)  claims_file="${2:?--claims-file requires a value}"; shift 2 ;;
+    -*)             log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)              log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
+  esac; done
+
+  # === MASSAGE ===
+  if [[ -n "${claims_file}" ]]; then
+    if [[ ! -r "${claims_file}" ]]; then
+      log::err "Claims file not readable | claims_file='${claims_file}'"
+      return 1
+    fi
+    local cline
+    while IFS= read -r cline; do
+      [[ -z "${cline}" || "${cline}" == \#* ]] && continue
+      claims+=("${cline}")
+    done < "${claims_file}"
+  fi
+
+  # === VALIDATE ===
+  [[ -n "${sha}" ]] || { log::err "Missing --sha"; help; return 1; }
+
+  if (( ${#claims} == 0 )); then
+    log::err "No claims provided | hint='pass --claim or --claims-file'"
+    help
+    return 1
+  fi
+
+  if ! git rev-parse --show-toplevel >/dev/null 2>&1; then
+    log::err "Not inside a git repository | cwd='${PWD}'"
+    return 1
+  fi
+
+  local resolved
+  if ! resolved="$(git rev-parse --verify "${sha}^{commit}" 2>/dev/null)"; then
+    log::err "SHA does not resolve to a commit | sha='${sha}'"
+    return 1
+  fi
+
+  # === LOGIC ===
+  log::info "Verifying claims | sha='${resolved:0:7}' count='${#claims}'"
+
+  echo "=== start FACT_CHECK ==="
+  print_row "RES" "LINE" "PATH" "DETAIL"
+
+  local fail_count=0
+  local claim parsed file_path line expected out verdict detail
+  for claim in "${claims[@]}"; do
+    if ! parsed="$(split_claim "${claim}")"; then
+      print_row "FAIL" "?" "${claim}" "malformed claim (expected path:line[:expected])"
+      fail_count=$(( fail_count + 1 ))
+      continue
+    fi
+    file_path="${parsed%%$'\t'*}"
+    line="${${parsed#*$'\t'}%%$'\t'*}"
+    expected="${parsed##*$'\t'}"
+
+    if [[ "${line}" != <-> ]]; then
+      print_row "FAIL" "${line}" "${file_path}" "line is not a number"
+      fail_count=$(( fail_count + 1 ))
+      continue
+    fi
+
+    out="$(verify_one_claim "${resolved}" "${file_path}" "${line}" "${expected}")" || true
+    verdict="${out%%$'\t'*}"
+    detail="${out#*$'\t'}"
+    print_row "${verdict}" "${line}" "${file_path}" "${detail}"
+    [[ "${verdict}" == "PASS" ]] || fail_count=$(( fail_count + 1 ))
+  done
+
+  echo "=== end FACT_CHECK ==="
+
+  if (( fail_count > 0 )); then
+    log::err "Fact-check failed | failed='${fail_count}' total='${#claims}' sha='${resolved:0:7}'"
+    return 1
+  fi
+  log::ok "All claims verified | total='${#claims}' sha='${resolved:0:7}'"
+}
+
+main "${@}"
