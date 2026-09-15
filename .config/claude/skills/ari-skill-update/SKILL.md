@@ -5,7 +5,7 @@ description: Edit a skill interactively, then commit it to the dotfiles tier tha
 
 # Skill Update
 
-Pull a skill from the registry, edit it interactively, then push it back. Runs in a fork by default so the main thread stays on the real work (see the first workflow step). Quality review is delegated to `/ari-skill-review`; script conventions to `/ari-skill-shellscripts` and `/ari-skill-pythonscripts`.
+Edit a skill interactively, then commit it to the dotfiles tier that owns it, adopting it first if it is not yet versioned. Runs in a fork by default so the main thread stays on the real work (see the first workflow step). Quality review is delegated to `/ari-skill-review`; script conventions to `/ari-skill-shellscripts` and `/ari-skill-pythonscripts`.
 
 ## Rules
 
@@ -50,7 +50,7 @@ Each invocation creates a fresh timestamped folder, so sessions never clash.
 The setup script pre-fills the **Skill** line; fill **Goal** during "Read the skill", and **Changes made** / **Open questions** during "Edit the skill". Drop a section if it's empty.
 
 ```markdown
-- **Skill**: pr — $HOME/.claude/skills/pr/SKILL.md — Create or update a PR
+- **Skill**: ari-pr — $HOME/.claude/skills/ari-pr/SKILL.md — Create or update a PR
 - **Goal**: Add draft PR support when user says "draft" or "wip"
 - **Changes made**:
   - Added --draft flag to gh pr create in the push step
@@ -61,7 +61,7 @@ The setup script pre-fills the **Skill** line; fill **Goal** during "Read the sk
 
 ## File storage
 
-- `bin/init.zsh` — session-setup script run once at "Set up the session": validates the registry env, pulls the skill, creates the investigation folder + pre-filled scratchpad, and prints the skill's files to read. See that step for its output contract.
+- `bin/init.zsh` — session-setup script run once at "Set up the session": confirms the skill exists, reports its dotfiles tier state, creates the investigation folder + pre-filled scratchpad, and prints the skill's files to read. See that step for its output contract.
 
 ## Workflow
 
