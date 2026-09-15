@@ -1,0 +1,180 @@
+#!/usr/bin/env zsh
+# Example skill script demonstrating all conventions from /ari-skill-shellscripts.
+# Run: zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --help
+
+set -euo pipefail
+
+readonly SCRIPT_DIR="${0:A:h}"
+# Shared libs resolve through the symlink farm, not ${SCRIPT_DIR:h:h}: skills are
+# spread across dotfiles tiers, so a relative hop lands in whichever tier this script sits in.
+readonly SKILLS_DIR="${HOME}/.claude/skills"
+
+# --- Environment variables ---
+
+: "${EXAMPLE_API_KEY:=demo-key-for-example}"  # Optional with default
+readonly EXAMPLE_TIMEOUT="${EXAMPLE_TIMEOUT:-30}"
+
+# --- Constants ---
+
+readonly VALID_MODES=(registry local compare)
+
+# --- Logging (source the canonical lib — never re-define log::* inline) ---
+
+readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+
+# --- Prerequisites ---
+
+#######################################
+# Check that required binaries are installed.
+# Globals: None
+# Arguments: None
+# Returns: 1 if any are missing
+#######################################
+check_prerequisites() {
+  local missing=()
+  for cmd in jq git; do
+    command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
+  done
+  if (( ${#missing} > 0 )); then
+    log::err "Missing required commands | missing='${(j:, :)missing}'"
+    return 1
+  fi
+}
+
+# --- Validation helpers ---
+
+#######################################
+# Check if a value is in an array of valid options.
+# Arguments:
+#   $1 - value to check
+#   $2.. - valid options
+# Returns: 0 if valid, 1 if not
+#######################################
+is_valid_option() {
+  local val="${1}"; shift
+  for opt in "${@}"; do
+    [[ "${val}" == "${opt}" ]] && return 0
+  done
+  return 1
+}
+
+########################################################################
+# Business logic
+########################################################################
+
+# --- Help ---
+
+help() {
+  cat <<EOF
+${c_green}example${c_rst} — demonstrate skill shell script conventions (does not modify anything)
+
+${c_bold}Usage:${c_rst}
+  zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example [OPTIONS]
+
+${c_bold}Options:${c_rst}
+  --mode MODE       Operating mode: ${(j:, :)VALID_MODES} (required)
+  --target SKILL    Skill name to operate on (repeatable)
+  --verbose         Enable debug logging
+  --dry-run         Show what would happen without doing it
+  -h, --help        Show this help
+
+${c_bold}Examples:${c_rst}
+  zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --help
+  zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode registry --target pr-patrol
+  zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode reg --target pr --target pr-patrol --verbose
+  zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode compare --dry-run
+EOF
+}
+
+# --- Main ---
+
+main() {
+  check_prerequisites || exit 1
+
+  # === PARSE ===
+  local verbose=false dry_run=false mode=""
+  local -a targets
+
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)   help; return 0 ;;
+    --verbose)   verbose=true; shift ;;
+    --dry-run)   dry_run=true; shift ;;
+    --mode)      mode="${2:?--mode requires a value}"; shift 2 ;;
+    --target)    targets+=("${2:?--target requires a value}"); shift 2 ;;
+    -*)          log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)           log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
+  esac; done
+
+  export VERBOSE="${verbose}"
+
+  # === MASSAGE ===
+
+  # Normalize case
+  mode="${mode:l}"
+
+  # Expand shortnames
+  case "${mode}" in
+    r|reg)   mode="registry" ;;
+    l)       mode="local" ;;
+    c|comp)  mode="compare" ;;
+  esac
+
+  # Multiline to array: list all skill directories
+  local -a all_skills
+  all_skills=("${(@f)$(ls -1 "${SKILLS_DIR}/" 2>/dev/null)}")
+
+  log::debug "Parsed args | mode='${mode}' targets='${(j: :)targets}' dry_run='${dry_run}'"
+  log::debug "Found skills | count='${#all_skills}' dir='${SKILLS_DIR}'"
+
+  # === VALIDATE ===
+
+  [[ -n "${mode}" ]] || { log::err "Missing --mode | valid_modes='${(j:, :)VALID_MODES}'"; help; return 1; }
+
+  if ! is_valid_option "${mode}" "${VALID_MODES[@]}"; then
+    log::err "Invalid --mode | mode='${mode}' valid_modes='${(j:, :)VALID_MODES}'"
+    return 1
+  fi
+
+  if (( ${#targets} == 0 )); then
+    log::warn "No --target specified, defaulting to all | count='${#all_skills}'"
+    targets=("${all_skills[@]}")
+  fi
+
+  # === LOGIC ===
+
+  log::info "Starting | mode='${mode}' dry_run='${dry_run}' target_count='${#targets}'"
+  for t in "${targets[@]}"; do
+    if [[ -d "${SKILLS_DIR}/${t}" ]]; then
+      log::info "Skill found | skill='${t}'"
+      continue
+    fi
+    log::warn "Skill not found | skill='${t}'"
+  done
+
+  if [[ "${dry_run}" == "true" ]]; then
+    log::info "Dry run — no changes made"
+    return 0
+  fi
+
+  # Demonstrate run_cmd — default levels (INFO before, ERR on failure)
+  run_cmd ls "${SKILLS_DIR}/${targets[1]}/SKILL.md" >/dev/null || true
+
+  # Demonstrate run_cmd — quiet on success, loud on failure
+  lvl=DEBUG lvl_fail=ERR run_cmd ls "${SKILLS_DIR}/nonexistent/SKILL.md" >/dev/null || true
+
+  # Structured output to stdout (for LLM consumption)
+  echo "=== start RESULT ==="
+  for t in "${targets[@]}"; do
+    jq -n --arg skill "${t}" --arg mode "${mode}" '{skill: $skill, mode: $mode, status: "ok"}'
+  done
+  echo "=== end RESULT ==="
+
+  log::info "Done"
+}
+
+main "${@}"
