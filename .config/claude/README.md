@@ -17,9 +17,11 @@ and run the click action without finding it on screen, plus a
 │   ├── notification-click-simulator.sh # invoke the click action programmatically
 │   ├── quickchat.sh                    # random Rocket League quickchat (CLI toy / fallback msg)
 │   └── initialize.sh                   # idempotent setup (brew + settings.json)
-└── lib/                                # implementation layer (sourced)
-    ├── notification-lib.sh             # constants, log, helpers
-    └── tmux-pane.sh                    # tmux_target_pane() — current pane
+├── lib/                                # implementation layer (sourced)
+│   ├── notification-lib.sh             # constants, log, helpers
+│   └── tmux-pane.sh                    # tmux_target_pane() — current pane
+└── skills/                             # shared-tier Claude skills; ~/.claude/skills/<name> symlinks here
+    └── <name>/SKILL.md                 # see skills/ari-dotfiles/SKILL.md, Placement rules
 ```
 
 `bin/` scripts are tiny orchestrators — they derive `CLAUDE_SCRIPT_ROOT` from
