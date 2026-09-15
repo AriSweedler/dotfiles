@@ -21,6 +21,8 @@ dotfiles.git
 .env
 .env.local
 .venv
+__pycache__/
+*.pyc
 
 # delve
 __debug_bin*
