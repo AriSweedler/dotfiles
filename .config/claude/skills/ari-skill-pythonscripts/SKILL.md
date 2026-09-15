@@ -17,12 +17,15 @@ zsh → `/ari-skill-shellscripts`, Python → this skill. For any other language
 ### Language and safety
 
 - **Standard library only.** Skills run without `pip install`. If a third-party dependency is genuinely unavoidable, say so explicitly and gate on it.
-- **Invoke via the `$HOME` form, never `cd`+relative, never piped.** `zsh $HOME/.claude/skills/<skill>/bin/<entrypoint>.zsh` (or `python3 $HOME/.claude/skills/<skill>/bin/<script>.py` for a script with no entrypoint). The matcher expands `$HOME` (but NOT `~`) in the invocation, so the `$HOME` form matches the user's absolute allowlist rules (`Bash(zsh /Users/arisweedler/.claude/skills/*)`, `Bash(python3 /Users/arisweedler/.claude/skills/*)`) and runs without a prompt; a `~` invocation does NOT match an absolute rule, and allowlist rules MUST be absolute (never a `~`- or `$HOME`-form pattern). A `cd` prefix, a relative `bin/x` path, or output piping (`| head`, `2>&1 | …`) also breaks the match.
+- **Only the shell runs Python.** Every `.py` ships with a sibling `.zsh` entrypoint, and that entrypoint is the only way the script is ever run: `zsh $HOME/.claude/skills/<skill>/bin/<entrypoint>.zsh`. Never `python3 …/script.py`, by hand or from another script; a script without an entrypoint gets one before it runs. The shell owns the environment (`PYTHONPATH`, `PYTHONDONTWRITEBYTECODE`); the Python owns the logic and never touches `sys.path`.
+- **Invoke via the `$HOME` form, never `cd`+relative, never piped.** The matcher expands `$HOME` (but NOT `~`) in the invocation, so the `$HOME` form matches the user's absolute allowlist rule (`Bash(zsh /Users/arisweedler/.claude/skills/*)`) and runs without a prompt; a `~` invocation does NOT match an absolute rule, and allowlist rules MUST be absolute (never a `~`- or `$HOME`-form pattern). A `cd` prefix, a relative `bin/x` path, or output piping (`| head`, `2>&1 | …`) also breaks the match.
 - **Ship a thin zsh entrypoint per script, and it MUST export `PYTHONPATH` before running the Python.** That export is the entire bootstrap for the shared lib — omit it and every run dies immediately with `ModuleNotFoundError: No module named 'at_log'`. Copy this shape (follow `/ari-skill-shellscripts` for the rest of the entrypoint):
   ```zsh
   readonly SCRIPT_DIR="${0:A:h}"
-  readonly SKILLS_DIR="${SCRIPT_DIR:h:h}"   # one :h per directory between the script and the skills root
+  # Through the symlink farm, not ${SCRIPT_DIR:h:h}: skills are spread across dotfiles tiers.
+  readonly SKILLS_DIR="${HOME}/.claude/skills"
   export PYTHONPATH="${SKILLS_DIR}/ari-skill-pythonscripts/lib${PYTHONPATH:+:${PYTHONPATH}}"
+  export PYTHONDONTWRITEBYTECODE=1
   exec python3 "${SCRIPT_DIR}/your_script.py" "${@}"
   ```
 - **Keep imports light.** Homebrew's `python3.14` has a slow cold start; a script that pulls heavy modules pays it every run.
@@ -73,7 +76,7 @@ from at_log import log_info, log_warn, log_err, die
 from at_subprocess import run_capture
 ```
 
-A Python script run by hand (no entrypoint) must pass it inline: `PYTHONPATH=…/ari-skill-pythonscripts/lib python3 script.py`.
+There is no by-hand form: a script run by hand goes through its entrypoint too. A `sys.path.insert` in a `.py` is a bug; fix it by giving the script an entrypoint.
 
 ## Subprocesses
 

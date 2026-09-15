@@ -18,6 +18,7 @@ This skill covers zsh. For Python, use `/ari-skill-pythonscripts` (its mirror). 
 
 - **Use zsh, not bash.** Bash version varies across machines; zsh is consistently modern.
 - **`set -euo pipefail` at the top.** Every script.
+- **Python only through its zsh entrypoint.** When a script needs a Python script, call `zsh …/<name>.zsh`, never `python3 …/<name>.py`. The entrypoint owns `PYTHONPATH`; the Python never edits `sys.path`. Shape and rules: `/ari-skill-pythonscripts`.
 - **Invoke with the shell name via the `$HOME` form.** `zsh $HOME/.claude/skills/<skill>/bin/<script>`. The matcher expands `$HOME` (but NOT `~`) in the invocation, so the `$HOME` form matches the user's absolute allowlist rule (`Bash(zsh /Users/<you>/.claude/skills/*)`) and runs without a permission prompt; a `~` invocation does NOT match an absolute rule. Allowlist rules MUST be absolute — never a `~`- or `$HOME`-form pattern (a `$HOME` pattern is never expanded, so it matches nothing). NEVER `cd` then run a relative `bin/x` path, and NEVER pipe the output (no `| head`, no `2>&1 | …` in the documented form): a `cd` prefix, relative path, or pipe breaks the match. Include a shebang (`#!/usr/bin/env zsh`) for documentation, but NEVER rely on it for execution.
 
 ### Naming

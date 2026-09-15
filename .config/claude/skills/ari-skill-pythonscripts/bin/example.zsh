@@ -3,6 +3,8 @@
 set -euo pipefail
 
 readonly SCRIPT_DIR="${0:A:h}"
-readonly SKILLS_DIR="${SCRIPT_DIR:h:h}"
+# Through the symlink farm, not ${SCRIPT_DIR:h:h}: skills are spread across dotfiles tiers.
+readonly SKILLS_DIR="${HOME}/.claude/skills"
 export PYTHONPATH="${SKILLS_DIR}/ari-skill-pythonscripts/lib${PYTHONPATH:+:${PYTHONPATH}}"
+export PYTHONDONTWRITEBYTECODE=1
 exec python3 "${SCRIPT_DIR}/example.py" "${@}"
