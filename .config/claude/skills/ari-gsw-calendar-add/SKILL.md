@@ -101,10 +101,10 @@ Then:
 gws calendar +insert --summary '[<Type>] <Title>' --start '<RFC3339>' --end '<RFC3339>' --location '<where>' --description '<notes>' 2>/dev/null
 ```
 
-Useful extras: `--attendee <email>` (repeatable), `--meet` (adds a Meet link). Report the `htmlLink` and `id` from the response, then open the event (work-profile Chrome first, portable fallbacks handled by the opener):
+Useful extras: `--attendee <email>` (repeatable), `--meet` (adds a Meet link). Report the `htmlLink` and `id` from the response, then open the event with the dotfiles opener (`~/.config/bin/open-link`, work-profile Chrome first):
 
 ```zsh
-zsh $HOME/.claude/skills/pm--lib/bin/open-target.zsh '<htmlLink>'
+open-link '<htmlLink>'
 ```
 
 If the insert fails (non-zero exit), show gws's stderr and offer retry / debug — expired auth or a locked keyring is the common cause.
