@@ -13,9 +13,9 @@ type Meta = {
   description: string
 }
 
-// terminal-notifier, not osascript: osascript posts as Script Editor, whose
-// banners macOS may suppress; terminal-notifier is what every other binding
-// here posts through. Absolute path: Karabiner's shell_command PATH is minimal.
+// terminal-notifier, not osascript: osascript posts as Script Editor, so the
+// banner looks unlike every other binding's. Absolute path: Karabiner's
+// shell_command PATH is minimal.
 const notify = (message: string) => ({
   shell_command: `/opt/homebrew/bin/terminal-notifier -title Keyboard -message ${JSON.stringify(message)} -group karabiner-which-keyboard`,
 })
