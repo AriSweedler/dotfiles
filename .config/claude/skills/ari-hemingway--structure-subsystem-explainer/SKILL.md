@@ -198,7 +198,7 @@ Follow the `Resolve permalink SHA` procedure in `$HOME/.claude/skills/ari-heming
 
 Append to `sources.md` and update `scratchpad.md` key findings per the cadence in `/ari-hemingway--lib` (every batch of ≤3 Read/Grep/Bash calls).
 
-**Research mode** — grep for the subsystem name, read key files, trace entry points, check git log for recent changes, read related docs. If tracing requires following function calls across ≥3 files to explain a single flow, follow the procedure in `$HOME/.claude/skills/code-trace/SKILL.md` and record its artifact path in `sources.md` under "Call graphs". See `/ari-hemingway--lib` for failure contracts.
+**Research mode** — grep for the subsystem name, read key files, trace entry points, check git log for recent changes, read related docs. If tracing requires following function calls across ≥3 files to explain a single flow, follow the procedure in `$HOME/.claude/skills/ari-code-trace/SKILL.md` and record its artifact path in `sources.md` under "Call graphs". See `/ari-hemingway--lib` for failure contracts.
 
 **Scaffold first when the vocabulary is missing.** If the subsystem has more than ~8 terms of its own jargon that neither you nor the reader can define, or the user asks to "break it down" or "explain the parts", STOP and run `/ari-hemingway--structure-scaffold` instead: its definitions pass builds the strictly ordered shared-jargon table, and each explainer section is then written in that vocabulary. Reuse the accepted table as this doc's `# Key details` glossary rather than re-deriving terms inline. Record the scaffold's investigation folder under `Pointers`.
 

@@ -10,7 +10,7 @@ Sibling-specific rules that extend `/ari-hemingway--format-gdoc`. `/ari-hemingwa
 ## Required sections (order-sensitive)
 
 1. Title — plain text, `[ari-hemingway scaffold] <Topic> [🤖 AI generated]`.
-2. `# Summary` — names the topic, what this revision contains, and links the toolchain that generated it: `ari-hemingway`, `ari-hemingway--structure-scaffold`, `ari-hemingway--share-gdoc`, `mermaid-diagram`.
+2. `# Summary` — names the topic, what this revision contains, and links the toolchain that generated it: `ari-hemingway`, `ari-hemingway--structure-scaffold`, `ari-hemingway--share-gdoc`, `ari-diagram-mermaid`.
 3. `# Definitions` — exactly one table, then at most one diagram image.
 4. `# Subsystems` — one `##` per subsystem.
 5. `# Useful links` — `## Code and PRs` with the same four skill links; `## Docs` with every doc URL from the table.

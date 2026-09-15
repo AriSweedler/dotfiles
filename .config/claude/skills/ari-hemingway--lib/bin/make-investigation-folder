@@ -223,7 +223,7 @@ EOF
 |---|---|---|---|
 | _none yet_ | _none_ | _none_ | _none_ |
 
-## Call graphs (optional — populated when /code-trace runs)
+## Call graphs (optional — populated when /ari-code-trace runs)
 | Artifact path | Entry point | Notes |
 |---|---|---|
 | _none_ | _none_ | _none_ |

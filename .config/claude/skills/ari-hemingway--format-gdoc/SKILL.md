@@ -256,12 +256,12 @@ All TODO markers follow the anchored form: `[TODO: verb — reason]`. Examples: 
 
 Diagrams MUST be inline images, not clickable links, and MUST fit on one page.
 
-1. Invoke `/mermaid-diagram` (default output is `ink_url`).
+1. Invoke `/ari-diagram-mermaid` (default output is `ink_url`).
 2. Embed the returned URL with markdown image syntax: `![Request flow from CDN to worker](https://mermaid.ink/img/pako:eNp...)`.
 3. NEVER pass `MERMAID_FORMAT=markdown_link` — it produces a clickable link, not an inline image.
 4. Keep the rendered image inside the page content box (Letter with 1in margins: 468 × 648 pt). Docs shrinks wide images to the text width, so a tall diagram is the risk — a 6-to-8-node nested flowchart fits; flatten with `direction LR` or split before adding more. `/ari-hemingway--share-gdoc` measures every embedded image at publish time and fails on one that spills.
 
-See `/ari-hemingway--lib` for the failure contract when `/mermaid-diagram` fails.
+See `/ari-hemingway--lib` for the failure contract when `/ari-diagram-mermaid` fails.
 
 ### Tables
 

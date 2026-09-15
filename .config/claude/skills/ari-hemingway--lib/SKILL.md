@@ -112,7 +112,7 @@ Filled example:
 |---|---|---|---|
 | `git fetch origin main` | 128 | fatal: Authentication failed for ... | Proceeded with local origin/main (300s old) |
 
-## Call graphs (optional — populated when /code-trace runs)
+## Call graphs (optional — populated when /ari-code-trace runs)
 | Artifact path | Entry point | Notes |
 |---|---|---|
 ```
@@ -317,8 +317,8 @@ Print: `Output complete — {path}, {lines} lines, {words} words. Transfer: {met
 
 ### Sub-skill failure contracts
 
-- **`/code-trace` failure or unavailability:** fall back to manual per-file trace; record the gap in `sources.md`. If `/code-trace` partially succeeded (zero exit but missing artifacts), still record its artifact path in `sources.md` under `## Call graphs` with a `partial` note.
-- **`/mermaid-diagram` failure:** embed the raw Mermaid source in a fenced ` ```mermaid ` block inside `draft.md`; mark with `[TODO: render diagram]`. Do NOT block drafting on image generation.
+- **`/ari-code-trace` failure or unavailability:** fall back to manual per-file trace; record the gap in `sources.md`. If `/ari-code-trace` partially succeeded (zero exit but missing artifacts), still record its artifact path in `sources.md` under `## Call graphs` with a `partial` note.
+- **`/ari-diagram-mermaid` failure:** embed the raw Mermaid source in a fenced ` ```mermaid ` block inside `draft.md`; mark with `[TODO: render diagram]`. Do NOT block drafting on image generation.
 - **MCP call failure:** see `## MCP reliability` above for the three-option pattern.
 
 ### Print lines
