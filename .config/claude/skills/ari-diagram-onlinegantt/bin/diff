@@ -1,0 +1,228 @@
+#!/usr/bin/env zsh
+# Structural diff of two onlinegantt.com .gantt files, keyed by TaskID.
+# Ignores JSON key-order / formatting noise; reports semantic task changes.
+# Run: zsh <skills-dir>/ari-diagram-onlinegantt/bin/diff --help
+
+set -euo pipefail
+
+readonly SCRIPT_DIR="${0:A:h}"
+readonly SKILLS_DIR="${SCRIPT_DIR:h:h}"  # <skill>/bin → skills root
+
+# --- Logging (source the canonical lib — never re-define log::* inline) ---
+
+readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+
+# --- Constants ---
+
+# Identity fields tried (in order) to match objects in arrays. Engine stays
+# schema-agnostic; TaskID/resourceId just let .gantt work with no config.
+readonly DEFAULT_ID_KEYS=(id _id uuid key TaskID taskId resourceId name)
+
+# --- Prerequisites ---
+
+#######################################
+# Check that required binaries are installed.
+# Arguments: $@ - command names to require
+# Returns: 1 if any are missing
+#######################################
+check_prerequisites() {
+  local missing=()
+  for cmd in "$@"; do
+    command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
+  done
+  if (( ${#missing} > 0 )); then
+    log::err "Missing required commands | missing='${(j:, :)missing}'"
+    return 1
+  fi
+}
+
+# --- Structural diff ---
+
+#######################################
+# Schema-agnostic structural diff of two JSON documents. Arrays of objects are
+# matched by identity field (else positional); narration is the caller's job.
+# Globals: BASE_FILE, NEW_FILE - inputs; ID_KEYS - comma-separated id fields.
+# Outputs: stdout — JSON {"changes": [{op, path, old/new|value}, ...]}.
+# Returns: 0 identical, 1 differ, 2 read/parse error.
+#######################################
+diff_files() {
+  python3 - <<'PY'
+import json, os, sys
+
+# Fallback when ID_KEYS is unset; first field present + unique in both arrays wins.
+DEFAULT_ID_KEYS = ["id", "_id", "uuid", "key", "TaskID", "taskId", "resourceId", "name"]
+
+
+def pick_id_key(a, b, id_keys):
+    """A field usable as identity: present on every element of both arrays and
+    unique (hashable) within each. Returns the field name or None."""
+    for key in id_keys:
+        ok = True
+        for lst in (a, b):
+            ids = []
+            for el in lst:
+                if not isinstance(el, dict) or key not in el:
+                    ok = False
+                    break
+                ids.append(el[key])
+            if not ok:
+                break
+            try:
+                if len(set(ids)) != len(ids):
+                    ok = False
+                    break
+            except TypeError:  # unhashable id value
+                ok = False
+                break
+        if ok:
+            return key
+    return None
+
+
+def diff(a, b, path, changes, id_keys):
+    if a == b:
+        return
+    if isinstance(a, dict) and isinstance(b, dict):
+        for k in a.keys() - b.keys():
+            changes.append({"op": "remove", "path": f"{path}.{k}", "value": a[k]})
+        for k in b.keys() - a.keys():
+            changes.append({"op": "add", "path": f"{path}.{k}", "value": b[k]})
+        for k in a.keys() & b.keys():
+            diff(a[k], b[k], f"{path}.{k}", changes, id_keys)
+    elif isinstance(a, list) and isinstance(b, list):
+        diff_list(a, b, path, changes, id_keys)
+    else:
+        changes.append({"op": "change", "path": path, "old": a, "new": b})
+
+
+def diff_list(a, b, path, changes, id_keys):
+    key = pick_id_key(a, b, id_keys)
+    if key is not None:
+        amap = {el[key]: el for el in a}
+        bmap = {el[key]: el for el in b}
+        for k in amap.keys() - bmap.keys():
+            changes.append({"op": "remove", "path": f"{path}[{key}={k}]", "value": amap[k]})
+        for k in bmap.keys() - amap.keys():
+            changes.append({"op": "add", "path": f"{path}[{key}={k}]", "value": bmap[k]})
+        for k in amap.keys() & bmap.keys():
+            diff(amap[k], bmap[k], f"{path}[{key}={k}]", changes, id_keys)
+        return
+    for i in range(max(len(a), len(b))):
+        if i >= len(a):
+            changes.append({"op": "add", "path": f"{path}[{i}]", "value": b[i]})
+        elif i >= len(b):
+            changes.append({"op": "remove", "path": f"{path}[{i}]", "value": a[i]})
+        else:
+            diff(a[i], b[i], f"{path}[{i}]", changes, id_keys)
+
+
+def main():
+    try:
+        with open(os.environ["BASE_FILE"]) as handle:
+            base = json.load(handle)
+        with open(os.environ["NEW_FILE"]) as handle:
+            new = json.load(handle)
+    except (OSError, json.JSONDecodeError) as err:
+        print(f"cannot read/parse input: {err}", file=sys.stderr)
+        return 2
+
+    id_keys = [k for k in os.environ.get("ID_KEYS", "").split(",") if k] or DEFAULT_ID_KEYS
+
+    changes = []
+    diff(base, new, "$", changes, id_keys)
+    if not changes:
+        return 0
+    changes.sort(key=lambda c: (c["path"], c["op"]))
+    print(json.dumps({"changes": changes}, indent=2, ensure_ascii=False))
+    return 1
+
+
+sys.exit(main())
+PY
+}
+
+# --- Help ---
+
+help() {
+  cat <<EOF
+${c_green}diff${c_rst} — schema-agnostic structural diff of two JSON files (read-only)
+
+${c_bold}Usage:${c_rst}
+  zsh $HOME/.claude/skills/ari-diagram-onlinegantt/bin/diff --base FILE --new FILE [--id-key NAME ...]
+
+${c_bold}Options:${c_rst}
+  --base FILE     The original file (the one you produced)
+  --new FILE      The edited file (the one the user shared back)
+  --id-key NAME   Field used to match objects in arrays (repeatable). Default:
+                  ${(j:, :)DEFAULT_ID_KEYS}
+  --verbose       Enable debug logging
+  -h, --help      Show this help
+
+${c_bold}Output:${c_rst} JSON {"changes":[{op, path, old/new|value}]} to stdout. Ignores
+object key-order and whitespace; matches array objects by identity field so
+reordering doesn't cascade. Narration into prose is the caller's job.
+Exit 0 = identical, 1 = differences found.
+
+${c_bold}Examples:${c_rst}
+  zsh $HOME/.claude/skills/ari-diagram-onlinegantt/bin/diff --base mine.gantt --new theirs.gantt
+  zsh $HOME/.claude/skills/ari-diagram-onlinegantt/bin/diff --base a.json --new b.json --id-key uuid
+EOF
+}
+
+# --- Main ---
+
+main() {
+  # === PARSE ===
+  local verbose=false base="" new=""
+  local -a id_keys
+
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)  help; return 0 ;;
+    --verbose)  verbose=true; shift ;;
+    --base)     base="${2:?--base requires a value}"; shift 2 ;;
+    --new)      new="${2:?--new requires a value}"; shift 2 ;;
+    --id-key)   id_keys+=("${2:?--id-key requires a value}"); shift 2 ;;
+    -*)         log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)          log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
+  esac; done
+
+  export VERBOSE="${verbose}"
+
+  # === MASSAGE ===
+  (( ${#id_keys} > 0 )) || id_keys=("${DEFAULT_ID_KEYS[@]}")
+  local id_keys_csv="${(j:,:)id_keys}"
+  log::debug "Parsed args | base='${base}' new='${new}' id_keys='${id_keys_csv}'"
+
+  # === VALIDATE ===
+  [[ -n "${base}" ]] || { log::err "Missing --base"; help; return 1; }
+  [[ -n "${new}" ]]  || { log::err "Missing --new"; help; return 1; }
+  [[ -f "${base}" ]] || { log::err "File not found | base='${base}'"; return 1; }
+  [[ -f "${new}" ]]  || { log::err "File not found | new='${new}'"; return 1; }
+  check_prerequisites python3 || return 1
+
+  # === LOGIC ===
+  local report rc
+  set +e
+  report="$(BASE_FILE="${base}" NEW_FILE="${new}" ID_KEYS="${id_keys_csv}" diff_files)"
+  rc=$?
+  set -e
+
+  if (( rc == 0 )); then
+    log::ok "Files identical | base='${base}' new='${new}'"
+    return 0
+  fi
+  if (( rc == 1 )); then
+    log::info "Differences found | base='${base}' new='${new}'"
+    echo "${report}"
+    return 0
+  fi
+  log::err "Diff failed | base='${base}' new='${new}'"
+  return 1
+}
+
+main "${@}"
