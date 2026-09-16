@@ -1,6 +1,7 @@
 #!/usr/bin/env zsh
 # Finish a Google Doc created from markdown in one fix-up batch: convert every plain Drive link
-# into a smart chip and style every table's header row (bold, centered, grey #D9D9D9), then verify
+# into a smart chip, style every table's header row (bold, centered, grey #D9D9D9), and set each
+# two-column table's column widths to the split that makes it shortest, then verify
 # from one re-read that every inline image fits one page and links to its editable mermaid.live
 # source and that no plain Drive link remains. tableHeader (pin header row) is read-only in the
 # Docs API and stays a manual step.
@@ -23,6 +24,8 @@ readonly IMAGE_LINK_PREFIX="https://mermaid.live/edit#"
 # April 2026) turns it into a chip. It accepts Drive file and folder URLs only, so this is the
 # whole allowlist; the captured id is what the pre-flight files.get validates.
 readonly DRIVE_LINK_RE='^https://(docs|drive)\.google\.com/(.*/d/|drive/folders/)([A-Za-z0-9_-]+)'
+# Column-width model for two-column tables: Arial metrics plus greedy wrap, see the jq header.
+readonly TABLE_WIDTHS_JQ="${SCRIPT_DIR:h}/lib/table_widths.jq"
 
 # --- Logging ---
 
@@ -240,14 +243,42 @@ build_header_style_requests() {
 }
 
 #######################################
-# Merge chip and style requests into the one batch. Descending anchor order means every request
-# runs before anything that would shift its indexes; within one anchor a link's delete precedes
-# its insert, and styles come last.
-# Arguments: $1 - chip requests path, $2 - style requests path, $3 - output path for the plain requests array
+# Build the column-width requests for every two-column table whose modeled height improves:
+# both columns become FIXED_WIDTH at the split the model found. Logs the model's line counts
+# before and after per table. Each request carries an `anchor` for ordering.
+# Globals: TABLE_WIDTHS_JQ
+# Arguments: $1 - path to doc JSON, $2 - output path for the requests JSON array
+#######################################
+build_column_width_requests() {
+  local doc_json="${1}" out="${2}"
+  local plan
+  plan="$(jq -c -f "${TABLE_WIDTHS_JQ}" "${doc_json}")"
+  local start rows cw0 cw1 clines bw0 bw1 blines
+  while IFS=$'\t' read -r start rows cw0 cw1 clines bw0 bw1 blines; do
+    [[ -n "${start}" ]] || continue
+    if (( blines < clines )); then
+      log::info "Table columns resized | start='${start}' rows='${rows}' current='${cw0}/${cw1} pt, ${clines} lines' best='${bw0}/${bw1} pt, ${blines} lines'"
+    else
+      log::info "Table columns kept | start='${start}' rows='${rows}' widths='${cw0}/${cw1} pt' lines='${clines}'"
+    fi
+  done < <(print -r -- "${plan}" | jq -r '.[] | [.start, .rows, (.current.w0|round), (.current.w1|round), .current.lines, .best.w0, .best.w1, .best.lines] | @tsv')
+  print -r -- "${plan}" | jq -c '[.[] | select(.best.lines < .current.lines) | .start as $t
+    | ({col: 0, w: .best.w0}, {col: 1, w: .best.w1})
+    | {anchor: $t, order: 2, request: {updateTableColumnProperties: {
+        tableStartLocation: {index: $t}, columnIndices: [.col],
+        tableColumnProperties: {widthType: "FIXED_WIDTH", width: {magnitude: .w, unit: "PT"}},
+        fields: "widthType,width"}}}]' > "${out}"
+}
+
+#######################################
+# Merge chip, style, and width requests into the one batch. Descending anchor order means every
+# request runs before anything that would shift its indexes; within one anchor a link's delete
+# precedes its insert, and styles come last.
+# Arguments: $1 - chip requests path, $2 - style requests path, $3 - width requests path, $4 - output path for the plain requests array
 #######################################
 merge_requests() {
-  local chips="${1}" styles="${2}" out="${3}"
-  jq -cs '.[0] + .[1] | sort_by([-.anchor, .order]) | map(.request)' "${chips}" "${styles}" > "${out}"
+  local chips="${1}" styles="${2}" widths="${3}" out="${4}"
+  jq -cs '.[0] + .[1] + .[2] | sort_by([-.anchor, .order]) | map(.request)' "${chips}" "${styles}" "${widths}" > "${out}"
 }
 
 #######################################
@@ -271,16 +302,44 @@ check_drive_links_are_chips() {
 }
 
 #######################################
-# Run every check against one doc JSON.
-# Arguments: $1 - path to doc JSON
+# Log the doc's rendered page count: export to PDF and read /Count from the Pages root. This is
+# the one real layout measurement available (the Docs API reports no geometry), so it is what
+# the column-width model is judged against.
+# Arguments: $1 - doc id, $2 - work dir
+#######################################
+report_page_count() {
+  local doc="${1}" work="${2}"
+  local params pages
+  params="$(jq -cn --arg id "${doc}" '{fileId: $id, mimeType: "application/pdf"}')"
+  # gws saves the export as download.pdf in the working directory.
+  (cd "${work}" && gws drive files export --params "${params}" > "${work}/export_reply.json") || { log::warn "PDF export failed; page count unknown | doc='${doc}'"; return 0; }
+  pages="$(strings -n 3 "${work}/download.pdf" | grep -A1 '/Type /Pages' | grep -oE '/Count +[0-9]+' | head -1 | tr -dc '0-9')"
+  if [[ -z "${pages}" ]]; then
+    log::warn "PDF export unreadable; page count unknown | pdf='${work}/download.pdf'"
+    return 0
+  fi
+  log::info "Rendered length | pages='${pages}' pdf='${work}/download.pdf'"
+  # Per-table rendered heights from the same PDF, so a column-width change can be judged in points.
+  local table pages_on rows cols height content
+  while IFS=$'\t' read -r table pages_on rows cols height content; do
+    [[ -n "${table}" ]] || continue
+    log::info "Rendered table | table='${table}' pages='${pages_on}' rows='${rows}' cols='${cols}' height_pt='${height}' content_height_pt='${content}'"
+  done < <(zsh "${SCRIPT_DIR}/gdoc_table_heights.zsh" --pdf "${work}/download.pdf" 2>/dev/null \
+           | jq -r '[.table, (.pages | join(",")), .rows, .cols, .height_pt, .content_height_pt] | @tsv')
+}
+
+#######################################
+# Run every check against one doc JSON, then report the rendered page count.
+# Arguments: $1 - path to doc JSON, $2 - doc id, $3 - work dir
 # Returns: 1 if any check fails
 #######################################
 run_checks() {
-  local doc_json="${1}"
+  local doc_json="${1}" doc="${2}" work="${3}"
   local rc=0
   check_images_fit_one_page "${doc_json}" || rc=1
   check_images_link_to_source "${doc_json}" || rc=1
   check_drive_links_are_chips "${doc_json}" || rc=1
+  report_page_count "${doc}" "${work}"
   return "${rc}"
 }
 
@@ -288,7 +347,7 @@ run_checks() {
 
 help() {
   cat <<EOH
-${c_green}gdoc_finish${c_rst} — one fix-up batch (Drive links to chips, styled table headers), then one verify read
+${c_green}gdoc_finish${c_rst} — one fix-up batch (Drive links to chips, styled table headers, two-column tables at their shortest split), then one verify read
 
 ${c_bold}Usage:${c_rst}
   zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_finish.zsh --doc ID_OR_URL [OPTIONS]
@@ -333,7 +392,7 @@ main() {
   log::info "Fetched doc | doc='${doc}' json='${work}/doc.json'"
 
   if [[ "${check_only}" == "true" ]]; then
-    run_checks "${work}/doc.json"
+    run_checks "${work}/doc.json" "${doc}" "${work}"
     return
   fi
 
@@ -342,7 +401,8 @@ main() {
   validate_link_targets "${work}/links.json" "${work}/links.valid.json"
   build_chip_requests "${work}/links.valid.json" "${work}/chip_requests.json"
   build_header_style_requests "${work}/doc.json" "${work}/style_requests.json"
-  merge_requests "${work}/chip_requests.json" "${work}/style_requests.json" "${work}/requests.json"
+  build_column_width_requests "${work}/doc.json" "${work}/width_requests.json"
+  merge_requests "${work}/chip_requests.json" "${work}/style_requests.json" "${work}/width_requests.json" "${work}/requests.json"
   local n_links n_tables n_requests revision
   n_links="$(jq 'length' "${work}/links.valid.json")"
   n_tables="$(jq '[.body.content[] | select(.table)] | length' "${work}/doc.json")"
@@ -363,7 +423,7 @@ main() {
     log::info "Nothing to fix up"
   fi
 
-  run_checks "${work}/doc.json"
+  run_checks "${work}/doc.json" "${doc}" "${work}"
 }
 
 main "${@}"

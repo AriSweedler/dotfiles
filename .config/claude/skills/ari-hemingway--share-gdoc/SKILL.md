@@ -5,7 +5,7 @@ description: "Publish a markdown draft as a Google Doc in one command — create
 
 # Publish to Google Doc
 
-Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-gdoc`) into a Google Doc with one script call. The script uploads the markdown through Drive's Docs conversion, then runs one fix-up batch for what markdown cannot express: every raw Drive link becomes a smart chip (Docs API `insertRichLink`) and header rows on every table become bold, centered, and grey (`#D9D9D9`). One re-read then verifies that every inline image fits the page content box and links to its editable mermaid.live source, and that no plain Drive link remains. Import, one batch, one verify read: the fix-up is part of publishing, never a follow-up.
+Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-gdoc`) into a Google Doc with one script call. The script uploads the markdown through Drive's Docs conversion, then runs one fix-up batch for what markdown cannot express: every raw Drive link becomes a smart chip (Docs API `insertRichLink`), header rows on every table become bold, centered, and grey (`#D9D9D9`), and every two-column table gets the column split that makes it shortest. That split comes from `lib/table_widths.jq`, which predicts each cell's wrapped line count from Arial metrics and tries every whole-point split; ties go to the widest first column, so terms stay on one line where that is free. The verify read ends by exporting the doc to PDF and logging its page count, the one real layout measurement the API allows; compare it across runs to judge the model. One re-read then verifies that every inline image fits the page content box and links to its editable mermaid.live source, and that no plain Drive link remains. Import, one batch, one verify read: the fix-up is part of publishing, never a follow-up.
 
 ## Preconditions
 
@@ -17,6 +17,7 @@ Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-g
 ## File storage
 
 - `bin/gdoc_publish.zsh` — the one-shot publish: create or update, then finish. Prints the doc URL on stdout.
+- `bin/gdoc_table_heights.zsh` — measures every table in a PDF exported from Docs: rendered height in points per table, summed across pages, with and without the header row Docs repeats on each page. The one real layout measurement available; `gdoc_finish.zsh` logs it after every publish, and a before/after pair of exports is how a column-width change is judged.
 - `bin/gdoc_finish.zsh` — the finishing half, runnable alone on any doc: one `documents.get`, one `batchUpdate` (pinned to that revision) that converts every plain `docs.google.com` or `drive.google.com` link into a chip and styles table header rows, then one re-read that checks each image fits one page and links to `https://mermaid.live/edit#...` and that no plain Drive link remains. Link targets the caller cannot open are left as hyperlinks with a warning, since one failing request would roll back the whole batch. `--check-only` runs the checks and changes nothing. Exit is non-zero on any failed check.
 
 ## Workflow
