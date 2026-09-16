@@ -36,3 +36,6 @@ bk.yaml
 
 # Datadog ddviz panel runtime state (socket lock, pid)
 .ddviz
+
+# Cloudflare wrangler CLI state
+.wrangler
