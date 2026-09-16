@@ -13,10 +13,10 @@ Formatting rules: see `/ari-hemingway--format-gdoc`. Workflow patterns (investig
 
 Required sections, in order:
 - Title (plain text, `[ari-hemingway scaffold] <Topic> [🤖 AI generated]`)
-- `# Summary` — what the topic is, what the article covers, and that it was generated as an example of the toolchain, linking all four: `ari-hemingway`, `ari-hemingway--structure-scaffold`, `ari-hemingway--share-gdoc`, `ari-diagram-mermaid`. Written last.
+- `# Summary` — what the topic is and what the article covers, then one plain-text sentence naming the toolchain that generated it (`ari-hemingway`, `ari-hemingway--structure-scaffold`, `ari-hemingway--share-gdoc`, `ari-diagram-mermaid`). Never link a skill in a Doc. Written last.
 - `# Definitions` — one two-column table, `Word | Definition`, then an optional layout diagram.
 - `# Subsystems` — one `##` per subsystem, each standalone.
-- `# Useful links` — `## Code and PRs` lists the same four skill links; `## Docs` lists every doc URL from the table, per `/ari-hemingway--format-gdoc`.
+- `# Useful links` — `## Docs` lists every doc URL from the table and the body, per `/ari-hemingway--format-gdoc`. No skill links.
 
 ### Skeleton
 
@@ -24,7 +24,7 @@ Required sections, in order:
 [ari-hemingway scaffold] Topic [🤖 AI generated]
 
 # Summary
-This article was generated as an example output of the [ari-hemingway](https://github.com/AriSweedler/dotfiles/tree/main/.config/claude/skills/ari-hemingway) writing pipeline: [ari-hemingway--structure-scaffold](https://github.com/AriSweedler/dotfiles/tree/main/.config/claude/skills/ari-hemingway--structure-scaffold) shaped it, [ari-hemingway--share-gdoc](https://github.com/AriSweedler/dotfiles/tree/main/.config/claude/skills/ari-hemingway--share-gdoc) published it, and [ari-diagram-mermaid](https://github.com/AriSweedler/dotfiles/tree/main/.config/claude/skills/ari-diagram-mermaid) drew the diagram. One sentence on the topic. One sentence on what this revision contains.
+This article was generated as an example output of the ari-hemingway writing pipeline: ari-hemingway--structure-scaffold shaped it, ari-hemingway--share-gdoc published it, and ari-diagram-mermaid drew the diagram. One sentence on the topic. One sentence on what this revision contains.
 
 # Definitions
 
@@ -44,13 +44,8 @@ Standalone explanation in the table's vocabulary.
 Names "Install layout" but never describes its internals.
 
 # Useful links
-## Code and PRs
-- [ari-hemingway](https://github.com/AriSweedler/dotfiles/tree/main/.config/claude/skills/ari-hemingway)
-- [ari-hemingway--structure-scaffold](https://github.com/AriSweedler/dotfiles/tree/main/.config/claude/skills/ari-hemingway--structure-scaffold)
-- [ari-hemingway--share-gdoc](https://github.com/AriSweedler/dotfiles/tree/main/.config/claude/skills/ari-hemingway--share-gdoc)
-- [ari-diagram-mermaid](https://github.com/AriSweedler/dotfiles/tree/main/.config/claude/skills/ari-diagram-mermaid)
 ## Docs
-- every doc URL used in the table
+- every doc URL used in the table and the body
 
 🤖🌸 Generated with Claude Code
 ```

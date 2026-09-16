@@ -10,10 +10,10 @@ Sibling-specific rules that extend `/ari-hemingway--format-gdoc`. `/ari-hemingwa
 ## Required sections (order-sensitive)
 
 1. Title — plain text, `[ari-hemingway scaffold] <Topic> [🤖 AI generated]`.
-2. `# Summary` — names the topic, what this revision contains, and links the toolchain that generated it: `ari-hemingway`, `ari-hemingway--structure-scaffold`, `ari-hemingway--share-gdoc`, `ari-diagram-mermaid`.
+2. `# Summary` — names the topic, what this revision contains, and the toolchain that generated it in plain text (`ari-hemingway`, `ari-hemingway--structure-scaffold`, `ari-hemingway--share-gdoc`, `ari-diagram-mermaid`); a link to a skill anywhere in the doc is a finding.
 3. `# Definitions` — exactly one table, then at most one diagram image.
 4. `# Subsystems` — one `##` per subsystem.
-5. `# Useful links` — `## Code and PRs` with the same four skill links; `## Docs` with every doc URL from the table.
+5. `# Useful links` — `## Docs` with every doc URL from the table and the body; no `## Code and PRs` unless the topic is code.
 6. Footer `🤖🌸 Generated with Claude Code`.
 
 ## Definitions table
@@ -34,7 +34,7 @@ Sibling-specific rules that extend `/ari-hemingway--format-gdoc`. `/ari-hemingwa
 ## Summary
 
 - Written from the accepted table and sections: every claim in it appears in the body.
-- States that the article was generated as an example of the toolchain, with all four skill links.
+- States in plain text that the article was generated as an example of the toolchain; no skill links.
 
 ## Diagram
 
