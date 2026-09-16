@@ -1,0 +1,80 @@
+#!/usr/bin/env zsh
+# probe-emoji — how many cells does THIS terminal advance for each glyph?
+# Writes each sample, asks for a cursor position report (ESC[6n), and prints
+# the difference. Whatever answers the report is what gets measured: inside
+# tmux that is tmux's grid, not the outer terminal, so run it in a bare window
+# to measure the terminal itself.
+#
+# Usage:
+#   probe-emoji                 # built-in samples covering each width class
+#   probe-emoji '⚠️' '0️⃣' 'abc'  # your own strings
+emulate -L zsh
+set -o pipefail
+
+if [[ ! -t 0 || ! -t 1 ]]; then
+  print -u2 "probe-emoji: stdin and stdout must be a terminal"
+  exit 1
+fi
+
+typeset -a samples
+if (( $# )); then
+  samples=("$@")
+else
+  samples=(
+    $'✅'                    # ✅ Emoji_Presentation=Yes
+    $'❌'                    # ❌
+    $'⏳'                    # ⏳
+    $'\U1F7E2'                   # 🟢
+    $'❗'                    # ❗
+    $'⚠'                    # ⚠ text-default, bare
+    $'⚠️'              # ⚠️ text-default + VS16
+    $'✔'                    # ✔ bare
+    $'✔️'              # ✔️ VS16
+    $'➡️'              # ➡️ VS16
+    $'0️⃣'             # 0️⃣ keycap
+    $'0⃣'                   # 0⃣ keycap without VS16
+    $'✓'                    # ✓ no Emoji property
+    $'●'                    # ● East Asian Ambiguous
+    $'\U1F1FA\U1F1F8'            # 🇺🇸 flag
+    $'\U1F1FA'                   # 🇺 lone regional indicator
+    $'\U1F44D\U1F3FB'            # 👍🏻 skin tone
+    $'\U1F468‍\U1F469‍\U1F467'  # 👨‍👩‍👧 ZWJ sequence
+  )
+fi
+
+codepoints() {
+  local s=$1 out='' ch
+  for ch in ${(s::)s}; do
+    out+=$(printf 'U+%04X ' "'$ch")
+  done
+  print -- "${out% }"
+}
+
+cpr_column() {
+  # Both directions go through /dev/tty: inside $(...) stdout is the capture pipe.
+  local reply=''
+  printf '\e[6n' > /dev/tty
+  if ! IFS= read -rs -t 2 -d 'R' reply < /dev/tty; then
+    print -u2 "probe-emoji: no cursor position report within 2s"
+    exit 1
+  fi
+  print -- "${reply##*;}"
+}
+
+old_stty=$(stty -g)
+stty -echo -icanon min 1 time 5
+trap 'stty "$old_stty"' EXIT INT TERM
+
+if [[ -n ${TMUX:-} ]]; then
+  print -- "answering: tmux $(tmux -V | cut -d' ' -f2) grid (run in a bare window to measure the terminal)"
+else
+  print -- "answering: ${TERM_PROGRAM:-$TERM}${TERM_PROGRAM_VERSION:+ $TERM_PROGRAM_VERSION}"
+fi
+printf '%-5s %-40s %s\n' 'cells' 'codepoints' 'glyph'
+for s in "${samples[@]}"; do
+  printf '\r\e[K'
+  before=$(cpr_column)
+  printf '%s' "$s"
+  after=$(cpr_column)
+  printf '\r\e[K%-5s %-40s %s\n' "$((after - before))" "$(codepoints "$s")" "$s"
+done
