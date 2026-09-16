@@ -1,11 +1,11 @@
 ---
 name: ari-hemingway--share-gdoc
-description: "Publish a markdown draft as a Google Doc in one command — create, or update an existing doc in place — and finish it: every Drive link a smart chip, table header rows styled (bold, centered, grey), two-column tables at their shortest split, every image checked to fit one page and to link to its mermaid.live source. Dry-runs first; the doc is created only on confirm."
+description: "Publish a markdown draft as a Google Doc in one command — create, optionally inside a given Drive folder, or update an existing doc in place — and finish it: every Drive link a smart chip, table header rows styled (bold, centered, grey), two-column tables at their shortest split, every image checked to fit one page and to link to its mermaid.live source. Dry-runs first; the doc is created only on confirm."
 ---
 
 # Publish to Google Doc
 
-Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-gdoc`) into a Google Doc with one script call: import the markdown through Drive's Docs conversion, apply one fix-up batch for what markdown cannot express, then verify from one re-read. The fix-up is part of publishing, never a follow-up.
+Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-gdoc`) into a Google Doc with one script call: import the markdown through Drive's Docs conversion, into the caller's Drive folder when `--folder` is given, apply one fix-up batch for what markdown cannot express, then verify from one re-read. The fix-up is part of publishing, never a follow-up.
 
 ## Rules
 
@@ -21,7 +21,8 @@ Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-g
 - `gws` CLI installed and authenticated for the user's @airtable.com account (`/gws-docs` covers setup). `jq` and `python3` installed.
 - The draft's first line is the plain-text title (ending `[🤖 AI generated]` per `/ari-hemingway--format-gdoc`). The script strips that line from the body and uses it as the Doc title; pass `--title` to override and keep the whole file as body.
 - Updating in place (`--doc`) replaces the entire body. Manual edits in the Doc are lost, including "Pin header row". Say so before updating a doc the user has touched.
-- Docs in shared drives work: the script sets `supportsAllDrives`. A Drive 404 on a doc the user can open therefore means the id is wrong, not that the doc moved.
+- Docs and folders in shared drives work: the script sets `supportsAllDrives`. A Drive 404 on a doc or folder the user can open therefore means the id is wrong, not that it moved.
+- `--folder <id|url>` creates the Doc inside that folder (a bare id or a `drive.google.com/drive/folders/…` URL). The script first checks that the target exists, is a folder, and accepts new files. The Doc is placed at creation and never moved, so `--folder` together with `--doc` is an error.
 
 ## File storage
 
@@ -34,17 +35,17 @@ Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-g
 
 ### Dry-run
 
-Emit exactly this one Bash call (add `--doc <id|url>` to update an existing doc):
+Emit exactly this one Bash call (add `--doc <id|url>` to update an existing doc, or `--folder <id|url>` to create inside a Drive folder):
 
 ```zsh
 zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_publish.zsh --file <path/to/output.md> --dry-run
 ```
 
-It logs the title and body size and validates the Drive request without creating anything. Show the user the title and whether this is a create or an update, then wait for confirmation.
+It logs the title, the body size, and the target folder's name and id when `--folder` is given, then validates the Drive request without creating anything. Show the user the title, whether this is a create or an update, and the folder, then wait for confirmation.
 
 ### Publish
 
-Same call without `--dry-run`:
+Same call without `--dry-run`, keeping `--doc` or `--folder`:
 
 ```zsh
 zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_publish.zsh --file <path/to/output.md>

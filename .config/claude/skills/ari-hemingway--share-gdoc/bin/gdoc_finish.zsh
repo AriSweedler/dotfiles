@@ -43,6 +43,7 @@ source "${LIB_LOGGING}"
 # Returns: 1 if any are missing
 #######################################
 check_prerequisites() {
+  local cmd
   local missing=()
   for cmd in gws jq; do
     command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
@@ -84,15 +85,15 @@ fetch_doc() {
 # Arguments: $1 - doc id, $2 - requests JSON array path, $3 - revision id, $4 - dry_run (true|false), $5 - reply path
 #######################################
 batch_update() {
-  local doc="${1}" requests="${2}" revision="${3}" dry_run="${4}" reply="${5}"
+  local doc="${1}" requests="${2}" revision="${3}" dry_run="${4}" reply_file="${5}"
   local params body
   params="$(jq -cn --arg id "${doc}" '{documentId: $id}')"
   body="$(jq -c --arg rev "${revision}" '{requests: ., writeControl: {requiredRevisionId: $rev}}' "${requests}")"
   if [[ "${dry_run}" == "true" ]]; then
-    gws docs documents batchUpdate --dry-run --params "${params}" --json "${body}" > "${reply}"
+    gws docs documents batchUpdate --dry-run --params "${params}" --json "${body}" > "${reply_file}"
     return
   fi
-  gws docs documents batchUpdate --params "${params}" --json "${body}" > "${reply}"
+  gws docs documents batchUpdate --params "${params}" --json "${body}" > "${reply_file}"
 }
 
 ########################################################################
