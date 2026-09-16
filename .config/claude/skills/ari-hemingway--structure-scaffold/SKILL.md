@@ -13,7 +13,7 @@ Formatting rules: see `/ari-hemingway--format-gdoc`. Workflow patterns (investig
 
 Required sections, in order:
 - Title (plain text, `[ari-hemingway scaffold] <Topic> [🤖 AI generated]`)
-- `# Summary` — what the topic is and what the article covers, then one plain-text sentence naming the toolchain that generated it (`ari-hemingway`, `ari-hemingway--structure-scaffold`, `ari-hemingway--share-gdoc`, `ari-diagram-mermaid`). Never link a skill in a Doc. Written last.
+- `# Summary` — what the topic is and what the article covers. Never mention a skill in the body; the footer credits the toolchain. Written last.
 - `# Definitions` — one two-column table, `Word | Definition`, then an optional layout diagram.
 - `# Subsystems` — one `##` per subsystem, each standalone.
 - `# Useful links` — `## Docs` lists every doc URL from the table and the body, per `/ari-hemingway--format-gdoc`. No skill links.
@@ -24,7 +24,7 @@ Required sections, in order:
 [ari-hemingway scaffold] Topic [🤖 AI generated]
 
 # Summary
-This article was generated as an example output of the ari-hemingway writing pipeline: ari-hemingway--structure-scaffold shaped it, ari-hemingway--share-gdoc published it, and ari-diagram-mermaid drew the diagram. One sentence on the topic. One sentence on what this revision contains.
+One sentence on the topic. One sentence on what this revision contains.
 
 # Definitions
 
@@ -47,7 +47,7 @@ Names "Install layout" but never describes its internals.
 ## Docs
 - every doc URL used in the table and the body
 
-🤖🌸 Generated with Claude Code
+🤖🌸 Generated with Claude Code with the ari-hemingway skill
 ```
 
 ## Rules
