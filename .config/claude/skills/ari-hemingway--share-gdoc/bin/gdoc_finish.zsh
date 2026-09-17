@@ -1,10 +1,10 @@
 #!/usr/bin/env zsh
 # Finish a Google Doc created from markdown in one fix-up batch: convert every plain Drive link
-# into a smart chip, style every table's header row (bold, centered, grey #D9D9D9), and set each
-# two-column table's column widths to the split that makes it shortest, then verify
-# from one re-read that every inline image fits one page and links to its editable mermaid.live
-# source and that no plain Drive link remains. tableHeader (pin header row) is read-only in the
-# Docs API and stays a manual step.
+# into a smart chip, style every table's header row (bold, centered, grey #D9D9D9), and set every
+# table's column widths to the ones that make it shortest with no column narrower than its widest
+# token, then verify from one re-read that every inline image fits one page and links to its
+# editable mermaid.live source, that no plain Drive link remains, and that every table fits the
+# text width. tableHeader (pin header row) is read-only in the Docs API and stays a manual step.
 
 set -euo pipefail
 
@@ -24,8 +24,11 @@ readonly IMAGE_LINK_PREFIX="https://mermaid.live/edit#"
 # April 2026) turns it into a chip. It accepts Drive file and folder URLs only, so this is the
 # whole allowlist; the captured id is what the pre-flight files.get validates.
 readonly DRIVE_LINK_RE='^https://(docs|drive)\.google\.com/(.*/d/|drive/folders/)([A-Za-z0-9_-]+)'
-# Column-width model for two-column tables: Arial metrics plus greedy wrap, see the jq header.
-readonly TABLE_WIDTHS_JQ="${SCRIPT_DIR:h}/lib/table_widths.jq"
+# Column-width planner for every table (any column count): Arial metrics plus greedy wrap, hard
+# minimum per column at its widest token; see the Python header. Points per modeled line, for
+# the predicted-vs-rendered comparison, match the planner's LINE_HEIGHT_PT.
+readonly TABLE_WIDTHS="${SCRIPT_DIR}/gdoc_table_widths.zsh"
+readonly LINE_HEIGHT_PT="15.15"
 
 # --- Logging ---
 
@@ -244,31 +247,67 @@ build_header_style_requests() {
 }
 
 #######################################
-# Build the column-width requests for every two-column table whose modeled height improves:
-# both columns become FIXED_WIDTH at the split the model found. Logs the model's line counts
-# before and after per table. Each request carries an `anchor` for ordering.
-# Globals: TABLE_WIDTHS_JQ
-# Arguments: $1 - path to doc JSON, $2 - output path for the requests JSON array
+# Run the width planner over every table in the doc; one JSON line per table into the plan file.
+# Globals: TABLE_WIDTHS
+# Arguments: $1 - path to doc JSON, $2 - output path for the plan (JSON lines), $@ - width overrides (START:w1,w2,...)
+#######################################
+plan_table_widths() {
+  local doc_json="${1}" out="${2}"
+  shift 2
+  local -a override_flags
+  override_flags=()
+  local spec
+  for spec in "${@}"; do override_flags+=(--override "${spec}"); done
+  zsh "${TABLE_WIDTHS}" --doc-json "${doc_json}" "${override_flags[@]}" > "${out}"
+}
+
+#######################################
+# Build the column-width requests from the plan: every column of every feasible table whose
+# modeled line count improves (or that the caller overrode) becomes FIXED_WIDTH at the planned
+# width. Logs one line per table. Each request carries an `anchor` for ordering.
+# Arguments: $1 - path to the plan (JSON lines), $2 - output path for the requests JSON array
 #######################################
 build_column_width_requests() {
-  local doc_json="${1}" out="${2}"
-  local plan
-  plan="$(jq -c -f "${TABLE_WIDTHS_JQ}" "${doc_json}")"
-  local start rows cw0 cw1 clines bw0 bw1 blines
-  while IFS=$'\t' read -r start rows cw0 cw1 clines bw0 bw1 blines; do
+  local plan="${1}" out="${2}"
+  local start rows cols current clines best blines feasible source
+  while IFS=$'\t' read -r start rows cols current clines best blines feasible source; do
     [[ -n "${start}" ]] || continue
-    if (( blines < clines )); then
-      log::info "Table columns resized | start='${start}' rows='${rows}' current='${cw0}/${cw1} pt, ${clines} lines' best='${bw0}/${bw1} pt, ${blines} lines'"
+    if [[ "${feasible}" != "true" ]]; then
+      log::warn "Table columns left as is; it cannot fit | start='${start}' rows='${rows}' cols='${cols}'"
+    elif [[ "${source}" == "override" ]]; then
+      log::info "Table columns overridden | start='${start}' rows='${rows}' cols='${cols}' widths='${best} pt' lines='${blines}'"
+    elif (( blines < clines )); then
+      log::info "Table columns resized | start='${start}' rows='${rows}' cols='${cols}' current='${current} pt, ${clines} lines' best='${best} pt, ${blines} lines'"
     else
-      log::info "Table columns kept | start='${start}' rows='${rows}' widths='${cw0}/${cw1} pt' lines='${clines}'"
+      log::info "Table columns kept | start='${start}' rows='${rows}' cols='${cols}' widths='${current} pt' lines='${clines}'"
     fi
-  done < <(print -r -- "${plan}" | jq -r '.[] | [.start, .rows, (.current.w0|round), (.current.w1|round), .current.lines, .best.w0, .best.w1, .best.lines] | @tsv')
-  print -r -- "${plan}" | jq -c '[.[] | select(.best.lines < .current.lines) | .start as $t
-    | ({col: 0, w: .best.w0}, {col: 1, w: .best.w1})
+  done < <(jq -r '[.start, .rows, .cols, (.current_pt | map(round) | join("/")), .current_lines, ((.best_pt // []) | map(round) | join("/")), (.best_lines // 0), .feasible, .source] | @tsv' "${plan}")
+  jq -cs '[.[] | select(.feasible and (.source == "override" or .best_lines < .current_lines)) | .start as $t
+    | .best_pt | to_entries[]
     | {anchor: $t, order: 2, request: {updateTableColumnProperties: {
-        tableStartLocation: {index: $t}, columnIndices: [.col],
-        tableColumnProperties: {widthType: "FIXED_WIDTH", width: {magnitude: .w, unit: "PT"}},
-        fields: "widthType,width"}}}]' > "${out}"
+        tableStartLocation: {index: $t}, columnIndices: [.key],
+        tableColumnProperties: {widthType: "FIXED_WIDTH", width: {magnitude: .value, unit: "PT"}},
+        fields: "widthType,width"}}}]' "${plan}" > "${out}"
+}
+
+#######################################
+# Log one line per table that cannot fit the text width even at its columns' minimums, naming the
+# deficit and the widest token per column; the author folds a column or shortens a token.
+# Arguments: $1 - path to the plan (JSON lines)
+# Returns: 1 if any table cannot fit
+#######################################
+check_tables_fit() {
+  local plan="${1}"
+  local rc=0 start cols deficit widest
+  while IFS=$'\t' read -r start cols deficit widest; do
+    [[ -n "${start}" ]] || continue
+    log::err "Table cannot fit the text width | start='${start}' cols='${cols}' deficit_pt='${deficit}' widest_tokens='${widest}' fix='fold a column or shorten a token, then re-run with --doc'"
+    rc=1
+  done < <(jq -r 'select(.feasible | not) | [.start, .cols, .deficit_pt, (.widest_tokens | join(" | "))] | @tsv' "${plan}")
+  if (( rc == 0 )); then
+    log::ok "Every table fits the text width | tables='$(jq -s 'length' "${plan}")'"
+  fi
+  return "${rc}"
 }
 
 #######################################
@@ -305,11 +344,13 @@ check_drive_links_are_chips() {
 #######################################
 # Log the doc's rendered page count: export to PDF and read /Count from the Pages root. This is
 # the one real layout measurement available (the Docs API reports no geometry), so it is what
-# the column-width model is judged against.
-# Arguments: $1 - doc id, $2 - work dir
+# the column-width model is judged against: each table's rendered height is compared with the
+# planner's prediction for the widths the doc now has, and a drift over one line-height warns.
+# Globals: LINE_HEIGHT_PT
+# Arguments: $1 - doc id, $2 - work dir, $3 - path to the plan for the doc as it now is (JSON lines)
 #######################################
 report_page_count() {
-  local doc="${1}" work="${2}"
+  local doc="${1}" work="${2}" plan="${3}"
   local params pages
   params="$(jq -cn --arg id "${doc}" '{fileId: $id, mimeType: "application/pdf"}')"
   # gws saves the export as download.pdf in the working directory.
@@ -320,27 +361,57 @@ report_page_count() {
     return 0
   fi
   log::info "Rendered length | pages='${pages}' pdf='${work}/download.pdf'"
-  # Per-table rendered heights from the same PDF, so a column-width change can be judged in points.
-  local table pages_on rows cols height content
+  # Per-table rendered heights from the same PDF, matched to the plan by document order.
+  local table pages_on rows cols height content predicted drift
   while IFS=$'\t' read -r table pages_on rows cols height content; do
     [[ -n "${table}" ]] || continue
-    log::info "Rendered table | table='${table}' pages='${pages_on}' rows='${rows}' cols='${cols}' height_pt='${height}' content_height_pt='${content}'"
+    predicted="$(jq -rs --argjson n "${table}" '.[$n - 1].predicted_current_pt // empty' "${plan}")"
+    if [[ -z "${predicted}" ]]; then
+      log::info "Rendered table | table='${table}' pages='${pages_on}' rows='${rows}' cols='${cols}' height_pt='${height}' content_height_pt='${content}'"
+      continue
+    fi
+    drift="$(awk -v a="${content}" -v b="${predicted}" 'BEGIN { d = a - b; if (d < 0) d = -d; printf "%.1f", d }')"
+    if awk -v d="${drift}" -v lh="${LINE_HEIGHT_PT}" 'BEGIN { exit !(d > lh) }'; then
+      log::warn "Rendered table drifts from the model | table='${table}' pages='${pages_on}' rows='${rows}' cols='${cols}' content_height_pt='${content}' predicted_pt='${predicted}' drift_pt='${drift}' tolerance_pt='${LINE_HEIGHT_PT}'"
+      continue
+    fi
+    log::info "Rendered table | table='${table}' pages='${pages_on}' rows='${rows}' cols='${cols}' height_pt='${height}' content_height_pt='${content}' predicted_pt='${predicted}' drift_pt='${drift}'"
   done < <(zsh "${SCRIPT_DIR}/gdoc_table_heights.zsh" --pdf "${work}/download.pdf" 2>/dev/null \
            | jq -r '[.table, (.pages | join(",")), .rows, .cols, .height_pt, .content_height_pt] | @tsv')
 }
 
 #######################################
-# Run every check against one doc JSON, then report the rendered page count.
-# Arguments: $1 - path to doc JSON, $2 - doc id, $3 - work dir
+# Render every page of the exported PDF to PNG when the caller asked for it.
+# Arguments: $1 - work dir (holds download.pdf), $2 - output dir ("" = skip)
+#######################################
+render_pages_if_requested() {
+  local work="${1}" out="${2}"
+  if [[ -z "${out}" ]]; then
+    return 0
+  fi
+  if [[ ! -f "${work}/download.pdf" ]]; then
+    log::warn "No PDF export to render | work='${work}'"
+    return 0
+  fi
+  zsh "${SCRIPT_DIR}/gdoc_render_pages.zsh" --pdf "${work}/download.pdf" --out "${out}" > /dev/null
+}
+
+#######################################
+# Run every check against one doc JSON (planning table widths read-only for the fit check and the
+# height comparison), then report the rendered page count.
+# Arguments: $1 - path to doc JSON, $2 - doc id, $3 - work dir, $4 - page render dir ("" = skip)
 # Returns: 1 if any check fails
 #######################################
 run_checks() {
-  local doc_json="${1}" doc="${2}" work="${3}"
+  local doc_json="${1}" doc="${2}" work="${3}" render_dir="${4}"
   local rc=0
   check_images_fit_one_page "${doc_json}" || rc=1
   check_images_link_to_source "${doc_json}" || rc=1
   check_drive_links_are_chips "${doc_json}" || rc=1
-  report_page_count "${doc}" "${work}"
+  plan_table_widths "${doc_json}" "${work}/plan_after.json"
+  check_tables_fit "${work}/plan_after.json" || rc=1
+  report_page_count "${doc}" "${work}" "${work}/plan_after.json"
+  render_pages_if_requested "${work}" "${render_dir}"
   return "${rc}"
 }
 
@@ -348,19 +419,22 @@ run_checks() {
 
 help() {
   cat <<EOH
-${c_green}gdoc_finish${c_rst} — one fix-up batch (Drive links to chips, styled table headers, two-column tables at their shortest split), then one verify read
+${c_green}gdoc_finish${c_rst} — one fix-up batch (Drive links to chips, styled table headers, every table at the column widths that make it shortest without mid-word breaks), then one verify read
 
 ${c_bold}Usage:${c_rst}
   zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_finish.zsh --doc ID_OR_URL [OPTIONS]
 
 ${c_bold}Options:${c_rst}
-  --doc ID_OR_URL   Google Doc id or docs.google.com URL (required)
-  --check-only      Run the checks against the doc as it is; change nothing
-  --dry-run         Validate the fix-up batch locally; change nothing
-  -h, --help        Show this help
+  --doc ID_OR_URL              Google Doc id or docs.google.com URL (required)
+  --table-widths START:w1,w2   Widths in points for the table at index START, instead of the model (repeatable; logged)
+  --render-pages DIR           Also render the PDF export to one PNG per page in DIR (needs swift)
+  --check-only                 Run the checks against the doc as it is; change nothing
+  --dry-run                    Validate the fix-up batch locally; change nothing
+  -h, --help                   Show this help
 
 ${c_bold}Exit code:${c_rst} non-zero when any inline image exceeds the page content box or lacks a link to its
-mermaid.live source, or when any Drive link is still a plain hyperlink.
+mermaid.live source, when any Drive link is still a plain hyperlink, or when a table's widest tokens
+cannot fit the text width even at their minimum column widths (fold a column or shorten a token).
 EOH
 }
 
@@ -370,21 +444,34 @@ main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local doc="" check_only=false dry_run=false
+  local doc="" check_only=false dry_run=false render_dir=""
+  local -a table_widths
+  table_widths=()
   while (( $# > 0 )); do case "${1}" in
-    -h|--help)    help; return 0 ;;
-    --doc)        doc="${2:?--doc requires a value}"; shift 2 ;;
-    --check-only) check_only=true; shift ;;
-    --dry-run)    dry_run=true; shift ;;
-    -*)           log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
-    *)            log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
+    -h|--help)       help; return 0 ;;
+    --doc)           doc="${2:?--doc requires a value}"; shift 2 ;;
+    --table-widths)  table_widths+=("${2:?--table-widths requires a value}"); shift 2 ;;
+    --render-pages)  render_dir="${2:?--render-pages requires a value}"; shift 2 ;;
+    --check-only)    check_only=true; shift ;;
+    --dry-run)       dry_run=true; shift ;;
+    -*)              log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)               log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
   esac; done
 
   # === MASSAGE ===
   doc="$(doc_id_from "${doc}")"
+  [[ -n "${render_dir}" ]] && render_dir="${render_dir:A}"
 
   # === VALIDATE ===
   [[ -n "${doc}" ]] || { log::err "Missing --doc"; help; return 1; }
+  local spec
+  for spec in "${table_widths[@]}"; do
+    [[ "${spec}" =~ '^[0-9]+:[0-9.]+(,[0-9.]+)*$' ]] || { log::err "Invalid --table-widths | spec='${spec}' expected='START:w1,w2,...'"; return 1; }
+  done
+  if [[ -n "${render_dir}" ]] && ! command -v swift >/dev/null 2>&1; then
+    log::err "--render-pages needs swift (Xcode command line tools) | render_dir='${render_dir}'"
+    return 1
+  fi
 
   # === LOGIC ===
   local work
@@ -393,16 +480,17 @@ main() {
   log::info "Fetched doc | doc='${doc}' json='${work}/doc.json'"
 
   if [[ "${check_only}" == "true" ]]; then
-    run_checks "${work}/doc.json" "${doc}" "${work}"
+    run_checks "${work}/doc.json" "${doc}" "${work}" "${render_dir}"
     return
   fi
 
-  # One batch built from the one read: chips and header styles together.
+  # One batch built from the one read: chips, header styles, and column widths together.
   plain_drive_links "${work}/doc.json" > "${work}/links.json"
   validate_link_targets "${work}/links.json" "${work}/links.valid.json"
   build_chip_requests "${work}/links.valid.json" "${work}/chip_requests.json"
   build_header_style_requests "${work}/doc.json" "${work}/style_requests.json"
-  build_column_width_requests "${work}/doc.json" "${work}/width_requests.json"
+  plan_table_widths "${work}/doc.json" "${work}/plan.json" "${table_widths[@]}"
+  build_column_width_requests "${work}/plan.json" "${work}/width_requests.json"
   merge_requests "${work}/chip_requests.json" "${work}/style_requests.json" "${work}/width_requests.json" "${work}/requests.json"
   local n_links n_tables n_requests revision
   n_links="$(jq 'length' "${work}/links.valid.json")"
@@ -424,7 +512,7 @@ main() {
     log::info "Nothing to fix up"
   fi
 
-  run_checks "${work}/doc.json" "${doc}" "${work}"
+  run_checks "${work}/doc.json" "${doc}" "${work}" "${render_dir}"
 }
 
 main "${@}"

@@ -1,6 +1,6 @@
 ---
 name: ari-hemingway--share-gdoc
-description: "Publish a markdown draft as a Google Doc in one command — create, optionally inside a given Drive folder, or update an existing doc in place — and finish it: every Drive link a smart chip, table header rows styled (bold, centered, grey), two-column tables at their shortest split, every image checked to fit one page and to link to its mermaid.live source. Dry-runs first; the doc is created only on confirm."
+description: "Publish a markdown draft as a Google Doc in one command — create, optionally inside a given Drive folder, or update an existing doc in place — and finish it: every Drive link a smart chip, table header rows styled (bold, centered, grey), every table's columns sized so it is shortest with no mid-word breaks, every image checked to fit one page and to link to its mermaid.live source. Dry-runs first; the doc is created only on confirm."
 ---
 
 # Publish to Google Doc
@@ -11,9 +11,10 @@ Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-g
 
 - **Every Drive link becomes a smart chip.** Drive's markdown import lands a raw `docs.google.com` or `drive.google.com` URL as a plain hyperlink, not a chip. The fix-up batch converts each one with the Docs API `insertRichLink` request (present since April 2026): `deleteContentRange` over the link text, then `insertRichLink` at the same index with `richLinkProperties.uri` only, since the server resolves the title and rejects `title` or `mimeType`. Requests run in descending index order so earlier indexes stay valid, and every target is pre-checked with `drive files get`, because one unreadable target fails the whole atomic batch. The verify read fails the publish if any Drive URL is still a plain link. A markdown-linked Drive URL is not converted, which is why `/ari-hemingway--format-gdoc` keeps them raw.
 - **Table header rows** become bold, centered, and grey (`#D9D9D9`) in the same batch. Pinning the header row stays manual: `tableHeader` is read-only in the API.
-- **Two-column tables take the split that makes them shortest.** `lib/table_widths.jq` predicts each cell's wrapped line count from Arial metrics and tries every whole-point split of the text width; ties go to the widest first column so terms stay on one line where that is free. Both columns are set `FIXED_WIDTH` in the same batch.
+- **Every table takes the column widths that make it shortest, and no column is narrower than its widest token.** `bin/gdoc_table_widths.zsh` predicts each cell's wrapped line count from Arial and Roboto Mono metrics (bold for the header row), sets each column's floor at its widest unbreakable token plus padding so nothing breaks mid-word, then searches whole-point transfers between every pair of columns for the fewest lines; ties move width toward the earlier column so terms stay on one line where that is free. Every column is set `FIXED_WIDTH` in the same batch. `--table-widths START:w1,w2,...` on `gdoc_finish.zsh` replaces the model for one table and is logged.
+- **A table that cannot fit fails the finish step; nothing is guessed.** When the column floors sum past the text width, the Doc is still created, the log names the table, the deficit in points and the widest token per column, and the exit is non-zero. Fold a column or shorten the token in the draft and re-run with `--doc`.
 - **Images are checked, not fixed.** Every inline image must fit the page content box and link to `https://mermaid.live/edit#...`; the Diagrams rule in `/ari-hemingway--format-gdoc` says how to author that, and the verify read fails otherwise.
-- **Layout is measured from the PDF export.** The Docs API reports no geometry, so after every publish the finish step exports the doc to PDF and logs the page count and every table's rendered height in points. Judge a width change by that, not by the model.
+- **Layout is measured from the PDF export.** The Docs API reports no geometry, so after every publish the finish step exports the doc to PDF, logs the page count and every table's rendered height in points beside the model's prediction for the widths the doc now has, and warns when they differ by more than one line. Pass `--render-pages DIR` to also get one PNG per page (PDFKit through `swift`, nothing to install) when wrapping needs a look, since heights alone do not show a mid-word break.
 - **One read, one batch, one read.** The batch is pinned to the revision it was built from (`writeControl.requiredRevisionId`), so a concurrent edit fails the batch instead of corrupting the doc.
 
 ## Preconditions
@@ -27,9 +28,10 @@ Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-g
 ## File storage
 
 - `bin/gdoc_publish.zsh` — the one-shot publish: create or update, then finish. Prints the doc URL on stdout.
-- `bin/gdoc_finish.zsh` — the finishing half, runnable alone on any doc: the fix-up batch (chips, header styles, column widths) and the verify read (image fit, image link, no plain Drive link, page count, table heights). `--check-only` runs the verify read and changes nothing. Exit is non-zero on any failed check.
+- `bin/gdoc_finish.zsh` — the finishing half, runnable alone on any doc: the fix-up batch (chips, header styles, column widths) and the verify read (image fit, image link, no plain Drive link, every table fits, page count, table heights against the model). `--check-only` runs the verify read and changes nothing; `--table-widths` overrides one table's widths; `--render-pages DIR` renders the export. Exit is non-zero on any failed check.
+- `bin/gdoc_table_widths.zsh` (+ `gdoc_table_widths.py`, per `/ari-skill-pythonscripts`) — the column-width planner for tables of any column count: one JSON line per table with the current and best widths, modeled line counts, predicted heights, the widest token per column, and whether the table can fit at all. Read-only; `gdoc_finish.zsh` calls it before the batch and again for the verify read.
 - `bin/gdoc_table_heights.zsh` — measures every table in a PDF exported from Docs from the cell clip rectangles the export draws: rendered height in points per table, summed across pages, with and without the header row Docs repeats on each page. `gdoc_finish.zsh` calls it; run it by hand on a before and after export to judge a change.
-- `lib/table_widths.jq` — the column-width model.
+- `bin/gdoc_render_pages.zsh` (+ `gdoc_render_pages.swift`) — renders a PDF export to one PNG per page with PDFKit; needs `swift` from the Xcode command line tools and nothing from brew.
 
 ## Workflow
 
@@ -55,7 +57,7 @@ The script creates (or updates) the doc, then runs `gdoc_finish.zsh` on it.
 
 ### Chip, style, and resize
 
-`gdoc_finish.zsh` runs inside Publish; nothing to emit. Read its log: one `Converted Drive links to chips` or `Applied fix-up batch` line, one `Table columns resized` or `Table columns kept` line per two-column table, then the verify lines. A non-zero exit after "Doc created" means a check failed: an image wider or taller than one page, an image with no mermaid.live link, or a Drive link the chip pass could not convert (a target the caller cannot open, or a non-Drive URL styled as one). The doc exists at that point; record its URL, fix the draft per `/ari-hemingway--format-gdoc`, and re-run with `--doc <url>`.
+`gdoc_finish.zsh` runs inside Publish; nothing to emit. Read its log: one `Applied fix-up batch` line, one `Table columns resized`, `Table columns kept`, or `Table columns overridden` line per table, then the verify lines, ending with one `Rendered table` line per table that carries `predicted_pt` and `drift_pt`. A non-zero exit after "Doc created" means a check failed: an image wider or taller than one page, an image with no mermaid.live link, a Drive link the chip pass could not convert (a target the caller cannot open, or a non-Drive URL styled as one), or a `Table cannot fit the text width` line naming the deficit and the widest token per column. The doc exists at that point; record its URL, fix the draft per `/ari-hemingway--format-gdoc` (for an unfit table: fold a column, or shorten or split the named token), and re-run with `--doc <url>`. A `Rendered table drifts from the model` warning means the layout differs from the prediction by more than one line; re-run with `--check-only --render-pages <dir>` and look at the page before touching widths by hand.
 
 ### Report
 
@@ -69,7 +71,7 @@ To verify a doc someone edited by hand, or to redo the fix-up after manual table
 zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_finish.zsh --doc <id|url> --check-only
 ```
 
-Drop `--check-only` to apply the fix-up batch. Both are idempotent: a chip is not a plain link, so a second run finds nothing to convert.
+Drop `--check-only` to apply the fix-up batch. Both are idempotent: a chip is not a plain link, so a second run finds nothing to convert, and a table already at its planned widths is kept. Add `--render-pages <dir>` to either form to inspect the rendered pages.
 
 ### Measure a change
 
