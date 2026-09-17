@@ -273,7 +273,7 @@ See `/ari-hemingway--lib` for the failure contract when `/ari-diagram-mermaid` f
 
 ### Tables
 
-Every table's header row is bold, centered, and grey (`#D9D9D9`); data rows are plain. Markdown import only bolds the header, so publishing through `/ari-hemingway--share-gdoc` applies the rest mechanically. A table that reaches a Doc any other way must be restyled by hand (or with `gdoc_finish.zsh` from that skill). Pinning the header row is a manual Docs step: the API cannot set it.
+Every table's header row is bold, centered, and grey (`#D9D9D9`); data rows are plain. Markdown import only bolds the header, so publishing through `/ari-hemingway--share-gdoc` applies the rest mechanically. A table that reaches a Doc any other way must be restyled by hand (or with `gdoc_finish.zsh` from that skill). The import also pins the header row (`tableHeader` is true on the first row), so it repeats at the top of every page the table spans; `/ari-hemingway--share-gdoc` verifies that flag at publish.
 
 ### Useful links (required final section)
 
