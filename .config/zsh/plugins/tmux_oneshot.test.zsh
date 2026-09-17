@@ -615,13 +615,15 @@ _t "_new_window outside tmux runs inline" "inline-ran" "$(print -r -- "${_err_ou
 _t "_new_window outside tmux warns" "Not inside tmux" "$(print -r -- "${_err_out}" | grep -o 'Not inside tmux')"
 
 # ---------------------------------------------------------------------------
-# Surface: entry.window wins; else TMUX_ONESHOT_SURFACE; pane attaches a throwaway session
+# Surface: entry.window wins; else TMUX_ONESHOT_SURFACE; popup_pane attaches a throwaway session
 # ---------------------------------------------------------------------------
 # First recorded tmux argv starting with <cmd>, fields <range> (cut syntax), |-joined.
-function _tmux_call() { grep -m1 "^${1}"$'\x1f' "${_tmux_file}" | cut -d $'\x1f' -f "${2:-1-}" | tr $'\x1f' '|' }
+function _tmux_call() { grep -m1 -e "^${1}"$'\x1f' "${_tmux_file}" | cut -d $'\x1f' -f "${2:-1-}" | tr $'\x1f' '|' }
+# The recorded tmux subcommands in order; a leading "-S <socket>" is stripped first.
+function _tmux_subcommands() { sed -E $'s/^-S\x1f[^\x1f]*\x1f//' "${_tmux_file}" | cut -d $'\x1f' -f1 | grep -E "${1}" | paste -sd'|' - }
 _t "surface: default is popup" "popup" "$(unset TMUX_ONESHOT_SURFACE; tmux_oneshot::_surface '{"cmd":"x"}')"
-_t "surface: TMUX_ONESHOT_SURFACE picks pane" "pane" "$(TMUX_ONESHOT_SURFACE=pane tmux_oneshot::_surface '{"cmd":"x"}')"
-_t "surface: an entry's window field wins" "window" "$(TMUX_ONESHOT_SURFACE=pane tmux_oneshot::_surface '{"cmd":"x","window":"w"}')"
+_t "surface: TMUX_ONESHOT_SURFACE picks popup_pane" "popup_pane" "$(TMUX_ONESHOT_SURFACE=popup_pane tmux_oneshot::_surface '{"cmd":"x"}')"
+_t "surface: an entry's window field wins" "window" "$(TMUX_ONESHOT_SURFACE=popup_pane tmux_oneshot::_surface '{"cmd":"x","window":"w"}')"
 _err_out="$(TMUX_ONESHOT_SURFACE=bogus tmux_oneshot::_surface '{"cmd":"x"}' 2>&1)"
 _t "surface: unknown value falls back to popup and says so" "popup Unknown surface" \
   "$(print -r -- "${_err_out}" | tail -1) $(print -r -- "${_err_out}" | grep -o 'Unknown surface')"
@@ -629,18 +631,18 @@ _t "surface: unknown value falls back to popup and says so" "popup Unknown surfa
 ( export TMUX=test-dummy TMUX_ONESHOT_SURFACE=window; _run_key aPa > /dev/null 2>&1 )
 _t "surface=window: a plain entry opens a window named after it" "new-window|-n|aPa" "$(_tmux_last 1-3)"
 : > "${_tmux_file}"
-_err_out="$(export TMUX=test-dummy TMUX_ONESHOT_SURFACE=pane; _run_key aPa 2>/dev/null)"; _err_rc=$?
-_t "surface=pane: new-session -d -s oneshot-<pid> -c pwd zsh -c pane-runner" \
+_err_out="$(export TMUX=test-dummy TMUX_ONESHOT_SURFACE=popup_pane; _run_key aPa 2>/dev/null)"; _err_rc=$?
+_t "surface=popup_pane: new-session -d -s oneshot-<pid> -c pwd zsh -c pane-runner" \
   "new-session|-d|-s|oneshot-$$|-c|${PWD}|zsh|-c|${TMUX_ONESHOT_PANE_RUNNER}|tmux-oneshot" "$(_tmux_call new-session 1-10)"
-_t "surface=pane: cmd, autodismiss and the back rc follow the runner" \
+_t "surface=popup_pane: cmd, autodismiss and the back rc follow the runner" \
   "${_stub} --query \"'alpha' \"|true|${FZF_GROUP_BACK_RC}" "$(_tmux_call new-session 11)|$(_tmux_call new-session 13-14)"
-_t "surface=pane: attaches to that session" "attach-session|-t|oneshot-$$" "$(_tmux_call attach-session)"
-_t "surface=pane: status off, attach, then kill the session" "set-option|attach-session|kill-session" \
-  "$(cut -d $'\x1f' -f1 "${_tmux_file}" | grep -E '^(set-option|attach-session|kill-session)$' | paste -sd'|' -)"
-_t "surface=pane: no rc back (popup closed mid-run) is a failure, and the popup never holds" "1 " \
+_t "surface=popup_pane: attaches to that session, naming this server's socket" "-S|test-dummy|attach-session|-t|oneshot-$$" "$(_tmux_call -S)"
+_t "surface=popup_pane: status off, attach, then kill the session" "set-option|attach-session|kill-session" \
+  "$(_tmux_subcommands '^(set-option|attach-session|kill-session)$')"
+_t "surface=popup_pane: no rc back (popup closed mid-run) is a failure, and the popup never holds" "1 " \
   "${_err_rc} $(print -r -- "${_err_out}" | grep HELD)"
-_err_out="$(unset TMUX; TMUX_ONESHOT_SURFACE=pane tmux_oneshot::_attach_session aPa 'echo inline-ran' true 2>&1)"
-_t "surface=pane outside tmux runs inline" "inline-ran" "$(print -r -- "${_err_out}" | grep -x inline-ran)"
+_err_out="$(unset TMUX; TMUX_ONESHOT_SURFACE=popup_pane tmux_oneshot::_attach_session aPa 'echo inline-ran' true 2>&1)"
+_t "surface=popup_pane outside tmux runs inline" "inline-ran" "$(print -r -- "${_err_out}" | grep -x inline-ran)"
 # The runner itself, headless: TMUX_ONESHOT_HOLD=0 (exported above) skips its esc read.
 local _rcf
 _rcf="$(mktemp /tmp/tmux-oneshot-test-rc.XXXXX)"

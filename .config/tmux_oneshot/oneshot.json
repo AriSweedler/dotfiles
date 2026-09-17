@@ -1,0 +1,9 @@
+[
+  {
+    "menu": {
+      "name": "log",
+      "text": "the last tmux-oneshot run log; holds, so popup_pane lets you copy from it"
+    },
+    "cmd": "tmux-oneshot --log"
+  }
+]

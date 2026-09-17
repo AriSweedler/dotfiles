@@ -76,12 +76,12 @@
 # Surface — where the assembled cmd runs. An entry's window field always wins; every
 # other entry follows TMUX_ONESHOT_SURFACE (--surface for one launch, `tmux setenv -g`
 # for every popup):
-#   popup   (default) eval in the popup's own shell. No copy mode: a popup is not a pane.
-#   pane    a throwaway session runs the cmd and the popup attaches to it, so under the
-#           popup sits a real pane: copy mode, scrollback and mouse selection work with
-#           this server's bindings. Hold and autodismiss happen in that pane; the rc
-#           comes back through a file because attach-session exits 0 regardless.
-#   window  like a window entry, the window named after the entry.
+#   popup       (default) eval in the popup's own shell. No copy mode: a popup is not a pane.
+#   popup_pane  a throwaway session runs the cmd and the popup attaches to it, so under the
+#               popup sits a real pane: copy mode, scrollback and mouse selection work with
+#               this server's bindings. Hold and autodismiss happen in that pane; the rc
+#               comes back through a file because attach-session exits 0 regardless.
+#   window      like a window entry, the window named after the entry.
 #
 # flags/subcommands are a builder and strictly opt-in: an entry without them
 # never prompts (beyond its own `prompt`). Assembly order per level: cmd,
@@ -123,7 +123,7 @@ function tmux_oneshot() {
       --debug)    tmux_oneshot::action::debug; return $?;;
       --dry-run)  tmux_oneshot::action::dry_run "${2:?--dry-run requires a name}"; return $?;;
       -q|--query) fzf_args=(--query "${2:?-q requires a value}"); shift 2;;
-      --surface)  export TMUX_ONESHOT_SURFACE="${2:?--surface requires popup, pane or window}"; shift 2;;
+      --surface)  export TMUX_ONESHOT_SURFACE="${2:?--surface requires popup, popup_pane or window}"; shift 2;;
       *)
         log::err "Unknown option | option='${1}'"
         tmux_oneshot::action::help >&2
@@ -161,19 +161,19 @@ ${c_cyan}Options:${c_rst}
     ${c_green}--prefix P${c_rst}       only names starting with P
   ${c_green}--files${c_rst}            print the source files that would load, as "tier<TAB>path"
   ${c_green}--dry-run <name>${c_rst}   print the entry's fields, its surface and assembled cmd; no eval
-  ${c_green}--surface <s>${c_rst}      popup, pane or window for this launch (see Surface)
+  ${c_green}--surface <s>${c_rst}      popup, popup_pane or window for this launch (see Surface)
   ${c_green}--edit [name]${c_rst}      \$EDITOR on every source file, or on the one defining <name>
   ${c_green}--debug${c_rst}            non-interactive: sources, render, index, preview and key checks
   ${c_green}--log${c_rst}              print the per-run stderr log (popup errors land here)
   ${c_green}-h, --help${c_rst}         show this help
 
 ${c_cyan}Surface${c_rst} (where the picked cmd runs; an entry's window field always wins):
-  popup    eval in the popup's shell — no copy mode, a popup is not a pane
-  pane     the popup attaches to a throwaway session running the cmd: copy mode,
-           scrollback and mouse selection work as in any pane
-  window   a new tmux window named after the entry
-  default  \$TMUX_ONESHOT_SURFACE (currently: ${c_grey}${TMUX_ONESHOT_SURFACE:-popup}${c_rst})
-           flip it for every launch: tmux setenv -g TMUX_ONESHOT_SURFACE pane
+  popup       eval in the popup's shell — no copy mode, a popup is not a pane
+  popup_pane  the popup attaches to a throwaway session running the cmd: copy mode,
+              scrollback and mouse selection work as in any pane
+  window      a new tmux window named after the entry
+  default     \$TMUX_ONESHOT_SURFACE (currently: ${c_grey}${TMUX_ONESHOT_SURFACE:-popup}${c_rst})
+              flip it for every launch: tmux setenv -g TMUX_ONESHOT_SURFACE popup_pane
 
 ${c_cyan}Sources${c_rst} (later wins on a duplicate name):
   global     ${c_grey}${XDG_CONFIG_HOME:-${HOME}/.config}/tmux_oneshot/*.json${c_rst}   skip: TMUX_ONESHOT_IGNORE_DIR_GLOBAL=1
@@ -750,7 +750,7 @@ function tmux_oneshot::action::dry_run() {
   entry="$(jq --argjson i "${idx}" '.[$i]' "${TMUX_ONESHOT_DB}")"
   cmd="$(tmux_oneshot::_assemble "${entry}")" || return 1
   jq -r --arg cmd "${cmd}" '
-    "name=\(.menu.name // .cmd) tier=\(._tier // "db") src=\(._src // env.TMUX_ONESHOT_DB) surface=\(if .window then "window:" + .window else (env.TMUX_ONESHOT_SURFACE // "popup" | if . == "pane" or . == "window" then . else "popup" end) end) autodismiss=\(.autodismiss // false) key=\(.key // "-") prompt=\(.prompt // "-")",
+    "name=\(.menu.name // .cmd) tier=\(._tier // "db") src=\(._src // env.TMUX_ONESHOT_DB) surface=\(if .window then "window:" + .window else (env.TMUX_ONESHOT_SURFACE // "popup" | if . == "popup_pane" or . == "window" then . else "popup" end) end) autodismiss=\(.autodismiss // false) key=\(.key // "-") prompt=\(.prompt // "-")",
     "cmd=\($cmd)"' <<< "${entry}"
 }
 
@@ -910,7 +910,7 @@ function tmux_oneshot::_run() {
       tmux_oneshot::_new_window "${window:-${name// /-}}" "${cmd}"
       return $?
       ;;
-    pane)
+    popup_pane)
       tmux_oneshot::_attach_session "${name}" "${cmd}" "${autodismiss}"; rc=$?
       ;;
     *)
@@ -926,7 +926,7 @@ function tmux_oneshot::_run() {
     [[ -n "${TMUX:-}" ]] && tmux display-message -d 1500 "✓ ${name}"
     return 0
   fi
-  if [[ "${surface}" == pane ]]; then
+  if [[ "${surface}" == popup_pane ]]; then
     # The pane already held until esc, and the cmd's stderr never reached this log, so a
     # failure is recorded without the notification that would only open an empty log.
     (( rc == 0 )) || log::err "${name} failed | rc='${rc}' cmd='${cmd}'"
@@ -937,7 +937,7 @@ function tmux_oneshot::_run() {
   return "${rc}"
 }
 
-# Output: popup | pane | window. An entry's window field wins; otherwise
+# Output: popup | popup_pane | window. An entry's window field wins; otherwise
 # TMUX_ONESHOT_SURFACE. An unknown value runs on the popup and says so.
 function tmux_oneshot::_surface() {
   local entry="${1:?}"
@@ -947,7 +947,7 @@ function tmux_oneshot::_surface() {
   fi
   local surface="${TMUX_ONESHOT_SURFACE:-popup}"
   case "${surface}" in
-    popup|pane|window) ;;
+    popup|popup_pane|window) ;;
     *) log::err "Unknown surface, using popup | surface='${surface}'"; surface=popup ;;
   esac
   print -r -- "${surface}"
@@ -1024,7 +1024,7 @@ TMUX_ONESHOT_PANE_RUNNER='eval "$1"; rc=$?; print -rn -- "${rc}" > "$2"; if (( r
 # scrollback and mouse selection work there with this server's bindings, which a popup's
 # own screen never gets. attach-session exits 0 whether the session ended or the client
 # was detached, so the rc travels back through a file; an empty file (popup closed
-# mid-run) reads as failure. TMUX= is what lets a client start inside the popup.
+# mid-run) reads as failure.
 function tmux_oneshot::_attach_session() {
   local name="${1:?}" cmd="${2:?}" autodismiss="${3:-false}"
   if [[ -z "${TMUX:-}" ]]; then
@@ -1042,7 +1042,9 @@ function tmux_oneshot::_attach_session() {
     rm -f "${rcf}"
     return 1
   fi
-  tmux set-option -t "${sess}" status off
+  # A fast autodismissed cmd can end the session before any of this; then there is
+  # nothing to show and the rc file already has its answer.
+  tmux set-option -t "${sess}" status off 2>/dev/null
   # The outer client's terminal features (RGB …) do not follow TERM into the nested client.
   local termfeatures
   local -a feats
@@ -1050,12 +1052,17 @@ function tmux_oneshot::_attach_session() {
   [[ -n "${termfeatures}" ]] && feats=(-T "${termfeatures}")
   # Closing the popup hangs this shell up mid-attach; the session must go with it.
   trap 'tmux kill-session -t "${sess}" 2>/dev/null' HUP
-  TMUX= tmux "${feats[@]}" attach-session -t "${sess}"
+  # Clearing TMUX is what lets a client start in here, but it also drops the socket, so
+  # the server is named again explicitly.
+  if tmux has-session -t "${sess}" 2>/dev/null; then
+    TMUX= tmux -S "${TMUX%%,*}" "${feats[@]}" attach-session -t "${sess}" 2>/dev/null
+  fi
   trap - HUP
   tmux kill-session -t "${sess}" 2>/dev/null
   local rc
   rc="$(cat "${rcf}" 2>/dev/null)"
   rm -f "${rcf}"
+  [[ -n "${rc}" ]] || log::err "No rc came back from the pane | session='${sess}'"
   return "${rc:-1}"
 }
 
