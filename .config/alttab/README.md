@@ -11,6 +11,7 @@ prompts, Pro features locked. Nothing is unlocked.
 | File | Purpose |
 |---|---|
 | `bin/alttab-free-build` | Clones upstream, applies the patch, builds, installs, fixes permissions. On `PATH` via `~/.config/bin`. |
+| `bin/alttab-free-cert` | Creates and trusts the local code-signing certificate the build is signed with, once per machine. Called by the build script; safe to run by hand. |
 | `free.patch` | The source change. Its header lists exactly what it alters. Targets upstream tag `v11.6.1`. |
 | `README.md` | This file. |
 | `AGENTS.md` | Instructions for an LLM agent doing this on a new machine with you. |
@@ -28,6 +29,8 @@ prompts, Pro features locked. Nothing is unlocked.
 
 - If the Homebrew AltTab is installed, the script uninstalls it so `brew upgrade` can never swap
   the Pro build back in. Your AltTab settings are kept.
+- The first run creates a local code-signing certificate, and macOS asks for an administrator
+  password once to trust it for code signing. See "Why permissions survive rebuilds" below.
 
 ## Run it
 
@@ -37,18 +40,23 @@ alttab-free-build
 
 It takes a minute or two, most of it compiling. The script:
 
-1. Clones `lwouis/alt-tab-macos` into `~/.cache/alttab-free/src` (or reuses it) at tag `v11.6.1`.
-2. Applies `free.patch`.
-3. Writes `config/local.xcconfig`: ad-hoc signature, macOS 12 deployment target, upstream
-   deprecation warnings not treated as errors.
-4. Builds the Release scheme and verifies the signature and bundle id.
-5. Quits AltTab, removes the Homebrew cask, replaces `/Applications/AltTab.app`, and deletes the
+1. Makes sure the local code-signing certificate `AltTab Free Local` exists and is trusted
+   (`bin/alttab-free-cert`). First time only: it is generated into your login keychain and macOS
+   asks for an administrator password to trust it. Every later run finds it and moves on.
+2. Clones `lwouis/alt-tab-macos` into `~/.cache/alttab-free/src` (or reuses it) at tag `v11.6.1`.
+3. Applies `free.patch`.
+4. Writes `config/local.xcconfig`: sign with that certificate, macOS 12 deployment target,
+   upstream deprecation warnings not treated as errors.
+5. Builds the Release scheme and verifies the signature and bundle id.
+6. Quits AltTab, removes the Homebrew cask, replaces `/Applications/AltTab.app`, and deletes the
    build-folder copy so Spotlight sees one AltTab.
-6. Sets the in-app updater to manual. The official update feed would reinstall Pro.
-7. Resets the Accessibility and Screen Recording records if the app's code requirement changed.
-8. Opens the app.
+7. Sets the in-app updater to manual. The official update feed would reinstall Pro.
+8. Resets the Accessibility and Screen Recording records if the app's code requirement changed.
+   With the certificate it does not change between rebuilds, so this happens on the first
+   install and then only if you switch signing identity.
+9. Opens the app.
 
-It prints `key=value` lines at the end. `permissions_reset=true` means step 9 below is needed.
+It prints `key=value` lines at the end. `permissions_reset=true` means the steps below are needed.
 
 ## What you do by hand
 
@@ -60,23 +68,39 @@ macOS will not let a script grant permissions. When AltTab opens its permissions
    You can skip this one with the checkbox in AltTab's window. You lose live thumbnails.
 3. Never accept an in-app update. **Check for updates…** in the menu offers the official Pro build.
 
-That is all. Re-running the script later is safe: an identical build is not reinstalled and your
-permissions stay put.
+That is all, once per machine. Re-running the script later, including for a newer AltTab
+version, keeps the grants: the certificate makes every rebuild the same app to macOS.
 
-## Why permissions need redoing after a rebuild
+If Keychain asks whether `codesign` may use the "AltTab Free Local" key during the first build,
+choose **Always Allow**.
 
-macOS stores each grant together with the app's code requirement. An ad-hoc signature's
-requirement is the binary's hash, so every rebuild, even in a different folder, is a new app to macOS. Toggling the old row
-in System Settings does nothing, and AltTab re-asks for Screen Recording every 5 seconds until a
-valid grant exists. The script clears the stale rows so a fresh grant sticks.
+## Why permissions survive rebuilds
 
-To grant once and keep it across rebuilds, create the local certificate the upstream repo
-provides (one admin password prompt to trust it), then build with it:
+macOS stores each grant together with the app's designated code requirement and checks the
+running binary against it. Signed with the local certificate, AltTab's requirement is
+
+```
+identifier "com.lwouis.alt-tab-macos" and certificate leaf = H"<sha1 of the certificate>"
+```
+
+Every rebuild signed with the same certificate satisfies it, so the grants stay valid. The
+certificate lives in your login keychain, is trusted for code signing only, and is valid for ten
+years. `zsh ~/.config/alttab/bin/alttab-free-cert --status` prints its SHA-1.
+
+An ad-hoc build (`alttab-free-build --identity -`) has the requirement `cdhash H"<hash of the
+binary>"` instead, so every rebuild is a new app to macOS: toggling the old row in System
+Settings does nothing and AltTab re-asks for Screen Recording every 5 seconds until a valid grant
+exists. The script clears the stale rows whenever the requirement changes so a fresh grant sticks.
+
+Certificates are per machine. On a new Mac the first run creates one there, and you grant once
+there. To start over on this machine:
 
 ```sh
-cd ~/.cache/alttab-free/src && scripts/codesign/setup_local.sh
-alttab-free-build --identity "Local Self-Signed"
+security find-certificate -c "AltTab Free Local" -p > /tmp/c.pem && sudo security remove-trusted-cert -d /tmp/c.pem
+security delete-identity -c "AltTab Free Local"
 ```
+
+The next `alttab-free-build` creates a new certificate, and you grant once more.
 
 ## Updating to a newer AltTab
 
@@ -93,7 +117,10 @@ to unlock Pro features.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Screen Recording prompt keeps popping up | Permission rows keyed to the previous binary | Quit AltTab, run `tccutil reset ScreenCapture com.lwouis.alt-tab-macos` and `tccutil reset Accessibility com.lwouis.alt-tab-macos`, reopen, grant again |
+| Screen Recording prompt keeps popping up | Permission rows keyed to a previous signature (an ad-hoc or Homebrew build) | Quit AltTab, run `tccutil reset ScreenCapture com.lwouis.alt-tab-macos` and `tccutil reset Accessibility com.lwouis.alt-tab-macos`, reopen, grant again |
+| Build fails: `No signing certificate "AltTab Free Local" found`, or `ambiguous` | Certificate missing, untrusted, or duplicated | `zsh ~/.config/alttab/bin/alttab-free-cert --status`. Missing or untrusted: run it without `--status` and approve the password dialog. Duplicated: delete the extras in Keychain Access |
+| `The authorization was canceled by the user` | The trust dialog was dismissed | Run `zsh ~/.config/alttab/bin/alttab-free-cert` again; it only re-applies trust |
+| Build fails with `errSecInternalComponent`, or a Keychain dialog asks about `codesign` | Keychain will not let codesign use the key silently | Choose **Always Allow** in the dialog. Without a dialog: Keychain Access > login > Keys > "AltTab Free Local" > Access Control > allow all applications, then rebuild |
 | System Settings shows AltTab on, but it still asks | Same stale rows | Same fix, or remove the row with **−** and add the app again |
 | Two AltTabs in Spotlight | Build-folder copy left behind | `rm -rf ~/.cache/alttab-free/src/DerivedData/Build/Products/Release/AltTab.app` |
 | Build fails | See `~/.cache/alttab-free/src/DerivedData/alttab-free-build.log` | Deployment-target and deprecation errors mean `config/local.xcconfig` was not written |
@@ -102,10 +129,12 @@ to unlock Pro features.
 Check what is installed:
 
 ```sh
-codesign -dvvv /Applications/AltTab.app 2>&1 | grep -E 'CDHash|Signature'
+codesign -dvvv /Applications/AltTab.app 2>&1 | grep -E 'CDHash|Signature|Authority|TeamIdentifier'
 ```
 
-`Signature=adhoc` is this build. A `TeamIdentifier=QXD7GW8FHY` line means the official build is back.
+`Authority=AltTab Free Local` is this build. `Signature=adhoc` is an ad-hoc build (`--identity -`),
+which loses its permissions on every rebuild. `TeamIdentifier=QXD7GW8FHY` means the official build
+is back.
 
 ## Free vs Pro, so you know what to expect
 

@@ -8,12 +8,13 @@
 # bring Pro back), pins the in-app updater to manual, and clears the macOS permission
 # records that were keyed to the previous binary.
 #
-# Permissions: TCC stores each grant together with the app's code requirement. An ad-hoc
-# signature's requirement is its cdhash, so to macOS every rebuild is a new app: toggling the
-# existing row in System Settings does nothing and AltTab re-prompts for Screen Recording
-# every 5s. This script resets the rows whenever the requirement changes, so a fresh grant
-# sticks. To grant only once across rebuilds, create the repo's local certificate
-# (scripts/codesign/setup_local.sh, one admin prompt) and pass --identity "Local Self-Signed".
+# Permissions: TCC stores each grant together with the app's code requirement. Builds are signed
+# with one stable local certificate (bin/alttab-free-cert creates it on first use; one admin
+# password prompt), so the requirement, and with it the grants, survive rebuilds. With
+# --identity "-" (ad-hoc) the requirement is the binary's cdhash instead: every rebuild is a new
+# app to macOS, toggling the existing row in System Settings does nothing, and AltTab re-prompts
+# for Screen Recording every 5s. Whenever the requirement does change, this script resets the
+# rows so a fresh grant sticks.
 
 set -euo pipefail
 
@@ -31,7 +32,9 @@ readonly UPSTREAM_URL="https://github.com/lwouis/alt-tab-macos.git"
 readonly DEFAULT_REF="v11.6.1"                  # the tag free.patch was written against
 readonly DEFAULT_PATCH="${SCRIPT_DIR:h}/free.patch"
 readonly DEFAULT_SRC="${XDG_CACHE_HOME:-${HOME}/.cache}/alttab-free/src"
-readonly DEFAULT_IDENTITY="-"                   # ad-hoc
+readonly CERT_SCRIPT="${SCRIPT_DIR}/alttab-free-cert"
+readonly LOCAL_IDENTITY="AltTab Free Local"     # created on first use by alttab-free-cert
+readonly DEFAULT_IDENTITY="${LOCAL_IDENTITY}"   # "-" for ad-hoc
 readonly BUNDLE_ID="com.lwouis.alt-tab-macos"
 readonly INSTALL_APP="/Applications/AltTab.app"
 readonly BREW_CASK="alt-tab"
@@ -50,13 +53,71 @@ DRY_RUN=false
 #######################################
 check_prerequisites() {
   local missing=()
-  for cmd in git xcodebuild codesign ditto tccutil defaults open osascript pgrep; do
+  for cmd in git xcodebuild codesign security ditto tccutil defaults open osascript pgrep; do
     command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
   done
   if (( ${#missing} > 0 )); then
     log::err "Missing required commands | missing='${(j:, :)missing}' hint='xcodebuild needs full Xcode, not just Command Line Tools'"
     return 1
   fi
+}
+
+# --- Signing ---
+
+#######################################
+# Make sure the identity can sign: ad-hoc needs nothing, the managed local certificate is created
+# on first use, anything else must already be a valid identity in the keychain.
+# Arguments: $1 identity
+# Outputs: "true" if a certificate was created just now, else "false"
+# Returns: 1 if the identity is unusable
+#######################################
+ensure_identity() {
+  local identity="${1}"
+  if [[ "${identity}" == "-" ]]; then
+    log::warn "Ad-hoc signing; permissions must be granted again after every rebuild | identity='${identity}'"
+    echo "false"
+    return 0
+  fi
+  if [[ "${identity}" == "${LOCAL_IDENTITY}" ]]; then
+    log::info "Ensuring the local signing certificate | identity='${identity}' script='${CERT_SCRIPT}'"
+    local -a cert_args=(--name "${identity}")
+    [[ "${VERBOSE}" == "true" ]] && cert_args+=(--verbose)
+    local cert_out
+    if ! cert_out="$(zsh "${CERT_SCRIPT}" "${cert_args[@]}")"; then
+      log::err "Could not prepare the signing certificate | identity='${identity}' script='${CERT_SCRIPT}'"
+      return 1
+    fi
+    print -r -- "${cert_out}" | awk -F= '$1 == "created" { print $2 }'
+    return 0
+  fi
+  if [[ -n "$(security find-identity -v -p codesigning 2>/dev/null | grep -F "\"${identity}\"" || true)" ]]; then
+    log::info "Using existing signing identity | identity='${identity}'"
+    echo "false"
+    return 0
+  fi
+  log::err "Signing identity not found | identity='${identity}' hint='security find-identity -v -p codesigning lists valid ones; \"-\" is ad-hoc'"
+  return 1
+}
+
+#######################################
+# One line for the dry-run plan: what the signing step will do for this identity.
+# Arguments: $1 identity
+#######################################
+describe_identity_plan() {
+  local identity="${1}"
+  if [[ "${identity}" == "-" ]]; then
+    echo "sign ad-hoc (permissions redone after every rebuild)"
+    return 0
+  fi
+  if [[ "${identity}" != "${LOCAL_IDENTITY}" ]]; then
+    echo "sign with the existing keychain identity '${identity}'"
+    return 0
+  fi
+  if zsh "${CERT_SCRIPT}" --name "${identity}" --status >/dev/null 2>&1; then
+    echo "sign with the local certificate '${identity}' (already present)"
+    return 0
+  fi
+  echo "create the local certificate '${identity}' with alttab-free-cert (one admin password prompt), sign with it"
 }
 
 # --- Source ---
@@ -189,7 +250,8 @@ verify_app() {
 app_cdhash() {
   local app="${1}"
   [[ -d "${app}" ]] || return 0
-  codesign -dvvv "${app}" 2>&1 | awk -F= '/^CDHash=/ { print $2; exit }'
+  # awk must consume all input: exiting on the first match can SIGPIPE codesign, and pipefail turns that into a failure.
+  codesign -dvvv "${app}" 2>&1 | awk -F= '/^CDHash=/ && !found { print $2; found = 1 }'
 }
 
 #######################################
@@ -199,7 +261,7 @@ app_cdhash() {
 app_requirement() {
   local app="${1}"
   [[ -d "${app}" ]] || return 0
-  codesign -d -r- "${app}" 2>&1 | awk '/designated =>/ { sub(/^.*designated => /, ""); print; exit }'
+  codesign -d -r- "${app}" 2>&1 | awk '/designated =>/ && !found { sub(/^.*designated => /, ""); print; found = 1 }'
 }
 
 # --- Install ---
@@ -298,8 +360,9 @@ ${c_bold}Options:${c_rst}
   --ref REF          Upstream tag or branch to build (default: ${DEFAULT_REF}, what free.patch targets)
   --src DIR          Where to clone/build (default: ${DEFAULT_SRC})
   --patch FILE       Patch to apply (default: ${DEFAULT_PATCH})
-  --identity ID      codesign identity (default: "-", ad-hoc). A stable local certificate such as
-                     "Local Self-Signed" keeps macOS permission grants valid across rebuilds.
+  --identity ID      codesign identity (default: "${DEFAULT_IDENTITY}", a local certificate that
+                     bin/alttab-free-cert creates on first use so permission grants survive rebuilds).
+                     "-" signs ad-hoc: permissions must be granted again after every rebuild.
   --build-only       Clone, patch, build and verify; do not touch /Applications or permissions
   --no-launch        Install but do not open the app afterwards
   --dry-run          Print the plan and exit without changing anything
@@ -310,7 +373,7 @@ ${c_bold}Examples:${c_rst}
   alttab-free-build
   alttab-free-build --build-only
   alttab-free-build --ref v11.7.0            # newer upstream; fails clearly if the patch no longer applies
-  alttab-free-build --identity "Local Self-Signed"
+  alttab-free-build --identity -              # ad-hoc; permissions redone after each rebuild
 
 ${c_bold}After install:${c_rst}
   If the permission records were reset, grant Accessibility and Screen Recording to AltTab in
@@ -362,7 +425,8 @@ main() {
 
   if [[ "${DRY_RUN}" == "true" ]]; then
     log::info "Dry run; nothing will change | ref='${ref}' src='${src}' patch='${patch}' identity='${identity}' build_only='${build_only}'"
-    log::INFO "1. clone ${UPSTREAM_URL} into src (or reuse), force-checkout ${ref}
+    log::INFO "0. $(describe_identity_plan "${identity}")
+1. clone ${UPSTREAM_URL} into src (or reuse), force-checkout ${ref}
 2. git apply ${patch}
 3. write ${src}/config/local.xcconfig (identity, version, deployment target 12.0, warnings not errors)
 4. xcodebuild scheme ${SCHEME} -> ${built_app}
@@ -375,6 +439,8 @@ main() {
   fi
 
   # === LOGIC ===
+  local identity_created
+  identity_created="$(ensure_identity "${identity}")" || return 1
   ensure_clone "${src}" "${ref}"
   checkout_ref "${src}" "${ref}"
   apply_patch "${src}" "${patch}" "${ref}"
@@ -396,6 +462,8 @@ app=${built_app}
 version=${version}
 commit=${commit}
 cdhash=${cdhash}
+identity=${identity}
+identity_created=${identity_created}
 installed=false
 permissions_reset=false
 EOF
@@ -433,6 +501,8 @@ app=${INSTALL_APP}
 version=${version}
 commit=${commit}
 cdhash=${cdhash}
+identity=${identity}
+identity_created=${identity_created}
 installed=${installed}
 permissions_reset=${reset}
 EOF
