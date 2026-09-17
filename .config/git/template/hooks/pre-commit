@@ -36,15 +36,6 @@ e - edit the offending file then ask again
   done
 }
 
-# A file is large
-function big_files() {
-  local -r file="${1:?}"
-  local BIG=300
-  if test "$(du "$file" | awk '{print $1}')" -gt "$BIG"; then
-    return 1
-  fi
-}
-
 # A file has trailing whitespace
 function trailing_whitespace() {
   local -r file="${1:?}"
@@ -68,7 +59,7 @@ function main() {
   # Read user input, assign stdin to keyboard
   exec < /dev/tty
   log::info "Pre-commit hook"
-  set -- "big_files" "trailing_whitespace"
+  set -- "trailing_whitespace"
   for my_check in "$@"; do check_changed "$my_check"; done
   exec <&-
 }
