@@ -224,7 +224,7 @@ Every piece of technical jargon or literal token MUST be wrapped in backticks. L
 ### Title, sections, footer
 
 - **Title is plain text, no `#` prefix.** First line of the draft becomes the Google Docs document title.
-- **Title MUST end with `[🤖 AI generated]`.**
+- **Title MUST start with `[🤖 AI generated]`.** The marker is a prefix; the title never ends with it and never names a skill.
 - **Sections start at `#` (h1); subsections at `##` (h2).**
 - **Final line MUST be `🤖🌸 Generated with Claude Code`**, optionally followed by ` with the ari-hemingway skill` — on its own, no heading. That suffix is the only place a skill may be named (see `No skill mentions`).
 - **The 🤖 and 🌸 are required literals.** Do not substitute ASCII (`[AI generated]`), unify bracketing, or strip emoji.
@@ -232,7 +232,7 @@ Every piece of technical jargon or literal token MUST be wrapped in backticks. L
 Full skeleton:
 
 ```
-Template Gallery Traffic Routing [🤖 AI generated]
+[🤖 AI generated] Template Gallery Traffic Routing
 
 # Summary
 One-paragraph overview.
