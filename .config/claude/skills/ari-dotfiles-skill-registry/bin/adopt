@@ -38,7 +38,8 @@ ${c_bold}Options:${c_rst}
   --dry-run      Log what would change; touch nothing
   -h, --help     Show this help
 
-Each skill must be in state ${c_bold}unlinked${c_rst} (or ${c_bold}ignored${c_rst}: naming it is the override). A skill
+Each skill must be in state ${c_bold}unlinked${c_rst} (or ${c_bold}ignored${c_rst} via .gitignore: naming it is the
+override) and must contain a SKILL.md; a directory without one is not a skill and is refused. A skill
 already ${c_bold}linked${c_rst} to the requested tier is a no-op. Ends with key=value lines per skill and the
 commit the caller should make.
 EOF
@@ -74,6 +75,10 @@ check_adoptable() {
   if [[ "${state}" == "linked" && "${cur_tier}" == "${tier}" && "${skill}" == "${dest}" ]]; then
     log::info "already adopted | skill='${skill}' tier='${tier}'"
     return 2
+  fi
+  if [[ -d "${SKILLS_DIR}/${skill}" ]] && ! is_skill_dir "${skill}"; then
+    log::err "not a skill | skill='${skill}' path='${SKILLS_DIR}/${skill}' expected='a directory containing SKILL.md'"
+    return 1
   fi
   if [[ "${state}" != "unlinked" && "${state}" != "ignored" ]]; then
     log::err "not adoptable | skill='${skill}' state='${state}' tier='${cur_tier}' expected_state='unlinked'"

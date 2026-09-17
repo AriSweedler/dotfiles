@@ -38,7 +38,7 @@ ${c_bold}Options:${c_rst}
 
 ${c_bold}Output:${c_rst} one line per skill on stdout: state=<state> tier=<tier> name=<name>
   linked    symlink into a tier root                   healthy
-  ignored   third-party skill listed in .gitignore     leave it
+  ignored   listed in .gitignore, or a directory without SKILL.md   leave it (reason= shown under --all)
   unlinked  real dir, no tier holds it                 adopt --skill NAME --tier df|ldf
   missing   tier holds it, no symlink                  link
   dangling  symlink target is gone                     link --prune
@@ -59,6 +59,23 @@ is_quiet_state() {
     [[ "${state}" == "${s}" ]] && return 0
   done
   return 1
+}
+
+#######################################
+# Print one output row; ignored rows carry the reason so a directory that is not
+# a skill (no SKILL.md) is told apart from a .gitignore'd third-party skill.
+# Arguments:
+#   $1 - state
+#   $2 - tier
+#   $3 - skill name
+#######################################
+format_row() {
+  local state="${1}" tier="${2}" skill="${3}"
+  if [[ "${state}" == "ignored" ]]; then
+    echo "state=${state} tier=${tier} name=${skill} reason=$(skill_ignore_reason "${skill}")"
+    return 0
+  fi
+  echo "state=${state} tier=${tier} name=${skill}"
 }
 
 main() {
@@ -88,7 +105,7 @@ main() {
     if [[ "${show_all}" != "true" ]] && is_quiet_state "${state}"; then
       continue
     fi
-    echo "state=${state} tier=${tier} name=${skill}"
+    echo "$(format_row "${state}" "${tier}" "${skill}")"
     shown=$(( shown + 1 ))
   done
 

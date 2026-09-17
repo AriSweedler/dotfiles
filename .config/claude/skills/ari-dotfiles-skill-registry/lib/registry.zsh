@@ -71,6 +71,37 @@ is_skill_ignored() {
 }
 
 #######################################
+# True (0) if the directory under SKILLS_DIR is a skill: it holds a SKILL.md.
+# Claude Code's own directories (the `synced` bucket) live under the same root
+# without one and are never ours to adopt.
+# Arguments:
+#   $1 - skill name
+#######################################
+is_skill_dir() {
+  local skill="${1}"
+  [[ -f "${SKILLS_DIR}/${skill}/SKILL.md" ]]
+}
+
+#######################################
+# Print why a real directory is ignored: `no-skill-md` when it has no SKILL.md,
+# `gitignore` when a .gitignore pattern matches, empty otherwise.
+# Arguments:
+#   $1 - skill name
+#######################################
+skill_ignore_reason() {
+  local skill="${1}"
+  if ! is_skill_dir "${skill}"; then
+    echo "no-skill-md"
+    return 0
+  fi
+  if is_skill_ignored "${skill}"; then
+    echo "gitignore"
+    return 0
+  fi
+  echo ""
+}
+
+#######################################
 # Print every tier whose root holds a real directory for the skill, one per line.
 # Arguments:
 #   $1 - skill name
@@ -91,7 +122,7 @@ tiers_holding() {
 #   foreign   symlink pointing outside every tier root     (manual)
 #   shadowed  real dir in SKILLS_DIR AND a tier holds it   (manual)
 #   conflict  more than one tier holds it                  (manual)
-#   ignored   real dir matched by .gitignore               (leave)
+#   ignored   real dir without SKILL.md, or matched by .gitignore  (leave)
 #   unlinked  real dir in SKILLS_DIR, no tier holds it     (fix: adopt)
 #   absent    nowhere
 # Arguments:
@@ -131,7 +162,7 @@ skill_state() {
       echo "shadowed ${holders[1]}"
       return 0
     fi
-    if is_skill_ignored "${skill}"; then
+    if [[ -n "$(skill_ignore_reason "${skill}")" ]]; then
       echo "ignored -"
       return 0
     fi
