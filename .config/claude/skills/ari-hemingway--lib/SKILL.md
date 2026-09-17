@@ -260,7 +260,7 @@ Record which ran in `sources.md` next to the TODO, formatted as `[TODO: verify |
 If `[TODO: verify]` count exceeds 20% of counted claims, STOP and present four options:
 1. Re-research the flagged claims.
 2. User answers the TODOs inline.
-3. Accept the high-TODO draft and mark the title `[🤖 AI generated — draft, needs SME review]`.
+3. Accept the high-TODO draft and replace the title's leading `[🤖 AI generated]` with `[🤖 AI generated — draft, needs SME review]`.
 4. Abort.
 
 ## Present
