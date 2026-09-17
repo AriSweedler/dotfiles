@@ -1,8 +1,8 @@
 [
   {
     "menu": {
-      "name": "killall NotificationCenter",
-      "text": "dismiss every stuck banner"
+      "name": "notifs",
+      "text": "Run `killall NotificationCenter` to restart the notification server"
     },
     "cmd": "killall NotificationCenter",
     "autodismiss": true,
