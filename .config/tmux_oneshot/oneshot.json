@@ -5,5 +5,12 @@
       "text": "the last tmux-oneshot run log; holds, so popup_pane lets you copy from it"
     },
     "cmd": "tmux-oneshot --log"
+  },
+  {
+    "menu": {
+      "name": "hello",
+      "text": "prints a line and holds until esc — a place to try copy mode"
+    },
+    "cmd": "echo \"hello from tmux-oneshot · $(date)\""
   }
 ]
