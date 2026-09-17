@@ -19,7 +19,7 @@ Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-g
 ## Preconditions
 
 - `gws` CLI installed and authenticated for the user's @airtable.com account (`/gws-docs` covers setup). `jq` and `python3` installed.
-- The draft's first line is the plain-text title (ending `[🤖 AI generated]` per `/ari-hemingway--format-gdoc`). The script strips that line from the body and uses it as the Doc title; pass `--title` to override and keep the whole file as body.
+- The draft's first line is the plain-text title (starting with `[🤖 AI generated]` per `/ari-hemingway--format-gdoc`). The script strips that line from the body and uses it as the Doc title; pass `--title` to override and keep the whole file as body.
 - Updating in place (`--doc`) replaces the entire body. Manual edits in the Doc are lost, including "Pin header row". Say so before updating a doc the user has touched.
 - Docs and folders in shared drives work: the script sets `supportsAllDrives`. A Drive 404 on a doc or folder the user can open therefore means the id is wrong, not that it moved.
 - `--folder <id|url>` creates the Doc inside that folder (a bare id or a `drive.google.com/drive/folders/…` URL). The script first checks that the target exists, is a folder, and accepts new files. The Doc is placed at creation and never moved, so `--folder` together with `--doc` is an error.
