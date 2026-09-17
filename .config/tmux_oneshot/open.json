@@ -4,7 +4,7 @@
       "name": "open",
       "text": "open the clipboard with the one open-* that accepts it"
     },
-    "key": "ctrl-l",
+    "key": "ctrl-o",
     "cmd": "open-any",
     "autodismiss": true
   }

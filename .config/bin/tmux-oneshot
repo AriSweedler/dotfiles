@@ -452,8 +452,10 @@ TMUX_ONESHOT_FZF_MATCH_ARGS=(--delimiter $'\t' --with-nth '2..' --tiebreak=begin
 
 # Keys fzf must keep, plus the termios specials a cooked tty consumes when
 # the key is typed before fzf enters raw mode (ctrl-u = VKILL, ctrl-w = VWERASE …).
+# ctrl-q (VSTART) and ctrl-o (VDISCARD) are left off on purpose: typed that early
+# they cost at most one wasted keystroke, and both carry direct keys.
 TMUX_ONESHOT_RESERVED_KEYS=(enter esc tab btab ctrl-c ctrl-j ctrl-m up down ctrl-y ctrl-e
-                            ctrl-u ctrl-w ctrl-d ctrl-z ctrl-s ctrl-q ctrl-r ctrl-o ctrl-t ctrl-h bspace)
+                            ctrl-u ctrl-w ctrl-d ctrl-z ctrl-s ctrl-r ctrl-t ctrl-h bspace)
 
 # Output: the comma-joined --expect list. Reserved names are dropped with
 # log::err; the survivors are validated by fzf itself (an unknown name would
