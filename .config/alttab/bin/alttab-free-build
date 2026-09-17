@@ -450,9 +450,10 @@ main() {
   build_app "${src}"
   verify_app "${built_app}"
 
-  local commit cdhash
+  local commit cdhash new_req
   commit="$(git -C "${src}" rev-parse --short HEAD)"
   cdhash="$(app_cdhash "${built_app}")"
+  new_req="$(app_requirement "${built_app}")"
 
   if [[ "${build_only}" == "true" ]]; then
     log::ok "Build only; nothing installed | app='${built_app}'"
@@ -464,16 +465,16 @@ commit=${commit}
 cdhash=${cdhash}
 identity=${identity}
 identity_created=${identity_created}
+requirement=${new_req}
 installed=false
 permissions_reset=false
 EOF
     return 0
   fi
 
-  local installed_cdhash old_req new_req reset="false" installed="false"
+  local installed_cdhash old_req reset="false" installed="false"
   installed_cdhash="$(app_cdhash "${INSTALL_APP}")"
   old_req="$(app_requirement "${INSTALL_APP}")"
-  new_req="$(app_requirement "${built_app}")"
 
   if [[ -n "${installed_cdhash}" && "${installed_cdhash}" == "${cdhash}" ]]; then
     log::info "Identical build already installed; skipping install | app='${INSTALL_APP}' cdhash='${cdhash}'"
@@ -503,6 +504,7 @@ commit=${commit}
 cdhash=${cdhash}
 identity=${identity}
 identity_created=${identity_created}
+requirement=${new_req}
 installed=${installed}
 permissions_reset=${reset}
 EOF

@@ -85,7 +85,8 @@ identifier "com.lwouis.alt-tab-macos" and certificate leaf = H"<sha1 of the cert
 
 Every rebuild signed with the same certificate satisfies it, so the grants stay valid. The
 certificate lives in your login keychain, is trusted for code signing only, and is valid for ten
-years. `zsh ~/.config/alttab/bin/alttab-free-cert --status` prints its SHA-1.
+years. `zsh ~/.config/alttab/bin/alttab-free-cert --status` prints its SHA-1, keychain, validity
+dates, trust state, the requirement above, and whether the installed app is signed by it.
 
 An ad-hoc build (`alttab-free-build --identity -`) has the requirement `cdhash H"<hash of the
 binary>"` instead, so every rebuild is a new app to macOS: toggling the old row in System
