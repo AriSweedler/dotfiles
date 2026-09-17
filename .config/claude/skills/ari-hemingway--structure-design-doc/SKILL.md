@@ -18,7 +18,7 @@ Formatting rules: see `/ari-hemingway--format-gdoc`. Workflow patterns (investig
 ## Document structure
 
 Required sections, in order:
-- Title (plain text, ending `[🤖 AI generated]` per `/ari-hemingway--format-gdoc`)
+- Title (plain text, starting with `[🤖 AI generated]` per `/ari-hemingway--format-gdoc`)
 - `# TL;DR` — 2–4 sentences. Problem, proposal, the sequencing constraint or risk that matters most. A reader who only reads this should know whether to engage.
 - `# Problem` — what's wrong today, with concrete evidence (permalinks, incidents, Slack threads). No marketing language; describe the failure mode.
 - `# Proposal` — numbered steps describing the change. Each step is a concrete artifact (file path, TF resource, config key, command). Cite the precedent the step follows when applicable.
@@ -45,7 +45,7 @@ Any reshape beyond this list MUST be called out in the update-mode diff summary.
 ### Skeleton
 
 ```
-Design Doc Title [🤖 AI generated]
+[🤖 AI generated] Design Doc Title
 
 # TL;DR
 2–4 sentences. Problem, proposal, sequencing/risk that matters most.
@@ -81,7 +81,7 @@ Alternative B — rejected because <reason>.
 Structural skeleton only — NOT a target length. See word-count buckets in `## Rules` for real targets.
 
 ```markdown
-Move MCP Registry Publisher Key Out of Hyperbase Dev [🤖 AI generated]
+[🤖 AI generated] Move MCP Registry Publisher Key Out of Hyperbase Dev
 
 # TL;DR
 
