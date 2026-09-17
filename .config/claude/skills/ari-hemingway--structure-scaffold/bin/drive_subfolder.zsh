@@ -13,9 +13,6 @@ readonly SKILLS_DIR="${HOME}/.claude/skills"
 
 # --- Constants ---
 
-readonly FOLDER_MIME="application/vnd.google-apps.folder"
-readonly FOLDER_FIELDS="id,name,mimeType,driveId,capabilities/canAddChildren"
-readonly GWS_TIMEOUT_SECS=30
 readonly LIST_PAGE_SIZE=200
 
 # --- Logging ---
@@ -26,7 +23,7 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
-source "${SKILLS_DIR}/ari-skill-shellscripts/lib/run_with_timeout.zsh"
+source "${SKILLS_DIR}/ari-hemingway--lib/lib/drive.zsh"
 
 # --- Prerequisites ---
 
@@ -45,65 +42,7 @@ check_prerequisites() {
   fi
 }
 
-# --- Drive helpers ---
-
-#######################################
-# Reduce a Drive folder URL (https://drive.google.com/drive/[u/0/]folders/<id>[?...]) or a
-# bare id to the id.
-# Arguments: $1 - folder id or URL
-# Outputs: the id on stdout
-#######################################
-folder_id_from() {
-  local folder="${1}"
-  if [[ "${folder}" == *"/folders/"* ]]; then
-    folder="${folder#*/folders/}"
-    folder="${folder%%\?*}"
-    folder="${folder%%/*}"
-  fi
-  echo "${folder}"
-}
-
-#######################################
-# Run one gws call under a wall-clock cap; stdout lands in the reply file, stderr beside it.
-# Globals: GWS_TIMEOUT_SECS
-# Arguments: $1 - reply path, $@ - gws arguments
-# Returns: the gws exit code, or 124 on timeout
-#######################################
-gws_call() {
-  local reply_file="${1}"; shift
-  local exit_code=0
-  run_with_timeout "${GWS_TIMEOUT_SECS}" "${reply_file}.err" gws "${@}" > "${reply_file}" || exit_code=$?
-  if (( exit_code != 0 )); then
-    log::err "gws call failed | args='${*}' exit_code='${exit_code}' error='$(tail -n 1 "${reply_file}.err" 2>/dev/null || true)'"
-  fi
-  return "${exit_code}"
-}
-
-#######################################
-# Verify the parent exists, is a folder, and accepts new files. supportsAllDrives covers
-# shared-drive folders, which otherwise answer 404.
-# Globals: FOLDER_MIME, FOLDER_FIELDS
-# Arguments: $1 - parent id, $2 - reply path
-# Outputs: the parent's name on stdout
-#######################################
-resolve_parent() {
-  local parent="${1}" reply_file="${2}"
-  local params mime name can_add
-  params="$(jq -cn --arg id "${parent}" --arg f "${FOLDER_FIELDS}" '{fileId: $id, fields: $f, supportsAllDrives: true}')"
-  gws_call "${reply_file}" drive files get --params "${params}" || return 1
-  mime="$(jq -r '.mimeType // ""' "${reply_file}")"
-  name="$(jq -r '.name // ""' "${reply_file}")"
-  can_add="$(jq -r '.capabilities.canAddChildren // false' "${reply_file}")"
-  if [[ "${mime}" != "${FOLDER_MIME}" ]]; then
-    log::err "Parent is not a folder | parent='${parent}' mime_type='${mime}' expected='${FOLDER_MIME}'"
-    return 1
-  fi
-  if [[ "${can_add}" != "true" ]]; then
-    log::err "Cannot add files to parent | parent='${parent}' name='${name}' can_add_children='${can_add}' expected='true'"
-    return 1
-  fi
-  echo "${name}"
-}
+# --- Drive helpers (shared ones come from ari-hemingway--lib/lib/drive.zsh) ---
 
 #######################################
 # List the parent's non-trashed children into the reply file.
@@ -115,13 +54,13 @@ list_children() {
   local params
   params="$(jq -cn --arg q "'${parent}' in parents and trashed = false" --argjson n "${LIST_PAGE_SIZE}" \
     '{q: $q, pageSize: $n, fields: "files(id,name,mimeType)", supportsAllDrives: true, includeItemsFromAllDrives: true}')"
-  gws_call "${reply_file}" drive files list --params "${params}"
+  drive::gws_call "${reply_file}" drive files list --params "${params}"
 }
 
 #######################################
 # Create the child folder under the parent. Under dry-run, Drive validates the request and
 # nothing is created.
-# Globals: FOLDER_MIME
+# Globals: DRIVE_FOLDER_MIME
 # Arguments: $1 - parent id, $2 - child name, $3 - dry_run, $4 - reply path
 # Outputs: the new folder's id on stdout (empty under dry-run)
 #######################################
@@ -129,10 +68,10 @@ create_child() {
   local parent="${1}" name="${2}" dry_run="${3}" reply_file="${4}"
   local meta params
   local -a flags
-  meta="$(jq -cn --arg name "${name}" --arg mime "${FOLDER_MIME}" --arg parent "${parent}" '{name: $name, mimeType: $mime, parents: [$parent]}')"
+  meta="$(jq -cn --arg name "${name}" --arg mime "${DRIVE_FOLDER_MIME}" --arg parent "${parent}" '{name: $name, mimeType: $mime, parents: [$parent]}')"
   params="$(jq -cn '{fields: "id,name", supportsAllDrives: true}')"
   [[ "${dry_run}" == "true" ]] && flags+=(--dry-run)
-  gws_call "${reply_file}" drive files create "${flags[@]}" --json "${meta}" --params "${params}" || return 1
+  drive::gws_call "${reply_file}" drive files create "${flags[@]}" --json "${meta}" --params "${params}" || return 1
   if [[ "${dry_run}" == "true" ]]; then
     log::info "Dry run: Drive accepted the create request; nothing created | parent='${parent}' name='${name}'"
     return 0
@@ -144,7 +83,7 @@ create_child() {
 # Decide where the Docs go. Empty parent: the parent itself. Existing child with the topic
 # name: that child. Otherwise: a new child (validated only under dry-run).
 # Arguments: $1 - parent id, $2 - child name, $3 - dry_run, $4 - children reply path, $5 - work dir
-# Outputs: one line "folder_id<TAB>created<TAB>reason" on stdout
+# Outputs: one line "folder_id|created|reason" on stdout ('|' keeps an empty folder_id in place)
 #######################################
 choose_target() {
   local parent="${1}" name="${2}" dry_run="${3}" children_file="${4}" work="${5}"
@@ -152,22 +91,22 @@ choose_target() {
   children_count="$(jq '.files | length' "${children_file}")"
   if (( children_count == 0 )); then
     log::info "Parent is empty; publishing into it | parent='${parent}'"
-    printf '%s\t%s\t%s\n' "${parent}" "false" "parent_empty"
+    printf '%s|%s|%s\n' "${parent}" "false" "parent_empty"
     return 0
   fi
-  existing="$(jq -r --arg n "${name}" --arg mime "${FOLDER_MIME}" '[.files[] | select(.mimeType == $mime and .name == $n)][0].id // empty' "${children_file}")"
+  existing="$(jq -r --arg n "${name}" --arg mime "${DRIVE_FOLDER_MIME}" '[.files[] | select(.mimeType == $mime and .name == $n)][0].id // empty' "${children_file}")"
   if [[ -n "${existing}" ]]; then
     log::info "Reusing existing child folder | parent='${parent}' name='${name}' folder_id='${existing}'"
-    printf '%s\t%s\t%s\n' "${existing}" "false" "child_exists"
+    printf '%s|%s|%s\n' "${existing}" "false" "child_exists"
     return 0
   fi
   log::info "Parent has children; creating a child folder | parent='${parent}' children='${children_count}' name='${name}' dry_run='${dry_run}'"
   folder_id="$(create_child "${parent}" "${name}" "${dry_run}" "${work}/create.json")" || return 1
   if [[ "${dry_run}" == "true" ]]; then
-    printf '%s\t%s\t%s\n' "" "would_create" "child_missing"
+    printf '%s|%s|%s\n' "" "would_create" "child_missing"
     return 0
   fi
-  printf '%s\t%s\t%s\n' "${folder_id}" "true" "child_missing"
+  printf '%s|%s|%s\n' "${folder_id}" "true" "child_missing"
 }
 
 # --- Help ---
@@ -207,7 +146,7 @@ main() {
   esac; done
 
   # === MASSAGE ===
-  parent="$(folder_id_from "${parent}")"
+  parent="$(drive::folder_id_from "${parent}")"
 
   # === VALIDATE ===
   [[ -n "${parent}" ]] || { log::err "Missing --parent"; help; return 1; }
@@ -216,10 +155,10 @@ main() {
   # === LOGIC ===
   local work parent_name folder_id created reason folder_name children_count
   work="$(mktemp -d)"
-  parent_name="$(resolve_parent "${parent}" "${work}/parent.json")" || return 1
+  parent_name="$(drive::resolve_folder "${parent}" "${work}/parent.json")" || return 1
   list_children "${parent}" "${work}/children.json" || return 1
   children_count="$(jq '.files | length' "${work}/children.json")"
-  IFS=$'\t' read -r folder_id created reason < <(choose_target "${parent}" "${name}" "${dry_run}" "${work}/children.json" "${work}")
+  IFS='|' read -r folder_id created reason < <(choose_target "${parent}" "${name}" "${dry_run}" "${work}/children.json" "${work}")
   [[ -n "${reason}" ]] || { log::err "Could not choose a target folder | parent='${parent}' name='${name}'"; return 1; }
   folder_name="${name}"
   [[ "${reason}" == "parent_empty" ]] && folder_name="${parent_name}"

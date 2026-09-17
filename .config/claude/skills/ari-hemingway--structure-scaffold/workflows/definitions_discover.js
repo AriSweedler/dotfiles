@@ -2,15 +2,15 @@ export const meta = {
   name: 'scaffold-definitions-discover',
   description: 'Sweep a topic from several angles, draft a definition for every candidate term with a verified doc link, refute per batch, run a completeness critic, report the dependency graph',
   phases: [
-    { title: 'Plan', detail: 'choose sweep angles when none were given' },
-    { title: 'Discover', detail: 'multi-angle sweep for candidate terms' },
+    { title: 'Plan', detail: 'choose sweep angles when none were given; a grounding-only sweep runs alongside' },
+    { title: 'Discover', detail: 'two sweep agents per angle, each over half of its sources' },
     { title: 'Define', detail: 'first-pass definitions with verified doc links' },
     { title: 'Verify', detail: 'accuracy and structure refuters per batch' },
     { title: 'Critic', detail: 'missing and redundant terms' },
   ],
 }
 
-// args: {topic, grounding?, angles?: [{key, prompt}], must_terms?: [], subsystems_hint?, batch_size?}
+// args: {topic, grounding?, angles?: [{key, prompt, sources?}], must_terms?: [], subsystems_hint?, batch_size?}
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 if (!A.topic) throw new Error('args.topic is required')
 const TOPIC = A.topic
@@ -19,7 +19,10 @@ const MUST = A.must_terms || []
 const BATCH = A.batch_size || 6
 const HINT = A.subsystems_hint || 'the standalone subsystem explanations a scaffold article of this topic would need'
 
-const ANGLES_SCHEMA = { type: 'object', properties: { angles: { type: 'array', items: { type: 'object', properties: { key: { type: 'string' }, prompt: { type: 'string' } }, required: ['key', 'prompt'] } } }, required: ['angles'] }
+const ANGLES_SCHEMA = { type: 'object', properties: { angles: { type: 'array', items: { type: 'object', properties: {
+  key: { type: 'string' }, prompt: { type: 'string' },
+  sources: { type: 'array', items: { type: 'string' }, description: 'The concrete URLs, commands, or paths this angle sweeps, one per entry, at least two; they are split between two researchers' },
+}, required: ['key', 'prompt', 'sources'] } } }, required: ['angles'] }
 const TERMS_SCHEMA = { type: 'object', properties: { terms: { type: 'array', items: { type: 'object', properties: {
   term: { type: 'string', description: 'Canonical noun form, capitalized as the official docs capitalize it' },
   aliases: { type: 'array', items: { type: 'string' } },
@@ -44,10 +47,21 @@ const MISSING_SCHEMA = { type: 'object', properties: {
 
 const norm = s => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/s$/, '')
 
+const sweepPrompt = (angle, sources) => `You are enumerating jargon for a glossary of ${TOPIC}. ${GROUNDING}
+
+Angle: ${angle}
+${sources ? `\nSources for this sweep (another researcher covers the rest of the angle; do not stray into theirs):\n${sources.map(s => `- ${s}`).join('\n')}\n` : ''}
+For each concept return the canonical term (noun form), aliases, a one-or-two-sentence first-pass draft, the single best canonical doc URL (empty string if none), the other terms of this topic the draft relies on, and the evidence you saw. Be exhaustive within your angle; 10 to 30 terms is typical.`
+
 phase('Plan')
+// Eager work is disposable: the grounding-only sweep starts beside the planner and merges like
+// any other sweep, so the first minutes are not spent on one agent.
+const groundingSweep = A.grounding
+  ? agent(sweepPrompt('sweep ONLY the sources the grounding above names (its local files, doc URLs, and commands): read each one and enumerate every named concept it uses or defines.'), { label: 'sweep:_grounding', phase: 'Discover', schema: TERMS_SCHEMA })
+  : Promise.resolve(null)
 let angles = A.angles
 if (!angles || !angles.length) {
-  const plan = await agent(`You are planning a glossary sweep for ${TOPIC}. ${GROUNDING}\n\nPropose 5 to 8 independent research angles that together enumerate every named concept a newcomer must know: official terminology pages, the on-disk or on-wire layout, the CLI or API surface, the configuration or definition language, the build or distribution pipeline, the ecosystem around it, and so on. Each angle is a self-contained instruction for one researcher: name the concrete sources (URLs, commands, paths) it must sweep. Return {angles: [{key, prompt}]}.`,
+  const plan = await agent(`You are planning a glossary sweep for ${TOPIC}. ${GROUNDING}\n\nPropose 5 to 8 independent research angles that together enumerate every named concept a newcomer must know: official terminology pages, the on-disk or on-wire layout, the CLI or API surface, the configuration or definition language, the build or distribution pipeline, the ecosystem around it, and so on. Each angle is a self-contained instruction for one researcher: name the concrete sources (URLs, commands, paths) it must sweep, and list them in sources — at least two per angle, since two researchers split them. Return {angles: [{key, prompt, sources}]}.`,
     { label: 'plan-angles', phase: 'Plan', schema: ANGLES_SCHEMA })
   angles = plan ? plan.angles : []
   log(`Planned ${angles.length} angles: ${angles.map(a => a.key).join(', ')}`)
@@ -55,9 +69,23 @@ if (!angles || !angles.length) {
 if (!angles.length) throw new Error('no sweep angles')
 
 phase('Discover')
-const sweeps = await parallel(angles.map(a => () => agent(
-  `You are enumerating jargon for a glossary of ${TOPIC}. ${GROUNDING}\n\nAngle: ${a.prompt}\n\nFor each concept return the canonical term (noun form), aliases, a one-or-two-sentence first-pass draft, the single best canonical doc URL (empty string if none), the other terms of this topic the draft relies on, and the evidence you saw. Be exhaustive within your angle; 10 to 30 terms is typical.`,
-  { label: `sweep:${a.key}`, phase: 'Discover', schema: TERMS_SCHEMA })))
+// Two agents per angle, each over half of its sources, so the sweep phase fills the agent cap.
+// An angle with fewer than two sources cannot be split safely and runs once.
+const sweepJobs = angles.flatMap(a => {
+  const sources = (a.sources || []).filter(s => typeof s === 'string' && s.trim())
+  if (sources.length < 2) return [{ label: `sweep:${a.key}`, prompt: sweepPrompt(a.prompt) }]
+  const mid = Math.ceil(sources.length / 2)
+  return [
+    { label: `sweep:${a.key}:1`, prompt: sweepPrompt(a.prompt, sources.slice(0, mid)) },
+    { label: `sweep:${a.key}:2`, prompt: sweepPrompt(a.prompt, sources.slice(mid)) },
+  ]
+})
+const unsplit = angles.filter(a => ((a.sources || []).filter(s => typeof s === 'string' && s.trim())).length < 2).map(a => a.key)
+if (unsplit.length) log(`Angles without splittable sources run as one sweep each: ${unsplit.join(', ')}`)
+const sweeps = [
+  ...(await parallel(sweepJobs.map(j => () => agent(j.prompt, { label: j.label, phase: 'Discover', schema: TERMS_SCHEMA })))),
+  await groundingSweep,
+]
 
 const byKey = new Map()
 for (const sweep of sweeps.filter(Boolean)) for (const t of sweep.terms) {

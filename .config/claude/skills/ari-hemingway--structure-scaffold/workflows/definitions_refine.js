@@ -3,13 +3,13 @@ export const meta = {
   description: 'Select the most important terms from a discover pass, rewrite them in dependency layers with Simplified Technical English, enforce linear ordering mechanically (axiomatic fallback), and re-verify facts',
   phases: [
     { title: 'Select', detail: 'judge panel picks the core terms' },
-    { title: 'Layer', detail: 'rewrite so each row uses only earlier rows' },
+    { title: 'Layer', detail: 'rewriters race per round; the table with the fewest violations is kept' },
     { title: 'Verify', detail: 'factual refuters on the final rows' },
   ],
 }
 
 // args: {topic, grounding?, input_json, terms?: [], judges?, min_votes?, target_rows?, must_terms?,
-//        max_sentences?, max_words?, ste100?, axiomatic?, fix_rounds?}
+//        max_sentences?, max_words?, ste100?, axiomatic?, fix_rounds?, rewriters?}
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 if (!A.topic) throw new Error('args.topic is required')
 if (!A.input_json) throw new Error('args.input_json (path to the discover result) is required')
@@ -25,6 +25,7 @@ const MAX_WORDS = A.max_words || 25
 const STE100 = A.ste100 !== false
 const AXIOMATIC = A.axiomatic !== false
 const FIX_ROUNDS = A.fix_rounds || 5
+const REWRITERS = A.rewriters || 2
 
 const SELECT_SCHEMA = { type: 'object', properties: { selected: { type: 'array', items: { type: 'object', properties: { term: { type: 'string' }, why: { type: 'string' } }, required: ['term', 'why'] } } }, required: ['selected'] }
 const ROWS_SCHEMA = { type: 'object', properties: { rows: { type: 'array', items: { type: 'object', properties: {
@@ -101,24 +102,35 @@ Rules, checked mechanically after you return:
 5. Any other jargon must be replaced with plain words or dropped. Keep one concrete example (a path or a name) when it helps.
 6. Keep facts true to the first-pass text; drop detail rather than invent. Keep the verified doc_url from the file; empty string if it had none.`
 
-let res = await agent(basePrompt, { label: 'rewrite:0', phase: 'Layer', schema: ROWS_SCHEMA, effort: 'high' })
-let rows = res ? res.rows : []
-let violations = checkOrder(rows, terms)
+// Eager work is disposable: REWRITERS candidates draft the same table in parallel and only the
+// one with the fewest mechanical violations survives. Fewer fix rounds for idle agent slots.
+const bestOf = async (prompt, tag) => {
+  const candidates = (await parallel(Array.from({ length: REWRITERS }, (_, i) => () => agent(
+    REWRITERS > 1 ? `${prompt}\n\nYou are rewriter ${i + 1} of ${REWRITERS} working independently on the same table; the candidate with the fewest mechanical violations is kept.` : prompt,
+    { label: REWRITERS > 1 ? `${tag}#${i + 1}` : tag, phase: 'Layer', schema: ROWS_SCHEMA, effort: 'high' })))).map((c, i) => ({ c, i })).filter(x => x.c)
+  if (!candidates.length) return null
+  const scored = candidates.map(({ c, i }) => ({ rows: c.rows, violations: checkOrder(c.rows, terms), i })).sort((x, y) => x.violations.length - y.violations.length || x.i - y.i)
+  if (REWRITERS > 1) log(`${tag}: kept candidate ${scored[0].i + 1} (${scored[0].violations.length} violations; others: ${scored.slice(1).map(c => c.violations.length).join(', ') || 'none'})`)
+  return scored[0]
+}
+
+let best = await bestOf(basePrompt, 'rewrite:0')
+let rows = best ? best.rows : []
+let violations = best ? best.violations : checkOrder(rows, terms)
 let round = 0
 while (violations.length && round < FIX_ROUNDS) {
   round++
   log(`Check round ${round}: ${violations.length} violations`)
-  const fixed = await agent(`${basePrompt}
+  const fixed = await bestOf(`${basePrompt}
 
 Your previous table failed the mechanical check. Fix ALL of these and return the complete corrected table (reorder rows and rewrite definitions as needed; you may not add or drop terms):
 ${violations.map(v => `- ${v.term}: ${v.issue}`).join('\n')}
 
 PREVIOUS TABLE:
-${rows.map((r, i) => `${i + 1}. ${r.term} | ${r.definition} | ${r.doc_url}`).join('\n')}`,
-    { label: `rewrite:${round}`, phase: 'Layer', schema: ROWS_SCHEMA, effort: 'high' })
+${rows.map((r, i) => `${i + 1}. ${r.term} | ${r.definition} | ${r.doc_url}`).join('\n')}`, `rewrite:${round}`)
   if (!fixed) break
   rows = fixed.rows
-  violations = checkOrder(rows, terms)
+  violations = fixed.violations
 }
 
 // Axiomatic fallback: a forward reference that survives the fix rounds means a genuine cycle.
@@ -147,17 +159,16 @@ First-pass source material: read ${INPUT} and search for the term.`,
   let r2 = 0
   while (violations.length && r2 < 2) {
     r2++
-    const fixed = await agent(`${basePrompt}
+    const fixed = await bestOf(`${basePrompt}
 
 "${target}" is now an AXIOMATIC root row (row 1) — keep its definition verbatim. Fix ALL of these and return the complete table:
 ${violations.map(v => `- ${v.term}: ${v.issue}`).join('\n')}
 
 TABLE:
-${rows.map((r, i) => `${i + 1}. ${r.term} | ${r.definition} | ${r.doc_url}`).join('\n')}`,
-      { label: `rewrite:axiom${axiomRounds}-${r2}`, phase: 'Layer', schema: ROWS_SCHEMA, effort: 'high' })
+${rows.map((r, i) => `${i + 1}. ${r.term} | ${r.definition} | ${r.doc_url}`).join('\n')}`, `rewrite:axiom${axiomRounds}-${r2}`)
     if (!fixed) break
     rows = fixed.rows
-    violations = checkOrder(rows, terms)
+    violations = fixed.violations
   }
 }
 log(`Layer check: ${violations.length} violations after ${round} fix rounds and ${axioms.length} axioms`)
@@ -194,18 +205,17 @@ let postRound = 0
 while (postViolations.length && postRound < 3) {
   postRound++
   log(`Post-review check round ${postRound}: ${postViolations.length} violations`)
-  const fixed = await agent(`${basePrompt}
+  const fixed = await bestOf(`${basePrompt}
 
 Reviewers corrected some rows for accuracy and the table now fails the mechanical check. Keep the reviewers' facts${axioms.length ? ` and keep the axiomatic rows verbatim (${axioms.join(', ')})` : ''}, fix ALL of these, return the complete table:
 ${postViolations.map(v => `- ${v.term}: ${v.issue}`).join('\n')}
 
 TABLE:
-${finalRows.map((r, i) => `${i + 1}. ${r.term} | ${r.definition} | ${r.doc_url}`).join('\n')}`,
-    { label: `rewrite:post-review-${postRound}`, phase: 'Layer', schema: ROWS_SCHEMA, effort: 'high' })
+${finalRows.map((r, i) => `${i + 1}. ${r.term} | ${r.definition} | ${r.doc_url}`).join('\n')}`, `rewrite:post-review-${postRound}`)
   if (!fixed) break
   const issuesByKey = new Map(finalRows.map(r => [norm(r.term), r.review_issues]))
   finalRows = fixed.rows.map(r => ({ ...r, review_issues: issuesByKey.get(norm(r.term)) || [] }))
   postViolations = checkOrder(finalRows, terms)
 }
 log(`Final: ${finalRows.length} rows, ${postViolations.length} violations, ${corrections.size} rows corrected by reviewers, ${axioms.length} axiomatic`)
-return { topic: TOPIC, rows: finalRows, violations: postViolations, terms, votes, axioms, corrected_count: corrections.size }
+return { topic: TOPIC, rows: finalRows, violations: postViolations, terms, votes, axioms, corrected_count: corrections.size, rewriters: REWRITERS }

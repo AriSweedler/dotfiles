@@ -15,10 +15,10 @@ Two layouts. **Single Doc**: no Drive folder was given, or the topic yields one 
 
 ### Single Doc
 
-Title `[ari-hemingway scaffold] <Topic> [🤖 AI generated]`, then `# Summary`, `# Definitions` (one two-column table, then an optional layout diagram), `# Subsystems` (one `##` per subsystem, each standalone), `# Useful links`, footer.
+Title `[🤖 AI generated] <Topic>`, then `# Summary`, `# Definitions` (one two-column table, then an optional layout diagram), `# Subsystems` (one `##` per subsystem, each standalone), `# Useful links`, footer.
 
 ```
-[ari-hemingway scaffold] Topic [🤖 AI generated]
+[🤖 AI generated] Topic
 
 # Summary
 One sentence on the topic. One sentence on what this revision contains.
@@ -49,10 +49,10 @@ Names "Install layout" but never describes its internals.
 
 ### Folder: Glossary Doc
 
-Title `[ari-hemingway scaffold] <Topic> — Glossary [🤖 AI generated]`. `# Definitions` holds the universal rows only, then the cluster diagram. `# Sub-explainers` lists every subsystem Doc as a raw `docs.google.com` URL (a smart chip after publish), one per line, in cluster order.
+Title `[🤖 AI generated] <Topic> — Glossary`. `# Definitions` holds the universal rows only, then the cluster diagram. `# Sub-explainers` lists every subsystem Doc as a raw `docs.google.com` URL (a smart chip after publish), one per line, in cluster order.
 
 ```
-[ari-hemingway scaffold] Topic — Glossary [🤖 AI generated]
+[🤖 AI generated] Topic — Glossary
 
 # Summary
 One sentence on the topic. One sentence naming the sub-explainers this glossary serves.
@@ -78,10 +78,10 @@ One sentence on the topic. One sentence naming the sub-explainers this glossary 
 
 ### Folder: Subsystem Doc
 
-Title `[ari-hemingway scaffold] <Topic> — <Subsystem> [🤖 AI generated]`. The Summary's second sentence links the Glossary as a raw URL. `# Definitions` holds the rows hoisted into this subsystem; each may lean on a Glossary row, never the reverse. One `#` section per heading the cluster step proposed.
+Title `[🤖 AI generated] <Topic> — <Subsystem>`. The Summary's second sentence links the Glossary as a raw URL. `# Definitions` is present only when rows hoist into this subsystem; each may lean on a Glossary row, never the reverse. A subsystem with no hoisted rows omits the section and its prose runs on Glossary vocabulary alone. One `#` section per heading the cluster step proposed.
 
 ```
-[ari-hemingway scaffold] Topic — Install layout [🤖 AI generated]
+[🤖 AI generated] Topic — Install layout
 
 # Summary
 One sentence on the subsystem. Vocabulary: https://docs.google.com/document/d/<glossary doc id>
@@ -128,6 +128,12 @@ The table must stay human-readable: target 25 to 35 rows, hard maximum 50. The f
 
 When definitions still cycle after the layered rewrite, one term in the cycle becomes axiomatic: its definition uses no table term at all, only everyday words. An axiomatic definition is accepted only after a dedicated agent has attempted an ASD-STE100 (Simplified Technical English) rewrite of it; it then moves to the top of the table as a root row and the cycle breaks. `definitions_refine.js` does this automatically and reports the axioms; record them in `scratchpad.md`.
 
+### Clustering
+
+Subsystems come from the discover graph, never from a hand-written list. `bin/cluster_definitions.zsh` builds a graph from every discover term's `depends_on` list, finds communities by greedy modularity (Clauset-Newman-Moore) at the modularity peak with no forced count, re-clusters each community once on its own subgraph to propose the headings inside its article, merges communities under 2% of the nodes into the neighbour they share the most edges with, and names each from the member its cluster-mates depend on most (top three shown). One community is one article; its second-level parts are that article's headings.
+
+A row of the accepted table is universal when at least half of its dependents lie outside its community and it has at least `nodes/15` dependents; the universal set is then closed under mentions, so a Glossary row never leans on a hoisted row. That ratio is the rule; when the articles' prose shares a term the rule left hoisted, `--universal "<term>"` is the escape hatch. The script warns when the universal share leaves 15% to 60%. An article may hoist no rows and run on Glossary vocabulary alone; `--min-rows N` folds communities with fewer than N hoisted rows into their most-connected neighbour. Flags address communities by the names the last run printed.
+
 ### Subsystem articles
 
 - Each article is standalone: a reader who has the Glossary (and, in the folder layout, the article's own table) can read it alone.
@@ -141,7 +147,9 @@ One diagram per Doc at most. The Glossary carries the cluster-level graph from t
 
 ### Multi-agent workflows
 
-The definitions passes are `Workflow` scripts shipped in `workflows/`. Invoking this skill is the user's opt-in to run them. Each pass is one workflow invocation; read its result before deciding the next. The Workflow tool refuses a `scriptPath` outside the working directory, so read the script once and pass its full text in `script`; the tool then prints a session-local path that works as `scriptPath` for reruns and resumes. `input_json` is a literal absolute path — the tool does not expand `$HOME`. Reviewer agents are told explicitly not to flag brevity or omitted detail — without that instruction they re-bloat every row and reintroduce forward references.
+The definitions passes are `Workflow` scripts shipped in `workflows/`. Invoking this skill is the user's opt-in to run them. Each pass is one workflow invocation; read its result before deciding the next. The Workflow tool refuses a `scriptPath` outside the working directory, so read the script once and pass its full text in `script`; the tool then prints a session-local path that works as `scriptPath` for reruns and resumes. `input_json` is a literal absolute path — the tool does not expand `$HOME`.
+
+The tool runs at most 16 agents at once, so a pass's wall-clock is agent count times agent duration. The passes fill idle slots with eager work that is cheap to throw away: a grounding-only sweep beside the planner, two sweep agents per angle over halves of its sources, and `rewriters` candidates per fix round of which only the table with the fewest mechanical violations survives. Verification is never grouped to save agents: every 6-term define batch gets its own accuracy and structure refuter, because a refuter that has read one batch's sources must not carry them into the next. Reviewer agents are told explicitly not to flag brevity or omitted detail — without that instruction they re-bloat every row and reintroduce forward references.
 
 ## Investigation folder
 
@@ -174,10 +182,11 @@ Scratchpad fields appended after `Last phase`:
 
 - `review-rules.md` — the constraints `/ari-hemingway--review-gdoc` enforces on a scaffold draft (loaded by its Sibling reviewer).
 - `bin/check_definitions_order.zsh` — the mechanical table check (jq program in `lib/check_definitions_order.jq`). Read-only, exits 1 on violations.
-- `bin/cluster_definitions.zsh` (+ `cluster_definitions.py`, per `/ari-skill-pythonscripts`) — clusters the discover graph into subsystems, maps the accepted table onto them, writes `clusters.json`, the cluster-level `graph.mmd`, and the per-Doc `rows/*.json`. Read-only apart from its outputs; `--force` overwrites them.
-- `bin/drive_subfolder.zsh` — chooses the publish folder: the user's folder when empty, else a child named after the topic (reused or created). `--dry-run` validates with Drive and creates nothing.
-- `workflows/definitions_discover.js` — Workflow script: plan angles (or take `angles`), multi-angle sweep, batched first-pass definitions with verified doc links, two refuters per batch, completeness critic, dependency graph. Args: `{topic, grounding, angles?, must_terms?, subsystems_hint?}`.
-- `workflows/definitions_refine.js` — Workflow script: judge-panel selection, layered STE100 rewrite, mechanical ordering check with fix rounds, axiomatic fallback, two factual refuters, recheck. Args: `{topic, grounding, input_json, terms?, judges?, min_votes?, target_rows?, must_terms?, max_sentences?, max_words?, ste100?, axiomatic?}`.
+- `bin/cluster_definitions.zsh` (+ `cluster_definitions.py`, per `/ari-skill-pythonscripts`) — clusters the discover graph into subsystems, maps the accepted table onto them, writes `clusters.json`, the cluster-level `graph.mmd`, and the per-Doc `rows/*.json`. Flags: `--alias`, `--merge`, `--rename`, `--universal`, `--min-rows`; `--force` overwrites outputs and removes stale `rows/*.json`.
+- `bin/drive_subfolder.zsh` — chooses the publish folder: the user's folder when empty, else a child named after the topic (reused or created). `--dry-run` validates with Drive and creates nothing. Drive helpers come from `/ari-hemingway--lib`'s `lib/drive.zsh`.
+- `tests/check_mention_matchers.zsh` + `tests/mention_matcher_cases.json` — feeds every case through the jq checker, the JS `mentionRe`, and the Python `mention_re`; exits 1 on any disagreement. Run it after touching any of the three.
+- `workflows/definitions_discover.js` — Workflow script: plan angles with their sources (or take `angles`) while a grounding-only sweep runs, two sweeps per angle, batched first-pass definitions with verified doc links, two refuters per batch, completeness critic, dependency graph. Args: `{topic, grounding, angles?: [{key, prompt, sources?}], must_terms?, subsystems_hint?, batch_size?}`.
+- `workflows/definitions_refine.js` — Workflow script: judge-panel selection, layered STE100 rewrite by racing rewriters, mechanical ordering check with fix rounds, axiomatic fallback, two factual refuters, recheck. Args: `{topic, grounding, input_json, terms?, judges?, min_votes?, target_rows?, must_terms?, max_sentences?, max_words?, ste100?, axiomatic?, fix_rounds?, rewriters?}`.
 
 ## Workflow
 
@@ -223,21 +232,30 @@ Print: `Refine complete — {n} rows, {k} axioms, 0 violations. Next: Cluster.`
 
 ### Subsystems — cluster
 
-Derive the subsystems from the discover graph, not by hand. Emit exactly this one Bash call (add `--alias "<row term>=<discover term>"` for each row the refine pass renamed; the script warns about rows it cannot map):
+Emit exactly this one Bash call (add `--alias "<row term>=<discover term>"` for each row the refine pass renamed; a row the script cannot map lands in the Glossary with a WARN):
 
 ```zsh
 zsh $HOME/.claude/skills/ari-hemingway--structure-scaffold/bin/cluster_definitions.zsh --discover <folder>/definitions_pass1.json --refined <folder>/definitions_final.json --out <folder>/clusters.json --mermaid <folder>/graph.mmd --rows-dir <folder>/rows
 ```
 
-It builds a graph from every discover term's `depends_on` list, finds communities by greedy modularity (Clauset-Newman-Moore) at the modularity peak with no forced count, re-clusters each community once on its own subgraph to propose the headings inside its article, merges communities under 2% of the nodes into the neighbour they share the most edges with, and names each from the member its cluster-mates depend on most (top three shown). A row of the accepted table is universal when at least half of its dependents lie outside its community and it has at least `nodes/15` dependents; expect a quarter to a third of the table, and read the script's warning when the share is off. One community is one article; its second-level parts are that article's headings.
+Present the proposal in one message and wait. The message MUST include, per community, its name candidates, its hoisted rows, and its proposed headings; then the universal rows with the `promoted` list; then every WARN line the script printed (cross-article mentions, unmapped rows, share out of band), each with the flag that resolves it. Example:
 
-Present the proposal in one message — per community its name candidates, its hoisted rows, and its proposed headings; then the universal rows — and wait. Apply renames, merges, and aliases; re-run the script after any change; run the check script on `rows/glossary.json` and every `rows/<slug>.json`. Fewer than two communities, or the user declining the split, means the single-Doc layout. Bake `graph.mmd` per the Diagrams rule and record the partition in the scratchpad.
+```
+[0] Install layout (candidates: Install layout / Cellar / keg) — 41 terms
+    hoisted: keg, Cellar, opt link        headings: Cellar · Linking
+[1] Distribution (candidates: Distribution / bottle / tap) — 33 terms
+    hoisted: bottle, tap                  headings: Bottles · Taps
+Universal (6 of 11): prefix, formula, Cellar, ... — promoted by closure: Cellar (via prefix)
+WARN cross-article mention | term='bottle' article='Distribution' mentions='keg' defined_in='Install layout' → --universal "keg"
+```
 
-Print: `Cluster complete — {n} subsystems, {k} universal rows of {m}, 0 violations. Next: Subsystems.`
+Apply the user's changes by re-running the SAME command with `--force` and the changes appended, for example `--force --rename "Install layout=Cellar and links" --merge "Taps=Distribution" --universal "keg"`; never hand-move rows. Re-present until accepted, then run the check script on `rows/glossary.json` and every `rows/<slug>.json`. Fewer than two communities, or the user declining the split, means the single-Doc layout. Bake `graph.mmd` per the Diagrams rule and record the partition in the scratchpad.
+
+Print: `Cluster complete — {n} subsystems, {k} universal rows of {m}, {w} warnings, 0 violations. Next: Subsystems.`
 
 ### Subsystems — draft
 
-Draft each article standalone, in the vocabulary of the Glossary rows plus its own rows, with one `#` section per accepted heading. `clusters.json` names each article's terms; the refined pass JSON (`definitions_refined.json`, and `definitions_pass1.json` for detail the cut removed) is the primary grounding: every claim traces to a row there or to a source in `sources.md`. Review each article against three criteria: (a) jargon that is not in its tables, (b) any description of another subsystem's internals, (c) claims not grounded in the sources. Use one agent per article when the Agent tool is available; inside a fork, self-review each article against the same three criteria. Fix, then re-review changed articles. Folder layout: one file per article in `subsystems/<slug>.md`, with its own table, `# Useful links`, and footer. Single Doc: one `##` per article under `# Subsystems`.
+Draft each article standalone, in the vocabulary of the Glossary rows plus its own rows, with one `#` section per accepted heading. `clusters.json` names each article's terms; the refined pass JSON (`definitions_refined.json`, and `definitions_pass1.json` for detail the cut removed) is the primary grounding: every claim traces to a row there or to a source in `sources.md`. Review each article against three criteria: (a) jargon that is not in its tables, (b) any description of another subsystem's internals, (c) claims not grounded in the sources. Use one agent per article when the Agent tool is available; inside a fork, self-review each article against the same three criteria. Fix, then re-review changed articles. A term hoisted into one article MUST NOT be reworded away when two or more articles use it as jargon in prose: run the cluster step again with `--universal "<term>"` and regenerate both tables. Folder layout: one file per article in `subsystems/<slug>.md`, with its own table, `# Useful links`, and footer. Single Doc: one `##` per article under `# Subsystems`.
 
 Print: `Subsystems complete — {n} articles, {words} words. Next: Summary.`
 
@@ -249,7 +267,7 @@ Print: `Draft complete — {docs} docs, {words} words. Next: Fact-check.`
 
 ### Fact-check
 
-Follow the `Fact-check gate` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md` for every draft. For external topics, "the codebase" is the grounding sources; each doc URL in a table counts as a claim and must resolve.
+Follow the `Fact-check gate` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md` for every draft. For external topics, "the codebase" is the grounding sources; each doc URL in a table counts as a claim and must resolve. The 20% `[TODO: verify]` gate applies per Doc.
 
 Print: `Fact-check complete — {n} claims verified, {k} marked [TODO: verify]. Next: Present.`
 
@@ -259,14 +277,16 @@ Follow the `Present` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL
 
 ### Folder structure
 
-Decide the layout from the count of Docs. One Doc: publish it into the user's folder as it is, even when the folder is not empty. Two or more: emit exactly this one Bash call, which returns the user's folder when it is empty and otherwise reuses or creates a child folder named after the topic (`--dry-run` first, then without):
+Decide the layout from the count of Docs. One Doc: publish it into the user's folder as it is, even when the folder is not empty; skip the rest of this step. No folder given: single Doc in My Drive; skip the rest of this step. Two or more Docs: emit exactly this one Bash call; it reports the user's folder when it is empty and otherwise the child folder named after the topic that it would reuse or create:
 
 ```zsh
-zsh $HOME/.claude/skills/ari-hemingway--structure-scaffold/bin/drive_subfolder.zsh --parent <folder id or URL> --name "<Topic>"
+zsh $HOME/.claude/skills/ari-hemingway--structure-scaffold/bin/drive_subfolder.zsh --parent <folder id or URL> --name "<Topic>" --dry-run
 ```
 
-Record `folder_id` and `reason` under `Folder` in the scratchpad. No folder given: single Doc in My Drive.
+Show `folder_name` and `reason`. When `reason='child_missing'`, wait for the user to approve creating the child folder. Then emit the same call without `--dry-run`. An empty `folder_id` after the real run is an error; stop. Record `folder_id` and `reason` under `Folder` in the scratchpad.
+
+Print: `Folder complete — {folder_id} ({reason}). Next: Output.`
 
 ### Output
 
-Follow the `Output` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md` for each Doc (`output.md` for the single Doc or the Glossary; `output/<slug>.md` per subsystem), then publish every Doc with `/ari-hemingway--share-gdoc` passing `--folder <folder_id>` on creation. Folder layout order: the Glossary first; then each subsystem Doc, whose Summary carries the Glossary URL; then rewrite the Glossary's `# Sub-explainers` with the subsystem Docs' raw URLs and update it in place with `--doc` (no `--folder`). Record every URL under `Doc URLs` in the scratchpad.
+Follow the `Output` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md` for each Doc (`output.md` for the single Doc or the Glossary; `output/<slug>.md` per subsystem). Then publish with `/ari-hemingway--share-gdoc`, passing `--folder <folder_id>` on every creation: one dry-run pass over every Doc, one message listing every title and the target folder, one confirmation, then publish all; a per-Doc gate only when a Doc fails. Folder layout order: the Glossary first; then each subsystem Doc, whose Summary carries the Glossary URL; then rewrite the Glossary's `# Sub-explainers` with the subsystem Docs' raw URLs and update it in place with `--doc`. Record each URL under `Doc URLs` in the scratchpad as soon as its Doc exists; on a failure, fix the draft and re-run Output, creating only the Docs without a URL. Any later revision of any Doc uses `--doc <its URL>`, never `--folder`.

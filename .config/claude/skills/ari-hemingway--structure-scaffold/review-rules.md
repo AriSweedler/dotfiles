@@ -7,27 +7,27 @@ loaded_by: /ari-hemingway--review-gdoc
 
 Sibling-specific rules that extend `/ari-hemingway--format-gdoc`. `/ari-hemingway--format-gdoc` is the floor — these rules ADD constraints; they MUST NOT override format rules.
 
-A scaffold is one Doc (single layout) or a folder of Docs (a Glossary Doc plus one Doc per subsystem). Identify the kind from the title before applying the section rules.
+A scaffold is one Doc (single layout) or a folder of Docs (a Glossary Doc plus one Doc per subsystem). Every title starts with `[🤖 AI generated]`; identify the kind from the title's suffix before applying the section rules: `— Glossary` is the Glossary Doc, any other ` — <Subsystem>` suffix is a subsystem Doc, no suffix is the single Doc. A title that does not start with `[🤖 AI generated]`, or that carries a skill name anywhere, is a finding.
 
 ## Required sections (order-sensitive)
 
-Single Doc, title `[ari-hemingway scaffold] <Topic> [🤖 AI generated]`:
+Single Doc, title `[🤖 AI generated] <Topic>`:
 1. `# Summary` — names the topic and what this revision contains.
 2. `# Definitions` — exactly one table, then at most one diagram image.
 3. `# Subsystems` — one `##` per subsystem.
 4. `# Useful links` — `## Docs` with every doc URL from the table and the body; no `## Code and PRs` unless the topic is code.
 5. Footer `🤖🌸 Generated with Claude Code with the ari-hemingway skill`.
 
-Glossary Doc, title `[ari-hemingway scaffold] <Topic> — Glossary [🤖 AI generated]`:
+Glossary Doc, title `[🤖 AI generated] <Topic> — Glossary`:
 1. `# Summary` — names the topic and the sub-explainers.
 2. `# Definitions` — exactly one table (the universal rows), then at most one diagram image (the cluster-level graph).
 3. `# Sub-explainers` — one raw `docs.google.com` URL per subsystem Doc, nothing else; a missing subsystem Doc or a markdown-linked URL is a finding.
 4. `# Useful links` — `## Docs` with every doc URL from the table.
 5. Footer.
 
-Subsystem Doc, title `[ari-hemingway scaffold] <Topic> — <Subsystem> [🤖 AI generated]`:
+Subsystem Doc, title `[🤖 AI generated] <Topic> — <Subsystem>`:
 1. `# Summary` — names the subsystem; its second sentence carries the Glossary Doc's raw URL.
-2. `# Definitions` — exactly one table: the rows hoisted into this subsystem.
+2. `# Definitions` — present only when rows hoist into this subsystem, then exactly one table of those rows; a subsystem with no hoisted rows omits the section and its prose runs on Glossary vocabulary alone. A table header with no rows is a finding.
 3. One or more `#` sections — the article's headings.
 4. `# Useful links` — `## Docs` with every doc URL from the table and the body.
 5. Footer.
