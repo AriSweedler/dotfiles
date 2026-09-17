@@ -1,0 +1,441 @@
+#!/usr/bin/env zsh
+# alttab-free-build — build AltTab from source as the permanent Free tier and install it.
+#
+# The official AltTab binary starts a 14-day Pro trial on first launch and then shows a
+# series of upgrade prompts. This script clones lwouis/alt-tab-macos at a known tag, applies
+# ../free.patch (no trial, no upsells; Pro features stay locked), builds the Release scheme,
+# replaces /Applications/AltTab.app (removing the Homebrew cask so `brew upgrade` cannot
+# bring Pro back), pins the in-app updater to manual, and clears the macOS permission
+# records that were keyed to the previous binary.
+#
+# Permissions: TCC stores each grant together with the app's code requirement. An ad-hoc
+# signature's requirement is its cdhash, so to macOS every rebuild is a new app: toggling the
+# existing row in System Settings does nothing and AltTab re-prompts for Screen Recording
+# every 5s. This script resets the rows whenever the requirement changes, so a fresh grant
+# sticks. To grant only once across rebuilds, create the repo's local certificate
+# (scripts/codesign/setup_local.sh, one admin prompt) and pass --identity "Local Self-Signed".
+
+set -euo pipefail
+
+readonly SCRIPT_DIR="${0:A:h}"
+readonly LIB_LOGGING="${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+
+# --- Constants ---
+
+readonly UPSTREAM_URL="https://github.com/lwouis/alt-tab-macos.git"
+readonly DEFAULT_REF="v11.6.1"                  # the tag free.patch was written against
+readonly DEFAULT_PATCH="${SCRIPT_DIR:h}/free.patch"
+readonly DEFAULT_SRC="${XDG_CACHE_HOME:-${HOME}/.cache}/alttab-free/src"
+readonly DEFAULT_IDENTITY="-"                   # ad-hoc
+readonly BUNDLE_ID="com.lwouis.alt-tab-macos"
+readonly INSTALL_APP="/Applications/AltTab.app"
+readonly BREW_CASK="alt-tab"
+readonly SCHEME="Release"
+readonly DERIVED_DATA="DerivedData"             # relative to the clone; gitignored upstream
+
+DRY_RUN=false
+
+# --- Prerequisites ---
+
+#######################################
+# Check that required binaries are installed.
+# Globals: None
+# Arguments: None
+# Returns: 1 if any are missing
+#######################################
+check_prerequisites() {
+  local missing=()
+  for cmd in git xcodebuild codesign ditto tccutil defaults open osascript pgrep; do
+    command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
+  done
+  if (( ${#missing} > 0 )); then
+    log::err "Missing required commands | missing='${(j:, :)missing}' hint='xcodebuild needs full Xcode, not just Command Line Tools'"
+    return 1
+  fi
+}
+
+# --- Source ---
+
+#######################################
+# Clone upstream into src unless a clone is already there.
+# Arguments: $1 src dir, $2 ref
+#######################################
+ensure_clone() {
+  local src="${1}" ref="${2}"
+  if [[ -d "${src}/.git" ]]; then
+    log::info "Reusing existing clone | src='${src}'"
+    return 0
+  fi
+  log::info "Cloning upstream | url='${UPSTREAM_URL}' ref='${ref}' src='${src}'"
+  mkdir -p "${src:h}"
+  run_cmd git -c advice.detachedHead=false clone --quiet --depth 50 --branch "${ref}" "${UPSTREAM_URL}" "${src}"
+}
+
+#######################################
+# Fetch ref and force-checkout it, discarding any earlier patch application.
+# Arguments: $1 src dir, $2 ref
+#######################################
+checkout_ref() {
+  local src="${1}" ref="${2}"
+  lvl=DEBUG run_cmd git -C "${src}" fetch --quiet --depth 50 origin "${ref}"
+  run_cmd git -C "${src}" checkout --quiet --force --detach FETCH_HEAD
+  log::info "Source ready | ref='${ref}' commit='$(git -C "${src}" rev-parse --short HEAD)'"
+}
+
+#######################################
+# Apply the Free patch. Idempotent: a tree that already carries it is left alone.
+# Arguments: $1 src dir, $2 patch file, $3 ref (for the error message)
+# Returns: 1 if the patch does not apply
+#######################################
+apply_patch() {
+  local src="${1}" patch="${2}" ref="${3}"
+  if git -C "${src}" apply --check --reverse "${patch}" >/dev/null 2>&1; then
+    log::info "Patch already applied | patch='${patch}'"
+    return 0
+  fi
+  if ! git -C "${src}" apply --check "${patch}" >/dev/null 2>&1; then
+    log::err "Patch does not apply | patch='${patch}' ref='${ref}' hint='free.patch targets ${DEFAULT_REF}; regenerate it against this version'"
+    log::ERR "$(git -C "${src}" apply --check "${patch}" 2>&1 || true)"
+    return 1
+  fi
+  run_cmd git -C "${src}" apply "${patch}"
+}
+
+#######################################
+# Version string for Info.plist: the nearest tag without its leading "v".
+# Arguments: $1 src dir
+# Outputs: version on stdout
+#######################################
+resolve_version() {
+  local src="${1}" version
+  version="$(git -C "${src}" describe --tags --abbrev=0 2>/dev/null || true)"
+  version="${version#v}"
+  if [[ ! "${version}" =~ ^[0-9]+(\.[0-9]+)+$ ]]; then
+    log::warn "No version tag reachable; using placeholder | describe='${version}' placeholder='0.0.0'"
+    version="0.0.0"
+  fi
+  echo "${version}"
+}
+
+#######################################
+# Write config/local.xcconfig. Both upstream xcconfigs include it last, so these settings win.
+# Arguments: $1 src dir, $2 codesign identity, $3 version
+#######################################
+write_local_xcconfig() {
+  local src="${1}" identity="${2}" version="${3}"
+  local file="${src}/config/local.xcconfig"
+  log::info "Writing build overrides | file='${file}' identity='${identity}' version='${version}'"
+  cat > "${file}" <<EOF
+// Written by alttab-free-build; included last by config/{debug,release}.xcconfig.
+CODE_SIGN_IDENTITY = ${identity}
+OTHER_CODE_SIGN_FLAGS = --timestamp=none --deep --options runtime
+CURRENT_PROJECT_VERSION = ${version}
+// Xcode 26+ rejects the upstream 10.14 deployment target.
+MACOSX_DEPLOYMENT_TARGET = 12.0
+// The 12.0 target surfaces upstream deprecation warnings; do not fail the build on them.
+SWIFT_TREAT_WARNINGS_AS_ERRORS = NO
+EOF
+}
+
+# --- Build ---
+
+#######################################
+# Build the Release scheme. Output goes to a log; on failure the distinct error lines are shown.
+# Arguments: $1 src dir
+# Returns: xcodebuild's exit code
+#######################################
+build_app() {
+  local src="${1}"
+  local build_log="${src}/${DERIVED_DATA}/alttab-free-build.log"
+  mkdir -p "${src}/${DERIVED_DATA}"
+  log::info "Building; this takes a minute or more | scheme='${SCHEME}' log='${build_log}'"
+  if ! ( cd "${src}" && xcodebuild -project alt-tab-macos.xcodeproj -scheme "${SCHEME}" \
+          -configuration "${SCHEME}" -derivedDataPath "${DERIVED_DATA}" build >"${build_log}" 2>&1 ); then
+    log::err "Build failed | log='${build_log}'"
+    log::ERR "$(grep -E 'error:' "${build_log}" | awk '!seen[$0]++' | head -20 || true)"
+    return 1
+  fi
+  log::ok "Build succeeded"
+}
+
+#######################################
+# Verify the signature seals and the bundle id is AltTab's.
+# Arguments: $1 app bundle
+# Returns: 1 on any mismatch
+#######################################
+verify_app() {
+  local app="${1}" bundle_id
+  if [[ ! -d "${app}" ]]; then
+    log::err "Built app missing | app='${app}'"
+    return 1
+  fi
+  run_cmd codesign --verify --deep --strict "${app}"
+  bundle_id="$(defaults read "${app}/Contents/Info.plist" CFBundleIdentifier)"
+  if [[ "${bundle_id}" != "${BUNDLE_ID}" ]]; then
+    log::err "Unexpected bundle id | bundle_id='${bundle_id}' expected='${BUNDLE_ID}'"
+    return 1
+  fi
+}
+
+#######################################
+# Code directory hash of an app bundle, or empty if it does not exist.
+# Arguments: $1 app bundle
+#######################################
+app_cdhash() {
+  local app="${1}"
+  [[ -d "${app}" ]] || return 0
+  codesign -dvvv "${app}" 2>&1 | awk -F= '/^CDHash=/ { print $2; exit }'
+}
+
+#######################################
+# Designated code requirement of an app bundle (what TCC keys grants to), or empty.
+# Arguments: $1 app bundle
+#######################################
+app_requirement() {
+  local app="${1}"
+  [[ -d "${app}" ]] || return 0
+  codesign -d -r- "${app}" 2>&1 | awk '/designated =>/ { sub(/^.*designated => /, ""); print; exit }'
+}
+
+# --- Install ---
+
+#######################################
+# Quit a running AltTab and wait up to 10s for it to exit.
+#######################################
+quit_app() {
+  pgrep -x AltTab >/dev/null || return 0
+  log::info "Quitting running AltTab"
+  osascript -e 'quit app "AltTab"' >/dev/null 2>&1 || pkill -x AltTab || true
+  local i
+  for i in {1..50}; do
+    pgrep -x AltTab >/dev/null || return 0
+    sleep 0.2
+  done
+  log::warn "AltTab still running after 10s; continuing"
+}
+
+#######################################
+# Uninstall the Homebrew cask if present, so a future brew upgrade cannot reinstall the Pro build.
+#######################################
+remove_brew_cask() {
+  command -v brew >/dev/null 2>&1 || return 0
+  brew list --cask "${BREW_CASK}" >/dev/null 2>&1 || return 0
+  log::info "Removing Homebrew cask | cask='${BREW_CASK}'"
+  run_cmd brew uninstall --cask "${BREW_CASK}"
+}
+
+#######################################
+# Replace /Applications/AltTab.app with the built bundle and drop the DerivedData copy,
+# so Spotlight and LaunchServices see exactly one AltTab.
+# Arguments: $1 built app bundle
+#######################################
+install_app() {
+  local built="${1}"
+  quit_app
+  remove_brew_cask
+  if [[ -e "${INSTALL_APP}" ]]; then
+    log::info "Replacing existing app | app='${INSTALL_APP}'"
+    run_cmd rm -rf "${INSTALL_APP}"
+  fi
+  run_cmd ditto "${built}" "${INSTALL_APP}"
+  run_cmd rm -rf "${built}"
+}
+
+#######################################
+# Set the in-app updater to manual. The official Sparkle feed would replace this build with Pro.
+#######################################
+pin_update_policy() {
+  local current
+  current="$(defaults read "${BUNDLE_ID}" updatePolicy 2>/dev/null || true)"
+  if [[ "${current}" == "0" ]]; then
+    log::debug "Update policy already manual"
+    return 0
+  fi
+  log::info "Pinning updater to manual | previous='${current:-unset}'"
+  run_cmd defaults write "${BUNDLE_ID}" updatePolicy -string "0"
+}
+
+#######################################
+# Clear the Accessibility and Screen Recording rows; macOS keyed them to the previous binary.
+#######################################
+reset_permissions() {
+  log::info "Clearing permission records keyed to the previous binary | bundle_id='${BUNDLE_ID}'"
+  run_cmd tccutil reset ScreenCapture "${BUNDLE_ID}"
+  run_cmd tccutil reset Accessibility "${BUNDLE_ID}"
+}
+
+#######################################
+# Decide whether the permission rows must be reset: yes unless the requirement is unchanged.
+# Arguments: $1 old requirement (may be empty), $2 new requirement
+# Outputs: "true" or "false"
+#######################################
+needs_permission_reset() {
+  local old_req="${1}" new_req="${2}"
+  if [[ -n "${old_req}" && "${old_req}" == "${new_req}" ]]; then
+    log::info "Code requirement unchanged; existing permission grants remain valid"
+    echo "false"
+    return 0
+  fi
+  log::info "Code requirement changed; permission grants must be redone | old='${old_req:-none}'"
+  echo "true"
+}
+
+# --- Help ---
+
+help() {
+  cat <<EOF
+${c_green}alttab-free-build${c_rst} — build AltTab as the permanent Free tier (no trial, no upsells) and install it
+
+${c_bold}Usage:${c_rst}
+  alttab-free-build [OPTIONS]
+
+${c_bold}Options:${c_rst}
+  --ref REF          Upstream tag or branch to build (default: ${DEFAULT_REF}, what free.patch targets)
+  --src DIR          Where to clone/build (default: ${DEFAULT_SRC})
+  --patch FILE       Patch to apply (default: ${DEFAULT_PATCH})
+  --identity ID      codesign identity (default: "-", ad-hoc). A stable local certificate such as
+                     "Local Self-Signed" keeps macOS permission grants valid across rebuilds.
+  --build-only       Clone, patch, build and verify; do not touch /Applications or permissions
+  --no-launch        Install but do not open the app afterwards
+  --dry-run          Print the plan and exit without changing anything
+  --verbose          Enable debug logging
+  -h, --help         Show this help
+
+${c_bold}Examples:${c_rst}
+  alttab-free-build
+  alttab-free-build --build-only
+  alttab-free-build --ref v11.7.0            # newer upstream; fails clearly if the patch no longer applies
+  alttab-free-build --identity "Local Self-Signed"
+
+${c_bold}After install:${c_rst}
+  If the permission records were reset, grant Accessibility and Screen Recording to AltTab in
+  System Settings > Privacy & Security, then choose "Quit & Reopen" when macOS asks.
+EOF
+}
+
+# --- Main ---
+
+main() {
+  check_prerequisites || exit 1
+
+  # === PARSE ===
+  local verbose=false build_only=false launch=true
+  local ref="${DEFAULT_REF}" src="${DEFAULT_SRC}" patch="${DEFAULT_PATCH}" identity="${DEFAULT_IDENTITY}"
+
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)     help; return 0 ;;
+    --verbose)     verbose=true; shift ;;
+    --dry-run)     DRY_RUN=true; shift ;;
+    --build-only)  build_only=true; shift ;;
+    --no-launch)   launch=false; shift ;;
+    --ref)         ref="${2:?--ref requires a value}"; shift 2 ;;
+    --src)         src="${2:?--src requires a value}"; shift 2 ;;
+    --patch)       patch="${2:?--patch requires a value}"; shift 2 ;;
+    --identity)    identity="${2:?--identity requires a value}"; shift 2 ;;
+    -*)            log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)             log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
+  esac; done
+
+  export VERBOSE="${verbose}"
+
+  # === MASSAGE ===
+  src="${src:A}"
+  patch="${patch:A}"
+
+  # === VALIDATE ===
+  if [[ ! -r "${patch}" ]]; then
+    log::err "Patch file not readable | patch='${patch}'"
+    return 1
+  fi
+  if [[ -e "${src}" && ! -d "${src}/.git" ]]; then
+    log::err "Source dir exists but is not a git clone | src='${src}'"
+    return 1
+  fi
+
+  local built_app="${src}/${DERIVED_DATA}/Build/Products/${SCHEME}/AltTab.app"
+  log::debug "Parsed args | ref='${ref}' src='${src}' patch='${patch}' identity='${identity}' build_only='${build_only}' launch='${launch}'"
+
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    log::info "Dry run; nothing will change | ref='${ref}' src='${src}' patch='${patch}' identity='${identity}' build_only='${build_only}'"
+    log::INFO "1. clone ${UPSTREAM_URL} into src (or reuse), force-checkout ${ref}
+2. git apply ${patch}
+3. write ${src}/config/local.xcconfig (identity, version, deployment target 12.0, warnings not errors)
+4. xcodebuild scheme ${SCHEME} -> ${built_app}
+5. codesign --verify; check bundle id ${BUNDLE_ID}
+6. quit AltTab; brew uninstall --cask ${BREW_CASK} if installed; replace ${INSTALL_APP}; delete the DerivedData copy
+7. defaults write ${BUNDLE_ID} updatePolicy 0
+8. tccutil reset ScreenCapture/Accessibility ${BUNDLE_ID} if the code requirement changed
+9. open ${INSTALL_APP}"
+    return 0
+  fi
+
+  # === LOGIC ===
+  ensure_clone "${src}" "${ref}"
+  checkout_ref "${src}" "${ref}"
+  apply_patch "${src}" "${patch}" "${ref}"
+  local version
+  version="$(resolve_version "${src}")"
+  write_local_xcconfig "${src}" "${identity}" "${version}"
+  build_app "${src}"
+  verify_app "${built_app}"
+
+  local commit cdhash
+  commit="$(git -C "${src}" rev-parse --short HEAD)"
+  cdhash="$(app_cdhash "${built_app}")"
+
+  if [[ "${build_only}" == "true" ]]; then
+    log::ok "Build only; nothing installed | app='${built_app}'"
+    log::warn "Spotlight lists this copy as a second AltTab until it is installed or deleted | app='${built_app}'"
+    cat <<EOF
+app=${built_app}
+version=${version}
+commit=${commit}
+cdhash=${cdhash}
+installed=false
+permissions_reset=false
+EOF
+    return 0
+  fi
+
+  local installed_cdhash old_req new_req reset="false" installed="false"
+  installed_cdhash="$(app_cdhash "${INSTALL_APP}")"
+  old_req="$(app_requirement "${INSTALL_APP}")"
+  new_req="$(app_requirement "${built_app}")"
+
+  if [[ -n "${installed_cdhash}" && "${installed_cdhash}" == "${cdhash}" ]]; then
+    log::info "Identical build already installed; skipping install | app='${INSTALL_APP}' cdhash='${cdhash}'"
+    run_cmd rm -rf "${built_app}"
+  else
+    reset="$(needs_permission_reset "${old_req}" "${new_req}")"
+    install_app "${built_app}"
+    installed="true"
+  fi
+
+  pin_update_policy
+  if [[ "${reset}" == "true" ]]; then
+    reset_permissions
+  fi
+  if [[ "${launch}" == "true" ]]; then
+    run_cmd open -a "${INSTALL_APP}"
+  fi
+  if [[ "${reset}" == "true" ]]; then
+    log::warn "Grant Accessibility and Screen Recording to AltTab in System Settings > Privacy & Security, then choose Quit & Reopen"
+  fi
+  log::ok "Done"
+
+  cat <<EOF
+app=${INSTALL_APP}
+version=${version}
+commit=${commit}
+cdhash=${cdhash}
+installed=${installed}
+permissions_reset=${reset}
+EOF
+}
+
+main "${@}"

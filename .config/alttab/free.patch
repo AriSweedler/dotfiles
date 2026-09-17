@@ -1,0 +1,236 @@
+AltTab Free-tier patch
+======================
+
+Removes the 14-day Pro trial and every upgrade prompt from AltTab, leaving the permanent
+Free tier. Pro features stay locked; nothing is unlocked.
+
+Base: lwouis/alt-tab-macos tag v11.6.1 (https://github.com/lwouis/alt-tab-macos)
+Apply: git apply free.patch            (from the repo root)
+Build + install: ~/.config/alttab/bin/alttab-free-build
+
+What it changes
+  LicenseManager        state is always .trialExpired; no trialStartDate written, no Keychain
+                        read, no license-server call
+  ProTransitionManager  Day 1/4/12/15/21/35 windows, popovers and badge are never emitted;
+                        the timed scheduler is never armed; no free pass for gated features
+  Menubar               no "Get Pro" / "My Account" items ("Support this project" stays)
+  SettingsWindow        no Upgrade button in the sidebar
+  UpgradeTab            Pro-only controls snap back silently instead of opening the Upgrade page
+  App                   first-launch Settings no longer waits for the Welcome letter
+
+diff --git a/src/App.swift b/src/App.swift
+index 1a647f0..dedc609 100644
+--- a/src/App.swift
++++ b/src/App.swift
+@@ -233,8 +233,7 @@ class App: AppCenterApplication {
+     /// "now" for the Welcome prompt. Kept narrow on purpose: the other Day-X prompts are gated by
+     /// trial age and don't fire on the very first launch.
+     private static func willShowDay1WelcomeOnAppLaunch() -> Bool {
+-        if case .pro = LicenseManager.shared.state { return false }
+-        return !ProTransitionManager.shared.hasSeenWelcome
++        false // FREE BUILD: the Welcome letter is never shown
+     }
+ 
+     private static func deferFirstLaunchSettingsUntilDay1WelcomeCloses() {
+diff --git a/src/Menubar.swift b/src/Menubar.swift
+index 32d8633..62f8ae6 100644
+--- a/src/Menubar.swift
++++ b/src/Menubar.swift
+@@ -81,29 +81,12 @@ class Menubar {
+     }
+     #endif
+ 
++    // FREE BUILD: never show "Get Pro" or "My Account"; keep the classic "Support this project" link.
+     static func refreshLicenseMenuItems() {
+         guard upgradeToProMenuItem != nil else { return }
+-        let state = LicenseManager.shared.state
+-        switch state {
+-        case .trial:
+-            toggleUpgradeMenuItem(true)
+-            supportProjectMenuItem.isHidden = true
+-            myAccountMenuItem.isHidden = true
+-        case .pro:
+-            toggleUpgradeMenuItem(false)
+-            supportProjectMenuItem.isHidden = true
+-            myAccountMenuItem.isHidden = false
+-        case .proExpired:
+-            toggleUpgradeMenuItem(true)
+-            supportProjectMenuItem.isHidden = false
+-            myAccountMenuItem.isHidden = false
+-        case .trialExpired:
+-            toggleUpgradeMenuItem(true)
+-            supportProjectMenuItem.isHidden = false
+-            myAccountMenuItem.isHidden = true
+-        }
+-        if case .pro = state { return }
+-        (upgradeToProMenuItem.view as? UpgradeMenuItemView)?.updateContent(state)
++        toggleUpgradeMenuItem(false)
++        supportProjectMenuItem.isHidden = false
++        myAccountMenuItem.isHidden = true
+     }
+ 
+     private static func toggleUpgradeMenuItem(_ show: Bool) {
+diff --git a/src/preferences/settings-window/SettingsWindow.swift b/src/preferences/settings-window/SettingsWindow.swift
+index 866329e..22f3a13 100644
+--- a/src/preferences/settings-window/SettingsWindow.swift
++++ b/src/preferences/settings-window/SettingsWindow.swift
+@@ -507,26 +507,12 @@ class SettingsWindow: NSWindow {
+             // too far in.
+             sidebarScrollView.leadingAnchor.constraint(equalTo: parent.leadingAnchor),
+             sidebarScrollView.trailingAnchor.constraint(equalTo: parent.trailingAnchor),
+-            sidebarScrollView.bottomAnchor.constraint(equalTo: upgradeButton.topAnchor, constant: -10),
++            sidebarScrollView.bottomAnchor.constraint(equalTo: quitButton.topAnchor, constant: -20),
+         ])
+     }
+ 
+     private func setupUpgradeButton(_ parent: NSView) {
+-        upgradeButton.target = self
+-        upgradeButton.action = #selector(upgradeButtonClicked)
+-        upgradeButton.translatesAutoresizingMaskIntoConstraints = false
+-        parent.addSubview(upgradeButton)
+-        // Align with the sidebar source-list highlight: the scroll view sits flush against the
+-        // sidebar edges and `.sourceList` adds its own ~10pt internal inset, so the highlight
+-        // pill ends up at `sidebarHorizontalPadding` from each edge — same as the search field.
+-        // The upgrade button matches that same edge.
+-        let inset = Self.sidebarHorizontalPadding
+-        NSLayoutConstraint.activate([
+-            upgradeButton.centerXAnchor.constraint(equalTo: parent.centerXAnchor),
+-            upgradeButton.bottomAnchor.constraint(equalTo: quitButton.topAnchor, constant: -20),
+-            upgradeButton.leadingAnchor.constraint(equalTo: parent.leadingAnchor, constant: inset),
+-            upgradeButton.trailingAnchor.constraint(equalTo: parent.trailingAnchor, constant: -inset),
+-        ])
++        // FREE BUILD: the Upgrade button is never added to the sidebar.
+     }
+ 
+     @objc private func upgradeButtonClicked() {
+diff --git a/src/preferences/settings-window/tabs/UpgradeTab.swift b/src/preferences/settings-window/tabs/UpgradeTab.swift
+index 191b71f..55b0016 100644
+--- a/src/preferences/settings-window/tabs/UpgradeTab.swift
++++ b/src/preferences/settings-window/tabs/UpgradeTab.swift
+@@ -463,8 +463,7 @@ class UpgradeTab {
+     }
+ 
+     static func navigateToUpgradeTab() {
+-        App.showSettingsWindow()
+-        SettingsWindow.shared?.showUpgradeView()
++        // FREE BUILD: Pro-only controls snap back to the stored Free value; there is no Upgrade page.
+     }
+ 
+     static func showAutoActivating(_ licenseKey: String) {
+diff --git a/src/pro/license/LicenseManager.swift b/src/pro/license/LicenseManager.swift
+index 4386913..1ebf11f 100644
+--- a/src/pro/license/LicenseManager.swift
++++ b/src/pro/license/LicenseManager.swift
+@@ -176,37 +176,18 @@ class LicenseManager {
+         }
+     }
+ 
++    // FREE BUILD: this build is the Free tier, permanently. No trial is ever started, no
++    // trialStartDate is written, the Keychain is never read, and the license server is never
++    // contacted.
+     func computeState() -> LicenseState {
+-        if keychain.value(account: Self.keychainKeyAccount) != nil {
+-            let lastValidationResult = defaults.bool(forKey: "lastValidationResult")
+-            guard lastValidationResult else { return .trialExpired }
+-            if let variant = keychain.value(account: Self.keychainVariantAccount),
+-               let maxVersion = Self.versionLimitedVariants[variant] {
+-                let currentVersion = currentAppVersion()
+-                if currentVersion.compare(maxVersion, options: .numeric) == .orderedDescending {
+-                    return .proExpired
+-                }
+-            }
+-            return .pro
+-        }
+-        return computeTrialState()
++        .trialExpired
+     }
+ 
+     private func computeTrialState() -> LicenseState {
+-        if defaults.object(forKey: "trialStartDate") == nil {
+-            defaults.set(clock.now.timeIntervalSince1970, forKey: "trialStartDate")
+-        }
+-        let trialStart = Date(timeIntervalSince1970: defaults.double(forKey: "trialStartDate"))
+-        let daysSinceTrialStart = Int(clock.now.timeIntervalSince(trialStart) / (24 * 60 * 60))
+-        guard daysSinceTrialStart < Self.trialDuration else { return .trialExpired }
+-        return .trial(daysRemaining: Self.trialDuration - daysSinceTrialStart)
++        .trialExpired
+     }
+ 
+     func scheduleAsyncRevalidationIfNeeded() {
+-        let lastValidation = defaults.double(forKey: "lastValidation")
+-        let elapsed = clock.now.timeIntervalSince1970 - lastValidation
+-        guard elapsed >= Self.revalidationInterval else { return }
+-        revalidateWithServer()
+     }
+ 
+     func revalidateWithServer() {
+diff --git a/src/pro/scheduling/ProTransitionManager.swift b/src/pro/scheduling/ProTransitionManager.swift
+index 1b4aaa2..7931913 100644
+--- a/src/pro/scheduling/ProTransitionManager.swift
++++ b/src/pro/scheduling/ProTransitionManager.swift
+@@ -140,8 +140,8 @@ class ProTransitionManager {
+         }
+     }
+ 
++    // FREE BUILD: every Day-X upsell window / popover / badge is dropped here, unconditionally.
+     private func emit(_ action: ProPromptAction) {
+-        onAction?(action)
+     }
+ 
+     // MARK: - Pass-through accessors for external callers (QAMenu, Day35FinalWindow, etc.)
+@@ -164,7 +164,7 @@ class ProTransitionManager {
+     // MARK: - Lifecycle
+ 
+     func onAppLaunchComplete() {
+-        scheduler.onAppLaunchComplete()
++        // FREE BUILD: the timed Day-X scheduler is never armed.
+     }
+ 
+     func onLicenseStateChanged() {
+@@ -202,42 +202,13 @@ class ProTransitionManager {
+     /// Called from App.showUiOrCycleSelection() at the start of a fresh switcher session (not on cycle).
+     /// Decides whether to queue a Day 4 tour or a post-expiration free-pass + [C] for after dismissal.
+     func onSwitcherShown() {
+-        let action = ProTransitionManagerTestable.evaluateSwitcherOpen(currentState())
+-        switch action {
+-        case .showDay4Tour:
+-            state.hasSeenDay4Tour = true
+-            pendingDismissAction = .showDay4Tour
+-        case .triggerFreePass:
+-            state.freePassUsed = true
+-            state.hasTriggeredPostExpirationSwitcher = true
+-            isFreePassSessionActive = true
+-            let style = state.rememberedAppearanceStyle.flatMap { AppearanceStylePreference.allCases[safe: $0] }
+-            let reason = HardGateReason.proPreferences(
+-                appearanceStyle: style,
+-                shortcut: state.rememberedShortcutStyle != nil)
+-            pendingDismissAction = .showFullUpgrade(reason)
+-        case .noop:
+-            break
+-        }
++        // FREE BUILD: no Day 4 tour, no post-expiration free pass.
+     }
+ 
+-    /// Returns true if the feature should be allowed to execute
++    /// FREE BUILD: hard-gated Pro features (Shortcuts 2-9, Search) are simply unavailable,
++    /// with no free pass and no upsell.
+     func attemptHardGatedFeature(_ feature: ProFeature) -> Bool {
+-        let action = ProTransitionManagerTestable.evaluateHardGate(currentState())
+-        switch action {
+-        case .allow: return true
+-        case .freePass:
+-            state.freePassUsed = true
+-            isFreePassSessionActive = true
+-            pendingDismissAction = .showFullUpgrade(.feature(feature))
+-            return true
+-        case .showFullUpgrade:
+-            showFullUpgradeWindow(for: .feature(feature))
+-            return false
+-        case .showHardGatePopover:
+-            emit(.showDay15HardGatePopover(.feature(feature)))
+-            return false
+-        }
++        false
+     }
+ 
+     func showFullUpgradeWindow(for reason: HardGateReason? = nil) {
