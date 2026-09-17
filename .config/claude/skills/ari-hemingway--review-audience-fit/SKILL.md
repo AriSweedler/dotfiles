@@ -35,7 +35,7 @@ Orthogonal to format: format checks syntax and convention (emoji literals, headi
 - [ ] Depth matches destination (slack = skimmable; gdoc = substantive; pr = factual).
 - [ ] Assumed knowledge matches destination's reader profile — no in-group jargon dropped on outsiders; no over-explanation for insiders.
 - [ ] Destination-specific conventions honored:
-  - gdoc: plain-text title with `[🤖 AI generated]` marker; `# Useful links` section
+  - gdoc: plain-text title starting with `[🤖 AI generated]`; `# Useful links` section
   - slack: opening `:wave:` or context line; no formal headings (`#`); `*bold*` mrkdwn
   - pr-description: `# Summary` and `# Test Plan` sections
   - email: greeting + closing
