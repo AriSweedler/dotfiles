@@ -1,7 +1,9 @@
 -- Claude Code prompt buffers: highlight /skill invocations that name an installed
--- skill, and @path references that resolve to a real file. Both need
--- filesystem existence checks, so this uses extmarks instead of :syntax (which
--- treesitter disables anyway).
+-- skill or one of Claude Code's own skills and slash commands, and @path references
+-- that resolve to a real file. Both need existence checks, so this uses extmarks
+-- instead of :syntax (which treesitter disables anyway).
+
+local slash = require("ari.claude_slash")
 
 local ns = vim.api.nvim_create_namespace("claude_refs")
 local skills_dir = vim.fs.normalize("~/.claude/skills")
@@ -18,8 +20,10 @@ local function installed_skills()
 	if not ok then
 		return skills
 	end
-	for name, kind in iter do
-		if kind == "directory" then
+	-- vim.fs.dir reports a symlinked skill as "link"; stat through it.
+	for name in iter do
+		local stat = vim.uv.fs_stat(vim.fs.joinpath(skills_dir, name))
+		if stat and stat.type == "directory" then
 			skills[name] = true
 		end
 	end
@@ -51,7 +55,7 @@ local function highlight_refs(buf)
 			if not s then
 				break
 			end
-			if at_boundary(line, s) and skills[name] then
+			if at_boundary(line, s) and (skills[name] or slash.names()[name]) then
 				vim.api.nvim_buf_set_extmark(buf, ns, lnum - 1, s - 1, {
 					end_col = e,
 					hl_group = "ClaudeSkill",
@@ -90,4 +94,9 @@ vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "InsertLeave" }, {
 		highlight_refs(buf)
 	end,
 })
+slash.ensure(function()
+	if vim.api.nvim_buf_is_valid(buf) then
+		highlight_refs(buf)
+	end
+end)
 highlight_refs(buf)
