@@ -3,7 +3,8 @@
 #
 # The official AltTab binary starts a 14-day Pro trial on first launch and then shows a
 # series of upgrade prompts. This script clones lwouis/alt-tab-macos at a known tag, applies
-# ../free.patch (no trial, no upsells; Pro features stay locked), builds the Release scheme,
+# ../free.patch (no trial, no upsells; Pro features stay locked except shortcut slot 2, AltTab's
+# default ⌥` for the active app's windows), builds the Release scheme,
 # replaces /Applications/AltTab.app (removing the Homebrew cask so `brew upgrade` cannot
 # bring Pro back), pins the in-app updater to manual, and clears the macOS permission
 # records that were keyed to the previous binary.

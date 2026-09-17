@@ -2,7 +2,10 @@ AltTab Free-tier patch
 ======================
 
 Removes the 14-day Pro trial and every upgrade prompt from AltTab, leaving the permanent
-Free tier. Pro features stay locked; nothing is unlocked.
+Free tier, with one deliberate exception: the second shortcut slot works. It is AltTab's own
+default (hold ⌥ and press the key above Tab to switch between the active app's windows),
+which the official Free tier blocks at the key press. Every other Pro feature stays locked:
+App Icons and Titles styles, Auto size, Search, Search-on-release, shortcut slots 3-9.
 
 Base: lwouis/alt-tab-macos tag v11.6.1 (https://github.com/lwouis/alt-tab-macos)
 Apply: git apply free.patch            (from the repo root)
@@ -12,7 +15,9 @@ What it changes
   LicenseManager        state is always .trialExpired; no trialStartDate written, no Keychain
                         read, no license-server call
   ProTransitionManager  Day 1/4/12/15/21/35 windows, popovers and badge are never emitted;
-                        the timed scheduler is never armed; no free pass for gated features
+                        the timed scheduler is never armed; no free pass for gated features;
+                        hard-gated features are refused, except shortcut slot 2
+  ControlsTab           the "+" button may re-add slot 2; slots 3-9 stay locked
   Menubar               no "Get Pro" / "My Account" items ("Support this project" stays)
   SettingsWindow        no Upgrade button in the sidebar
   UpgradeTab            Pro-only controls snap back silently instead of opening the Upgrade page
@@ -117,6 +122,20 @@ index 191b71f..55b0016 100644
      }
  
      static func showAutoActivating(_ licenseKey: String) {
+diff --git a/src/preferences/settings-window/tabs/controls/ControlsTab.swift b/src/preferences/settings-window/tabs/controls/ControlsTab.swift
+index af569dc..3f6f615 100644
+--- a/src/preferences/settings-window/tabs/controls/ControlsTab.swift
++++ b/src/preferences/settings-window/tabs/controls/ControlsTab.swift
+@@ -585,7 +585,8 @@ class ControlsTab {
+     private static func addShortcutSlot() {
+         let currentCount = Preferences.shortcutCount
+         guard currentCount < Preferences.maxShortcutCount else { return }
+-        if currentCount >= 1 && LicenseManager.shared.isProLocked {
++        // FREE BUILD: slot 2 may be re-added; slots 3-9 stay locked.
++        if currentCount >= 2 && LicenseManager.shared.isProLocked {
+             UpgradeTab.navigateToUpgradeTab()
+             return
+         }
 diff --git a/src/pro/license/LicenseManager.swift b/src/pro/license/LicenseManager.swift
 index 4386913..1ebf11f 100644
 --- a/src/pro/license/LicenseManager.swift
@@ -165,7 +184,7 @@ index 4386913..1ebf11f 100644
  
      func revalidateWithServer() {
 diff --git a/src/pro/scheduling/ProTransitionManager.swift b/src/pro/scheduling/ProTransitionManager.swift
-index 1b4aaa2..7931913 100644
+index 1b4aaa2..931f6ee 100644
 --- a/src/pro/scheduling/ProTransitionManager.swift
 +++ b/src/pro/scheduling/ProTransitionManager.swift
 @@ -140,8 +140,8 @@ class ProTransitionManager {
@@ -187,7 +206,7 @@ index 1b4aaa2..7931913 100644
      }
  
      func onLicenseStateChanged() {
-@@ -202,42 +202,13 @@ class ProTransitionManager {
+@@ -202,42 +202,14 @@ class ProTransitionManager {
      /// Called from App.showUiOrCycleSelection() at the start of a fresh switcher session (not on cycle).
      /// Decides whether to queue a Day 4 tour or a post-expiration free-pass + [C] for after dismissal.
      func onSwitcherShown() {
@@ -212,8 +231,9 @@ index 1b4aaa2..7931913 100644
      }
  
 -    /// Returns true if the feature should be allowed to execute
-+    /// FREE BUILD: hard-gated Pro features (Shortcuts 2-9, Search) are simply unavailable,
-+    /// with no free pass and no upsell.
++    /// FREE BUILD: hard-gated Pro features (Shortcuts 3-9, Search) are simply unavailable, with no
++    /// free pass and no upsell. The second shortcut slot is allowed: it is AltTab's own default
++    /// (hold ⌥, press the key above Tab, windows of the active app only).
      func attemptHardGatedFeature(_ feature: ProFeature) -> Bool {
 -        let action = ProTransitionManagerTestable.evaluateHardGate(currentState())
 -        switch action {
@@ -230,7 +250,7 @@ index 1b4aaa2..7931913 100644
 -            emit(.showDay15HardGatePopover(.feature(feature)))
 -            return false
 -        }
-+        false
++        feature == .extraShortcut(index: 1)
      }
  
      func showFullUpgradeWindow(for reason: HardGateReason? = nil) {

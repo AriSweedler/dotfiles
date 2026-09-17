@@ -23,7 +23,9 @@ All of these are true, and you have verified each with a command, not an assumpt
 
 ## Ground rules
 
-- The patch keeps Pro features locked. Do not edit it, or anything else, to unlock them.
+- The patch keeps Pro features locked, with one deliberate exception: shortcut slot 2 (⌥`,
+  windows of the active app), which is AltTab's own default. Do not edit it, or anything else,
+  to unlock more.
 - Never install AltTab through Homebrew here. The script removes the cask on purpose.
 - Permissions cannot be granted from a shell. `tccutil` only resets. The person clicks in
   System Settings; you tell them exactly where and verify afterwards.
@@ -140,7 +142,7 @@ permissions, say so.
 
 | Symptom | Cause | What to do |
 |---|---|---|
-| `Patch does not apply` | `--ref` newer than `v11.6.1` | Prefer `--ref v11.6.1`. If they want the newer version: check out the tag in the clone, port the six changes listed in `free.patch`'s header by hand, `git diff > free.patch` keeping the header, re-run with `--patch`. Keep Pro locked. |
+| `Patch does not apply` | `--ref` newer than `v11.6.1` | Prefer `--ref v11.6.1`. If they want the newer version: check out the tag in the clone, port the changes listed in `free.patch`'s header by hand, `git diff > free.patch` keeping the header, re-run with `--patch`. Keep Pro locked apart from slot 2. |
 | Build error about `MACOSX_DEPLOYMENT_TARGET` or deprecations reported as errors | `config/local.xcconfig` missing or overridden | Confirm the file exists in the clone with `MACOSX_DEPLOYMENT_TARGET = 12.0` and `SWIFT_TREAT_WARNINGS_AS_ERRORS = NO`; re-run. |
 | `xcodebuild` license or `xcode-select` errors | Xcode not set up | Person runs the two `sudo` commands from Preflight. |
 | `No signing certificate "AltTab Free Local" found` or `ambiguous` during the build | Certificate missing, untrusted, or duplicated | `zsh ~/.config/alttab/bin/alttab-free-cert --status`. Missing or untrusted: step 1. Duplicated: the person deletes the extras in Keychain Access. |

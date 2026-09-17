@@ -4,7 +4,9 @@ The official AltTab (`brew install --cask alt-tab`) starts a 14-day Pro trial on
 with no way to opt out, then shows upgrade prompts on days 1, 4, 12, 15, 21 and 35. On day 15
 any Pro setting you picked silently reverts. This folder builds AltTab from its GPL-3.0 source
 with a small patch that makes it the permanent Free tier from the first launch: no trial, no
-prompts, Pro features locked. Nothing is unlocked.
+prompts, Pro features locked, with one deliberate exception. The second shortcut slot, AltTab's
+own default of ⌥` for switching between the active app's windows, works. Slots 3 to 9, Search,
+and the Pro appearance options stay locked.
 
 ## Files
 
@@ -112,7 +114,7 @@ alttab-free-build --ref v11.7.0
 If the patch no longer applies, the script stops and says so. Regenerate it: check out the new
 tag in the clone, make the changes the header of `free.patch` describes, then
 `git diff > ~/.config/alttab/free.patch` and paste the header back on top. Do not widen the patch
-to unlock Pro features.
+beyond the second shortcut slot.
 
 ## If something is off
 
@@ -126,6 +128,7 @@ to unlock Pro features.
 | Two AltTabs in Spotlight | Build-folder copy left behind | `rm -rf ~/.cache/alttab-free/src/DerivedData/Build/Products/Release/AltTab.app` |
 | Build fails | See `~/.cache/alttab-free/src/DerivedData/alttab-free-build.log` | Deployment-target and deprecation errors mean `config/local.xcconfig` was not written |
 | Switcher size or style changed on its own | Auto size, App Icons and Titles styles are Pro | Expected. Pick a Free value in Settings |
+| ⌥` does nothing | A build from before slot 2 was allowed, or slot 2 was removed in Settings | Rebuild with `alttab-free-build`. In Settings > Controls, the **+** button re-adds slot 2; set it to hold ⌥, press `, "Active app" |
 
 Check what is installed:
 
@@ -139,7 +142,10 @@ is back.
 
 ## Free vs Pro, so you know what to expect
 
-Free: Thumbnails style, Shortcut 1, fixed switcher sizes, all filters, window previews, gestures,
-per-app exceptions, switching across Spaces.
+Free: Thumbnails style, Shortcut 1 (⌥⇥, all apps), fixed switcher sizes, all filters, window
+previews, gestures, per-app exceptions, switching across Spaces.
 
-Pro, shown with a badge and locked: App Icons and Titles styles, Search, Auto size, Shortcuts 2 to 9.
+Unlocked by this patch on purpose: Shortcut 2 (⌥`, windows of the active app). It is what AltTab
+configures by default; the official Free tier blocks it at the key press.
+
+Pro, shown with a badge and locked: App Icons and Titles styles, Search, Auto size, Shortcuts 3 to 9.
