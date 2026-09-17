@@ -139,7 +139,7 @@ source_sha1: {hash}  # openssl dgst -sha1
 ```
 
 **Topic-slug derivation** (per lib) uses a fallback chain for title-less drafts:
-1. Doc title if present (plain-text first line before the `[🤖 AI generated]` tag).
+1. Doc title if present (plain-text first line after the leading `[🤖 AI generated]` marker).
 2. First non-blank line of `source.md`, trimmed.
 3. Input filename stem.
 4. `anonymous-$(openssl rand -hex 3)`.
@@ -303,7 +303,7 @@ Print: `Present complete — {k} findings selected.` (or `... 0 selected — clo
 
 | Reviewer | Output file | Rules (sections in `/ari-hemingway--format-gdoc`) | Check bullets |
 |---|---|---|---|
-| Formatting | `formatting.md` | Document conventions → Title, sections, footer; Diagrams; Tables | Title plain text + ends `[🤖 AI generated]`; final line exactly `🤖🌸 Generated with Claude Code`, optionally followed by ` with the ari-hemingway skill`; emoji literals preserved; sections start at `#`; subsections `##`; no skipped heading levels; diagrams are `[![alt](ink_url?width=620)](live_url)`: an image linked to its mermaid.live source, width capped at 620 px; each diagram plausibly fits one page (a nested flowchart past ~8 nodes or a long vertical chain is flagged); every table has a header row (styling is applied by `/ari-hemingway--share-gdoc` at publish, so flag any plan to paste the doc by hand) |
+| Formatting | `formatting.md` | Document conventions → Title, sections, footer; Diagrams; Tables | Title plain text + starts with `[🤖 AI generated]`; final line exactly `🤖🌸 Generated with Claude Code`, optionally followed by ` with the ari-hemingway skill`; emoji literals preserved; sections start at `#`; subsections `##`; no skipped heading levels; diagrams are `[![alt](ink_url?width=620)](live_url)`: an image linked to its mermaid.live source, width capped at 620 px; each diagram plausibly fits one page (a nested flowchart past ~8 nodes or a long vertical chain is flagged); every table has a header row (styling is applied by `/ari-hemingway--share-gdoc` at publish, so flag any plan to paste the doc by hand) |
 | Links | `links.md` | Link formatting; Link formatting → Link density; Useful links | First-mention code refs are `/blob/{sha}/` permalinks with full 40-char SHAs; later mentions bare backticks; new `#` sections reset the counter; aliases re-link; code without repo location uses bare backticks (not fabricated permalinks); every named external entity (source-by-title, product/tool, company, person, protocol/spec) is hyperlinked at its first mention in the body, not just listed in `# Useful links`; PR refs use full title + number + escaped brackets; `docs.google.com`/`drive.google.com` URLs are raw (not markdown), so the publish step can chip them; no mention of a Claude skill outside the footer, so no skill names in the body, no `github.com/AriSweedler/dotfiles/...` URL, and no `## Code and PRs` block listing the toolchain; request flows are numbered lists; `# Useful links` section is present and inventories every URL in the body + every resource named but not linked inline |
 | Typography | `typography.md` | Typography → Jargon and literal tokens | Every technical jargon / literal token is backticked: protocol tokens (`|c`, `|ms`, `:1|c`), wire formats, daemon / port / path / env-var / command names, metric type names, and acronyms used as literals (`UDP`, `TCP`, `OTLP`, `HTTP`) when naming the literal protocol/token rather than reading as prose; an acronym reading as prose is left unbackticked |
 | Scaffolding | `scaffolding.md` | Document conventions skeleton + sibling `review-rules.md` `Required sections`, `Reshape rules` | Required sections present and in order; no required section empty (or contains mandated fallback text like "None found during research"); section sizes proportional to doc's target word count; flow-diagram trigger respected per sibling rules; reshape rules not violated (optional sections renamed only to concrete titles, merges stay under size cap) |
@@ -325,7 +325,7 @@ Print: `Present complete — {k} findings selected.` (or `... 0 selected — clo
 
 - Input: `/tmp/hemingway/subsystem-explainer/widget-cache-invalidation-ab3f9c/20260416-120000-7a3c/draft.md`
 - Auto-detect: path matches `/tmp/hemingway/{skill-name}/` → `skill-name = subsystem-explainer`.
-- Doc first line: `Widget Cache Invalidation [🤖 AI generated]` → title exists.
+- Doc first line: `[🤖 AI generated] Widget Cache Invalidation` → title exists.
 - Slug source: title → `widget-cache-invalidation-{sha1:0:6}`.
 - Print: `Slug derived from: title.`
 
@@ -333,7 +333,7 @@ Print: `Present complete — {k} findings selected.` (or `... 0 selected — clo
 
 ```markdown
 ## Checklist
-- [x] Title plain text + ends `[🤖 AI generated]`: PASS
+- [x] Title plain text + starts with `[🤖 AI generated]`: PASS
 - [x] Final line `🤖🌸 Generated with Claude Code`: PASS
 - [ ] Emoji literals preserved: FAIL (see Finding #1)
 - [x] Sections start at `#`: PASS
