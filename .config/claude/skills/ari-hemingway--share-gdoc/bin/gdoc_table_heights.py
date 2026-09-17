@@ -2,8 +2,10 @@
 
 The Docs API reports no layout, but the PDF export does: it emits one clip rectangle per table
 cell in page points with y running down from the top, `x y w h re W* n`. Cells are clustered
-into tables by vertical adjacency. A segment that starts at the top margin continues the
-previous page's last table, and its first row is the header row Docs repeats on every page.
+into tables by vertical adjacency. A segment that starts at the top margin continues the table
+that ended the previous page only when its column grid (the x edges of its first row) matches
+that table's grid; a table that merely begins at the top of a page is a new table. In a
+continuation the first row is the header row Docs repeats on every page.
 
 Output: one JSON object per table on stdout, in document order:
   {"table": n, "pages": [...], "rows": r, "cols": c,
@@ -27,6 +29,7 @@ STREAM_RE = re.compile(rb"stream\r?\n(.*?)\r?\nendstream", re.S)
 CLIP_RE = re.compile(r"(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) re\s+W\* n")
 GAP_PT = 3.0
 TOP_MARGIN_PT = 72.0
+GRID_TOLERANCE_PT = 1.0  # column x edges of a continued table match the previous page's within this
 
 
 def parse_args():
@@ -124,15 +127,38 @@ def summarize(segments):
     }
 
 
+def column_grid(cells):
+    """Sorted x edges of the cells in the segment's first row: the table's column grid."""
+    first_y = min(c["y"] for c in cells)
+    return sorted(c["x"] for c in cells if abs(c["y"] - first_y) < 0.01)
+
+
+def same_grid(a, b):
+    if len(a) != len(b):
+        return False
+    return all(abs(x - y) <= GRID_TOLERANCE_PT for x, y in zip(a, b))
+
+
+def continues_previous(tables, seg, page_num):
+    """True when seg is the next page's continuation of the last table: that table ended on the
+    previous page, seg starts at the top margin, and the column grids match."""
+    if not tables:
+        return False
+    prev_page, prev_cells = tables[-1][-1]
+    if prev_page != page_num - 1:
+        return False
+    if min(c["y"] for c in seg) > TOP_MARGIN_PT + GAP_PT:
+        return False
+    return same_grid(column_grid(prev_cells), column_grid(seg))
+
+
 def collect_tables(objs):
     tables = []
     for page_num, pid in enumerate(page_ids(objs), start=1):
         segments = [s for s in cluster(cells_on_page(page_content(objs, pid))) if len(s) > 1]
         segments.sort(key=lambda s: min(c["y"] for c in s))
         for seg in segments:
-            top = min(c["y"] for c in seg)
-            continues = tables and top <= TOP_MARGIN_PT + GAP_PT and tables[-1][-1][0] == page_num - 1
-            if continues:
+            if continues_previous(tables, seg, page_num):
                 tables[-1].append((page_num, seg))
             else:
                 tables.append([(page_num, seg)])

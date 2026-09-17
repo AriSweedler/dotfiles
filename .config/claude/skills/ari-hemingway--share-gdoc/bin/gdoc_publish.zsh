@@ -203,7 +203,6 @@ main() {
 
   local finish_rc=0
   zsh "${SCRIPT_DIR}/gdoc_finish.zsh" --doc "${doc_id}" || finish_rc=$?
-  log::info "Manual step remains: Format > Table > Pin header row (tableHeader is read-only in the Docs API)"
   echo "${url}"
   return "${finish_rc}"
 }

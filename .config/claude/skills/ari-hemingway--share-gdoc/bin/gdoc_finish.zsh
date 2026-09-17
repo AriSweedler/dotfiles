@@ -3,8 +3,9 @@
 # into a smart chip, style every table's header row (bold, centered, grey #D9D9D9), and set every
 # table's column widths to the ones that make it shortest with no column narrower than its widest
 # token, then verify from one re-read that every inline image fits one page and links to its
-# editable mermaid.live source, that no plain Drive link remains, and that every table fits the
-# text width. tableHeader (pin header row) is read-only in the Docs API and stays a manual step.
+# editable mermaid.live source, that no plain Drive link remains, that every table fits the text
+# width, and that every table's first row is a pinned header (Drive's markdown import sets
+# tableHeader; the PDF export repeats that row on every page).
 
 set -euo pipefail
 
@@ -29,6 +30,9 @@ readonly DRIVE_LINK_RE='^https://(docs|drive)\.google\.com/(.*/d/|drive/folders/
 # the predicted-vs-rendered comparison, match the planner's LINE_HEIGHT_PT.
 readonly TABLE_WIDTHS="${SCRIPT_DIR}/gdoc_table_widths.zsh"
 readonly LINE_HEIGHT_PT="15.15"
+# A rendered table may drift from the model by this much before the verify read warns: 1.5 lines,
+# because a single extra wrapped line is model rounding, not a layout problem worth a look.
+readonly DRIFT_TOLERANCE_PT="22.7"
 
 # --- Logging ---
 
@@ -291,6 +295,27 @@ build_column_width_requests() {
 }
 
 #######################################
+# Log whether every table's first row is a pinned header (tableRowStyle.tableHeader). Drive's
+# markdown import sets it, and Docs repeats a pinned row on every page the table spans.
+# Arguments: $1 - path to doc JSON
+# Returns: 1 if any table's first row is not pinned
+#######################################
+check_header_rows_pinned() {
+  local doc_json="${1}"
+  local rc=0 start n_tables
+  n_tables="$(jq '[.body.content[] | select(.table)] | length' "${doc_json}")"
+  while IFS=$'\t' read -r start; do
+    [[ -n "${start}" ]] || continue
+    log::warn "Table header row is not pinned | start='${start}' expected='tableRows[0].tableRowStyle.tableHeader == true'"
+    rc=1
+  done < <(jq -r '.body.content[] | select(.table) | select((.table.tableRows[0].tableRowStyle.tableHeader // false) | not) | [.startIndex] | @tsv' "${doc_json}")
+  if (( rc == 0 )); then
+    log::ok "Header rows pinned | tables='${n_tables}'"
+  fi
+  return "${rc}"
+}
+
+#######################################
 # Log one line per table that cannot fit the text width even at its columns' minimums, naming the
 # deficit and the widest token per column; the author folds a column or shortens a token.
 # Arguments: $1 - path to the plan (JSON lines)
@@ -345,8 +370,8 @@ check_drive_links_are_chips() {
 # Log the doc's rendered page count: export to PDF and read /Count from the Pages root. This is
 # the one real layout measurement available (the Docs API reports no geometry), so it is what
 # the column-width model is judged against: each table's rendered height is compared with the
-# planner's prediction for the widths the doc now has, and a drift over one line-height warns.
-# Globals: LINE_HEIGHT_PT
+# planner's prediction for the widths the doc now has, and a drift over DRIFT_TOLERANCE_PT warns.
+# Globals: DRIFT_TOLERANCE_PT
 # Arguments: $1 - doc id, $2 - work dir, $3 - path to the plan for the doc as it now is (JSON lines)
 #######################################
 report_page_count() {
@@ -371,8 +396,8 @@ report_page_count() {
       continue
     fi
     drift="$(awk -v a="${content}" -v b="${predicted}" 'BEGIN { d = a - b; if (d < 0) d = -d; printf "%.1f", d }')"
-    if awk -v d="${drift}" -v lh="${LINE_HEIGHT_PT}" 'BEGIN { exit !(d > lh) }'; then
-      log::warn "Rendered table drifts from the model | table='${table}' pages='${pages_on}' rows='${rows}' cols='${cols}' content_height_pt='${content}' predicted_pt='${predicted}' drift_pt='${drift}' tolerance_pt='${LINE_HEIGHT_PT}'"
+    if awk -v d="${drift}" -v tol="${DRIFT_TOLERANCE_PT}" 'BEGIN { exit !(d > tol) }'; then
+      log::warn "Rendered table drifts from the model | table='${table}' pages='${pages_on}' rows='${rows}' cols='${cols}' content_height_pt='${content}' predicted_pt='${predicted}' drift_pt='${drift}' tolerance_pt='${DRIFT_TOLERANCE_PT}'"
       continue
     fi
     log::info "Rendered table | table='${table}' pages='${pages_on}' rows='${rows}' cols='${cols}' height_pt='${height}' content_height_pt='${content}' predicted_pt='${predicted}' drift_pt='${drift}'"
@@ -408,6 +433,7 @@ run_checks() {
   check_images_fit_one_page "${doc_json}" || rc=1
   check_images_link_to_source "${doc_json}" || rc=1
   check_drive_links_are_chips "${doc_json}" || rc=1
+  check_header_rows_pinned "${doc_json}" || rc=1
   plan_table_widths "${doc_json}" "${work}/plan_after.json"
   check_tables_fit "${work}/plan_after.json" || rc=1
   report_page_count "${doc}" "${work}" "${work}/plan_after.json"
@@ -433,8 +459,9 @@ ${c_bold}Options:${c_rst}
   -h, --help                   Show this help
 
 ${c_bold}Exit code:${c_rst} non-zero when any inline image exceeds the page content box or lacks a link to its
-mermaid.live source, when any Drive link is still a plain hyperlink, or when a table's widest tokens
-cannot fit the text width even at their minimum column widths (fold a column or shorten a token).
+mermaid.live source, when any Drive link is still a plain hyperlink, when a table's first row is not a
+pinned header, or when a table's widest tokens cannot fit the text width even at their minimum column
+widths (fold a column or shorten a token).
 EOH
 }
 
