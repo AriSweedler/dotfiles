@@ -15,9 +15,7 @@ readonly SKILLS_DIR="${HOME}/.claude/skills"
 # --- Constants ---
 
 readonly DOC_MIME="application/vnd.google-apps.document"
-readonly FOLDER_MIME="application/vnd.google-apps.folder"
 readonly REPLY_FIELDS="id,name,parents,webViewLink"
-readonly FOLDER_FIELDS="id,name,mimeType,driveId,capabilities/canAddChildren"
 
 # --- Logging ---
 
@@ -27,6 +25,7 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
+source "${SKILLS_DIR}/ari-hemingway--lib/lib/drive.zsh"
 
 # --- Prerequisites ---
 
@@ -60,21 +59,6 @@ doc_id_from() {
   echo "${doc}"
 }
 
-#######################################
-# Reduce a Drive folder URL (https://drive.google.com/drive/[u/0/]folders/<id>[?...]) or bare id
-# to the id.
-# Arguments: $1 - id or URL
-#######################################
-folder_id_from() {
-  local folder="${1}"
-  if [[ "${folder}" == *"/folders/"* ]]; then
-    folder="${folder#*/folders/}"
-    folder="${folder%%\?*}"
-    folder="${folder%%/*}"
-  fi
-  echo "${folder}"
-}
-
 ########################################################################
 # Business logic
 ########################################################################
@@ -96,36 +80,6 @@ stage_body() {
   log::info "Using first line as title; stripped from body | title='${title}'"
   tail -n +2 "${file}" | jq -Rs 'ltrimstr("\n")' -r > "${body}"
   echo "${title}"
-}
-
-#######################################
-# Verify the Drive folder a new Doc will be created in: it must exist, be a folder, and accept
-# new files. supportsAllDrives covers shared-drive folders, which otherwise answer 404.
-# Globals: FOLDER_MIME, FOLDER_FIELDS
-# Arguments: $1 - folder id, $2 - reply path
-# Outputs: the folder name on stdout
-#######################################
-resolve_folder() {
-  local folder="${1}" reply_file="${2}"
-  local params
-  params="$(jq -cn --arg id "${folder}" --arg f "${FOLDER_FIELDS}" '{fileId: $id, fields: $f, supportsAllDrives: true}')"
-  if ! gws drive files get --params "${params}" > "${reply_file}" 2> "${reply_file}.err"; then
-    log::err "Folder not found or not readable | folder='${folder}' error='$(tail -n 1 "${reply_file}.err")' expected='a Drive folder id or drive.google.com/drive/folders URL the caller can open'"
-    return 1
-  fi
-  local mime can_add name
-  mime="$(jq -r '.mimeType // empty' "${reply_file}")"
-  can_add="$(jq -r '.capabilities.canAddChildren // false' "${reply_file}")"
-  name="$(jq -r '.name // empty' "${reply_file}")"
-  if [[ "${mime}" != "${FOLDER_MIME}" ]]; then
-    log::err "Target is not a folder | folder='${folder}' mime_type='${mime}' expected='${FOLDER_MIME}'"
-    return 1
-  fi
-  if [[ "${can_add}" != "true" ]]; then
-    log::err "Cannot add files to folder | folder='${folder}' name='${name}' can_add_children='${can_add}' expected='true'"
-    return 1
-  fi
-  echo "${name}"
 }
 
 #######################################
@@ -198,7 +152,7 @@ main() {
 
   # === MASSAGE ===
   doc="$(doc_id_from "${doc}")"
-  folder="$(folder_id_from "${folder}")"
+  folder="$(drive::folder_id_from "${folder}")"
   [[ -n "${file}" ]] && file="${file:A}"
 
   # === VALIDATE ===
@@ -226,7 +180,7 @@ main() {
 
   local folder_name=""
   if [[ -n "${folder}" ]]; then
-    folder_name="$(resolve_folder "${folder}" "${work}/folder_reply.json")" || return 1
+    folder_name="$(drive::resolve_folder "${folder}" "${work}/folder_reply.json")" || return 1
     log::info "Target folder | folder='${folder}' name='${folder_name}' drive='$(jq -r '.driveId // "my-drive"' "${work}/folder_reply.json")'"
   fi
 
