@@ -10,7 +10,7 @@ Sibling-specific rules that extend `/ari-hemingway--format-gdoc`. `/ari-hemingwa
 ## Required sections (order-sensitive)
 
 Every explainer MUST include these sections, in this order:
-1. Title — plain text, ending `[🤖 AI generated]`.
+1. Title — plain text, starting with `[🤖 AI generated]`.
 2. `# Summary`
 3. `# How it works`
 4. `# Gotchas`

@@ -18,7 +18,7 @@ Formatting rules: see `/ari-hemingway--format-gdoc`. Workflow patterns (investig
 ## Document structure
 
 Required sections, in order:
-- Title (plain text, ending `[🤖 AI generated]` per `/ari-hemingway--format-gdoc`)
+- Title (plain text, starting with `[🤖 AI generated]` per `/ari-hemingway--format-gdoc`)
 - `# Summary` — one sentence per distinct capability, never exceed 4 sentences
 - `# How it works` — core mechanism; flows as numbered steps
 - `# Gotchas` (see "Gotchas vs Operational notes" below)
@@ -58,7 +58,7 @@ Group into: `## Fact corrections`, `## Additions`, `## Removals`, `## Prose/stru
 ### Skeleton
 
 ```
-Title Goes Here [🤖 AI generated]
+[🤖 AI generated] Title Goes Here
 
 # Summary
 One sentence per distinct capability. Never exceed 4 sentences.
@@ -92,7 +92,7 @@ Complete inventory per `/ari-hemingway--format-gdoc` — every URL inlined above
 Structural skeleton only — NOT a target length. See word-count buckets in `## Rules` for real targets.
 
 ```markdown
-Widget Cache Invalidation [🤖 AI generated]
+[🤖 AI generated] Widget Cache Invalidation
 
 # Summary
 
