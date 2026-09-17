@@ -76,11 +76,11 @@
 # Surface — where the assembled cmd runs. An entry's window field always wins; every
 # other entry follows TMUX_ONESHOT_SURFACE (--surface for one launch, `tmux setenv -g`
 # for every popup):
-#   popup       (default) eval in the popup's own shell. No copy mode: a popup is not a pane.
-#   popup_pane  a throwaway session runs the cmd and the popup attaches to it, so under the
-#               popup sits a real pane: copy mode, scrollback and mouse selection work with
-#               this server's bindings. Hold and autodismiss happen in that pane; the rc
-#               comes back through a file because attach-session exits 0 regardless.
+#   popup_pane  (default) a throwaway session runs the cmd and the popup attaches to it, so
+#               under the popup sits a real pane: copy mode, scrollback and mouse selection
+#               work with this server's bindings. Hold and autodismiss happen in that pane;
+#               the rc comes back through a file because attach-session exits 0 regardless.
+#   popup       eval in the popup's own shell. No copy mode: a popup is not a pane.
 #   window      like a window entry, the window named after the entry.
 #
 # flags/subcommands are a builder and strictly opt-in: an entry without them
@@ -168,12 +168,12 @@ ${c_cyan}Options:${c_rst}
   ${c_green}-h, --help${c_rst}         show this help
 
 ${c_cyan}Surface${c_rst} (where the picked cmd runs; an entry's window field always wins):
+  popup_pane  (default) the popup attaches to a throwaway session running the cmd: copy
+              mode, scrollback and mouse selection work as in any pane
   popup       eval in the popup's shell — no copy mode, a popup is not a pane
-  popup_pane  the popup attaches to a throwaway session running the cmd: copy mode,
-              scrollback and mouse selection work as in any pane
   window      a new tmux window named after the entry
-  default     \$TMUX_ONESHOT_SURFACE (currently: ${c_grey}${TMUX_ONESHOT_SURFACE:-popup}${c_rst})
-              flip it for every launch: tmux setenv -g TMUX_ONESHOT_SURFACE popup_pane
+  current     ${c_grey}${TMUX_ONESHOT_SURFACE:-${TMUX_ONESHOT_DEFAULT_SURFACE}}${c_rst} — flip it for every launch with
+              tmux setenv -g TMUX_ONESHOT_SURFACE popup
 
 ${c_cyan}Sources${c_rst} (later wins on a duplicate name):
   global     ${c_grey}${XDG_CONFIG_HOME:-${HOME}/.config}/tmux_oneshot/*.json${c_rst}   skip: TMUX_ONESHOT_IGNORE_DIR_GLOBAL=1
@@ -750,7 +750,7 @@ function tmux_oneshot::action::dry_run() {
   entry="$(jq --argjson i "${idx}" '.[$i]' "${TMUX_ONESHOT_DB}")"
   cmd="$(tmux_oneshot::_assemble "${entry}")" || return 1
   jq -r --arg cmd "${cmd}" '
-    "name=\(.menu.name // .cmd) tier=\(._tier // "db") src=\(._src // env.TMUX_ONESHOT_DB) surface=\(if .window then "window:" + .window else (env.TMUX_ONESHOT_SURFACE // "popup" | if . == "popup_pane" or . == "window" then . else "popup" end) end) autodismiss=\(.autodismiss // false) key=\(.key // "-") prompt=\(.prompt // "-")",
+    "name=\(.menu.name // .cmd) tier=\(._tier // "db") src=\(._src // env.TMUX_ONESHOT_DB) surface=\(if .window then "window:" + .window else (env.TMUX_ONESHOT_SURFACE // "popup_pane" | if . == "popup" or . == "window" then . else "popup_pane" end) end) autodismiss=\(.autodismiss // false) key=\(.key // "-") prompt=\(.prompt // "-")",
     "cmd=\($cmd)"' <<< "${entry}"
 }
 
@@ -937,18 +937,24 @@ function tmux_oneshot::_run() {
   return "${rc}"
 }
 
+# Also the fallback the dry-run/debug jq template hardcodes; keep the two in step.
+TMUX_ONESHOT_DEFAULT_SURFACE=popup_pane
+
 # Output: popup | popup_pane | window. An entry's window field wins; otherwise
-# TMUX_ONESHOT_SURFACE. An unknown value runs on the popup and says so.
+# TMUX_ONESHOT_SURFACE. An unknown value runs on the default and says so.
 function tmux_oneshot::_surface() {
   local entry="${1:?}"
   if [[ -n "$(jq -r '.window // ""' <<< "${entry}")" ]]; then
     print -r -- window
     return 0
   fi
-  local surface="${TMUX_ONESHOT_SURFACE:-popup}"
+  local surface="${TMUX_ONESHOT_SURFACE:-${TMUX_ONESHOT_DEFAULT_SURFACE}}"
   case "${surface}" in
     popup|popup_pane|window) ;;
-    *) log::err "Unknown surface, using popup | surface='${surface}'"; surface=popup ;;
+    *)
+      log::err "Unknown surface, using ${TMUX_ONESHOT_DEFAULT_SURFACE} | surface='${surface}'"
+      surface="${TMUX_ONESHOT_DEFAULT_SURFACE}"
+      ;;
   esac
   print -r -- "${surface}"
 }

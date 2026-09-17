@@ -31,6 +31,8 @@ source "${HOME}/.config/bin/tmux-oneshot"
 TMUX_ONESHOT_KEY_STYLE=''
 # CLI-run cases must not post real notifications or wait for a keypress on a real tty.
 export TMUX_ONESHOT_NOTIFY=0 TMUX_ONESHOT_HOLD=0
+# The run-mode tests below drive the in-popup eval path; the surface tests override per case.
+export TMUX_ONESHOT_SURFACE=popup
 
 local _picks_file _typed_file _calls_file _label_file _tmux_file _db
 _picks_file="$(mktemp /tmp/tmux-oneshot-test-picks.XXXXX)"
@@ -621,11 +623,12 @@ _t "_new_window outside tmux warns" "Not inside tmux" "$(print -r -- "${_err_out
 function _tmux_call() { grep -m1 -e "^${1}"$'\x1f' "${_tmux_file}" | cut -d $'\x1f' -f "${2:-1-}" | tr $'\x1f' '|' }
 # The recorded tmux subcommands in order; a leading "-S <socket>" is stripped first.
 function _tmux_subcommands() { sed -E $'s/^-S\x1f[^\x1f]*\x1f//' "${_tmux_file}" | cut -d $'\x1f' -f1 | grep -E "${1}" | paste -sd'|' - }
-_t "surface: default is popup" "popup" "$(unset TMUX_ONESHOT_SURFACE; tmux_oneshot::_surface '{"cmd":"x"}')"
+_t "surface: default is popup_pane" "popup_pane" "$(unset TMUX_ONESHOT_SURFACE; tmux_oneshot::_surface '{"cmd":"x"}')"
+_t "surface: TMUX_ONESHOT_SURFACE=popup opts out" "popup" "$(TMUX_ONESHOT_SURFACE=popup tmux_oneshot::_surface '{"cmd":"x"}')"
 _t "surface: TMUX_ONESHOT_SURFACE picks popup_pane" "popup_pane" "$(TMUX_ONESHOT_SURFACE=popup_pane tmux_oneshot::_surface '{"cmd":"x"}')"
 _t "surface: an entry's window field wins" "window" "$(TMUX_ONESHOT_SURFACE=popup_pane tmux_oneshot::_surface '{"cmd":"x","window":"w"}')"
 _err_out="$(TMUX_ONESHOT_SURFACE=bogus tmux_oneshot::_surface '{"cmd":"x"}' 2>&1)"
-_t "surface: unknown value falls back to popup and says so" "popup Unknown surface" \
+_t "surface: unknown value falls back to the default and says so" "popup_pane Unknown surface" \
   "$(print -r -- "${_err_out}" | tail -1) $(print -r -- "${_err_out}" | grep -o 'Unknown surface')"
 : > "${_tmux_file}"
 ( export TMUX=test-dummy TMUX_ONESHOT_SURFACE=window; _run_key aPa > /dev/null 2>&1 )
