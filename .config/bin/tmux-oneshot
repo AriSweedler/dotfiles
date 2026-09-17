@@ -73,6 +73,16 @@
 #                and its tier ("global" | "local" | "generated" | "extra"). Shown in the
 #                preview; used by --edit, --debug and --dry-run.
 #
+# Surface — where the assembled cmd runs. An entry's window field always wins; every
+# other entry follows TMUX_ONESHOT_SURFACE (--surface for one launch, `tmux setenv -g`
+# for every popup):
+#   popup   (default) eval in the popup's own shell. No copy mode: a popup is not a pane.
+#   pane    a throwaway session runs the cmd and the popup attaches to it, so under the
+#           popup sits a real pane: copy mode, scrollback and mouse selection work with
+#           this server's bindings. Hold and autodismiss happen in that pane; the rc
+#           comes back through a file because attach-session exits 0 regardless.
+#   window  like a window entry, the window named after the entry.
+#
 # flags/subcommands are a builder and strictly opt-in: an entry without them
 # never prompts (beyond its own `prompt`). Assembly order per level: cmd,
 # then selected flags, then the chosen subcommand's assembly. The top-level
@@ -106,18 +116,21 @@ function tmux_oneshot() {
   tmux_oneshot::_load || return 1
 
   local -a fzf_args
-  case "${1:-}" in
-    --list)     shift; tmux_oneshot::action::list "$@"; return $?;;
-    --edit)     shift; tmux_oneshot::action::edit "$@"; return $?;;
-    --debug)    tmux_oneshot::action::debug; return $?;;
-    --dry-run)  tmux_oneshot::action::dry_run "${2:?--dry-run requires a name}"; return $?;;
-    -q|--query) fzf_args=(--query "${2:?-q requires a value}"); shift 2;;
-    -*)
-      log::err "Unknown option | option='${1}'"
-      tmux_oneshot::action::help >&2
-      return 1
-      ;;
-  esac
+  while [[ "${1:-}" == -* ]]; do
+    case "${1}" in
+      --list)     shift; tmux_oneshot::action::list "$@"; return $?;;
+      --edit)     shift; tmux_oneshot::action::edit "$@"; return $?;;
+      --debug)    tmux_oneshot::action::debug; return $?;;
+      --dry-run)  tmux_oneshot::action::dry_run "${2:?--dry-run requires a name}"; return $?;;
+      -q|--query) fzf_args=(--query "${2:?-q requires a value}"); shift 2;;
+      --surface)  export TMUX_ONESHOT_SURFACE="${2:?--surface requires popup, pane or window}"; shift 2;;
+      *)
+        log::err "Unknown option | option='${1}'"
+        tmux_oneshot::action::help >&2
+        return 1
+        ;;
+    esac
+  done
 
   if (( $# > 0 )); then
     local idx
@@ -134,9 +147,9 @@ function tmux_oneshot::action::help() {
 ${c_green}tmux-oneshot${c_rst} — pick a oneshot command from the merged entry files and run it
 
 Selecting an entry cds to its pwd (if set), asks its prompt (if set), resolves its
-flags/subcommands (if any), then evals the assembled command in the popup, or in a
-new tmux window for window entries. A direct key (⌃x in the menu) runs its entry at
-once. The entry schema is documented at the top of this script.
+flags/subcommands (if any), then runs the assembled command on the surface below. A
+direct key (⌃x in the menu) runs its entry at once. The entry schema is documented at
+the top of this script.
 
 ${c_cyan}Usage:${c_rst}
   tmux-oneshot [name]                 run an entry by menu.name or 1-based index
@@ -147,11 +160,20 @@ ${c_cyan}Options:${c_rst}
     ${c_green}--depth N${c_rst}        keep the first N /-segments (1: groups list once, as "ap")
     ${c_green}--prefix P${c_rst}       only names starting with P
   ${c_green}--files${c_rst}            print the source files that would load, as "tier<TAB>path"
-  ${c_green}--dry-run <name>${c_rst}   print the entry's surface fields and assembled cmd; no eval
+  ${c_green}--dry-run <name>${c_rst}   print the entry's fields, its surface and assembled cmd; no eval
+  ${c_green}--surface <s>${c_rst}      popup, pane or window for this launch (see Surface)
   ${c_green}--edit [name]${c_rst}      \$EDITOR on every source file, or on the one defining <name>
   ${c_green}--debug${c_rst}            non-interactive: sources, render, index, preview and key checks
   ${c_green}--log${c_rst}              print the per-run stderr log (popup errors land here)
   ${c_green}-h, --help${c_rst}         show this help
+
+${c_cyan}Surface${c_rst} (where the picked cmd runs; an entry's window field always wins):
+  popup    eval in the popup's shell — no copy mode, a popup is not a pane
+  pane     the popup attaches to a throwaway session running the cmd: copy mode,
+           scrollback and mouse selection work as in any pane
+  window   a new tmux window named after the entry
+  default  \$TMUX_ONESHOT_SURFACE (currently: ${c_grey}${TMUX_ONESHOT_SURFACE:-popup}${c_rst})
+           flip it for every launch: tmux setenv -g TMUX_ONESHOT_SURFACE pane
 
 ${c_cyan}Sources${c_rst} (later wins on a duplicate name):
   global     ${c_grey}${XDG_CONFIG_HOME:-${HOME}/.config}/tmux_oneshot/*.json${c_rst}   skip: TMUX_ONESHOT_IGNORE_DIR_GLOBAL=1
@@ -728,7 +750,7 @@ function tmux_oneshot::action::dry_run() {
   entry="$(jq --argjson i "${idx}" '.[$i]' "${TMUX_ONESHOT_DB}")"
   cmd="$(tmux_oneshot::_assemble "${entry}")" || return 1
   jq -r --arg cmd "${cmd}" '
-    "name=\(.menu.name // .cmd) tier=\(._tier // "db") src=\(._src // env.TMUX_ONESHOT_DB) surface=\(if .window then "window:" + .window else "popup" end) autodismiss=\(.autodismiss // false) key=\(.key // "-") prompt=\(.prompt // "-")",
+    "name=\(.menu.name // .cmd) tier=\(._tier // "db") src=\(._src // env.TMUX_ONESHOT_DB) surface=\(if .window then "window:" + .window else (env.TMUX_ONESHOT_SURFACE // "popup" | if . == "pane" or . == "window" then . else "popup" end) end) autodismiss=\(.autodismiss // false) key=\(.key // "-") prompt=\(.prompt // "-")",
     "cmd=\($cmd)"' <<< "${entry}"
 }
 
@@ -877,28 +899,58 @@ function tmux_oneshot::_run() {
     return 1
   fi
 
-  local name window
+  local name autodismiss surface rc
   name="$(jq -r '.menu.name // .cmd' <<< "${entry}")"
-  window="$(jq -r '.window // ""' <<< "${entry}")"
-  if [[ -n "${window}" ]]; then
-    tmux_oneshot::_new_window "${window}" "${cmd}"
-    return $?
-  fi
-
-  log::info "Running oneshot | cmd='${cmd}' pwd='${PWD}'"
-  eval "${cmd}"
-  local rc=$?
+  autodismiss="$(jq -r '.autodismiss // false' <<< "${entry}")"
+  surface="$(tmux_oneshot::_surface "${entry}")"
+  case "${surface}" in
+    window)
+      local window
+      window="$(jq -r '.window // ""' <<< "${entry}")"
+      tmux_oneshot::_new_window "${window:-${name// /-}}" "${cmd}"
+      return $?
+      ;;
+    pane)
+      tmux_oneshot::_attach_session "${name}" "${cmd}" "${autodismiss}"; rc=$?
+      ;;
+    *)
+      log::info "Running oneshot | cmd='${cmd}' pwd='${PWD}'"
+      eval "${cmd}"; rc=$?
+      ;;
+  esac
   if (( rc == FZF_GROUP_BACK_RC )); then
     log::info "Cancelled | name='${name}'"
     return "${rc}"
-  elif (( rc != 0 )); then
-    log::fail "${name} failed | rc='${rc}' cmd='${cmd}'"
-  elif [[ "$(jq -r '.autodismiss // false' <<< "${entry}")" == "true" ]]; then
+  fi
+  if (( rc == 0 )) && [[ "${autodismiss}" == "true" ]]; then
     [[ -n "${TMUX:-}" ]] && tmux display-message -d 1500 "✓ ${name}"
     return 0
   fi
+  if [[ "${surface}" == pane ]]; then
+    # The pane already held until esc, and the cmd's stderr never reached this log, so a
+    # failure is recorded without the notification that would only open an empty log.
+    (( rc == 0 )) || log::err "${name} failed | rc='${rc}' cmd='${cmd}'"
+    return "${rc}"
+  fi
+  (( rc == 0 )) || log::fail "${name} failed | rc='${rc}' cmd='${cmd}'"
   tmux_oneshot::_hold_until_escape
   return "${rc}"
+}
+
+# Output: popup | pane | window. An entry's window field wins; otherwise
+# TMUX_ONESHOT_SURFACE. An unknown value runs on the popup and says so.
+function tmux_oneshot::_surface() {
+  local entry="${1:?}"
+  if [[ -n "$(jq -r '.window // ""' <<< "${entry}")" ]]; then
+    print -r -- window
+    return 0
+  fi
+  local surface="${TMUX_ONESHOT_SURFACE:-popup}"
+  case "${surface}" in
+    popup|pane|window) ;;
+    *) log::err "Unknown surface, using popup | surface='${surface}'"; surface=popup ;;
+  esac
+  print -r -- "${surface}"
 }
 
 # Runs inside the new window ($1 = cmd, $2 = window name): eval the entry; on failure hold so
@@ -959,6 +1011,52 @@ function tmux_oneshot::_new_window() {
   [[ -n "${ONESHOT_INPUT:-}" ]] && envargs=(-e "ONESHOT_INPUT=${ONESHOT_INPUT}")
   log::info "Opening window | name='${name}' cmd='${cmd}' pwd='${PWD}'"
   tmux new-window -n "${name}" -c "${PWD}" "${envargs[@]}" zsh -c "${TMUX_ONESHOT_WINDOW_RUNNER}" tmux-oneshot "${cmd}" "${name}"
+}
+
+# Runs inside the attached session's pane ($1 = cmd, $2 = rc file, $3 = autodismiss,
+# $4 = FZF_GROUP_BACK_RC): eval the entry, hand the rc back through the file, then hold
+# until esc so the output stays readable — and copyable, this being a real pane. An
+# autodismissed success and a cancel skip the hold. TMUX_ONESHOT_HOLD=0 skips the read (tests).
+TMUX_ONESHOT_PANE_RUNNER='eval "$1"; rc=$?; print -rn -- "${rc}" > "$2"; if (( rc == $4 )) || { (( rc == 0 )) && [[ "$3" == true ]] }; then exit ${rc}; fi; (( rc == 0 )) || print -u2 "\n── rc=${rc} ──"; print -u2 "── esc to close ──"; [[ "${TMUX_ONESHOT_HOLD:-1}" == 0 ]] || while read -k 1 -s key < /dev/tty; do (( #key == 27 )) && break; done; exit ${rc}'
+
+# Input: <name> <cmd> <autodismiss>. The popup stays a popup on screen, but under it a
+# client is attached to a throwaway session whose one pane runs the cmd: copy mode,
+# scrollback and mouse selection work there with this server's bindings, which a popup's
+# own screen never gets. attach-session exits 0 whether the session ended or the client
+# was detached, so the rc travels back through a file; an empty file (popup closed
+# mid-run) reads as failure. TMUX= is what lets a client start inside the popup.
+function tmux_oneshot::_attach_session() {
+  local name="${1:?}" cmd="${2:?}" autodismiss="${3:-false}"
+  if [[ -z "${TMUX:-}" ]]; then
+    log::warn "Not inside tmux; running inline | session='${name}'"
+    eval "${cmd}"
+    return $?
+  fi
+  local sess="oneshot-$$" rcf
+  rcf="$(mktemp "${TMPDIR:-/tmp}/tmux-oneshot-rc.XXXXXX")" || return 1
+  local -a envargs
+  [[ -n "${ONESHOT_INPUT:-}" ]] && envargs=(-e "ONESHOT_INPUT=${ONESHOT_INPUT}")
+  log::info "Attaching session | session='${sess}' cmd='${cmd}' pwd='${PWD}'"
+  if ! tmux new-session -d -s "${sess}" -c "${PWD}" "${envargs[@]}" \
+      zsh -c "${TMUX_ONESHOT_PANE_RUNNER}" tmux-oneshot "${cmd}" "${rcf}" "${autodismiss}" "${FZF_GROUP_BACK_RC}"; then
+    rm -f "${rcf}"
+    return 1
+  fi
+  tmux set-option -t "${sess}" status off
+  # The outer client's terminal features (RGB …) do not follow TERM into the nested client.
+  local termfeatures
+  local -a feats
+  termfeatures="$(tmux display-message -p '#{client_termfeatures}' 2>/dev/null)"
+  [[ -n "${termfeatures}" ]] && feats=(-T "${termfeatures}")
+  # Closing the popup hangs this shell up mid-attach; the session must go with it.
+  trap 'tmux kill-session -t "${sess}" 2>/dev/null' HUP
+  TMUX= tmux "${feats[@]}" attach-session -t "${sess}"
+  trap - HUP
+  tmux kill-session -t "${sess}" 2>/dev/null
+  local rc
+  rc="$(cat "${rcf}" 2>/dev/null)"
+  rm -f "${rcf}"
+  return "${rc:-1}"
 }
 
 # Keep the popup open so command output stays readable; Esc closes it.

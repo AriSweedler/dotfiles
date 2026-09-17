@@ -614,6 +614,49 @@ _err_out="$(unset TMUX; tmux_oneshot::_new_window caf 'echo inline-ran' 2>&1)"
 _t "_new_window outside tmux runs inline" "inline-ran" "$(print -r -- "${_err_out}" | grep -x inline-ran)"
 _t "_new_window outside tmux warns" "Not inside tmux" "$(print -r -- "${_err_out}" | grep -o 'Not inside tmux')"
 
+# ---------------------------------------------------------------------------
+# Surface: entry.window wins; else TMUX_ONESHOT_SURFACE; pane attaches a throwaway session
+# ---------------------------------------------------------------------------
+# First recorded tmux argv starting with <cmd>, fields <range> (cut syntax), |-joined.
+function _tmux_call() { grep -m1 "^${1}"$'\x1f' "${_tmux_file}" | cut -d $'\x1f' -f "${2:-1-}" | tr $'\x1f' '|' }
+_t "surface: default is popup" "popup" "$(unset TMUX_ONESHOT_SURFACE; tmux_oneshot::_surface '{"cmd":"x"}')"
+_t "surface: TMUX_ONESHOT_SURFACE picks pane" "pane" "$(TMUX_ONESHOT_SURFACE=pane tmux_oneshot::_surface '{"cmd":"x"}')"
+_t "surface: an entry's window field wins" "window" "$(TMUX_ONESHOT_SURFACE=pane tmux_oneshot::_surface '{"cmd":"x","window":"w"}')"
+_err_out="$(TMUX_ONESHOT_SURFACE=bogus tmux_oneshot::_surface '{"cmd":"x"}' 2>&1)"
+_t "surface: unknown value falls back to popup and says so" "popup Unknown surface" \
+  "$(print -r -- "${_err_out}" | tail -1) $(print -r -- "${_err_out}" | grep -o 'Unknown surface')"
+: > "${_tmux_file}"
+( export TMUX=test-dummy TMUX_ONESHOT_SURFACE=window; _run_key aPa > /dev/null 2>&1 )
+_t "surface=window: a plain entry opens a window named after it" "new-window|-n|aPa" "$(_tmux_last 1-3)"
+: > "${_tmux_file}"
+_err_out="$(export TMUX=test-dummy TMUX_ONESHOT_SURFACE=pane; _run_key aPa 2>/dev/null)"; _err_rc=$?
+_t "surface=pane: new-session -d -s oneshot-<pid> -c pwd zsh -c pane-runner" \
+  "new-session|-d|-s|oneshot-$$|-c|${PWD}|zsh|-c|${TMUX_ONESHOT_PANE_RUNNER}|tmux-oneshot" "$(_tmux_call new-session 1-10)"
+_t "surface=pane: cmd, autodismiss and the back rc follow the runner" \
+  "${_stub} --query \"'alpha' \"|true|${FZF_GROUP_BACK_RC}" "$(_tmux_call new-session 11)|$(_tmux_call new-session 13-14)"
+_t "surface=pane: attaches to that session" "attach-session|-t|oneshot-$$" "$(_tmux_call attach-session)"
+_t "surface=pane: status off, attach, then kill the session" "set-option|attach-session|kill-session" \
+  "$(cut -d $'\x1f' -f1 "${_tmux_file}" | grep -E '^(set-option|attach-session|kill-session)$' | paste -sd'|' -)"
+_t "surface=pane: no rc back (popup closed mid-run) is a failure, and the popup never holds" "1 " \
+  "${_err_rc} $(print -r -- "${_err_out}" | grep HELD)"
+_err_out="$(unset TMUX; TMUX_ONESHOT_SURFACE=pane tmux_oneshot::_attach_session aPa 'echo inline-ran' true 2>&1)"
+_t "surface=pane outside tmux runs inline" "inline-ran" "$(print -r -- "${_err_out}" | grep -x inline-ran)"
+# The runner itself, headless: TMUX_ONESHOT_HOLD=0 (exported above) skips its esc read.
+local _rcf
+_rcf="$(mktemp /tmp/tmux-oneshot-test-rc.XXXXX)"
+_err_out="$(zsh -c "${TMUX_ONESHOT_PANE_RUNNER}" tmux-oneshot 'echo ran; (exit 3)' "${_rcf}" false "${FZF_GROUP_BACK_RC}" 2>&1)"; _err_rc=$?
+_t "pane runner: rc reaches the file and the exit; a failure shows its rc and holds" "3 3 ran rc=3 esc" \
+  "${_err_rc} $(cat "${_rcf}") $(print -r -- "${_err_out}" | grep -x ran) $(print -r -- "${_err_out}" | grep -o 'rc=3') $(print -r -- "${_err_out}" | grep -o 'esc')"
+_err_out="$(zsh -c "${TMUX_ONESHOT_PANE_RUNNER}" tmux-oneshot 'echo ok' "${_rcf}" true "${FZF_GROUP_BACK_RC}" 2>&1)"; _err_rc=$?
+_t "pane runner: an autodismissed success exits without holding" "0 0 ok " \
+  "${_err_rc} $(cat "${_rcf}") $(print -r -- "${_err_out}" | grep -x ok) $(print -r -- "${_err_out}" | grep -o 'esc')"
+_err_out="$(zsh -c "${TMUX_ONESHOT_PANE_RUNNER}" tmux-oneshot 'echo ok' "${_rcf}" false "${FZF_GROUP_BACK_RC}" 2>&1)"; _err_rc=$?
+_t "pane runner: a held success shows only the esc banner" "0 esc " \
+  "${_err_rc} $(print -r -- "${_err_out}" | grep -o 'esc') $(print -r -- "${_err_out}" | grep -o 'rc=')"
+_err_out="$(zsh -c "${TMUX_ONESHOT_PANE_RUNNER}" tmux-oneshot "(exit ${FZF_GROUP_BACK_RC})" "${_rcf}" false "${FZF_GROUP_BACK_RC}" 2>&1)"; _err_rc=$?
+_t "pane runner: a cancel skips the hold" "${FZF_GROUP_BACK_RC} " "${_err_rc} $(print -r -- "${_err_out}" | grep -o 'esc')"
+rm -f "${_rcf}"
+
 _set_typed "foo bar"
 _t "prompt entry exports ONESHOT_INPUT into cmd" "https://go/foo bar" "$(_run_key go 2>/dev/null)"
 _t "prompt label is shown verbatim" "go/ " "$(cat "${_label_file}")"
