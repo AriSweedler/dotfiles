@@ -37,6 +37,11 @@ readonly DOTFILES_REMOTE="${DOTFILES_REMOTE:-https://github.com/AriSweedler/dotf
 # (~/.local/share/zsh/plugins/dotfiles.zsh); unset means "no key to load".
 readonly DOTFILES_SSH_KEY_OP_ITEM="${DOTFILES_SSH_KEY_OP_ITEM:-}"
 readonly DOTFILES_SSH_KEY_OP_VAULT="${DOTFILES_SSH_KEY_OP_VAULT:-}"
+# The GitHub account every push authenticates as, through its `gh auth token`
+# and a one-shot credential helper: the same account whatever gh account is
+# active or whichever keys the ssh agent holds, nothing switched, nothing to
+# restore. Needs `env -u GITHUB_TOKEN gh auth login` (HTTPS) once per machine.
+readonly DOTFILES_GITHUB_LOGIN="${DOTFILES_GITHUB_LOGIN:-AriSweedler}"
 
 # --- Constants ---
 
@@ -49,7 +54,6 @@ readonly LDF_HOOKS="${HOME}/.config/git/local-dotfiles-hooks"
 readonly GITMODULES="${HOME}/.gitmodules"
 readonly LOG_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/dotfiles/push"
 readonly KEEP_BACKUPS=1
-readonly PUSH_TOOL="${HOME}/.config/bin/git_push_as_personal"
 readonly REGISTRY_LINK="${HOME}/.config/claude/skills/ari-dotfiles-skill-registry/bin/link"
 readonly VALID_COMMANDS=(init pull push status logs)
 
@@ -58,6 +62,8 @@ DRY_RUN=false
 PUSH_SCOPE=all
 LOGS_PREVIOUS=false
 LOGS_REPO=""
+# The login's gh token, set by cmd_push; inherited by the background pushes.
+TOKEN=""
 
 # --- Help ---
 
@@ -85,12 +91,15 @@ ${c_bold}Flags:${c_rst}
   -h, --help         This help
 
 ${c_bold}Environment:${c_rst}
+  DOTFILES_GITHUB_LOGIN        GitHub account every push authenticates as, by its gh token
+                               (default ${DOTFILES_GITHUB_LOGIN}); once per machine: env -u GITHUB_TOKEN gh auth login
   DOTFILES_REMOTE              shared repo to clone when missing (default ${DOTFILES_REMOTE})
   DOTFILES_SSH_KEY_OP_ITEM     1Password item holding the ssh key's "Absolute path" and "password"
   DOTFILES_SSH_KEY_OP_VAULT    its vault; both come from the local tier, unset = no key to load
 
 ${c_bold}Logs:${c_rst} ${LOG_DIR}/<repo>.log (last run) and .log.bak.1 (the run before).
-Pushes go through ${PUSH_TOOL}. Human-only: Claude Code is denied 'dotfiles push'.
+Pushes are token-pinned to ${DOTFILES_GITHUB_LOGIN}: no gh account switch, no ssh key swap.
+Human-only: Claude Code is denied 'dotfiles push'.
 EOF
 }
 
@@ -289,22 +298,165 @@ cmd_pull() {
 # --- push ---
 
 #######################################
-# Push one repo as the personal account, output to its rotated log.
+# Rewrite a GitHub remote URL to https so the token, not the ssh agent, authenticates.
+# Arguments:
+#   $1 - remote URL
+# Outputs:
+#   the https URL; returns 1 for a URL that is not on github.com
+#######################################
+to_https_url() {
+  local url="${1}"
+  case "${url}" in
+    https://github.com/*)   print -r -- "${url}" ;;
+    git@github.com:*)       print -r -- "https://github.com/${url#git@github.com:}" ;;
+    ssh://git@github.com/*) print -r -- "https://github.com/${url#ssh://git@github.com/}" ;;
+    *) return 1 ;;
+  esac
+}
+
+#######################################
+# Get the login's token from gh and check whose it is. Sets TOKEN.
+# Globals:
+#   DOTFILES_GITHUB_LOGIN, TOKEN
+#######################################
+load_token() {
+  if ! TOKEN="$(env -u GITHUB_TOKEN gh auth token -u "${DOTFILES_GITHUB_LOGIN}" 2>/dev/null)" || [[ -z "${TOKEN}" ]]; then
+    log::err "Personal account is not logged into gh | login='${DOTFILES_GITHUB_LOGIN}' fix='env -u GITHUB_TOKEN gh auth login   (HTTPS; pick ${DOTFILES_GITHUB_LOGIN})'"
+    return 1
+  fi
+  local who
+  who="$(GH_TOKEN="${TOKEN}" gh api user -q .login 2>/dev/null || true)"
+  if [[ "${who}" != "${DOTFILES_GITHUB_LOGIN}" ]]; then
+    log::err "Token identity mismatch | expected='${DOTFILES_GITHUB_LOGIN}' got='${who:-<none>}'"
+    return 1
+  fi
+  log::info "pushing as | login='${DOTFILES_GITHUB_LOGIN}'"
+}
+
+#######################################
+# git for a repo: the shared tier's bare repo and $HOME, or a submodule's directory.
 # Arguments:
 #   $1 - 'shared' or a submodule path relative to $HOME
+#   $@ - git arguments
+#######################################
+repo_git() {
+  local repo="${1}"; shift
+  if [[ "${repo}" == shared ]]; then
+    df_git "${@}"
+  else
+    git -C "${HOME}/${repo}" "${@}"
+  fi
+}
+
+#######################################
+# repo_git with a one-shot credential helper that answers with the login's
+# token. The token travels in the environment, never in argv.
+# Globals:
+#   DOTFILES_GITHUB_LOGIN, TOKEN
+# Arguments:
+#   $1 - repo
+#   $@ - git arguments
+#######################################
+repo_git_as_login() {
+  local repo="${1}"; shift
+  local -a git_cmd
+  if [[ "${repo}" == shared ]]; then
+    git_cmd=(git -C "${DF_WORK_TREE}" --git-dir="${DF_GIT_DIR}" --work-tree="${DF_WORK_TREE}")
+  else
+    git_cmd=(git -C "${HOME}/${repo}")
+  fi
+  DOTFILES_PUSH_LOGIN="${DOTFILES_GITHUB_LOGIN}" DOTFILES_PUSH_TOKEN="${TOKEN}" \
+    "${git_cmd[@]}" -c credential.helper= \
+      -c 'credential.helper=!f() { echo "username=${DOTFILES_PUSH_LOGIN}"; echo "password=${DOTFILES_PUSH_TOKEN}"; }; f' \
+      "${@}"
+}
+
+#######################################
+# Where a repo's push goes: its current branch, that branch's sha, origin as https.
+# Arguments:
+#   $1 - repo
+# Outputs:
+#   three lines: branch, sha, url; returns 1 with the reason logged
+#######################################
+push_target() {
+  local repo="${1}" branch remote_url url fix
+  branch="$(repo_git "${repo}" branch --show-current 2>/dev/null || true)"
+  if [[ -z "${branch}" ]]; then
+    if [[ "${repo}" == shared ]]; then
+      fix="git df switch main"
+    else
+      fix="git -C ~/${repo} switch main   (/ari-dotfiles § Submodules step 1)"
+    fi
+    log::err "Detached HEAD: nothing to push | repo='${repo}' fix='${fix}'"
+    return 1
+  fi
+  if ! remote_url="$(repo_git "${repo}" remote get-url origin 2>/dev/null)"; then
+    log::err "No such remote | repo='${repo}' remote='origin' remotes='$(repo_git "${repo}" remote | tr '\n' ' ')'"
+    return 1
+  fi
+  if ! url="$(to_https_url "${remote_url}")"; then
+    log::err "Remote is not on github.com | repo='${repo}' url='${remote_url}'"
+    return 1
+  fi
+  print -r -- "${branch}"
+  repo_git "${repo}" rev-parse "refs/heads/${branch}"
+  print -r -- "${url}"
+}
+
+#######################################
+# Push one repo's current branch to origin as the login: push, confirm the
+# remote ref, refresh origin/<branch> so hooks that read it (the shared tier's
+# pointer check) see the push.
+# Arguments:
+#   $1 - repo
+#######################################
+push_repo_steps() {
+  local repo="${1}"
+  local -a target
+  target=("${(@f)$(push_target "${repo}")}") || return 1
+  local branch="${target[1]}" sha="${target[2]}" url="${target[3]}"
+  log::info "Pushing | repo='${repo}' branch='${branch}' sha='${sha:0:7}' url='${url}' head_author='$(repo_git "${repo}" log -1 --format='%an <%ae>' "${sha}")'"
+  if ! repo_git_as_login "${repo}" push "${url}" "refs/heads/${branch}:refs/heads/${branch}"; then
+    log::err "Push rejected | repo='${repo}' branch='${branch}' url='${url}'"
+    return 1
+  fi
+  local remote_sha
+  remote_sha="$(repo_git_as_login "${repo}" ls-remote "${url}" "refs/heads/${branch}" | cut -f1)"
+  if [[ "${remote_sha}" != "${sha}" ]]; then
+    log::err "Remote ref does not match after push | repo='${repo}' remote_sha='${remote_sha}' local_sha='${sha}'"
+    return 1
+  fi
+  if ! repo_git_as_login "${repo}" fetch -q origin "${branch}" 2>/dev/null; then
+    log::warn "Pushed, but origin/${branch} did not refresh | repo='${repo}' hint='git fetch origin yourself'"
+  fi
+  log::info "Pushed | ${DOTFILES_GITHUB_LOGIN} ${branch}@${sha:0:7} -> ${url}"
+}
+
+#######################################
+# push_repo_steps with everything in the repo's rotated log.
+# Arguments:
+#   $1 - repo
 #######################################
 push_repo() {
   local repo="${1}" logfile
   logfile="$(log_file "${repo}")"
   log_rotate "${logfile}" "${KEEP_BACKUPS}"
   {
-    print -r -- "# $(date -u +%FT%TZ) dotfiles push -> ${repo}"
-    if [[ "${repo}" == shared ]]; then
-      GIT_DIR="${DF_GIT_DIR}" GIT_WORK_TREE="${DF_WORK_TREE}" "${PUSH_TOOL}"
-    else
-      ( cd "${HOME}/${repo}" && "${PUSH_TOOL}" )
-    fi
+    print -r -- "# $(date -u +%FT%TZ) dotfiles push -> ${repo} as ${DOTFILES_GITHUB_LOGIN}"
+    push_repo_steps "${repo}"
   } > "${logfile}" 2>&1
+}
+
+#######################################
+# Under --dry-run: the push a repo would get. No network.
+# Arguments:
+#   $1 - repo
+#######################################
+dry_run_push() {
+  local repo="${1}"
+  local -a target
+  target=("${(@f)$(push_target "${repo}")}") || return 1
+  log::info "dry-run, would push | repo='${repo}' branch='${target[1]}' sha='${target[2]:0:7}' url='${target[3]}' log='$(log_file "${repo}")'"
 }
 
 #######################################
@@ -318,7 +470,7 @@ push_submodules() {
     log::info "no submodules declared | file='${GITMODULES}'"
     return 0
   fi
-  local sub_path
+  local sub_path failed=0 rc
   local -A pids
   for sub_path in "${paths[@]}"; do
     if [[ ! -e "${HOME}/${sub_path}/.git" ]]; then
@@ -326,32 +478,36 @@ push_submodules() {
       continue
     fi
     if [[ "${DRY_RUN}" == true ]]; then
-      log::info "dry-run, would push | repo='${sub_path}' log='$(log_file "${sub_path}")'"
+      dry_run_push "${sub_path}" || failed=$(( failed + 1 ))
       continue
     fi
     push_repo "${sub_path}" &
     pids[${sub_path}]=$!
   done
-  (( ${#pids} > 0 )) || return 0
-  log::info "submodule pushes running | count='${#pids}' logs='${LOG_DIR}'"
-  local failed=0 rc
-  for sub_path in "${(@k)pids}"; do
-    rc=0
-    wait "${pids[${sub_path}]}" || rc=$?
-    if (( rc == 0 )); then
-      log::info "pushed | repo='${sub_path}' log='$(log_file "${sub_path}")'"
-    else
-      log::err "push failed | repo='${sub_path}' rc='${rc}' see='dotfiles logs --repo ${sub_path}'"
-      failed=$(( failed + 1 ))
-    fi
-  done
+  if (( ${#pids} > 0 )); then
+    log::info "submodule pushes running | count='${#pids}' logs='${LOG_DIR}'"
+    for sub_path in "${(@k)pids}"; do
+      rc=0
+      wait "${pids[${sub_path}]}" || rc=$?
+      if (( rc == 0 )); then
+        log::info "pushed | repo='${sub_path}' log='$(log_file "${sub_path}")'"
+      else
+        log::err "push failed | repo='${sub_path}' rc='${rc}' see='dotfiles logs --repo ${sub_path}'"
+        failed=$(( failed + 1 ))
+      fi
+    done
+  fi
   (( failed == 0 ))
 }
 
 push_shared() {
+  if [[ ! -d "${DF_GIT_DIR}" ]]; then
+    log::err "shared repo not cloned | git_dir='${DF_GIT_DIR}' fix='dotfiles init'"
+    return 1
+  fi
   if [[ "${DRY_RUN}" == true ]]; then
-    log::info "dry-run, would push | repo='shared' log='$(log_file shared)'"
-    return 0
+    dry_run_push shared
+    return
   fi
   if push_repo shared; then
     log::info "pushed | repo='shared' log='$(log_file shared)'"
@@ -363,11 +519,12 @@ push_shared() {
 
 cmd_push() {
   check_prerequisites git gh || return 1
-  if [[ ! -x "${PUSH_TOOL}" ]]; then
-    log::err "push tool missing | path='${PUSH_TOOL}'"
-    return 1
+  if [[ "${DRY_RUN}" == true ]]; then
+    log::info "dry-run, would authenticate | login='${DOTFILES_GITHUB_LOGIN}' via='env -u GITHUB_TOKEN gh auth token -u ${DOTFILES_GITHUB_LOGIN}'"
+  else
+    load_token || return 1
+    mkdir -p "${LOG_DIR}"
   fi
-  mkdir -p "${LOG_DIR}"
   if [[ "${PUSH_SCOPE}" != shared-only ]]; then
     if ! push_submodules; then
       log::err "shared tier not pushed: a submodule push failed | fix='dotfiles logs, fix, dotfiles push'"
@@ -377,7 +534,7 @@ cmd_push() {
   if [[ "${PUSH_SCOPE}" != submodules-only ]]; then
     push_shared || return 1
   fi
-  log::info "push done | scope='${PUSH_SCOPE}'"
+  log::info "push done | scope='${PUSH_SCOPE}' login='${DOTFILES_GITHUB_LOGIN}'"
 }
 
 # --- status / logs ---

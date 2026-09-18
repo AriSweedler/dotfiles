@@ -84,7 +84,7 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
 | `Detached HEAD: nothing to push` | a pull left the submodule detached | **Submodules** step 1 (`git -C ~/<path> switch main`), push again |
 | `! [rejected]` (fetch first / non-fast-forward), or `Remote ref does not match after push` | the remote moved | shared: `dotfiles pull`; submodule: `git -C ~/<path> pull --rebase origin main`, re-run its checks, push again |
 | `submodule not checked out` | never initialized here | `dotfiles init` |
-| `Not inside a git repository`, `No such remote` | a broken checkout | `dotfiles status`, then **Submodules** |
+| `No such remote`, `Remote is not on github.com` | a rewired or broken checkout | `dotfiles status`, then **Submodules** |
 | DNS, timeout, TLS | network | retry; nothing was lost |
 | a hook's own `[ERROR]` lines | the repo's pre-push hook refused | fix what it names; NEVER `--no-verify` |
 
@@ -174,8 +174,8 @@ One dotfiles change; never stop after the first commit.
    `git -C ~/<path> add <files> && git -C ~/<path> commit -m "…"`. Its hooks
    and commit conventions apply, not the tier's.
 3. **Its push is the user's**: `dotfiles push --submodules-only` (every
-   submodule, in parallel, logged) or `git_push_as_personal` inside the
-   directory for just this one; Claude is denied both. Ask, wait, then confirm
+   submodule, in parallel, one log each, as the personal account); Claude is
+   denied it. Ask, wait, then confirm
    `git -C ~/<path> status -sb` → `## main...origin/main`.
 4. **Commit the bump**, always, as part of the same change:
    ```zsh
@@ -222,8 +222,9 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
 - **Nvim**: `~/.config/nvim/`, lazy.nvim specs in `lua/plugins/`, `lazy = true` by default
 - **Claude skills**: `~/.config/claude/skills/<name>/`, symlinked from `~/.claude/skills/<name>`
 - **Submodules**: declared in `~/.gitmodules`; today `~/.config/chrome-exoskeleton/`
-  (with `~/.config/bin/exo` and `~/.config/bin/git_push_as_personal`) — see **Submodules**
-  and `/ari-dotfile-submodule-chrome-exoskeleton`
+  (with `~/.config/bin/exo`) — see **Submodules** and `/ari-dotfile-submodule-chrome-exoskeleton`
+- **Harness**: `~/.config/bin/dotfiles` (init, pull, push, status, logs) — see **Pushing**
+  and **Bootstrapping a machine**; the push is token-pinned to `DOTFILES_GITHUB_LOGIN`
 
 ### Local (ldf)
 - **Zsh plugins**: `~/.local/share/zsh/plugins/`, sourced after the shared dir
