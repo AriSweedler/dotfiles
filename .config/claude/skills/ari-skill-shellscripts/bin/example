@@ -5,9 +5,13 @@
 set -euo pipefail
 
 readonly SCRIPT_DIR="${0:A:h}"
-# Shared libs resolve through the symlink farm, not ${SCRIPT_DIR:h:h}: skills are
-# spread across dotfiles tiers, so a relative hop lands in whichever tier this script sits in.
 readonly SKILLS_DIR="${HOME}/.claude/skills"
+readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
 
 # --- Environment variables ---
 
@@ -17,15 +21,6 @@ readonly EXAMPLE_TIMEOUT="${EXAMPLE_TIMEOUT:-30}"
 # --- Constants ---
 
 readonly VALID_MODES=(registry local compare)
-
-# --- Logging (source the canonical lib — never re-define log::* inline) ---
-
-readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
-if [[ ! -r "${LIB_LOGGING}" ]]; then
-  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
-  exit 1
-fi
-source "${LIB_LOGGING}"
 
 # --- Prerequisites ---
 

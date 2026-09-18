@@ -1,8 +1,9 @@
 #!/usr/bin/env zsh
 # Canonical colorized logging for skill zsh scripts. Source it; do not execute.
+# The full mandatory preamble is in /ari-skill-shellscripts § Logging.
 #
 #   readonly SCRIPT_DIR="${0:A:h}"
-#   readonly SKILLS_DIR="${SCRIPT_DIR:h:h}"   # script in <skill>/bin/ or <skill>/lib/ (add :h per extra nesting)
+#   readonly SKILLS_DIR="${HOME}/.claude/skills"
 #   source "${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
 #
 # Tiers (all write to stderr; stdout is reserved for data):

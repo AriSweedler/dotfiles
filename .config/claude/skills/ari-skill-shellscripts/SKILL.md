@@ -109,23 +109,20 @@ This skill covers zsh. For Python, use `/ari-skill-pythonscripts` (its mirror). 
 
 ## Logging
 
-**Source the canonical implementation — never re-define the `log::*` block inline.**
+**Source the canonical implementation — never re-define the `log::*` block inline.** Every script MUST open with this exact preamble, right after `set -euo pipefail`, with no comment inside it:
 
 ```zsh
 readonly SCRIPT_DIR="${0:A:h}"
-# Shared libs resolve through the symlink farm, never a relative hop from SCRIPT_DIR:
-# skills are versioned across dotfiles tiers (/ari-dotfiles-skill-registry), so
-# ${SCRIPT_DIR:h:h} lands in whichever tier root this script happens to live in.
 readonly SKILLS_DIR="${HOME}/.claude/skills"
 readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
 if [[ ! -r "${LIB_LOGGING}" ]]; then
   print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
-  exit 1   # `return 1` in a sourced lib
+  exit 1
 fi
 source "${LIB_LOGGING}"
 ```
 
-`${0:A}` is the script's absolute path with symlinks resolved, even when sourced, so `${0:A:h}` is the script's real dir: use it for the skill's own `lib/`, not for other skills. `bin/example` uses this exact snippet.
+Shared libs resolve through the symlink farm (`SKILLS_DIR`), never a relative hop from `SCRIPT_DIR`: skills are versioned across dotfiles tiers (`/ari-dotfiles-skill-registry`), so `${SCRIPT_DIR:h:h}` lands in whichever tier root the script happens to live in. `${0:A:h}` is the script's real dir with symlinks resolved, even when sourced; use `SCRIPT_DIR` only for the skill's own `lib/`. A sourced lib uses `return 1` in place of `exit 1`. `bin/example` opens with this exact preamble.
 
 The sourced lib provides, all colorized to stderr:
 
