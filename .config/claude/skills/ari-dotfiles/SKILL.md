@@ -20,6 +20,8 @@ On this laptop the local `origin` is `git@github.com:AriSweedler-at/dotfiles.git
 
 1. Edit the file. Pick its tier with **Placement rules**.
 2. `git df add <abs path>` or `git ldf add <abs path>`; commit with a descriptive message.
+   A path inside a submodule (`~/.config/chrome-exoskeleton/…`) is refused by
+   `git df add`: follow **Submodules** instead.
 3. Print `git df log --oneline -1` / `git ldf log --oneline -1` to confirm the tier.
 4. Shared: end with "Run `git_df_push` when ready." Local: `git ldf push` now.
 5. Offer the **Post-change sweep**.
@@ -74,9 +76,11 @@ cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
   `~/.local/share/claude-skills/<name>/` (ldf), and `~/.claude/skills/<name>` is a
   symlink to it. Edit through either path; commit through the tier. Linking,
   adopting, and drift are `/ari-dotfiles-skill-registry`'s job.
-- **Chrome Exoskeleton plugins follow the same split**, with the framework as a
-  df submodule at `~/.config/chrome-exoskeleton`. Everything about it is
-  `/ari-dotfile-submodule-chrome-exoskeleton`'s job.
+- **Chrome Exoskeleton plugins follow the same split.** A plugin for a site you
+  use only as an employee is ldf (`~/.local/share/chrome-exoskeleton/plugins/`);
+  everything else is a file of the framework repo at `~/.config/chrome-exoskeleton/`,
+  a submodule (see **Submodules**). Building, testing and the framework's own
+  push are `/ari-dotfile-submodule-chrome-exoskeleton`'s job.
 - **Split mixed files.** Keep the generic mechanism in config and parameterize
   the company detail from local:
   ```zsh
@@ -117,6 +121,66 @@ git ldf add ~/.local/share/zsh/plugins/airtable.zsh && git ldf commit -m "Add ai
 rg -n 'plugins/airtable.zsh' ~/.config ~/.local/share   # edit every hit; re-run until empty
 ```
 
+## Submodules
+
+Some `~/.config` directories are git submodules of the shared repo: their files
+belong to another repo, and the shared tier records only a commit hash for the
+directory, the **pointer**, which is what every other machine checks out.
+`cd ~ && git df submodule status` lists them. Today: `.config/chrome-exoskeleton`
+(upstream `github.com/AriSweedler/chrome-exoskeleton`, public; the repo itself
+is `/ari-dotfile-submodule-chrome-exoskeleton`'s job).
+
+`git df add` refuses a file inside a submodule (`fatal: Pathspec '…' is in
+submodule '…'`); the only path it accepts there is the directory itself, the
+pointer. `git submodule` runs only from `$HOME`: plain `git submodule`
+elsewhere targets whatever repo the cwd is in.
+
+### Changing something inside a submodule
+
+One dotfiles change; never stop after the first commit.
+
+1. **Be on its `main`.** `git -C ~/<path> branch --show-current` must print
+   `main`; it prints nothing after any `git df pull` or `git df submodule
+   update` (`submodule.recurse=true` checks the pointer out detached). Nothing
+   committed yet → `git -C ~/<path> switch main`. Committed while detached →
+   `git -C ~/<path> branch -f main HEAD`, only if
+   `git -C ~/<path> merge-base --is-ancestor main HEAD` succeeds; else ask.
+2. **Commit in the submodule's repo** on `main`, explicit paths:
+   `git -C ~/<path> add <files> && git -C ~/<path> commit -m "…"`. Its hooks
+   and commit conventions apply, not the tier's.
+3. **Its push is the user's**: `git_push_as_personal` inside the directory
+   (Claude is denied it). Ask, wait, then confirm
+   `git -C ~/<path> status -sb` → `## main...origin/main`.
+4. **Commit the bump**, always, as part of the same change:
+   ```zsh
+   git df add ~/<path> && git df commit -m "<name>: bump to $(git -C ~/<path> rev-parse --short HEAD) (<what it carries>)"
+   ```
+   The df pre-commit hook fetches the submodule's `origin/main` and refuses a
+   pointer not on it (step 3 skipped, a stale `main` pushed, or offline): fix,
+   re-run the commit, nothing to re-stage. Pointer already at HEAD → nothing to
+   bump; say so.
+5. End with "Run `git_df_push` when ready.", as for any shared-tier commit.
+
+### After `git df pull` on any machine
+
+The pull moves the pointer and detaches the checkout onto it; a never-initialized
+submodule stays an empty directory until `cd ~ && git df submodule update --init`.
+Then the repo's own refresh (chrome-exoskeleton: `exo link && exo build`), and
+step 1 before committing in it again. `new-machine apply dotfiles_repo` runs
+the `--init` on a fresh machine; `new-machine check` reports
+`submodule_uninitialized` and `submodule_drift`.
+
+### Verify
+
+```
+git -C ~/<path> status -sb          → ## main...origin/main
+cd ~ && git df submodule status      →  <sha> <path> (heads/main)    leading space, not +
+git df status --short -- <path>      → (empty)
+```
+
+Prefixes: space = checkout matches the pointer; `+` = checkout ahead of the
+pointer (bump needed, or update on another machine); `-` = not initialized.
+
 ## Key locations
 
 ### Ignore files
@@ -131,7 +195,9 @@ rg -n 'plugins/airtable.zsh' ~/.config ~/.local/share   # edit every hit; re-run
 - **Zsh plugins**: `~/.config/zsh/plugins/`, sourced first
 - **Nvim**: `~/.config/nvim/`, lazy.nvim specs in `lua/plugins/`, `lazy = true` by default
 - **Claude skills**: `~/.config/claude/skills/<name>/`, symlinked from `~/.claude/skills/<name>`
-- **Chrome Exoskeleton**: `~/.config/chrome-exoskeleton/` (submodule), `~/.config/bin/exo` — see `/ari-dotfile-submodule-chrome-exoskeleton`
+- **Submodules**: declared in `~/.gitmodules`; today `~/.config/chrome-exoskeleton/`
+  (with `~/.config/bin/exo` and `~/.config/bin/git_push_as_personal`) — see **Submodules**
+  and `/ari-dotfile-submodule-chrome-exoskeleton`
 
 ### Local (ldf)
 - **Zsh plugins**: `~/.local/share/zsh/plugins/`, sourced after the shared dir
@@ -165,9 +231,10 @@ with "Run `git_df_push` when ready." if anything landed in the shared repo.
 Homebrew + `~/.config/new-machine/Brewfile` (includes `bash`; the ldf hook needs bash 5),
 bare-clone the shared repo to `~/dotfiles.git`, `git init --bare ~/.local/local-dotfiles.git`
 with the allowlist from `~/.config/new-machine/local-dotfiles-exclude`, `core.hooksPath`
-for both repos, and the `claude_skills` step, which symlinks every tier-held skill into
-`~/.claude/skills` (`/ari-dotfiles-skill-registry`'s `link --prune`). It prints the one
-manual step, since the remote is per machine:
+for both repos, `submodule update --init` (the `dotfiles_repo` step), the `claude_skills`
+step, which symlinks every tier-held skill into `~/.claude/skills`
+(`/ari-dotfiles-skill-registry`'s `link --prune`), and the `chrome_exoskeleton` step
+(`exo deps ci`, `exo build`). It prints the one manual step, since the remote is per machine:
 
 ```zsh
 git ldf remote add origin <this machine's private repo>
