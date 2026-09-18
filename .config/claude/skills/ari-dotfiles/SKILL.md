@@ -60,7 +60,11 @@ cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
 ## Pushing
 
 - **Shared: NEVER `git df push` and NEVER run `git_df_push`.** It is Ari's
-  function. After committing, end with: "Run `git_df_push` when ready."
+  function (denied to Claude in settings). It first pushes every submodule as
+  the personal account, in parallel in the background, logging to
+  `~/.local/state/git_df_push/<submodule>.log` (`.log.bak.1` = the run
+  before), then pushes the shared repo. After committing, end with:
+  "Run `git_df_push` when ready."
 - **Local: push after every ldf commit.** No confirmation needed.
 
 ## Placement rules
