@@ -119,10 +119,11 @@ ${c_bold}Options:${c_rst}
   -h, --help     Show this help
 
 ${c_bold}Output:${c_rst}
-  key=value lines (skill, is_new, state, tier, skill_dir, investigation_dir,
+  key=value lines (skill, is_new, state, tier, source, skill_dir, investigation_dir,
   scratchpad) plus a FILES section listing the skill's files to read. Creates the
   investigation folder and a pre-filled scratchpad. state/tier come from
-  /ari-dotfiles-skill-registry (linked, unlinked, ignored, ...).
+  /ari-dotfiles-skill-registry (linked, unlinked, ignored, ...); source is
+  submodule:<path> when a submodule's skills/ holds the skill, else empty.
 EOF
 }
 
@@ -148,9 +149,13 @@ main() {
     return 1
   fi
 
-  local state tier
+  local state tier source=""
   read -r state tier <<< "$(skill_state "${skill}")"
   check_skill_state "${skill}" "${is_new}" "${state}" "${tier}" || return 1
+  # A skill held by a submodule's skills/ is committed in that repo, not the tier.
+  if [[ "${state}" == "linked" || "${state}" == "missing" ]]; then
+    source="$(root_source "${tier}" "$(skill_holder_root "${tier}" "${skill}")")"
+  fi
 
   # === LOGIC ===
   local skill_dir="${SKILLS_DIR}/${skill}"
@@ -188,6 +193,7 @@ skill=${skill}
 is_new=${is_new}
 state=${state}
 tier=${tier}
+source=${source}
 skill_dir=${skill_dir}
 investigation_dir=${inv_dir}
 scratchpad=${scratchpad}
