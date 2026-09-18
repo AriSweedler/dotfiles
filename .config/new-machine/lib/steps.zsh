@@ -8,8 +8,9 @@
 typeset -g NEW_MACHINE_STEPS_LOADED=1
 
 typeset -gra STEPS=(brew brew_pkgs brew_drift dotfiles_repo local_dotfiles_repo bob_neovim claude
-                    terminal_nerdfont karabiner claude_notifications claude_skills git_health weekly_verify)
-typeset -gA STEP_NEEDS=([brew_pkgs]=brew [brew_drift]=brew [terminal_nerdfont]=brew)
+                    terminal_nerdfont karabiner claude_notifications claude_skills chrome_exoskeleton
+                    git_health weekly_verify)
+typeset -gA STEP_NEEDS=([brew_pkgs]=brew [brew_drift]=brew [terminal_nerdfont]=brew [chrome_exoskeleton]=dotfiles_repo)
 typeset -gA STEP_DESC=(
   [brew]="Homebrew is installed"
   [brew_pkgs]="every item declared in the merged Brewfiles is installed (brew bundle check/install --no-upgrade)"
@@ -22,6 +23,7 @@ typeset -gA STEP_DESC=(
   [karabiner]="karabiner.json exists, is valid JSON, and is jq -S sorted; healthcheck runs when present"
   [claude_notifications]="Claude Code notification hook points at notification-fire.sh and terminal-notifier resolves"
   [claude_skills]="every skill a dotfiles tier holds is symlinked into ~/.claude/skills and no link dangles"
+  [chrome_exoskeleton]="the Chrome Exoskeleton submodule has its dependencies (which wire its hooks) and a built dist/"
   [git_health]="git-health launchd job installed and loaded"
   [weekly_verify]="new-machine weekly verify launchd job installed, current, and loaded"
 )
@@ -593,6 +595,62 @@ check::claude_skills() {
 
 apply::claude_skills() {
   run_cmd_mutating zsh "$(steps::skill_registry_bin)/link" --prune
+}
+
+# ── chrome_exoskeleton ───────────────────────────────────────────────────────
+# The framework is a shared-tier submodule (dotfiles_repo initializes it). Its hooks are
+# wired by npm's prepare script, so a fresh checkout has none until `exo deps ci` runs;
+# `exo build` produces the dist/ Chrome loads. Node comes from the local tier's env.zsh on
+# a work machine; a personal machine needs it on PATH, hence a warn, not a fail.
+steps::exo_framework_dir() {
+  print -r -- "${HOME}/.config/chrome-exoskeleton"
+}
+
+steps::exo_have_node() {
+  local env_zsh="${XDG_DATA_HOME:-${HOME}/.local/share}/chrome-exoskeleton/env.zsh"
+  [[ -r "${env_zsh}" ]] && source "${env_zsh}"
+  command -v node >/dev/null 2>&1
+}
+
+check::chrome_exoskeleton() {
+  local fw
+  fw="$(steps::exo_framework_dir)"
+  if [[ ! -x "${fw}/bin/exo" ]]; then
+    verdict skip no_submodule -d "framework not checked out | path='${fw}'" -f "new-machine apply dotfiles_repo"
+    return 0
+  fi
+  if ! steps::exo_have_node; then
+    verdict warn node_missing -d "node is not on PATH and no env.zsh provides it" -f "brew install node   (or set it up in ~/.local/share/chrome-exoskeleton/env.zsh)" -m
+    return 0
+  fi
+  local hooks
+  hooks="$(git -C "${fw}" config core.hooksPath 2>/dev/null || true)"
+  if [[ ! -d "${fw}/node_modules" || "${hooks}" != ".githooks" ]]; then
+    verdict fail deps_missing -d "node_modules='$([[ -d "${fw}/node_modules" ]] && echo present || echo missing)' hooksPath='${hooks:-unset}'" -f "new-machine apply chrome_exoskeleton"
+    return 0
+  fi
+  if [[ ! -f "${fw}/dist/manifest.json" ]]; then
+    verdict fail not_built -d "no dist/manifest.json | path='${fw}/dist'" -f "new-machine apply chrome_exoskeleton"
+    return 0
+  fi
+  verdict ok built -d "dist version=$(jq -r .version "${fw}/dist/manifest.json" 2>/dev/null || echo '?') hooks='${hooks}'"
+}
+
+apply::chrome_exoskeleton() {
+  local fw
+  fw="$(steps::exo_framework_dir)"
+  if [[ ! -x "${fw}/bin/exo" ]]; then
+    log::err "framework not checked out | path='${fw}' fix='new-machine apply dotfiles_repo'"
+    return 1
+  fi
+  if ! steps::exo_have_node; then
+    log::warn "node is not on PATH; skipping | fix='brew install node, or ~/.local/share/chrome-exoskeleton/env.zsh'"
+    return 0
+  fi
+  if [[ ! -d "${fw}/node_modules" || "$(git -C "${fw}" config core.hooksPath 2>/dev/null)" != ".githooks" ]]; then
+    run_cmd_mutating zsh "${fw}/bin/exo" deps ci || return 1
+  fi
+  run_cmd_mutating zsh "${fw}/bin/exo" build
 }
 
 # ── git_health ───────────────────────────────────────────────────────────────
