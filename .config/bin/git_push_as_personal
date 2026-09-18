@@ -1,0 +1,180 @@
+#!/usr/bin/env zsh
+#
+# git_push_as_personal — push a branch to GitHub as the PERSONAL account, no
+# matter which gh account is active or which keys the ssh agent holds.
+#
+# Token-pinned: the push authenticates with `gh auth token -u <personal>`
+# through a one-shot credential helper, so no account is switched and nothing
+# needs restoring afterwards. Verifies the token's identity before pushing and
+# the remote ref after, then refreshes the tracking ref so hooks that read
+# <remote>/<branch> (the dotfiles submodule pointer check) see the push.
+#
+# For a human at a terminal. Claude Code is denied this command
+# (permissions.deny in ~/.claude/settings.json) and asks you to run it.
+
+set -euo pipefail
+
+readonly PERSONAL_LOGIN="${GIT_PUSH_AS_PERSONAL_LOGIN:-AriSweedler}"
+source "${HOME}/.config/zsh/plugins/log.zsh"
+
+TOKEN=""
+
+help() {
+  cat <<HELP
+${c_green}git_push_as_personal${c_rst} — push a branch to GitHub as ${PERSONAL_LOGIN}, whatever gh account or ssh key is active
+
+${c_cyan}Usage:${c_rst}
+  git_push_as_personal [--branch NAME] [--remote NAME | --url URL] [--dry-run]
+
+${c_cyan}Options:${c_rst}
+  --branch NAME  Branch to push (default: the current branch; a detached HEAD is refused)
+  --remote NAME  Remote whose URL to push to, rewritten to https (default: origin)
+  --url URL      Push to this https://github.com/... URL instead of a remote's
+  --dry-run      Authenticate and negotiate with the remote, push nothing
+  -h, --help     Show this help
+
+Needs the personal account logged into gh:
+  env -u GITHUB_TOKEN gh auth login      # HTTPS, then pick ${PERSONAL_LOGIN}
+HELP
+}
+
+#######################################
+# Rewrite a GitHub remote URL to https so the token, not the ssh agent, authenticates.
+# Arguments:
+#   $1 - remote URL
+# Outputs:
+#   the https URL; returns 1 for a URL that is not on github.com
+#######################################
+to_https_url() {
+  local url="${1}"
+  case "${url}" in
+    https://github.com/*)   print -r -- "${url}" ;;
+    git@github.com:*)       print -r -- "https://github.com/${url#git@github.com:}" ;;
+    ssh://git@github.com/*) print -r -- "https://github.com/${url#ssh://git@github.com/}" ;;
+    *) return 1 ;;
+  esac
+}
+
+#######################################
+# Run git with a one-shot credential helper that answers with the personal
+# token. The token travels in the environment, never in argv.
+# Globals:
+#   PERSONAL_LOGIN, TOKEN
+# Arguments:
+#   git arguments
+#######################################
+git_as_personal() {
+  GIT_PUSH_AS_PERSONAL_LOGIN="${PERSONAL_LOGIN}" GIT_PUSH_AS_PERSONAL_TOKEN="${TOKEN}" \
+    git -c credential.helper= \
+        -c 'credential.helper=!f() { echo "username=${GIT_PUSH_AS_PERSONAL_LOGIN}"; echo "password=${GIT_PUSH_AS_PERSONAL_TOKEN}"; }; f' \
+        "${@}"
+}
+
+main() {
+  # === PREREQUISITES ===
+  local -a missing=()
+  local cmd
+  for cmd in git gh; do
+    command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
+  done
+  if (( ${#missing} > 0 )); then
+    log::err "Missing required commands | missing='${(j:, :)missing}'"
+    return 1
+  fi
+
+  # === PARSE ===
+  local branch="" remote="origin" url="" dry_run=false
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help) help; return 0 ;;
+    --branch)  branch="${2:?--branch requires a value}"; shift 2 ;;
+    --remote)  remote="${2:?--remote requires a value}"; shift 2 ;;
+    --url)     url="${2:?--url requires a value}"; shift 2 ;;
+    --dry-run) dry_run=true; shift ;;
+    -*)        log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)         log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
+  esac; done
+
+  # === MASSAGE ===
+  local repo_root
+  if ! repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+    log::err "Not inside a git repository | cwd='${PWD}'"
+    return 1
+  fi
+  if [[ -z "${branch}" ]]; then
+    branch="$(git branch --show-current)"
+  fi
+  local remote_url=""
+  if [[ -z "${url}" ]]; then
+    if ! remote_url="$(git remote get-url "${remote}" 2>/dev/null)"; then
+      log::err "No such remote | remote='${remote}' remotes='$(git remote | tr '\n' ' ')'"
+      return 1
+    fi
+    if ! url="$(to_https_url "${remote_url}")"; then
+      log::err "Remote is not on github.com; pass --url | remote='${remote}' url='${remote_url}'"
+      return 1
+    fi
+  fi
+
+  # === VALIDATE ===
+  if [[ -z "${branch}" ]]; then
+    log::err "Detached HEAD: nothing to push | fix='git switch <branch>, or pass --branch NAME'"
+    return 1
+  fi
+  if ! git rev-parse --verify -q "refs/heads/${branch}" >/dev/null; then
+    log::err "No such local branch | branch='${branch}'"
+    return 1
+  fi
+  if [[ "${url}" != https://github.com/* ]]; then
+    log::err "URL must start with https://github.com/ | url='${url}'"
+    return 1
+  fi
+  if ! TOKEN="$(env -u GITHUB_TOKEN gh auth token -u "${PERSONAL_LOGIN}" 2>/dev/null)" || [[ -z "${TOKEN}" ]]; then
+    log::err "Personal account is not logged into gh | login='${PERSONAL_LOGIN}' fix='env -u GITHUB_TOKEN gh auth login   (HTTPS; pick ${PERSONAL_LOGIN})'"
+    return 1
+  fi
+  local who
+  who="$(GH_TOKEN="${TOKEN}" gh api user -q .login 2>/dev/null || true)"
+  if [[ "${who}" != "${PERSONAL_LOGIN}" ]]; then
+    log::err "Token identity mismatch | expected='${PERSONAL_LOGIN}' got='${who:-<none>}'"
+    return 1
+  fi
+
+  # === LOGIC ===
+  local sha author
+  sha="$(git rev-parse "refs/heads/${branch}")"
+  author="$(git log -1 --format='%an <%ae>' "refs/heads/${branch}")"
+  log::info "Pushing as ${PERSONAL_LOGIN} | repo='${repo_root}' branch='${branch}' sha='${sha:0:7}' url='${url}' head_author='${author}' dry_run='${dry_run}'"
+
+  local -a push_flags=()
+  if [[ "${dry_run}" == true ]]; then
+    push_flags+=(--dry-run)
+  fi
+  git_as_personal push ${push_flags[@]+"${push_flags[@]}"} "${url}" "refs/heads/${branch}:refs/heads/${branch}"
+
+  if [[ "${dry_run}" == true ]]; then
+    log::info "Dry run: nothing pushed"
+    return 0
+  fi
+
+  local remote_sha
+  remote_sha="$(git_as_personal ls-remote "${url}" "refs/heads/${branch}" | cut -f1)"
+  if [[ "${remote_sha}" != "${sha}" ]]; then
+    log::err "Remote ref does not match after push | remote_sha='${remote_sha}' local_sha='${sha}'"
+    return 1
+  fi
+  if [[ -n "${remote_url}" ]]; then
+    if ! git fetch -q "${remote}" "${branch}" 2>/dev/null; then
+      log::warn "Push succeeded but the tracking ref did not refresh | remote='${remote}' hint='its fetch URL may need a key; run git fetch ${remote} yourself'"
+    fi
+  fi
+  log::info "Pushed | ${PERSONAL_LOGIN} ${branch}@${sha:0:7} -> ${url}"
+
+  cat <<SUMMARY
+login=${PERSONAL_LOGIN}
+branch=${branch}
+sha=${sha}
+url=${url}
+SUMMARY
+}
+
+main "${@}"
