@@ -43,6 +43,7 @@
 .config/pip/
 .config/raycast
 .config/raycast/extensions/
+.config/swiftpm/
 .config/uv/
 .config/zsh/.zcompdump
 .config/zsh/history
