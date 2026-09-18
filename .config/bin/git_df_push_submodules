@@ -1,0 +1,136 @@
+#!/usr/bin/env zsh
+#
+# git_df_push_submodules — push every submodule of the shared dotfiles as the
+# personal account: all in parallel, in the background, each run logged to its
+# own rotating file so a failure is diagnosed from the log instead of
+# remembered.
+#
+#   ${XDG_STATE_HOME:-~/.local/state}/git_df_push/<submodule>.log          this run
+#   ${XDG_STATE_HOME:-~/.local/state}/git_df_push/<submodule>.log.bak.1    the run before
+#
+# git_df_push calls this first and then pushes the shared repo itself; nothing
+# to think about. Human-only: Claude Code is denied it, like the
+# git_push_as_personal it runs in each submodule.
+
+set -euo pipefail
+
+source "${HOME}/.config/zsh/plugins/log.zsh"
+source "${HOME}/.config/zsh/plugins/log_rotate.zsh"
+
+readonly GITMODULES="${HOME}/.gitmodules"
+readonly LOG_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/git_df_push"
+readonly PUSH_TOOL="${HOME}/.config/bin/git_push_as_personal"
+readonly KEEP_BACKUPS=1
+
+help() {
+  cat <<HELP
+${c_green}git_df_push_submodules${c_rst} — push every shared-dotfiles submodule as the personal account, in parallel, in the background
+
+${c_cyan}Usage:${c_rst}
+  git_df_push_submodules [--list | --wait]
+
+${c_cyan}Options:${c_rst}
+  --list      Print each submodule and its log file; push nothing
+  --wait      Run in the foreground: wait for every push and report each result
+  -h, --help  Show this help
+
+Logs: ${LOG_DIR}/<submodule>.log (current run) and .log.bak.1 (the run before).
+Each submodule is pushed with ${PUSH_TOOL}.
+HELP
+}
+
+#######################################
+# Submodule paths declared in ~/.gitmodules, one per line, relative to $HOME.
+#######################################
+submodule_paths() {
+  [[ -f "${GITMODULES}" ]] || return 0
+  git config -f "${GITMODULES}" --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}'
+}
+
+#######################################
+# A filename-safe log name for a submodule path: leading dot and slashes dropped.
+# Arguments:
+#   $1 - submodule path relative to $HOME
+#######################################
+log_name() {
+  local sub_path="${1#.}"
+  print -r -- "${sub_path//\//-}"
+}
+
+main() {
+  # === PARSE ===
+  local mode=background
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help) help; return 0 ;;
+    --list)    mode=list; shift ;;
+    --wait)    mode=wait; shift ;;
+    -*)        log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)         log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
+  esac; done
+
+  # === VALIDATE ===
+  if [[ "${mode}" != list && ! -x "${PUSH_TOOL}" ]]; then
+    log::err "push tool missing | path='${PUSH_TOOL}'"
+    return 1
+  fi
+  local -a paths
+  paths=("${(@f)$(submodule_paths)}")
+  paths=("${(@)paths:#}")
+  if (( ${#paths} == 0 )); then
+    log::info "no submodules declared | file='${GITMODULES}'"
+    return 0
+  fi
+
+  # === LOGIC ===
+  mkdir -p "${LOG_DIR}"
+  local sub_path dir logfile
+  local -A pids
+  for sub_path in "${paths[@]}"; do
+    dir="${HOME}/${sub_path}"
+    logfile="${LOG_DIR}/$(log_name "${sub_path}").log"
+    if [[ "${mode}" == list ]]; then
+      print -r -- "${sub_path}  ->  ${logfile}"
+      continue
+    fi
+    if [[ ! -e "${dir}/.git" ]]; then
+      log::warn "submodule not checked out; skipping | path='${dir}'"
+      continue
+    fi
+    log_rotate "${logfile}" "${KEEP_BACKUPS}"
+    # nohup so the push outlives the caller's shell; the log carries the header.
+    nohup zsh -c 'print -r -- "# $(date -u +%FT%TZ) git_df_push_submodules -> $1"; cd "$1" && "$2"' \
+      _ "${dir}" "${PUSH_TOOL}" > "${logfile}" 2>&1 &
+    pids[${sub_path}]=$!
+  done
+
+  if [[ "${mode}" == list ]]; then
+    return 0
+  fi
+  if (( ${#pids} == 0 )); then
+    log::info "nothing to push | submodules='${(j:, :)paths}'"
+    return 0
+  fi
+  if [[ "${mode}" == background ]]; then
+    log::info "submodule pushes running in the background | count='${#pids}' logs='${LOG_DIR}'"
+    for sub_path in "${(@k)pids}"; do
+      print -r -- "  ${sub_path}: tail -f ${LOG_DIR}/$(log_name "${sub_path}").log"
+    done
+    return 0
+  fi
+
+  local failed=0 rc
+  for sub_path in "${(@k)pids}"; do
+    rc=0
+    wait "${pids[${sub_path}]}" || rc=$?
+    logfile="${LOG_DIR}/$(log_name "${sub_path}").log"
+    if (( rc == 0 )); then
+      log::info "pushed | submodule='${sub_path}' log='${logfile}'"
+    else
+      log::err "push failed | submodule='${sub_path}' rc='${rc}' log='${logfile}'"
+      failed=$(( failed + 1 ))
+    fi
+  done
+  (( failed == 0 ))
+}
+
+main "${@}"
