@@ -33,7 +33,7 @@ root is a sibling, not a child, of it.
 - **Submodule skills are committed in the submodule.** `status` marks them
   `source=submodule:<path>`; `link` symlinks them like any tier skill. `adopt`
   never targets a submodule: create the skill under `<submodule>/skills/<name>/`,
-  commit and push that repo, bump the tier's pointer, then run `link`.
+  commit it there and finish per `/ari-dotfiles` § Submodules, then run `link`.
 - **Third-party skills stay put.** `~/.claude/skills/.gitignore` lists them; `status`
   reports them as `ignored`. Naming one explicitly to `adopt` is the override. A directory
   with no `SKILL.md` (Claude Code's `synced/` bucket) is not a skill: `status` reports it

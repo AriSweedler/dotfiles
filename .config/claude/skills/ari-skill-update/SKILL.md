@@ -181,7 +181,7 @@ git df add $HOME/.config/claude/skills/<skill-name> && git df commit -m "<skill-
 
 (`git ldf add $HOME/.local/share/claude-skills/<skill-name>` for `tier=ldf`.) Pushing follows `/ari-dotfiles`'s Pushing rules; this skill never pushes.
 
-If the setup output carried `source=submodule:<path>`, the skill is versioned in that submodule's own repo, not the tier: stage and commit there, then push that repo and bump the tier's pointer following the submodule's skill (for `.config/chrome-exoskeleton`, `/ari-dotfile-submodule-chrome-exoskeleton`):
+If the setup output carried `source=submodule:<path>`, the skill is versioned in that submodule's own repo, not the tier: stage and commit there, then finish the dotfiles change per `/ari-dotfiles` § Submodules (the user's push, then the pointer bump, committed as part of the same change):
 
 ```zsh
 git -C $HOME/<path> add skills/<skill-name> && git -C $HOME/<path> commit -m "<skill-name>: <what changed and why>"
