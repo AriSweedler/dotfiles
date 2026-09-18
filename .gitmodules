@@ -1,0 +1,3 @@
+[submodule ".config/chrome-exoskeleton"]
+	path = .config/chrome-exoskeleton
+	url = https://github.com/AriSweedler/chrome-exoskeleton.git
