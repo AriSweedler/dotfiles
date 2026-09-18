@@ -74,6 +74,9 @@ cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
   `~/.local/share/claude-skills/<name>/` (ldf), and `~/.claude/skills/<name>` is a
   symlink to it. Edit through either path; commit through the tier. Linking,
   adopting, and drift are `/ari-dotfiles-skill-registry`'s job.
+- **Chrome Exoskeleton plugins follow the same split**, with the framework as a
+  df submodule at `~/.config/chrome-exoskeleton`. Everything about it is
+  `/ari-dotfile-submodule-chrome-exoskeleton`'s job.
 - **Split mixed files.** Keep the generic mechanism in config and parameterize
   the company detail from local:
   ```zsh
@@ -128,6 +131,7 @@ rg -n 'plugins/airtable.zsh' ~/.config ~/.local/share   # edit every hit; re-run
 - **Zsh plugins**: `~/.config/zsh/plugins/`, sourced first
 - **Nvim**: `~/.config/nvim/`, lazy.nvim specs in `lua/plugins/`, `lazy = true` by default
 - **Claude skills**: `~/.config/claude/skills/<name>/`, symlinked from `~/.claude/skills/<name>`
+- **Chrome Exoskeleton**: `~/.config/chrome-exoskeleton/` (submodule), `~/.config/bin/exo` — see `/ari-dotfile-submodule-chrome-exoskeleton`
 
 ### Local (ldf)
 - **Zsh plugins**: `~/.local/share/zsh/plugins/`, sourced after the shared dir
