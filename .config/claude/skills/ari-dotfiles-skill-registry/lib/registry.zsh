@@ -4,6 +4,9 @@
 #
 # Skills are versioned in the dotfiles, one real directory per tier root, and
 # ${HOME}/.claude/skills/<name> is a symlink into whichever tier owns the skill.
+# A tier's git submodules add roots too: every submodule's top-level skills/
+# directory holds skills that travel with that submodule (committed in its own
+# repo, owned by the tier that holds the submodule).
 
 [[ -n "${_ARI_SKILL_REGISTRY_ZSH:-}" ]] && return 0
 readonly _ARI_SKILL_REGISTRY_ZSH=1
@@ -15,6 +18,11 @@ readonly TIERS=(df ldf)
 readonly -A TIER_ROOTS=(
   df  "${HOME}/.config/claude/skills"
   ldf "${HOME}/.local/share/claude-skills"
+)
+# Each tier's worktree: where its .gitmodules lives and submodule paths resolve.
+readonly -A TIER_WORKTREES=(
+  df  "${HOME}"
+  ldf "${HOME}/.local"
 )
 
 #######################################
@@ -35,6 +43,75 @@ is_valid_tier() {
 tier_root() {
   local tier="${1}"
   echo "${TIER_ROOTS[${tier}]}"
+}
+
+#######################################
+# Print the skills root of every submodule the tier tracks, one per line: for
+# each path in the tier worktree's .gitmodules, <worktree>/<path>/skills when
+# that directory exists. Nothing when the tier has no .gitmodules.
+# Arguments:
+#   $1 - tier
+#######################################
+submodule_skill_roots() {
+  local tier="${1}"
+  local worktree="${TIER_WORKTREES[${tier}]}"
+  local modules="${worktree}/.gitmodules"
+  [[ -f "${modules}" ]] || return 0
+  local key sub_path
+  while read -r key sub_path; do
+    [[ -n "${sub_path}" ]] || continue
+    [[ -d "${worktree}/${sub_path}/skills" ]] && echo "${worktree}/${sub_path}/skills"
+  done < <(git config -f "${modules}" --get-regexp '^submodule\..*\.path$' 2>/dev/null)
+  return 0
+}
+
+#######################################
+# Print every directory that may hold the tier's skills, one per line: the tier
+# root first, then each submodule's skills/.
+# Arguments:
+#   $1 - tier
+#######################################
+skill_roots() {
+  local tier="${1}"
+  tier_root "${tier}"
+  submodule_skill_roots "${tier}"
+}
+
+#######################################
+# Print the root under which the tier holds the skill as a real directory, or
+# nothing. A tier root beats a submodule root; two roots holding the same
+# skill is a conflict skill_state reports.
+# Arguments:
+#   $1 - tier
+#   $2 - skill name
+#######################################
+skill_holder_root() {
+  local tier="${1}" skill="${2}" root
+  for root in "${(@f)$(skill_roots "${tier}")}"; do
+    if [[ -d "${root}/${skill}" && ! -L "${root}/${skill}" ]]; then
+      echo "${root}"
+      return 0
+    fi
+  done
+  return 0
+}
+
+#######################################
+# Print `submodule:<path>` when the root is a submodule's skills/ directory
+# (path relative to the tier worktree), or nothing for a plain tier root.
+# Arguments:
+#   $1 - tier
+#   $2 - root
+#######################################
+root_source() {
+  local tier="${1}" root="${2}"
+  local worktree="${TIER_WORKTREES[${tier}]}"
+  if [[ "${root}" == "$(tier_root "${tier}")" ]]; then
+    echo ""
+    return 0
+  fi
+  local rel="${root#${worktree}/}"
+  echo "submodule:${rel%/skills}"
 }
 
 #######################################
@@ -102,14 +179,18 @@ skill_ignore_reason() {
 }
 
 #######################################
-# Print every tier whose root holds a real directory for the skill, one per line.
+# Print every tier holding a real directory for the skill under any of its roots
+# (tier root or a submodule's skills/), one line per holding root, so a skill
+# held twice within one tier shows up twice and reads as a conflict.
 # Arguments:
 #   $1 - skill name
 #######################################
 tiers_holding() {
-  local skill="${1}" tier
+  local skill="${1}" tier root
   for tier in "${TIERS[@]}"; do
-    [[ -d "$(tier_root "${tier}")/${skill}" && ! -L "$(tier_root "${tier}")/${skill}" ]] && echo "${tier}"
+    for root in "${(@f)$(skill_roots "${tier}")}"; do
+      [[ -d "${root}/${skill}" && ! -L "${root}/${skill}" ]] && echo "${tier}"
+    done
   done
   return 0
 }
@@ -145,13 +226,15 @@ skill_state() {
       echo "dangling -"
       return 0
     fi
-    local target tier
+    local target tier root
     target="${link:A}"
     for tier in "${TIERS[@]}"; do
-      if [[ "${target}" == "$(tier_root "${tier}")/${skill}" ]]; then
-        echo "linked ${tier}"
-        return 0
-      fi
+      for root in "${(@f)$(skill_roots "${tier}")}"; do
+        if [[ "${target}" == "${root:A}/${skill}" ]]; then
+          echo "linked ${tier}"
+          return 0
+        fi
+      done
     done
     echo "foreign -"
     return 0
@@ -178,13 +261,18 @@ skill_state() {
 }
 
 #######################################
-# Print the union of skill names across SKILLS_DIR and every tier root, sorted.
-# Only directories and symlinks count; files such as README.md do not.
+# Print the union of skill names across SKILLS_DIR, every tier root and every
+# submodule skills/ root, sorted. Only directories and symlinks count; files
+# such as README.md do not.
 #######################################
 list_all_skills() {
-  local root entry
+  local root entry tier
+  local -a roots=("${SKILLS_DIR}")
+  for tier in "${TIERS[@]}"; do
+    roots+=("${(@f)$(skill_roots "${tier}")}")
+  done
   {
-    for root in "${SKILLS_DIR}" "${(@v)TIER_ROOTS}"; do
+    for root in "${roots[@]}"; do
       [[ -d "${root}" ]] || continue
       for entry in "${root}"/*(N-/) "${root}"/*(N@); do
         echo "${entry:t}"

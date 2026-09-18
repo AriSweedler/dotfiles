@@ -15,6 +15,7 @@ copy step, no drift check against a remote, and no push here (pushing follows
 |---|---|---|
 | Shared (`git df`) | `~/.config/claude/skills/` | Skills correct on every machine |
 | Local (`git ldf`) | `~/.local/share/claude-skills/` | Airtable- or machine-specific skills |
+| Either, via a submodule | `<submodule>/skills/` for every path in the tier's `.gitmodules` (e.g. `~/.config/chrome-exoskeleton/skills/`) | Skills that travel with that repo; committed there, not with `git df`/`git ldf` |
 
 `~/.local/share/claude/` is Claude Code's own install dir, which is why the local
 root is a sibling, not a child, of it.
@@ -29,6 +30,10 @@ root is a sibling, not a child, of it.
   recipe in `/ari-dotfiles`, then run `link`.
 - **Shared libraries resolve through `$HOME/.claude/skills/`**, never through a
   relative hop from the script's own directory: skills sit in different tiers.
+- **Submodule skills are committed in the submodule.** `status` marks them
+  `source=submodule:<path>`; `link` symlinks them like any tier skill. `adopt`
+  never targets a submodule: create the skill under `<submodule>/skills/<name>/`,
+  commit and push that repo, bump the tier's pointer, then run `link`.
 - **Third-party skills stay put.** `~/.claude/skills/.gitignore` lists them; `status`
   reports them as `ignored`. Naming one explicitly to `adopt` is the override. A directory
   with no `SKILL.md` (Claude Code's `synced/` bucket) is not a skill: `status` reports it
@@ -43,7 +48,8 @@ zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/status
 ```
 
 Prints one `state=… tier=… name=…` line per actionable skill (`--all` includes
-healthy rows; `ignored` rows add `reason=gitignore|no-skill-md`). Act per state:
+healthy rows; `ignored` rows add `reason=gitignore|no-skill-md`; rows held by a
+submodule add `source=submodule:<path>`). Act per state:
 
 | State | Meaning | Fix |
 |---|---|---|
@@ -90,4 +96,4 @@ pulling shared dotfiles that added a skill.
 - `bin/status` — read-only classification
 - `bin/link` — create missing symlinks, prune dangling ones
 - `bin/adopt` — move + link + stage one or more skills into a tier
-- `lib/registry.zsh` — tier roots and `skill_state`, shared by the three scripts
+- `lib/registry.zsh` — tier roots (plus every submodule's `skills/`) and `skill_state`, shared by the three scripts

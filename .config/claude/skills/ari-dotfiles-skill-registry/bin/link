@@ -48,7 +48,7 @@ EOF
 #######################################
 link_skill() {
   local skill="${1}" tier="${2}" dry_run="${3}"
-  local target="$(tier_root "${tier}")/${skill}"
+  local target="$(skill_holder_root "${tier}" "${skill}")/${skill}"
   local link="${SKILLS_DIR}/${skill}"
   if [[ "${dry_run}" == "true" ]]; then
     log::info "dry-run: would link | link='${link}' target='${target}'"

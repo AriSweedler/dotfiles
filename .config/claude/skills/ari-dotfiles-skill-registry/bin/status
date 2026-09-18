@@ -36,7 +36,8 @@ ${c_bold}Options:${c_rst}
   --all         Include healthy rows (linked, ignored); default shows actionable rows only
   -h, --help    Show this help
 
-${c_bold}Output:${c_rst} one line per skill on stdout: state=<state> tier=<tier> name=<name>
+${c_bold}Output:${c_rst} one line per skill on stdout: state=<state> tier=<tier> name=<name> [source=submodule:<path>]
+  source=   present when a submodule's top-level skills/ holds the skill: commit it in that repo
   linked    symlink into a tier root                   healthy
   ignored   listed in .gitignore, or a directory without SKILL.md   leave it (reason= shown under --all)
   unlinked  real dir, no tier holds it                 adopt --skill NAME --tier df|ldf
@@ -63,7 +64,9 @@ is_quiet_state() {
 
 #######################################
 # Print one output row; ignored rows carry the reason so a directory that is not
-# a skill (no SKILL.md) is told apart from a .gitignore'd third-party skill.
+# a skill (no SKILL.md) is told apart from a .gitignore'd third-party skill, and
+# rows held by a submodule's skills/ carry source=submodule:<path> so callers
+# commit in that repo instead of the tier.
 # Arguments:
 #   $1 - state
 #   $2 - tier
@@ -75,7 +78,13 @@ format_row() {
     echo "state=${state} tier=${tier} name=${skill} reason=$(skill_ignore_reason "${skill}")"
     return 0
   fi
-  echo "state=${state} tier=${tier} name=${skill}"
+  local row="state=${state} tier=${tier} name=${skill}"
+  if [[ "${state}" == "linked" || "${state}" == "missing" ]]; then
+    local source
+    source="$(root_source "${tier}" "$(skill_holder_root "${tier}" "${skill}")")"
+    [[ -n "${source}" ]] && row+=" source=${source}"
+  fi
+  echo "${row}"
 }
 
 main() {
