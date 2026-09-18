@@ -136,6 +136,13 @@ dotfiles::commit() {
       fi
       rc=0
       out="$("${git[@]}" push 2>&1)" || rc=$?
+      # git reports a failing pre-push hook as exit 1, same as being offline; the
+      # chrome-exoskeleton hook prints a verdict line so this can tell them apart.
+      if [[ "${out}" == *'[EXO-PREPUSH] failed'* ]]; then
+        log::err "pre-push checks failed; nothing pushed | tier='local' fix='exo check, then git ldf push'"
+        log::ERR "${out}"
+        return 1
+      fi
       if (( rc != 0 )); then
         log::warn "push failed; run 'git ldf push' when online"
         log::WARN "${out}"

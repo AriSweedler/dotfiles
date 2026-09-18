@@ -17,7 +17,33 @@ log::err()  { echo -e "${C_RED}[ERROR]${C_RST} $*" >&2; }
 log::warn() { echo -e "${C_YELLOW}[WARN]${C_RST} $*" >&2; }
 log::info() { echo -e "${C_GREEN}[INFO]${C_RST} $*" >&2; }
 
+# A chrome-exoskeleton submodule pointer bump must reference a commit already on
+# the framework's origin/main, or every other machine's `git df submodule update`
+# fails to check it out.
+check_exoskeleton_pointer() {
+  local rel=".config/chrome-exoskeleton"
+  if ! git diff --cached --name-only | grep -qx "${rel}"; then
+    return 0
+  fi
+  local fw sha
+  fw="$(git rev-parse --show-toplevel)/${rel}"
+  sha="$(git diff --cached -- "${rel}" | awk '/^\+Subproject commit/ {print $3}')"
+  [[ -n "${sha}" ]] || return 0
+  log::info "Checking chrome-exoskeleton ${sha:0:8} is on origin/main..."
+  if ! git -C "${fw}" fetch -q origin main 2>/dev/null; then
+    log::warn "Could not fetch chrome-exoskeleton origin; checking against the last fetch."
+  fi
+  if ! git -C "${fw}" merge-base --is-ancestor "${sha}" origin/main 2>/dev/null; then
+    log::err "chrome-exoskeleton pointer ${sha:0:8} is not on origin/main."
+    log::warn "Push the framework repo first (from ~/.config/chrome-exoskeleton), then re-stage the pointer."
+    return 1
+  fi
+  log::info "chrome-exoskeleton pointer is published."
+}
+
 main() {
+  check_exoskeleton_pointer || return 1
+
   # git diff --cached --name-only emits paths relative to the repo root, and
   # the bare repo's worktree is $HOME — so match the repo-relative path, not an
   # absolute one (grep -qx needs a full-line match).

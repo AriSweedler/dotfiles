@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+#
+# Pre-push hook for the local-dotfiles bare repo.
+# When a push touches share/chrome-exoskeleton/ (this machine's private plugins),
+# run the framework's whole check suite over the framework + BOTH plugin tiers:
+# lint, format, tsc, vitest, a build and the Playwright suite. A plugin here can
+# neither break the framework nor go out with a red test.
+#
+# Prints an [EXO-PREPUSH] verdict line; dotfiles::commit reads it, since git
+# reports any hook failure as exit 1. EXO_PUSH_E2E=0 skips the browser suite.
+#
+# Setup (new-machine enforces it):
+#   git ldf config core.hooksPath ~/.config/git/local-dotfiles-hooks
+
+set -euo pipefail
+
+readonly HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+readonly FW="${HOOK_DIR}/../../chrome-exoskeleton"
+readonly ZERO=0000000000000000000000000000000000000000
+readonly C_RED='\033[31m'
+readonly C_GREEN='\033[32m'
+readonly C_RST='\033[0m'
+
+log::err()  { echo -e "${C_RED}[ERROR]${C_RST} $*" >&2; }
+log::info() { echo -e "${C_GREEN}[INFO]${C_RST} $*" >&2; }
+
+main() {
+  # git runs pre-push in the caller's cwd when pushing from outside the worktree.
+  cd "${GIT_WORK_TREE:-$(git rev-parse --show-toplevel)}"
+
+  local touched=0 lref lsha rref rsha changed
+  while read -r lref lsha rref rsha; do
+    [[ "${lsha}" == "${ZERO}" ]] && continue                # deleting a ref
+    if [[ "${rsha}" == "${ZERO}" ]]; then
+      touched=1                                             # first push of a ref: no range, run
+    elif ! changed="$(git diff --name-only "${rsha}..${lsha}" -- share/chrome-exoskeleton/ 2>/dev/null)"; then
+      touched=1                                             # remote sha unknown here: fail closed
+    elif [[ -n "${changed}" ]]; then
+      touched=1
+    fi
+  done
+  (( touched )) || exit 0
+
+  if [[ ! -x "${FW}/bin/exo" ]]; then
+    log::err "chrome-exoskeleton framework missing | path='${FW}' (shared tier not checked out or submodule not initialized)"
+    echo "[EXO-PREPUSH] failed" >&2
+    exit 1
+  fi
+
+  local -a flags=()
+  if [[ "${EXO_PUSH_E2E:-1}" != 0 ]]; then flags+=(--e2e); fi
+  log::info "share/chrome-exoskeleton changed; running exo check ${flags[*]:-}"
+  if ! env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE zsh "${FW}/bin/exo" check ${flags[@]+"${flags[@]}"}; then
+    echo "[EXO-PREPUSH] failed" >&2
+    exit 1
+  fi
+  echo "[EXO-PREPUSH] passed" >&2
+}
+
+main "$@"

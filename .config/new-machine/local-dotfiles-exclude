@@ -21,6 +21,11 @@
 !/share/double_cd/
 !/share/new-machine/
 !/share/claude-skills/
+!/share/chrome-exoskeleton/
+/share/chrome-exoskeleton/plugins/node_modules
+/share/chrome-exoskeleton/**/examples/*
+!/share/chrome-exoskeleton/**/examples/.gitkeep
+/share/chrome-exoskeleton/**/test-results/
 # Secrets live in *.secret.zsh beside the plugin that needs them; never tracked.
 *.secret.zsh
 # Symlinks into tool-managed installs (claude version dir, pipx venv).

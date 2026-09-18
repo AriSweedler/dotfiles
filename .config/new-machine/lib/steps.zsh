@@ -280,6 +280,20 @@ check::dotfiles_repo() {
     verdict fail hooks_path -d "core.hooksPath='${hooks}' expected='${NEW_MACHINE_DF_HOOKS}'" -f "new-machine apply dotfiles_repo"
     return 0
   fi
+  if [[ -f "${HOME}/.gitmodules" ]]; then
+    local sub_status uninit drifted
+    sub_status="$(git -C "${HOME}" --git-dir="${git_dir}" --work-tree="${HOME}" submodule status 2>/dev/null || true)"
+    uninit="$(print -r -- "${sub_status}" | awk '/^-/ {print $2}')"
+    drifted="$(print -r -- "${sub_status}" | awk '/^\+/ {print $2}')"
+    if [[ -n "${uninit}" ]]; then
+      verdict fail submodule_uninitialized -d "submodule not checked out | paths='${uninit//$'\n'/, }'" -f "new-machine apply dotfiles_repo"
+      return 0
+    fi
+    if [[ -n "${drifted}" ]]; then
+      verdict warn submodule_drift -d "checkout differs from the committed pointer | paths='${drifted//$'\n'/, }'" -f "cd ~ && git df submodule update   (or commit the new pointer)"
+      return 0
+    fi
+  fi
   local dirty
   dirty="$(git --git-dir="${git_dir}" --work-tree="${HOME}" status --porcelain --untracked-files=no 2>/dev/null || true)"
   if [[ -n "${dirty}" ]]; then
@@ -304,6 +318,11 @@ apply::dotfiles_repo() {
     fi
   fi
   steps::ensure_hooks_path "${git_dir}" "${NEW_MACHINE_DF_HOOKS}"
+  # Submodules (.config/chrome-exoskeleton) check out empty until initialized;
+  # git refuses submodule commands from outside the worktree, hence -C HOME.
+  if [[ -f "${HOME}/.gitmodules" ]]; then
+    run_cmd_mutating git -C "${HOME}" --git-dir="${git_dir}" --work-tree="${HOME}" submodule update --init || return 1
+  fi
 }
 
 # ── local_dotfiles_repo ──────────────────────────────────────────────────────
