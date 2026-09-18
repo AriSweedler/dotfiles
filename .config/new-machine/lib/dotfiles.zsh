@@ -1,7 +1,7 @@
 # lib/dotfiles.zsh — dotfiles::commit, the one place the two dotfiles tiers' git rules live.
 # Sourced by bin/new-machine after lib/common.zsh; defines functions only.
 #
-#   global  ~/dotfiles.git             work tree $HOME         committed, never pushed (Ari runs git_df_push)
+#   global  ~/dotfiles.git             work tree $HOME         committed, never pushed (Ari runs dotfiles push)
 #   local   ~/.local/local-dotfiles.git work tree $HOME/.local  committed and pushed
 #
 # Explicit --git-dir/--work-tree throughout: the `git df`/`git ldf` aliases sit behind a config
@@ -127,7 +127,7 @@ dotfiles::commit() {
   print -r -- "[${tier}] $("${git[@]}" log --oneline -1)"
   case "${tier}" in
     global)
-      print -r -- 'Run `git_df_push` when ready.'
+      print -r -- 'Run `dotfiles push` when ready.'
       ;;
     local)
       if dotfiles::is_no_push; then

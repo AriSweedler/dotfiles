@@ -41,7 +41,7 @@ Trail:    /tmp/nmtest/home/.local/state/new-machine/verify.log
 
 1. In a terminal: `cd ~` and paste this one line:
 
-    claude "Read /tmp/nmtest/home/Desktop/new-machine-FAILED.md and /tmp/nmtest/home/.local/state/new-machine/verify/log.txt. Load the /ari-dotfiles skill first and follow its two-tier rules: shared tier (~/.config, git df) commit and NEVER push, end with 'Run git_df_push when ready'; local tier (~/.local, git ldf) commit and then git ldf push. Diagnose why 'new-machine check' cannot run on this machine and fix it; do not silence the check. Finish with 'new-machine check --json' and show me the output."
+    claude "Read /tmp/nmtest/home/Desktop/new-machine-FAILED.md and /tmp/nmtest/home/.local/state/new-machine/verify/log.txt. Load the /ari-dotfiles skill first and follow its two-tier rules: shared tier (~/.config, git df) commit and NEVER push, end with 'Run dotfiles push when ready'; local tier (~/.local, git ldf) commit and then git ldf push. Diagnose why 'new-machine check' cannot run on this machine and fix it; do not silence the check. Finish with 'new-machine check --json' and show me the output."
 
 2. Rules for the fix (the /ari-dotfiles skill is canonical):
    - Declared brew state is the two Brewfiles: /tmp/nmtest/home/.config/new-machine/Brewfile (global, df) and

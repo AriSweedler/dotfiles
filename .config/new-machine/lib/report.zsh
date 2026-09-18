@@ -301,7 +301,7 @@ report::render() {
 
 1. In a terminal: \`cd ~\` and paste this one line:
 
-    claude "Read ${report_path} and ${log_path}. Load the /ari-dotfiles skill first and follow its two-tier rules: shared tier (~/.config, git df) commit and NEVER push, end with 'Run git_df_push when ready'; local tier (~/.local, git ldf) commit and then git ldf push. ${task} Finish with 'new-machine check --json' and show me the output."
+    claude "Read ${report_path} and ${log_path}. Load the /ari-dotfiles skill first and follow its two-tier rules: shared tier (~/.config, git df) commit and NEVER push, end with 'Run dotfiles push when ready'; local tier (~/.local, git ldf) commit and then git ldf push. ${task} Finish with 'new-machine check --json' and show me the output."
 
 2. Rules for the fix (the /ari-dotfiles skill is canonical):
    - Declared brew state is the two Brewfiles: ${HOME}/.config/new-machine/Brewfile (global, df) and

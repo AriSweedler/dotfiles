@@ -1,0 +1,502 @@
+#!/usr/bin/env zsh
+# dotfiles — the harness for Ari's two-tier dotfiles (see /ari-dotfiles).
+#   init    make this machine's dotfiles whole: shared repo cloned and checked
+#           out, hooks wired, submodules checked out, skills linked, the GitHub
+#           ssh key loaded (passphrase from 1Password). new-machine relies on it.
+#   pull    fast-forward the shared tier, then init
+#   push    push every submodule (in parallel, each to its own log), then the
+#           shared tier, all as the personal GitHub account by token; a
+#           submodule failure blocks the shared push
+#   status  both tiers, the submodules, and the last push per repo
+#   logs    the push logs, for diagnosing a failed push
+# Run: dotfiles <command> [flags]; dotfiles --help
+
+set -euo pipefail
+
+readonly SCRIPT_DIR="${0:A:h}"
+readonly SKILLS_DIR="${HOME}/.claude/skills"
+
+LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
+# Bootstrap: before `dotfiles init` has linked the skills the farm is empty, and the
+# only reachable copy is the shared tier's own.
+[[ -r "${LIB_LOGGING}" ]] || LIB_LOGGING="${HOME}/.config/claude/skills/ari-skill-shellscripts/lib/logging.zsh"
+readonly LIB_LOGGING
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+source "${HOME}/.config/zsh/plugins/log_rotate.zsh"
+
+# --- Environment variables ---
+
+# The shared repo, cloned when missing. https so a fresh machine needs no key.
+readonly DOTFILES_REMOTE="${DOTFILES_REMOTE:-https://github.com/AriSweedler/dotfiles.git}"
+# The GitHub ssh key to load into the agent, described by a 1Password item that
+# holds its "Absolute path" and "password" fields. Set by the local tier
+# (~/.local/share/zsh/plugins/dotfiles.zsh); unset means "no key to load".
+readonly DOTFILES_SSH_KEY_OP_ITEM="${DOTFILES_SSH_KEY_OP_ITEM:-}"
+readonly DOTFILES_SSH_KEY_OP_VAULT="${DOTFILES_SSH_KEY_OP_VAULT:-}"
+
+# --- Constants ---
+
+readonly DF_GIT_DIR="${HOME}/dotfiles.git"
+readonly DF_WORK_TREE="${HOME}"
+readonly DF_HOOKS="${HOME}/.config/git/dotfiles-hooks"
+readonly LDF_GIT_DIR="${HOME}/.local/local-dotfiles.git"
+readonly LDF_WORK_TREE="${HOME}/.local"
+readonly LDF_HOOKS="${HOME}/.config/git/local-dotfiles-hooks"
+readonly GITMODULES="${HOME}/.gitmodules"
+readonly LOG_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/dotfiles/push"
+readonly KEEP_BACKUPS=1
+readonly PUSH_TOOL="${HOME}/.config/bin/git_push_as_personal"
+readonly REGISTRY_LINK="${HOME}/.config/claude/skills/ari-dotfiles-skill-registry/bin/link"
+readonly VALID_COMMANDS=(init pull push status logs)
+
+# Flags, set by main.
+DRY_RUN=false
+PUSH_SCOPE=all
+LOGS_PREVIOUS=false
+LOGS_REPO=""
+
+# --- Help ---
+
+help() {
+  cat <<EOF
+${c_green}dotfiles${c_rst} — harness for the two-tier dotfiles: init, pull, push, status, logs
+
+${c_bold}Usage:${c_rst}
+  dotfiles init   [--dry-run]                 shared repo cloned + checked out, hooks wired,
+                                              submodules checked out, skills linked, ssh key loaded
+  dotfiles pull   [--dry-run]                 fast-forward the shared tier, then init
+  dotfiles push   [--submodules-only|--shared-only] [--dry-run]
+                                              push every submodule in parallel (one log each),
+                                              then the shared tier; both as the personal account.
+                                              Any submodule failure blocks the shared push.
+  dotfiles status                             both tiers, submodules, last push per repo
+  dotfiles logs   [--repo NAME] [--previous]  push logs (NAME = 'shared' or a submodule path)
+
+${c_bold}Flags:${c_rst}
+  --dry-run          Print what would run; change nothing
+  --submodules-only  push: only the submodules
+  --shared-only      push: only the shared tier
+  --repo NAME        logs: one repo instead of all
+  --previous         logs: the run before the last one (.log.bak.1)
+  -h, --help         This help
+
+${c_bold}Environment:${c_rst}
+  DOTFILES_REMOTE              shared repo to clone when missing (default ${DOTFILES_REMOTE})
+  DOTFILES_SSH_KEY_OP_ITEM     1Password item holding the ssh key's "Absolute path" and "password"
+  DOTFILES_SSH_KEY_OP_VAULT    its vault; both come from the local tier, unset = no key to load
+
+${c_bold}Logs:${c_rst} ${LOG_DIR}/<repo>.log (last run) and .log.bak.1 (the run before).
+Pushes go through ${PUSH_TOOL}. Human-only: Claude Code is denied 'dotfiles push'.
+EOF
+}
+
+# --- Git per tier ---
+
+# -C <worktree>: with an explicit work tree, ls-files/status/submodule still scope
+# themselves to the cwd, so a call from anywhere else would see a slice or nothing.
+df_git()  { git -C "${DF_WORK_TREE}"  --git-dir="${DF_GIT_DIR}"  --work-tree="${DF_WORK_TREE}"  "${@}"; }
+ldf_git() { git -C "${LDF_WORK_TREE}" --git-dir="${LDF_GIT_DIR}" --work-tree="${LDF_WORK_TREE}" "${@}"; }
+
+#######################################
+# Run a state-changing command, or print it under --dry-run.
+#######################################
+run_mut() {
+  if [[ "${DRY_RUN}" == true ]]; then
+    log::info "dry-run, would run | cmd='${*}'"
+    return 0
+  fi
+  run_cmd "${@}"
+}
+
+# --- Submodules ---
+
+#######################################
+# Submodule paths declared in ~/.gitmodules, one per line, relative to $HOME.
+#######################################
+submodule_paths() {
+  [[ -f "${GITMODULES}" ]] || return 0
+  git config -f "${GITMODULES}" --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}'
+}
+
+#######################################
+# The log file for a repo: 'shared' or a submodule path (dot and slashes dropped).
+# Arguments:
+#   $1 - 'shared' or a submodule path relative to $HOME
+#######################################
+log_file() {
+  local repo="${1#.}"
+  print -r -- "${LOG_DIR}/${repo//\//-}.log"
+}
+
+# --- init ---
+
+#######################################
+# Clone the shared bare repo when this machine has none.
+#######################################
+init_clone() {
+  if [[ -d "${DF_GIT_DIR}" ]]; then
+    log::info "shared repo present | git_dir='${DF_GIT_DIR}'"
+    return 0
+  fi
+  run_mut git clone --bare "${DOTFILES_REMOTE}" "${DF_GIT_DIR}"
+}
+
+#######################################
+# A bare clone has no tracking config; `dotfiles pull` needs main to track origin/main.
+#######################################
+init_tracking() {
+  [[ -d "${DF_GIT_DIR}" ]] || return 0
+  if [[ "$(df_git config branch.main.remote 2>/dev/null || true)" == origin &&
+        "$(df_git config branch.main.merge 2>/dev/null || true)" == refs/heads/main ]]; then
+    log::info "main tracks origin/main | git_dir='${DF_GIT_DIR}'"
+    return 0
+  fi
+  run_mut df_git config branch.main.remote origin || return 1
+  run_mut df_git config branch.main.merge refs/heads/main
+}
+
+#######################################
+# Check the shared repo out into $HOME when nothing is checked out yet.
+#######################################
+init_checkout() {
+  [[ -d "${DF_GIT_DIR}" ]] || return 0
+  if [[ -n "$(df_git ls-files 2>/dev/null | head -n 1)" ]]; then
+    log::info "shared tier checked out | work_tree='${DF_WORK_TREE}'"
+    return 0
+  fi
+  if ! run_mut df_git checkout; then
+    log::err "checkout failed; move the listed files aside and re-run | work_tree='${DF_WORK_TREE}'"
+    return 1
+  fi
+}
+
+#######################################
+# Point a tier's core.hooksPath at its versioned hooks dir, once.
+# Arguments:
+#   $1 - git function (df_git | ldf_git)
+#   $2 - hooks dir
+#######################################
+init_hooks() {
+  local git_fn="${1}" hooks_dir="${2}" current
+  current="$("${git_fn}" config --local core.hooksPath 2>/dev/null || true)"
+  if [[ "${current}" == "${hooks_dir}" ]]; then
+    log::info "hooks wired | tier='${git_fn%_git}' hooks_dir='${hooks_dir}'"
+    return 0
+  fi
+  run_mut "${git_fn}" config --local core.hooksPath "${hooks_dir}"
+}
+
+init_submodules() {
+  [[ -f "${GITMODULES}" ]] || return 0
+  # git submodule refuses to run outside the worktree.
+  ( cd "${DF_WORK_TREE}" && run_mut df_git submodule update --init )
+}
+
+init_skills() {
+  if [[ ! -r "${REGISTRY_LINK}" ]]; then
+    log::warn "skill registry not found; skills not linked | path='${REGISTRY_LINK}'"
+    return 0
+  fi
+  run_mut zsh "${REGISTRY_LINK}" --prune
+}
+
+#######################################
+# True (0) when the agent already holds the key at the given path.
+# Arguments:
+#   $1 - private key path
+#######################################
+ssh_key_loaded() {
+  local key_path="${1}" fingerprint
+  fingerprint="$(ssh-keygen -lf "${key_path}" 2>/dev/null | awk '{print $2}')" || return 1
+  [[ -n "${fingerprint}" ]] || return 1
+  ssh-add -l 2>/dev/null | awk '{print $2}' | grep -qxF "${fingerprint}"
+}
+
+#######################################
+# Load the GitHub ssh key into the agent, its path and passphrase read from the
+# 1Password item the local tier names. The passphrase goes from op straight to
+# ssh-add through an askpass helper: never the clipboard, never argv.
+#######################################
+init_ssh_key() {
+  if [[ -z "${DOTFILES_SSH_KEY_OP_ITEM}" ]]; then
+    log::info "no ssh key configured; skipping | hint='DOTFILES_SSH_KEY_OP_ITEM in the local tier'"
+    return 0
+  fi
+  if ! command -v op >/dev/null 2>&1; then
+    log::warn "1Password CLI missing; ssh key not loaded | fix='brew install 1password-cli'"
+    return 0
+  fi
+  local -a vault_flag=()
+  [[ -n "${DOTFILES_SSH_KEY_OP_VAULT}" ]] && vault_flag=(--vault "${DOTFILES_SSH_KEY_OP_VAULT}")
+  local key_path
+  if ! key_path="$(op item get "${DOTFILES_SSH_KEY_OP_ITEM}" ${vault_flag[@]+"${vault_flag[@]}"} --field "Absolute path" 2>/dev/null)"; then
+    log::err "1Password item not readable | item='${DOTFILES_SSH_KEY_OP_ITEM}' vault='${DOTFILES_SSH_KEY_OP_VAULT}' fix='op signin'"
+    return 1
+  fi
+  key_path="${key_path/#\~/${HOME}}"
+  if [[ ! -f "${key_path}" ]]; then
+    log::err "ssh key file missing | path='${key_path}' item='${DOTFILES_SSH_KEY_OP_ITEM}'"
+    return 1
+  fi
+  if ssh_key_loaded "${key_path}"; then
+    log::info "ssh key already in the agent | path='${key_path}'"
+    return 0
+  fi
+  if [[ "${DRY_RUN}" == true ]]; then
+    log::info "dry-run, would ssh-add with the passphrase from 1Password | path='${key_path}' item='${DOTFILES_SSH_KEY_OP_ITEM}'"
+    return 0
+  fi
+  local askpass
+  askpass="$(mktemp)"
+  trap 'rm -f "${askpass}"' EXIT
+  {
+    print -r -- '#!/usr/bin/env zsh'
+    print -r -- "exec op item get ${(q)DOTFILES_SSH_KEY_OP_ITEM} ${(q)vault_flag[@]} --fields password --reveal"
+  } > "${askpass}"
+  chmod 700 "${askpass}"
+  DISPLAY=1 SSH_ASKPASS="${askpass}" SSH_ASKPASS_REQUIRE=force ssh-add "${key_path}" </dev/null
+  log::info "ssh key loaded | path='${key_path}'"
+}
+
+cmd_init() {
+  check_prerequisites git || return 1
+  init_clone || return 1
+  init_tracking || return 1
+  init_checkout || return 1
+  init_hooks df_git "${DF_HOOKS}" || return 1
+  if [[ -d "${LDF_GIT_DIR}" ]]; then
+    init_hooks ldf_git "${LDF_HOOKS}" || return 1
+  else
+    log::info "no local tier on this machine | hint='new-machine apply local_dotfiles_repo'"
+  fi
+  init_submodules || return 1
+  init_skills || return 1
+  init_ssh_key || return 1
+  log::info "init done | next='each submodule's own setup (chrome-exoskeleton: exo deps ci && exo build), or new-machine setup'"
+  cmd_status
+}
+
+cmd_pull() {
+  check_prerequisites git || return 1
+  run_mut df_git pull --ff-only || return 1
+  cmd_init
+}
+
+# --- push ---
+
+#######################################
+# Push one repo as the personal account, output to its rotated log.
+# Arguments:
+#   $1 - 'shared' or a submodule path relative to $HOME
+#######################################
+push_repo() {
+  local repo="${1}" logfile
+  logfile="$(log_file "${repo}")"
+  log_rotate "${logfile}" "${KEEP_BACKUPS}"
+  {
+    print -r -- "# $(date -u +%FT%TZ) dotfiles push -> ${repo}"
+    if [[ "${repo}" == shared ]]; then
+      GIT_DIR="${DF_GIT_DIR}" GIT_WORK_TREE="${DF_WORK_TREE}" "${PUSH_TOOL}"
+    else
+      ( cd "${HOME}/${repo}" && "${PUSH_TOOL}" )
+    fi
+  } > "${logfile}" 2>&1
+}
+
+#######################################
+# Push every checked-out submodule in parallel; wait for all; fail if any failed.
+#######################################
+push_submodules() {
+  local -a paths
+  paths=("${(@f)$(submodule_paths)}")
+  paths=("${(@)paths:#}")
+  if (( ${#paths} == 0 )); then
+    log::info "no submodules declared | file='${GITMODULES}'"
+    return 0
+  fi
+  local sub_path
+  local -A pids
+  for sub_path in "${paths[@]}"; do
+    if [[ ! -e "${HOME}/${sub_path}/.git" ]]; then
+      log::warn "submodule not checked out; skipping | path='${sub_path}' fix='dotfiles init'"
+      continue
+    fi
+    if [[ "${DRY_RUN}" == true ]]; then
+      log::info "dry-run, would push | repo='${sub_path}' log='$(log_file "${sub_path}")'"
+      continue
+    fi
+    push_repo "${sub_path}" &
+    pids[${sub_path}]=$!
+  done
+  (( ${#pids} > 0 )) || return 0
+  log::info "submodule pushes running | count='${#pids}' logs='${LOG_DIR}'"
+  local failed=0 rc
+  for sub_path in "${(@k)pids}"; do
+    rc=0
+    wait "${pids[${sub_path}]}" || rc=$?
+    if (( rc == 0 )); then
+      log::info "pushed | repo='${sub_path}' log='$(log_file "${sub_path}")'"
+    else
+      log::err "push failed | repo='${sub_path}' rc='${rc}' see='dotfiles logs --repo ${sub_path}'"
+      failed=$(( failed + 1 ))
+    fi
+  done
+  (( failed == 0 ))
+}
+
+push_shared() {
+  if [[ "${DRY_RUN}" == true ]]; then
+    log::info "dry-run, would push | repo='shared' log='$(log_file shared)'"
+    return 0
+  fi
+  if push_repo shared; then
+    log::info "pushed | repo='shared' log='$(log_file shared)'"
+    return 0
+  fi
+  log::err "push failed | repo='shared' see='dotfiles logs --repo shared'"
+  return 1
+}
+
+cmd_push() {
+  check_prerequisites git gh || return 1
+  if [[ ! -x "${PUSH_TOOL}" ]]; then
+    log::err "push tool missing | path='${PUSH_TOOL}'"
+    return 1
+  fi
+  mkdir -p "${LOG_DIR}"
+  if [[ "${PUSH_SCOPE}" != shared-only ]]; then
+    if ! push_submodules; then
+      log::err "shared tier not pushed: a submodule push failed | fix='dotfiles logs, fix, dotfiles push'"
+      return 1
+    fi
+  fi
+  if [[ "${PUSH_SCOPE}" != submodules-only ]]; then
+    push_shared || return 1
+  fi
+  log::info "push done | scope='${PUSH_SCOPE}'"
+}
+
+# --- status / logs ---
+
+#######################################
+# One line for a tier: branch and ahead/behind from status -sb, plus dirty counts.
+# Arguments:
+#   $1 - label
+#   $2 - git function name (df_git | ldf_git)
+#######################################
+tier_line() {
+  local label="${1}" git_fn="${2}"
+  local head dirty
+  head="$("${git_fn}" status -sb --untracked-files=no 2>/dev/null | head -n 1 || true)"
+  dirty="$("${git_fn}" status --short --untracked-files=no 2>/dev/null | wc -l | tr -d ' ' || true)"
+  print -r -- "${label}: ${head:-not cloned}  uncommitted=${dirty:-?}"
+}
+
+cmd_status() {
+  print -r -- "${c_bold}tiers${c_rst}"
+  print -r -- "  $(tier_line shared df_git)"
+  if [[ -d "${LDF_GIT_DIR}" ]]; then
+    print -r -- "  $(tier_line local ldf_git)"
+  else
+    print -r -- "  local: no repo (new-machine setup)"
+  fi
+  print -r -- "${c_bold}submodules${c_rst} (space = at the pointer, + = ahead of it, - = not initialized)"
+  if [[ -f "${GITMODULES}" ]]; then
+    ( cd "${DF_WORK_TREE}" && df_git submodule status 2>/dev/null | awk '{print "  " $0}' ) || true
+  else
+    print -r -- "  none declared"
+  fi
+  print -r -- "${c_bold}last push${c_rst} (${LOG_DIR})"
+  local logfile
+  for logfile in "${LOG_DIR}"/*.log(N); do
+    print -r -- "  ${logfile:t:r}: $(head -n 1 "${logfile}" | awk '{print $2}')  $(tail -n 1 "${logfile}" | cut -c1-100)"
+  done
+  [[ -n "$(print -l "${LOG_DIR}"/*.log(N))" ]] || print -r -- "  none yet"
+}
+
+cmd_logs() {
+  local -a files
+  local suffix="" repo
+  [[ "${LOGS_PREVIOUS}" == true ]] && suffix=".bak.1"
+  if [[ -n "${LOGS_REPO}" ]]; then
+    files=("$(log_file "${LOGS_REPO}")${suffix}")
+  else
+    files=("${LOG_DIR}"/*.log${suffix}(N))
+  fi
+  if (( ${#files} == 0 )); then
+    log::info "no push logs yet | dir='${LOG_DIR}'"
+    return 0
+  fi
+  local file
+  for file in "${files[@]}"; do
+    if [[ ! -f "${file}" ]]; then
+      log::err "no such log | file='${file}' valid_repos='shared, $(submodule_paths | tr '\n' ' ')'"
+      return 1
+    fi
+    print -r -- "${c_bold}=== ${file:t} ($(date -r "${file}" -u +%FT%TZ)) ===${c_rst}"
+    cat "${file}"
+  done
+}
+
+# --- Prerequisites ---
+
+#######################################
+# Check that required binaries are installed.
+# Arguments: the commands to require
+#######################################
+check_prerequisites() {
+  local -a missing=()
+  local cmd
+  for cmd in "${@}"; do
+    command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
+  done
+  if (( ${#missing} > 0 )); then
+    log::err "Missing required commands | missing='${(j:, :)missing}'"
+    return 1
+  fi
+}
+
+# --- Main ---
+
+main() {
+  # === PARSE ===
+  local command=""
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)          help; return 0 ;;
+    --dry-run)          DRY_RUN=true; shift ;;
+    --submodules-only)  PUSH_SCOPE=submodules-only; shift ;;
+    --shared-only)      PUSH_SCOPE=shared-only; shift ;;
+    --previous)         LOGS_PREVIOUS=true; shift ;;
+    --repo)             LOGS_REPO="${2:?--repo requires a value}"; shift 2 ;;
+    -*)                 log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)
+      if [[ -n "${command}" ]]; then
+        log::err "Unexpected argument | argument='${1}' command='${command}'"; help; return 1
+      fi
+      command="${1}"; shift ;;
+  esac; done
+
+  # === MASSAGE ===
+  command="${command:l}"
+
+  # === VALIDATE ===
+  if [[ -z "${command}" ]]; then
+    log::err "Missing command | valid_commands='${(j:, :)VALID_COMMANDS}'"
+    help
+    return 1
+  fi
+  if (( ! ${VALID_COMMANDS[(Ie)${command}]} )); then
+    log::err "Invalid command | command='${command}' valid_commands='${(j:, :)VALID_COMMANDS}'"
+    help
+    return 1
+  fi
+
+  # === LOGIC ===
+  "cmd_${command}"
+}
+
+main "${@}"

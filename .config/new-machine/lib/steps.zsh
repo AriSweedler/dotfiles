@@ -319,12 +319,14 @@ apply::dotfiles_repo() {
       return 1
     fi
   fi
-  steps::ensure_hooks_path "${git_dir}" "${NEW_MACHINE_DF_HOOKS}"
-  # Submodules (.config/chrome-exoskeleton) check out empty until initialized;
-  # git refuses submodule commands from outside the worktree, hence -C HOME.
-  if [[ -f "${HOME}/.gitmodules" ]]; then
-    run_cmd_mutating git -C "${HOME}" --git-dir="${git_dir}" --work-tree="${HOME}" submodule update --init || return 1
+  # Everything after the checkout is the dotfiles harness's job: tracking config, hooks for
+  # both tiers, submodules, skill links, the ssh key. It ships in the checkout just made.
+  local harness="${HOME}/.config/bin/dotfiles"
+  if [[ ! -r "${harness}" ]] && ! nm::is_dry_run; then
+    log::err "dotfiles harness missing after checkout | path='${harness}'"
+    return 1
   fi
+  run_cmd_mutating zsh "${harness}" init
 }
 
 # ── local_dotfiles_repo ──────────────────────────────────────────────────────

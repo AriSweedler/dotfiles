@@ -25,4 +25,6 @@ fi
 # A no-op once HOME is populated; refuses, listing them, to overwrite files it does not own.
 git --git-dir="$GIT_DIR" --work-tree="$HOME" checkout
 
+# The checkout carries the dotfiles harness; it finishes the dotfiles (hooks, submodules, skills, key).
+zsh "$HOME/.config/bin/dotfiles" init
 exec "$HOME/.config/new-machine/bin/new-machine" setup "$@"

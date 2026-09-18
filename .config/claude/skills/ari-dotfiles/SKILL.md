@@ -23,7 +23,7 @@ On this laptop the local `origin` is `git@github.com:AriSweedler-at/dotfiles.git
    A path inside a submodule (`~/.config/chrome-exoskeleton/…`) is refused by
    `git df add`: follow **Submodules** instead.
 3. Print `git df log --oneline -1` / `git ldf log --oneline -1` to confirm the tier.
-4. Shared: end with "Run `git_df_push` when ready." Local: `git ldf push` now.
+4. Shared: end with "Run `dotfiles push` when ready." Local: `git ldf push` now.
 5. Offer the **Post-change sweep**.
 
 **Always pass absolute paths to `git df` and `git ldf`.** Relative pathspecs
@@ -59,13 +59,34 @@ cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
 
 ## Pushing
 
-- **Shared: NEVER `git df push` and NEVER run `git_df_push`.** It is Ari's
-  function (denied to Claude in settings). It first pushes every submodule as
-  the personal account, in parallel in the background, logging to
-  `~/.local/state/git_df_push/<submodule>.log` (`.log.bak.1` = the run
-  before), then pushes the shared repo. After committing, end with:
-  "Run `git_df_push` when ready."
+- **Shared: NEVER `git df push` and NEVER run `dotfiles push`.** Ari runs it
+  (denied to Claude in settings). It pushes every submodule first, in parallel,
+  then the shared repo, all as the personal account by token (no key swap);
+  a failed submodule blocks the shared push. Each repo's output lands in
+  `~/.local/state/dotfiles/push/<repo>.log` (`.log.bak.1` = the run before).
+  After committing, end with: "Run `dotfiles push` when ready."
 - **Local: push after every ldf commit.** No confirmation needed.
+
+### When `dotfiles push` fails
+
+It stops at the first failing repo, names it, and pushes nothing after it.
+Read the log, then act; you may run these two (read-only) yourself:
+
+```zsh
+dotfiles status                                   # tiers, submodule pointers, each repo's last push line
+dotfiles logs --repo shared                       # or --repo .config/chrome-exoskeleton; --previous = the run before
+```
+
+| log says | cause | do |
+|---|---|---|
+| `Personal account is not logged into gh` | this machine's gh has no personal login | the user runs `env -u GITHUB_TOKEN gh auth login` (HTTPS) |
+| `Token identity mismatch` | the stored personal token is not the personal account | `env -u GITHUB_TOKEN gh auth status`; re-login |
+| `Detached HEAD: nothing to push` | a pull left the submodule detached | **Submodules** step 1 (`git -C ~/<path> switch main`), push again |
+| `! [rejected]` (fetch first / non-fast-forward), or `Remote ref does not match after push` | the remote moved | shared: `dotfiles pull`; submodule: `git -C ~/<path> pull --rebase origin main`, re-run its checks, push again |
+| `submodule not checked out` | never initialized here | `dotfiles init` |
+| `Not inside a git repository`, `No such remote` | a broken checkout | `dotfiles status`, then **Submodules** |
+| DNS, timeout, TLS | network | retry; nothing was lost |
+| a hook's own `[ERROR]` lines | the repo's pre-push hook refused | fix what it names; NEVER `--no-verify` |
 
 ## Placement rules
 
@@ -152,8 +173,9 @@ One dotfiles change; never stop after the first commit.
 2. **Commit in the submodule's repo** on `main`, explicit paths:
    `git -C ~/<path> add <files> && git -C ~/<path> commit -m "…"`. Its hooks
    and commit conventions apply, not the tier's.
-3. **Its push is the user's**: `git_push_as_personal` inside the directory
-   (Claude is denied it). Ask, wait, then confirm
+3. **Its push is the user's**: `dotfiles push --submodules-only` (every
+   submodule, in parallel, logged) or `git_push_as_personal` inside the
+   directory for just this one; Claude is denied both. Ask, wait, then confirm
    `git -C ~/<path> status -sb` → `## main...origin/main`.
 4. **Commit the bump**, always, as part of the same change:
    ```zsh
@@ -163,7 +185,7 @@ One dotfiles change; never stop after the first commit.
    pointer not on it (step 3 skipped, a stale `main` pushed, or offline): fix,
    re-run the commit, nothing to re-stage. Pointer already at HEAD → nothing to
    bump; say so.
-5. End with "Run `git_df_push` when ready.", as for any shared-tier commit.
+5. End with "Run `dotfiles push` when ready.", as for any shared-tier commit.
 
 ### After `git df pull` on any machine
 
@@ -227,7 +249,7 @@ Both clean → those two lines are the whole answer; stop. Otherwise inspect eac
 change (`diff` for modified, `cat` for untracked), then print the plan as one
 line per commit (tier: files → message), grouping tightly related files (a new
 config plus its include), before the first commit. Commit, then push local; end
-with "Run `git_df_push` when ready." if anything landed in the shared repo.
+with "Run `dotfiles push` when ready." if anything landed in the shared repo.
 
 ## Bootstrapping a machine
 
@@ -247,6 +269,16 @@ git ldf add -A && git ldf commit -m "local dotfiles: initial snapshot" && git ld
 
 Keep `local-dotfiles-exclude` in sync with `~/.local/local-dotfiles.git/info/exclude` when the
 allowlist changes.
+
+`dotfiles init` (`~/.config/bin/dotfiles`) is the canonical setup of the dotfiles themselves,
+and both `bootstrap.sh` and new-machine's `dotfiles_repo` step call it: shared repo cloned
+and tracking `origin/main`, checked out into `$HOME`, hooks wired for both tiers, submodules
+checked out, skills linked, and the GitHub ssh key loaded into the agent with its passphrase
+read from 1Password (`op`; the item and vault come from the local tier's
+`~/.local/share/zsh/plugins/dotfiles.zsh`, so a machine without them just skips the key).
+Idempotent; `--dry-run` prints the plan. `dotfiles pull` fast-forwards the shared tier and
+re-runs init; `dotfiles status` shows both tiers, the submodule pointers and each repo's last
+push; `dotfiles push` and `dotfiles logs` are under **Pushing**.
 
 Hook setup for both tiers is documented in `~/.config/git/dotfiles-hooks/README.md`
 and `~/.config/git/local-dotfiles-hooks/README.md`; those are the versioned source.

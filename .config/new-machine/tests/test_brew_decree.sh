@@ -53,7 +53,7 @@ decree cask:google-chrome --global --reason "browser"
 assert_eq "decree cask --global exits 0" 0 "${RC}"
 assert_contains "global Brewfile gained the cask with its reason" "$(cat "${GLOBAL}")" 'cask "google-chrome"  # browser'
 assert_eq "df commit subject" "new-machine: declare cask google-chrome (global)" "$(df_subject)"
-assert_contains "global decree ends with the push reminder" "${OUT}${ERR}" 'Run `git_df_push` when ready.'
+assert_contains "global decree ends with the push reminder" "${OUT}${ERR}" 'Run `dotfiles push` when ready.'
 assert_eq "df remote refs untouched" "${df_remote_before}" "$(git ls-remote "${FIX}/remotes/dotfiles.git" | sort)"
 
 # ── refusals ──────────────────────────────────────────────────────────────────

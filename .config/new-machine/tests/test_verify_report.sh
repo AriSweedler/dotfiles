@@ -35,7 +35,7 @@ assert_contains "the literal claude line" "${content}" "claude \"Read ${REPORT}"
 assert_contains "/ari-dotfiles" "${content}" "/ari-dotfiles"
 assert_contains "NEVER push" "${content}" "NEVER push"
 assert_contains "git ldf push" "${content}" "git ldf push"
-assert_contains "Run git_df_push when ready" "${content}" "Run git_df_push when ready"
+assert_contains "Run dotfiles push when ready" "${content}" "Run dotfiles push when ready"
 assert_contains "tests/run.sh" "${content}" "tests/run.sh"
 assert_contains "What fixed looks like" "${content}" '## What "fixed" looks like'
 assert_contains "raw log path under the fake state dir" "${content}" "${STATE}/verify/log.txt"
