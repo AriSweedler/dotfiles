@@ -112,13 +112,14 @@ ldf_git() { git -C "${LDF_WORK_TREE}" --git-dir="${LDF_GIT_DIR}" --work-tree="${
 
 #######################################
 # Run a state-changing command, or print it under --dry-run.
+# `runner=run_cmd_cap run_mut …` also logs the command's stdout, one line each.
 #######################################
 run_mut() {
   if [[ "${DRY_RUN}" == true ]]; then
     log::info "dry-run, would run | cmd='${*}'"
     return 0
   fi
-  run_cmd "${@}"
+  "${runner:-run_cmd}" "${@}"
 }
 
 # --- Submodules ---
@@ -232,7 +233,8 @@ init_skills() {
     log::warn "skill registry not found; skills not linked | path='${REGISTRY_LINK}'"
     return 0
   fi
-  run_mut zsh "${REGISTRY_LINK}" --prune
+  # The registry prints its linked/pruned/skipped summary on stdout; log it.
+  runner=run_cmd_cap run_mut zsh "${REGISTRY_LINK}" --prune
 }
 
 #######################################
@@ -308,7 +310,7 @@ cmd_init() {
   init_skills || return 1
   init_ssh_key || return 1
   init_fetch || return 1
-  log::info "init done | next='each submodule's own setup (chrome-exoskeleton: exo deps ci && exo build), or new-machine setup'"
+  log::info "init done | next='per-submodule setup (chrome-exoskeleton: exo deps ci && exo build) or new-machine setup'"
   cmd_status
 }
 
@@ -563,6 +565,15 @@ cmd_push() {
 # --- status / logs ---
 
 #######################################
+# A push log's verdict: its last line without color codes and the [LEVEL] tag.
+# Arguments:
+#   $1 - log file
+#######################################
+log_verdict() {
+  tail -n 1 "${1}" | awk '{ gsub(/[[:cntrl:]]\[[0-9;]*m/, ""); sub(/^\[[A-Z]+\] /, ""); print }'
+}
+
+#######################################
 # One line for a tier: branch and ahead/behind from status -sb, plus dirty counts.
 # Arguments:
 #   $1 - label
@@ -590,10 +601,10 @@ cmd_status() {
   else
     print -r -- "  none declared"
   fi
-  print -r -- "${c_bold}last push${c_rst} (${LOG_DIR})"
+  print -r -- "${c_bold}last push${c_rst} (${LOG_DIR}; 'dotfiles logs' for the whole run)"
   local logfile
   for logfile in "${LOG_DIR}"/*.log(N); do
-    print -r -- "  ${logfile:t:r}: $(head -n 1 "${logfile}" | awk '{print $2}')  $(tail -n 1 "${logfile}" | cut -c1-100)"
+    printf '  %-26s %s  %s\n' "${logfile:t:r}" "$(head -n 1 "${logfile}" | awk '{print $2}')" "$(log_verdict "${logfile}")"
   done
   [[ -n "$(print -l "${LOG_DIR}"/*.log(N))" ]] || print -r -- "  none yet"
 }
