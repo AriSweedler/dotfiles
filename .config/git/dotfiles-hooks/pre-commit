@@ -29,13 +29,18 @@ check_exoskeleton_pointer() {
   fw="$(git rev-parse --show-toplevel)/${rel}"
   sha="$(git diff --cached -- "${rel}" | awk '/^\+Subproject commit/ {print $3}')"
   [[ -n "${sha}" ]] || return 0
-  log::info "Checking chrome-exoskeleton ${sha:0:8} is on origin/main..."
+  # The local origin/main first (a `dotfiles push` bump has just set it: no network);
+  # only a miss asks the remote, in case another tool pushed without refreshing it.
+  if git -C "${fw}" merge-base --is-ancestor "${sha}" origin/main 2>/dev/null; then
+    return 0
+  fi
+  log::info "Checking chrome-exoskeleton ${sha:0:8} against the remote's main..."
   if ! git -C "${fw}" fetch -q origin main 2>/dev/null; then
     log::warn "Could not fetch chrome-exoskeleton origin; checking against the last fetch."
   fi
   if ! git -C "${fw}" merge-base --is-ancestor "${sha}" origin/main 2>/dev/null; then
     log::err "chrome-exoskeleton pointer ${sha:0:8} is not on origin/main."
-    log::warn "Push the framework repo first (from ~/.config/chrome-exoskeleton), then re-stage the pointer."
+    log::warn "Push the framework repo first (dotfiles push --submodules), then re-run the commit."
     return 1
   fi
   log::info "chrome-exoskeleton pointer is published."

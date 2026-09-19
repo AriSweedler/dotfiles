@@ -61,11 +61,13 @@ cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
 
 - **Shared: NEVER `git df push` and NEVER run `dotfiles push`.** Ari runs it
   (denied to Claude in settings). It pushes every submodule first, in parallel,
-  then the shared repo, all as the personal account by token (no key swap), and
-  the local tier alongside to its own remote with the ssh agent's key (its
-  pre-push hook included); a repo already at its `origin/main` is skipped
-  silently (the submodule count line says how many were checked and pushed);
-  a failed submodule blocks the shared push, nothing else blocks anything.
+  commits the shared tier's pointer bump for each published one (that path
+  alone; `<name>: bump to <sha> (<subject>)`), then pushes the shared repo, all
+  as the personal account by token (no key swap), and the local tier alongside
+  to its own remote with the ssh agent's key (its pre-push hook included); a
+  repo already at its `origin/main` is skipped silently (the submodule count
+  line says how many were checked, pushed and bumped); a failed submodule or
+  a refused bump blocks the shared push, nothing else blocks anything.
   Each repo's output lands in `~/.local/state/dotfiles/push/<repo>.log`
   (`shared`, `local`, or the submodule path; `.log.bak.1` = the run before).
   After committing, end with: "Run `dotfiles push` when ready."
@@ -180,20 +182,20 @@ One dotfiles change; never stop after the first commit.
 2. **Commit in the submodule's repo** on `main`, explicit paths:
    `git -C ~/<path> add <files> && git -C ~/<path> commit -m "…"`. Its hooks
    and commit conventions apply, not the tier's.
-3. **Its push is the user's**: `dotfiles push --submodules` (every
-   submodule, in parallel, one log each, as the personal account; `--shared`,
-   `--local` and `--no-<part>` narrow the scope the same way); Claude is
-   denied it. Ask, wait, then confirm
-   `git -C ~/<path> status -sb` → `## main...origin/main`.
-4. **Commit the bump**, always, as part of the same change:
+3. **Its push, and the bump, are the user's**: end with "Run `dotfiles push`
+   when ready." That pushes the submodule, commits the shared tier's pointer
+   bump (`<name>: bump to <sha> (<subject>)`, that path alone) and pushes the
+   shared tier with it; `dotfiles push --submodules` alone still commits the
+   bump (`--shared`, `--local` and `--no-<part>` narrow the scope the same
+   way). Claude is denied the command. Afterwards, **Verify**.
+4. **Bump by hand only when the submodule was pushed some other way** and no
+   `dotfiles push` is coming (`git df status --short -- ~/<path>` shows ` M`):
    ```zsh
    git df add ~/<path> && git df commit -m "<name>: bump to $(git -C ~/<path> rev-parse --short HEAD) (<what it carries>)"
    ```
-   The df pre-commit hook fetches the submodule's `origin/main` and refuses a
-   pointer not on it (step 3 skipped, a stale `main` pushed, or offline): fix,
-   re-run the commit, nothing to re-stage. Pointer already at HEAD → nothing to
-   bump; say so.
-5. End with "Run `dotfiles push` when ready.", as for any shared-tier commit.
+   The df pre-commit hook refuses a pointer not on the submodule's
+   `origin/main` (checked locally, fetched only on a miss): push first, re-run
+   the commit, nothing to re-stage.
 
 ### After `git df pull` on any machine
 

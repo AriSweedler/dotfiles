@@ -73,9 +73,10 @@ ${c_bold}Usage:${c_rst}
   dotfiles pull   [--dry-run]                 fast-forward the shared tier, then init
   dotfiles push   [--submodules|--shared|--local|--no-submodules|--no-shared|--no-local] [--dry-run]
                                               push every submodule with something to push, in
-                                              parallel (one log each), then the shared tier, both as
-                                              the personal account; the local tier alongside, to its
-                                              own remote with the ssh agent's key (its pre-push hook
+                                              parallel (one log each), commit the shared tier's
+                                              pointer bumps, then push the shared tier, all as the
+                                              personal account; the local tier alongside, to its own
+                                              remote with the ssh agent's key (its pre-push hook
                                               included). Repos already at origin are skipped
                                               silently; a submodule failure blocks the shared push.
   dotfiles status                             both tiers, submodules, last push per repo
@@ -442,37 +443,76 @@ push_tier() {
 }
 
 #######################################
-# Push every checked-out submodule that needs it, in parallel; wait for all; report the
-# counts; fail if any failed. Up-to-date submodules are silent.
+# The shared tier's pointer for a submodule follows its published HEAD: committed
+# alone (that path only; message '<name>: bump to <sha> (<subject>)'), so the
+# shared push after the submodules carries it. Returns 0 bumped, 2 nothing to do
+# (pointer already there, checkout not ahead of it, no shared repo), 1 refused.
+# Arguments:
+#   $1 - submodule path
+#######################################
+bump_pointer() {
+  local repo="${1}" pointer head count=1 subject message out
+  repo_present shared || return 2
+  pointer="$(repo_git shared ls-tree HEAD -- "${repo}" 2>/dev/null | awk '{print $3}')"
+  head="$(repo_git "${repo}" rev-parse HEAD 2>/dev/null || true)"
+  [[ -n "${head}" && "${head}" != "${pointer}" ]] || return 2
+  if [[ -n "${pointer}" ]] && ! repo_git "${repo}" merge-base --is-ancestor "${pointer}" "${head}" 2>/dev/null; then
+    log::warn "pointer not bumped: checkout is not ahead of it | repo='${repo}' pointer='${pointer:0:7}' head='${head:0:7}' fix='dotfiles pull, or git -C ~/${repo} switch main'"
+    return 2
+  fi
+  [[ -z "${pointer}" ]] || count="$(repo_git "${repo}" rev-list --count "${pointer}..${head}")"
+  subject="$(repo_git "${repo}" log -1 --format=%s "${head}")"
+  message="${repo:t}: bump to ${head:0:7} (${subject})"
+  (( count <= 1 )) || message="${repo:t}: bump to ${head:0:7} (${count} commits, latest: ${subject})"
+  if [[ "${DRY_RUN}" == true ]]; then
+    log::info "dry-run, would bump | repo='${repo}' from='${pointer:0:7}' to='${head:0:7}' message='${message}'"; return 0
+  fi
+  # `commit -- <path>` records this path alone; anything else staged in the shared tier stays staged.
+  if ! out="$(repo_git shared commit -q -m "${message}" -- "${repo}" 2>&1)"; then
+    print -r -- "${out}" >&2
+    log::err "pointer bump refused | repo='${repo}' to='${head:0:7}' fix='see the hook output above'"; return 1
+  fi
+  log::info "bumped | repo='${repo}' to='${head:0:7}' commit='$(repo_git shared rev-parse --short HEAD)' message='${message}'"
+}
+
+#######################################
+# Push every checked-out submodule that needs it, in parallel; wait for all; bump the
+# shared tier's pointer of every published one; report the counts; fail if any failed.
+# Up-to-date submodules are silent.
 #######################################
 push_submodules() {
   if (( ${#SUBMODULES} == 0 )); then log::info "no submodules declared | file='${GITMODULES}'"; return 0; fi
-  local repo checked=0 pushed=0 failed=0 verb=pushed start="${EPOCHREALTIME}"
-  local -a running=()
+  local repo rc checked=0 pushed=0 bumped=0 failed=0 verb=pushed start="${EPOCHREALTIME}"
+  local -a running=() published=()
   [[ "${DRY_RUN}" == true ]] && verb=would_push
   for repo in "${SUBMODULES[@]}"; do
     if ! repo_present "${repo}"; then log::warn "submodule not checked out; skipping | path='${repo}' fix='dotfiles init'"; continue; fi
     checked=$(( checked + 1 ))
-    push_needed "${repo}" || continue
+    if ! push_needed "${repo}"; then published+=("${repo}"); continue; fi
     if ! push_begin "${repo}"; then failed=$(( failed + 1 )); continue; fi
-    if [[ "${DRY_RUN}" == true ]]; then pushed=$(( pushed + 1 )); continue; fi   # the plan printed counts as would_push
+    if [[ "${DRY_RUN}" == true ]]; then pushed=$(( pushed + 1 )); published+=("${repo}"); continue; fi   # the plan printed counts as would_push
     running+=("${repo}")
   done
   if (( ${#running} > 0 )); then
     log::info "submodule pushes running | count='${#running}' logs='${LOG_DIR}'"
     for repo in "${running[@]}"; do
-      if push_wait "${repo}"; then pushed=$(( pushed + 1 )); else failed=$(( failed + 1 )); fi
+      if push_wait "${repo}"; then pushed=$(( pushed + 1 )); published+=("${repo}"); else failed=$(( failed + 1 )); fi
     done
   fi
-  log::info "submodules done | checked='${checked}' ${verb}='${pushed}' failed='${failed}' took='$(elapsed "${start}")s'"
+  for repo in "${published[@]}"; do
+    rc=0; bump_pointer "${repo}" || rc=$?
+    case "${rc}" in 0) bumped=$(( bumped + 1 )) ;; 2) ;; *) failed=$(( failed + 1 )) ;; esac
+  done
+  log::info "submodules done | checked='${checked}' ${verb}='${pushed}' bumped='${bumped}' failed='${failed}' took='$(elapsed "${start}")s'"
   (( failed == 0 ))
 }
 
 # True (0) when a push part (local | submodules | shared) is in PUSH_SCOPE.
 in_scope() { (( ${PUSH_SCOPE[(Ie)${1}]} )); }
 
-# The local tier runs in the background while the submodules push, then the shared tier
-# (only if every submodule made it), then the local result.
+# The local tier runs in the background while the submodules push (and their pointer
+# bumps are committed), then the shared tier (only if every submodule made it), then
+# the local result.
 cmd_push() {
   local start="${EPOCHREALTIME}" failed=false scope="${(j:, :)PUSH_SCOPE}"
   check_prerequisites git gh || return 1
