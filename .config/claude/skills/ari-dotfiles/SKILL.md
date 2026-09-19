@@ -62,7 +62,9 @@ cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
 - **Shared: NEVER `git df push` and NEVER run `dotfiles push`.** Ari runs it
   (denied to Claude in settings). It pushes every submodule first, in parallel,
   then the shared repo, all as the personal account by token (no key swap);
-  a failed submodule blocks the shared push. Each repo's output lands in
+  a repo already at its `origin/main` is skipped silently (the submodule count
+  line says how many were checked and pushed); a failed submodule blocks the
+  shared push. Each repo's output lands in
   `~/.local/state/dotfiles/push/<repo>.log` (`.log.bak.1` = the run before).
   After committing, end with: "Run `dotfiles push` when ready."
 - **Local: push after every ldf commit.** No confirmation needed.
@@ -81,7 +83,7 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
 |---|---|---|
 | `Personal account is not logged into gh` | this machine's gh has no personal login | the user runs `env -u GITHUB_TOKEN gh auth login` (HTTPS) |
 | `Token identity mismatch` | the stored personal token is not the personal account | `env -u GITHUB_TOKEN gh auth status`; re-login |
-| `Detached HEAD: nothing to push` | a pull left the submodule detached | **Submodules** step 1 (`git -C ~/<path> switch main`), push again |
+| `Detached HEAD: nothing to push` | commits made while a pull had left the submodule detached (detached with nothing new is skipped silently) | **Submodules** step 1 (`git -C ~/<path> branch -f main HEAD` if `main` is an ancestor, else ask), push again |
 | `! [rejected]` (fetch first / non-fast-forward), or `Remote ref does not match after push` | the remote moved | shared: `dotfiles pull`; submodule: `git -C ~/<path> pull --rebase origin main`, re-run its checks, push again |
 | `submodule not checked out` | never initialized here | `dotfiles init` |
 | `No such remote`, `Remote is not on github.com` | a rewired or broken checkout | `dotfiles status`, then **Submodules** |
