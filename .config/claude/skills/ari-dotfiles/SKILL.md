@@ -61,13 +61,16 @@ cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
 
 - **Shared: NEVER `git df push` and NEVER run `dotfiles push`.** Ari runs it
   (denied to Claude in settings). It pushes every submodule first, in parallel,
-  then the shared repo, all as the personal account by token (no key swap);
-  a repo already at its `origin/main` is skipped silently (the submodule count
-  line says how many were checked and pushed); a failed submodule blocks the
-  shared push. Each repo's output lands in
-  `~/.local/state/dotfiles/push/<repo>.log` (`.log.bak.1` = the run before).
+  then the shared repo, all as the personal account by token (no key swap), and
+  the local tier alongside to its own remote with the ssh agent's key (its
+  pre-push hook included); a repo already at its `origin/main` is skipped
+  silently (the submodule count line says how many were checked and pushed);
+  a failed submodule blocks the shared push, nothing else blocks anything.
+  Each repo's output lands in `~/.local/state/dotfiles/push/<repo>.log`
+  (`shared`, `local`, or the submodule path; `.log.bak.1` = the run before).
   After committing, end with: "Run `dotfiles push` when ready."
-- **Local: push after every ldf commit.** No confirmation needed.
+- **Local: push after every ldf commit.** No confirmation needed; `dotfiles
+  push` also picks up a local commit left unpushed.
 
 ### When `dotfiles push` fails
 
@@ -90,6 +93,7 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
 | `No such remote`, `Remote is not on github.com` | a rewired or broken checkout | `dotfiles status`, then **Submodules** |
 | DNS, timeout, TLS | network | retry; nothing was lost |
 | a hook's own `[ERROR]` lines | the repo's pre-push hook refused | fix what it names; NEVER `--no-verify` |
+| local log: `[EXO-PREPUSH] failed` | the local tier's pre-push hook ran the exoskeleton suite and it failed; the commit stands | `/ari-dotfile-submodule-chrome-exoskeleton` § When it fails, then push again |
 
 ## Placement rules
 

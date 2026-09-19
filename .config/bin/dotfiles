@@ -6,8 +6,9 @@
 #   pull    fast-forward the shared tier, then init
 #   push    push every submodule with commits origin lacks (in parallel, each
 #           to its own log), then the shared tier, all as the personal GitHub
-#           account by token; repos already at origin are skipped silently;
-#           a submodule failure blocks the shared push
+#           account by token; the local tier alongside, to its own remote with
+#           its own key; repos already at origin are skipped silently; a
+#           submodule failure blocks the shared push
 #   status  both tiers, the submodules, and the last push per repo
 #   logs    the push logs, for diagnosing a failed push
 # Run: dotfiles <command> [flags]; dotfiles --help
@@ -89,20 +90,22 @@ ${c_bold}Usage:${c_rst}
   dotfiles init   [--dry-run]                 shared repo cloned + checked out, hooks wired,
                                               submodules checked out, skills linked, ssh key loaded
   dotfiles pull   [--dry-run]                 fast-forward the shared tier, then init
-  dotfiles push   [--submodules-only|--shared-only] [--dry-run]
+  dotfiles push   [--submodules-only|--shared-only|--local-only] [--dry-run]
                                               push every submodule with something to push, in
-                                              parallel (one log each), then the shared tier; both
-                                              as the personal account. Repos already at origin are
-                                              skipped silently; a submodule failure blocks the
-                                              shared push.
+                                              parallel (one log each), then the shared tier, both as
+                                              the personal account; the local tier alongside, to its
+                                              own remote with the ssh agent's key (its pre-push hook
+                                              included). Repos already at origin are skipped
+                                              silently; a submodule failure blocks the shared push.
   dotfiles status                             both tiers, submodules, last push per repo
-  dotfiles logs   [--repo NAME] [--previous]  push logs (NAME = 'shared' or a submodule path)
+  dotfiles logs   [--repo NAME] [--previous]  push logs (NAME = 'shared', 'local' or a submodule path)
 
 ${c_bold}Flags:${c_rst}
   --dry-run          Print what would run; change nothing
   --timing           Log every step's duration (steps over DOTFILES_SLOW_STEP are logged regardless)
   --submodules-only  push: only the submodules
   --shared-only      push: only the shared tier
+  --local-only       push: only the local tier
   --repo NAME        logs: one repo instead of all
   --previous         logs: the run before the last one (.log.bak.1)
   -h, --help         This help
@@ -481,18 +484,18 @@ ensure_token() {
 }
 
 #######################################
-# git for a repo: the shared tier's bare repo and $HOME, or a submodule's directory.
+# git for a repo: a tier's bare repo and worktree, or a submodule's directory.
 # Arguments:
-#   $1 - 'shared' or a submodule path relative to $HOME
+#   $1 - 'shared', 'local', or a submodule path relative to $HOME
 #   $@ - git arguments
 #######################################
 repo_git() {
   local repo="${1}"; shift
-  if [[ "${repo}" == shared ]]; then
-    df_git "${@}"
-  else
-    git -C "${HOME}/${repo}" "${@}"
-  fi
+  case "${repo}" in
+    shared) df_git "${@}" ;;
+    local)  ldf_git "${@}" ;;
+    *)      git -C "${HOME}/${repo}" "${@}" ;;
+  esac
 }
 
 #######################################
@@ -529,11 +532,11 @@ push_target() {
   local repo="${1}" branch remote_url url fix
   branch="$(repo_git "${repo}" branch --show-current 2>/dev/null || true)"
   if [[ -z "${branch}" ]]; then
-    if [[ "${repo}" == shared ]]; then
-      fix="git df switch main"
-    else
-      fix="git -C ~/${repo} switch main   (/ari-dotfiles § Submodules step 1)"
-    fi
+    case "${repo}" in
+      shared) fix="git df switch main" ;;
+      local)  fix="git ldf switch main" ;;
+      *)      fix="git -C ~/${repo} switch main   (/ari-dotfiles § Submodules step 1)" ;;
+    esac
     log::err "Detached HEAD: nothing to push | repo='${repo}' fix='${fix}'"
     return 1
   fi
@@ -541,7 +544,9 @@ push_target() {
     log::err "No such remote | repo='${repo}' remote='origin' remotes='$(repo_git "${repo}" remote | tr '\n' ' ')'"
     return 1
   fi
-  if ! url="$(to_https_url "${remote_url}")"; then
+  if [[ "${repo}" == local ]]; then
+    url="${remote_url}"   # pushed to origin as configured (ssh, the agent's key), not by token
+  elif ! url="$(to_https_url "${remote_url}")"; then
     log::err "Remote is not on github.com | repo='${repo}' url='${remote_url}'"
     return 1
   fi
@@ -551,10 +556,12 @@ push_target() {
 }
 
 #######################################
-# Push one repo's current branch to origin as the login, one round trip: git's
-# --porcelain verdict for the ref confirms the push (no ls-remote), and
-# origin/<branch> is set to the pushed sha (no fetch) so hooks that read it
-# (the shared tier's pointer check) and push_needed see the push.
+# Push one repo's current branch, one round trip: git's --porcelain verdict
+# for the ref confirms the push (no ls-remote). Personal repos go to their
+# https URL by token and origin/<branch> is set to the pushed sha (no fetch)
+# so hooks that read it (the shared tier's pointer check) and push_needed see
+# the push; the local tier goes to its origin as configured, whose key the ssh
+# agent holds, and git refreshes origin/<branch> itself.
 # Arguments:
 #   $1 - repo
 #######################################
@@ -563,9 +570,15 @@ push_repo_steps() {
   local -a target
   target=("${(@f)$(push_target "${repo}")}") || return 1
   local branch="${target[1]}" sha="${target[2]}" url="${target[3]}"
-  local refspec="refs/heads/${branch}:refs/heads/${branch}" out flag
-  log::info "Pushing | repo='${repo}' branch='${branch}' sha='${sha:0:7}' url='${url}' head_author='$(repo_git "${repo}" log -1 --format='%an <%ae>' "${sha}")'"
-  if ! out="$(repo_git_as_login "${repo}" push --porcelain "${url}" "${refspec}" 2>&1)"; then
+  local refspec="refs/heads/${branch}:refs/heads/${branch}" out flag dest actor
+  local -a push_git
+  if [[ "${repo}" == local ]]; then
+    dest=origin; actor="the ssh agent's key"; push_git=(repo_git "${repo}")
+  else
+    dest="${url}"; actor="${DOTFILES_GITHUB_LOGIN}"; push_git=(repo_git_as_login "${repo}")
+  fi
+  log::info "Pushing | repo='${repo}' branch='${branch}' sha='${sha:0:7}' url='${url}' as='${actor}' head_author='$(repo_git "${repo}" log -1 --format='%an <%ae>' "${sha}")'"
+  if ! out="$("${push_git[@]}" push --porcelain "${dest}" "${refspec}" 2>&1)"; then
     print -r -- "${out}"
     log::err "Push rejected | repo='${repo}' branch='${branch}' url='${url}'"
     return 1
@@ -581,8 +594,10 @@ push_repo_steps() {
       return 1
       ;;
   esac
-  repo_git "${repo}" update-ref "refs/remotes/origin/${branch}" "${sha}"
-  log::info "Pushed | ${DOTFILES_GITHUB_LOGIN} ${branch}@${sha:0:7} -> ${url}"
+  if [[ "${repo}" != local ]]; then
+    repo_git "${repo}" update-ref "refs/remotes/origin/${branch}" "${sha}"
+  fi
+  log::info "Pushed | ${branch}@${sha:0:7} -> ${url}"
 }
 
 #######################################
@@ -596,7 +611,7 @@ push_repo() {
   mkdir -p "${LOG_DIR}"
   log_rotate "${logfile}" "${KEEP_BACKUPS}"
   {
-    print -r -- "# $(date -u +%FT%TZ) dotfiles push -> ${repo} as ${DOTFILES_GITHUB_LOGIN}"
+    print -r -- "# $(date -u +%FT%TZ) dotfiles push -> ${repo}"
     push_repo_steps "${repo}"
   } > "${logfile}" 2>&1
 }
@@ -688,6 +703,49 @@ push_submodules() {
   (( failed == 0 ))
 }
 
+# The local tier's background push, started before the submodules and awaited last.
+LOCAL_PID=""
+LOCAL_START=""
+
+#######################################
+# Start the local tier's push in the background: its own remote and key, its
+# own hooks (the pre-push may run exo check --e2e, ~90 s), no token. Nothing to
+# push, or no local tier: one line, no push.
+#######################################
+push_local_begin() {
+  if [[ ! -d "${LDF_GIT_DIR}" ]]; then
+    log::info "no local tier on this machine | hint='new-machine apply local_dotfiles_repo'"
+    return 0
+  fi
+  if ! push_needed local; then
+    log::info "local tier up to date | sha='$(ldf_git rev-parse --short HEAD 2>/dev/null || true)'"
+    return 0
+  fi
+  if [[ "${DRY_RUN}" == true ]]; then
+    dry_run_push local
+    return
+  fi
+  LOCAL_START="${EPOCHREALTIME}"
+  push_repo local &
+  LOCAL_PID=$!
+  log::info "local tier pushing in the background | log='$(log_file local)' note='its pre-push hook may run exo check --e2e'"
+}
+
+#######################################
+# Wait for the local tier's push, if one was started, and report it.
+#######################################
+push_local_wait() {
+  [[ -n "${LOCAL_PID}" ]] || return 0
+  local rc=0
+  wait "${LOCAL_PID}" || rc=$?
+  if (( rc == 0 )); then
+    log::info "pushed | repo='local' took='$(elapsed "${LOCAL_START}")s' log='$(log_file local)'"
+    return 0
+  fi
+  log::err "push failed | repo='local' rc='${rc}' took='$(elapsed "${LOCAL_START}")s' see='dotfiles logs --repo local'"
+  return 1
+}
+
 push_shared() {
   if [[ ! -d "${DF_GIT_DIR}" ]]; then
     log::err "shared repo not cloned | git_dir='${DF_GIT_DIR}' fix='dotfiles init'"
@@ -711,17 +769,32 @@ push_shared() {
   return 1
 }
 
+#######################################
+# The local tier runs in the background while the submodules push, then the
+# shared tier (only if every submodule made it), then the local result.
+#######################################
 cmd_push() {
-  local start="${EPOCHREALTIME}"
+  local start="${EPOCHREALTIME}" failed=false
   check_prerequisites git gh || return 1
-  if [[ "${PUSH_SCOPE}" != shared-only ]]; then
-    if ! push_submodules; then
-      log::err "shared tier not pushed: a submodule push failed | fix='dotfiles logs, fix, dotfiles push'"
-      return 1
-    fi
+  if [[ "${PUSH_SCOPE}" == all || "${PUSH_SCOPE}" == local-only ]]; then
+    push_local_begin || failed=true
   fi
-  if [[ "${PUSH_SCOPE}" != submodules-only ]]; then
-    push_shared || return 1
+  if [[ "${PUSH_SCOPE}" == all || "${PUSH_SCOPE}" == submodules-only ]]; then
+    if push_submodules; then
+      if [[ "${PUSH_SCOPE}" == all ]]; then
+        push_shared || failed=true
+      fi
+    else
+      failed=true
+      log::err "shared tier not pushed: a submodule push failed | fix='dotfiles logs, fix, dotfiles push'"
+    fi
+  elif [[ "${PUSH_SCOPE}" == shared-only ]]; then
+    push_shared || failed=true
+  fi
+  push_local_wait || failed=true
+  if [[ "${failed}" == true ]]; then
+    log::err "push failed | scope='${PUSH_SCOPE}' took='$(elapsed "${start}")s'"
+    return 1
   fi
   log::info "push done | scope='${PUSH_SCOPE}' took='$(elapsed "${start}")s'"
 }
@@ -837,7 +910,7 @@ cmd_logs() {
   local file
   for file in "${files[@]}"; do
     if [[ ! -f "${file}" ]]; then
-      log::err "no such log | file='${file}' valid_repos='shared, $(submodule_paths | tr '\n' ' ')'"
+      log::err "no such log | file='${file}' valid_repos='shared, local, $(submodule_paths | tr '\n' ' ')'"
       return 1
     fi
     print -r -- "${c_bold}=== ${file:t} ($(date -r "${file}" -u +%FT%TZ)) ===${c_rst}"
@@ -874,6 +947,7 @@ main() {
     --timing)           TIMING=true; shift ;;
     --submodules-only)  PUSH_SCOPE=submodules-only; shift ;;
     --shared-only)      PUSH_SCOPE=shared-only; shift ;;
+    --local-only)       PUSH_SCOPE=local-only; shift ;;
     --previous)         LOGS_PREVIOUS=true; shift ;;
     --repo)             LOGS_REPO="${2:?--repo requires a value}"; shift 2 ;;
     -*)                 log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
