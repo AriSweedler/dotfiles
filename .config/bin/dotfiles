@@ -155,17 +155,39 @@ init_clone() {
 }
 
 #######################################
-# A bare clone has no tracking config; `dotfiles pull` needs main to track origin/main.
+# A bare clone has no tracking config: no fetch refspec (so no remote-tracking
+# refs) and no upstream for main. `dotfiles pull` needs the upstream; status
+# needs origin/main to show ahead/behind.
 #######################################
 init_tracking() {
   [[ -d "${DF_GIT_DIR}" ]] || return 0
-  if [[ "$(df_git config branch.main.remote 2>/dev/null || true)" == origin &&
+  local refspec='+refs/heads/*:refs/remotes/origin/*'
+  if [[ "$(df_git config remote.origin.fetch 2>/dev/null || true)" == "${refspec}" &&
+        "$(df_git config branch.main.remote 2>/dev/null || true)" == origin &&
         "$(df_git config branch.main.merge 2>/dev/null || true)" == refs/heads/main ]]; then
     log::info "main tracks origin/main | git_dir='${DF_GIT_DIR}'"
     return 0
   fi
+  run_mut df_git config remote.origin.fetch "${refspec}" || return 1
   run_mut df_git config branch.main.remote origin || return 1
   run_mut df_git config branch.main.merge refs/heads/main
+}
+
+#######################################
+# Create origin/main once (a bare clone has no remote-tracking refs). Runs after
+# the ssh key is loaded: origin may be an ssh URL. Offline or keyless is a
+# warning, not a failure; `dotfiles pull` fills it in later.
+#######################################
+init_fetch() {
+  [[ -d "${DF_GIT_DIR}" ]] || return 0
+  if df_git rev-parse -q --verify refs/remotes/origin/main >/dev/null 2>&1; then
+    log::info "origin/main known | git_dir='${DF_GIT_DIR}'"
+    return 0
+  fi
+  if ! run_mut df_git fetch -q origin; then
+    log::warn "could not fetch origin; ahead/behind unknown until 'dotfiles pull' | url='$(df_git config remote.origin.url 2>/dev/null || true)'"
+  fi
+  return 0
 }
 
 #######################################
@@ -285,6 +307,7 @@ cmd_init() {
   init_submodules || return 1
   init_skills || return 1
   init_ssh_key || return 1
+  init_fetch || return 1
   log::info "init done | next='each submodule's own setup (chrome-exoskeleton: exo deps ci && exo build), or new-machine setup'"
   cmd_status
 }
