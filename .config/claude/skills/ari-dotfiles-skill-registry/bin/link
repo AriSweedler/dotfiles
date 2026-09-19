@@ -89,7 +89,9 @@ main() {
   local skill state tier
   local linked=0 pruned=0 skipped=0
   for skill in "${(@f)$(list_all_skills)}"; do
-    read -r state tier <<< "$(skill_state "${skill}")"
+    skill_state "${skill}" >/dev/null   # leaves '<state> <tier>' in REPLY; no subshell per skill
+    state="${REPLY%% *}"
+    tier="${REPLY#* }"
     case "${state}" in
       missing)
         link_skill "${skill}" "${tier}" "${dry_run}"

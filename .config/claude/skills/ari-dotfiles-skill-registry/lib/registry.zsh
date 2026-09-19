@@ -65,6 +65,27 @@ submodule_skill_roots() {
   return 0
 }
 
+# A tier's roots never change within one run, and the per-skill functions below
+# run once per skill (60+): computed once here, they cost no git spawn or fork.
+typeset -gA _SKILL_ROOTS_BY_TIER
+
+#######################################
+# Set $reply to every directory that may hold the tier's skills: the tier root
+# first, then each submodule's skills/. Forks only on the first call per tier.
+# Arguments:
+#   $1 - tier
+#######################################
+skill_roots_reply() {
+  local tier="${1}"
+  if [[ -z "${_SKILL_ROOTS_BY_TIER[${tier}]:-}" ]]; then
+    local -a roots=("${TIER_ROOTS[${tier}]}")
+    roots+=("${(@f)$(submodule_skill_roots "${tier}")}")
+    roots=("${(@)roots:#}")
+    _SKILL_ROOTS_BY_TIER[${tier}]="${(F)roots}"
+  fi
+  reply=("${(@f)_SKILL_ROOTS_BY_TIER[${tier}]}")
+}
+
 #######################################
 # Print every directory that may hold the tier's skills, one per line: the tier
 # root first, then each submodule's skills/.
@@ -72,9 +93,8 @@ submodule_skill_roots() {
 #   $1 - tier
 #######################################
 skill_roots() {
-  local tier="${1}"
-  tier_root "${tier}"
-  submodule_skill_roots "${tier}"
+  skill_roots_reply "${1}"
+  print -rl -- "${reply[@]}"
 }
 
 #######################################
@@ -87,7 +107,8 @@ skill_roots() {
 #######################################
 skill_holder_root() {
   local tier="${1}" skill="${2}" root
-  for root in "${(@f)$(skill_roots "${tier}")}"; do
+  skill_roots_reply "${tier}"
+  for root in "${reply[@]}"; do
     if [[ -d "${root}/${skill}" && ! -L "${root}/${skill}" ]]; then
       echo "${root}"
       return 0
@@ -186,17 +207,36 @@ skill_ignore_reason() {
 #   $1 - skill name
 #######################################
 tiers_holding() {
-  local skill="${1}" tier root
-  for tier in "${TIERS[@]}"; do
-    for root in "${(@f)$(skill_roots "${tier}")}"; do
-      [[ -d "${root}/${skill}" && ! -L "${root}/${skill}" ]] && echo "${tier}"
-    done
-  done
+  tiers_holding_reply "${1}"
+  if (( ${#reply} > 0 )); then
+    print -rl -- "${reply[@]}"
+  fi
   return 0
 }
 
 #######################################
-# Classify one skill. Prints `<state> <tier>`; tier is `-` when none applies.
+# tiers_holding into $reply, without a subshell.
+# Arguments:
+#   $1 - skill name
+#######################################
+tiers_holding_reply() {
+  local skill="${1}" tier root
+  local -a roots found=()
+  for tier in "${TIERS[@]}"; do
+    skill_roots_reply "${tier}"
+    roots=("${reply[@]}")
+    for root in "${roots[@]}"; do
+      [[ -d "${root}/${skill}" && ! -L "${root}/${skill}" ]] && found+=("${tier}")
+    done
+  done
+  reply=("${found[@]}")
+  return 0
+}
+
+#######################################
+# Classify one skill. Prints `<state> <tier>` and leaves the same in $REPLY, so
+# a caller looping over every skill can read it without a subshell; tier is `-`
+# when none applies.
 #   linked    symlink into a tier root                     (healthy)
 #   missing   tier holds it, no symlink in SKILLS_DIR      (fix: link)
 #   dangling  symlink whose target is gone                 (fix: link --prune)
@@ -211,53 +251,68 @@ tiers_holding() {
 #######################################
 skill_state() {
   local skill="${1}"
-  local link="${SKILLS_DIR}/${skill}"
-  local -a holders
-  holders=("${(@f)$(tiers_holding "${skill}")}")
-  holders=("${(@)holders:#}")
+  tiers_holding_reply "${skill}"
+  skill_state_of "${skill}" "${SKILLS_DIR}/${skill}" "${reply[@]}"
+  print -r -- "${REPLY}"
+}
+
+#######################################
+# skill_state's classification, given what it gathered, into $REPLY. No
+# subshell on any path a linked skill takes.
+# Arguments:
+#   $1 - skill name
+#   $2 - the symlink path in SKILLS_DIR
+#   $@ - tiers holding a real directory for the skill
+#######################################
+skill_state_of() {
+  local skill="${1}" link="${2}"; shift 2
+  local -a holders=("${@}")
 
   if (( ${#holders} > 1 )); then
-    echo "conflict ${(j:,:)holders}"
+    REPLY="conflict ${(j:,:)holders}"
     return 0
   fi
 
   if [[ -L "${link}" ]]; then
     if [[ ! -e "${link}" ]]; then
-      echo "dangling -"
+      REPLY="dangling -"
       return 0
     fi
     local target tier root
+    local -a roots
     target="${link:A}"
     for tier in "${TIERS[@]}"; do
-      for root in "${(@f)$(skill_roots "${tier}")}"; do
+      skill_roots_reply "${tier}"
+      roots=("${reply[@]}")
+      for root in "${roots[@]}"; do
         if [[ "${target}" == "${root:A}/${skill}" ]]; then
-          echo "linked ${tier}"
+          REPLY="linked ${tier}"
           return 0
         fi
       done
     done
-    echo "foreign -"
+    REPLY="foreign -"
     return 0
   fi
 
   if [[ -d "${link}" ]]; then
     if (( ${#holders} == 1 )); then
-      echo "shadowed ${holders[1]}"
+      REPLY="shadowed ${holders[1]}"
       return 0
     fi
     if [[ -n "$(skill_ignore_reason "${skill}")" ]]; then
-      echo "ignored -"
+      REPLY="ignored -"
       return 0
     fi
-    echo "unlinked -"
+    REPLY="unlinked -"
     return 0
   fi
 
   if (( ${#holders} == 1 )); then
-    echo "missing ${holders[1]}"
+    REPLY="missing ${holders[1]}"
     return 0
   fi
-  echo "absent -"
+  REPLY="absent -"
 }
 
 #######################################
@@ -269,7 +324,8 @@ list_all_skills() {
   local root entry tier
   local -a roots=("${SKILLS_DIR}")
   for tier in "${TIERS[@]}"; do
-    roots+=("${(@f)$(skill_roots "${tier}")}")
+    skill_roots_reply "${tier}"
+    roots+=("${reply[@]}")
   done
   {
     for root in "${roots[@]}"; do
@@ -280,3 +336,15 @@ list_all_skills() {
     done
   } | LC_ALL=C sort -u
 }
+
+#######################################
+# Fill the roots cache in the sourcing process, so every $(...) subshell the
+# scripts open inherits it instead of re-reading .gitmodules.
+#######################################
+warm_skill_roots() {
+  local tier
+  for tier in "${TIERS[@]}"; do
+    skill_roots_reply "${tier}"
+  done
+}
+warm_skill_roots
