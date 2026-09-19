@@ -1,24 +1,15 @@
 #!/usr/bin/env zsh
-# dotfiles — the harness for Ari's two-tier dotfiles (see /ari-dotfiles).
-#   init    make this machine's dotfiles whole: shared repo cloned and checked
-#           out, hooks wired, submodules checked out, skills linked, the GitHub
-#           ssh key loaded (passphrase from 1Password). new-machine relies on it.
-#   pull    fast-forward the shared tier, then init
-#   push    push every submodule with commits origin lacks (in parallel, each
-#           to its own log), then the shared tier, all as the personal GitHub
-#           account by token; the local tier alongside, to its own remote with
-#           its own key; repos already at origin are skipped silently; a
-#           submodule failure blocks the shared push
-#   status  both tiers, the submodules, and the last push per repo
-#   logs    the push logs, for diagnosing a failed push
-# Run: dotfiles <command> [flags]; dotfiles --help
+# dotfiles — the harness for Ari's two-tier dotfiles (see /ari-dotfiles): init, pull,
+# push, status, logs. `dotfiles --help` says what each does; new-machine relies on init.
+#
+# Every repo — 'shared', 'local', or a submodule path relative to $HOME — goes through
+# the same functions; the TIER_* tables hold what differs between the two tiers.
 
 set -euo pipefail
 zmodload zsh/datetime   # EPOCHREALTIME / EPOCHSECONDS: step timing, identity cache age
 
 readonly SCRIPT_DIR="${0:A:h}"
 readonly SKILLS_DIR="${HOME}/.claude/skills"
-
 LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
 # Bootstrap: before `dotfiles init` has linked the skills the farm is empty, and the
 # only reachable copy is the shared tier's own.
@@ -31,54 +22,44 @@ fi
 source "${LIB_LOGGING}"
 source "${HOME}/.config/zsh/plugins/log_rotate.zsh"
 
-# --- Environment variables ---
+# --- Environment variables (the help text documents each) ---
 
-# The shared repo, cloned when missing. https so a fresh machine needs no key.
-readonly DOTFILES_REMOTE="${DOTFILES_REMOTE:-https://github.com/AriSweedler/dotfiles.git}"
-# The GitHub ssh key to load into the agent, described by a 1Password item that
-# holds its "Absolute path" and "password" fields. Set by the local tier
-# (~/.local/share/zsh/plugins/dotfiles.zsh); unset means "no key to load".
+readonly DOTFILES_REMOTE="${DOTFILES_REMOTE:-https://github.com/AriSweedler/dotfiles.git}"   # https: a fresh machine needs no key
+# The ssh key's 1Password item and vault come from the local tier (~/.local/share/zsh/plugins/dotfiles.zsh); unset = no key.
 readonly DOTFILES_SSH_KEY_OP_ITEM="${DOTFILES_SSH_KEY_OP_ITEM:-}"
 readonly DOTFILES_SSH_KEY_OP_VAULT="${DOTFILES_SSH_KEY_OP_VAULT:-}"
-# The key file itself, so "already in the agent" is answered without a
-# 1Password call (about a second); unset means read the item's "Absolute path".
-readonly DOTFILES_SSH_KEY_PATH="${DOTFILES_SSH_KEY_PATH:-}"
-# The GitHub account every push authenticates as, through its `gh auth token`
-# and a one-shot credential helper: the same account whatever gh account is
-# active or whichever keys the ssh agent holds, nothing switched, nothing to
-# restore. Needs `env -u GITHUB_TOKEN gh auth login` (HTTPS) once per machine.
-readonly DOTFILES_GITHUB_LOGIN="${DOTFILES_GITHUB_LOGIN:-AriSweedler}"
-# A step slower than this many seconds gets a 'slow step' line; --timing logs every step.
+readonly DOTFILES_SSH_KEY_PATH="${DOTFILES_SSH_KEY_PATH:-}"   # known = "already in the agent" costs no 1Password call (~1 s)
+readonly DOTFILES_GITHUB_LOGIN="${DOTFILES_GITHUB_LOGIN:-AriSweedler}"   # every personal push authenticates as this, by its gh token
 readonly DOTFILES_SLOW_STEP="${DOTFILES_SLOW_STEP:-0.5}"
 
 # --- Constants ---
 
-readonly DF_GIT_DIR="${HOME}/dotfiles.git"
-readonly DF_WORK_TREE="${HOME}"
-readonly DF_HOOKS="${HOME}/.config/git/dotfiles-hooks"
-readonly LDF_GIT_DIR="${HOME}/.local/local-dotfiles.git"
-readonly LDF_WORK_TREE="${HOME}/.local"
-readonly LDF_HOOKS="${HOME}/.config/git/local-dotfiles-hooks"
+# The tiers, by repo name. A submodule needs no row: its git is its checkout, ~/<path>.
+readonly -A TIER_GIT_DIR=(shared "${HOME}/dotfiles.git" local "${HOME}/.local/local-dotfiles.git")
+readonly -A TIER_WORK_TREE=(shared "${HOME}" local "${HOME}/.local")
+readonly -A TIER_HOOKS=(shared "${HOME}/.config/git/dotfiles-hooks" local "${HOME}/.config/git/local-dotfiles-hooks")
+readonly -A TIER_ALIAS=(shared df local ldf)   # the git alias a human types
 readonly GITMODULES="${HOME}/.gitmodules"
 readonly STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/dotfiles"
 readonly LOG_DIR="${STATE_DIR}/push"
 readonly KEEP_BACKUPS=1
-# Whose token this is, verified once by `gh api user` (a network round trip) and
-# remembered by a hash of the token: re-verified when the token changes or after
-# this many seconds.
-readonly IDENTITY_CACHE="${STATE_DIR}/identity"
+readonly IDENTITY_CACHE="${STATE_DIR}/identity"   # '<sha256 of token> <login> <epoch>': whose token, verified when
 readonly IDENTITY_TTL_SECONDS=$(( 7 * 24 * 3600 ))
 readonly REGISTRY_LINK="${HOME}/.config/claude/skills/ari-dotfiles-skill-registry/bin/link"
 readonly VALID_COMMANDS=(init pull push status logs)
+readonly PUSH_PARTS=(local submodules shared)   # in run order
+# Submodule paths declared in ~/.gitmodules, relative to $HOME; empty when none.
+SUBMODULES=("${(@f)$(git config -f "${GITMODULES}" --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}' || true)}")
+readonly -a SUBMODULES=("${(@)SUBMODULES:#}")
 
 # Flags, set by main.
 DRY_RUN=false
 TIMING=false
-PUSH_SCOPE=all
+PUSH_SCOPE=("${PUSH_PARTS[@]}")   # narrowed by --<part>, then --no-<part>
 LOGS_PREVIOUS=false
 LOGS_REPO=""
-# The login's gh token, set by cmd_push; inherited by the background pushes.
-TOKEN=""
+TOKEN=""              # the login's gh token, loaded before the first personal push; inherited by the background pushes
+typeset -A PIDS STARTS   # background pushes in flight, by repo
 
 # --- Help ---
 
@@ -90,7 +71,7 @@ ${c_bold}Usage:${c_rst}
   dotfiles init   [--dry-run]                 shared repo cloned + checked out, hooks wired,
                                               submodules checked out, skills linked, ssh key loaded
   dotfiles pull   [--dry-run]                 fast-forward the shared tier, then init
-  dotfiles push   [--submodules-only|--shared-only|--local-only] [--dry-run]
+  dotfiles push   [--submodules|--shared|--local|--no-submodules|--no-shared|--no-local] [--dry-run]
                                               push every submodule with something to push, in
                                               parallel (one log each), then the shared tier, both as
                                               the personal account; the local tier alongside, to its
@@ -103,9 +84,12 @@ ${c_bold}Usage:${c_rst}
 ${c_bold}Flags:${c_rst}
   --dry-run          Print what would run; change nothing
   --timing           Log every step's duration (steps over DOTFILES_SLOW_STEP are logged regardless)
-  --submodules-only  push: only the submodules
-  --shared-only      push: only the shared tier
-  --local-only       push: only the local tier
+  --submodules       push: the submodules (no selecting flag = all three parts)
+  --shared           push: the shared tier
+  --local            push: the local tier
+  --no-submodules    push: leave the submodules out
+  --no-shared        push: leave the shared tier out
+  --no-local         push: leave the local tier out
   --repo NAME        logs: one repo instead of all
   --previous         logs: the run before the last one (.log.bak.1)
   -h, --help         This help
@@ -125,43 +109,34 @@ Human-only: Claude Code is denied 'dotfiles push'.
 EOF
 }
 
-# --- Git per tier ---
-
-# -C <worktree>: with an explicit work tree, ls-files/status/submodule still scope
-# themselves to the cwd, so a call from anywhere else would see a slice or nothing.
-df_git()  { git -C "${DF_WORK_TREE}"  --git-dir="${DF_GIT_DIR}"  --work-tree="${DF_WORK_TREE}"  "${@}"; }
-ldf_git() { git -C "${LDF_WORK_TREE}" --git-dir="${LDF_GIT_DIR}" --work-tree="${LDF_WORK_TREE}" "${@}"; }
+# --- Repos and helpers ---
 
 #######################################
-# Run a state-changing command, or print it under --dry-run.
-# `runner=run_cmd_cap run_mut …` also logs the command's stdout, one line each.
+# git for a repo. -C <worktree> as well as --git-dir/--work-tree: ls-files, status and
+# submodule scope themselves to the cwd otherwise.
+# Arguments:
+#   $1 - repo: 'shared', 'local', or a submodule path relative to $HOME
+#   $@ - git arguments
 #######################################
+repo_git() {
+  local repo="${1}"; shift
+  if [[ -z "${TIER_GIT_DIR[${repo}]:-}" ]]; then git -C "${HOME}/${repo}" "${@}"; return; fi
+  git -C "${TIER_WORK_TREE[${repo}]}" --git-dir="${TIER_GIT_DIR[${repo}]}" --work-tree="${TIER_WORK_TREE[${repo}]}" "${@}"
+}
+# True (0) when the repo exists here: the tier's bare repo, or the submodule's checkout (its .git is a file).
+repo_present() { [[ -e "${TIER_GIT_DIR[${1}]:-${HOME}/${1}/.git}" ]]; }
+# A repo's push log: shared.log, local.log, or the path minus its leading dot, slashes as dashes.
+log_file() { print -r -- "${LOG_DIR}/${${1#.}//\//-}.log"; }
+# Run a state-changing command, or print it under --dry-run; `runner=run_cmd_cap run_mut …` also logs its stdout.
 run_mut() {
-  if [[ "${DRY_RUN}" == true ]]; then
-    log::info "dry-run, would run | cmd='${*}'"
-    return 0
-  fi
+  if [[ "${DRY_RUN}" == true ]]; then log::info "dry-run, would run | cmd='${*}'"; return 0; fi
   "${runner:-run_cmd}" "${@}"
 }
-
-# --- Timing ---
-
-#######################################
 # Seconds since a start taken from EPOCHREALTIME, two decimals.
-# Arguments:
-#   $1 - start
-#######################################
-elapsed() {
-  printf '%.2f' $(( EPOCHREALTIME - ${1} ))
-}
+elapsed() { printf '%.2f' $(( EPOCHREALTIME - ${1} )); }
 
-#######################################
-# Run a step and time it. Every step is logged under --timing; otherwise only
-# one slower than DOTFILES_SLOW_STEP, so a slow run names its culprit.
-# Arguments:
-#   $1 - label
-#   $@ - command
-#######################################
+# Run a step (label, then the command) and time it: every step under --timing, otherwise
+# only one slower than DOTFILES_SLOW_STEP, so a slow run names its culprit.
 step() {
   local label="${1}"; shift
   local start="${EPOCHREALTIME}" rc=0 took
@@ -175,195 +150,105 @@ step() {
   return "${rc}"
 }
 
-# --- Submodules ---
-
-#######################################
-# Submodule paths declared in ~/.gitmodules, one per line, relative to $HOME.
-#######################################
-submodule_paths() {
-  [[ -f "${GITMODULES}" ]] || return 0
-  git config -f "${GITMODULES}" --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}'
+check_prerequisites() {
+  local -a missing=()
+  local cmd
+  for cmd in "${@}"; do command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}"); done
+  if (( ${#missing} > 0 )); then log::err "Missing required commands | missing='${(j:, :)missing}'"; return 1; fi
 }
 
-#######################################
-# The log file for a repo: 'shared' or a submodule path (dot and slashes dropped).
-# Arguments:
-#   $1 - 'shared' or a submodule path relative to $HOME
-#######################################
-log_file() {
-  local repo="${1#.}"
-  print -r -- "${LOG_DIR}/${repo//\//-}.log"
-}
+# --- init: every step idempotent; a shared repo still missing (a dry-run clone) skips its steps ---
 
-# --- init ---
-
-#######################################
-# Clone the shared bare repo when this machine has none.
-#######################################
 init_clone() {
-  if [[ -d "${DF_GIT_DIR}" ]]; then
-    log::info "shared repo present | git_dir='${DF_GIT_DIR}'"
-    return 0
-  fi
-  run_mut git clone --bare "${DOTFILES_REMOTE}" "${DF_GIT_DIR}"
+  if repo_present shared; then log::info "shared repo present | git_dir='${TIER_GIT_DIR[shared]}'"; return 0; fi
+  run_mut git clone --bare "${DOTFILES_REMOTE}" "${TIER_GIT_DIR[shared]}"
 }
 
 #######################################
-# A bare clone has no tracking config: no fetch refspec (so no remote-tracking
-# refs) and no upstream for main. `dotfiles pull` needs the upstream; status
-# needs origin/main to show ahead/behind.
+# A bare clone has no tracking config: no fetch refspec (so no remote-tracking refs) and no
+# upstream for main. pull needs the upstream; status needs origin/main for ahead/behind.
+# Each key is set only when it differs.
 #######################################
 init_tracking() {
-  [[ -d "${DF_GIT_DIR}" ]] || return 0
-  local refspec='+refs/heads/*:refs/remotes/origin/*'
-  if [[ "$(df_git config remote.origin.fetch 2>/dev/null || true)" == "${refspec}" &&
-        "$(df_git config branch.main.remote 2>/dev/null || true)" == origin &&
-        "$(df_git config branch.main.merge 2>/dev/null || true)" == refs/heads/main ]]; then
-    log::info "main tracks origin/main | git_dir='${DF_GIT_DIR}'"
-    return 0
-  fi
-  run_mut df_git config remote.origin.fetch "${refspec}" || return 1
-  run_mut df_git config branch.main.remote origin || return 1
-  run_mut df_git config branch.main.merge refs/heads/main
+  repo_present shared || return 0
+  local kv changed=false
+  for kv in 'remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*' 'branch.main.remote=origin' 'branch.main.merge=refs/heads/main'; do
+    [[ "$(repo_git shared config "${kv%%=*}" 2>/dev/null || true)" == "${kv#*=}" ]] && continue
+    run_mut repo_git shared config "${kv%%=*}" "${kv#*=}" || return 1
+    changed=true
+  done
+  [[ "${changed}" == true ]] || log::info "main tracks origin/main | git_dir='${TIER_GIT_DIR[shared]}'"
 }
 
-#######################################
-# Create origin/main once (a bare clone has no remote-tracking refs). Runs after
-# the ssh key is loaded: origin may be an ssh URL. Offline or keyless is a
-# warning, not a failure; `dotfiles pull` fills it in later.
-#######################################
-init_fetch() {
-  [[ -d "${DF_GIT_DIR}" ]] || return 0
-  if df_git rev-parse -q --verify refs/remotes/origin/main >/dev/null 2>&1; then
-    log::info "origin/main known | git_dir='${DF_GIT_DIR}'"
-    return 0
-  fi
-  if ! run_mut df_git fetch -q origin; then
-    log::warn "could not fetch origin; ahead/behind unknown until 'dotfiles pull' | url='$(df_git config remote.origin.url 2>/dev/null || true)'"
-  fi
-  return 0
-}
-
-#######################################
-# Check the shared repo out into $HOME when nothing is checked out yet.
-#######################################
+# Check the shared repo out into $HOME when nothing is checked out yet (one index lookup: this script is tracked).
 init_checkout() {
-  [[ -d "${DF_GIT_DIR}" ]] || return 0
-  # One index lookup, not a listing of the whole worktree: this script is tracked.
-  if [[ -n "$(df_git ls-files -- .config/bin/dotfiles 2>/dev/null)" ]]; then
-    log::info "shared tier checked out | work_tree='${DF_WORK_TREE}'"
-    return 0
+  repo_present shared || return 0
+  if [[ -n "$(repo_git shared ls-files -- .config/bin/dotfiles 2>/dev/null)" ]]; then
+    log::info "shared tier checked out | work_tree='${TIER_WORK_TREE[shared]}'"; return 0
   fi
-  if ! run_mut df_git checkout; then
-    log::err "checkout failed; move the listed files aside and re-run | work_tree='${DF_WORK_TREE}'"
-    return 1
+  if ! run_mut repo_git shared checkout; then
+    log::err "checkout failed; move the listed files aside and re-run | work_tree='${TIER_WORK_TREE[shared]}'"; return 1
   fi
 }
 
-#######################################
 # Point a tier's core.hooksPath at its versioned hooks dir, once.
-# Arguments:
-#   $1 - git function (df_git | ldf_git)
-#   $2 - hooks dir
-#######################################
 init_hooks() {
-  local git_fn="${1}" hooks_dir="${2}" current
-  current="$("${git_fn}" config --local core.hooksPath 2>/dev/null || true)"
-  if [[ "${current}" == "${hooks_dir}" ]]; then
-    log::info "hooks wired | tier='${git_fn%_git}' hooks_dir='${hooks_dir}'"
-    return 0
+  local repo="${1}" hooks_dir="${TIER_HOOKS[${1}]}"
+  if [[ "$(repo_git "${repo}" config --local core.hooksPath 2>/dev/null || true)" == "${hooks_dir}" ]]; then
+    log::info "hooks wired | tier='${TIER_ALIAS[${repo}]}' hooks_dir='${hooks_dir}'"; return 0
   fi
-  run_mut "${git_fn}" config --local core.hooksPath "${hooks_dir}"
+  run_mut repo_git "${repo}" config --local core.hooksPath "${hooks_dir}"
 }
 
 #######################################
-# Check out the submodules that were never initialized. An initialized one is
-# left alone: `submodule update` would detach it onto the pointer, and a
-# checkout ahead of the pointer is a commit awaiting its bump, not drift to
-# undo. `dotfiles pull` moves pointers; `dotfiles status` shows the drift.
+# Check out the submodules never initialized here. An initialized one is left alone:
+# `submodule update` would detach it onto the pointer, and a checkout ahead of the pointer
+# is a commit awaiting its bump, not drift to undo (pull moves pointers; status shows drift).
 #######################################
 init_submodules() {
-  [[ -f "${GITMODULES}" ]] || return 0
-  local sub_path
-  local -a paths missing=()
-  paths=("${(@f)$(submodule_paths)}")
-  paths=("${(@)paths:#}")
-  for sub_path in "${paths[@]}"; do
-    if [[ ! -e "${HOME}/${sub_path}/.git" ]]; then
-      missing+=("${sub_path}")
-    fi
-  done
-  if (( ${#missing} == 0 )); then
-    log::info "submodules checked out | count='${#paths}'"
-    return 0
-  fi
+  local repo
+  local -a missing=()
+  for repo in "${SUBMODULES[@]}"; do repo_present "${repo}" || missing+=("${repo}"); done
+  if (( ${#missing} == 0 )); then log::info "submodules checked out | count='${#SUBMODULES}'"; return 0; fi
   # git submodule refuses to run outside the worktree.
-  ( cd "${DF_WORK_TREE}" && run_mut df_git submodule update --init -- "${missing[@]}" )
+  ( cd "${TIER_WORK_TREE[shared]}" && run_mut repo_git shared submodule update --init -- "${missing[@]}" )
 }
 
+# The registry prints its linked/pruned/skipped summary on stdout; log it.
 init_skills() {
-  if [[ ! -r "${REGISTRY_LINK}" ]]; then
-    log::warn "skill registry not found; skills not linked | path='${REGISTRY_LINK}'"
-    return 0
-  fi
-  # The registry prints its linked/pruned/skipped summary on stdout; log it.
+  if [[ ! -r "${REGISTRY_LINK}" ]]; then log::warn "skill registry not found; skills not linked | path='${REGISTRY_LINK}'"; return 0; fi
   runner=run_cmd_cap run_mut zsh "${REGISTRY_LINK}" --prune
 }
 
-#######################################
 # True (0) when the agent already holds the key at the given path.
-# Arguments:
-#   $1 - private key path
-#######################################
 ssh_key_loaded() {
-  local key_path="${1}" fingerprint
-  fingerprint="$(ssh-keygen -lf "${key_path}" 2>/dev/null | awk '{print $2}')" || return 1
-  [[ -n "${fingerprint}" ]] || return 1
-  ssh-add -l 2>/dev/null | awk '{print $2}' | grep -qxF "${fingerprint}"
+  local fingerprint
+  fingerprint="$(ssh-keygen -lf "${1}" 2>/dev/null | awk '{print $2}')" || return 1
+  [[ -n "${fingerprint}" ]] && ssh-add -l 2>/dev/null | awk '{print $2}' | grep -qxF "${fingerprint}"
 }
 
 #######################################
-# Load the GitHub ssh key into the agent, its path and passphrase read from the
-# 1Password item the local tier names. The passphrase goes from op straight to
-# ssh-add through an askpass helper: never the clipboard, never argv.
+# Load the GitHub ssh key into the agent, its path and passphrase read from the 1Password
+# item the local tier names. The passphrase goes from op straight to ssh-add through an
+# askpass helper: never the clipboard, never argv.
 #######################################
 init_ssh_key() {
-  if [[ -z "${DOTFILES_SSH_KEY_OP_ITEM}" ]]; then
-    log::info "no ssh key configured; skipping | hint='DOTFILES_SSH_KEY_OP_ITEM in the local tier'"
-    return 0
-  fi
+  if [[ -z "${DOTFILES_SSH_KEY_OP_ITEM}" ]]; then log::info "no ssh key configured; skipping | hint='DOTFILES_SSH_KEY_OP_ITEM in the local tier'"; return 0; fi
+  local key_path="${DOTFILES_SSH_KEY_PATH/#\~/${HOME}}" askpass
   local -a vault_flag=()
   [[ -n "${DOTFILES_SSH_KEY_OP_VAULT}" ]] && vault_flag=(--vault "${DOTFILES_SSH_KEY_OP_VAULT}")
-  local key_path="${DOTFILES_SSH_KEY_PATH/#\~/${HOME}}"
   # The common case, settled without 1Password: path known, key already loaded.
-  if [[ -n "${key_path}" && -f "${key_path}" ]] && ssh_key_loaded "${key_path}"; then
-    log::info "ssh key already in the agent | path='${key_path}'"
-    return 0
-  fi
-  if ! command -v op >/dev/null 2>&1; then
-    log::warn "1Password CLI missing; ssh key not loaded | fix='brew install 1password-cli'"
-    return 0
-  fi
+  if [[ -n "${key_path}" ]] && ssh_key_loaded "${key_path}"; then log::info "ssh key already in the agent | path='${key_path}'"; return 0; fi
+  if ! command -v op >/dev/null 2>&1; then log::warn "1Password CLI missing; ssh key not loaded | fix='brew install 1password-cli'"; return 0; fi
   if [[ -z "${key_path}" ]]; then
-    if ! key_path="$(op item get "${DOTFILES_SSH_KEY_OP_ITEM}" ${vault_flag[@]+"${vault_flag[@]}"} --field "Absolute path" 2>/dev/null)"; then
-      log::err "1Password item not readable | item='${DOTFILES_SSH_KEY_OP_ITEM}' vault='${DOTFILES_SSH_KEY_OP_VAULT}' fix='op signin'"
-      return 1
+    if ! key_path="$(op item get "${DOTFILES_SSH_KEY_OP_ITEM}" "${vault_flag[@]}" --field "Absolute path" 2>/dev/null)"; then
+      log::err "1Password item not readable | item='${DOTFILES_SSH_KEY_OP_ITEM}' vault='${DOTFILES_SSH_KEY_OP_VAULT}' fix='op signin'"; return 1
     fi
     key_path="${key_path/#\~/${HOME}}"
   fi
-  if [[ ! -f "${key_path}" ]]; then
-    log::err "ssh key file missing | path='${key_path}' item='${DOTFILES_SSH_KEY_OP_ITEM}'"
-    return 1
-  fi
-  if ssh_key_loaded "${key_path}"; then
-    log::info "ssh key already in the agent | path='${key_path}'"
-    return 0
-  fi
-  if [[ "${DRY_RUN}" == true ]]; then
-    log::info "dry-run, would ssh-add with the passphrase from 1Password | path='${key_path}' item='${DOTFILES_SSH_KEY_OP_ITEM}'"
-    return 0
-  fi
-  local askpass
+  if [[ ! -f "${key_path}" ]]; then log::err "ssh key file missing | path='${key_path}' item='${DOTFILES_SSH_KEY_OP_ITEM}'"; return 1; fi
+  if ssh_key_loaded "${key_path}"; then log::info "ssh key already in the agent | path='${key_path}'"; return 0; fi
+  if [[ "${DRY_RUN}" == true ]]; then log::info "dry-run, would ssh-add with the passphrase from 1Password | path='${key_path}' item='${DOTFILES_SSH_KEY_OP_ITEM}'"; return 0; fi
   askpass="$(mktemp)"
   trap 'rm -f "${askpass}"' EXIT
   {
@@ -375,15 +260,24 @@ init_ssh_key() {
   log::info "ssh key loaded | path='${key_path}'"
 }
 
+# Create origin/main once (a bare clone has no remote-tracking refs). Runs after the ssh key:
+# origin may be an ssh URL. Offline or keyless is a warning, not a failure; pull fills it in.
+init_fetch() {
+  repo_present shared || return 0
+  if repo_git shared rev-parse -q --verify refs/remotes/origin/main >/dev/null 2>&1; then log::info "origin/main known | git_dir='${TIER_GIT_DIR[shared]}'"; return 0; fi
+  run_mut repo_git shared fetch -q origin && return 0
+  log::warn "could not fetch origin; ahead/behind unknown until 'dotfiles pull' | url='$(repo_git shared config remote.origin.url 2>/dev/null || true)'"
+}
+
 cmd_init() {
   local start="${EPOCHREALTIME}"
   check_prerequisites git || return 1
   step clone init_clone || return 1
   step tracking init_tracking || return 1
   step checkout init_checkout || return 1
-  step "hooks df" init_hooks df_git "${DF_HOOKS}" || return 1
-  if [[ -d "${LDF_GIT_DIR}" ]]; then
-    step "hooks ldf" init_hooks ldf_git "${LDF_HOOKS}" || return 1
+  step "hooks df" init_hooks shared || return 1
+  if repo_present local; then
+    step "hooks ldf" init_hooks local || return 1
   else
     log::info "no local tier on this machine | hint='new-machine apply local_dotfiles_repo'"
   fi
@@ -398,7 +292,7 @@ cmd_init() {
 cmd_pull() {
   local start="${EPOCHREALTIME}"
   check_prerequisites git || return 1
-  step pull run_mut df_git pull --ff-only || return 1
+  step pull run_mut repo_git shared pull --ff-only || return 1
   cmd_init || return 1
   log::info "pull done | took='$(elapsed "${start}")s'"
 }
@@ -406,182 +300,75 @@ cmd_pull() {
 # --- push ---
 
 #######################################
-# Rewrite a GitHub remote URL to https so the token, not the ssh agent, authenticates.
-# Arguments:
-#   $1 - remote URL
-# Outputs:
-#   the https URL; returns 1 for a URL that is not on github.com
-#######################################
-to_https_url() {
-  local url="${1}"
-  case "${url}" in
-    https://github.com/*)   print -r -- "${url}" ;;
-    git@github.com:*)       print -r -- "https://github.com/${url#git@github.com:}" ;;
-    ssh://git@github.com/*) print -r -- "https://github.com/${url#ssh://git@github.com/}" ;;
-    *) return 1 ;;
-  esac
-}
-
-#######################################
-# A fingerprint of TOKEN: what the identity cache stores, never the token.
-#######################################
-token_fingerprint() {
-  print -rn -- "${TOKEN}" | shasum -a 256 | awk '{print $1}'
-}
-
-#######################################
-# True (0) when the identity cache vouches for TOKEN: same fingerprint, same
-# login, verified within IDENTITY_TTL_SECONDS.
-#######################################
-identity_cached() {
-  [[ -f "${IDENTITY_CACHE}" ]] || return 1
-  local fingerprint login verified_at
-  read -r fingerprint login verified_at < "${IDENTITY_CACHE}" || return 1
-  [[ "${verified_at}" == <-> ]] || return 1
-  [[ "${fingerprint}" == "$(token_fingerprint)" && "${login}" == "${DOTFILES_GITHUB_LOGIN}" ]] || return 1
-  (( EPOCHSECONDS - verified_at < IDENTITY_TTL_SECONDS ))
-}
-
-identity_remember() {
-  mkdir -p "${STATE_DIR}"
-  ( umask 077; print -r -- "$(token_fingerprint) ${DOTFILES_GITHUB_LOGIN} ${EPOCHSECONDS}" > "${IDENTITY_CACHE}" )
-}
-
-#######################################
-# Get the login's token from gh and check whose it is. Sets TOKEN. The check is
-# a network round trip, so the identity cache answers it for a known token.
-# Globals:
-#   DOTFILES_GITHUB_LOGIN, TOKEN
+# Get the login's token from gh and check whose it is. Sets TOKEN. The check is a network
+# round trip, so the identity cache (same token fingerprint, same login, younger than
+# IDENTITY_TTL_SECONDS) answers it for a known token. Runs before the first personal push only.
 #######################################
 load_token() {
   if ! TOKEN="$(env -u GITHUB_TOKEN gh auth token -u "${DOTFILES_GITHUB_LOGIN}" 2>/dev/null)" || [[ -z "${TOKEN}" ]]; then
-    log::err "Personal account is not logged into gh | login='${DOTFILES_GITHUB_LOGIN}' fix='env -u GITHUB_TOKEN gh auth login   (HTTPS; pick ${DOTFILES_GITHUB_LOGIN})'"
-    return 1
+    log::err "Personal account is not logged into gh | login='${DOTFILES_GITHUB_LOGIN}' fix='env -u GITHUB_TOKEN gh auth login   (HTTPS; pick ${DOTFILES_GITHUB_LOGIN})'"; return 1
   fi
-  if identity_cached; then
-    log::info "pushing as | login='${DOTFILES_GITHUB_LOGIN}' identity='cached'"
-    return 0
+  local fingerprint cached_fingerprint="" cached_login="" verified_at=0 who
+  fingerprint="$(print -rn -- "${TOKEN}" | shasum -a 256 | awk '{print $1}')"
+  if [[ -f "${IDENTITY_CACHE}" ]]; then read -r cached_fingerprint cached_login verified_at < "${IDENTITY_CACHE}" || true; fi
+  if [[ "${cached_fingerprint}" == "${fingerprint}" && "${cached_login}" == "${DOTFILES_GITHUB_LOGIN}" && "${verified_at}" == <-> ]] &&
+     (( EPOCHSECONDS - verified_at < IDENTITY_TTL_SECONDS )); then
+    log::info "pushing as | login='${DOTFILES_GITHUB_LOGIN}' identity='cached'"; return 0
   fi
-  local who
   who="$(GH_TOKEN="${TOKEN}" gh api user -q .login 2>/dev/null || true)"
-  if [[ "${who}" != "${DOTFILES_GITHUB_LOGIN}" ]]; then
-    log::err "Token identity mismatch | expected='${DOTFILES_GITHUB_LOGIN}' got='${who:-<none>}'"
-    return 1
-  fi
-  identity_remember
+  if [[ "${who}" != "${DOTFILES_GITHUB_LOGIN}" ]]; then log::err "Token identity mismatch | expected='${DOTFILES_GITHUB_LOGIN}' got='${who:-<none>}'"; return 1; fi
+  mkdir -p "${STATE_DIR}"
+  ( umask 077; print -r -- "${fingerprint} ${DOTFILES_GITHUB_LOGIN} ${EPOCHSECONDS}" > "${IDENTITY_CACHE}" )
   log::info "pushing as | login='${DOTFILES_GITHUB_LOGIN}' identity='verified'"
 }
 
 #######################################
-# Load the token before the first real push, once; a run with nothing to push
-# never touches gh.
+# Where a repo's push goes: sets branch, sha and url in the caller's scope (zsh dynamic
+# scoping). Personal repos push by token, so their origin goes over https; the local tier
+# keeps its origin as is. Returns 1 with the reason logged.
 #######################################
-ensure_token() {
-  if [[ "${DRY_RUN}" == true || -n "${TOKEN}" ]]; then
-    return 0
+push_target() {
+  local repo="${1}" remote_url fix="git -C ~/${1} switch main   (/ari-dotfiles § Submodules step 1)"
+  [[ -z "${TIER_ALIAS[${repo}]:-}" ]] || fix="git ${TIER_ALIAS[${repo}]} switch main"
+  branch="$(repo_git "${repo}" branch --show-current 2>/dev/null || true)"
+  if [[ -z "${branch}" ]]; then log::err "Detached HEAD: nothing to push | repo='${repo}' fix='${fix}'"; return 1; fi
+  if ! remote_url="$(repo_git "${repo}" remote get-url origin 2>/dev/null)"; then
+    log::err "No such remote | repo='${repo}' remote='origin' remotes='$(repo_git "${repo}" remote | tr '\n' ' ')'"; return 1
   fi
-  step token load_token
-}
-
-#######################################
-# git for a repo: a tier's bare repo and worktree, or a submodule's directory.
-# Arguments:
-#   $1 - 'shared', 'local', or a submodule path relative to $HOME
-#   $@ - git arguments
-#######################################
-repo_git() {
-  local repo="${1}"; shift
-  case "${repo}" in
-    shared) df_git "${@}" ;;
-    local)  ldf_git "${@}" ;;
-    *)      git -C "${HOME}/${repo}" "${@}" ;;
+  sha="$(repo_git "${repo}" rev-parse "refs/heads/${branch}")"
+  url="${remote_url}"
+  [[ "${repo}" != local ]] || return 0
+  case "${remote_url}" in
+    https://github.com/*)   ;;
+    git@github.com:*)       url="https://github.com/${remote_url#git@github.com:}" ;;
+    ssh://git@github.com/*) url="https://github.com/${remote_url#ssh://git@github.com/}" ;;
+    *) log::err "Remote is not on github.com | repo='${repo}' url='${remote_url}'"; return 1 ;;
   esac
 }
 
 #######################################
-# repo_git with a one-shot credential helper that answers with the login's
-# token. The token travels in the environment, never in argv.
-# Globals:
-#   DOTFILES_GITHUB_LOGIN, TOKEN
-# Arguments:
-#   $1 - repo
-#   $@ - git arguments
+# Push one repo's current branch; everything on stdout, which push_begin sends to the
+# repo's log. One round trip: git's --porcelain verdict for the ref confirms the push (no
+# ls-remote). Personal repos go to their https URL with a one-shot credential helper
+# answering with the login's token (in the environment, never argv), and origin/<branch>
+# is set to the pushed sha (no fetch) so hooks and push_needed see it; the local tier goes
+# to origin as configured and git refreshes its tracking ref itself.
 #######################################
-repo_git_as_login() {
-  local repo="${1}"; shift
-  local -a git_cmd
-  if [[ "${repo}" == shared ]]; then
-    git_cmd=(git -C "${DF_WORK_TREE}" --git-dir="${DF_GIT_DIR}" --work-tree="${DF_WORK_TREE}")
-  else
-    git_cmd=(git -C "${HOME}/${repo}")
-  fi
-  DOTFILES_PUSH_LOGIN="${DOTFILES_GITHUB_LOGIN}" DOTFILES_PUSH_TOKEN="${TOKEN}" \
-    "${git_cmd[@]}" -c credential.helper= \
-      -c 'credential.helper=!f() { echo "username=${DOTFILES_PUSH_LOGIN}"; echo "password=${DOTFILES_PUSH_TOKEN}"; }; f' \
-      "${@}"
-}
-
-#######################################
-# Where a repo's push goes: its current branch, that branch's sha, origin as https.
-# Arguments:
-#   $1 - repo
-# Outputs:
-#   three lines: branch, sha, url; returns 1 with the reason logged
-#######################################
-push_target() {
-  local repo="${1}" branch remote_url url fix
-  branch="$(repo_git "${repo}" branch --show-current 2>/dev/null || true)"
-  if [[ -z "${branch}" ]]; then
-    case "${repo}" in
-      shared) fix="git df switch main" ;;
-      local)  fix="git ldf switch main" ;;
-      *)      fix="git -C ~/${repo} switch main   (/ari-dotfiles § Submodules step 1)" ;;
-    esac
-    log::err "Detached HEAD: nothing to push | repo='${repo}' fix='${fix}'"
-    return 1
-  fi
-  if ! remote_url="$(repo_git "${repo}" remote get-url origin 2>/dev/null)"; then
-    log::err "No such remote | repo='${repo}' remote='origin' remotes='$(repo_git "${repo}" remote | tr '\n' ' ')'"
-    return 1
-  fi
+push_repo() {
+  local repo="${1}" branch sha url refspec out flag dest actor="${DOTFILES_GITHUB_LOGIN}"
+  local -a auth=(-c credential.helper= -c 'credential.helper=!f() { echo "username=${DOTFILES_PUSH_LOGIN}"; echo "password=${DOTFILES_PUSH_TOKEN}"; }; f')
+  print -r -- "# $(date -u +%FT%TZ) dotfiles push -> ${repo}"
+  push_target "${repo}" || return 1
+  refspec="refs/heads/${branch}:refs/heads/${branch}"; dest="${url}"
   if [[ "${repo}" == local ]]; then
-    url="${remote_url}"   # pushed to origin as configured (ssh, the agent's key), not by token
-  elif ! url="$(to_https_url "${remote_url}")"; then
-    log::err "Remote is not on github.com | repo='${repo}' url='${remote_url}'"
-    return 1
-  fi
-  print -r -- "${branch}"
-  repo_git "${repo}" rev-parse "refs/heads/${branch}"
-  print -r -- "${url}"
-}
-
-#######################################
-# Push one repo's current branch, one round trip: git's --porcelain verdict
-# for the ref confirms the push (no ls-remote). Personal repos go to their
-# https URL by token and origin/<branch> is set to the pushed sha (no fetch)
-# so hooks that read it (the shared tier's pointer check) and push_needed see
-# the push; the local tier goes to its origin as configured, whose key the ssh
-# agent holds, and git refreshes origin/<branch> itself.
-# Arguments:
-#   $1 - repo
-#######################################
-push_repo_steps() {
-  local repo="${1}"
-  local -a target
-  target=("${(@f)$(push_target "${repo}")}") || return 1
-  local branch="${target[1]}" sha="${target[2]}" url="${target[3]}"
-  local refspec="refs/heads/${branch}:refs/heads/${branch}" out flag dest actor
-  local -a push_git
-  if [[ "${repo}" == local ]]; then
-    dest=origin; actor="the ssh agent's key"; push_git=(repo_git "${repo}")
+    dest=origin; actor="the ssh agent's key"; auth=()
   else
-    dest="${url}"; actor="${DOTFILES_GITHUB_LOGIN}"; push_git=(repo_git_as_login "${repo}")
+    local -x DOTFILES_PUSH_LOGIN="${DOTFILES_GITHUB_LOGIN}" DOTFILES_PUSH_TOKEN="${TOKEN}"   # what the helper answers; git's environment, never argv
   fi
   log::info "Pushing | repo='${repo}' branch='${branch}' sha='${sha:0:7}' url='${url}' as='${actor}' head_author='$(repo_git "${repo}" log -1 --format='%an <%ae>' "${sha}")'"
-  if ! out="$("${push_git[@]}" push --porcelain "${dest}" "${refspec}" 2>&1)"; then
+  if ! out="$(repo_git "${repo}" "${auth[@]}" push --porcelain "${dest}" "${refspec}" 2>&1)"; then
     print -r -- "${out}"
-    log::err "Push rejected | repo='${repo}' branch='${branch}' url='${url}'"
-    return 1
+    log::err "Push rejected | repo='${repo}' branch='${branch}' url='${url}'"; return 1
   fi
   print -r -- "${out}"
   # The ref's line: '<flag>\t<refspec>\t<summary>'; flag ' ' = fast-forward, '*' = new, '=' = up to date.
@@ -589,351 +376,180 @@ push_repo_steps() {
   case "${flag}" in
     ' '|'*') ;;
     '=')     log::info "Already there | repo='${repo}' branch='${branch}' sha='${sha:0:7}'" ;;
-    *)
-      log::err "Remote ref does not match after push | repo='${repo}' branch='${branch}' flag='${flag:-none}'"
-      return 1
-      ;;
+    *)       log::err "Remote ref does not match after push | repo='${repo}' branch='${branch}' flag='${flag:-none}'"; return 1 ;;
   esac
-  if [[ "${repo}" != local ]]; then
-    repo_git "${repo}" update-ref "refs/remotes/origin/${branch}" "${sha}"
-  fi
+  [[ "${repo}" == local ]] || repo_git "${repo}" update-ref "refs/remotes/origin/${branch}" "${sha}"
   log::info "Pushed | ${branch}@${sha:0:7} -> ${url}"
 }
 
 #######################################
-# push_repo_steps with everything in the repo's rotated log.
-# Arguments:
-#   $1 - repo
-#######################################
-push_repo() {
-  local repo="${1}" logfile
-  logfile="$(log_file "${repo}")"
-  mkdir -p "${LOG_DIR}"
-  log_rotate "${logfile}" "${KEEP_BACKUPS}"
-  {
-    print -r -- "# $(date -u +%FT%TZ) dotfiles push -> ${repo}"
-    push_repo_steps "${repo}"
-  } > "${logfile}" 2>&1
-}
-
-#######################################
-# Under --dry-run: the push a repo would get. No network.
-# Arguments:
-#   $1 - repo
-#######################################
-dry_run_push() {
-  local repo="${1}"
-  local -a target
-  target=("${(@f)$(push_target "${repo}")}") || return 1
-  log::info "dry-run, would push | repo='${repo}' branch='${target[1]}' sha='${target[2]:0:7}' url='${target[3]}' log='$(log_file "${repo}")'"
-}
-
-#######################################
-# True (0) when a repo has commits origin lacks, judged locally against the
-# remote-tracking ref (refreshed by every push here and by pull): no network.
-# Detached (after a pull) compares HEAD with origin/main. No tracking ref yet
-# counts as needed; the push itself then decides.
-# Arguments:
-#   $1 - repo
+# True (0) when a repo has commits origin lacks, judged locally against the remote-tracking
+# ref (refreshed by every push here and by pull): no network. Detached (after a pull)
+# compares HEAD with origin/main. No tracking ref yet counts as needed; the push decides.
 #######################################
 push_needed() {
-  local repo="${1}" branch local_ref remote_ref
+  local repo="${1}" branch local_ref=HEAD remote_ref=refs/remotes/origin/main
   branch="$(repo_git "${repo}" branch --show-current 2>/dev/null || true)"
-  if [[ -n "${branch}" ]]; then
-    local_ref="refs/heads/${branch}"
-    remote_ref="refs/remotes/origin/${branch}"
-  else
-    local_ref=HEAD
-    remote_ref=refs/remotes/origin/main
-  fi
+  if [[ -n "${branch}" ]]; then local_ref="refs/heads/${branch}"; remote_ref="refs/remotes/origin/${branch}"; fi
   repo_git "${repo}" rev-parse -q --verify "${remote_ref}" >/dev/null 2>&1 || return 0
   ! repo_git "${repo}" merge-base --is-ancestor "${local_ref}" "${remote_ref}" 2>/dev/null
 }
 
 #######################################
-# Push every checked-out submodule that needs it, in parallel; wait for all;
-# report the counts; fail if any failed. Up-to-date submodules are silent.
+# Start a repo's push. Under --dry-run: the would-push line, no network. Else: the token
+# (once; personal repos only), the rotated log, and push_repo in the background, recorded
+# in PIDS/STARTS for push_wait. Returns 1 with the reason logged.
+#######################################
+push_begin() {
+  local repo="${1}" branch sha url logfile
+  logfile="$(log_file "${repo}")"
+  if [[ "${DRY_RUN}" == true ]]; then
+    push_target "${repo}" || return 1
+    log::info "dry-run, would push | repo='${repo}' branch='${branch}' sha='${sha:0:7}' url='${url}' log='${logfile}'"; return 0
+  fi
+  if [[ "${repo}" != local && -z "${TOKEN}" ]]; then step token load_token || return 1; fi
+  log_rotate "${logfile}" "${KEEP_BACKUPS}"
+  STARTS[${repo}]="${EPOCHREALTIME}"
+  push_repo "${repo}" > "${logfile}" 2>&1 &
+  PIDS[${repo}]=$!
+}
+
+# Wait for a repo's background push and report it in one line.
+push_wait() {
+  local repo="${1}" rc=0 took
+  wait "${PIDS[${repo}]}" || rc=$?
+  took="$(elapsed "${STARTS[${repo}]}")"
+  if (( rc == 0 )); then log::info "pushed | repo='${repo}' took='${took}s' log='$(log_file "${repo}")'"; return 0; fi
+  log::err "push failed | repo='${repo}' rc='${rc}' took='${took}s' see='dotfiles logs --repo ${repo}'"; return 1
+}
+
+#######################################
+# Push a tier: absent or already at origin is one line and no push. The shared tier is
+# awaited here; the local tier (its pre-push hook may run exo check --e2e, ~90 s) runs on
+# while the rest pushes, and cmd_push awaits it last.
+#######################################
+push_tier() {
+  local repo="${1}"
+  if ! repo_present "${repo}"; then
+    if [[ "${repo}" == shared ]]; then log::err "shared repo not cloned | git_dir='${TIER_GIT_DIR[shared]}' fix='dotfiles init'"; return 1; fi
+    log::info "no local tier on this machine | hint='new-machine apply local_dotfiles_repo'"; return 0
+  fi
+  if ! push_needed "${repo}"; then log::info "${repo} tier up to date | sha='$(repo_git "${repo}" rev-parse --short HEAD 2>/dev/null || true)'"; return 0; fi
+  push_begin "${repo}" || return 1
+  [[ -n "${PIDS[${repo}]:-}" ]] || return 0   # dry-run: nothing running
+  if [[ "${repo}" == local ]]; then log::info "local tier pushing in the background | log='$(log_file local)' note='its pre-push hook may run exo check --e2e'"; return 0; fi
+  push_wait "${repo}"
+}
+
+#######################################
+# Push every checked-out submodule that needs it, in parallel; wait for all; report the
+# counts; fail if any failed. Up-to-date submodules are silent.
 #######################################
 push_submodules() {
-  local -a paths
-  paths=("${(@f)$(submodule_paths)}")
-  paths=("${(@)paths:#}")
-  if (( ${#paths} == 0 )); then
-    log::info "no submodules declared | file='${GITMODULES}'"
-    return 0
-  fi
-  local sub_path checked=0 pushed=0 failed=0 rc verb=pushed start="${EPOCHREALTIME}"
+  if (( ${#SUBMODULES} == 0 )); then log::info "no submodules declared | file='${GITMODULES}'"; return 0; fi
+  local repo checked=0 pushed=0 failed=0 verb=pushed start="${EPOCHREALTIME}"
+  local -a running=()
   [[ "${DRY_RUN}" == true ]] && verb=would_push
-  local -A pids starts
-  for sub_path in "${paths[@]}"; do
-    if [[ ! -e "${HOME}/${sub_path}/.git" ]]; then
-      log::warn "submodule not checked out; skipping | path='${sub_path}' fix='dotfiles init'"
-      continue
-    fi
+  for repo in "${SUBMODULES[@]}"; do
+    if ! repo_present "${repo}"; then log::warn "submodule not checked out; skipping | path='${repo}' fix='dotfiles init'"; continue; fi
     checked=$(( checked + 1 ))
-    push_needed "${sub_path}" || continue
-    if [[ "${DRY_RUN}" == true ]]; then
-      if dry_run_push "${sub_path}"; then
-        pushed=$(( pushed + 1 ))
-      else
-        failed=$(( failed + 1 ))
-      fi
-      continue
-    fi
-    ensure_token || return 1
-    starts[${sub_path}]="${EPOCHREALTIME}"
-    push_repo "${sub_path}" &
-    pids[${sub_path}]=$!
+    push_needed "${repo}" || continue
+    if ! push_begin "${repo}"; then failed=$(( failed + 1 )); continue; fi
+    if [[ "${DRY_RUN}" == true ]]; then pushed=$(( pushed + 1 )); continue; fi   # the plan printed counts as would_push
+    running+=("${repo}")
   done
-  if (( ${#pids} > 0 )); then
-    log::info "submodule pushes running | count='${#pids}' logs='${LOG_DIR}'"
-    for sub_path in "${(@k)pids}"; do
-      rc=0
-      wait "${pids[${sub_path}]}" || rc=$?
-      if (( rc == 0 )); then
-        log::info "pushed | repo='${sub_path}' took='$(elapsed "${starts[${sub_path}]}")s' log='$(log_file "${sub_path}")'"
-        pushed=$(( pushed + 1 ))
-      else
-        log::err "push failed | repo='${sub_path}' rc='${rc}' took='$(elapsed "${starts[${sub_path}]}")s' see='dotfiles logs --repo ${sub_path}'"
-        failed=$(( failed + 1 ))
-      fi
+  if (( ${#running} > 0 )); then
+    log::info "submodule pushes running | count='${#running}' logs='${LOG_DIR}'"
+    for repo in "${running[@]}"; do
+      if push_wait "${repo}"; then pushed=$(( pushed + 1 )); else failed=$(( failed + 1 )); fi
     done
   fi
   log::info "submodules done | checked='${checked}' ${verb}='${pushed}' failed='${failed}' took='$(elapsed "${start}")s'"
   (( failed == 0 ))
 }
 
-# The local tier's background push, started before the submodules and awaited last.
-LOCAL_PID=""
-LOCAL_START=""
+# True (0) when a push part (local | submodules | shared) is in PUSH_SCOPE.
+in_scope() { (( ${PUSH_SCOPE[(Ie)${1}]} )); }
 
-#######################################
-# Start the local tier's push in the background: its own remote and key, its
-# own hooks (the pre-push may run exo check --e2e, ~90 s), no token. Nothing to
-# push, or no local tier: one line, no push.
-#######################################
-push_local_begin() {
-  if [[ ! -d "${LDF_GIT_DIR}" ]]; then
-    log::info "no local tier on this machine | hint='new-machine apply local_dotfiles_repo'"
-    return 0
-  fi
-  if ! push_needed local; then
-    log::info "local tier up to date | sha='$(ldf_git rev-parse --short HEAD 2>/dev/null || true)'"
-    return 0
-  fi
-  if [[ "${DRY_RUN}" == true ]]; then
-    dry_run_push local
-    return
-  fi
-  LOCAL_START="${EPOCHREALTIME}"
-  push_repo local &
-  LOCAL_PID=$!
-  log::info "local tier pushing in the background | log='$(log_file local)' note='its pre-push hook may run exo check --e2e'"
-}
-
-#######################################
-# Wait for the local tier's push, if one was started, and report it.
-#######################################
-push_local_wait() {
-  [[ -n "${LOCAL_PID}" ]] || return 0
-  local rc=0
-  wait "${LOCAL_PID}" || rc=$?
-  if (( rc == 0 )); then
-    log::info "pushed | repo='local' took='$(elapsed "${LOCAL_START}")s' log='$(log_file local)'"
-    return 0
-  fi
-  log::err "push failed | repo='local' rc='${rc}' took='$(elapsed "${LOCAL_START}")s' see='dotfiles logs --repo local'"
-  return 1
-}
-
-push_shared() {
-  if [[ ! -d "${DF_GIT_DIR}" ]]; then
-    log::err "shared repo not cloned | git_dir='${DF_GIT_DIR}' fix='dotfiles init'"
-    return 1
-  fi
-  if ! push_needed shared; then
-    log::info "shared tier up to date | sha='$(df_git rev-parse --short HEAD 2>/dev/null || true)'"
-    return 0
-  fi
-  if [[ "${DRY_RUN}" == true ]]; then
-    dry_run_push shared
-    return
-  fi
-  ensure_token || return 1
-  local start="${EPOCHREALTIME}"
-  if push_repo shared; then
-    log::info "pushed | repo='shared' took='$(elapsed "${start}")s' log='$(log_file shared)'"
-    return 0
-  fi
-  log::err "push failed | repo='shared' took='$(elapsed "${start}")s' see='dotfiles logs --repo shared'"
-  return 1
-}
-
-#######################################
-# The local tier runs in the background while the submodules push, then the
-# shared tier (only if every submodule made it), then the local result.
-#######################################
+# The local tier runs in the background while the submodules push, then the shared tier
+# (only if every submodule made it), then the local result.
 cmd_push() {
-  local start="${EPOCHREALTIME}" failed=false
+  local start="${EPOCHREALTIME}" failed=false scope="${(j:, :)PUSH_SCOPE}"
   check_prerequisites git gh || return 1
-  if [[ "${PUSH_SCOPE}" == all || "${PUSH_SCOPE}" == local-only ]]; then
-    push_local_begin || failed=true
+  if in_scope local; then push_tier local || failed=true; fi
+  if in_scope submodules && ! push_submodules; then
+    failed=true
+    if in_scope shared; then log::err "shared tier not pushed: a submodule push failed | fix='dotfiles logs, fix, dotfiles push'"; fi
+  elif in_scope shared; then
+    push_tier shared || failed=true
   fi
-  if [[ "${PUSH_SCOPE}" == all || "${PUSH_SCOPE}" == submodules-only ]]; then
-    if push_submodules; then
-      if [[ "${PUSH_SCOPE}" == all ]]; then
-        push_shared || failed=true
-      fi
-    else
-      failed=true
-      log::err "shared tier not pushed: a submodule push failed | fix='dotfiles logs, fix, dotfiles push'"
-    fi
-  elif [[ "${PUSH_SCOPE}" == shared-only ]]; then
-    push_shared || failed=true
-  fi
-  push_local_wait || failed=true
-  if [[ "${failed}" == true ]]; then
-    log::err "push failed | scope='${PUSH_SCOPE}' took='$(elapsed "${start}")s'"
-    return 1
-  fi
-  log::info "push done | scope='${PUSH_SCOPE}' took='$(elapsed "${start}")s'"
+  if [[ -n "${PIDS[local]:-}" ]]; then push_wait local || failed=true; fi
+  if [[ "${failed}" == true ]]; then log::err "push failed | scope='${scope}' took='$(elapsed "${start}")s'"; return 1; fi
+  log::info "push done | scope='${scope}' took='$(elapsed "${start}")s'"
 }
 
 # --- status / logs ---
 
-#######################################
-# A push log in one line: the run's timestamp (from its header) and its verdict
-# (the last line, without color codes and the [LEVEL] tag), tab-separated.
-# Arguments:
-#   $1 - log file
-#######################################
-log_summary() {
-  awk 'NR == 1 { when = $2 } { last = $0 }
-       END { gsub(/[[:cntrl:]]\[[0-9;]*m/, "", last); sub(/^\[[A-Z]+\] /, "", last); print when "\t" last }' "${1}"
-}
-
-#######################################
-# One line for a tier from a single `git status`: the branch header (with
-# ahead/behind once origin/main is known) and the count of uncommitted paths.
-# Arguments:
-#   $1 - label
-#   $2 - git function name (df_git | ldf_git)
-#######################################
+# One line for a tier from a single `git status`: the branch header (with ahead/behind once
+# origin/main is known) and the count of uncommitted paths.
 tier_line() {
-  local label="${1}" git_fn="${2}"
+  local repo="${1}"
   local -a lines
-  lines=("${(@f)$("${git_fn}" status --porcelain -b --untracked-files=no --ignore-submodules=dirty 2>/dev/null || true)}")
+  lines=("${(@f)$(repo_git "${repo}" status --porcelain -b --untracked-files=no --ignore-submodules=dirty 2>/dev/null || true)}")
   lines=("${(@)lines:#}")
-  if (( ${#lines} == 0 )); then
-    print -r -- "${label}: not cloned"
-    return 0
-  fi
-  print -r -- "${label}: ${lines[1]}  uncommitted=$(( ${#lines} - 1 ))"
+  if (( ${#lines} == 0 )); then print -r -- "${repo}: not cloned"; return 0; fi
+  print -r -- "${repo}: ${lines[1]}  uncommitted=$(( ${#lines} - 1 ))"
 }
 
-#######################################
-# One line per declared submodule, in `git submodule status` shape without its
-# cost: prefix (space = at the pointer, + = elsewhere, - = not initialized),
-# sha, path, (heads/<branch>) or (detached).
-#######################################
+# One line per declared submodule, in `git submodule status` shape without its cost:
+# prefix (space = at the pointer, + = elsewhere, - = not initialized), sha, path, (heads/<branch>) or (detached).
 submodule_lines() {
-  local -a paths
-  paths=("${(@f)$(submodule_paths)}")
-  paths=("${(@)paths:#}")
-  (( ${#paths} > 0 )) || return 0
-  local meta sub_path pointer head branch prefix where
+  if (( ${#SUBMODULES} == 0 )); then print -r -- "  none declared"; return 0; fi
+  local meta repo pointer head branch prefix where
   local -A pointers
   # ls-tree: '160000 commit <sha>\t<path>' per submodule, one call for all.
-  while IFS=$'\t' read -r meta sub_path; do
-    pointers[${sub_path}]="${meta##* }"
-  done < <(df_git ls-tree HEAD -- "${paths[@]}" 2>/dev/null)
-  for sub_path in "${paths[@]}"; do
-    pointer="${pointers[${sub_path}]:-}"
-    if [[ ! -e "${HOME}/${sub_path}/.git" ]]; then
-      print -r -- "  -${pointer} ${sub_path}"
-      continue
-    fi
-    head="$(git -C "${HOME}/${sub_path}" rev-parse HEAD 2>/dev/null || true)"
-    branch="$(git -C "${HOME}/${sub_path}" branch --show-current 2>/dev/null || true)"
-    prefix=' '
-    [[ "${head}" == "${pointer}" ]] || prefix='+'
-    if [[ -n "${branch}" ]]; then
-      where="heads/${branch}"
-    else
-      where=detached
-    fi
-    print -r -- "  ${prefix}${head} ${sub_path} (${where})"
+  while IFS=$'\t' read -r meta repo; do pointers[${repo}]="${meta##* }"; done < <(repo_git shared ls-tree HEAD -- "${SUBMODULES[@]}" 2>/dev/null)
+  for repo in "${SUBMODULES[@]}"; do
+    pointer="${pointers[${repo}]:-}"
+    if ! repo_present "${repo}"; then print -r -- "  -${pointer} ${repo}"; continue; fi
+    head="$(repo_git "${repo}" rev-parse HEAD 2>/dev/null || true)"
+    branch="$(repo_git "${repo}" branch --show-current 2>/dev/null || true)"
+    prefix=' '; [[ "${head}" == "${pointer}" ]] || prefix='+'
+    where="heads/${branch}"; [[ -n "${branch}" ]] || where=detached
+    print -r -- "  ${prefix}${head} ${repo} (${where})"
   done
 }
 
 cmd_status() {
-  local start="${EPOCHREALTIME}"
-  print -r -- "${c_bold}tiers${c_rst}"
-  print -r -- "  $(tier_line shared df_git)"
-  if [[ -d "${LDF_GIT_DIR}" ]]; then
-    print -r -- "  $(tier_line local ldf_git)"
-  else
-    print -r -- "  local: no repo (new-machine setup)"
-  fi
-  print -r -- "${c_bold}submodules${c_rst} (space = at the pointer, + = elsewhere, - = not initialized)"
-  if [[ -f "${GITMODULES}" ]]; then
-    submodule_lines
-  else
-    print -r -- "  none declared"
-  fi
-  print -r -- "${c_bold}last push${c_rst} (${LOG_DIR}; 'dotfiles logs' for the whole run)"
-  local logfile when verdict
+  local start="${EPOCHREALTIME}" logfile when verdict
   local -a logfiles=("${LOG_DIR}"/*.log(N))
+  print -r -- "${c_bold}tiers${c_rst}"
+  print -r -- "  $(tier_line shared)"
+  if repo_present local; then print -r -- "  $(tier_line local)"; else print -r -- "  local: no repo (new-machine setup)"; fi
+  print -r -- "${c_bold}submodules${c_rst} (space = at the pointer, + = elsewhere, - = not initialized)"
+  submodule_lines
+  print -r -- "${c_bold}last push${c_rst} (${LOG_DIR}; 'dotfiles logs' for the whole run)"
   for logfile in "${logfiles[@]}"; do
-    IFS=$'\t' read -r when verdict <<< "$(log_summary "${logfile}")"
+    # The run's timestamp (its header) and verdict (its last line, minus color codes and the [LEVEL] tag).
+    IFS=$'\t' read -r when verdict <<< "$(awk 'NR == 1 { when = $2 } { last = $0 }
+      END { gsub(/[[:cntrl:]]\[[0-9;]*m/, "", last); sub(/^\[[A-Z]+\] /, "", last); print when "\t" last }' "${logfile}")"
     printf '  %-26s %s  %s\n' "${logfile:t:r}" "${when}" "${verdict}"
   done
   (( ${#logfiles} > 0 )) || print -r -- "  none yet"
-  if [[ "${TIMING}" == true ]]; then
-    log::info "status | took='$(elapsed "${start}")s'"
-  fi
+  if [[ "${TIMING}" == true ]]; then log::info "status | took='$(elapsed "${start}")s'"; fi
 }
 
 cmd_logs() {
+  local suffix="" file
   local -a files
-  local suffix="" repo
   [[ "${LOGS_PREVIOUS}" == true ]] && suffix=".bak.1"
-  if [[ -n "${LOGS_REPO}" ]]; then
-    files=("$(log_file "${LOGS_REPO}")${suffix}")
-  else
-    files=("${LOG_DIR}"/*.log${suffix}(N))
-  fi
-  if (( ${#files} == 0 )); then
-    log::info "no push logs yet | dir='${LOG_DIR}'"
-    return 0
-  fi
-  local file
+  if [[ -n "${LOGS_REPO}" ]]; then files=("$(log_file "${LOGS_REPO}")${suffix}"); else files=("${LOG_DIR}"/*.log${suffix}(N)); fi
+  if (( ${#files} == 0 )); then log::info "no push logs yet | dir='${LOG_DIR}'"; return 0; fi
   for file in "${files[@]}"; do
-    if [[ ! -f "${file}" ]]; then
-      log::err "no such log | file='${file}' valid_repos='shared, local, $(submodule_paths | tr '\n' ' ')'"
-      return 1
-    fi
+    if [[ ! -f "${file}" ]]; then log::err "no such log | file='${file}' valid_repos='shared, local, ${(j: :)SUBMODULES}'"; return 1; fi
     print -r -- "${c_bold}=== ${file:t} ($(date -r "${file}" -u +%FT%TZ)) ===${c_rst}"
     cat "${file}"
   done
-}
-
-# --- Prerequisites ---
-
-#######################################
-# Check that required binaries are installed.
-# Arguments: the commands to require
-#######################################
-check_prerequisites() {
-  local -a missing=()
-  local cmd
-  for cmd in "${@}"; do
-    command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
-  done
-  if (( ${#missing} > 0 )); then
-    log::err "Missing required commands | missing='${(j:, :)missing}'"
-    return 1
-  fi
 }
 
 # --- Main ---
@@ -941,36 +557,34 @@ check_prerequisites() {
 main() {
   # === PARSE ===
   local command=""
+  local -a only=() skip=() scope_flags=()
   while (( $# > 0 )); do case "${1}" in
-    -h|--help)          help; return 0 ;;
-    --dry-run)          DRY_RUN=true; shift ;;
-    --timing)           TIMING=true; shift ;;
-    --submodules-only)  PUSH_SCOPE=submodules-only; shift ;;
-    --shared-only)      PUSH_SCOPE=shared-only; shift ;;
-    --local-only)       PUSH_SCOPE=local-only; shift ;;
-    --previous)         LOGS_PREVIOUS=true; shift ;;
-    --repo)             LOGS_REPO="${2:?--repo requires a value}"; shift 2 ;;
-    -*)                 log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    -h|--help)      help; return 0 ;;
+    --dry-run)      DRY_RUN=true; shift ;;
+    --timing)       TIMING=true; shift ;;
+    --previous)     LOGS_PREVIOUS=true; shift ;;
+    --repo)         LOGS_REPO="${2:?--repo requires a value}"; shift 2 ;;
+    --submodules|--shared|--local)          only+=("${1#--}");    scope_flags+=("${1}"); shift ;;
+    --no-submodules|--no-shared|--no-local) skip+=("${1#--no-}"); scope_flags+=("${1}"); shift ;;
+    -*)             log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)
-      if [[ -n "${command}" ]]; then
-        log::err "Unexpected argument | argument='${1}' command='${command}'"; help; return 1
-      fi
+      if [[ -n "${command}" ]]; then log::err "Unexpected argument | argument='${1}' command='${command}'"; help; return 1; fi
       command="${1}"; shift ;;
   esac; done
 
   # === MASSAGE ===
   command="${command:l}"
+  # Selecting flags name the scope exactly (none = every part); excluding flags then remove from it.
+  (( ${#only} == 0 )) || PUSH_SCOPE=("${(@)PUSH_PARTS:*only}")
+  PUSH_SCOPE=("${(@)PUSH_SCOPE:|skip}")
 
   # === VALIDATE ===
-  if [[ -z "${command}" ]]; then
-    log::err "Missing command | valid_commands='${(j:, :)VALID_COMMANDS}'"
-    help
-    return 1
-  fi
+  if [[ -z "${command}" ]]; then log::err "Missing command | valid_commands='${(j:, :)VALID_COMMANDS}'"; help; return 1; fi
   if (( ! ${VALID_COMMANDS[(Ie)${command}]} )); then
-    log::err "Invalid command | command='${command}' valid_commands='${(j:, :)VALID_COMMANDS}'"
-    help
-    return 1
+    log::err "Invalid command | command='${command}' valid_commands='${(j:, :)VALID_COMMANDS}'"; help; return 1
+  fi
+  if [[ "${command}" == push ]] && (( ${#PUSH_SCOPE} == 0 )); then
+    log::err "Empty push scope: every part excluded | flags='${scope_flags[*]}' parts='${(j:, :)PUSH_PARTS}'"; help; return 1
   fi
 
   # === LOGIC ===

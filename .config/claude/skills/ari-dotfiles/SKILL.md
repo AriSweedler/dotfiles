@@ -180,8 +180,9 @@ One dotfiles change; never stop after the first commit.
 2. **Commit in the submodule's repo** on `main`, explicit paths:
    `git -C ~/<path> add <files> && git -C ~/<path> commit -m "…"`. Its hooks
    and commit conventions apply, not the tier's.
-3. **Its push is the user's**: `dotfiles push --submodules-only` (every
-   submodule, in parallel, one log each, as the personal account); Claude is
+3. **Its push is the user's**: `dotfiles push --submodules` (every
+   submodule, in parallel, one log each, as the personal account; `--shared`,
+   `--local` and `--no-<part>` narrow the scope the same way); Claude is
    denied it. Ask, wait, then confirm
    `git -C ~/<path> status -sb` → `## main...origin/main`.
 4. **Commit the bump**, always, as part of the same change:
