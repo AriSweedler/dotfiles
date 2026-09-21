@@ -90,7 +90,7 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
 | `Token identity mismatch` | the stored personal token is not the personal account | `env -u GITHUB_TOKEN gh auth status`; re-login |
 | `Detached HEAD: nothing to push` | commits made while a pull had left the submodule detached (detached with nothing new is skipped silently) | **Submodules** step 1 (`git -C ~/<path> branch -f main HEAD` if `main` is an ancestor, else ask), push again |
 | `! [rejected]` (fetch first / non-fast-forward), or `Remote ref does not match after push` | the remote moved | shared: `dotfiles pull`; submodule: `git -C ~/<path> pull --rebase origin main`, re-run its checks, push again |
-| `slow step` | a step took longer than `DOTFILES_SLOW_STEP` (0.5s) | read the step name; `dotfiles --timing <cmd>` times every step |
+| `slow step` | a step took longer than `DOTFILES_SLOW_STEP` (0.5s; pull's own fetch is allowed 5s) | read the step name; `dotfiles --timing <cmd>` times every step |
 | `submodule not checked out` | never initialized here | `dotfiles init` |
 | `No such remote`, `Remote is not on github.com` | a rewired or broken checkout | `dotfiles status`, then **Submodules** |
 | DNS, timeout, TLS | network | retry; nothing was lost |

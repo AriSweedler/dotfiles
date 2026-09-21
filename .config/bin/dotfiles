@@ -21,6 +21,7 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
 fi
 source "${LIB_LOGGING}"
 source "${HOME}/.config/zsh/plugins/log_rotate.zsh"
+source "${HOME}/.config/zsh/plugins/strip_ansi.zsh"   # the push logs are plain text
 
 # --- Environment variables (the help text documents each) ---
 
@@ -102,7 +103,7 @@ ${c_bold}Environment:${c_rst}
   DOTFILES_SSH_KEY_OP_ITEM     1Password item holding the ssh key's "Absolute path" and "password"
   DOTFILES_SSH_KEY_OP_VAULT    its vault; both come from the local tier, unset = no key to load
   DOTFILES_SSH_KEY_PATH        the key file, so checking the agent needs no 1Password call (unset = ask the item)
-  DOTFILES_SLOW_STEP           seconds; a slower step gets a 'slow step' line (default ${DOTFILES_SLOW_STEP})
+  DOTFILES_SLOW_STEP           seconds; a slower step gets a 'slow step' line (default ${DOTFILES_SLOW_STEP}; pull's fetch allows 5)
 
 ${c_bold}Logs:${c_rst} ${LOG_DIR}/<repo>.log (last run) and .log.bak.1 (the run before).
 Pushes are token-pinned to ${DOTFILES_GITHUB_LOGIN}: no gh account switch, no ssh key swap.
@@ -137,16 +138,17 @@ run_mut() {
 elapsed() { printf '%.2f' $(( EPOCHREALTIME - ${1} )); }
 
 # Run a step (label, then the command) and time it: every step under --timing, otherwise
-# only one slower than DOTFILES_SLOW_STEP, so a slow run names its culprit.
+# only one slower than DOTFILES_SLOW_STEP, so a slow run names its culprit. A step that is
+# a network round trip sets its own bar: `slow=5 step pull …`.
 step() {
   local label="${1}"; shift
-  local start="${EPOCHREALTIME}" rc=0 took
+  local start="${EPOCHREALTIME}" rc=0 took threshold="${slow:-${DOTFILES_SLOW_STEP}}"
   "${@}" || rc=$?
   took="$(elapsed "${start}")"
   if [[ "${TIMING}" == true ]]; then
     log::info "step | name='${label}' took='${took}s'"
-  elif (( took >= DOTFILES_SLOW_STEP )); then
-    log::warn "slow step | name='${label}' took='${took}s' threshold='${DOTFILES_SLOW_STEP}s'"
+  elif (( took >= threshold )); then
+    log::warn "slow step | name='${label}' took='${took}s' threshold='${threshold}s'"
   fi
   return "${rc}"
 }
@@ -293,7 +295,7 @@ cmd_init() {
 cmd_pull() {
   local start="${EPOCHREALTIME}"
   check_prerequisites git || return 1
-  step pull run_mut repo_git shared pull --ff-only || return 1
+  slow=5 step pull run_mut repo_git shared pull --ff-only || return 1   # a fetch takes seconds; that is not slow
   cmd_init || return 1
   log::info "pull done | took='$(elapsed "${start}")s'"
 }
@@ -411,7 +413,7 @@ push_begin() {
   if [[ "${repo}" != local && -z "${TOKEN}" ]]; then step token load_token || return 1; fi
   log_rotate "${logfile}" "${KEEP_BACKUPS}"
   STARTS[${repo}]="${EPOCHREALTIME}"
-  push_repo "${repo}" > "${logfile}" 2>&1 &
+  { push_repo "${repo}" 2>&1 | strip_ansi > "${logfile}"; } &   # pipefail: the group exits with push_repo's rc
   PIDS[${repo}]=$!
 }
 
@@ -570,9 +572,9 @@ cmd_status() {
   submodule_lines
   print -r -- "${c_bold}last push${c_rst} (${LOG_DIR}; 'dotfiles logs' for the whole run)"
   for logfile in "${logfiles[@]}"; do
-    # The run's timestamp (its header) and verdict (its last line, minus color codes and the [LEVEL] tag).
+    # The run's timestamp (its header) and verdict (its last line, minus the [LEVEL] tag).
     IFS=$'\t' read -r when verdict <<< "$(awk 'NR == 1 { when = $2 } { last = $0 }
-      END { gsub(/[[:cntrl:]]\[[0-9;]*m/, "", last); sub(/^\[[A-Z]+\] /, "", last); print when "\t" last }' "${logfile}")"
+      END { sub(/^\[[A-Z]+\] /, "", last); print when "\t" last }' "${logfile}")"
     printf '  %-26s %s  %s\n' "${logfile:t:r}" "${when}" "${verdict}"
   done
   (( ${#logfiles} > 0 )) || print -r -- "  none yet"
