@@ -1,3 +1,9 @@
+---
+name: ari-diagram-gh-todo
+description: "Track TODO items with dependencies as a status-colored Mermaid graph posted as a GitHub PR or issue comment, with a baked mermaid.ink URL for embedding elsewhere."
+user_invocable: true
+---
+
 # ari-diagram-gh-todo
 
 Track TODO items with dependencies as color-coded mermaid diagrams, posted as GitHub PR/issue comments.
@@ -13,17 +19,24 @@ Track TODO items with dependencies as color-coded mermaid diagrams, posted as Gi
 ## Workflow
 
 1. **Gather TODOs** from user — each item needs: name, status (unstarted/in-progress/done), dependencies
-2. **Create a temp dir**: `TMPDIR=$(mktemp -d /tmp/todo-diagram-$(date +%s%3N)-XXXXXXX)`
-3. **Build mermaid `graph TD`** and write to `$TMPDIR/diagram.mmd`:
+2. **Set up the session** — emit exactly this one Bash call; it prints the `diagram_file=` path to write to:
+   ```zsh
+   zsh $HOME/.claude/skills/ari-diagram-mermaid/bin/init.zsh --name todo-diagram
+   ```
+3. **Build mermaid `graph TD`** and write it to that `diagram_file`:
+   - Line 1 is the `%%{init: …}%%` directive that opens `/ari-diagram-mermaid`'s color theme block, copied verbatim: it pins the theme and halos free-standing text, bake refuses the file without it, and GitHub renders it
    - Each TODO as a node, labeled with task name
    - Dependency arrows (`A --> B` means B depends on A)
-   - Status-based classDefs and class assignments:
+   - Status-based classDefs and class assignments; every fill carries a text color that passes bake's contrast gate:
      ```mermaid
      classDef red fill:#F82B60,stroke:#C42249,color:#fff
      classDef yellow fill:#FCB400,stroke:#B88000,color:#333
-     classDef green fill:#20C933,stroke:#168E24,color:#fff
+     classDef green fill:#20C933,stroke:#168E24,color:#333
      ```
-4. **Bake**: `$HOME/.claude/skills/ari-diagram-mermaid/bin/bake $TMPDIR/diagram.mmd`
+4. **Bake** the file init printed:
+   ```zsh
+   zsh $HOME/.claude/skills/ari-diagram-mermaid/bin/bake /tmp/ari-diagram-mermaid/<timestamp>/todo-diagram.mmd
+   ```
 5. **Post as a GitHub comment** using `gh`. The comment MUST have this format:
    - An `## <Title>` header
    - A single sentence describing the diagram
@@ -65,6 +78,7 @@ For TODOs:
 ---
 
 ```mermaid
+%%{init: {'theme':'default', 'themeCSS': '.messageText, text.text, text.actor, .loopText, .noteText, .labelText, .titleText { paint-order: stroke; stroke: #ffffff; stroke-width: 4px; stroke-linejoin: round; }'}}%%
 graph TD
     A["Design API"]
     B["Implement backend"]
@@ -77,7 +91,7 @@ graph TD
 
     classDef red fill:#F82B60,stroke:#C42249,color:#fff
     classDef yellow fill:#FCB400,stroke:#B88000,color:#333
-    classDef green fill:#20C933,stroke:#168E24,color:#fff
+    classDef green fill:#20C933,stroke:#168E24,color:#333
 
     class A green
     class B yellow
