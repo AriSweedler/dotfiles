@@ -9,9 +9,9 @@
 #
 # Environment variables:
 #   MERMAID_FORMAT        Output format (default: markdown_link)
-#     markdown_link       Clickable markdown image link: [![](img)](edit)
+#     markdown_link       Clickable markdown image link: [![](img)](view)
 #     ink_url             Direct PNG image URL via mermaid.ink
-#     live_url            Editable URL via mermaid.live
+#     live_url            Fullscreen view URL via mermaid.live (/view#; swap view for edit to open the editor)
 #   MERMAID_VALIDATE_ONLY If set to "1", validate only (no URL, no clipboard)
 set -euo pipefail
 
@@ -73,7 +73,8 @@ main() {
   fi
 
   local live_url output
-  live_url="https://mermaid.live/edit#pako:$(pako_compress)"
+  # /view renders the diagram alone; /edit would land a Docs reader in the editor. Same pako payload.
+  live_url="https://mermaid.live/view#pako:$(pako_compress)"
 
   case "${format}" in
     ink_url)

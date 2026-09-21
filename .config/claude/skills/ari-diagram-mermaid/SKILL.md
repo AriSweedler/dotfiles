@@ -5,7 +5,7 @@ Create, validate, and share Mermaid.js diagrams with Airtable brand colors. `bak
 ## Rules
 
 - **Never hand-reproduce the baked link.** `bake` prints the markdown link, copies it to the clipboard, and writes a `.url` sidecar. You MAY print or relay the link — but only verbatim from `bake`'s output or the sidecar file. NEVER retype, transcribe, reconstruct, or regenerate it yourself: it's a long base64 string, slow and error-prone to reproduce when the script already emitted the exact bytes. Simplest path: tell the user it's on the clipboard.
-- **Default output is `markdown_link`.** Override `MERMAID_FORMAT` only when the user explicitly asks for another form (e.g. a GitHub-native fenced block), or when a Google Doc pipeline needs the sidecars: bake `ink_url` and `live_url` on the same `.mmd` and let the caller compose `[![alt](<ink_url>?width=620)](<live_url>)`. mermaid.ink honors `?width=` (and `?height=`, `?scale=`); 620 px is 465 pt, inside a Letter page's 468 pt text width. Drive's markdown import turns that form into an inline image whose link opens the editable source.
+- **Default output is `markdown_link`.** Override `MERMAID_FORMAT` only when the user explicitly asks for another form (e.g. a GitHub-native fenced block), or when a Google Doc pipeline needs the sidecars: bake `ink_url` and `live_url` on the same `.mmd` and let the caller compose `[![alt](<ink_url>?width=620)](<live_url>)`. mermaid.ink honors `?width=` (and `?height=`, `?scale=`); 620 px is 465 pt, inside a Letter page's 468 pt text width. Drive's markdown import turns that form into an inline image whose link opens the diagram fullscreen on mermaid.live (`/view#`, never `/edit#`: the reader gets the diagram, not the editor).
 
 ## Workflow
 
@@ -23,7 +23,7 @@ Create, validate, and share Mermaid.js diagrams with Airtable brand colors. `bak
 4. **Present** to user:
    - The markdown link is on the clipboard (and printed by `bake`, and in the `url_file` sidecar). Tell the user it's copied.
    - If you surface the link inline, relay it verbatim from `bake`'s output or the sidecar — never retype it (see Rules).
-   - For a Google Doc published through `/ari-hemingway--share-gdoc`: bake `ink_url` and `live_url`, then embed `[![alt](<ink_url>?width=620)](<live_url>)`; its finish step fails an image that does not link to mermaid.live. For a hand-edited Doc: paste the markdown link, or Insert > Image > By URL and add the live link to the image.
+   - For a Google Doc published through `/ari-hemingway--share-gdoc`: bake `ink_url` and `live_url`, then embed `[![alt](<ink_url>?width=620)](<live_url>)`; its finish step fails an image whose link is not the `mermaid.live/view#` form. For a hand-edited Doc: paste the markdown link, or Insert > Image > By URL and add the live link to the image.
 
 ## Airtable Color Theme (always include)
 
@@ -49,9 +49,9 @@ linkStyle default stroke-width:2px
 
 | `MERMAID_FORMAT=`        | Output                                                      |
 | ------------------------ | ----------------------------------------------------------- |
-| `markdown_link` (default) | Image linked to its source (`[![](img)](edit)`), no alt, no width cap |
+| `markdown_link` (default) | Image linked to its source (`[![](img)](view)`), no alt, no width cap |
 | `ink_url`                 | Direct mermaid.ink PNG image URL; append `?width=620` for Docs      |
-| `live_url`                | Editable mermaid.live URL; the link target for a Docs image         |
+| `live_url`                | Fullscreen mermaid.live URL (`/view#pako:`); the link target for a Docs image. Swap `view` for `edit` in the path to open the editor; the payload is identical |
 
 Set `MERMAID_VALIDATE_ONLY=1` to validate without generating URLs or copying to clipboard.
 
