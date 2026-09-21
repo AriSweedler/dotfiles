@@ -4,12 +4,13 @@
 # mint the embed URL, copy it to the clipboard, and write a sidecar so callers relay
 # the exact bytes.
 #
-# Line 1 of the source pins the theme and carries a themeCSS text halo. The theme pin
-# beats whatever theme a viewer's mermaid.live writes into the URL; the halo outlines
-# free-standing text (sequence messages, box titles, lifeline captions) in white so it
-# reads on the dark canvas mermaid.live's view page paints in dark mode. Every fill
-# pairs with a text color that clears MIN_CONTRAST. The gates run before any network
-# call.
+# Line 1 of the source pins the theme, sizes sequence text, and carries a themeCSS
+# block for text that has nothing of its own behind it (sequence messages, box titles,
+# loop and title text). The Doc image is always white (mermaid.ink), but the view
+# link's canvas follows the viewer: under a dark color scheme that text flips to light,
+# and a soft glow covers the case where the site toggle and the OS scheme disagree.
+# Every fill pairs with a text color that clears MIN_CONTRAST. The gates run before
+# any network call.
 set -euo pipefail
 
 readonly SCRIPT_DIR="${0:A:h}"
@@ -20,23 +21,26 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
+source "${SKILLS_DIR}/ari-skill-shellscripts/lib/run_with_timeout.zsh"
 
 readonly LIB_CONTRAST="${SCRIPT_DIR:h}/lib/contrast.awk"
 readonly VALID_FORMATS=(markdown_link ink_url live_url)
 readonly REQUIRED_THEME="default"
-# The one line every diagram starts with. Whitespace-insensitive match on its two
-# load-bearing parts: the theme pin and the paint-order halo.
-readonly CANONICAL_DIRECTIVE="%%{init: {'theme':'default', 'themeCSS': '.messageText, text.text, text.actor, .loopText, .noteText, .labelText, .titleText { paint-order: stroke; stroke: #ffffff; stroke-width: 4px; stroke-linejoin: round; }'}}%%"
+# The one line every diagram starts with. Whitespace-insensitive match on its
+# load-bearing parts: the theme pin, themeCSS, the dark color-scheme block, and the glow.
+readonly CANONICAL_DIRECTIVE="%%{init: {'theme':'default', 'sequence': {'messageFontSize': 18, 'actorFontSize': 18, 'noteFontSize': 16}, 'themeCSS': '.messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 2px #fff) drop-shadow(0 0 3px #fff); } @media (prefers-color-scheme: dark) { .messageText, text.text, .loopText, .titleText, text.actor-man { fill: #eeeeee; } .messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 2px #000) drop-shadow(0 0 3px #000); } }'}}%%"
 readonly MIN_CONTRAST="3.0"   # WCAG AA for large or bold text; node labels are bold
 readonly DARK_CANVAS="1e1e1e" # mermaid.live's dark-mode view background, for --dark-check
 readonly CURL_TIMEOUT="30"
+readonly CHROME_TIMEOUT="90"  # a first-run headless profile once hung without a cap
+readonly CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 readonly INK_BASE="https://mermaid.ink/img/base64:"
 # /view renders the diagram alone; /edit would land a Docs reader in the editor. Same pako payload.
 readonly LIVE_BASE="https://mermaid.live/view#pako:"
 
 #######################################
 # Fail when a required command is absent.
-# Globals: none
+# Globals: LIB_CONTRAST
 # Arguments: none
 # Returns: 1 if any are missing
 #######################################
@@ -56,7 +60,7 @@ check_prerequisites() {
 }
 
 help() {
-  cat <<EOF
+  cat <<HELP
 ${c_green}bake${c_rst} — gate a Mermaid diagram's directive and contrast, confirm it renders, and mint its embed link
 
 ${c_bold}Usage:${c_rst}
@@ -67,11 +71,13 @@ ${c_bold}Options:${c_rst}
   --file PATH       The .mmd source (a bare positional path is accepted for older callers)
   --format FORMAT   ${(j:, :)VALID_FORMATS} (default: markdown_link; MERMAID_FORMAT env is the fallback)
   --validate-only   Run the gates and the render check; mint no URL (MERMAID_VALIDATE_ONLY=1 is the fallback)
-  --dark-check      Also save <name>.dark.jpg, the render on a #${DARK_CANVAS} canvas, for a legibility look
+  --dark-check      Also save <name>.dark.jpg (mermaid.ink on a #${DARK_CANVAS} canvas: site dark, OS light)
+                    and, when Chrome is installed, <name>.dark-scheme.png (the view URL under a dark
+                    color scheme: site dark, OS dark), for a legibility look
   -h, --help        Show this help
 
 ${c_bold}Gates:${c_rst}
-  Line 1 of the source MUST be the canonical directive (theme pin plus text halo):
+  Line 1 of the source MUST be the canonical directive (theme pin, sequence fonts, adaptive free-standing text):
     ${CANONICAL_DIRECTIVE}
   Every classDef/style that sets fill MUST set color at a contrast ratio >= ${MIN_CONTRAST}:1.
   Violations print as line|directive|name|fill|color|ratio|reason and the bake stops.
@@ -79,15 +85,16 @@ ${c_bold}Gates:${c_rst}
 ${c_bold}Output:${c_rst}
   The link on stdout, copied to the clipboard when one exists, and written to <name>.<format>.url.
   Relay it verbatim; never retype it.
-EOF
+HELP
 }
 
 #######################################
 # Fail unless line 1 is an init directive that pins the default theme and carries
-# the text halo. Whitespace is ignored when matching the two required parts.
+# the adaptive text rules: a themeCSS with a dark color-scheme block and a glow.
+# Whitespace is ignored when matching the required parts.
 # Globals: REQUIRED_THEME, CANONICAL_DIRECTIVE
 # Arguments: $1 = path to the .mmd
-# Returns: 1 when line 1 is not an init directive, names another theme, or lacks the halo
+# Returns: 1 when line 1 is not an init directive, names another theme, or lacks the rules
 #######################################
 check_directive() {
   local file="${1}"
@@ -118,11 +125,14 @@ check_directive() {
     fi
   done
   local squeezed="${first_line//[[:space:]]/}"
-  if [[ "${squeezed}" != *themeCSS* || "${squeezed}" != *paint-order:stroke* ]]; then
-    log::err "Directive lacks the text halo | file='${file}' expected_line_1=\"${CANONICAL_DIRECTIVE}\""
-    return 1
-  fi
-  log::debug "Directive gate passed | theme='${REQUIRED_THEME}' halo='paint-order: stroke'"
+  local part
+  for part in themeCSS "prefers-color-scheme:dark" drop-shadow; do
+    if [[ "${squeezed}" != *"${part}"* ]]; then
+      log::err "Directive lacks the adaptive text rules | file='${file}' missing='${part}' expected_line_1=\"${CANONICAL_DIRECTIVE}\""
+      return 1
+    fi
+  done
+  log::debug "Directive gate passed | theme='${REQUIRED_THEME}' rules='prefers-color-scheme + drop-shadow'"
 }
 
 #######################################
@@ -192,13 +202,13 @@ check_renders() {
 }
 
 #######################################
-# Save the render on a dark canvas next to the sidecars so the author can judge
-# legibility the way a dark-mode mermaid.live viewer will see it.
+# Save the mermaid.ink render on a dark canvas: the case where the site is dark but
+# the OS scheme is light, so only the glow keeps free-standing text readable.
 # Globals: CURL_TIMEOUT, DARK_CANVAS
 # Arguments: $1 = mermaid.ink image URL, $2 = path to the .mmd
 # Returns: 1 on a non-200 response
 #######################################
-save_dark_check() {
+save_dark_canvas_check() {
   local url="${1}" file="${2}"
   local dark_file="${file%.mmd}.dark.jpg"
   local http_code
@@ -207,7 +217,41 @@ save_dark_check() {
     log::err "Dark-canvas render failed | http_code='${http_code}' dark_file='${dark_file}'"
     return 1
   fi
-  log::info "Dark-canvas render saved; look at it | dark_file='${dark_file}' canvas='#${DARK_CANVAS}'"
+  log::info "Dark-canvas render saved; look at it | case='site dark, OS light (glow fallback)' dark_file='${dark_file}' canvas='#${DARK_CANVAS}'"
+}
+
+#######################################
+# Screenshot the view URL in headless Chrome under a dark color scheme: the case
+# where site and OS are both dark, so the media query flips free-standing text light.
+# Skipped with a log line when Chrome is not installed.
+# Globals: CHROME_BIN, CHROME_TIMEOUT
+# Arguments: $1 = mermaid.live view URL, $2 = path to the .mmd
+# Returns: 1 when Chrome ran but produced no screenshot
+#######################################
+save_dark_scheme_check() {
+  local live_url="${1}" file="${2}"
+  local shot_file="${file%.mmd}.dark-scheme.png"
+  if [[ ! -x "${CHROME_BIN}" ]]; then
+    log::info "Dark-scheme screenshot skipped; Chrome not installed | chrome_bin='${CHROME_BIN}'"
+    return 0
+  fi
+  local profile_dir err_file exit_code=0
+  profile_dir="$(mktemp -d)"
+  err_file="$(mktemp)"
+  run_with_timeout "${CHROME_TIMEOUT}" "${err_file}" "${CHROME_BIN}" --headless=new --disable-gpu --force-dark-mode \
+    --hide-scrollbars --window-size=1400,900 --user-data-dir="${profile_dir}" --virtual-time-budget=8000 \
+    --screenshot="${shot_file}" "${live_url}" >/dev/null || exit_code=$?
+  rm -rf "${profile_dir}"
+  if [[ ! -s "${shot_file}" ]]; then
+    log::err "Dark-scheme screenshot failed | exit_code='${exit_code}' shot_file='${shot_file}' stderr='$(head -1 "${err_file}")'"
+    rm -f "${err_file}"
+    return 1
+  fi
+  rm -f "${err_file}"
+  if (( exit_code == 124 )); then
+    log::debug "Chrome hung after writing the screenshot; killed at the cap | timeout_secs='${CHROME_TIMEOUT}'"
+  fi
+  log::info "Dark-scheme screenshot saved; look at it | case='site dark, OS dark (color flip)' shot_file='${shot_file}'"
 }
 
 #######################################
@@ -294,11 +338,13 @@ main() {
   check_contrast "${file}" || return 1
 
   # === LOGIC ===
-  local url
+  local url live_url
   url="${INK_BASE}$(encode_state "${file}")"
+  live_url="${LIVE_BASE}$(pako_compress "${file}")"
   check_renders "${url}" || return 1
   if [[ "${dark_check}" == "true" ]]; then
-    save_dark_check "${url}" "${file}" || return 1
+    save_dark_canvas_check "${url}" "${file}" || return 1
+    save_dark_scheme_check "${live_url}" "${file}" || return 1
   fi
 
   if [[ "${validate_only}" == "true" ]]; then
@@ -306,8 +352,7 @@ main() {
     return 0
   fi
 
-  local live_url output url_file
-  live_url="${LIVE_BASE}$(pako_compress "${file}")"
+  local output url_file
   output="$(mint_output "${format}" "${url}" "${live_url}")"
   url_file="${file%.mmd}.${format}.url"
   printf '%s' "${output}" > "${url_file}"
