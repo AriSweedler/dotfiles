@@ -279,13 +279,13 @@ Every table's header row is bold, centered, and grey (`#D9D9D9`); data rows are 
 
 Every gdoc MUST end with a `# Useful links` section immediately before the `🤖🌸 Generated with Claude Code` footer. It is a complete inventory of external resources the doc depends on:
 
-1. **Every URL already inlined in the body** — permalinks, PR references, Drive/Docs smart chips. Repeat them here as a scannable list.
+1. **Every URL already inlined in the body** — permalinks, PR references, Drive/Docs smart chips. Repeat them here as a scannable list. A section that is itself a list of links (a scaffold's `# Sub-explainers`) is the exception: its URLs are not repeated.
 2. **Every resource mentioned by name but NOT linked inline** — e.g., "the design doc", "the ops runbook", "that Slack thread". Surface the URL here so readers don't have to hunt.
 
 Group into subsections when the list grows:
 - `## Code and PRs` — GitHub permalinks, PR links.
 - `## Docs` — Google Docs/Drive URLs (raw, for smart chips).
 - `## Dashboards and playbooks` — Datadog boards, runbooks, Grafana, golinks.
-- `## Related explainers` — other gdocs produced by `/ari-hemingway--*` skills.
+- `## Related explainers` — the gdocs the body directly relies on, not every sibling in a folder.
 
 The inline link inside the body and its entry in Useful links are BOTH required — do not substitute one for the other. A reader skimming Useful links gets the full surface area without reading the body.
