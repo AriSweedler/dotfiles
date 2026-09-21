@@ -3,7 +3,7 @@
 # into a smart chip, style every table's header row (bold, centered, grey #D9D9D9), and set every
 # table's column widths to the ones that make it shortest with no column narrower than its widest
 # token, then verify from one re-read that every inline image fits one page and links to its
-# editable mermaid.live source, that no plain Drive link remains, that every table fits the text
+# mermaid.live source in fullscreen view, that no plain Drive link remains, that every table fits the text
 # width, and that every table's first row is a pinned header (Drive's markdown import sets
 # tableHeader; the PDF export repeats that row on every page).
 
@@ -19,8 +19,9 @@ readonly SKILLS_DIR="${HOME}/.claude/skills"
 readonly HEADER_GREY="0.8509804"   # #D9D9D9, matches Docs' "light grey 1"
 # tabs.* cannot share a field mask with body.content, so only the first tab is processed.
 readonly GET_FIELDS="revisionId,documentStyle,inlineObjects,body.content"
-# A diagram image must open its editable source; the markdown form [![alt](ink)](live) lands here.
-readonly IMAGE_LINK_PREFIX="https://mermaid.live/edit#"
+# A diagram image must open its source fullscreen (/view, not /edit: the reader gets the diagram,
+# not the editor); the markdown form [![alt](ink)](live) lands here.
+readonly IMAGE_LINK_PREFIX="https://mermaid.live/view#"
 # Drive's markdown import lands a raw Drive URL as a plain hyperlink; insertRichLink (Docs API,
 # April 2026) turns it into a chip. It accepts Drive file and folder URLs only, so this is the
 # whole allowlist; the captured id is what the pre-flight files.get validates.
@@ -144,7 +145,7 @@ check_images_fit_one_page() {
 # Log one line per inline image saying whether it links to its mermaid.live source.
 # Globals: IMAGE_LINK_PREFIX
 # Arguments: $1 - path to doc JSON
-# Returns: 1 if any image has no link or a link outside mermaid.live
+# Returns: 1 if any image has no link or a link that is not the mermaid.live view form
 #######################################
 check_images_link_to_source() {
   local doc_json="${1}"
@@ -459,7 +460,7 @@ ${c_bold}Options:${c_rst}
   -h, --help                   Show this help
 
 ${c_bold}Exit code:${c_rst} non-zero when any inline image exceeds the page content box or lacks a link to its
-mermaid.live source, when any Drive link is still a plain hyperlink, when a table's first row is not a
+mermaid.live source in view form (${IMAGE_LINK_PREFIX}), when any Drive link is still a plain hyperlink, when a table's first row is not a
 pinned header, or when a table's widest tokens cannot fit the text width even at their minimum column
 widths (fold a column or shorten a token).
 EOH
