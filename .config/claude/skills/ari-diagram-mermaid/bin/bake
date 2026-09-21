@@ -1,104 +1,276 @@
 #!/usr/bin/env zsh
 #
-# Bake a Mermaid diagram: validate, generate URL, copy to clipboard.
+# Bake a Mermaid diagram: gate its contrast, confirm it renders, mint the embed URL,
+# copy it to the clipboard, and write a sidecar so callers relay the exact bytes.
 #
-# Usage: bake <file.mmd>
-#
-# The rendered link is printed to stdout, copied to the clipboard, and written to a
-# sidecar file — so callers relay it verbatim and never hand-reproduce the base64.
-#
-# Environment variables:
-#   MERMAID_FORMAT        Output format (default: markdown_link)
-#     markdown_link       Clickable markdown image link: [![](img)](view)
-#     ink_url             Direct PNG image URL via mermaid.ink
-#     live_url            Fullscreen view URL via mermaid.live (/view#; swap view for edit to open the editor)
-#   MERMAID_VALIDATE_ONLY If set to "1", validate only (no URL, no clipboard)
+# The theme is pinned inside the source (`%%{init: {'theme':'default'}}%%`), so the
+# diagram looks the same whatever theme a viewer's mermaid.live puts in the URL, and
+# every fill pairs with a text color that clears MIN_CONTRAST. The gate runs before
+# any network call.
 set -euo pipefail
 
-log() { printf '\033[1;34m==>\033[0m %s\n' "$*" >&2; }
-die() { printf '\033[1;31m==>\033[0m %s\n' "$*" >&2; exit 1; }
+readonly SCRIPT_DIR="${0:A:h}"
+readonly SKILLS_DIR="${HOME}/.claude/skills"
+readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+
+readonly LIB_CONTRAST="${SCRIPT_DIR:h}/lib/contrast.awk"
+readonly VALID_FORMATS=(markdown_link ink_url live_url)
+readonly REQUIRED_THEME="default"
+readonly MIN_CONTRAST="3.0"   # WCAG AA for large or bold text; node labels are bold
+readonly CURL_TIMEOUT="30"
+readonly INK_BASE="https://mermaid.ink/img/base64:"
+# /view renders the diagram alone; /edit would land a Docs reader in the editor. Same pako payload.
+readonly LIVE_BASE="https://mermaid.live/view#pako:"
+
+#######################################
+# Fail when a required command is absent.
+# Globals: none
+# Arguments: none
+# Returns: 1 if any are missing
+#######################################
+check_prerequisites() {
+  local missing=()
+  for cmd in node curl awk; do
+    command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
+  done
+  if (( ${#missing} > 0 )); then
+    log::err "Missing required commands | missing='${(j:, :)missing}'"
+    return 1
+  fi
+  if [[ ! -r "${LIB_CONTRAST}" ]]; then
+    log::err "Missing contrast lib | path='${LIB_CONTRAST}'"
+    return 1
+  fi
+}
+
+help() {
+  cat <<EOF
+${c_green}bake${c_rst} — gate a Mermaid diagram's contrast, confirm it renders, and mint its embed link
+
+${c_bold}Usage:${c_rst}
+  zsh \$HOME/.claude/skills/ari-diagram-mermaid/bin/bake --file <diagram.mmd> [--format FORMAT] [--validate-only]
+  zsh \$HOME/.claude/skills/ari-diagram-mermaid/bin/bake <diagram.mmd>          (compatibility form)
+
+${c_bold}Options:${c_rst}
+  --file PATH       The .mmd source (a bare positional path is accepted for older callers)
+  --format FORMAT   ${(j:, :)VALID_FORMATS} (default: markdown_link; MERMAID_FORMAT env is the fallback)
+  --validate-only   Run the contrast gate and the render check; mint no URL (MERMAID_VALIDATE_ONLY=1 is the fallback)
+  -h, --help        Show this help
+
+${c_bold}Gate:${c_rst}
+  Line 1 of the source MUST be %%{init: {'theme':'${REQUIRED_THEME}'}}%% and every classDef/style
+  that sets fill MUST set color at a contrast ratio >= ${MIN_CONTRAST}:1. Violations print as
+  line|directive|name|fill|color|ratio|reason and the bake stops.
+
+${c_bold}Output:${c_rst}
+  The link on stdout, copied to the clipboard when one exists, and written to <name>.<format>.url.
+  Relay it verbatim; never retype it.
+EOF
+}
+
+#######################################
+# Fail unless the source pins the default theme with an init directive.
+# Globals: REQUIRED_THEME
+# Arguments: $1 = path to the .mmd
+# Returns: 1 when the directive is missing or names another theme
+#######################################
+check_theme_pin() {
+  local file="${1}"
+  local themes
+  # Quote characters are passed in, so the regex is portable across BSD and GNU awk.
+  themes="$(awk -v q="'" '
+    BEGIN { re = "[\"" q "]theme[\"" q "][ \t]*:[ \t]*[\"" q "][^\"" q "]+[\"" q "]" }
+    /^[ \t]*%%\{init/ && match($0, re) {
+      t = substr($0, RSTART, RLENGTH)
+      sub(/^.*:[ \t]*["'"'"']/, "", t); sub(/["'"'"']$/, "", t)
+      print t
+    }' "${file}")"
+  if [[ -z "${themes}" ]]; then
+    log::err "No theme directive | file='${file}' expected_line_1=\"%%{init: {'theme':'${REQUIRED_THEME}'}}%%\""
+    return 1
+  fi
+  local theme
+  for theme in ${(f)themes}; do
+    if [[ "${theme}" != "${REQUIRED_THEME}" ]]; then
+      log::err "Theme directive is not the pinned theme | theme='${theme}' expected='${REQUIRED_THEME}'"
+      return 1
+    fi
+  done
+  log::debug "Theme pinned | theme='${REQUIRED_THEME}'"
+}
+
+#######################################
+# Fail when any classDef/style pairs a fill with missing or low-contrast text.
+# Globals: LIB_CONTRAST, MIN_CONTRAST
+# Arguments: $1 = path to the .mmd
+# Returns: 1 when there is at least one violation
+#######################################
+check_contrast() {
+  local file="${1}"
+  local violations
+  violations="$(awk -v min_ratio="${MIN_CONTRAST}" -f "${LIB_CONTRAST}" "${file}")"
+  if [[ -z "${violations}" ]]; then
+    log::debug "Contrast gate passed | min_ratio='${MIN_CONTRAST}'"
+    return 0
+  fi
+  log::err "Contrast gate failed | min_ratio='${MIN_CONTRAST}' format='line|directive|name|fill|color|ratio|reason'"
+  log::ERR "${violations}"
+  return 1
+}
+
+#######################################
+# Encode the mermaid.live state as base64url JSON for mermaid.ink.
+# Globals: REQUIRED_THEME
+# Arguments: $1 = path to the .mmd
+# Returns: the encoded state on stdout
+#######################################
+encode_state() {
+  node -e "
+const fs = require('fs');
+const code = fs.readFileSync(process.argv[1], 'utf-8');
+const state = JSON.stringify({code, mermaid: {theme: process.argv[2]}});
+process.stdout.write(Buffer.from(state).toString('base64url'));
+" "${1}" "${REQUIRED_THEME}"
+}
+
+#######################################
+# Deflate the mermaid.live state as base64url for the pako: fragment.
+# Globals: REQUIRED_THEME
+# Arguments: $1 = path to the .mmd
+# Returns: the compressed state on stdout
+#######################################
+pako_compress() {
+  node -e "
+const zlib = require('zlib');
+const fs = require('fs');
+const code = fs.readFileSync(process.argv[1], 'utf-8');
+const state = JSON.stringify({code, mermaid: {theme: process.argv[2]}});
+process.stdout.write(zlib.deflateSync(state, { level: 9 }).toString('base64url'));
+" "${1}" "${REQUIRED_THEME}"
+}
+
+#######################################
+# Fail unless mermaid.ink renders the image.
+# Globals: CURL_TIMEOUT
+# Arguments: $1 = mermaid.ink image URL
+# Returns: 1 on a non-200 response
+#######################################
+check_renders() {
+  local url="${1}"
+  local http_code
+  http_code="$(curl -s --max-time "${CURL_TIMEOUT}" -o /dev/null -w '%{http_code}' "${url}")"
+  if [[ "${http_code}" != "200" ]]; then
+    log::err "Invalid mermaid diagram | http_code='${http_code}' debug_url='${url}'"
+    return 1
+  fi
+}
+
+#######################################
+# Compose the output for one format.
+# Globals: none
+# Arguments: $1 = format, $2 = image URL, $3 = live URL
+# Returns: the output on stdout
+#######################################
+mint_output() {
+  local format="${1}" url="${2}" live_url="${3}"
+  if [[ "${format}" == "ink_url" ]]; then
+    echo "${url}"
+    return
+  fi
+  if [[ "${format}" == "live_url" ]]; then
+    echo "${live_url}"
+    return
+  fi
+  echo "[![](${url})](${live_url})"
+}
 
 copy_to_clipboard() {
-  if command -v pbcopy &>/dev/null; then
+  if command -v pbcopy >/dev/null 2>&1; then
     pbcopy
-  elif command -v xclip &>/dev/null; then
+  elif command -v xclip >/dev/null 2>&1; then
     xclip -selection clipboard 2>/dev/null
-  elif command -v xsel &>/dev/null; then
+  elif command -v xsel >/dev/null 2>&1; then
     xsel --clipboard --input 2>/dev/null
   else
     return 1
   fi
 }
 
-encode_state() {
-  node -e "
-const fs = require('fs');
-const code = fs.readFileSync(process.argv[1], 'utf-8');
-const state = JSON.stringify({code, mermaid: {theme: 'default'}});
-process.stdout.write(Buffer.from(state).toString('base64url'));
-" "${file}"
-}
-
-pako_compress() {
-  node -e "
-const zlib = require('zlib');
-const fs = require('fs');
-const code = fs.readFileSync(process.argv[1], 'utf-8');
-const state = JSON.stringify({code, mermaid: {theme: 'default'}});
-const compressed = zlib.deflateSync(state, { level: 9 });
-process.stdout.write(compressed.toString('base64url'));
-" "${file}"
+#######################################
+# Deliver the output: clipboard when available, sidecar file always.
+# Globals: none
+# Arguments: $1 = output, $2 = format, $3 = sidecar path
+# Returns: none
+#######################################
+deliver_output() {
+  local output="${1}" format="${2}" url_file="${3}"
+  if printf '%s' "${output}" | copy_to_clipboard; then
+    log::info "Valid diagram — link copied to clipboard | format='${format}' url_file='${url_file}'"
+    return
+  fi
+  log::info "Valid diagram — clipboard unavailable; link written to file | format='${format}' url_file='${url_file}'"
 }
 
 main() {
-  (( $# > 0 )) || die "Usage: bake <file.mmd>"
+  check_prerequisites || exit 1
 
-  local file="$1"
-  [[ -f "${file}" ]] || die "File not found: ${file}"
+  # === PARSE ===
+  local file="" format="${MERMAID_FORMAT:-markdown_link}" validate_only="false"
+  [[ "${MERMAID_VALIDATE_ONLY:-}" == "1" ]] && validate_only="true"
 
-  local format="${MERMAID_FORMAT:-markdown_link}"
-  case "${format}" in
-    ink_url|live_url|markdown_link) ;;
-    *) die "Unknown MERMAID_FORMAT: ${format} (expected ink_url, live_url, or markdown_link)" ;;
-  esac
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)        help; return 0 ;;
+    --file)           file="${2:?--file requires a value}"; shift 2 ;;
+    --format)         format="${2:?--format requires a value}"; shift 2 ;;
+    --validate-only)  validate_only="true"; shift ;;
+    -*)               log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)
+      if [[ -n "${file}" ]]; then
+        log::err "Unexpected argument | argument='${1}'"; help; return 1
+      fi
+      file="${1}"; shift ;;
+  esac; done
 
-  local url http_code
-  url="https://mermaid.ink/img/base64:$(encode_state)"
-  http_code=$(curl -s -o /dev/null -w "%{http_code}" "${url}")
-  [[ "${http_code}" == "200" ]] || die "Invalid mermaid diagram (HTTP ${http_code})\nDebug URL: ${url}"
+  # === MASSAGE ===
+  format="${format:l}"
 
-  if [[ "${MERMAID_VALIDATE_ONLY:-}" == "1" ]]; then
-    log "Valid mermaid diagram"
+  # === VALIDATE ===
+  if [[ -z "${file}" ]]; then
+    log::err "No source given | expected='--file <diagram.mmd>'"; help; return 1
+  fi
+  if [[ ! -f "${file}" ]]; then
+    log::err "File not found | file='${file}'"; return 1
+  fi
+  if (( ! ${VALID_FORMATS[(Ie)${format}]} )); then
+    log::err "Unknown format | format='${format}' valid_formats='${(j:, :)VALID_FORMATS}'"; return 1
+  fi
+  check_theme_pin "${file}" || return 1
+  check_contrast "${file}" || return 1
+
+  # === LOGIC ===
+  local url
+  url="${INK_BASE}$(encode_state "${file}")"
+  check_renders "${url}" || return 1
+
+  if [[ "${validate_only}" == "true" ]]; then
+    log::info "Valid mermaid diagram | file='${file}'"
     return 0
   fi
 
-  local live_url output
-  # /view renders the diagram alone; /edit would land a Docs reader in the editor. Same pako payload.
-  live_url="https://mermaid.live/view#pako:$(pako_compress)"
-
-  case "${format}" in
-    ink_url)
-      output="${url}"
-      ;;
-    live_url)
-      output="${live_url}"
-      ;;
-    markdown_link)
-      output="[![](${url})](${live_url})"
-      ;;
-  esac
-
-  local url_file="${file%.mmd}.${format}.url"
+  local live_url output url_file
+  live_url="${LIVE_BASE}$(pako_compress "${file}")"
+  output="$(mint_output "${format}" "${url}" "${live_url}")"
+  url_file="${file%.mmd}.${format}.url"
   printf '%s' "${output}" > "${url_file}"
 
   # Print verbatim so callers relay this exact value — never hand-reproduce the base64.
   echo "${output}"
-
-  if printf '%s' "${output}" | copy_to_clipboard; then
-    log "Valid diagram — markdown link copied to clipboard | format='${format}' url_file='${url_file}'"
-  else
-    log "Valid diagram — clipboard unavailable; link written to file | format='${format}' url_file='${url_file}'"
-  fi
+  deliver_output "${output}" "${format}" "${url_file}"
 }
 
-main "$@"
+main "${@}"
