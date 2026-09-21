@@ -30,7 +30,7 @@ One sentence on the topic. One sentence on what this revision contains.
 | [prefix](https://docs.example/prefix) | The top-level directory of an installation. Everything else lives under it. |
 | [keg](https://docs.example/keg) | The directory under the prefix that holds one installed version of one package. |
 
-[![Layout: how the definitions fit together](https://mermaid.ink/img/...?width=620)](https://mermaid.live/edit#...)
+[![Layout: how the definitions fit together](https://mermaid.ink/img/...?width=620)](https://mermaid.live/view#...)
 
 # Subsystems
 
@@ -63,7 +63,7 @@ One sentence on the topic. One sentence naming the sub-explainers this glossary 
 | --- | --- |
 | [prefix](https://docs.example/prefix) | The top-level directory of an installation. Everything else lives under it. |
 
-[![Subsystems: how the clusters depend on each other](https://mermaid.ink/img/...?width=620)](https://mermaid.live/edit#...)
+[![Subsystems: how the clusters depend on each other](https://mermaid.ink/img/...?width=620)](https://mermaid.live/view#...)
 
 # Sub-explainers
 - https://docs.google.com/document/d/<install-layout doc id>
@@ -143,7 +143,7 @@ A row of the accepted table is universal when at least half of its dependents li
 
 ### Diagrams
 
-One diagram per Doc at most. The Glossary carries the cluster-level graph from the cluster step (one node per subsystem, edges weighted by cross-subsystem dependencies, the universal rows as one group). A single Doc may carry a small layout diagram of 5 to 8 terms instead. Produce every diagram with `/ari-diagram-mermaid`, baking both `MERMAID_FORMAT=ink_url` and `MERMAID_FORMAT=live_url`, and embed it per the Diagrams rule in `/ari-hemingway--format-gdoc`: `[![alt](<ink_url>?width=620)](<live_url>)`, read from the two sidecars. The image MUST fit on one page and MUST link to its mermaid.live source; `/ari-hemingway--share-gdoc` checks both at publish time and fails otherwise. Keep it compact: 6 to 8 nodes in `flowchart LR` fit; split before adding more.
+One diagram per Doc at most. The Glossary carries the cluster-level graph from the cluster step (one node per subsystem, edges weighted by cross-subsystem dependencies, the universal rows as one group). A single Doc may carry a small layout diagram of 5 to 8 terms instead. Produce every diagram with `/ari-diagram-mermaid`, baking both `MERMAID_FORMAT=ink_url` and `MERMAID_FORMAT=live_url`, and embed it per the Diagrams rule in `/ari-hemingway--format-gdoc`: `[![alt](<ink_url>?width=620)](<live_url>)`, read from the two sidecars. The image MUST fit on one page and MUST link to its mermaid.live source in view form (`/view#`, as `live_url` bakes it); `/ari-hemingway--share-gdoc` checks both at publish time and fails otherwise. Keep it compact: 6 to 8 nodes in `flowchart LR` fit; split before adding more.
 
 ### Multi-agent workflows
 
