@@ -26,7 +26,7 @@ An artifact folder at `/tmp/ari-code-trace-<name>-<YYYYMMDD-HHmmss>/` (UTC) cont
 - `_edges.md` — edge list maintained during exploration
 - `mermaid/call-graph.mmd` — Mermaid diagram of the call graph
 - `mermaid/call-graph.ink_url.url` — mermaid.ink PNG URL (cat-friendly)
-- `mermaid/call-graph.live_url.url` — mermaid.live editor URL (cat-friendly)
+- `mermaid/call-graph.live_url.url` — mermaid.live fullscreen view URL (cat-friendly)
 
 For functions over 300 lines, both an unabridged file (full source) and an `.abridged` file (pseudocode summary) are produced.
 
@@ -297,15 +297,15 @@ function isExpired(card: CardInfo): boolean {
 ## Phase 4: Diagram
 
 1. Create `mermaid/` subfolder in the artifact folder.
-2. Write `mermaid/call-graph.mmd`.
-3. Bake URLs using `/ari-diagram-mermaid`'s `bin/bake` script:
+2. Write `mermaid/call-graph.mmd`. Line 1 is `%%{init: {'theme':'default'}}%%`, and every `classDef` or `style` that sets `fill` also sets `color`; bake refuses the file otherwise, and the Airtable palette in `/ari-diagram-mermaid` satisfies both.
+3. Bake URLs with `/ari-diagram-mermaid`'s `bin/bake` script, passing the artifact's absolute path:
 
-```bash
-MERMAID_FORMAT=ink_url  $HOME/.claude/skills/ari-diagram-mermaid/bin/bake mermaid/call-graph.mmd
-MERMAID_FORMAT=live_url $HOME/.claude/skills/ari-diagram-mermaid/bin/bake mermaid/call-graph.mmd
+```zsh
+MERMAID_FORMAT=ink_url  zsh $HOME/.claude/skills/ari-diagram-mermaid/bin/bake /tmp/ari-code-trace-<name>-<YYYYMMDD-HHmmss>/mermaid/call-graph.mmd
+MERMAID_FORMAT=live_url zsh $HOME/.claude/skills/ari-diagram-mermaid/bin/bake /tmp/ari-code-trace-<name>-<YYYYMMDD-HHmmss>/mermaid/call-graph.mmd
 ```
 
-The bake script validates the diagram (HTTP 200 check), prints the URL to stdout, and writes sidecar files next to the `.mmd`: `call-graph.ink_url.url` and `call-graph.live_url.url`. If validation fails, fix the `.mmd` and re-run.
+The bake script gates the theme directive and text contrast, confirms mermaid.ink renders the source, prints the URL to stdout, and writes sidecar files next to the `.mmd`: `call-graph.ink_url.url` and `call-graph.live_url.url` (the fullscreen `mermaid.live/view#` link). A failed gate lists each offending line; fix the `.mmd` and re-run.
 
 Diagram rules:
 - `graph TD` (top-down) layout
