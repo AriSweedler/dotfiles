@@ -13,15 +13,15 @@ A scaffold is one Doc (single layout) or a folder of Docs (a Glossary Doc plus o
 
 Single Doc, title `[🤖 AI generated] <Topic>`:
 1. `# Summary` — names the topic and what this revision contains.
-2. `# Definitions` — exactly one table, then at most one diagram image.
+2. `# Definitions` — exactly one table, then any diagrams.
 3. `# Subsystems` — one `##` per subsystem.
 4. `# Useful links` — `## Docs` with every doc URL from the table and the body; no `## Code and PRs` unless the topic is code.
 5. Footer `🤖🌸 Generated with Claude Code with the ari-hemingway skill`.
 
 Glossary Doc, title `[🤖 AI generated] <Topic> — Glossary`:
 1. `# Summary` — names the topic and the sub-explainers.
-2. `# Definitions` — exactly one table (the universal rows), then at most one diagram image (the cluster-level graph).
-3. `# Sub-explainers` — one raw `docs.google.com` URL per subsystem Doc, nothing else; a missing subsystem Doc or a markdown-linked URL is a finding.
+2. `# Definitions` — exactly one table (the universal rows), then any diagrams.
+3. `# Sub-explainers` — any diagrams, then one raw `docs.google.com` URL per subsystem Doc and nothing else; a missing subsystem Doc or a markdown-linked URL is a finding.
 4. `# Useful links` — `## Docs` with every doc URL from the table.
 5. Footer.
 
@@ -55,6 +55,6 @@ Any mention of a skill outside the footer is a finding in every kind.
 - Written from the accepted tables and articles: every claim in it appears in the body.
 - Says nothing about how the scaffold was made; the footer carries the credit.
 
-## Diagram
+## Diagrams
 
-- At most one image per Doc, directly after its table, per the Diagrams rule in `/ari-hemingway--format-gdoc`: `[![alt](ink_url?width=620)](live_url)`, so the image links to its mermaid.live source. In a single Doc it ties together terms that are all in the table; in the Glossary it is the cluster-level graph whose nodes are the subsystem Docs listed under `# Sub-explainers`.
+- Diagrams are optional and unlimited. Each follows the Diagrams rule in `/ari-hemingway--format-gdoc` (`[![alt](ink_url?width=620)](live_url)`: fits one page, links to its `mermaid.live/view#` source) and names only terms in the Doc's tables or, for the Glossary's cluster-level graph, the subsystem Docs listed under `# Sub-explainers`. A diagram that names a term the tables lack is a finding against the tables.

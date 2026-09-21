@@ -15,7 +15,7 @@ Two layouts. **Single Doc**: no Drive folder was given, or the topic yields one 
 
 ### Single Doc
 
-Title `[🤖 AI generated] <Topic>`, then `# Summary`, `# Definitions` (one two-column table, then an optional layout diagram), `# Subsystems` (one `##` per subsystem, each standalone), `# Useful links`, footer.
+Title `[🤖 AI generated] <Topic>`, then `# Summary`, `# Definitions` (one two-column table, then any diagrams), `# Subsystems` (one `##` per subsystem, each standalone), `# Useful links`, footer.
 
 ```
 [🤖 AI generated] Topic
@@ -49,7 +49,7 @@ Names "Install layout" but never describes its internals.
 
 ### Folder: Glossary Doc
 
-Title `[🤖 AI generated] <Topic> — Glossary`. `# Definitions` holds the universal rows only, then the cluster diagram. `# Sub-explainers` lists every subsystem Doc as a raw `docs.google.com` URL (a smart chip after publish), one per line, in cluster order.
+Title `[🤖 AI generated] <Topic> — Glossary`. `# Definitions` holds the universal rows only, then any diagrams (a layout of table terms, for example). `# Sub-explainers` opens with the cluster diagram, then lists every subsystem Doc as a raw `docs.google.com` URL (a smart chip after publish), one per line, in cluster order.
 
 ```
 [🤖 AI generated] Topic — Glossary
@@ -63,9 +63,10 @@ One sentence on the topic. One sentence naming the sub-explainers this glossary 
 | --- | --- |
 | [prefix](https://docs.example/prefix) | The top-level directory of an installation. Everything else lives under it. |
 
+# Sub-explainers
+
 [![Subsystems: how the clusters depend on each other](https://mermaid.ink/img/...?width=620)](https://mermaid.live/view#...)
 
-# Sub-explainers
 - https://docs.google.com/document/d/<install-layout doc id>
 - https://docs.google.com/document/d/<distribution doc id>
 
@@ -143,7 +144,7 @@ A row of the accepted table is universal when at least half of its dependents li
 
 ### Diagrams
 
-One diagram per Doc at most. The Glossary carries the cluster-level graph from the cluster step (one node per subsystem, edges weighted by cross-subsystem dependencies, the universal rows as one group). A single Doc may carry a small layout diagram of 5 to 8 terms instead. Produce every diagram with `/ari-diagram-mermaid`, baking both `MERMAID_FORMAT=ink_url` and `MERMAID_FORMAT=live_url`, and embed it per the Diagrams rule in `/ari-hemingway--format-gdoc`: `[![alt](<ink_url>?width=620)](<live_url>)`, read from the two sidecars. The image MUST fit on one page and MUST link to its mermaid.live source in view form (`/view#`, as `live_url` bakes it); `/ari-hemingway--share-gdoc` checks both at publish time and fails otherwise. Keep it compact: 6 to 8 nodes in `flowchart LR` fit; split before adding more.
+Diagrams are optional and unlimited; each names only terms from the Doc's tables. The Glossary carries the cluster-level graph from the cluster step (one node per subsystem, edges weighted by cross-subsystem dependencies, the universal rows as one group) at the head of `# Sub-explainers`, and any Doc may carry a layout diagram of 5 to 8 table terms after its table. Produce every diagram with `/ari-diagram-mermaid`, baking both `MERMAID_FORMAT=ink_url` and `MERMAID_FORMAT=live_url`, and embed it per the Diagrams rule in `/ari-hemingway--format-gdoc`: `[![alt](<ink_url>?width=620)](<live_url>)`, read from the two sidecars. The image MUST fit on one page and MUST link to its mermaid.live source in view form (`/view#`, as `live_url` bakes it); `/ari-hemingway--share-gdoc` checks both at publish time and fails otherwise. Keep it compact: 6 to 8 nodes in `flowchart LR` fit; split before adding more.
 
 ### Multi-agent workflows
 
@@ -162,7 +163,7 @@ definitions_final.json     # rows after hand edits, in table order; the accepted
 clusters.json              # cluster step result: communities, sections, hoisted and universal rows
 rows/glossary.json         # universal rows; rows/<slug>.json = glossary rows then the article's rows
 graph.mmd, graph.ink_url.url, graph.live_url.url   # cluster-level diagram (folder layout)
-diagram.mmd, diagram.ink_url.url, diagram.live_url.url   # layout diagram (single Doc, optional)
+diagram.mmd, diagram.ink_url.url, diagram.live_url.url   # layout diagram (optional, any Doc)
 draft.md                   # single Doc, or the Glossary Doc
 subsystems/<slug>.md       # one draft per subsystem Doc (folder layout)
 output.md, output/<slug>.md   # what /ari-hemingway--share-gdoc publishes
