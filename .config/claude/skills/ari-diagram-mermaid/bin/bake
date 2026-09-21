@@ -1,12 +1,15 @@
 #!/usr/bin/env zsh
 #
-# Bake a Mermaid diagram: gate its contrast, confirm it renders, mint the embed URL,
-# copy it to the clipboard, and write a sidecar so callers relay the exact bytes.
+# Bake a Mermaid diagram: gate its line-1 directive and contrast, confirm it renders,
+# mint the embed URL, copy it to the clipboard, and write a sidecar so callers relay
+# the exact bytes.
 #
-# The theme is pinned inside the source (`%%{init: {'theme':'default'}}%%`), so the
-# diagram looks the same whatever theme a viewer's mermaid.live puts in the URL, and
-# every fill pairs with a text color that clears MIN_CONTRAST. The gate runs before
-# any network call.
+# Line 1 of the source pins the theme and carries a themeCSS text halo. The theme pin
+# beats whatever theme a viewer's mermaid.live writes into the URL; the halo outlines
+# free-standing text (sequence messages, box titles, lifeline captions) in white so it
+# reads on the dark canvas mermaid.live's view page paints in dark mode. Every fill
+# pairs with a text color that clears MIN_CONTRAST. The gates run before any network
+# call.
 set -euo pipefail
 
 readonly SCRIPT_DIR="${0:A:h}"
@@ -21,7 +24,11 @@ source "${LIB_LOGGING}"
 readonly LIB_CONTRAST="${SCRIPT_DIR:h}/lib/contrast.awk"
 readonly VALID_FORMATS=(markdown_link ink_url live_url)
 readonly REQUIRED_THEME="default"
+# The one line every diagram starts with. Whitespace-insensitive match on its two
+# load-bearing parts: the theme pin and the paint-order halo.
+readonly CANONICAL_DIRECTIVE="%%{init: {'theme':'default', 'themeCSS': '.messageText, text.text, text.actor, .loopText, .noteText, .labelText, .titleText { paint-order: stroke; stroke: #ffffff; stroke-width: 4px; stroke-linejoin: round; }'}}%%"
 readonly MIN_CONTRAST="3.0"   # WCAG AA for large or bold text; node labels are bold
+readonly DARK_CANVAS="1e1e1e" # mermaid.live's dark-mode view background, for --dark-check
 readonly CURL_TIMEOUT="30"
 readonly INK_BASE="https://mermaid.ink/img/base64:"
 # /view renders the diagram alone; /edit would land a Docs reader in the editor. Same pako payload.
@@ -50,22 +57,24 @@ check_prerequisites() {
 
 help() {
   cat <<EOF
-${c_green}bake${c_rst} — gate a Mermaid diagram's contrast, confirm it renders, and mint its embed link
+${c_green}bake${c_rst} — gate a Mermaid diagram's directive and contrast, confirm it renders, and mint its embed link
 
 ${c_bold}Usage:${c_rst}
-  zsh \$HOME/.claude/skills/ari-diagram-mermaid/bin/bake --file <diagram.mmd> [--format FORMAT] [--validate-only]
+  zsh \$HOME/.claude/skills/ari-diagram-mermaid/bin/bake --file <diagram.mmd> [--format FORMAT] [--validate-only] [--dark-check]
   zsh \$HOME/.claude/skills/ari-diagram-mermaid/bin/bake <diagram.mmd>          (compatibility form)
 
 ${c_bold}Options:${c_rst}
   --file PATH       The .mmd source (a bare positional path is accepted for older callers)
   --format FORMAT   ${(j:, :)VALID_FORMATS} (default: markdown_link; MERMAID_FORMAT env is the fallback)
-  --validate-only   Run the contrast gate and the render check; mint no URL (MERMAID_VALIDATE_ONLY=1 is the fallback)
+  --validate-only   Run the gates and the render check; mint no URL (MERMAID_VALIDATE_ONLY=1 is the fallback)
+  --dark-check      Also save <name>.dark.jpg, the render on a #${DARK_CANVAS} canvas, for a legibility look
   -h, --help        Show this help
 
-${c_bold}Gate:${c_rst}
-  Line 1 of the source MUST be %%{init: {'theme':'${REQUIRED_THEME}'}}%% and every classDef/style
-  that sets fill MUST set color at a contrast ratio >= ${MIN_CONTRAST}:1. Violations print as
-  line|directive|name|fill|color|ratio|reason and the bake stops.
+${c_bold}Gates:${c_rst}
+  Line 1 of the source MUST be the canonical directive (theme pin plus text halo):
+    ${CANONICAL_DIRECTIVE}
+  Every classDef/style that sets fill MUST set color at a contrast ratio >= ${MIN_CONTRAST}:1.
+  Violations print as line|directive|name|fill|color|ratio|reason and the bake stops.
 
 ${c_bold}Output:${c_rst}
   The link on stdout, copied to the clipboard when one exists, and written to <name>.<format>.url.
@@ -74,13 +83,20 @@ EOF
 }
 
 #######################################
-# Fail unless the source pins the default theme with an init directive.
-# Globals: REQUIRED_THEME
+# Fail unless line 1 is an init directive that pins the default theme and carries
+# the text halo. Whitespace is ignored when matching the two required parts.
+# Globals: REQUIRED_THEME, CANONICAL_DIRECTIVE
 # Arguments: $1 = path to the .mmd
-# Returns: 1 when the directive is missing or names another theme
+# Returns: 1 when line 1 is not an init directive, names another theme, or lacks the halo
 #######################################
-check_theme_pin() {
+check_directive() {
   local file="${1}"
+  if ! awk 'NR == 1 { exit ($0 ~ /^[ \t]*%%\{init/) ? 0 : 1 } END { if (NR == 0) exit 1 }' "${file}"; then
+    log::err "No init directive on line 1 | file='${file}' expected_line_1=\"${CANONICAL_DIRECTIVE}\""
+    return 1
+  fi
+  local first_line
+  first_line="$(awk 'NR == 1 { print; exit }' "${file}")"
   local themes
   # Quote characters are passed in, so the regex is portable across BSD and GNU awk.
   themes="$(awk -v q="'" '
@@ -91,7 +107,7 @@ check_theme_pin() {
       print t
     }' "${file}")"
   if [[ -z "${themes}" ]]; then
-    log::err "No theme directive | file='${file}' expected_line_1=\"%%{init: {'theme':'${REQUIRED_THEME}'}}%%\""
+    log::err "Directive pins no theme | file='${file}' expected_line_1=\"${CANONICAL_DIRECTIVE}\""
     return 1
   fi
   local theme
@@ -101,7 +117,12 @@ check_theme_pin() {
       return 1
     fi
   done
-  log::debug "Theme pinned | theme='${REQUIRED_THEME}'"
+  local squeezed="${first_line//[[:space:]]/}"
+  if [[ "${squeezed}" != *themeCSS* || "${squeezed}" != *paint-order:stroke* ]]; then
+    log::err "Directive lacks the text halo | file='${file}' expected_line_1=\"${CANONICAL_DIRECTIVE}\""
+    return 1
+  fi
+  log::debug "Directive gate passed | theme='${REQUIRED_THEME}' halo='paint-order: stroke'"
 }
 
 #######################################
@@ -171,6 +192,25 @@ check_renders() {
 }
 
 #######################################
+# Save the render on a dark canvas next to the sidecars so the author can judge
+# legibility the way a dark-mode mermaid.live viewer will see it.
+# Globals: CURL_TIMEOUT, DARK_CANVAS
+# Arguments: $1 = mermaid.ink image URL, $2 = path to the .mmd
+# Returns: 1 on a non-200 response
+#######################################
+save_dark_check() {
+  local url="${1}" file="${2}"
+  local dark_file="${file%.mmd}.dark.jpg"
+  local http_code
+  http_code="$(curl -s --max-time "${CURL_TIMEOUT}" -o "${dark_file}" -w '%{http_code}' "${url}?bgColor=${DARK_CANVAS}")"
+  if [[ "${http_code}" != "200" ]]; then
+    log::err "Dark-canvas render failed | http_code='${http_code}' dark_file='${dark_file}'"
+    return 1
+  fi
+  log::info "Dark-canvas render saved; look at it | dark_file='${dark_file}' canvas='#${DARK_CANVAS}'"
+}
+
+#######################################
 # Compose the output for one format.
 # Globals: none
 # Arguments: $1 = format, $2 = image URL, $3 = live URL
@@ -220,7 +260,7 @@ main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local file="" format="${MERMAID_FORMAT:-markdown_link}" validate_only="false"
+  local file="" format="${MERMAID_FORMAT:-markdown_link}" validate_only="false" dark_check="false"
   [[ "${MERMAID_VALIDATE_ONLY:-}" == "1" ]] && validate_only="true"
 
   while (( $# > 0 )); do case "${1}" in
@@ -228,6 +268,7 @@ main() {
     --file)           file="${2:?--file requires a value}"; shift 2 ;;
     --format)         format="${2:?--format requires a value}"; shift 2 ;;
     --validate-only)  validate_only="true"; shift ;;
+    --dark-check)     dark_check="true"; shift ;;
     -*)               log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)
       if [[ -n "${file}" ]]; then
@@ -249,13 +290,16 @@ main() {
   if (( ! ${VALID_FORMATS[(Ie)${format}]} )); then
     log::err "Unknown format | format='${format}' valid_formats='${(j:, :)VALID_FORMATS}'"; return 1
   fi
-  check_theme_pin "${file}" || return 1
+  check_directive "${file}" || return 1
   check_contrast "${file}" || return 1
 
   # === LOGIC ===
   local url
   url="${INK_BASE}$(encode_state "${file}")"
   check_renders "${url}" || return 1
+  if [[ "${dark_check}" == "true" ]]; then
+    save_dark_check "${url}" "${file}" || return 1
+  fi
 
   if [[ "${validate_only}" == "true" ]]; then
     log::info "Valid mermaid diagram | file='${file}'"
