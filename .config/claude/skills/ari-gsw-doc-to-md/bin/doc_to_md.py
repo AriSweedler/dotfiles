@@ -4,14 +4,20 @@
 Fetches a doc via the `gws` CLI (or reads a saved JSON) and renders markdown.
 Tab-aware: a `?tab=<tabId>` in the source URL (or `--tab`) renders just that tab;
 with no tab, a single-tab doc renders as-is and a multi-tab doc errors (use
-/ari-gsw-read to expand it into one file per tab). Logs go to stderr as
-`key='value'` records (message separated from data by `|`); only the result —
-the output path, or the markdown under --stdout — goes to stdout.
+/ari-gsw-read to expand it into one file per tab). Two dialects: the default
+reads well; `--publish` emits the /ari-hemingway--format-gdoc dialect (title as
+the first line, Drive URLs raw, linked images via mermaid.ink) so the output
+feeds /ari-hemingway--share-gdoc unchanged. Logs go to stderr as `key='value'`
+records (message separated from data by `|`); only the result — the output
+path, or the markdown under --stdout — goes to stdout.
 """
 import argparse
+import base64
 import json
 import re
 import sys
+import zlib
+from dataclasses import dataclass
 from pathlib import Path
 
 from at_log import log_info, log_warn, die  # on PYTHONPATH via the entrypoint
@@ -23,6 +29,10 @@ DOC_ID_RE = re.compile(r"/(?:document|file)/d/([a-zA-Z0-9_-]+)")
 OPEN_ID_RE = re.compile(r"[?&]id=([a-zA-Z0-9_-]+)")
 BARE_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{20,}$")
 TAB_ID_RE = re.compile(r"[?&]tab=([a-zA-Z0-9._-]+)")
+DRIVE_URL_RE = re.compile(r"^https://(?:docs|drive)\.google\.com/")
+MERMAID_LIVE_RE = re.compile(r"^https://mermaid\.live/(?:edit|view)#pako:([A-Za-z0-9_-]+)")
+MERMAID_INK_PREFIX = "https://mermaid.ink/img/base64:"
+DOCS_IMAGE_WIDTH_PX = 620  # 465 pt: inside a Letter page's 468 pt text width
 
 HEADING_PREFIX = {
     "TITLE": "# ",
@@ -36,6 +46,14 @@ HEADING_PREFIX = {
 }
 ORDERED_GLYPHS = {"DECIMAL", "ZERO_DECIMAL", "ALPHA", "UPPER_ALPHA", "ROMAN", "UPPER_ROMAN"}
 MONOSPACE_HINTS = ("Mono", "Consolas", "Courier", "Source Code")
+
+
+@dataclass(frozen=True)
+class RenderContext:
+    """Per-body lookup tables plus the output dialect, threaded through rendering."""
+    inline_objects: dict
+    lists: dict
+    publish: bool
 
 
 def parse_json_or_die(text, where):
@@ -96,6 +114,44 @@ def fetch_doc(doc_id):
     return parse_json_or_die(result.stdout, "gws output")
 
 
+# ----- publish dialect helpers -----
+
+def is_drive_url(url):
+    return bool(DRIVE_URL_RE.match(url or ""))
+
+
+def mermaid_ink_url(live_url):
+    """Derive the mermaid.ink PNG URL from a mermaid.live pako link, or None.
+    Same state JSON, re-encoded as plain base64url — what ari-diagram-mermaid's
+    bake emits for MERMAID_FORMAT=ink_url."""
+    match = MERMAID_LIVE_RE.match(live_url)
+    if not match:
+        return None
+    payload = match.group(1)
+    try:
+        raw = base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4))
+        state = json.loads(zlib.decompress(raw).decode("utf-8"))
+    except (ValueError, zlib.error) as err:
+        log_warn(f"could not decode mermaid.live payload | live_url='{live_url[:80]}' err='{err}'")
+        return None
+    if not isinstance(state, dict) or not state.get("code"):
+        log_warn(f"mermaid.live payload has no code | live_url='{live_url[:80]}'")
+        return None
+    compact = json.dumps(state, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    encoded = base64.urlsafe_b64encode(compact).decode("ascii").rstrip("=")
+    return f"{MERMAID_INK_PREFIX}{encoded}"
+
+
+def render_linked_image(alt, content_uri, link):
+    """Publish dialect: an image linked to its mermaid.live source renders from
+    mermaid.ink at Docs width, so the expiring contentUri never reaches the draft."""
+    ink_url = mermaid_ink_url(link)
+    if ink_url is None:
+        log_warn(f"image link is not a mermaid.live source, keeping contentUri | link='{link[:80]}'")
+        return f"[![{alt}]({content_uri})]({link})"
+    return f"[![{alt}]({ink_url}?width={DOCS_IMAGE_WIDTH_PX})]({link})"
+
+
 # ----- inline element rendering -----
 
 def wrap(text, left, right):
@@ -129,12 +185,24 @@ def render_text_run_inner(run):
     return out
 
 
-def render_rich_link(element):
+def render_text_link(text, link, ctx):
+    """A linked run group. Publish dialect renders a Drive URL raw so the publish
+    step can chip it (a chip shows the target's title, so the anchor text goes)."""
+    if ctx.publish and is_drive_url(link):
+        if text.strip():
+            log_warn(f"dropped anchor text for a Drive URL | text='{text.strip()}' url='{link}'")
+        return link
+    return f"[{text}]({link})"
+
+
+def render_rich_link(element, ctx):
     props = element.get("richLink", {}).get("richLinkProperties", {})
     uri = props.get("uri", "")
     title = props.get("title") or uri or "link"
     if not uri:
         return title
+    if ctx.publish and is_drive_url(uri):
+        return uri
     return f"[{title}]({uri})"
 
 
@@ -156,10 +224,10 @@ def render_date_element(element):
     return props.get("displayText", "")
 
 
-def render_inline_object(element, inline_objects):
-    object_id = element.get("inlineObjectElement", {}).get("inlineObjectId", "")
+def render_inline_object(element, ctx):
+    inline = element.get("inlineObjectElement", {})
     embedded = (
-        inline_objects.get(object_id, {})
+        ctx.inline_objects.get(inline.get("inlineObjectId", ""), {})
         .get("inlineObjectProperties", {})
         .get("embeddedObject", {})
     )
@@ -167,10 +235,13 @@ def render_inline_object(element, inline_objects):
     if not uri:
         return ""
     alt = embedded.get("title") or embedded.get("description") or "image"
+    link = (inline.get("textStyle", {}).get("link") or {}).get("url")
+    if ctx.publish and link:
+        return render_linked_image(alt, uri, link)
     return f"![{alt}]({uri})"
 
 
-def render_elements(elements, inline_objects):
+def render_elements(elements, ctx):
     """Render a paragraph's inline elements, coalescing adjacent runs that share
     one link URL into a single markdown link (Google splits styled phrases into
     several runs, which would otherwise produce duplicate adjacent links)."""
@@ -190,17 +261,17 @@ def render_elements(elements, inline_objects):
                 ):
                     group.append(render_text_run_inner(elements[index]["textRun"]))
                     index += 1
-                parts.append(f"[{''.join(group)}]({link})")
+                parts.append(render_text_link("".join(group), link, ctx))
                 continue
             parts.append(render_text_run_inner(element["textRun"]))
         elif "richLink" in element:
-            parts.append(render_rich_link(element))
+            parts.append(render_rich_link(element, ctx))
         elif "person" in element:
             parts.append(render_person(element))
         elif "dateElement" in element:
             parts.append(render_date_element(element))
         elif "inlineObjectElement" in element:
-            parts.append(render_inline_object(element, inline_objects))
+            parts.append(render_inline_object(element, ctx))
         elif "horizontalRule" in element:
             parts.append("---")
         # autoText, pageBreak, columnBreak, footnoteReference, equation: dropped
@@ -224,11 +295,11 @@ def render_list_item(text, bullet, lists):
     return f"{indent}{marker} {text}"
 
 
-def render_paragraph(paragraph, inline_objects, lists):
-    text = render_elements(paragraph.get("elements", []), inline_objects)
+def render_paragraph(paragraph, ctx):
+    text = render_elements(paragraph.get("elements", []), ctx)
     bullet = paragraph.get("bullet")
     if bullet is not None:
-        return render_list_item(text, bullet, lists)
+        return render_list_item(text, bullet, ctx.lists)
     if not text:
         return ""
     named_style = paragraph.get("paragraphStyle", {}).get("namedStyleType", "NORMAL_TEXT")
@@ -237,11 +308,11 @@ def render_paragraph(paragraph, inline_objects, lists):
     return text
 
 
-def render_cell(cell, inline_objects, lists):
+def render_cell(cell, ctx):
     pieces = []
     for element in cell.get("content", []):
         if "paragraph" in element:
-            rendered = render_paragraph(element["paragraph"], inline_objects, lists)
+            rendered = render_paragraph(element["paragraph"], ctx)
             if rendered:
                 pieces.append(rendered)
         elif "table" in element:
@@ -250,7 +321,7 @@ def render_cell(cell, inline_objects, lists):
     return " ".join(pieces).replace("|", "\\|").replace("\n", " ").strip()
 
 
-def render_table(table, inline_objects, lists):
+def render_table(table, ctx):
     rows = table.get("tableRows", [])
     if not rows:
         return ""
@@ -259,7 +330,7 @@ def render_table(table, inline_objects, lists):
         return ""
     md_rows = []
     for row in rows:
-        cells = [render_cell(c, inline_objects, lists) for c in row.get("tableCells", [])]
+        cells = [render_cell(c, ctx) for c in row.get("tableCells", [])]
         cells += [""] * (column_count - len(cells))
         md_rows.append("| " + " | ".join(cells) + " |")
     separator = "| " + " | ".join(["---"] * column_count) + " |"
@@ -281,19 +352,22 @@ def join_blocks(blocks):
     return out + "\n"
 
 
-def convert_content(content):
+def convert_content(content, publish):
     """Render one body's worth of content. `content` carries body/inlineObjects/lists
     — from a single tab (documentTab) or the legacy top-level document."""
-    inline_objects = content.get("inlineObjects", {})
-    lists = content.get("lists", {})
+    ctx = RenderContext(
+        inline_objects=content.get("inlineObjects", {}),
+        lists=content.get("lists", {}),
+        publish=publish,
+    )
     blocks = []
     for element in content.get("body", {}).get("content", []):
         if "paragraph" in element:
-            rendered = render_paragraph(element["paragraph"], inline_objects, lists)
+            rendered = render_paragraph(element["paragraph"], ctx)
             if rendered:
                 blocks.append((rendered, element["paragraph"].get("bullet") is not None))
         elif "table" in element:
-            rendered = render_table(element["table"], inline_objects, lists)
+            rendered = render_table(element["table"], ctx)
             if rendered:
                 blocks.append((rendered, False))
         # sectionBreak, tableOfContents: dropped
@@ -326,7 +400,7 @@ def collect_tabs(doc):
     return tabs
 
 
-def render_doc(doc, requested_tab_id):
+def render_doc(doc, requested_tab_id, publish):
     """Return (markdown, tab_title) for exactly one tab: the requested tab, or the
     sole tab, or a tabless doc's body. A multi-tab doc with no tab selected is an
     error — use /ari-gsw-read to expand it into one file per tab."""
@@ -337,20 +411,31 @@ def render_doc(doc, requested_tab_id):
             "inlineObjects": doc.get("inlineObjects", {}),
             "lists": doc.get("lists", {}),
         }
-        return convert_content(legacy), None
+        return convert_content(legacy, publish), None
     if requested_tab_id:
         for tab in tabs:
             if tab["id"] == requested_tab_id:
                 log_info(f"rendering tab | tab_id='{tab['id']}' title='{tab['title']}'")
                 # Only suffix the filename when there's more than one tab to disambiguate.
                 tab_title = tab["title"] if len(tabs) > 1 else None
-                return convert_content(tab["content"]), tab_title
+                return convert_content(tab["content"], publish), tab_title
         available = ", ".join(t["id"] for t in tabs)
         die(f"tab not found | tab_id='{requested_tab_id}' available='{available}'")
     if len(tabs) == 1:
-        return convert_content(tabs[0]["content"]), None
+        return convert_content(tabs[0]["content"], publish), None
     summary = "; ".join(f"{t['id']}={t['title']}" for t in tabs)
     die(f"doc has multiple tabs, select one | tabs='{len(tabs)}' available='{summary}' hint='pass --tab <id> or a ?tab= URL, or use /ari-gsw-read for one file per tab'")
+
+
+def with_title_line(markdown, title, publish):
+    """Publish dialect: the Doc title, plain text, is the draft's first line —
+    /ari-hemingway--share-gdoc reads it back as the document title."""
+    if not publish:
+        return markdown
+    if not title:
+        log_warn("doc has no title, publish dialect gets none | hint='set one in Docs before publishing'")
+        return markdown
+    return f"{title}\n\n{markdown}"
 
 
 def slugify(title):
@@ -374,6 +459,8 @@ def parse_args():
     parser.add_argument("--out", help="write markdown to PATH, or into PATH/ when it is a directory (default: <title-slug>[__<tab-slug>].md in CWD)")
     parser.add_argument("--stdout", action="store_true", help="print markdown to stdout instead of a file")
     parser.add_argument("--force", action="store_true", help="overwrite the output file if it already exists")
+    parser.add_argument("--publish", action="store_true",
+                        help="emit the /ari-hemingway--format-gdoc dialect: Doc title as the first line, Drive URLs raw, linked images via mermaid.ink (feeds /ari-hemingway--share-gdoc)")
     parser.add_argument("--json-file", dest="json_file", help="convert a saved Docs JSON instead of fetching")
     return parser.parse_args()
 
@@ -422,9 +509,10 @@ def main():
 
     requested_tab_id = resolve_requested_tab_id(args)
     doc = load_doc(args)
-    markdown, tab_title = render_doc(doc, requested_tab_id)
+    markdown, tab_title = render_doc(doc, requested_tab_id, args.publish)
     if not markdown.strip():
         die(f"document produced no content | title='{doc.get('title', '')}'")
+    markdown = with_title_line(markdown, doc.get("title", ""), args.publish)
 
     write_output(markdown, args, doc.get("title", "google-doc"), tab_title)
 
