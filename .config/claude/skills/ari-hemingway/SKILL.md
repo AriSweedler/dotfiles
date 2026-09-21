@@ -12,7 +12,7 @@ Dispatcher for the `ari-hemingway--*` family. Turns "I need to write X" into a s
 Every skill in the family follows: `ari-hemingway--<pipeline>[-<specific>]`
 
 Pipeline stages:
-- `acquire` — knowledge gathering (covered by `--lib` Investigate; for an unfamiliar topic, `structure-scaffold`'s definitions pass is the acquire strategy)
+- `acquire` — knowledge gathering (covered by `--lib` Investigate; for an unfamiliar topic, `structure-scaffold`'s definitions pass is the acquire strategy; an existing Google Doc is acquired with `/ari-gsw-doc-to-md --publish`)
 - `structure` — document shape (what sections, what order, what required)
 - `format` — destination syntax (gdoc, slack, md, pr-description, email)
 - `review` — quality gates (axis-based: brevity, clarity, factual, audience-fit; or destination-bundle: review-gdoc)
@@ -124,4 +124,4 @@ User invocation: `/ari-hemingway explain the multi-cluster rollout subsystem`
 - Use Agent only for parallel reviewer dispatch inside bundles.
 - NEVER short-circuit the review prompt — always ask, even if (4) Skip is the obvious pick.
 - Do NOT edit the draft until the user selects review findings to apply.
-- If the user provides an existing draft (path or URL) and skips structure, go straight to the review prompt.
+- If the user provides an existing draft and skips structure, go straight to the review prompt. A path is the draft as-is. A Google Doc URL is fetched with `zsh $HOME/.claude/skills/ari-gsw-doc-to-md/bin/doc-to-md.zsh "<url>" --publish --out <scratch>/draft.md`, whose output is already the `/ari-hemingway--share-gdoc` dialect — never the read dialect, which drops the Doc title, renders chips as markdown links, and loses an image's mermaid.live link.
