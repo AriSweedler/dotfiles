@@ -297,7 +297,7 @@ function isExpired(card: CardInfo): boolean {
 ## Phase 4: Diagram
 
 1. Create `mermaid/` subfolder in the artifact folder.
-2. Write `mermaid/call-graph.mmd`. Line 1 is `%%{init: {'theme':'default'}}%%`, and every `classDef` or `style` that sets `fill` also sets `color`; bake refuses the file otherwise, and the Airtable palette in `/ari-diagram-mermaid` satisfies both.
+2. Write `mermaid/call-graph.mmd`. Line 1 is the `%%{init: …}%%` directive that opens `/ari-diagram-mermaid`'s color theme block, copied verbatim, and every `classDef` or `style` that sets `fill` also sets `color`; bake refuses the file otherwise, and that palette block satisfies both.
 3. Bake URLs with `/ari-diagram-mermaid`'s `bin/bake` script, passing the artifact's absolute path:
 
 ```zsh
