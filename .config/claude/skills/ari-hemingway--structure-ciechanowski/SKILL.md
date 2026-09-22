@@ -29,12 +29,13 @@ One `articles/<slug>/index.html` from `template/article.html`, in this order:
 - Every concept gets exactly one key insight: one sentence, at most 25 words, that a reader could repeat to explain the concept. It may lean only on earlier concepts; `check_definitions_order.zsh` on the insights list, in table order, enforces this mechanically.
 - Every concept gets exactly one figure whose job is to show the key insight without telling it. Figures are counted per concept, never per word. A figure is static (Mermaid through `/ari-diagram-mermaid`) when nothing in it needs to move; otherwise it is an interactive JSON figure spec in the runtime's vocabulary. The skill writes HTML and JSON, never JavaScript.
 - A figure spec has three keys that mirror the concept: `shows` (layers and readouts), `manipulates` (controls), `notice` (ordered named states the reader steps through, and the layer ids the prose will point at). Every spec passes `node tools/explainers.cjs validate` and `states` before any prose is written around it.
-- Sections are the scaffold's cluster communities, named by their noun, in topological order of the cluster graph. Within a section, concepts follow table order. Universal rows belong to the first section in reading order that needs them.
+- Sections are the scaffold's cluster communities, named by their noun, ordered by the table position of their first row. Within a section, concepts follow table order. Universal rows belong to the section of the next hoisted row after them.
 
 ### Prose
 
 - Written last, after every insight and figure is accepted. Kernighan & Ritchie: terse, present tense, active voice, one idea per sentence. `we` builds ("let's add a second satellite"), `you` operates the figure ("drag the slider").
 - Each figure is followed by one sentence naming its controls, then prose that points at figure state through `data-ref` spans ("the red arc"), never through words the figure does not show.
+- Hiding information in a figure hides it in the prose. A `data-ref` to a layer the reader has switched off renders plain, so a sentence never depends on the highlight to be understood, and refs to an optional layer live in the sentences about that option ("with the Sun direction shown, the orange arrow...").
 - Terms are defined at the point of need, once, by apposition in the same sentence, with the first-use markup; later uses carry the term link. The glossary `<dd>` is the only copy of the definition.
 - Every simplification is flagged in the sentence that makes it ("for now we ignore the postponement rules") and repaid in a named later section.
 - Math appears only after the figure that motivates it; formulas show their variables and skip derivations. Numbers come in two forms when both help ("29.530589 days, or 29 days 12 hours 44 minutes").
@@ -87,7 +88,7 @@ Print: `Acquire complete — {n} rows, {k} communities. Next: Skeleton.`
 
 ### Skeleton
 
-Order the communities topologically over `cross_edges` in `clusters.json` (an edge from A to B means A's terms depend on B's; B comes first). Assign every table row to a section: a hoisted row to its community; a universal row to the community of the first row, in table order, that mentions it, else to its own discover community. Write `skeleton.md`: one `##` per section with its concepts in table order and the cluster step's proposed headings. Present it and wait; apply changes by editing `skeleton.md`, never by hand-moving table rows.
+Assign every table row to a section: a hoisted row to its community; a universal row to the community of the next hoisted row after it in table order. Order the sections by the table position of their first row: the accepted table is already in dependency order, while `cross_edges` in `clusters.json` run both ways between real subsystems and cannot order them. A foundational row that the cluster step hoisted into a late community (a `Day` term merged into a year-shape community) belongs to every section; re-run the cluster step with `--universal "<term>"` rather than hand-moving it. Write `skeleton.md`: one `##` per section with its concepts in table order. Present it and wait; apply changes by editing `skeleton.md` or re-running the cluster step, never by hand-moving table rows.
 
 Print: `Skeleton complete — {k} sections, {n} concepts. Next: Insights.`
 
