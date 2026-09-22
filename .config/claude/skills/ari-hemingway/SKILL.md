@@ -40,10 +40,11 @@ What are you writing?
 (4) post-mortem             → ari-hemingway--structure-post-mortem          [planned]
 (5) design doc              → ari-hemingway--structure-design-doc           [planned]
 (6) scaffold article        → ari-hemingway--structure-scaffold  (break a topic into definitions + subsystems)
-(7) other — tell me what destination and the doc's purpose
+(7) interactive explainer   → ari-hemingway--structure-ciechanowski  (one linear toy-to-real article with a figure per concept, for the explainers site)
+(8) other — tell me what destination and the doc's purpose
 ```
 
-Auto-detect if possible: if the user pasted a Google Doc URL → `subsystem-explainer` update mode is likely. If the session is a PR branch with uncommitted changes → `pr-description`. If the user wants to "break down", "come up to speed on", or "define the parts of" a topic they lack vocabulary for → `scaffold`. Print the inferred shape with evidence and ask to confirm.
+Auto-detect if possible: if the user pasted a Google Doc URL → `subsystem-explainer` update mode is likely. If the session is a PR branch with uncommitted changes → `pr-description`. If the user wants to "break down", "come up to speed on", or "define the parts of" a topic they lack vocabulary for → `scaffold`. If the user wants an "interactive explainer", a "Ciechanowski-style" article, or something for `explainers.sweedler.com` → `ciechanowski` (it runs `scaffold` in Skeleton mode itself). Print the inferred shape with evidence and ask to confirm.
 
 If no matching sibling is installed, STOP and print:
 ```
@@ -86,6 +87,7 @@ Print the final draft path and suggest a destination-appropriate share action:
 | Destination | Share action |
 |---|---|
 | gdoc | Invoke `/ari-hemingway--share-gdoc` — creates (or updates in place) the Doc from the markdown and styles its tables. |
+| explainer | "The article is in the explainers repo; commit it there. Hosting on explainers.sweedler.com is a later share sibling." |
 | slack | "Paste into the target channel / thread. Preserve the formatting — it's already mrkdwn." |
 | pr-description | "Run `gh pr edit {PR} --body-file {path}`." |
 | gist | "Run `gh gist create {path} --desc '{topic}'`." |
