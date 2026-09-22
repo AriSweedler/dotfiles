@@ -29,8 +29,12 @@ plugin that overruns, children first, and logs it as timed out. One hung plugin 
 hold the job, because launchd runs one instance at a time.
 
 The framework runs the plugin with the trigger as `$1`, keeps its output in
-`~/.local/state/dotfiles/jobs/<name>.log` (the previous run in `.log.bak.1`) and stamps a
-success. Plugins are independent of one another, so the order they run in is irrelevant and
+`~/.local/state/dotfiles/jobs/<name>.log` (the previous run in `.log.bak.1`), stamps the run,
+and tells the user how it ended: on success a two-second banner carrying the plugin's last
+output line, on failure or timeout a persistent alert whose click opens the log. So a plugin
+prints a one-line summary last and posts no completion banner of its own; a notification a
+plugin does post is about its domain (aws-sso-autologin's click-to-login notice), never about
+having finished. Plugins are independent of one another, so the order they run in is irrelevant and
 no name carries a number. A job with a CLI of its own (git-health, aws-sso-autologin) keeps it
 in a `bin/` and leaves a shim here that execs it.
 

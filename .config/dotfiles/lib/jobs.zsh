@@ -179,7 +179,8 @@ jobs_run_count() {
 #######################################
 # Run one job for a trigger. Its output goes to ~/.local/state/dotfiles/jobs/<name>.log
 # (plain text, the previous run in .log.bak.1) and to stdout; the run touches the stamp the
-# cron due check reads and records its rc beside it. One log line here either way.
+# cron due check reads and records its rc beside it. One log line here either way, and a
+# notification from jobs_notify_finish: the engine reports every ending, so a plugin need not.
 # Arguments: name, trigger
 #######################################
 jobs_run_one() {
@@ -196,13 +197,15 @@ jobs_run_one() {
   } | strip_ansi | tee "${logfile}" || rc=$?   # pipefail: the group exits with the plugin's rc
   touch "${JOBS_STATE_DIR}/${name}.ran"
   print -r -- "${rc}" > "${JOBS_STATE_DIR}/${name}.rc"
+  local took; took="$(elapsed "${start}")"
   if (( rc == 0 )); then
-    log::info "job ok | name='${name}' tier='${JOB_TIER[${name}]}' trigger='${trigger}' took='$(elapsed "${start}")s' log='${logfile}'"
+    log::info "job ok | name='${name}' tier='${JOB_TIER[${name}]}' trigger='${trigger}' took='${took}s' log='${logfile}'"
   elif (( rc == 124 )); then
     log::err "job timed out | name='${name}' tier='${JOB_TIER[${name}]}' trigger='${trigger}' limit='${limit}s' log='${logfile}'"
   else
-    log::err "job failed | name='${name}' tier='${JOB_TIER[${name}]}' trigger='${trigger}' rc='${rc}' took='$(elapsed "${start}")s' log='${logfile}'"
+    log::err "job failed | name='${name}' tier='${JOB_TIER[${name}]}' trigger='${trigger}' rc='${rc}' took='${took}s' log='${logfile}'"
   fi
+  jobs_notify_finish "${name}" "${rc}" "${took}" "${logfile}"
   return "${rc}"
 }
 
@@ -285,6 +288,78 @@ jobs_list() {
   else
     print -r -- "  launchd: ${c_red}not loaded${c_rst} (dotfiles jobs install)"
   fi
+}
+
+# --- notifications: the engine reports how every job ended, so no plugin can forget to ---
+
+# terminal-notifier, probed by absolute path because launchd's PATH may lack Homebrew. Without
+# it there is no banner: an osascript banner cannot be removed and would sit in Notification
+# Center forever.
+jobs_notifier_bin() {
+  local tn p
+  tn="$(command -v terminal-notifier 2>/dev/null || true)"
+  if [[ -z "${tn}" ]]; then
+    for p in /opt/homebrew/bin/terminal-notifier /usr/local/bin/terminal-notifier; do
+      [[ -x "${p}" ]] && { tn="${p}"; break; }
+    done
+  fi
+  [[ -n "${tn}" ]] || return 1
+  print -r -- "${tn}"
+}
+
+# terminal-notifier with the given arguments, output discarded, killed after
+# JOBS_NOTIFIER_TIMEOUT_SECONDS. The watchdog holds no descriptor and its sleep dies with it,
+# or a caller's pipe stays open. Returns its rc, or 124 on the timeout.
+jobs_notify() {
+  local tn pid watchdog rc=0
+  tn="$(jobs_notifier_bin)" || return 1
+  "${tn}" "${@}" >/dev/null 2>&1 </dev/null &
+  pid=$!
+  { sleep "${JOBS_NOTIFIER_TIMEOUT_SECONDS}"; kill "${pid}" 2>/dev/null; } >/dev/null 2>&1 </dev/null &
+  watchdog=$!
+  wait "${pid}" || rc=$?
+  pkill -P "${watchdog}" 2>/dev/null || true
+  kill "${watchdog}" 2>/dev/null || true
+  if (( rc == 143 )); then log::warn "terminal-notifier hung; killed | args='${*}'"; rc=124; fi
+  return "${rc}"
+}
+
+# The command a failure alert's click runs: the job's log in a new tmux window on the user's
+# default server (launchd has no $TMUX, so the socket path is derived), else in Terminal.
+# Absolute paths throughout: the click runs under /bin/sh with launchd's PATH.
+jobs_click_command() {
+  local logfile="${1}" sock="/private/tmp/tmux-$(id -u)/default" tmux_bin editor_bin
+  tmux_bin="$(command -v tmux 2>/dev/null || true)"
+  [[ -z "${tmux_bin}" && -x /opt/homebrew/bin/tmux ]] && tmux_bin=/opt/homebrew/bin/tmux
+  editor_bin="$(command -v "${${EDITOR:-vi}%% *}" 2>/dev/null || command -v vi)"
+  if [[ -S "${sock}" && -n "${tmux_bin}" ]]; then
+    print -r -- "${(q)tmux_bin} -S ${(q)sock} new-window -n dotfiles-jobs-log ${(q)editor_bin} + ${(q)logfile}"
+  else
+    print -r -- "/usr/bin/open -a Terminal ${(q)logfile}"
+  fi
+}
+
+#######################################
+# Tell the user how a job ended. Success: a JOBS_HUD_SECONDS banner (post, sleep, remove by
+# group; macOS gives banners no duration control) carrying the plugin's last output line, so a
+# plugin's summary is what it prints last; any earlier failure alert for the job comes down.
+# Failure or timeout: a persistent alert, one per job (its group), whose click opens the log.
+# Arguments: name, rc, took, logfile
+#######################################
+jobs_notify_finish() {
+  local name="${1}" rc="${2}" took="${3}" logfile="${4}" last verdict
+  jobs_notifier_bin >/dev/null || return 0
+  last="$(grep -v -E '^# |^[[:space:]]*$' "${logfile}" 2>/dev/null | tail -n 1 | cut -c1-140)"
+  if (( rc == 0 )); then
+    jobs_notify -remove "dotfiles-jobs-${name}" || true
+    jobs_notify -group dotfiles-jobs -title "dotfiles jobs" -message "${name} ok in ${took}s${last:+ · ${last}}" || return 0
+    sleep "${JOBS_HUD_SECONDS}"
+    jobs_notify -remove dotfiles-jobs || true
+    return 0
+  fi
+  verdict="failed (rc ${rc})"; (( rc == 124 )) && verdict="timed out"
+  jobs_notify -group "dotfiles-jobs-${name}" -title "dotfiles jobs: ${name} ${verdict}" \
+    -message "${last:-no output} — click to open the log" -execute "$(jobs_click_command "${logfile}")" || true
 }
 
 # --- the launchd job ---

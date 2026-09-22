@@ -297,13 +297,9 @@ do_unregister() {
 }
 
 #######################################
-# Flash a notification for a fixed duration. macOS gives banners no duration control, but
-# terminal-notifier can remove a delivered notification by group, so post-sleep-remove
-# yields an exact lifetime. Synchronous on purpose: launchd's process-group cleanup would
-# kill a backgrounded remover and orphan the banner. launchd's PATH has no Homebrew, so the
-# binary is probed by absolute path; without it there is no banner at all — an osascript
-# banner cannot be removed and would sit in Notification Center forever.
-# Arguments: message, seconds (default 2)
+# terminal-notifier for the alert below. launchd's PATH has no Homebrew, so the binary is
+# probed by absolute path; without it there is no banner at all — an osascript banner cannot
+# be removed and would sit in Notification Center forever.
 #######################################
 notifier_bin() {
     local tn p
@@ -315,14 +311,6 @@ notifier_bin() {
     fi
     [[ -n "${tn}" ]] || return 1
     print -r -- "${tn}"
-}
-
-hud() {
-    local msg="${1}" seconds="${2:-2}" tn
-    tn="$(notifier_bin)" || return 0
-    "${tn}" -group git-health -title git-health -message "${msg}" >/dev/null || return 0
-    sleep "${seconds}"
-    "${tn}" -remove git-health >/dev/null || true
 }
 
 #######################################
@@ -377,8 +365,9 @@ case "${mode}" in
         tick_started="${EPOCHREALTIME}"
         all_rc=0
         do_all || all_rc=1
+        # The summary is the last line printed: under dotfiles jobs it becomes the engine's banner.
         if (( all_rc == 0 )); then
-            hud "$(printf 'git health: healthy in %.2fs' $(( EPOCHREALTIME - tick_started )))"
+            printf 'healthy in %.2fs\n' $(( EPOCHREALTIME - tick_started ))
         fi
         exit "${all_rc}"
         ;;

@@ -46,6 +46,8 @@ readonly JOBS_EVENT_NAME="com.apple.screenIsUnlocked"
 readonly JOBS_EVENT_WAIT_SECONDS=2          # the consumer's wait for an event before deciding none started the job
 readonly JOBS_INTERVAL_SECONDS=300          # the tick; cron schedules are checked on it, so it is their resolution
 readonly JOBS_TIMEOUT_SECONDS=900           # a plugin's run is killed after this unless its '# timeout:' line says otherwise
+readonly JOBS_HUD_SECONDS=2                 # how long the engine's "job ok" banner stays up
+readonly JOBS_NOTIFIER_TIMEOUT_SECONDS=10   # terminal-notifier occasionally never returns (seen on -remove); a banner is never worth a hang
 # launchd's PATH has no Homebrew; plugins shell out to jq, terminal-notifier, python3.
 readonly JOBS_LAUNCHD_PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 # The per-plugin jobs this framework replaced; install boots them out and removes their plists.
