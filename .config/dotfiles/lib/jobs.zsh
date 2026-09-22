@@ -27,7 +27,7 @@ jobs_discover() {
   done
 }
 
-# A plugin's triggers, from its `# triggers:` header line: unlock, load, every:<seconds>.
+# A plugin's triggers, from its `# triggers:` header line: unlock, load.
 jobs_triggers() {
   setopt local_options extended_glob   # the ## quantifier below
   local line
@@ -76,15 +76,6 @@ jobs_with_timeout() {
   kill "${watchdog}" 2>/dev/null || true
   (( rc == 143 || rc == 137 )) && rc=124
   return "${rc}"
-}
-
-# True (0) when an every:<seconds> job is due: never run, or last run longer ago than the
-# period. The stamp marks a run, not a success: a failing weekly check must wait a week, not
-# retry on every five-minute tick.
-jobs_due() {
-  local stamp="${JOBS_STATE_DIR}/${1}.ran" seconds="${2}"
-  [[ -f "${stamp}" ]] || return 0
-  (( EPOCHSECONDS - $(zstat +mtime "${stamp}") >= seconds ))
 }
 
 #######################################
@@ -187,8 +178,8 @@ jobs_run_count() {
 
 #######################################
 # Run one job for a trigger. Its output goes to ~/.local/state/dotfiles/jobs/<name>.log
-# (plain text, the previous run in .log.bak.1) and to stdout; the run touches the stamp
-# jobs_due reads and records its rc beside it. One log line here either way.
+# (plain text, the previous run in .log.bak.1) and to stdout; the run touches the stamp the
+# cron due check reads and records its rc beside it. One log line here either way.
 # Arguments: name, trigger
 #######################################
 jobs_run_one() {
@@ -216,9 +207,9 @@ jobs_run_one() {
 }
 
 #######################################
-# True (0) when a plugin should run for this trigger: a named trigger it declares, an every:
-# period that has elapsed, or a cron schedule whose moment has come (the last two on a tick and
-# at load only). Unknown tokens are warned about, not ignored.
+# True (0) when a plugin should run for this trigger: a named trigger it declares, or a cron
+# schedule whose moment has come (on a tick and at load only). Unknown tokens are warned about,
+# not ignored.
 # Arguments: name, trigger
 #######################################
 jobs_plugin_due() {
@@ -226,7 +217,6 @@ jobs_plugin_due() {
   local periodic=1; [[ "${trigger}" == tick || "${trigger}" == load ]] && periodic=0
   for t in ${=$(jobs_triggers "${plugin}")}; do
     case "${t}" in
-      every:*)     (( periodic == 0 )) && jobs_due "${name}" "${t#every:}" && return 0 ;;
       unlock|load) [[ "${t}" == "${trigger}" ]] && return 0 ;;
       *)           log::warn "unknown trigger; ignored | job='${name}' trigger='${t}'" ;;
     esac
@@ -244,8 +234,8 @@ jobs_plugin_due() {
 # What launchd runs. The tag comes from the event consumer: the event's key
 # (screenIsUnlocked) when one started the job, else 'launchd', which is RunAtLoad on the
 # job's first spawn since it was loaded (login, or install) and the StartInterval tick after
-# that. every:<seconds> and cron schedules run on a tick and at load when due; unlock and load
-# on their named trigger. Every due plugin runs even after one fails; the tick fails if any did.
+# that. Cron schedules run on a tick and at load when due; unlock and load on their named
+# trigger. Every due plugin runs even after one fails; the tick fails if any did.
 # Arguments: tag
 #######################################
 jobs_tick() {

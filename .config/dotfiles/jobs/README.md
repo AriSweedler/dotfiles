@@ -10,20 +10,19 @@ private plugins in ldf, one place they meet.
 A plugin is one executable file named for the job. Its header says when it runs: a
 `# triggers:` line, and any number of `# cron:` lines, one five-field expression each:
 
-    # triggers: unlock load every:3600
-    # cron: 5 10 * * 1
+    # triggers: unlock load
+    # cron: 20 * * * *
 
 - `unlock` — the screen was unlocked.
 - `load` — the job was (re)loaded: login, or `dotfiles jobs install`.
-- `every:<seconds>` — due on a tick, and at load, once that long has passed since the plugin
-  last ran, whatever it exited with: a failing check waits out its period, it does not retry
-  every five minutes. `dotfiles jobs list` shows the last run and its rc.
 - `# cron: minute hour day-of-month month day-of-week` — standard five fields: `*`, `n`,
   `a-b`, `*/s`, `a-b/s`, comma lists; Sunday is 0 or 7. Due on a tick, and at load, once the
-  expression's most recent moment at or before now is later than the plugin's last run. Unlike
-  cron, a moment missed while the machine was asleep fires on the first tick after wake, as
-  launchd's own calendar jobs do; a plugin that has never run is due at once. Resolution is the
-  tick, five minutes.
+  expression's most recent moment at or before now is later than the plugin's last run,
+  whatever that run exited with, so a failing check waits for its next moment rather than
+  retrying every five minutes. Unlike cron, a moment missed while the machine was asleep fires
+  on the first tick after wake, as launchd's own calendar jobs do; a plugin that has never run
+  is due at once. Resolution is the tick, five minutes. `dotfiles jobs list` shows each
+  plugin's last run and rc.
 
 An optional `# timeout: <seconds>` line caps a run (default 900); the framework kills a
 plugin that overruns, children first, and logs it as timed out. One hung plugin must not

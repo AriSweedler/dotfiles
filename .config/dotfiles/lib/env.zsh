@@ -44,7 +44,7 @@ readonly JOBS_CONSUMER_BIN="${JOBS_STATE_DIR}/bin/launch-event-consume"
 readonly JOBS_EVENT_STREAM="com.apple.notifyd.matching"
 readonly JOBS_EVENT_NAME="com.apple.screenIsUnlocked"
 readonly JOBS_EVENT_WAIT_SECONDS=2          # the consumer's wait for an event before deciding none started the job
-readonly JOBS_INTERVAL_SECONDS=300          # the tick; every:<seconds> plugins run on the first tick past their period
+readonly JOBS_INTERVAL_SECONDS=300          # the tick; cron schedules are checked on it, so it is their resolution
 readonly JOBS_TIMEOUT_SECONDS=900           # a plugin's run is killed after this unless its '# timeout:' line says otherwise
 # launchd's PATH has no Homebrew; plugins shell out to jq, terminal-notifier, python3.
 readonly JOBS_LAUNCHD_PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"

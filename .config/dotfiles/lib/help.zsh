@@ -55,7 +55,7 @@ ${c_bold}Environment:${c_rst}
 ${c_bold}Jobs:${c_rst} one launchd job, ${JOBS_LABEL}, fires on screen unlock, at login and every
 ${JOBS_INTERVAL_SECONDS}s, and runs the plugins whose triggers match. A plugin is an executable in
 ${JOBS_ROOT_DF} (shared) or ${JOBS_ROOT_LDF} (this machine)
-whose header has '# triggers: unlock load every:<seconds>' and any '# cron: m h dom mon dow' lines;
+whose header has '# triggers: unlock load' and any '# cron: m h dom mon dow' lines;
 it gets the trigger as \$1. Logs and
 success stamps: ${JOBS_STATE_DIR}. The README beside the shared plugins has the contract.
 
