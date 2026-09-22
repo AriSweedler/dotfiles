@@ -1,6 +1,4 @@
 # dotfiles/lib/run.zsh — running a step: dry-run gating, timing, prerequisites.
-# Sourced by ~/.config/bin/dotfiles in no particular order: this file defines functions and
-# nothing runs when it is sourced, so it needs no other module first (see README.md).
 zmodload zsh/datetime   # EPOCHREALTIME / EPOCHSECONDS
 
 # Run a state-changing command, or print it under --dry-run; `runner=run_cmd_cap run_mut …` also logs its stdout.

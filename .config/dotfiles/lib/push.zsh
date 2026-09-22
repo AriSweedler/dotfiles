@@ -1,6 +1,4 @@
 # dotfiles/lib/push.zsh — `dotfiles push`: token identity, per-repo pushes, pointer bumps.
-# Sourced by ~/.config/bin/dotfiles in no particular order: this file defines functions and
-# nothing runs when it is sourced, so it needs no other module first (see README.md).
 zmodload zsh/datetime   # EPOCHREALTIME / EPOCHSECONDS
 
 # --- push ---

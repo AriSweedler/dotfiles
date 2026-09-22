@@ -1,6 +1,4 @@
 # dotfiles/lib/init.zsh — `dotfiles init` and `dotfiles pull`: every step idempotent.
-# Sourced by ~/.config/bin/dotfiles in no particular order: this file defines functions and
-# nothing runs when it is sourced, so it needs no other module first (see README.md).
 zmodload zsh/datetime   # EPOCHREALTIME / EPOCHSECONDS
 
 # --- init: every step idempotent; a shared repo still missing (a dry-run clone) skips its steps ---

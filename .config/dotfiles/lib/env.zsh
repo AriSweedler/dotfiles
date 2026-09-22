@@ -1,6 +1,4 @@
 # dotfiles/lib/env.zsh — the environment variables, constants and flag defaults every module reads.
-# Sourced by ~/.config/bin/dotfiles in no particular order: this file sets variables from $HOME and the
-# environment only, and nothing else runs when it is sourced, so it needs no other module first (see README.md).
 
 # --- Environment variables (the help text documents each) ---
 

@@ -1,6 +1,4 @@
 # dotfiles/lib/main.zsh — argument parsing, validation and dispatch to cmd_<command>.
-# Sourced by ~/.config/bin/dotfiles in no particular order: this file defines functions and
-# nothing runs when it is sourced, so it needs no other module first (see README.md).
 
 # --- Main ---
 

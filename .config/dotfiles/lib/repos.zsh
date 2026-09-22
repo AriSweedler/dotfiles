@@ -1,6 +1,4 @@
 # dotfiles/lib/repos.zsh — git for a repo: the tiers by name, a submodule by path.
-# Sourced by ~/.config/bin/dotfiles in no particular order: this file defines functions and
-# nothing runs when it is sourced, so it needs no other module first (see README.md).
 
 # --- Repos and helpers ---
 

@@ -1,7 +1,4 @@
 #!/usr/bin/env zsh
-# dotfiles — the harness for Ari's two-tier dotfiles (see /ari-dotfiles): init, pull, push,
-# status, logs, git. This file is only the entrypoint. The program is ~/.config/dotfiles/lib/,
-# one independent module per concern, sourced in any order; its README states the rules.
 set -euo pipefail
 readonly DOTFILES_LIB="${${0:A}:h:h}/dotfiles/lib"
 for _module in "${DOTFILES_LIB}"/*.zsh(N); do source "${_module}"; done

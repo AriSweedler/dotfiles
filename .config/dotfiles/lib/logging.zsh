@@ -1,6 +1,4 @@
-# dotfiles/lib/logging.zsh — the shared logging library plus the two zsh plugins the push logs
-# need. The one module with source-time work; it resolves its paths from $HOME alone, so it
-# needs no other module first (see README.md).
+# dotfiles/lib/logging.zsh — the shared logging library plus the two zsh plugins the push logs need.
 #
 # Bootstrap: before `dotfiles init` has linked the skills, ~/.claude/skills is empty and the
 # only reachable copy of the logging lib is the shared tier's own under ~/.config.

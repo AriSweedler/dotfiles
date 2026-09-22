@@ -1,6 +1,4 @@
 # dotfiles/lib/help.zsh — the --help text.
-# Sourced by ~/.config/bin/dotfiles in no particular order: this file defines functions and
-# nothing runs when it is sourced, so it needs no other module first (see README.md).
 
 # --- Help ---
 
