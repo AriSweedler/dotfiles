@@ -57,6 +57,19 @@
 #                shown verbatim ("go/ "). The answer is exported as
 #                $ONESHOT_INPUT and cmd references it as "${ONESHOT_INPUT}"
 #                (expanded once by eval, never re-parsed). Empty answer aborts.
+#   groups       the one-screen builder (fzf_groups.zsh): exclusive option groups, each with
+#                a default, every option a row "<group>  ● [k] label". A key selects its
+#                option from any row, in any order (space or ⏎ selects the highlighted
+#                row); alt-⏎ runs; esc goes back to the picker that opened the entry.
+#                Assembly: cmd, then each group's selected value in group order, before
+#                any flags/subcommands. Same shape as the Karabiner arg builder.
+#     name         the group's id
+#     label        the row's left column (default: name)
+#     default      the key of the option selected at open
+#     options      [{key, label, value, prompt}]: key is one letter or digit, unique across
+#                  groups; value defaults to "{}"
+#       prompt     ask for a value in place ("words: "); the answer replaces {} in value and
+#                  shows on the row. esc at the prompt keeps the previous selection.
 #   flags        the builder: multiselected at run time (tab: toggle, esc: none)
 #     flag         e.g. "--verbose", or an env var name like "ACTION"
 #     type         "bool" (default: emits just the flag) or "kv"
@@ -83,11 +96,11 @@
 #   popup       eval in the popup's own shell. No copy mode: a popup is not a pane.
 #   window      like a window entry, the window named after the entry.
 #
-# flags/subcommands are a builder and strictly opt-in: an entry without them
-# never prompts (beyond its own `prompt`). Assembly order per level: cmd,
-# then selected flags, then the chosen subcommand's assembly. The top-level
-# menu shows only cmd/description plus a "…" hint when an entry has flags or
-# subcommands — never the options.
+# groups/flags/subcommands are a builder and strictly opt-in: an entry without
+# them never prompts (beyond its own `prompt`). Assembly order per level: cmd,
+# then the groups' values, then selected flags, then the chosen subcommand's
+# assembly. The top-level menu shows only cmd/description plus a "…" hint when
+# an entry has a builder — never the options.
 #
 # Drives fzf directly: the whole menu is ONE jq pass emitting
 # "<0-based idx>\t<line>" with the index column hidden (--with-nth 2..), so
@@ -99,6 +112,7 @@
 
 source "${HOME}/.config/zsh/plugins/log.zsh"
 source "${HOME}/.config/zsh/plugins/fzf_group.zsh"
+source "${HOME}/.config/zsh/plugins/fzf_groups.zsh"
 
 function tmux_oneshot() {
   local dep
@@ -147,7 +161,7 @@ function tmux_oneshot::action::help() {
 ${c_green}tmux-oneshot${c_rst} — pick a oneshot command from the merged entry files and run it
 
 Selecting an entry cds to its pwd (if set), asks its prompt (if set), resolves its
-flags/subcommands (if any), then runs the assembled command on the surface below. A
+groups/flags/subcommands (if any), then runs the assembled command on the surface below. A
 direct key (⌃x in the menu) runs its entry at once. The entry schema is documented at
 the top of this script.
 
@@ -429,7 +443,7 @@ function tmux_oneshot::_menu() {
     def leaf: (.menu.name // .cmd // "?") | if contains("/") then (split("/")[1:] | join("/")) else . end;
     def body: (.menu.text
         // ((if .menu.name then (.cmd // "") else "" end)
-          + (if ((.flags // []) + (.subcommands // []) | length) > 0 then " …" else "" end)
+          + (if ((.groups // []) + (.flags // []) + (.subcommands // []) | length) > 0 then " …" else "" end)
           + (if .description then "  # " + .description else "" end)
           + (if .pwd then " @ " + .pwd else "" end))) | ltrimstr(" ");
     def keylabel: .key | sub("^ctrl-"; "⌃") | sub("^alt-"; "⌥") | sub("^f(?<n>[0-9]+)$"; "F\(.n)");
@@ -557,7 +571,7 @@ function tmux_oneshot::_pick() {
     tmux_oneshot::_pick_group "${idx#g:}"
     return $?
   fi
-  tmux_oneshot::_run_or_back "${idx}" tmux_oneshot::_pick
+  tmux_oneshot::_run_or_back "${idx}" tmux_oneshot::_pick --no-select-1
 }
 
 # Second level: one group's entries by leaf. A typed leaf (or full name) runs
@@ -565,13 +579,14 @@ function tmux_oneshot::_pick() {
 # than closing the popup.
 function tmux_oneshot::_pick_group() {
   local group="${1:?}" menu out rc
+  shift
   menu="$(tmux_oneshot::_menu --group "${group}")"
   if [[ -z "${menu}" ]]; then
     log::err "Empty group | group='${group}'"
     return 1
   fi
   fzf_group::args "${group}"
-  out="$(tmux_oneshot::_fzf --select-1 --ansi "${TMUX_ONESHOT_FZF_MATCH_ARGS[@]}" \
+  out="$(tmux_oneshot::_fzf --select-1 --ansi "$@" "${TMUX_ONESHOT_FZF_MATCH_ARGS[@]}" \
       --sync --bind 'ctrl-j:ignore' "${reply[@]}" \
       --preview "jq -r --arg i {1} ${(qq)TMUX_ONESHOT_JQ_PREVIEW} ${(qq)TMUX_ONESHOT_DB}" \
       --preview-window=up:3:wrap <<< "${menu}")"; rc=$?
@@ -590,12 +605,14 @@ function tmux_oneshot::_pick_group() {
     log::warn "No entry selected"
     return 1
   fi
-  tmux_oneshot::_run_or_back "${idx}" tmux_oneshot::_pick_group "${group}"
+  tmux_oneshot::_run_or_back "${idx}" tmux_oneshot::_pick_group "${group}" --no-select-1
 }
 
 # Runs an entry from a picker. A command that exits FZF_GROUP_BACK_RC (esc inside its
-# own picker, e.g. go-link; ctrl-c) is a cancel, not a failure: the picker that ran it
-# reopens — the same "esc: back" a group gives. Input: <idx> <reopen command...>.
+# own picker, e.g. go-link; ctrl-c; esc on a groups screen) is a cancel, not a failure:
+# the picker that ran it reopens — the same "esc: back" a group gives. The reopen passes
+# --no-select-1: a list of one would otherwise re-run the entry the user just left.
+# Input: <idx> <reopen command...>.
 function tmux_oneshot::_run_or_back() {
   local idx="${1:?}" rc
   shift
@@ -814,15 +831,23 @@ function tmux_oneshot::_flag() {
 }
 
 # Input: entry JSON object
-# Output: the assembled command string. Interactive: flag multiselect (esc =
-# no flags), kv value prompts, subcommand pick (esc = abort). Recurses
-# through subcommands.
+# Output: the assembled command string. Interactive: the groups screen (esc =
+# back, FZF_GROUP_BACK_RC), flag multiselect (esc = no flags), kv value
+# prompts, subcommand pick (esc = abort). Recurses through subcommands.
 function tmux_oneshot::_assemble() {
   local entry="${1:?}"
   # Declared once: zsh's `local` on an already-local name prints var=value,
   # which would leak into this function's captured stdout.
-  local out menu picked line idx rendered sub
+  local out menu picked line idx rendered sub sel gv grc=0
   out="$(jq -r '.cmd // ""' <<< "${entry}")"
+
+  if (( $(jq '.groups // [] | length' <<< "${entry}") > 0 )); then
+    sel="$(fzf_groups::pick "$(jq -c '{groups: .groups}' <<< "${entry}")" \
+            --title "$(jq -r '.menu.name // .cmd // "builder"' <<< "${entry}")")" || grc=$?
+    (( grc == 0 )) || return "${grc}"
+    gv="$(jq -r --argjson s "${sel}" '[.groups[] | $s[.name] // empty] | join(" ")' <<< "${entry}")"
+    [[ -n "${gv}" ]] && out+=" ${gv}"
+  fi
 
   if (( $(jq '.flags // [] | length' <<< "${entry}") > 0 )); then
     menu="$(jq -r '.flags | to_entries[]
@@ -889,8 +914,12 @@ function tmux_oneshot::_run() {
     fi
   fi
 
-  local cmd
-  if ! cmd="$(tmux_oneshot::_assemble "${entry}")"; then
+  local cmd rc=0
+  cmd="$(tmux_oneshot::_assemble "${entry}")" || rc=$?
+  if (( rc == FZF_GROUP_BACK_RC )); then
+    log::info "Back | idx='${idx}'"
+    return "${rc}"
+  elif (( rc != 0 )); then
     log::warn "Aborted | idx='${idx}'"
     return 1
   fi
@@ -899,7 +928,7 @@ function tmux_oneshot::_run() {
     return 1
   fi
 
-  local name autodismiss surface rc
+  local name autodismiss surface
   name="$(jq -r '.menu.name // .cmd' <<< "${entry}")"
   autodismiss="$(jq -r '.autodismiss // false' <<< "${entry}")"
   surface="$(tmux_oneshot::_surface "${entry}")"

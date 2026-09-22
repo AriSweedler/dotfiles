@@ -234,6 +234,48 @@ tmux_oneshot::_assemble "${_nested}" > /dev/null 2>&1
 _t "esc on subcommand aborts" "1" "$?"
 
 # ---------------------------------------------------------------------------
+# Assembly: groups (the one-screen builder; fzf_groups::pick stubbed)
+# ---------------------------------------------------------------------------
+local _groups_file; _groups_file="$(mktemp /tmp/tmux-oneshot-test-groups.XXXXX)"
+function fzf_groups::pick() {
+  print -r -- "$*" >> "${_calls_file}"
+  local answer; answer="$(cat "${_groups_file}")"
+  [[ "${answer}" == "BACK" ]] && return "${FZF_GROUP_BACK_RC}"
+  print -r -- "${answer}"
+}
+local _grouped='{"cmd": "typing", "menu": {"name": "typing"}, "groups": [
+  {"name": "action", "default": "n", "options": [{"key": "n", "label": "next", "value": "next"}]},
+  {"name": "words", "default": "5", "options": [{"key": "5", "label": "50", "value": "--words 50"}]}
+], "flags": [{"flag": "--verbose"}]}'
+print -n '{"action":"current","words":"--words 300"}' > "${_groups_file}"
+_set_picks "verbose"
+_t "groups: values in group order, before flags" "typing current --words 300 --verbose" \
+  "$(tmux_oneshot::_assemble "${_grouped}")"
+_t "groups: the screen gets the entry's spec and name" \
+  '{"groups":[{"name":"action","default":"n","options":[{"key":"n","label":"next","value":"next"}]},{"name":"words","default":"5","options":[{"key":"5","label":"50","value":"--words 50"}]}]} --title typing' \
+  "$(grep -- '--title typing' "${_calls_file}" | tail -1)"
+print -n 'BACK' > "${_groups_file}"
+tmux_oneshot::_assemble "${_grouped}" > /dev/null 2>&1
+_t "groups: esc on the screen is back, not abort" "${FZF_GROUP_BACK_RC}" "$?"
+
+# Through the picker: back reopens it, and without --select-1 so a one-entry list does not
+# re-run the entry the user just left.
+local _db_groups
+_db_groups="$(mktemp /tmp/tmux-oneshot-test-db-groups.XXXXX)"
+print -r -- "[${_grouped}]" > "${_db_groups}"
+export TMUX_ONESHOT_DB="${_db_groups}"
+: > "${_calls_file}"
+_set_picks $'\t\ttyping' "ESC"
+tmux_oneshot::_pick > /dev/null 2>&1
+_t "groups: back from the screen returns to the picker, which then aborts on esc" "1" "$?"
+_t "groups: the reopened picker passes --no-select-1" "1" \
+  "$(grep -c -- '--no-select-1' "${_calls_file}")"
+_t "groups: the first picker did not" "" "$(head -1 "${_calls_file}" | grep -o -- '--no-select-1')"
+export TMUX_ONESHOT_DB="${_db}"
+rm -f "${_groups_file}" "${_db_groups}"
+unfunction fzf_groups::pick
+
+# ---------------------------------------------------------------------------
 # _run end-to-end: cwd, eval, hold-vs-autodismiss
 # ---------------------------------------------------------------------------
 _set_picks "ESC" "assembled"

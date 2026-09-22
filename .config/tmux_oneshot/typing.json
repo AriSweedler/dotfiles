@@ -2,29 +2,28 @@
   {
     "menu": {
       "name": "typing",
-      "text": "Monkeytype passage test (Hyper+T): pick next/current/previous/status, then --words"
+      "text": "Monkeytype passage test (Hyper+T): action × words on one screen, alt-⏎ runs"
     },
     "cmd": "REPO_LIB=\"$HOME/.config/karabiner/karabiner.ts/src/scripts/lib\" \"$HOME/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\"",
     "autodismiss": true,
-    "subcommands": [
+    "groups": [
       {
-        "cmd": "next",
-        "description": "next unread passage; esc on the flag screen = 50 words",
-        "flags": [{"flag": "--words", "type": "kv", "options": ["5", "50", "100", "300"], "description": "word budget"}]
+        "name": "action", "label": "action", "default": "n",
+        "options": [
+          {"key": "n", "label": "next", "value": "next"},
+          {"key": "c", "label": "current", "value": "current"},
+          {"key": "p", "label": "previous", "value": "previous"},
+          {"key": "s", "label": "status", "value": "status"}
+        ]
       },
       {
-        "cmd": "current",
-        "description": "retype the last passage; --words re-anchors at that length",
-        "flags": [{"flag": "--words", "type": "kv", "options": ["5", "50", "100", "300"], "description": "word budget"}]
-      },
-      {
-        "cmd": "previous",
-        "description": "rewind one passage and retype it; --words re-anchors",
-        "flags": [{"flag": "--words", "type": "kv", "options": ["5", "50", "100", "300"], "description": "word budget"}]
-      },
-      {
-        "cmd": "status",
-        "description": "progress only; no test opened"
+        "name": "words", "label": "words", "default": "5",
+        "options": [
+          {"key": "5", "label": "50 words", "value": "--words 50"},
+          {"key": "1", "label": "100 words", "value": "--words 100"},
+          {"key": "2", "label": "200 words", "value": "--words 200"},
+          {"key": "o", "label": "other…", "prompt": "words: ", "value": "--words {}"}
+        ]
       }
     ]
   }
