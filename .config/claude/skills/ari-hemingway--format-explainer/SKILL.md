@@ -36,6 +36,7 @@ Static figure: the same wrapper with `data-static` (the validator then requires 
 ## Prose refs and state links
 
 - Pointing at figure state: `<span data-fig="fig-months" data-ref="sun-line">the orange arrow</span>`. `data-ref` names a layer, control, or readout id declared in that figure; the validator rejects anything else.
+- A ref inherits the visibility of what it points at. When the layer, readout, or control a `data-ref` names is hidden in the figure's current state (a toggle switched off, a state's `visible.hide`), the runtime renders the span as plain prose: no token color, no underline, no hover highlight. It returns when the layer does. Hiding information in the figure hides it in the text, so write the sentence to read correctly when the span is plain.
 - Jumping a figure to a named state: `<a href="#fig-months" data-state="sidereal">after one sidereal month</a>`. The href stays a real fragment so the link works without JavaScript.
 
 ## Terms and glossary
