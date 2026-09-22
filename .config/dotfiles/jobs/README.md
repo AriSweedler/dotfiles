@@ -1,7 +1,10 @@
 # dotfiles/jobs
 
-Job plugins for `dotfiles jobs`: one launchd job, `com.<user>.dotfiles-jobs`, fires on screen
-unlock, at login and every five minutes, and runs the plugins whose triggers match. This
+Job plugins for `dotfiles jobs`: one launchd job, `com.<user>.dotfiles-jobs`, runs the plugins
+whose triggers match on screen unlock, at login and every five minutes. Its program is a small
+resident agent launchd keeps alive, because macOS announces an unlock only as a distributed
+notification, which launchd itself cannot subscribe to; the agent observes it, keeps the timer,
+runs the load tick when it starts, and never overlaps two runs. This
 directory holds the shared tier's plugins; the local tier adds its own under
 `~/.local/share/dotfiles/jobs/`, and the framework runs both (`dotfiles jobs list` shows each
 with its tier). Same shape as the Chrome Exoskeleton: framework and public plugins in df,
@@ -38,8 +41,9 @@ having finished. Plugins are independent of one another, so the order they run i
 no name carries a number. A job with a CLI of its own (git-health, aws-sso-autologin) keeps it
 in a `bin/` and leaves a shim here that execs it.
 
-    dotfiles jobs list          plugins of both tiers, triggers, last run and rc, launchd state
+    dotfiles jobs list          plugins of both tiers, triggers, last run and rc, agent state
     dotfiles jobs run <name>    run one now (trigger 'manual')
+    dotfiles jobs unlock        simulate a screen unlock (SIGUSR1 to the agent)
     dotfiles jobs install       the launchd job; idempotent; `dotfiles init` runs it
 
-Simulate an unlock without locking: `notifyutil -p com.apple.screenIsUnlocked`.
+Only a real lock and unlock proves the observer; the simulation proves everything after it.

@@ -27,6 +27,7 @@ ${c_bold}Usage:${c_rst}
   dotfiles [--local] --dir                    print the tier's bare repo path and exit
   dotfiles jobs [list]                        the job plugins of both tiers, their triggers and last success
   dotfiles jobs run <name>                    run one plugin now (trigger 'manual'); output to its log and stdout
+  dotfiles jobs unlock                        simulate a screen unlock (SIGUSR1 to the resident agent)
   dotfiles jobs install|uninstall             the one launchd job that runs them (init runs install)
 
 ${c_bold}Flags:${c_rst}
@@ -52,8 +53,9 @@ ${c_bold}Environment:${c_rst}
   DOTFILES_SSH_KEY_PATH        the key file, so checking the agent needs no 1Password call (unset = ask the item)
   DOTFILES_SLOW_STEP           seconds; a slower step gets a 'slow step' line (default ${DOTFILES_SLOW_STEP}; pull's fetch allows 5)
 
-${c_bold}Jobs:${c_rst} one launchd job, ${JOBS_LABEL}, fires on screen unlock, at login and every
-${JOBS_INTERVAL_SECONDS}s, and runs the plugins whose triggers match. A plugin is an executable in
+${c_bold}Jobs:${c_rst} one launchd job, ${JOBS_LABEL}: a resident agent that runs the plugins whose
+triggers match on screen unlock (a distributed notification only a resident observer can hear),
+at login and every ${JOBS_INTERVAL_SECONDS}s. A plugin is an executable in
 ${JOBS_ROOT_DF} (shared) or ${JOBS_ROOT_LDF} (this machine)
 whose header has '# triggers: unlock load' and any '# cron: m h dom mon dow' lines;
 it gets the trigger as \$1; the engine posts a banner when it ends (an alert, click opens the log, on failure). Logs and

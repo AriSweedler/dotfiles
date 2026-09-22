@@ -168,12 +168,11 @@ jobs_cron_due() {
   (( $(zstat +mtime "${stamp}") < prev ))
 }
 
-# The job's spawn count since launchd loaded it; 0 when it is not loaded.
-jobs_run_count() {
-  local runs
-  runs="$(launchctl print "gui/$(id -u)/${JOBS_LABEL}" 2>/dev/null | awk '/^[[:space:]]*runs = /{print $3; exit}')"
-  [[ "${runs}" == <-> ]] || runs=0
-  print -r -- "${runs}"
+# The agent's pid from launchd, or nothing when the job is not running.
+jobs_agent_pid() {
+  local pid
+  pid="$(launchctl print "gui/$(id -u)/${JOBS_LABEL}" 2>/dev/null | awk '/^[[:space:]]*pid = /{print $3; exit}')"
+  [[ "${pid}" == <-> ]] && print -r -- "${pid}"
 }
 
 #######################################
@@ -234,18 +233,16 @@ jobs_plugin_due() {
 }
 
 #######################################
-# What launchd runs. The tag comes from the event consumer: the event's key
-# (screenIsUnlocked) when one started the job, else 'launchd', which is RunAtLoad on the
-# job's first spawn since it was loaded (login, or install) and the StartInterval tick after
-# that. Cron schedules run on a tick and at load when due; unlock and load on their named
-# trigger. Every due plugin runs even after one fails; the tick fails if any did.
+# What the agent runs. The tag names why: 'load' when the agent starts (login, install, or a
+# restart by launchd), 'screenIsUnlocked' for the distributed notification of that name, 'tick'
+# for its timer. Cron schedules run on a tick and at load when due; unlock and load on their
+# named trigger. Every due plugin runs even after one fails; the tick fails if any did.
 # Arguments: tag
 #######################################
 jobs_tick() {
   local tag="${1}" trigger name rc=0 ran=0
   case "${tag}" in
     screenIsUnlocked) trigger=unlock ;;
-    launchd) if (( $(jobs_run_count) == 1 )); then trigger=load; else trigger=tick; fi ;;
     *) trigger="${tag}" ;;
   esac
   jobs_discover
@@ -283,10 +280,13 @@ jobs_list() {
     fi
     printf '  %-4s %-20s %-22s %-20s %s\n' "${JOB_TIER[${name}]}" "${name}" "$(jobs_schedule "${JOB_PATH[${name}]}")" "${last}" "${rc}"
   done
-  if launchctl print "gui/$(id -u)/${JOBS_LABEL}" >/dev/null 2>&1; then
-    print -r -- "  launchd: loaded, runs since load=$(jobs_run_count)"
+  local pid; pid="$(jobs_agent_pid)"
+  if [[ -n "${pid}" ]]; then
+    print -r -- "  agent: running (pid ${pid}); 'dotfiles jobs unlock' simulates an unlock"
+  elif launchctl print "gui/$(id -u)/${JOBS_LABEL}" >/dev/null 2>&1; then
+    print -r -- "  agent: ${c_yellow}loaded but not running${c_rst} (launchd restarts it; see ${JOBS_STATE_DIR}/launchd.err.log)"
   else
-    print -r -- "  launchd: ${c_red}not loaded${c_rst} (dotfiles jobs install)"
+    print -r -- "  agent: ${c_red}not loaded${c_rst} (dotfiles jobs install)"
   fi
 }
 
@@ -365,104 +365,120 @@ jobs_notify_finish() {
 # --- the launchd job ---
 
 #######################################
-# Write and compile the XPC event consumer, the job's program. launchd delivers a LaunchEvents
-# trigger as an XPC event and re-spawns the job every 10 s until the job's own process
-# registers a handler and receives it; a shell cannot, and a child process does not count
-# (tried), so this 40-line C program is the program: it consumes the event, then execs the
-# harness with --trigger <event key | launchd>. Compiled only when the source changed.
-# Globals: JOBS_CONSUMER_BIN
+# Write and compile the agent, the job's program, which launchd keeps alive. macOS posts the
+# screen-unlock event only as a distributed notification (NSDistributedNotificationCenter),
+# which launchd's LaunchEvents cannot subscribe to and notifyutil never sees, so a resident
+# observer is the only way to hear it. The agent also owns the timer and the load run, and
+# serializes every run. Compiled only when the source changed.
+# Globals: JOBS_AGENT_BIN
 #######################################
-jobs_write_consumer() {
-  local src="${JOBS_CONSUMER_BIN}.c" rendered
-  mkdir -p "${JOBS_CONSUMER_BIN:h}"
+jobs_write_agent() {
+  local src="${JOBS_AGENT_BIN}.c" rendered
+  mkdir -p "${JOBS_AGENT_BIN:h}"
   rendered="$(mktemp)"
   cat >"${rendered}" <<'CSRC'
-// launch-event-consume <stream> <timeout-seconds> <program> [args...]
-// Generated and compiled by `dotfiles jobs install` (see dotfiles/lib/jobs.zsh).
-//
-// launchd delivers the trigger that started the job as an XPC event on <stream> and, until
-// the job's own process registers a handler and receives it, re-spawns the job every
-// ThrottleInterval. This runs as the job's program: it registers, waits up to
-// <timeout-seconds> for the event, then execs <program> [args...] --trigger <event key>
-// (com.apple. stripped), or --trigger launchd when nothing arrived (RunAtLoad, StartInterval,
-// `launchctl kickstart`).
+// dotfiles-jobs-agent <harness> <interval-seconds> <unlock-notification>
+// Generated and compiled by `dotfiles jobs install` (see dotfiles/lib/jobs.zsh); launchd keeps
+// it alive as the dotfiles jobs job's program. It runs
+//     /bin/zsh <harness> jobs tick --trigger <tag>
+// once at start (load), on every <unlock-notification> from the distributed notification
+// center (screenIsUnlocked), every <interval-seconds> (tick), and on SIGUSR1 (screenIsUnlocked
+// again, so `dotfiles jobs unlock` can simulate an unlock). Runs are serialized: an event that
+// arrives during a run is delivered after it. A timer missed asleep fires once on wake.
+#include <CoreFoundation/CoreFoundation.h>
 #include <dispatch/dispatch.h>
+#include <errno.h>
+#include <signal.h>
+#include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <unistd.h>
-#include <xpc/xpc.h>
 
-static int g_argc;
-static char **g_argv;
+extern char **environ;
+static const char *g_harness;
 
 static void run(const char *tag) {
-    static char trigger[256];
-    const char *prefix = "com.apple.";
-    if (strncmp(tag, prefix, strlen(prefix)) == 0) {
-        tag += strlen(prefix);
+    char *argv[] = {"/bin/zsh", (char *)g_harness, "jobs", "tick", "--trigger", (char *)tag, NULL};
+    pid_t pid;
+    int rc = posix_spawn(&pid, "/bin/zsh", NULL, NULL, argv, environ);
+    if (rc != 0) {
+        fprintf(stderr, "dotfiles-jobs-agent: spawn failed: %s\n", strerror(rc));
+        return;
     }
-    snprintf(trigger, sizeof trigger, "%s", tag);
-    int n = g_argc - 3;
-    char **args = calloc((size_t)n + 3, sizeof *args);
-    for (int i = 0; i < n; i++) {
-        args[i] = g_argv[3 + i];
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {
     }
-    args[n] = "--trigger";
-    args[n + 1] = trigger;
-    args[n + 2] = NULL;
-    execv(args[0], args);
-    perror("execv");
-    exit(3);
+}
+
+static void on_unlock(CFNotificationCenterRef c, void *o, CFNotificationName n, const void *obj, CFDictionaryRef ui) {
+    (void)c; (void)o; (void)n; (void)obj; (void)ui;
+    run("screenIsUnlocked");
+}
+
+static void on_timer(CFRunLoopTimerRef t, void *info) {
+    (void)t; (void)info;
+    run("tick");
 }
 
 int main(int argc, char **argv) {
-    if (argc < 4) {
-        fprintf(stderr, "usage: %s <stream> <timeout-seconds> <program> [args...]\n", argv[0]);
+    if (argc != 4) {
+        fprintf(stderr, "usage: %s <harness> <interval-seconds> <unlock-notification>\n", argv[0]);
         return 2;
     }
-    g_argc = argc;
-    g_argv = argv;
-    xpc_set_event_stream_handler(argv[1], NULL, ^(xpc_object_t event) {
-        const char *name = xpc_dictionary_get_string(event, XPC_EVENT_KEY_NAME);
-        run(name ? name : "event");
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(atof(argv[2]) * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{ run("launchd"); });
-    dispatch_main();
+    g_harness = argv[1];
+    double interval = atof(argv[2]);
+    if (interval < 1) {
+        interval = 300;
+    }
+    CFStringRef name = CFStringCreateWithCString(NULL, argv[3], kCFStringEncodingUTF8);
+    CFNotificationCenterAddObserver(CFNotificationCenterGetDistributedCenter(), NULL, on_unlock, name, NULL,
+                                    CFNotificationSuspensionBehaviorDeliverImmediately);
+    CFRunLoopTimerRef timer = CFRunLoopTimerCreate(NULL, CFAbsoluteTimeGetCurrent() + interval, interval, 0, 0, on_timer, NULL);
+    CFRunLoopAddTimer(CFRunLoopGetCurrent(), timer, kCFRunLoopDefaultMode);
+    // SIGUSR1 simulates an unlock; the handler runs on the main queue, which the run loop drains.
+    signal(SIGUSR1, SIG_IGN);
+    dispatch_source_t usr1 = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGUSR1, 0, dispatch_get_main_queue());
+    dispatch_source_set_event_handler(usr1, ^{ run("screenIsUnlocked"); });
+    dispatch_resume(usr1);
+    run("load");
+    CFRunLoopRun();
+    return 0;
 }
 CSRC
-  if [[ -x "${JOBS_CONSUMER_BIN}" ]] && cmp -s "${rendered}" "${src}"; then
-    rm -f "${rendered}"; log::info "event consumer current | bin='${JOBS_CONSUMER_BIN}'"; return 0
+  if [[ -x "${JOBS_AGENT_BIN}" ]] && cmp -s "${rendered}" "${src}"; then
+    rm -f "${rendered}"; jobs_agent_changed=0; log::info "agent current | bin='${JOBS_AGENT_BIN}'"; return 0
   fi
   if ! command -v cc >/dev/null 2>&1; then
     rm -f "${rendered}"
-    log::err "no C compiler; the jobs launchd job needs the Command Line Tools | fix='xcode-select --install'"; return 1
+    log::err "no C compiler; the jobs agent needs the Command Line Tools | fix='xcode-select --install'"; return 1
   fi
   mv "${rendered}" "${src}"
-  cc -O2 -Wall -Wextra -o "${JOBS_CONSUMER_BIN}" "${src}"
-  log::info "compiled event consumer | bin='${JOBS_CONSUMER_BIN}'"
+  cc -O2 -Wall -Wextra -framework CoreFoundation -o "${JOBS_AGENT_BIN}" "${src}"
+  jobs_agent_changed=1
+  log::info "compiled agent | bin='${JOBS_AGENT_BIN}'"
 }
 
 #######################################
 # Render the plist through jq + plutil (jq escapes every value; plutil rejects malformed
-# output) and install it only when it differs. Sets jobs_plist_changed for the caller.
+# output) and install it only when it differs. Sets jobs_plist_changed for the caller. The
+# agent is the program and launchd keeps it alive; it owns the unlock observer and the timer.
 # Globals: JOBS_*, jobs_plist_changed
 #######################################
 jobs_write_plist() {
   local rendered
   rendered="$(mktemp)"
   jq -n \
-    --arg label "${JOBS_LABEL}" --arg consumer "${JOBS_CONSUMER_BIN}" --arg wait "${JOBS_EVENT_WAIT_SECONDS}" \
-    --arg harness "${HOME}/.config/bin/dotfiles" --arg path "${JOBS_LAUNCHD_PATH}" \
-    --arg stream "${JOBS_EVENT_STREAM}" --arg event "${JOBS_EVENT_NAME}" --argjson interval "${JOBS_INTERVAL_SECONDS}" \
+    --arg label "${JOBS_LABEL}" --arg agent "${JOBS_AGENT_BIN}" --arg harness "${HOME}/.config/bin/dotfiles" \
+    --arg interval "${JOBS_INTERVAL_SECONDS}" --arg notification "${JOBS_UNLOCK_NOTIFICATION}" \
+    --arg path "${JOBS_LAUNCHD_PATH}" \
     --arg out "${JOBS_STATE_DIR}/launchd.out.log" --arg err "${JOBS_STATE_DIR}/launchd.err.log" \
     '{
       Label: $label,
-      ProgramArguments: [$consumer, $stream, $wait, "/bin/zsh", $harness, "jobs", "tick"],
+      ProgramArguments: [$agent, $harness, $interval, $notification],
       RunAtLoad: true,
-      StartInterval: $interval,
-      LaunchEvents: {($stream): {($event): {Notification: $event}}},
+      KeepAlive: true,
       EnvironmentVariables: {PATH: $path},
       StandardOutPath: $out,
       StandardErrorPath: $err
@@ -477,9 +493,9 @@ jobs_write_plist() {
 
 #######################################
 # Idempotent, and an init step: the per-plugin jobs this framework replaced are booted out
-# and their plists removed; the consumer is compiled and the plist written only on change;
-# a loaded job whose plist did not change is left alone (a bootout + bootstrap would fire
-# RunAtLoad again).
+# and their plists removed; the agent is compiled and the plist written only on change; the
+# job is restarted only when one of them changed (a running agent is the old binary until it
+# is), since a bootout + bootstrap runs the load tick again.
 #######################################
 jobs_install() {
   local label plist
@@ -492,24 +508,33 @@ jobs_install() {
     log::info "removed legacy job | label='${label}' plist='${plist}'"
   done
   if [[ "${DRY_RUN}" == true ]]; then
-    log::info "dry-run, would compile the consumer, write the plist and bootstrap, each only if changed | label='${JOBS_LABEL}' plist='${JOBS_PLIST}'"; return 0
+    log::info "dry-run, would compile the agent, write the plist and bootstrap, each only if changed | label='${JOBS_LABEL}' plist='${JOBS_PLIST}'"; return 0
   fi
   mkdir -p "${JOBS_STATE_DIR}"
-  jobs_write_consumer || return 1
-  local jobs_plist_changed=1
+  rm -f "${JOBS_STATE_DIR}"/bin/launch-event-consume(N) "${JOBS_STATE_DIR}"/bin/launch-event-consume.c(N)   # the pre-agent helper
+  local jobs_agent_changed=1 jobs_plist_changed=1
+  jobs_write_agent || return 1
   jobs_write_plist
-  if (( jobs_plist_changed == 0 )) && launchctl print "gui/$(id -u)/${JOBS_LABEL}" >/dev/null 2>&1; then
+  if (( jobs_plist_changed == 0 && jobs_agent_changed == 0 )) && launchctl print "gui/$(id -u)/${JOBS_LABEL}" >/dev/null 2>&1; then
     log::info "jobs launchd job current | label='${JOBS_LABEL}'"; return 0
   fi
   launchctl bootout "gui/$(id -u)/${JOBS_LABEL}" 2>/dev/null || true
   launchctl bootstrap "gui/$(id -u)" "${JOBS_PLIST}"
-  log::info "installed jobs launchd job | label='${JOBS_LABEL}' triggers='${JOBS_EVENT_NAME}, login, every ${JOBS_INTERVAL_SECONDS}s' logs='${JOBS_STATE_DIR}'"
+  log::info "installed jobs launchd job | label='${JOBS_LABEL}' triggers='${JOBS_UNLOCK_NOTIFICATION}, login, every ${JOBS_INTERVAL_SECONDS}s' logs='${JOBS_STATE_DIR}'"
 }
 
 jobs_uninstall() {
   launchctl bootout "gui/$(id -u)/${JOBS_LABEL}" 2>/dev/null || true
   rm -f "${JOBS_PLIST}"
   log::info "removed jobs launchd job | label='${JOBS_LABEL}'"
+}
+
+# Simulate a screen unlock: SIGUSR1 to the agent, which runs the unlock tick as if the
+# distributed notification had arrived. Only a real lock and unlock proves the observer itself.
+jobs_simulate_unlock() {
+  local pid; pid="$(jobs_agent_pid)"
+  if [[ -z "${pid}" ]]; then log::err "agent not running | fix='dotfiles jobs install'"; return 1; fi
+  kill -USR1 "${pid}" && log::info "unlock simulated | agent_pid='${pid}' watch='${JOBS_STATE_DIR}/launchd.err.log'"
 }
 
 # --- command ---
@@ -530,8 +555,9 @@ cmd_jobs() {
       if [[ -z "${JOB_PATH[${name}]:-}" ]]; then log::err "no such job | name='${name}' known='${(kj:, :)JOB_PATH}'"; return 1; fi
       jobs_run_one "${name}" "${trigger}" ;;
     tick) jobs_tick "${trigger}" ;;
+    unlock) jobs_simulate_unlock ;;
     install) jobs_install ;;
     uninstall) jobs_uninstall ;;
-    *) log::err "Unknown jobs subcommand | sub='${sub}' valid='list, run <name>, tick, install, uninstall'"; return 1 ;;
+    *) log::err "Unknown jobs subcommand | sub='${sub}' valid='list, run <name>, tick, unlock, install, uninstall'"; return 1 ;;
   esac
 }
