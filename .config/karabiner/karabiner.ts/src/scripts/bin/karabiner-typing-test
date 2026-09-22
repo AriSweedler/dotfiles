@@ -2,9 +2,11 @@
 #
 # Karabiner typing-mode handler. Opens a Monkeytype custom typing test seeded
 # by the `passage` CLI (per-book bookmarks under XDG state) and narrates via
-# Notification Center. Logs one CSV line per test for stats. Output goes to
-# /tmp/karabiner.karabiner-typing-test/log.txt via the karabiner_script
-# wrapper, which also sets REPO_LIB.
+# Notification Center. Logs one CSV line per test for stats. From Karabiner the
+# karabiner_script wrapper runs it and keeps its output in
+# /tmp/karabiner.karabiner-typing-test/log.txt; it also runs by name from a shell
+# and from the tmux oneshot `typing` (~/.config/bin symlinks here), REPO_LIB then
+# defaulting to the lib dir beside this script.
 #
 # Usage: karabiner-typing-test [ACTION] [--words N]
 #   next (default)  next unread passage, advancing the bookmark
@@ -15,7 +17,7 @@
 set -euo pipefail
 
 readonly PASSAGE_BIN="${HOME}/.config/bin/passage"
-readonly REPO_LIB="${REPO_LIB:?REPO_LIB must be set by the karabiner_script wrapper}"
+readonly REPO_LIB="${REPO_LIB:-${0:A:h:h}/lib}"
 readonly ENCODER="${REPO_LIB}/monkeytype_url.cjs"
 readonly LZ_STRING="${REPO_LIB}/lz-string.js"
 readonly PASSAGE_LOGGING_LIB="${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
