@@ -27,14 +27,23 @@ jobs_discover() {
   done
 }
 
-# A plugin's triggers, from its `# triggers:` header line: unlock, load, every:<seconds>,
-# daily@HH:MM, Mon@HH:MM … Sun@HH:MM.
+# A plugin's triggers, from its `# triggers:` header line: unlock, load, every:<seconds>.
 jobs_triggers() {
   setopt local_options extended_glob   # the ## quantifier below
   local line
   line="$(grep -m1 -E '^# triggers:' "${1}" 2>/dev/null || true)"
   line="${line#\# triggers:}"
   print -r -- "${line##[[:space:]]##}"
+}
+
+# A plugin's cron schedules, one five-field expression per `# cron:` header line.
+jobs_crons() {
+  setopt local_options extended_glob
+  local line
+  grep -E '^# cron:' "${1}" 2>/dev/null | while IFS= read -r line; do
+    line="${line#\# cron:}"
+    print -r -- "${${line##[[:space:]]##}%%[[:space:]]##}"
+  done
 }
 
 # A plugin's run limit in seconds: its `# timeout:` header line, else JOBS_TIMEOUT_SECONDS.
@@ -79,33 +88,93 @@ jobs_due() {
 }
 
 #######################################
-# True (0) when a calendar trigger is due: daily@HH:MM, or <Day>@HH:MM (Mon … Sun) for weekly.
-# Due means the most recent scheduled moment at or before now is later than the plugin's last
-# run, so a moment missed asleep fires on the first tick after wake, as launchd's own calendar
-# jobs do, and a plugin that never ran is due at once. A malformed spec is warned about and
-# never due.
-# Arguments: name, spec
+# Does a value satisfy one cron field: `*`, `n`, `a-b`, `*/s`, `a-b/s`, or a comma list of
+# those. Returns 0 matched, 1 not, 2 malformed (out of range, or not a number).
+# Arguments: field, value, lo, hi
 #######################################
-jobs_calendar_due() {
-  local name="${1}" spec="${2}" stamp="${JOBS_STATE_DIR}/${1}.ran"
-  local day="${spec%@*}" when="${spec#*@}" hour minute want back=0 scheduled
-  local -A dow=(mon 1 tue 2 wed 3 thu 4 fri 5 sat 6 sun 7)
-  if [[ "${when}" != <0-23>:<0-59> || ( "${day:l}" != daily && -z "${dow[${day:l}]:-}" ) ]]; then
-    log::warn "bad calendar trigger; ignored | job='${name}' trigger='${spec}' want='daily@HH:MM or Mon@HH:MM'"; return 1
+jobs_cron_field() {
+  local spec="${1}" value="${2}" lo="${3}" hi="${4}" part a b step matched=1
+  for part in ${(s:,:)spec}; do
+    step=1
+    if [[ "${part}" == */* ]]; then step="${part#*/}"; part="${part%/*}"; fi
+    if [[ "${part}" == '*' ]]; then a="${lo}"; b="${hi}"
+    elif [[ "${part}" == *-* ]]; then a="${part%-*}"; b="${part#*-}"
+    else a="${part}"; b="${part}"; fi
+    [[ "${a}" == <-> && "${b}" == <-> && "${step}" == <-> ]] || return 2
+    (( a >= lo && b <= hi && a <= b && step >= 1 )) || return 2
+    (( value >= a && value <= b && (value - a) % step == 0 )) && matched=0
+  done
+  return "${matched}"
+}
+
+# The day-of-week field, where both 0 and 7 are Sunday. Arguments: field, %w value (0-6).
+jobs_cron_dow() {
+  local rc
+  jobs_cron_field "${1}" "${2}" 0 7; rc=$?
+  if (( rc == 1 && ${2} == 0 )); then jobs_cron_field "${1}" 7 0 7; rc=$?; fi
+  return "${rc}"
+}
+
+# Returns 0 when a five-field expression is well formed, 2 otherwise (with the offending field).
+jobs_cron_valid() {
+  local -a f=("${@}")
+  (( ${#f} == 5 )) || return 2
+  local rc
+  jobs_cron_field "${f[1]}" 0 0 59;  rc=$?; (( rc == 2 )) && return 2
+  jobs_cron_field "${f[2]}" 0 0 23;  rc=$?; (( rc == 2 )) && return 2
+  jobs_cron_field "${f[3]}" 1 1 31;  rc=$?; (( rc == 2 )) && return 2
+  jobs_cron_field "${f[4]}" 1 1 12;  rc=$?; (( rc == 2 )) && return 2
+  jobs_cron_field "${f[5]}" 0 0 7;   rc=$?; (( rc == 2 )) && return 2
+  return 0
+}
+
+#######################################
+# Prints the epoch of the most recent minute at or before now that matches a five-field cron
+# expression, looking back up to a year; prints nothing (rc 1) when none does. Days are walked
+# back through `date -v` so DST changes land on real local midnights; within a matching day the
+# hours and minutes are walked down from the latest allowed.
+# Arguments: the five fields
+#######################################
+jobs_cron_previous() {
+  local -a f=("${@}")
+  local d h m day_start dom mon dow hi_h hi_m mm_hi
+  for (( d = 0; d <= 366; d++ )); do
+    day_start="$(date -j -v-"${d}"d -v0H -v0M -v0S +%s)"
+    strftime -s dom '%d' "${day_start}"; strftime -s mon '%m' "${day_start}"; strftime -s dow '%w' "${day_start}"
+    jobs_cron_field "${f[3]}" $(( 10#${dom} )) 1 31 || continue
+    jobs_cron_field "${f[4]}" $(( 10#${mon} )) 1 12 || continue
+    jobs_cron_dow "${f[5]}" "${dow}" || continue
+    hi_h=23; hi_m=59
+    if (( d == 0 )); then strftime -s hi_h '%H' "${EPOCHSECONDS}"; strftime -s hi_m '%M' "${EPOCHSECONDS}"; hi_h=$(( 10#${hi_h} )); hi_m=$(( 10#${hi_m} )); fi
+    for (( h = hi_h; h >= 0; h-- )); do
+      jobs_cron_field "${f[2]}" "${h}" 0 23 || continue
+      mm_hi=59; (( d == 0 && h == hi_h )) && mm_hi="${hi_m}"
+      for (( m = mm_hi; m >= 0; m-- )); do
+        if jobs_cron_field "${f[1]}" "${m}" 0 59; then
+          date -j -r "${day_start}" -v"${h}"H -v"${m}"M -v0S +%s; return 0
+        fi
+      done
+    done
+  done
+  return 1
+}
+
+#######################################
+# True (0) when a cron schedule is due: its most recent moment at or before now is later than
+# the plugin's last run, so a moment missed asleep fires on the first tick after wake (unlike
+# cron, which skips it) and a plugin that never ran is due at once. A malformed expression is
+# warned about and never due.
+# Arguments: name, expression
+#######################################
+jobs_cron_due() {
+  local name="${1}" expr="${2}" stamp="${JOBS_STATE_DIR}/${1}.ran" prev
+  local -a f=(${=expr})
+  if ! jobs_cron_valid "${f[@]}"; then
+    log::warn "bad cron trigger; ignored | job='${name}' cron='${expr}' want='minute hour day-of-month month day-of-week'"; return 1
   fi
-  hour="${when%:*}"; minute="${when#*:}"
-  if [[ "${day:l}" != daily ]]; then
-    want="${dow[${day:l}]}"
-    back=$(( ($(date +%u) - want + 7) % 7 ))
-  fi
-  scheduled="$(date -j -v-"${back}"d -v"${hour}"H -v"${minute}"M -v0S +%s)"
-  if (( scheduled > EPOCHSECONDS )); then
-    # Today's (this week's) moment is still ahead; the previous one is the reference.
-    if [[ "${day:l}" == daily ]]; then back=1; else back=$(( back + 7 )); fi
-    scheduled="$(date -j -v-"${back}"d -v"${hour}"H -v"${minute}"M -v0S +%s)"
-  fi
+  prev="$(jobs_cron_previous "${f[@]}")" || return 1
   [[ -f "${stamp}" ]] || return 0
-  (( $(zstat +mtime "${stamp}") < scheduled ))
+  (( $(zstat +mtime "${stamp}") < prev ))
 }
 
 # The job's spawn count since launchd loaded it; 0 when it is not loaded.
@@ -147,15 +216,40 @@ jobs_run_one() {
 }
 
 #######################################
+# True (0) when a plugin should run for this trigger: a named trigger it declares, an every:
+# period that has elapsed, or a cron schedule whose moment has come (the last two on a tick and
+# at load only). Unknown tokens are warned about, not ignored.
+# Arguments: name, trigger
+#######################################
+jobs_plugin_due() {
+  local name="${1}" trigger="${2}" plugin="${JOB_PATH[${name}]}" t expr
+  local periodic=1; [[ "${trigger}" == tick || "${trigger}" == load ]] && periodic=0
+  for t in ${=$(jobs_triggers "${plugin}")}; do
+    case "${t}" in
+      every:*)     (( periodic == 0 )) && jobs_due "${name}" "${t#every:}" && return 0 ;;
+      unlock|load) [[ "${t}" == "${trigger}" ]] && return 0 ;;
+      *)           log::warn "unknown trigger; ignored | job='${name}' trigger='${t}'" ;;
+    esac
+  done
+  if (( periodic == 0 )); then
+    for expr in "${(@f)$(jobs_crons "${plugin}")}"; do
+      [[ -n "${expr}" ]] || continue
+      jobs_cron_due "${name}" "${expr}" && return 0
+    done
+  fi
+  return 1
+}
+
+#######################################
 # What launchd runs. The tag comes from the event consumer: the event's key
 # (screenIsUnlocked) when one started the job, else 'launchd', which is RunAtLoad on the
 # job's first spawn since it was loaded (login, or install) and the StartInterval tick after
-# that. every:<seconds> and calendar plugins run on a tick and at load when due; the others
+# that. every:<seconds> and cron schedules run on a tick and at load when due; unlock and load
 # on their named trigger. Every due plugin runs even after one fails; the tick fails if any did.
 # Arguments: tag
 #######################################
 jobs_tick() {
-  local tag="${1}" trigger name t triggers rc=0 ran=0
+  local tag="${1}" trigger name rc=0 ran=0
   case "${tag}" in
     screenIsUnlocked) trigger=unlock ;;
     launchd) if (( $(jobs_run_count) == 1 )); then trigger=load; else trigger=tick; fi ;;
@@ -163,25 +257,23 @@ jobs_tick() {
   esac
   jobs_discover
   for name in "${(@ko)JOB_PATH}"; do
-    triggers="$(jobs_triggers "${JOB_PATH[${name}]}")"
-    for t in ${=triggers}; do
-      case "${t}" in
-        every:*)
-          [[ "${trigger}" == tick || "${trigger}" == load ]] || continue
-          jobs_due "${name}" "${t#every:}" || continue ;;
-        *@*)
-          [[ "${trigger}" == tick || "${trigger}" == load ]] || continue
-          jobs_calendar_due "${name}" "${t}" || continue ;;
-        unlock|load) [[ "${t}" == "${trigger}" ]] || continue ;;
-        *) log::warn "unknown trigger; ignored | job='${name}' trigger='${t}'"; continue ;;
-      esac
-      ran=$(( ran + 1 ))
-      jobs_run_one "${name}" "${trigger}" || rc=1
-      break
-    done
+    jobs_plugin_due "${name}" "${trigger}" || continue
+    ran=$(( ran + 1 ))
+    jobs_run_one "${name}" "${trigger}" || rc=1
   done
   log::info "tick done | trigger='${trigger}' ran='${ran}' plugins='${#JOB_PATH}'"
   return "${rc}"
+}
+
+# One line for the list: the triggers, then each cron expression in quotes.
+jobs_schedule() {
+  local out expr
+  out="$(jobs_triggers "${1}")"
+  for expr in "${(@f)$(jobs_crons "${1}")}"; do
+    [[ -n "${expr}" ]] || continue
+    out="${out:+${out} }cron:'${expr}'"
+  done
+  print -r -- "${out}"
 }
 
 jobs_list() {
@@ -196,7 +288,7 @@ jobs_list() {
       last="$(date -r "${stamp}" '+%Y-%m-%dT%H:%M:%S')"
       [[ -f "${JOBS_STATE_DIR}/${name}.rc" ]] && rc="$(<"${JOBS_STATE_DIR}/${name}.rc")"
     fi
-    printf '  %-4s %-20s %-22s %-20s %s\n' "${JOB_TIER[${name}]}" "${name}" "$(jobs_triggers "${JOB_PATH[${name}]}")" "${last}" "${rc}"
+    printf '  %-4s %-20s %-22s %-20s %s\n' "${JOB_TIER[${name}]}" "${name}" "$(jobs_schedule "${JOB_PATH[${name}]}")" "${last}" "${rc}"
   done
   if launchctl print "gui/$(id -u)/${JOBS_LABEL}" >/dev/null 2>&1; then
     print -r -- "  launchd: loaded, runs since load=$(jobs_run_count)"
