@@ -11,7 +11,7 @@
 //   2 — clipboard is empty
 //   3 — only plain-text flavors present (no rich text on clipboard)
 //   4 — rich flavors present but no <a> anchors found in any strategy
-//   5 — clipboard appears to be pbpastelinks' own previous output
+//   5 — clipboard appears to be pbpastelinks' own previous output ([text](url) in plain text)
 
 import Cocoa
 import Foundation
@@ -172,19 +172,11 @@ let plainOnlyMarkers: Set<String> = [
     "org.chromium.source-url",
 ]
 
+// pbpastelinks' own output is plain text with markdown links: "[text](url)".
 func looksSelfReferential(_ text: String) -> Bool {
-    let lines = text.split(separator: "\n").map { String($0) }
-    guard lines.count >= 2 else { return false }
-    let urlPattern = try! NSRegularExpression(pattern: "^.+ https?://\\S+$")
-    var matches = 0
-    for line in lines {
-        let s = line.trimmingCharacters(in: .whitespaces)
-        if s.isEmpty { continue }
-        let range = NSRange(location: 0, length: (s as NSString).length)
-        if urlPattern.firstMatch(in: s, range: range) != nil { matches += 1 }
-        else { return false }
-    }
-    return matches >= 2
+    let re = try! NSRegularExpression(pattern: "\\]\\(<?(?:https?://|mailto:)")
+    let range = NSRange(location: 0, length: (text as NSString).length)
+    return re.firstMatch(in: text, range: range) != nil
 }
 
 func emitBailDiagnostic(exitCode: Int32, reason: String, hint: String) {
@@ -239,7 +231,7 @@ if types.isEmpty {
 if !hasRich {
     if looksSelfReferential(plain) {
         emitBailDiagnostic(exitCode: 5,
-            reason: "clipboard looks like pbpastelinks own previous output (every line is 'text url')",
+            reason: "clipboard looks like pbpastelinks own previous output (plain text with [text](url) links)",
             hint: "re-copy from the original source to extract links again")
     }
     emitBailDiagnostic(exitCode: 3,

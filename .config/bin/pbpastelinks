@@ -1,17 +1,27 @@
 #!/usr/bin/env zsh
-# Expand rich-text links on the clipboard into plain "text url" lines.
+# pbpastelinks — rewrite the clipboard as plain text with its hyperlinks inlined as
+# markdown: "ABC XXX ZZZ", where XXX is a link, becomes "ABC [XXX](url) ZZZ". A plain-text
+# paste of rich text loses exactly the links; this keeps them and changes nothing else.
 #
 # Architecture:
-#   1. A Swift binary (pbpastelinks-extract) reads every NSPasteboard flavor
-#      and returns HTML to stdout. It handles public.html, Chromium's
-#      web-custom-data (including Slack's Quill JSON), public.rtf via
-#      NSAttributedString, and Apple Web Archive. Source lives at
+#   1. A Swift binary (pbpastelinks-extract) reads every NSPasteboard flavor and returns
+#      HTML to stdout: public.html, Chromium's web-custom-data (including Slack's Quill
+#      JSON), public.rtf via NSAttributedString, Apple Web Archive. Source lives at
 #      ${SWIFT_SRC}; it's lazy-compiled to ${SWIFT_BIN} on first run.
-#   2. A perl regex walks the HTML and emits "text url" lines.
-#   3. zsh wires the two together and rewrites the clipboard.
+#   2. The plain-text flavor (pbpaste) is the text a plain paste would produce, the source
+#      app's own rendering, so nothing but the links is at stake. Without one, the text is
+#      derived from the HTML.
+#   3. A perl pass walks the HTML's <a href> anchors in order and, for each, finds its text
+#      in the plain text (whitespace-tolerant, from the previous match onward) and replaces
+#      it with [text](url). Anchors whose text is the url itself are left alone: a bare url
+#      survives a plain paste. Adjacent anchors to one url (Google Docs splits a link
+#      wherever the styling changes) are merged first. The link text is the plain text's own
+#      run, line breaks included. An anchor whose text cannot be found is appended at the
+#      end so the link is not lost.
+#   4. zsh wires the three together and rewrites the clipboard (plain text only).
 #
-# On no-match the clipboard is left untouched — overwriting empty would
-# destroy work.
+# When there is nothing to inline the clipboard is left untouched — overwriting it with
+# empty or unchanged text would destroy the rich copy for no gain.
 set -euo pipefail
 
 readonly LOG_LIB="${HOME}/.config/zsh/plugins/log.zsh"
@@ -23,14 +33,12 @@ readonly SWIFT_BIN="${HOME}/.cache/pbpastelinks/extract"
 
 #######################################
 # Verify required binaries exist.
-# Globals: None
-# Arguments: None
 # Returns: 1 if any are missing
 #######################################
 check_prerequisites() {
   local missing=()
   local cmd
-  for cmd in pbcopy perl swiftc; do
+  for cmd in pbcopy pbpaste perl swiftc; do
     command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
   done
   if (( ${#missing} > 0 )); then
@@ -65,32 +73,38 @@ ensure_extractor() {
 help() {
   local cg=$'\e[32m' cc=$'\e[36m' cr=$'\e[0m'
   cat <<EOF
-${cg}pbpastelinks${cr} — flatten clipboard rich-text links into "text url" lines
+${cg}pbpastelinks${cr} — clipboard rich text → plain text with links inlined as [text](url)
 
-Reads every NSPasteboard flavor (HTML, Chromium web-custom-data, RTF,
-Web Archive) via an embedded Swift extractor, then emits one "text url"
-line per <a href=...> anchor. The clipboard is replaced with the flat
-output so you can paste into terminals / plain-text destinations.
+Reads every NSPasteboard flavor (HTML, Chromium web-custom-data, RTF, Web Archive) via an
+embedded Swift extractor, takes the plain-text flavor as the text a plain paste would give,
+and replaces each linked run of text with [text](url) in place. A bare url linked to itself
+is left as it is. The clipboard is replaced with the result, plain text only, so a paste
+into a terminal, a plain-text box or a markdown editor keeps every link.
+
+  ABC XXX ZZZ   →   ABC [XXX](https://…) ZZZ
 
 Works with copies from:
   - Google Docs, GitHub, generic web pages (public.html)
-  - Slack desktop / web (Chromium web-custom-data → text/html or slack/text)
+  - Slack desktop / web (Chromium web-custom-data → text/html or Quill delta)
   - Mail, TextEdit, Notes, Word (public.rtf → NSAttributedString)
   - Safari (Apple Web Archive)
 
 ${cc}Usage:${cr}
-  pbpastelinks [--quiet] [--rebuild]
+  pbpastelinks [--quiet] [--dry-run] [--rebuild]
   pbpastelinks -h | --help
 
 ${cc}Options:${cr}
-  --quiet      Suppress stderr logging (still prints output on stdout)
+  --quiet      Suppress stderr logging (still prints the result on stdout)
+  --dry-run    Print the result; leave the clipboard as it is
   --rebuild    Force recompile the swift extractor binary
   -h, --help   Show this help
 
 ${cc}Diagnostics:${cr}
-  Every step logs to stderr at INFO. The swift extractor lists every
-  pasteboard flavor present and which strategy it picked. The zsh wrapper
-  logs each anchor it extracts and the final clipboard write.
+  Every step logs to stderr. The swift extractor lists every pasteboard flavor present and
+  which strategy it picked. The perl pass logs each link it inlines, each bare url it
+  keeps, and each anchor whose text it could not find (those are appended at the end).
+  Exit codes 2–5 are the extractor's: empty clipboard, plain text only, rich text without
+  anchors, and pbpastelinks' own previous output.
 EOF
 }
 
@@ -98,10 +112,11 @@ main() {
   check_prerequisites || return 1
 
   # === PARSE ===
-  local quiet=false rebuild=false
+  local quiet=false rebuild=false dry_run=false
   while (( $# > 0 )); do case "${1}" in
     -h|--help) help; return 0 ;;
     --quiet)   quiet=true; shift ;;
+    --dry-run) dry_run=true; shift ;;
     --rebuild) rebuild=true; shift ;;
     -*)        log::err "unknown flag | flag='${1}'"; help; return 1 ;;
     *)         log::err "unexpected argument | argument='${1}'"; help; return 1 ;;
@@ -110,6 +125,7 @@ main() {
   # === MASSAGE ===
   if [[ "${quiet}" == "true" ]]; then
     export OTTO_NO_PREAMBLE=1
+    export PBL_QUIET=1
     log::info() { :; }
     log::warn() { :; }
   fi
@@ -122,78 +138,208 @@ main() {
   ensure_extractor || return 1
 
   # === LOGIC ===
-  # Swift extractor emits its own diagnostic block to stderr on failure
-  # (FAIL/hint/flavor list/preview). On success it logs one "hit" line.
-  # The wrapper stays quiet on failure and only logs the post-extract steps.
+  # The extractor emits its own diagnostic block to stderr on failure (FAIL/hint/flavor
+  # list/preview) and one "hit" line on success; its exit code passes through.
   local html rc=0
   html="$("${SWIFT_BIN}")" || rc="${?}"
-
   if (( rc != 0 )); then
-    # Swift already explained why; don't double-log. Pass exit code through
-    # so callers can branch on it.
     return "${rc}"
   fi
-
   if [[ -z "${html}" ]]; then
     log::warn "extractor returned rc=0 but no html — bug in extractor"
     return 0
   fi
 
-  local -a links
-  local line
-  while IFS= read -r line; do
-    [[ -z "${line}" ]] && continue
-    links+=("${line}")
-    log::info "anchor matched | n='${#links}' entry='${line[1,200]}'"
-  done < <(printf '%s' "${html}" | extract_anchors)
-
-  if (( ${#links} == 0 )); then
-    log::warn "extractor hit but perl found no <a> anchors | clipboard left untouched"
-    return 0
+  local plain_file
+  plain_file="$(mktemp "${TMPDIR:-/tmp}/pbpastelinks.XXXXXX")"
+  pbpaste > "${plain_file}" || true
+  if [[ ! -s "${plain_file}" ]]; then
+    log::warn "no plain-text flavor on the clipboard; deriving the text from the html"
   fi
 
-  local output="${(F)links}"
-  printf '%s' "${output}" | pbcopy
-  log::info "wrote clipboard | bytes='${#output}' count='${#links}'"
+  # The sentinel keeps a trailing newline the source had; $(…) would strip it.
+  local output
+  if ! output="$(printf '%s' "${html}" | inline_links "${plain_file}" && printf x)"; then
+    rm -f "${plain_file}"
+    log::warn "nothing to inline | clipboard left untouched"
+    return 0
+  fi
+  rm -f "${plain_file}"
+  output="${output%x}"
 
-  printf '%s\n' "${output}"
+  if [[ "${dry_run}" == "true" ]]; then
+    log::info "dry run | bytes='${#output}' clipboard left untouched"
+  else
+    printf '%s' "${output}" | pbcopy
+    log::info "wrote clipboard | bytes='${#output}'"
+  fi
+  printf '%s' "${output}"
+  [[ "${output}" == *$'\n' ]] || print
 }
 
 #######################################
-# Walk HTML on stdin, emit one "text url" line per <a href=...>.
-# Decodes common HTML entities in both anchor text and href.
+# HTML on stdin, the plain-text flavor in the file $1 (may be empty). Prints the plain text
+# with every anchor's text replaced by [text](url); exit 1 when there is nothing to inline.
+# Logs to stderr unless PBL_QUIET is set.
 #######################################
-extract_anchors() {
-  perl -0777 -ne '
-    sub unescape {
-      my $s = shift;
-      $s =~ s/&nbsp;/ /g;
-      $s =~ s/&amp;/&/g;
-      $s =~ s/&lt;/</g;
-      $s =~ s/&gt;/>/g;
-      $s =~ s/&quot;/"/g;
-      $s =~ s/&#39;/'\''/g;
-      $s =~ s/&#(\d+);/chr($1)/ge;
-      return $s;
-    }
-    while (m{<a\b([^>]*)>(.*?)</a>}gis) {
-      my ($attrs, $text) = ($1, $2);
-      my $href;
-      if    ($attrs =~ /\bhref\s*=\s*"([^"]*)"/i) { $href = $1 }
-      elsif ($attrs =~ /\bhref\s*=\s*'\''([^'\'']*)'\''/i) { $href = $1 }
-      else  { next }
+inline_links() {
+  local prog
+  prog="$(cat <<'PERL'
+use strict;
+use warnings;
+use utf8;
+use open qw(:std :encoding(UTF-8));
 
-      $text =~ s/<[^>]+>//g;
-      $text = unescape($text);
-      $text =~ s/\s+/ /g;
-      $text =~ s/^\s+|\s+$//g;
+my ($plain_file) = @ARGV;
+my $quiet = $ENV{PBL_QUIET} ? 1 : 0;
+sub note { print STDERR "[pbpastelinks] $_[0]\n" unless $quiet }
 
-      $href = unescape($href);
-
-      next if $text eq "" || $href eq "";
-      print "$text $href\n";
-    }
-  '
+local $/;
+my $html = <STDIN>;
+$html = "" unless defined $html;
+my $plain = "";
+if (defined $plain_file && -s $plain_file) {
+  open(my $fh, "<", $plain_file) or die "cannot read $plain_file: $!";
+  $plain = <$fh>;
+  close $fh;
+  $plain = "" unless defined $plain;
 }
 
-main "${@}"
+# Named entities the producers emit, then hex and decimal references; &amp; last so that
+# "&amp;lt;" decodes to a literal "&lt;".
+sub unescape {
+  my $s = shift;
+  $s =~ s/&nbsp;/\x{a0}/g;
+  $s =~ s/&lt;/</g;
+  $s =~ s/&gt;/>/g;
+  $s =~ s/&quot;/"/g;
+  $s =~ s/&(?:apos|#39|#x27);/'/g;
+  $s =~ s/&#x([0-9a-fA-F]+);/chr(hex($1))/ge;
+  $s =~ s/&#(\d+);/chr($1)/ge;
+  $s =~ s/&amp;/&/g;
+  return $s;
+}
+
+# What a plain paste already keeps: a url whose text is the url. Scheme, www. and a
+# trailing slash do not count as a difference.
+sub norm_url {
+  my $u = lc shift;
+  $u =~ s/^[\s\x{a0}]+|[\s\x{a0}]+$//g;
+  $u =~ s{^(?:https?:)?//}{};
+  $u =~ s{^mailto:}{};
+  $u =~ s{^www\.}{};
+  $u =~ s{/+$}{};
+  return $u;
+}
+
+# CommonMark: "]" in the text is escaped; a url with ")" or whitespace goes in <…>.
+sub markdown_link {
+  my ($text, $href) = @_;
+  $text =~ s/([\[\]])/\\$1/g;
+  $href = "<$href>" if $href =~ /[)\s]/;
+  return "[$text]($href)";
+}
+
+# Fallback text when the clipboard has no plain-text flavor: the HTML, block ends as
+# newlines, tags gone, entities decoded.
+sub html_to_text {
+  my $t = shift;
+  $t =~ s{<(head|style|script)\b.*?</\1>}{}gis;
+  $t =~ s{<br\s*/?>}{\n}gi;
+  $t =~ s{</(?:p|div|li|tr|h[1-6]|blockquote|pre|table)>}{\n}gi;
+  $t =~ s{<li\b[^>]*>}{- }gi;
+  $t =~ s{<[^>]+>}{}g;
+  $t = unescape($t);
+  $t =~ s/[ \t\x{a0}]+/ /g;
+  $t =~ s/ *\n */\n/g;
+  $t =~ s/\n{3,}/\n\n/g;
+  $t =~ s/^\s+|\s+$//g;
+  return $t;
+}
+
+# The anchors in document order as [text, href]. Adjacent anchors to the same href with
+# nothing but whitespace between them are one link that the producer split.
+my @anchors;
+my $prev_end = 0;
+while ($html =~ m{<a\b([^>]*)>(.*?)</a>}gis) {
+  my ($start, $end) = ($-[0], $+[0]);
+  my ($attrs, $inner) = ($1, $2);
+  my $href;
+  if    ($attrs =~ /\bhref\s*=\s*"([^"]*)"/i) { $href = $1 }
+  elsif ($attrs =~ /\bhref\s*=\s*'([^']*)'/i) { $href = $1 }
+  else  { $prev_end = $end; next }
+  my $text = $inner;
+  $text =~ s/<[^>]+>//g;
+  $text = unescape($text);
+  $text =~ s/[\s\x{a0}]+/ /g;
+  $text =~ s/^ | $//g;
+  $href = unescape($href);
+  $href =~ s/^\s+|\s+$//g;
+  if ($text eq "" || $href eq "") { $prev_end = $end; next }
+  my $between = substr($html, $prev_end, $start - $prev_end);
+  $between =~ s/<[^>]+>//g;
+  $between = unescape($between);
+  if (@anchors && $anchors[-1][1] eq $href && $between =~ /^[\s\x{a0}]*$/) {
+    $anchors[-1][0] .= ($between ne "" ? " " : "") . $text;
+  } else {
+    push @anchors, [$text, $href];
+  }
+  $prev_end = $end;
+}
+
+if ($plain eq "") {
+  note("no plain-text flavor; text derived from the html");
+  $plain = html_to_text($html);
+}
+
+my $cursor = 0;
+my $inlined = 0;
+my @unmatched;
+for my $a (@anchors) {
+  my ($text, $href) = @$a;
+  if (norm_url($text) eq norm_url($href)) {
+    note("bare url kept | url='$href'");
+    next;
+  }
+  my $md = markdown_link($text, $href);
+  my $re = join '[\s\x{a0}]+', map { quotemeta } split /[\s\x{a0}]+/, $text;
+  my $found = 0;
+  for my $from ($cursor, 0) {
+    pos($plain) = $from;
+    if ($plain =~ /$re/g) {
+      my ($s, $e) = ($-[0], $+[0]);
+      # The plain text's own run is the link text, so a line break inside it stays.
+      $md = markdown_link(substr($plain, $s, $e - $s), $href);
+      substr($plain, $s, $e - $s, $md);
+      $cursor = $s + length $md;
+      $found = 1;
+      last;
+    }
+  }
+  if ($found) {
+    $inlined++;
+    note("inlined | text='$text' url='$href'");
+  } else {
+    push @unmatched, $md;
+    note("text not found in the plain text; appended at the end | text='$text' url='$href'");
+  }
+}
+
+if (!$inlined && !@unmatched) {
+  note(@anchors ? "every link's text is its url; a plain paste keeps those" : "no <a> anchors with text in the html");
+  exit 1;
+}
+if (@unmatched) {
+  my $tail = join("\n", @unmatched);
+  $plain = $plain =~ /\n\z/ ? "$plain$tail\n" : "$plain\n$tail";
+}
+print $plain;
+PERL
+)"
+  perl -e "${prog}" "${1}"
+}
+
+# Run only when executed; tests source this file for inline_links.
+if [[ "${ZSH_EVAL_CONTEXT}" == "toplevel" ]]; then
+  main "${@}"
+fi

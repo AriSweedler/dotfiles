@@ -25,5 +25,13 @@
     "cmd": "applepaste \"$(pbpaste)\"",
     "autodismiss": true,
     "key": "ctrl-p"
+  },
+  {
+    "menu": {
+      "name": "pbpastelinks",
+      "text": "clipboard rich text → plain text with links inlined as [text](url); alias pbl"
+    },
+    "cmd": "pbpastelinks",
+    "autodismiss": true
   }
 ]
