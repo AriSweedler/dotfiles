@@ -20,6 +20,7 @@
 !/share/tmux_oneshot/
 !/share/double_cd/
 !/share/new-machine/
+!/share/dotfiles/
 !/share/claude-skills/
 !/share/chrome-exoskeleton/
 /share/chrome-exoskeleton/plugins/node_modules

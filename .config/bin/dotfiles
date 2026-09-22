@@ -40,9 +40,14 @@ readonly -A TIER_GIT_DIR=(shared "${HOME}/dotfiles.git" local "${HOME}/.local/lo
 readonly -A TIER_WORK_TREE=(shared "${HOME}" local "${HOME}/.local")
 readonly -A TIER_HOOKS=(shared "${HOME}/.config/git/dotfiles-hooks" local "${HOME}/.config/git/local-dotfiles-hooks")
 readonly -A TIER_ALIAS=(shared df local ldf)   # the git alias a human types
+# The pre-harness layout kept the shared bare repo at ~/dotfiles; init's first step renames it.
+# (The local tier is per machine and was never migrated by anything; nothing to do there.)
+readonly LEGACY_SHARED_GIT_DIR="${HOME}/dotfiles"
 readonly GITMODULES="${HOME}/.gitmodules"
 readonly STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/dotfiles"
 readonly LOG_DIR="${STATE_DIR}/push"
+# The local tier's init hooks: each installs what its tier needs outside ~/.local (see help).
+readonly LOCAL_INIT_HOOKS_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/dotfiles/init.d"
 readonly KEEP_BACKUPS=1
 readonly IDENTITY_CACHE="${STATE_DIR}/identity"   # '<sha256 of token> <login> <epoch>': whose token, verified when
 readonly IDENTITY_TTL_SECONDS=$(( 7 * 24 * 3600 ))
@@ -69,8 +74,9 @@ help() {
 ${c_green}dotfiles${c_rst} — harness for the two-tier dotfiles: init, pull, push, status, logs
 
 ${c_bold}Usage:${c_rst}
-  dotfiles init   [--dry-run]                 shared repo cloned + checked out, hooks wired,
-                                              submodules checked out, skills linked, ssh key loaded
+  dotfiles init   [--dry-run]                 a pre-harness ~/dotfiles renamed to ~/dotfiles.git, shared repo
+                                              cloned + checked out, hooks wired, submodules checked out,
+                                              skills linked, ssh key loaded, local init hooks run
   dotfiles pull   [--dry-run]                 fast-forward the shared tier, then init
   dotfiles push   [--submodules|--shared|--local|--no-submodules|--no-shared|--no-local] [--dry-run]
                                               push every submodule with something to push, in
@@ -104,6 +110,12 @@ ${c_bold}Environment:${c_rst}
   DOTFILES_SSH_KEY_OP_VAULT    its vault; both come from the local tier, unset = no key to load
   DOTFILES_SSH_KEY_PATH        the key file, so checking the agent needs no 1Password call (unset = ask the item)
   DOTFILES_SLOW_STEP           seconds; a slower step gets a 'slow step' line (default ${DOTFILES_SLOW_STEP}; pull's fetch allows 5)
+
+${c_bold}Local init hooks:${c_rst} ${LOCAL_INIT_HOOKS_DIR}/*
+Executables the local tier ships to install what it needs outside ~/.local: a LaunchAgent
+plist under ~/Library, a compiled helper under ~/.local/state. init runs them last, in name
+order; each must be idempotent and treat --dry-run as plan-only. One failing hook fails init
+after every hook has run.
 
 ${c_bold}Logs:${c_rst} ${LOG_DIR}/<repo>.log (last run) and .log.bak.1 (the run before).
 Pushes are token-pinned to ${DOTFILES_GITHUB_LOGIN}: no gh account switch, no ssh key swap.
@@ -161,6 +173,25 @@ check_prerequisites() {
 }
 
 # --- init: every step idempotent; a shared repo still missing (a dry-run clone) skips its steps ---
+
+#######################################
+# Rename the shared bare repo from its pre-harness name, once, and move on: the rest of init
+# gives the renamed repo its tracking config, hooks and checkout like any other. A directory
+# at the old name that is not a bare repo (no HEAD, or a .git inside) is someone else's and is
+# left alone with a warning; both names present is a conflict only a human can settle.
+#######################################
+init_migrate() {
+  local old="${LEGACY_SHARED_GIT_DIR}" new="${TIER_GIT_DIR[shared]}"
+  [[ -d "${old}" ]] || return 0
+  if [[ ! -f "${old}/HEAD" || -d "${old}/.git" ]]; then
+    log::warn "legacy path is not a bare repo; leaving it alone | path='${old}'"; return 0
+  fi
+  if [[ -e "${new}" ]]; then
+    log::err "legacy and current bare repo both exist; keep one | legacy='${old}' current='${new}'"; return 1
+  fi
+  run_mut mv "${old}" "${new}" || return 1
+  [[ "${DRY_RUN}" == true ]] || log::info "migrated shared bare repo | from='${old}' to='${new}'"
+}
 
 init_clone() {
   if repo_present shared; then log::info "shared repo present | git_dir='${TIER_GIT_DIR[shared]}'"; return 0; fi
@@ -272,9 +303,35 @@ init_fetch() {
   log::warn "could not fetch origin; ahead/behind unknown until 'dotfiles pull' | url='$(repo_git shared config remote.origin.url 2>/dev/null || true)'"
 }
 
+#######################################
+# Run the local tier's init hooks: every executable in LOCAL_INIT_HOOKS_DIR, in name order.
+# A hook installs whatever its tier needs outside the tier's worktree — a LaunchAgent plist
+# under ~/Library, a compiled helper under ~/.local/state — so a fresh machine gets it from
+# `dotfiles init` and not from memory. Contract: idempotent, and --dry-run means plan only.
+# Every hook runs even after one fails; the step fails if any did.
+#######################################
+init_local_hooks() {
+  local -a hooks=("${LOCAL_INIT_HOOKS_DIR}"/*(N-.x:t))
+  if (( ${#hooks} == 0 )); then log::info "no local init hooks | dir='${LOCAL_INIT_HOOKS_DIR}'"; return 0; fi
+  local hook hrc rc=0
+  local -a flags=()
+  [[ "${DRY_RUN}" == true ]] && flags=(--dry-run)
+  for hook in "${hooks[@]}"; do
+    hrc=0
+    "${LOCAL_INIT_HOOKS_DIR}/${hook}" "${flags[@]}" || hrc=$?
+    if (( hrc == 0 )); then
+      log::info "local init hook ok | hook='${hook}'"
+    else
+      log::err "local init hook failed | hook='${hook}' rc='${hrc}'"; rc=1
+    fi
+  done
+  return "${rc}"
+}
+
 cmd_init() {
   local start="${EPOCHREALTIME}"
   check_prerequisites git || return 1
+  step migrate init_migrate || return 1
   step clone init_clone || return 1
   step tracking init_tracking || return 1
   step checkout init_checkout || return 1
@@ -288,6 +345,7 @@ cmd_init() {
   step skills init_skills || return 1
   step "ssh key" init_ssh_key || return 1
   step fetch init_fetch || return 1
+  step "local hooks" init_local_hooks || return 1
   log::info "init done | took='$(elapsed "${start}")s' next='per-submodule setup (chrome-exoskeleton: exo deps ci && exo build) or new-machine setup'"
   step status cmd_status
 }

@@ -104,7 +104,9 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
   `$XDG_DATA_HOME/bin` is policy, not local), git config, nvim, `~/.config/bin`.
 - **Company or machine-specific → `~/.local` (ldf).** Airtable env vars, aws/tsh/
   cloud-dev helpers, per-machine data for fzfdb selectors, `~/.local/bin`
-  wrappers.
+  wrappers. Something the tier needs outside `~/.local` (a LaunchAgent plist, a
+  compiled helper) is installed by a hook in `~/.local/share/dotfiles/init.d/`
+  that `dotfiles init` runs; see **Bootstrapping a machine**.
 - **Claude skills follow the same split.** The real directory lives in the tier
   that owns it, `~/.config/claude/skills/<name>/` (df) or
   `~/.local/share/claude-skills/<name>/` (ldf), and `~/.claude/skills/<name>` is a
@@ -290,6 +292,20 @@ read from 1Password (`op`; the item and vault come from the local tier's
 Idempotent; `--dry-run` prints the plan. `dotfiles pull` fast-forwards the shared tier and
 re-runs init; `dotfiles status` shows both tiers, the submodule pointers and each repo's last
 push; `dotfiles push` and `dotfiles logs` are under **Pushing**.
+
+`dotfiles init` also owns two things `new-machine` does not:
+
+- **Migration from the pre-harness layout.** Its first step renames a shared bare repo still
+  at `~/dotfiles` to `~/dotfiles.git`, then moves on; the rest of init gives the renamed repo
+  its tracking config, hooks and checkout. A directory at the old name that is not a bare repo
+  is left alone with a warning; both names present is an error to settle by hand. The local
+  tier is per machine and is not migrated.
+- **Local init hooks.** Its last step runs every executable in `~/.local/share/dotfiles/init.d/`
+  in name order. When something in the local tier depends on a file outside `~/.local` (a
+  LaunchAgent plist under `~/Library`, a compiled helper under `~/.local/state`), the tier ships
+  a hook there that installs it, so a fresh machine gets it from `dotfiles init` and not from
+  memory. A hook is idempotent and treats `--dry-run` as plan-only; `50-aws-sso-autologin`
+  (which runs `aws-sso-autologin --install`) is the model.
 
 Hook setup for both tiers is documented in `~/.config/git/dotfiles-hooks/README.md`
 and `~/.config/git/local-dotfiles-hooks/README.md`; those are the versioned source.
