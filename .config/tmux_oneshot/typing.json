@@ -1,0 +1,31 @@
+[
+  {
+    "menu": {
+      "name": "typing",
+      "text": "Monkeytype passage test (Hyper+T): pick next/current/previous/status, then --words"
+    },
+    "cmd": "REPO_LIB=\"$HOME/.config/karabiner/karabiner.ts/src/scripts/lib\" \"$HOME/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\"",
+    "autodismiss": true,
+    "subcommands": [
+      {
+        "cmd": "next",
+        "description": "next unread passage; esc on the flag screen = 50 words",
+        "flags": [{"flag": "--words", "type": "kv", "options": ["5", "50", "100", "300"], "description": "word budget"}]
+      },
+      {
+        "cmd": "current",
+        "description": "retype the last passage; --words re-anchors at that length",
+        "flags": [{"flag": "--words", "type": "kv", "options": ["5", "50", "100", "300"], "description": "word budget"}]
+      },
+      {
+        "cmd": "previous",
+        "description": "rewind one passage and retype it; --words re-anchors",
+        "flags": [{"flag": "--words", "type": "kv", "options": ["5", "50", "100", "300"], "description": "word budget"}]
+      },
+      {
+        "cmd": "status",
+        "description": "progress only; no test opened"
+      }
+    ]
+  }
+]
