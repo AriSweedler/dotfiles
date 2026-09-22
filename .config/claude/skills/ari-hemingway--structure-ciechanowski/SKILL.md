@@ -15,7 +15,7 @@ One `articles/<slug>/index.html` from `template/article.html`, in this order:
 
 1. Title: the subject noun (`GPS`, `The Hebrew Calendar`). No subtitle, no `[🤖 AI generated]` prefix in the `<h1>`; the marker goes in `<meta name="generator">` and the footer.
 2. Opening: three sentences (why it matters, why it is opaque, what the article will do), then the hero figure: the whole finished system, before any explanation.
-3. One `<section>` per subsystem, in assembly order, headed by the subsystem's noun. Inside, one block per concept, in table order: setup prose, the figure, one sentence naming its controls, prose that points at figure state, the implication, then a transition that names what was built and what it unlocks.
+3. One `<section>` per subsystem, in assembly order, headed by the subsystem's noun. Inside, one block per concept, in table order: setup prose, the figure with a caption that names its controls, prose that points at figure state, the implication, then a transition that carries a fact about what was built and what it unlocks.
 4. `Further Watching and Reading`: three to six annotated `rel="external"` links.
 5. `Final Words`: one short paragraph.
 6. The glossary: the accepted definitions table as a collapsed `<details id="glossary">`, one row per term, each row linking back to the term's first use.
@@ -33,8 +33,8 @@ One `articles/<slug>/index.html` from `template/article.html`, in this order:
 
 ### Prose
 
-- Written last, after every insight and figure is accepted. Kernighan & Ritchie: terse, present tense, active voice, one idea per sentence. `we` builds ("let's add a second satellite"), `you` operates the figure ("drag the slider").
-- Each figure is followed by one sentence naming its controls, then prose that points at figure state through `data-ref` spans ("the red arc"), never through words the figure does not show.
+- Written last, after every insight and figure is accepted. Kernighan & Ritchie: terse, present tense, active voice, one idea per sentence, no sentence over 30 words, paragraphs of at most six sentences on one topic. `we` builds ("let's add a second satellite"), `you` operates the figure ("drag the slider"). Transitions state a fact, never what the article does next; the one allowed exception is a flagged simplification ("For now we ignore X; that is the last section."). Glossary terms keep the table's spelling everywhere in prose, and the prose never coins a synonym for one ("leap year" for a 13-month year).
+- The figure's caption names its controls in the imperative ("Drag the slider or press play; the inset magnifies the ray tips.") and carries the not-to-scale caveat; the prose never repeats the caption. The prose after a figure points at figure state through `data-ref` spans ("the red arc"), never through words the figure does not show, in sentences of one idea each.
 - Hiding information in a figure hides it in the prose. A `data-ref` to a layer the reader has switched off renders plain, so a sentence never depends on the highlight to be understood, and refs to an optional layer live in the sentences about that option ("with the Sun direction shown, the orange arrow...").
 - Terms are defined at the point of need, once, by apposition in the same sentence, with the first-use markup; later uses carry the term link. The glossary `<dd>` is the only copy of the definition.
 - Every simplification is flagged in the sentence that makes it ("for now we ignore the postponement rules") and repaid in a named later section.
