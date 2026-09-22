@@ -90,12 +90,14 @@ Works with copies from:
   - Safari (Apple Web Archive)
 
 ${cc}Usage:${cr}
-  pbpastelinks [--quiet] [--dry-run] [--rebuild]
+  pbpastelinks [--quiet] [--dry-run] [--preview] [--rebuild]
   pbpastelinks -h | --help
 
 ${cc}Options:${cr}
   --quiet      Suppress stderr logging (still prints the result on stdout)
   --dry-run    Print the result; leave the clipboard as it is
+  --preview    Print the plain text before and the result after, the inlined links
+               highlighted, instead of the bare result; what the tmux oneshot shows
   --rebuild    Force recompile the swift extractor binary
   -h, --help   Show this help
 
@@ -112,11 +114,12 @@ main() {
   check_prerequisites || return 1
 
   # === PARSE ===
-  local quiet=false rebuild=false dry_run=false
+  local quiet=false rebuild=false dry_run=false preview=false
   while (( $# > 0 )); do case "${1}" in
     -h|--help) help; return 0 ;;
     --quiet)   quiet=true; shift ;;
     --dry-run) dry_run=true; shift ;;
+    --preview) preview=true; shift ;;
     --rebuild) rebuild=true; shift ;;
     -*)        log::err "unknown flag | flag='${1}'"; help; return 1 ;;
     *)         log::err "unexpected argument | argument='${1}'"; help; return 1 ;;
@@ -164,16 +167,49 @@ main() {
     log::warn "nothing to inline | clipboard left untouched"
     return 0
   fi
-  rm -f "${plain_file}"
   output="${output%x}"
 
+  local after_label="clipboard now"
   if [[ "${dry_run}" == "true" ]]; then
     log::info "dry run | bytes='${#output}' clipboard left untouched"
+    after_label="dry run, clipboard unchanged"
   else
     printf '%s' "${output}" | pbcopy
     log::info "wrote clipboard | bytes='${#output}'"
   fi
-  printf '%s' "${output}"
+  if [[ "${preview}" == "true" ]]; then
+    print_preview "${plain_file}" "${output}" "${after_label}"
+  else
+    printf '%s' "${output}"
+    [[ "${output}" == *$'\n' ]] || print
+  fi
+  rm -f "${plain_file}"
+}
+
+#######################################
+# The before/after view the tmux oneshot holds on screen: the plain-text flavor as a plain
+# paste would have given it ($1, a file; empty when the text was derived from the html),
+# then the result ($2) with every [text](url) highlighted, under the label $3. Display
+# only: the clipboard already holds the uncolored result.
+#######################################
+print_preview() {
+  local plain_file="${1}" output="${2}" after_label="${3}"
+  local cb=$'\e[1m' cd=$'\e[2m' cc=$'\e[36m' cy=$'\e[33m' cr=$'\e[0m'
+  print -r -- "${cb}── before (plain paste) ──${cr}"
+  if [[ -s "${plain_file}" ]]; then
+    cat "${plain_file}"
+    # $(…) would strip the very newline being looked for; the sentinel keeps it.
+    local last; last="$(tail -c1 "${plain_file}"; printf x)"
+    [[ "${last%x}" == $'\n' ]] || print
+  else
+    print -r -- "${cd}(no plain-text flavor on the clipboard; the text was derived from the html)${cr}"
+  fi
+  print
+  print -r -- "${cb}── after (${after_label}) ──${cr}"
+  # [text](url) and [text](<url with spaces>): text in cyan, url dimmed. Escaped \] inside
+  # the text is part of the text.
+  printf '%s' "${output}" | perl -pe '
+    s{(\[(?:\\.|[^\]\\])*\])(\((?:<[^>]*>|[^)]*)\))}{\e[36m$1\e[2m$2\e[0m}g'
   [[ "${output}" == *$'\n' ]] || print
 }
 

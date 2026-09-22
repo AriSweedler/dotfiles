@@ -29,9 +29,8 @@
   {
     "menu": {
       "name": "pbpastelinks",
-      "text": "clipboard rich text → plain text with links inlined as [text](url); alias pbl"
+      "text": "clipboard rich text → plain text with links inlined as [text](url); shows before/after, esc closes; alias pbl"
     },
-    "cmd": "pbpastelinks",
-    "autodismiss": true
+    "cmd": "pbpastelinks --preview"
   }
 ]
