@@ -52,7 +52,7 @@ readonly KEEP_BACKUPS=1
 readonly IDENTITY_CACHE="${STATE_DIR}/identity"   # '<sha256 of token> <login> <epoch>': whose token, verified when
 readonly IDENTITY_TTL_SECONDS=$(( 7 * 24 * 3600 ))
 readonly REGISTRY_LINK="${HOME}/.config/claude/skills/ari-dotfiles-skill-registry/bin/link"
-readonly VALID_COMMANDS=(init pull push status logs)
+readonly VALID_COMMANDS=(init pull push status logs git)
 readonly PUSH_PARTS=(local submodules shared)   # in run order
 # Submodule paths declared in ~/.gitmodules, relative to $HOME; empty when none.
 SUBMODULES=("${(@f)$(git config -f "${GITMODULES}" --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}' || true)}")
@@ -60,6 +60,9 @@ readonly -a SUBMODULES=("${(@)SUBMODULES:#}")
 
 # Flags, set by main.
 DRY_RUN=false
+PRINT_DIR=false          # --dir: print the tier's bare repo path and exit
+GIT_TIER=shared          # git / --dir act on one tier; --local picks the local one
+GIT_ARGS=()              # everything after 'git', verbatim
 TIMING=false
 PUSH_SCOPE=("${PUSH_PARTS[@]}")   # narrowed by --<part>, then --no-<part>
 LOGS_PREVIOUS=false
@@ -88,13 +91,18 @@ ${c_bold}Usage:${c_rst}
                                               silently; a submodule failure blocks the shared push.
   dotfiles status                             both tiers, submodules, last push per repo
   dotfiles logs   [--repo NAME] [--previous]  push logs (NAME = 'shared', 'local' or a submodule path)
+  dotfiles [--local] git <args…>              git in the shared tier (--git-dir ~/dotfiles.git, --work-tree ~,
+                                              what 'git df' does); with --local, the local tier ('git ldf').
+                                              Everything after 'git' goes to git untouched.
+  dotfiles [--local] --dir                    print the tier's bare repo path and exit
 
 ${c_bold}Flags:${c_rst}
   --dry-run          Print what would run; change nothing
   --timing           Log every step's duration (steps over DOTFILES_SLOW_STEP are logged regardless)
   --submodules       push: the submodules (no selecting flag = all three parts)
   --shared           push: the shared tier
-  --local            push: the local tier
+  --local            push: the local tier; git and --dir: act on the local tier instead of the shared
+  --dir              print the tier's bare repo path (~/dotfiles.git, or ~/.local/local-dotfiles.git with --local)
   --no-submodules    push: leave the submodules out
   --no-shared        push: leave the shared tier out
   --no-local         push: leave the local tier out
@@ -349,6 +357,9 @@ cmd_init() {
   log::info "init done | took='$(elapsed "${start}")s' next='per-submodule setup (chrome-exoskeleton: exo deps ci && exo build) or new-machine setup'"
   step status cmd_status
 }
+
+# git in one tier, args untouched: `dotfiles git status`, `dotfiles --local git log -1`.
+cmd_git() { repo_git "${GIT_TIER}" "${GIT_ARGS[@]}"; }
 
 cmd_pull() {
   local start="${EPOCHREALTIME}"
@@ -663,13 +674,16 @@ main() {
     --dry-run)      DRY_RUN=true; shift ;;
     --timing)       TIMING=true; shift ;;
     --previous)     LOGS_PREVIOUS=true; shift ;;
+    --dir)          PRINT_DIR=true; shift ;;
     --repo)         LOGS_REPO="${2:?--repo requires a value}"; shift 2 ;;
     --submodules|--shared|--local)          only+=("${1#--}");    scope_flags+=("${1}"); shift ;;
     --no-submodules|--no-shared|--no-local) skip+=("${1#--no-}"); scope_flags+=("${1}"); shift ;;
     -*)             log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)
       if [[ -n "${command}" ]]; then log::err "Unexpected argument | argument='${1}' command='${command}'"; help; return 1; fi
-      command="${1}"; shift ;;
+      command="${1}"; shift
+      # git is a passthrough: its own flags must not be parsed here.
+      if [[ "${command:l}" == git ]]; then GIT_ARGS=("${@}"); set --; fi ;;
   esac; done
 
   # === MASSAGE ===
@@ -677,6 +691,8 @@ main() {
   # Selecting flags name the scope exactly (none = every part); excluding flags then remove from it.
   (( ${#only} == 0 )) || PUSH_SCOPE=("${(@)PUSH_PARTS:*only}")
   PUSH_SCOPE=("${(@)PUSH_SCOPE:|skip}")
+  (( ${only[(Ie)local]} )) && GIT_TIER=local
+  if [[ "${PRINT_DIR}" == true ]]; then print -r -- "${TIER_GIT_DIR[${GIT_TIER}]}"; return 0; fi
 
   # === VALIDATE ===
   if [[ -z "${command}" ]]; then log::err "Missing command | valid_commands='${(j:, :)VALID_COMMANDS}'"; help; return 1; fi

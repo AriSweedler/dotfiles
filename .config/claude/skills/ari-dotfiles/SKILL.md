@@ -40,6 +40,10 @@ git ldf add -A        # safe: info/exclude is an allowlist of hand-written dirs
 git ldf push
 ```
 
+The harness spells the same two things without the aliases: `dotfiles git <args…>` is
+`git df …`, `dotfiles --local git <args…>` is `git ldf …`, and `dotfiles [--local] --dir`
+prints the tier's bare repo path.
+
 `~/.local/local-dotfiles.git/info/exclude` is the allowlist. Read it; do not
 restate it. `git ldf add -A` is safe because of it.
 
@@ -235,7 +239,7 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
 - **Claude skills**: `~/.config/claude/skills/<name>/`, symlinked from `~/.claude/skills/<name>`
 - **Submodules**: declared in `~/.gitmodules`; today `~/.config/chrome-exoskeleton/`
   (with `~/.config/bin/exo`) — see **Submodules** and `/ari-dotfile-submodule-chrome-exoskeleton`
-- **Harness**: `~/.config/bin/dotfiles` (init, pull, push, status, logs) — see **Pushing**
+- **Harness**: `~/.config/bin/dotfiles` (init, pull, push, status, logs, git) — see **Pushing**
   and **Bootstrapping a machine**; the push is token-pinned to `DOTFILES_GITHUB_LOGIN`
 
 ### Local (ldf)
