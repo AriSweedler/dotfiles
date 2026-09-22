@@ -1,0 +1,5 @@
+#!/usr/bin/env zsh
+# triggers: every:3600
+# timeout: 3600
+# git-health's hourly tick over every registered repo (`git health --register`).
+exec "${HOME}/.config/bin/git-health" --all

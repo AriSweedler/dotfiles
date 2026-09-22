@@ -19,8 +19,11 @@ main() {
     *)
       if [[ -n "${command}" ]]; then log::err "Unexpected argument | argument='${1}' command='${command}'"; help; return 1; fi
       command="${1}"; shift
-      # git is a passthrough: its own flags must not be parsed here.
-      if [[ "${command:l}" == git ]]; then GIT_ARGS=("${@}"); set --; fi ;;
+      # git and jobs take the rest of the line: their own flags must not be parsed here.
+      case "${command:l}" in
+        git)  GIT_ARGS=("${@}"); set -- ;;
+        jobs) JOBS_ARGS=("${@}"); set -- ;;
+      esac ;;
   esac; done
 
   # === MASSAGE ===

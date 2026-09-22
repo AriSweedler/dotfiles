@@ -132,32 +132,6 @@ init_fetch() {
   log::warn "could not fetch origin; ahead/behind unknown until 'dotfiles pull' | url='$(repo_git shared config remote.origin.url 2>/dev/null || true)'"
 }
 
-#######################################
-# Run the local tier's init hooks: every executable in LOCAL_INIT_HOOKS_DIR. A hook installs
-# whatever its tier needs outside the tier's worktree — a LaunchAgent plist under ~/Library,
-# a compiled helper under ~/.local/state — so a fresh machine gets it from `dotfiles init` and
-# not from memory. Contract: idempotent, --dry-run means plan only, independent of the other
-# hooks (so their order is irrelevant). Every hook runs even after one fails; the step fails
-# if any did.
-#######################################
-init_local_hooks() {
-  local -a hooks=("${LOCAL_INIT_HOOKS_DIR}"/*(N-.x:t))
-  if (( ${#hooks} == 0 )); then log::info "no local init hooks | dir='${LOCAL_INIT_HOOKS_DIR}'"; return 0; fi
-  local hook hrc rc=0
-  local -a flags=()
-  [[ "${DRY_RUN}" == true ]] && flags=(--dry-run)
-  for hook in "${hooks[@]}"; do
-    hrc=0
-    "${LOCAL_INIT_HOOKS_DIR}/${hook}" "${flags[@]}" || hrc=$?
-    if (( hrc == 0 )); then
-      log::info "local init hook ok | hook='${hook}'"
-    else
-      log::err "local init hook failed | hook='${hook}' rc='${hrc}'"; rc=1
-    fi
-  done
-  return "${rc}"
-}
-
 cmd_init() {
   local start="${EPOCHREALTIME}"
   check_prerequisites git || return 1
@@ -175,7 +149,7 @@ cmd_init() {
   step skills init_skills || return 1
   step "ssh key" init_ssh_key || return 1
   step fetch init_fetch || return 1
-  step "local hooks" init_local_hooks || return 1
+  step jobs jobs_install || return 1
   log::info "init done | took='$(elapsed "${start}")s' next='per-submodule setup (chrome-exoskeleton: exo deps ci && exo build) or new-machine setup'"
   step status cmd_status
 }

@@ -9,7 +9,7 @@ ${c_green}dotfiles${c_rst} — harness for the two-tier dotfiles: init, pull, pu
 ${c_bold}Usage:${c_rst}
   dotfiles init   [--dry-run]                 a pre-harness ~/dotfiles renamed to ~/dotfiles.git, shared repo
                                               cloned + checked out, hooks wired, submodules checked out,
-                                              skills linked, ssh key loaded, local init hooks run
+                                              skills linked, ssh key loaded, the jobs launchd job installed
   dotfiles pull   [--dry-run]                 fast-forward the shared tier, then init
   dotfiles push   [--submodules|--shared|--local|--no-submodules|--no-shared|--no-local] [--dry-run]
                                               push every submodule with something to push, in
@@ -25,6 +25,9 @@ ${c_bold}Usage:${c_rst}
                                               what 'git df' does); with --local, the local tier ('git ldf').
                                               Everything after 'git' goes to git untouched.
   dotfiles [--local] --dir                    print the tier's bare repo path and exit
+  dotfiles jobs [list]                        the job plugins of both tiers, their triggers and last success
+  dotfiles jobs run <name>                    run one plugin now (trigger 'manual'); output to its log and stdout
+  dotfiles jobs install|uninstall             the one launchd job that runs them (init runs install)
 
 ${c_bold}Flags:${c_rst}
   --dry-run          Print what would run; change nothing
@@ -49,11 +52,11 @@ ${c_bold}Environment:${c_rst}
   DOTFILES_SSH_KEY_PATH        the key file, so checking the agent needs no 1Password call (unset = ask the item)
   DOTFILES_SLOW_STEP           seconds; a slower step gets a 'slow step' line (default ${DOTFILES_SLOW_STEP}; pull's fetch allows 5)
 
-${c_bold}Local init hooks:${c_rst} ${LOCAL_INIT_HOOKS_DIR}/*
-Executables the local tier ships to install what it needs outside ~/.local: a LaunchAgent
-plist under ~/Library, a compiled helper under ~/.local/state. init runs them last; each is
-idempotent, independent of the others, and treats --dry-run as plan-only. One failing hook
-fails init after every hook has run.
+${c_bold}Jobs:${c_rst} one launchd job, ${JOBS_LABEL}, fires on screen unlock, at login and every
+${JOBS_INTERVAL_SECONDS}s, and runs the plugins whose triggers match. A plugin is an executable in
+${JOBS_ROOT_DF} (shared) or ${JOBS_ROOT_LDF} (this machine)
+whose second line is '# triggers: unlock load every:<seconds>'; it gets the trigger as \$1. Logs and
+success stamps: ${JOBS_STATE_DIR}. The README beside the shared plugins has the contract.
 
 ${c_bold}Logs:${c_rst} ${LOG_DIR}/<repo>.log (last run) and .log.bak.1 (the run before).
 Pushes are token-pinned to ${DOTFILES_GITHUB_LOGIN}: no gh account switch, no ssh key swap.

@@ -479,7 +479,7 @@ ldf_git() { git --git-dir="${NEW_MACHINE_LDF_GIT_DIR}" --work-tree="${HOME}/.loc
 # ── The non-brew steps' happy path ───────────────────────────────────────────
 
 # Everything the non-brew checks look at, in its "ok" state: sorted karabiner.json, the claude
-# notification hook, a loaded git-health job, and the weekly job's plist rendered by the lib
+# notification hook, a loaded dotfiles-jobs job, and the weekly job's plist rendered by the lib
 # itself (so weekly_verify compares equal). Shim logs are reset afterwards so a following
 # read-only run can still assert_no_mutation.
 seed_home_baseline() {
@@ -493,9 +493,9 @@ seed_home_baseline() {
   chmod +x "${HOME}/.config/claude/bin/initialize.sh" "${HOME}/.config/claude/bin/notification-fire.sh" "${HOME}/.config/bin/git-health"
   "${HOME}/.config/claude/bin/initialize.sh"
 
-  label="com.$(id -un).git-health"
+  label="com.$(id -un).dotfiles-jobs"
   plist="${HOME}/Library/LaunchAgents/${label}.plist"
-  jq -n --arg label "${label}" '{Label: $label, ProgramArguments: ["/bin/zsh", "git-health", "--all"], StartCalendarInterval: {Minute: 20}}' \
+  jq -n --arg label "${label}" '{Label: $label, ProgramArguments: ["/bin/zsh", "dotfiles", "jobs", "tick"], StartInterval: 300}' \
     | plutil -convert xml1 - -o "${plist}"
   touch "${LAUNCHCTL_SHIM_STATE}/${label}"
 

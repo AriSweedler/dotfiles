@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The small steps: bob_neovim, claude, terminal_nerdfont, karabiner, claude_notifications,
-# git_health — each check's verdicts and the dry-run of each apply.
+# dotfiles_jobs — each check's verdicts and the dry-run of each apply.
 set -u
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -167,21 +167,21 @@ assert_json "settings.json untouched by the dry-run" "${HOME}/.claude/settings.j
 check_step claude_notifications
 assert_eq "hook wired → ok" ok "$(status_of claude_notifications)"
 
-# ── git_health ────────────────────────────────────────────────────────────────
-GH_LABEL="com.$(id -un).git-health"
-GH_PLIST="${HOME}/Library/LaunchAgents/${GH_LABEL}.plist"
-check_step git_health
-assert_eq "plist missing → fail" fail "$(status_of git_health)"
-assert_eq "reason not_installed" not_installed "$(reason_of git_health)"
-jq -n --arg label "${GH_LABEL}" '{Label: $label, ProgramArguments: ["/bin/zsh", "git-health", "--all"], StartCalendarInterval: {Minute: 20}}' \
-  | plutil -convert xml1 - -o "${GH_PLIST}"
-touch "${LAUNCHCTL_SHIM_STATE}/${GH_LABEL}"
-check_step git_health
-assert_eq "plist present, lints, loaded → ok" ok "$(status_of git_health)"
-rm -f "${LAUNCHCTL_SHIM_STATE}/${GH_LABEL}"
-check_step git_health
-assert_eq "plist present but unloaded → fail" fail "$(status_of git_health)"
-assert_eq "reason not_loaded" not_loaded "$(reason_of git_health)"
+# ── dotfiles_jobs ────────────────────────────────────────────────────────────────
+JOBS_LABEL="com.$(id -un).dotfiles-jobs"
+JOBS_PLIST="${HOME}/Library/LaunchAgents/${JOBS_LABEL}.plist"
+check_step dotfiles_jobs
+assert_eq "plist missing → fail" fail "$(status_of dotfiles_jobs)"
+assert_eq "reason not_installed" not_installed "$(reason_of dotfiles_jobs)"
+jq -n --arg label "${JOBS_LABEL}" '{Label: $label, ProgramArguments: ["/bin/zsh", "dotfiles", "jobs", "tick"], StartInterval: 300}' \
+  | plutil -convert xml1 - -o "${JOBS_PLIST}"
+touch "${LAUNCHCTL_SHIM_STATE}/${JOBS_LABEL}"
+check_step dotfiles_jobs
+assert_eq "plist present, lints, loaded → ok" ok "$(status_of dotfiles_jobs)"
+rm -f "${LAUNCHCTL_SHIM_STATE}/${JOBS_LABEL}"
+check_step dotfiles_jobs
+assert_eq "plist present but unloaded → fail" fail "$(status_of dotfiles_jobs)"
+assert_eq "reason not_loaded" not_loaded "$(reason_of dotfiles_jobs)"
 assert_no_mutation "misc checks and dry-runs are read-only"
 
 if (( FAIL > 0 )); then jq -c '.steps[] | {step, status, reason, detail}' "${FIX}/out.json" >&2; fi

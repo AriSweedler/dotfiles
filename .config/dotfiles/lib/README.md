@@ -11,6 +11,9 @@ The program behind `~/.config/bin/dotfiles`, which is only the entrypoint: it so
   `$HOME`.
 - **Functions call across modules freely at run time**; by then everything is loaded. A new
   global belongs in `env.zsh`, never beside the function that first needs it.
+- **Never name a variable after one of zsh's own.** `path` is tied to `PATH` (a local by that
+  name made `mkdir` vanish), `status` is `$?`; also `argv`, `options`, `fpath`, `cdpath`,
+  `manpath`, `prompt`, `reply`, `watch`, `signals`, `histchars`.
 
 One concern per file, named for it:
 

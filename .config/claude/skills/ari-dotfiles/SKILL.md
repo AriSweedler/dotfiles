@@ -108,9 +108,10 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
   `$XDG_DATA_HOME/bin` is policy, not local), git config, nvim, `~/.config/bin`.
 - **Company or machine-specific → `~/.local` (ldf).** Airtable env vars, aws/tsh/
   cloud-dev helpers, per-machine data for fzfdb selectors, `~/.local/bin`
-  wrappers. Something the tier needs outside `~/.local` (a LaunchAgent plist, a
-  compiled helper) is installed by a hook in `~/.local/share/dotfiles/init.d/`
-  that `dotfiles init` runs; see **Bootstrapping a machine**.
+  wrappers. Never a framework, never a launchd job, never a script that stands
+  alone: an ldf component plugs into a df framework at one of the **Cutpoints**.
+  Something that should run on a schedule or on screen unlock is a job plugin
+  under `~/.local/share/dotfiles/jobs/`.
 - **Claude skills follow the same split.** The real directory lives in the tier
   that owns it, `~/.config/claude/skills/<name>/` (df) or
   `~/.local/share/claude-skills/<name>/` (ldf), and `~/.claude/skills/<name>` is a
@@ -160,6 +161,36 @@ git df commit -m "Move airtable.zsh to local tier"
 git ldf add ~/.local/share/zsh/plugins/airtable.zsh && git ldf commit -m "Add airtable.zsh from shared tier"
 rg -n 'plugins/airtable.zsh' ~/.config ~/.local/share   # edit every hit; re-run until empty
 ```
+
+## Cutpoints
+
+Every framework lives in the shared tier; the local tier only plugs into one. The
+framework knows the local root by convention (`$XDG_DATA_HOME/<framework>/…`, i.e.
+`~/.local/share/<framework>/…`), discovers what is there at run time, reports each
+plugin's tier, and installs whatever needs installing from `dotfiles init` or
+`new-machine`. The local tier therefore never installs anything, never owns a launchd
+job and never ships a framework or a stand-alone script of its own. The Chrome
+Exoskeleton is the model.
+
+| Framework (df) | ldf plugs in at | How the framework finds it |
+|---|---|---|
+| zsh startup, `source_zsh_dir` in `~/.config/zsh/plugins/` | `~/.local/share/zsh/plugins/*.zsh` (secrets in `*.secret.zsh`, untracked) | sourced after the shared plugins |
+| `dotfiles jobs` (`~/.config/dotfiles/lib/jobs.zsh`; shared plugins `~/.config/dotfiles/jobs/`) | `~/.local/share/dotfiles/jobs/<name>` | one launchd job runs both roots' plugins on unlock, login and a 5-minute tick; `dotfiles jobs list` |
+| Chrome Exoskeleton, `exo` (`~/.config/chrome-exoskeleton/`) | `~/.local/share/chrome-exoskeleton/plugins/<name>/` | `exo link` mounts both roots; `/ari-dotfile-submodule-chrome-exoskeleton` |
+| Claude skills, `/ari-dotfiles-skill-registry` (`~/.config/claude/skills/`) | `~/.local/share/claude-skills/<name>/` | symlinked into `~/.claude/skills` |
+| `new-machine` Brewfile (`~/.config/new-machine/Brewfile`) | `~/.local/share/new-machine/Brewfile` | merged for `brew bundle` |
+| `open-any` (`~/.config/zsh/plugins/open_any.zsh`) | `~/.local/bin/open-*` | discovered by name across both bin tiers |
+| fzfdb selectors (functions in `~/.config/zsh/plugins/`) | `~/.local/share/{go_aws,kuber,aws_profile}/` | data read by the shared functions |
+| `PATH` (`prepend_to_path` in `ari.zsh`) | `~/.local/bin/`, `~/.local/share/bin/` | on `PATH` on every machine |
+
+**Adding a cutpoint**: build the framework in df with a local root under
+`~/.local/share/<framework>/`, admit that root in both copies of the ldf allowlist
+(`~/.local/local-dotfiles.git/info/exclude` and
+`~/.config/new-machine/local-dotfiles-exclude`), give the framework a `list`/`status` that
+names each plugin's tier, wire its install into `dotfiles init` (a step) or `new-machine`
+(a step with a check), and add its row here. A plugin needing something outside its
+tier (a launchd job, a compiled helper) is the sign that the framework is missing a
+piece, not that the plugin should install it.
 
 ## Submodules
 
@@ -239,7 +270,9 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
 - **Claude skills**: `~/.config/claude/skills/<name>/`, symlinked from `~/.claude/skills/<name>`
 - **Submodules**: declared in `~/.gitmodules`; today `~/.config/chrome-exoskeleton/`
   (with `~/.config/bin/exo`) — see **Submodules** and `/ari-dotfile-submodule-chrome-exoskeleton`
-- **Harness**: `~/.config/bin/dotfiles` (init, pull, push, status, logs, git) — see **Pushing**
+- **Jobs framework**: `~/.config/dotfiles/lib/jobs.zsh`; shared plugins in `~/.config/dotfiles/jobs/`
+  (README = the plugin contract) — see **Cutpoints**
+- **Harness**: `~/.config/bin/dotfiles` (init, pull, push, status, logs, git, jobs) — see **Pushing**
   and **Bootstrapping a machine**; the push is token-pinned to `DOTFILES_GITHUB_LOGIN`.
   The file in `bin` is only the entrypoint; the program is `~/.config/dotfiles/lib/*.zsh`,
   one module per concern, each independent at source time (its README has the rules and
@@ -249,6 +282,7 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
 - **Zsh plugins**: `~/.local/share/zsh/plugins/`, sourced after the shared dir
   via `source_zsh_dir --optional "${XDG_DATA_HOME}/zsh/plugins"`
 - **Scripts**: `~/.local/bin/` and `~/.local/share/bin/`
+- **Job plugins**: `~/.local/share/dotfiles/jobs/<name>` — see **Cutpoints**
 - **Data**: `~/.local/share/{go_aws,kuber,aws_profile,tmux_oneshot}/`
 - **Claude skills**: `~/.local/share/claude-skills/<name>/`, symlinked from `~/.claude/skills/<name>`
   (`~/.local/share/claude/` is Claude Code's own install dir; hands off)
@@ -307,13 +341,11 @@ push; `dotfiles push` and `dotfiles logs` are under **Pushing**.
   its tracking config, hooks and checkout. A directory at the old name that is not a bare repo
   is left alone with a warning; both names present is an error to settle by hand. The local
   tier is per machine and is not migrated.
-- **Local init hooks.** Its last step runs every executable in `~/.local/share/dotfiles/init.d/`.
-  When something in the local tier depends on a file outside `~/.local` (a
-  LaunchAgent plist under `~/Library`, a compiled helper under `~/.local/state`), the tier ships
-  a hook there that installs it, so a fresh machine gets it from `dotfiles init` and not from
-  memory. A hook is idempotent, independent of the other hooks (their order is irrelevant),
-  and treats `--dry-run` as plan-only; `aws-sso-autologin` (which runs
-  `aws-sso-autologin --install`) is the model.
+- **Jobs.** Its last step, `dotfiles jobs install`, installs the one launchd job
+  (`com.<user>.dotfiles-jobs`: screen unlock, login, every 5 minutes) that runs the job
+  plugins of both tiers, and boots out the per-plugin jobs it replaced (git-health's,
+  aws-sso-autologin's). `new-machine`'s `dotfiles_jobs` step checks it is loaded. The
+  plugin contract is `~/.config/dotfiles/jobs/README.md`; see **Cutpoints**.
 
 Hook setup for both tiers is documented in `~/.config/git/dotfiles-hooks/README.md`
 and `~/.config/git/local-dotfiles-hooks/README.md`; those are the versioned source.

@@ -2,10 +2,11 @@
 # Self-contained maintenance runner + guardrail for git object stores. Owns the whole job
 # with explicit git commands — no git-maintenance machinery, no maintenance.repo
 # registration, no launchd jobs owned by git, no config prerequisites. Repos opt in via a
-# machine-local registry; one launchd job ticks them all hourly.
+# machine-local registry; the dotfiles jobs framework ticks them all hourly (the plugin
+# ~/.config/dotfiles/jobs/git-health runs `git health --all`).
 #
 #   git health --register     # inside a repo: register it + tear out git-maintenance there
-#   git health --install      # once per machine: launchd job + machine-level teardown
+#   git health --install      # once per machine: tear out git-maintenance's own machinery
 #   git health                # one manual tick for the current repo
 #
 # History, so nobody rebuilds this on top of git-maintenance again: pack consolidation via
@@ -29,8 +30,6 @@ log::err() { echo -e "${c_red}[ERROR]${c_rst}" "$@" >&2 ; }
 log::warn() { echo -e "${c_yellow}[WARN]${c_rst}" "$@" >&2 ; }
 log::info() { echo -e "${c_green}[INFO]${c_rst}" "$@" >&2 ; }
 
-readonly LABEL="com.$(id -un).git-health"
-readonly PLIST="${HOME}/Library/LaunchAgents/${LABEL}.plist"
 readonly STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/git-health"
 readonly REGISTRY="${STATE_DIR}/repos"
 readonly LOG_FILE="${STATE_DIR}/git-health.log"
@@ -54,11 +53,11 @@ ${c_bold}Modes:${c_rst}
   --all         Tick every registered repo (what the launchd job runs).
   --register    Add the repo to ${REGISTRY}, tear out its git-maintenance
                 config (maintenance.*, refs/prefetch/*), and pin maintenance.auto=false +
-                gc.auto=0 so this script is the sole owner of the object store. Installs
-                the launchd job if missing.
+                gc.auto=0 so this script is the sole owner of the object store.
   --unregister  Remove the repo from the registry.
-  --install     Idempotent machine setup: installs the hourly launchd job and tears down
-                all legacy machinery (git maintenance stop, org.git-scm.git.* jobs).
+  --install     Idempotent machine setup: tears down all legacy machinery (git maintenance
+                stop, org.git-scm.git.* jobs). The hourly tick itself is the dotfiles jobs
+                framework's; \`dotfiles jobs install\` owns that launchd job.
 
 ${c_bold}Options:${c_rst}
   --repo PATH  Repository to act on (default: the repo containing cwd)
@@ -217,30 +216,9 @@ do_tick() {
 }
 
 #######################################
-# Emit the launchd plist through jq + plutil. jq escapes every interpolated value and
-# plutil rejects structurally invalid output, so a bad path fails the install instead
-# of writing malformed XML for launchd to choke on.
-# Globals: LABEL, PLIST, STATE_DIR
-#######################################
-write_plist() {
-    jq -n \
-        --arg label "${LABEL}" \
-        --arg script "${HOME}/.config/bin/git-health" \
-        --arg out "${STATE_DIR}/launchd.out.log" \
-        --arg err "${STATE_DIR}/launchd.err.log" \
-        '{
-            Label: $label,
-            ProgramArguments: ["/bin/zsh", $script, "--all"],
-            StartCalendarInterval: {Minute: 20},
-            StandardOutPath: $out,
-            StandardErrorPath: $err
-        }' | plutil -convert xml1 - -o "${PLIST}"
-    plutil -lint -s "${PLIST}"
-}
-
-#######################################
-# Idempotent machine setup + teardown of every trace of the git-maintenance approach.
-# Globals: dry_run, LABEL, PLIST
+# Idempotent teardown of every trace of the git-maintenance approach. The hourly tick is
+# not installed here: the dotfiles jobs framework runs ~/.config/dotfiles/jobs/git-health.
+# Globals: dry_run
 #######################################
 do_install() {
     print -r -- "$(date '+%Y-%m-%d %H:%M:%S') [machine] install" | tee -a "${LOG_FILE}"
@@ -256,21 +234,13 @@ do_install() {
         rm -f "${f}"
         log::info "removed legacy launchd job | job='${job}'"
     done
-
-    if (( dry_run )); then
-        log::info "dry-run, would write plist and bootstrap | plist='${PLIST}' label='${LABEL}'"
-        return 0
-    fi
-    write_plist
-    launchctl bootout "gui/$(id -u)/${LABEL}" 2>/dev/null || true
-    launchctl bootstrap "gui/$(id -u)" "${PLIST}"
-    log::info "installed launchd job | label='${LABEL}' schedule='hourly at :20'"
+    log::info "hourly tick is the dotfiles jobs framework's | plugin='${HOME}/.config/dotfiles/jobs/git-health' ensure='dotfiles jobs install'"
 }
 
 #######################################
 # Register the repo: add to the registry, tear out its git-maintenance config, pin this
-# script as the sole owner of the object store. Installs the launchd job if missing.
-# Globals: repo, dry_run, REGISTRY, PLIST
+# script as the sole owner of the object store.
+# Globals: repo, dry_run, REGISTRY
 #######################################
 do_register() {
     # git maintenance unregister only edits config; stray maintenance.* keys survive it.
@@ -308,9 +278,6 @@ do_register() {
         print -r -- "${repo}" >> "${REGISTRY}"
     fi
     note "registered"
-    if [[ ! -f "${PLIST}" ]]; then
-        do_install
-    fi
 }
 
 #######################################

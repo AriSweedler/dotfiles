@@ -9,8 +9,8 @@ typeset -g NEW_MACHINE_STEPS_LOADED=1
 
 typeset -gra STEPS=(brew brew_pkgs brew_drift dotfiles_repo local_dotfiles_repo bob_neovim claude
                     terminal_nerdfont karabiner claude_notifications claude_skills chrome_exoskeleton
-                    git_health weekly_verify)
-typeset -gA STEP_NEEDS=([brew_pkgs]=brew [brew_drift]=brew [terminal_nerdfont]=brew [chrome_exoskeleton]=dotfiles_repo)
+                    dotfiles_jobs weekly_verify)
+typeset -gA STEP_NEEDS=([brew_pkgs]=brew [brew_drift]=brew [terminal_nerdfont]=brew [chrome_exoskeleton]=dotfiles_repo [dotfiles_jobs]=dotfiles_repo)
 typeset -gA STEP_DESC=(
   [brew]="Homebrew is installed"
   [brew_pkgs]="every item declared in the merged Brewfiles is installed (brew bundle check/install --no-upgrade)"
@@ -24,7 +24,7 @@ typeset -gA STEP_DESC=(
   [claude_notifications]="Claude Code notification hook points at notification-fire.sh and terminal-notifier resolves"
   [claude_skills]="every skill a dotfiles tier holds is symlinked into ~/.claude/skills and no link dangles"
   [chrome_exoskeleton]="the Chrome Exoskeleton submodule has its dependencies (which wire its hooks) and a built dist/"
-  [git_health]="git-health launchd job installed and loaded"
+  [dotfiles_jobs]="dotfiles jobs launchd job (runs the job plugins of both tiers) installed and loaded"
   [weekly_verify]="new-machine weekly verify launchd job installed, current, and loaded"
 )
 
@@ -655,34 +655,33 @@ apply::chrome_exoskeleton() {
   run_cmd_mutating zsh "${fw}/bin/exo" build
 }
 
-# ── git_health ───────────────────────────────────────────────────────────────
-check::git_health() {
-  local label="com.$(id -un).git-health" plist="${NEW_MACHINE_LAUNCH_AGENTS_DIR}/com.$(id -un).git-health.plist"
+# ── dotfiles_jobs ────────────────────────────────────────────────────────────
+# The one launchd job of the dotfiles jobs framework (screen unlock, login, every 5 minutes);
+# it runs the job plugins of both tiers, git-health's hourly tick among them.
+check::dotfiles_jobs() {
+  local label="com.$(id -un).dotfiles-jobs" plist="${NEW_MACHINE_LAUNCH_AGENTS_DIR}/com.$(id -un).dotfiles-jobs.plist"
   if [[ ! -f "${plist}" ]]; then
-    verdict fail not_installed -d "plist missing | path='${plist}'" -f "new-machine apply git_health"
+    verdict fail not_installed -d "plist missing | path='${plist}'" -f "new-machine apply dotfiles_jobs"
     return 0
   fi
   if ! plutil -lint -s "${plist}" >/dev/null 2>&1; then
-    verdict fail not_installed -d "plist does not lint | path='${plist}'" -f "new-machine apply git_health"
+    verdict fail not_installed -d "plist does not lint | path='${plist}'" -f "new-machine apply dotfiles_jobs"
     return 0
   fi
   if ! launchctl print "gui/$(id -u)/${label}" >/dev/null 2>&1; then
-    verdict fail not_loaded -d "job not loaded | label='${label}'" -f "new-machine apply git_health"
+    verdict fail not_loaded -d "job not loaded | label='${label}'" -f "new-machine apply dotfiles_jobs"
     return 0
   fi
   verdict ok loaded -d "label='${label}'"
 }
 
-apply::git_health() {
-  local script="${HOME}/.config/bin/git-health"
-  if [[ ! -x "${script}" ]]; then
-    script="$(command -v git-health 2>/dev/null || true)"
-  fi
-  if [[ -z "${script}" ]]; then
-    log::err "git-health missing | expected='${HOME}/.config/bin/git-health'"
+apply::dotfiles_jobs() {
+  local harness="${HOME}/.config/bin/dotfiles"
+  if [[ ! -f "${harness}" ]]; then
+    log::err "dotfiles harness missing | expected='${harness}' fix='new-machine apply dotfiles_repo'"
     return 1
   fi
-  run_cmd_mutating "${script}" --install
+  run_cmd_mutating zsh "${harness}" jobs install
 }
 
 # ── weekly_verify ────────────────────────────────────────────────────────────

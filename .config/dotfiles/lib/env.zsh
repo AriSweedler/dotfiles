@@ -23,23 +23,41 @@ readonly LEGACY_SHARED_GIT_DIR="${HOME}/dotfiles"
 readonly GITMODULES="${HOME}/.gitmodules"
 readonly STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/dotfiles"
 readonly LOG_DIR="${STATE_DIR}/push"
-# The local tier's init hooks: each installs what its tier needs outside ~/.local (see help).
-readonly LOCAL_INIT_HOOKS_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/dotfiles/init.d"
 readonly KEEP_BACKUPS=1
 readonly IDENTITY_CACHE="${STATE_DIR}/identity"   # '<sha256 of token> <login> <epoch>': whose token, verified when
 readonly IDENTITY_TTL_SECONDS=$(( 7 * 24 * 3600 ))
 readonly REGISTRY_LINK="${HOME}/.config/claude/skills/ari-dotfiles-skill-registry/bin/link"
-readonly VALID_COMMANDS=(init pull push status logs git)
+readonly VALID_COMMANDS=(init pull push status logs git jobs)
 readonly PUSH_PARTS=(local submodules shared)   # in run order
 # Submodule paths declared in ~/.gitmodules, relative to $HOME; empty when none.
 SUBMODULES=("${(@f)$(git config -f "${GITMODULES}" --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}' || true)}")
 readonly -a SUBMODULES=("${(@)SUBMODULES:#}")
+
+# --- jobs: one launchd job runs every job plugin, from both tiers (lib/jobs.zsh) ---
+
+readonly JOBS_LABEL="com.$(id -un).dotfiles-jobs"
+readonly JOBS_PLIST="${HOME}/Library/LaunchAgents/${JOBS_LABEL}.plist"
+readonly JOBS_ROOT_DF="${HOME}/.config/dotfiles/jobs"                              # the shared tier's plugins
+readonly JOBS_ROOT_LDF="${XDG_DATA_HOME:-${HOME}/.local/share}/dotfiles/jobs"       # the local tier's
+readonly JOBS_STATE_DIR="${STATE_DIR}/jobs"                                         # logs, success stamps, the consumer
+readonly JOBS_CONSUMER_BIN="${JOBS_STATE_DIR}/bin/launch-event-consume"
+readonly JOBS_EVENT_STREAM="com.apple.notifyd.matching"
+readonly JOBS_EVENT_NAME="com.apple.screenIsUnlocked"
+readonly JOBS_EVENT_WAIT_SECONDS=2          # the consumer's wait for an event before deciding none started the job
+readonly JOBS_INTERVAL_SECONDS=300          # the tick; every:<seconds> plugins run on the first tick past their period
+readonly JOBS_TIMEOUT_SECONDS=900           # a plugin's run is killed after this unless its '# timeout:' line says otherwise
+# launchd's PATH has no Homebrew; plugins shell out to jq, terminal-notifier, python3.
+readonly JOBS_LAUNCHD_PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+# The per-plugin jobs this framework replaced; install boots them out and removes their plists.
+readonly -a JOBS_LEGACY_LABELS=("com.$(id -un).git-health" "com.$(id -un).aws-sso-autologin")
+typeset -gA JOB_PATH=() JOB_TIER=()         # name → executable, name → df | ldf; filled by jobs_discover
 
 # Flags, set by main.
 DRY_RUN=false
 PRINT_DIR=false          # --dir: print the tier's bare repo path and exit
 GIT_TIER=shared          # git / --dir act on one tier; --local picks the local one
 GIT_ARGS=()              # everything after 'git', verbatim
+JOBS_ARGS=()             # everything after 'jobs', verbatim
 TIMING=false
 PUSH_SCOPE=("${PUSH_PARTS[@]}")   # narrowed by --<part>, then --no-<part>
 LOGS_PREVIOUS=false

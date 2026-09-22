@@ -27,7 +27,7 @@ assert_eq "decree without a tier flag exits 64" 64 "${RC}"
 
 nm steps
 assert_eq "steps exits 0" 0 "${RC}"
-names=(brew brew_pkgs brew_drift dotfiles_repo local_dotfiles_repo bob_neovim claude terminal_nerdfont karabiner claude_notifications claude_skills git_health weekly_verify)
+names=(brew brew_pkgs brew_drift dotfiles_repo local_dotfiles_repo bob_neovim claude terminal_nerdfont karabiner claude_notifications claude_skills dotfiles_jobs weekly_verify)
 listed=0
 for s in "${names[@]}"; do
   if grep -qE "(^|[[:space:]])${s}([[:space:]]|$)" <<< "${OUT}"; then listed=$((listed + 1)); else fail "steps lists ${s}" "${OUT}"; fi
