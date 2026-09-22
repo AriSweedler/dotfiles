@@ -9,13 +9,17 @@ private plugins in ldf, one place they meet.
 
 A plugin is one executable file named for the job. Its second line says when it runs:
 
-    # triggers: unlock load every:3600
+    # triggers: unlock load every:3600 Mon@10:05
 
 - `unlock` — the screen was unlocked.
 - `load` — the job was (re)loaded: login, or `dotfiles jobs install`.
 - `every:<seconds>` — due on a tick, and at load, once that long has passed since the plugin
-  last ran, whatever it exited with: a failing weekly check waits a week, it does not retry
+  last ran, whatever it exited with: a failing check waits out its period, it does not retry
   every five minutes. `dotfiles jobs list` shows the last run and its rc.
+- `daily@HH:MM`, `Mon@HH:MM` … `Sun@HH:MM` — due on a tick, and at load, once the most recent
+  scheduled moment is later than the plugin's last run. A moment missed while the machine was
+  asleep fires on the first tick after wake, as launchd's own calendar jobs do; a plugin that
+  has never run is due at once.
 
 An optional `# timeout: <seconds>` line caps a run (default 900); the framework kills a
 plugin that overruns, children first, and logs it as timed out. One hung plugin must not

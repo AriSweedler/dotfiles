@@ -27,7 +27,8 @@ jobs_discover() {
   done
 }
 
-# A plugin's triggers, from its `# triggers:` header line: unlock, load, every:<seconds>.
+# A plugin's triggers, from its `# triggers:` header line: unlock, load, every:<seconds>,
+# daily@HH:MM, Mon@HH:MM … Sun@HH:MM.
 jobs_triggers() {
   setopt local_options extended_glob   # the ## quantifier below
   local line
@@ -77,6 +78,36 @@ jobs_due() {
   (( EPOCHSECONDS - $(zstat +mtime "${stamp}") >= seconds ))
 }
 
+#######################################
+# True (0) when a calendar trigger is due: daily@HH:MM, or <Day>@HH:MM (Mon … Sun) for weekly.
+# Due means the most recent scheduled moment at or before now is later than the plugin's last
+# run, so a moment missed asleep fires on the first tick after wake, as launchd's own calendar
+# jobs do, and a plugin that never ran is due at once. A malformed spec is warned about and
+# never due.
+# Arguments: name, spec
+#######################################
+jobs_calendar_due() {
+  local name="${1}" spec="${2}" stamp="${JOBS_STATE_DIR}/${1}.ran"
+  local day="${spec%@*}" when="${spec#*@}" hour minute want back=0 scheduled
+  local -A dow=(mon 1 tue 2 wed 3 thu 4 fri 5 sat 6 sun 7)
+  if [[ "${when}" != <0-23>:<0-59> || ( "${day:l}" != daily && -z "${dow[${day:l}]:-}" ) ]]; then
+    log::warn "bad calendar trigger; ignored | job='${name}' trigger='${spec}' want='daily@HH:MM or Mon@HH:MM'"; return 1
+  fi
+  hour="${when%:*}"; minute="${when#*:}"
+  if [[ "${day:l}" != daily ]]; then
+    want="${dow[${day:l}]}"
+    back=$(( ($(date +%u) - want + 7) % 7 ))
+  fi
+  scheduled="$(date -j -v-"${back}"d -v"${hour}"H -v"${minute}"M -v0S +%s)"
+  if (( scheduled > EPOCHSECONDS )); then
+    # Today's (this week's) moment is still ahead; the previous one is the reference.
+    if [[ "${day:l}" == daily ]]; then back=1; else back=$(( back + 7 )); fi
+    scheduled="$(date -j -v-"${back}"d -v"${hour}"H -v"${minute}"M -v0S +%s)"
+  fi
+  [[ -f "${stamp}" ]] || return 0
+  (( $(zstat +mtime "${stamp}") < scheduled ))
+}
+
 # The job's spawn count since launchd loaded it; 0 when it is not loaded.
 jobs_run_count() {
   local runs
@@ -119,8 +150,8 @@ jobs_run_one() {
 # What launchd runs. The tag comes from the event consumer: the event's key
 # (screenIsUnlocked) when one started the job, else 'launchd', which is RunAtLoad on the
 # job's first spawn since it was loaded (login, or install) and the StartInterval tick after
-# that. every:<seconds> plugins run on a tick and at load when due; the others on their
-# named trigger. Every due plugin runs even after one fails; the tick fails if any did.
+# that. every:<seconds> and calendar plugins run on a tick and at load when due; the others
+# on their named trigger. Every due plugin runs even after one fails; the tick fails if any did.
 # Arguments: tag
 #######################################
 jobs_tick() {
@@ -138,8 +169,11 @@ jobs_tick() {
         every:*)
           [[ "${trigger}" == tick || "${trigger}" == load ]] || continue
           jobs_due "${name}" "${t#every:}" || continue ;;
-        "${trigger}") ;;
-        *) continue ;;
+        *@*)
+          [[ "${trigger}" == tick || "${trigger}" == load ]] || continue
+          jobs_calendar_due "${name}" "${t}" || continue ;;
+        unlock|load) [[ "${t}" == "${trigger}" ]] || continue ;;
+        *) log::warn "unknown trigger; ignored | job='${name}' trigger='${t}'"; continue ;;
       esac
       ran=$(( ran + 1 ))
       jobs_run_one "${name}" "${trigger}" || rc=1
