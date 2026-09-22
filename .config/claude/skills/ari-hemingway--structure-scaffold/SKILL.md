@@ -1,11 +1,11 @@
 ---
 name: ari-hemingway--structure-scaffold
-description: "Produce a scaffold for a complex topic: a summary, a linear table of shared-jargon definitions (each row uses only earlier rows), and one standalone article per subsystem, where the subsystems come from clustering the concept graph. Publishes one Google Doc, or — given a Drive folder — a folder of Docs: a Glossary Doc holding the universal definitions plus one Doc per subsystem carrying its own hoisted definitions. Iterative and strictly checked; definitions are built by multi-agent workflows and verified mechanically before anything else is written. Use to come up to speed on, or explain, a system you don't yet have a vocabulary for."
+description: "Produce a scaffold for a complex topic: a summary, a linear table of shared-jargon definitions (each row uses only earlier rows), and one standalone article per subsystem, where the subsystems come from clustering the concept graph. Publishes one Google Doc, or — given a Drive folder — a folder of Docs: a Glossary Doc holding the universal definitions plus one Doc per subsystem carrying its own hoisted definitions. Iterative and strictly checked; definitions are built by multi-agent workflows and verified mechanically before anything else is written. Use to come up to speed on, or explain, a system you don't yet have a vocabulary for. Skeleton mode stops after Cluster and hands the accepted table and subsystem graph to another structure skill."
 ---
 
 # Scaffold
 
-Produce a scaffold for a complex topic: a summary, a table of shared-jargon definitions, and one standalone article per subsystem. The definitions come first and are checked mechanically; the subsystems come from clustering the concept graph; everything else is written in the table's vocabulary. The output is one Google Doc or, when the user gives a Drive folder and the topic yields two or more articles, a folder of Docs: a Glossary Doc with the universal definitions and one Doc per subsystem with the definitions only it needs.
+Produce a scaffold for a complex topic: a summary, a table of shared-jargon definitions, and one standalone article per subsystem. The definitions come first and are checked mechanically; the subsystems come from clustering the concept graph; everything else is written in the table's vocabulary. The output is one Google Doc or, when the user gives a Drive folder and the topic yields two or more articles, a folder of Docs: a Glossary Doc with the universal definitions and one Doc per subsystem with the definitions only it needs. In Skeleton mode, invoked by another structure skill such as `/ari-hemingway--structure-ciechanowski`, the workflow ends after Cluster: the accepted table, the cluster result and the sources are the output, and no article is drafted.
 
 Formatting rules: see `/ari-hemingway--format-gdoc`. Workflow patterns (investigation folder, restore context, drafting, permalink resolution, fact-check, present/output): see `/ari-hemingway--lib`. Publishing: `/ari-hemingway--share-gdoc`. If any rule here appears to contradict `/ari-hemingway--format-gdoc`, the format skill wins.
 
@@ -193,7 +193,7 @@ Scratchpad fields appended after `Last phase`:
 
 ### Gather pointers
 
-Collect the topic, the terms the user already wants defined (`must_terms`), any sources (docs URLs, a local install, code paths), the audience, and the Drive folder (id or `drive.google.com/drive/folders` URL) when the user wants a folder of Docs. Derive `{topic-slug}` and create the investigation folder per `/ari-hemingway--lib` with `--skill-name scaffold`. Write the initial scratchpad (Subject, Mode `research`, Pointers, Grounding, Folder).
+Collect the topic, the terms the user already wants defined (`must_terms`), any sources (docs URLs, a local install, code paths), the audience, and the Drive folder (id or `drive.google.com/drive/folders` URL) when the user wants a folder of Docs. Collect the mode: `research` (default, produces Docs) or `skeleton` (the caller asked for the table and the subsystem graph only). Derive `{topic-slug}` and create the investigation folder per `/ari-hemingway--lib` with `--skill-name scaffold`. Write the initial scratchpad (Subject, Mode `research` or `skeleton`, Pointers, Grounding, Folder).
 
 ### Restore context
 
@@ -253,6 +253,8 @@ WARN cross-article mention | term='bottle' article='Distribution' mentions='keg'
 Apply the user's changes by re-running the SAME command with `--force` and the changes appended, for example `--force --rename "Install layout=Cellar and links" --merge "Taps=Distribution" --universal "keg"`; never hand-move rows. Re-present until accepted, then run the check script on `rows/glossary.json` and every `rows/<slug>.json`. Fewer than two communities, or the user declining the split, means the single-Doc layout. Bake `graph.mmd` per the Diagrams rule and record the partition in the scratchpad.
 
 Print: `Cluster complete — {n} subsystems, {k} universal rows of {m}, {w} warnings, 0 violations. Next: Subsystems.`
+
+In `skeleton` mode the workflow ends here. Set `Last phase` to `Cluster (skeleton)`, then print `Skeleton complete — {folder}: definitions_final.json, clusters.json, rows/. Next: caller.` and stop; the caller reads those files and never edits them. Every later step is `research` mode only.
 
 ### Subsystems — draft
 
