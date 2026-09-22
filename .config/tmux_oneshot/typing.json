@@ -2,7 +2,7 @@
   {
     "menu": {
       "name": "typing",
-      "text": "Monkeytype passage test (Hyper+T): action × words on one screen, alt-⏎ runs"
+      "text": "Monkeytype passage test (Hyper+T): action × words on one screen, ⏎ runs"
     },
     "cmd": "REPO_LIB=\"$HOME/.config/karabiner/karabiner.ts/src/scripts/lib\" \"$HOME/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\"",
     "autodismiss": true,

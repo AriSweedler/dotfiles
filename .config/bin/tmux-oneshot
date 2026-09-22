@@ -58,13 +58,14 @@
 #                $ONESHOT_INPUT and cmd references it as "${ONESHOT_INPUT}"
 #                (expanded once by eval, never re-parsed). Empty answer aborts.
 #   groups       the one-screen builder (fzf_groups.zsh): exclusive option groups, each with
-#                a default, every option a row "<group>  ● [k] label". A key selects its
-#                option from any row, in any order (space or ⏎ selects the highlighted
-#                row); alt-⏎ runs; esc goes back to the picker that opened the entry.
+#                a default, drawn as blocks titled by label, one row per option "● [k]
+#                label". A key selects its option from any row, in any order (space
+#                selects the highlighted row); ⏎ runs; esc goes back to the picker that
+#                opened the entry. The assembled command shows at the bottom as it changes.
 #                Assembly: cmd, then each group's selected value in group order, before
 #                any flags/subcommands. Same shape as the Karabiner arg builder.
 #     name         the group's id
-#     label        the row's left column (default: name)
+#     label        the block's title (default: name)
 #     default      the key of the option selected at open
 #     options      [{key, label, value, prompt}]: key is one letter or digit, unique across
 #                  groups; value defaults to "{}"
@@ -843,7 +844,7 @@ function tmux_oneshot::_assemble() {
 
   if (( $(jq '.groups // [] | length' <<< "${entry}") > 0 )); then
     sel="$(fzf_groups::pick "$(jq -c '{groups: .groups}' <<< "${entry}")" \
-            --title "$(jq -r '.menu.name // .cmd // "builder"' <<< "${entry}")")" || grc=$?
+            --title "$(jq -r '.menu.name // .cmd // "builder"' <<< "${entry}")" --cmd "${out}")" || grc=$?
     (( grc == 0 )) || return "${grc}"
     gv="$(jq -r --argjson s "${sel}" '[.groups[] | $s[.name] // empty] | join(" ")' <<< "${entry}")"
     [[ -n "${gv}" ]] && out+=" ${gv}"

@@ -1,12 +1,15 @@
 # fzf_groups.zsh — one screen of exclusive option groups: the builder behind tmux-oneshot's
-# `groups`. Every option is a row, "<group>  ● [k] label"; the screen stays up while the
-# selection changes and only alt-⏎ leaves it with an answer. The Karabiner arg builder
-# (karabiner.ts/src/utils/argbuilder.ts) has the same shape, drawn in Notification Center.
+# `groups`. Each group is a block, its label as the title, one row per option, "● [k] label",
+# a blank line between blocks; the screen stays up while the selection changes and only ⏎
+# leaves it with an answer. The Karabiner arg builder (karabiner.ts/src/utils/argbuilder.ts)
+# has the same shape, drawn in Notification Center.
 #
 #   a key      selects that option within its group, from any row, in any order
-#   space, ⏎   select the highlighted row
-#   alt-⏎      accept: print the selection as JSON and exit 0
+#   space      selects the highlighted row
+#   ⏎          accept: print the selection as JSON and exit 0
 #   esc        back: exit FZF_GROUP_BACK_RC, nothing printed
+#   ↑ ↓        move between options; the title rows are skipped
+# The command the selection assembles shows at the bottom and follows every change.
 # An option with a `prompt` asks for a value in place (a one-line fzf editor: ⏎ accepts, esc
 # returns to the screen with the selection as it was); the answer replaces {} in its value
 # and shows on the row, "other…: 300".
@@ -14,15 +17,18 @@
 # Usage:
 #   fzf_groups::pick '{"groups":[{"name":"words","default":"5","options":[
 #       {"key":"5","label":"50 words","value":"--words 50"},
-#       {"key":"o","label":"other…","prompt":"words: ","value":"--words {}"}]}]}' --title typing
-#   → {"words":"--words 50"}
+#       {"key":"o","label":"other…","prompt":"words: ","value":"--words {}"}]}]}' \
+#       --title typing --cmd 'typing-test'
+#   → {"words":"--words 50"}          (the footer read: typing-test --words 50)
 # Spec: groups[]: name, label (default: name), default (an option key), options[]: key (one
 # letter or digit, unique across groups), label, value (default "{}"), prompt (optional).
 #
 # fzf re-renders through bindings that run this file as a script (the guard at the bottom):
 # `zsh fzf_groups.zsh render|pick|pick-row <state> …`. The state is one JSON file holding the
-# spec, the selection and the typed answers, so every callback is one jq call. Needs fzf
-# 0.62+ (--no-input).
+# spec, the selection and the typed answers, so every callback is one jq call. Items are
+# NUL-separated (--read0) so a block's title item can carry the blank line above it; a
+# title item has no key column, which is how the arrow bindings know to step over it.
+# Needs fzf 0.62+ (--no-input).
 
 (( ${+functions[log::info]} )) || source "${${(%):-%x}:A:h}/log.zsh"
 (( ${+FZF_GROUP_BACK_RC} )) || source "${${(%):-%x}:A:h}/fzf_group.zsh"
@@ -62,17 +68,19 @@ function fzf_groups::_validate() {
     [problems] | .[0] // empty' <<< "${1:?spec}"
 }
 
-# Input: <state file>. Output: one row per option, "<group>\t<key>\t<label col> ● [k] text".
+# Input: <state file>. Output: NUL-terminated items, per group a title item "\t\t<bold
+# label>" (with a leading newline from the second group on, the blank line between blocks)
+# then one item per option, "<group>\t<key>\t● [k] text". Columns 3.. are what fzf shows.
 function fzf_groups::_render() {
-  jq -r '
+  jq -j '
     .sel as $sel | .typed as $typed
-    | ([.spec.groups[] | (.label // .name) | length] | max) as $w
-    | .spec.groups[] as $g
-    | ($g.label // $g.name) as $label
-    | $g.options[]
-    | (if .prompt then .label + (if ($typed[.key] // "") != "" then ": " + $typed[.key] else "" end)
-       else .label end) as $text
-    | "\($g.name)\t\(.key)\t\($label)\(" " * ($w - ($label | length) + 2))\(if $sel[$g.name] == .key then "●" else "○" end) [\(.key)] \($text)"' \
+    | [.spec.groups | to_entries[] | .key as $i | .value as $g
+       | ("\t\t" + (if $i == 0 then "" else "\n" end) + "\u001b[1m" + ($g.label // $g.name) + "\u001b[0m"),
+         ($g.options[]
+          | (if .prompt then .label + (if ($typed[.key] // "") != "" then ": " + $typed[.key] else "" end)
+             else .label end) as $text
+          | "\($g.name)\t\(.key)\t\(if $sel[$g.name] == .key then "●" else "○" end) [\(.key)] \($text)")]
+    | .[] | . + "\u0000"' \
     "${1:?state}"
 }
 
@@ -104,13 +112,32 @@ function fzf_groups::_pick() {
   fzf_groups::_update "${state}" '.typed[$k] = $t | .sel[$g] = $k' --arg g "${group}" --arg k "${key}" --arg t "${typed}"
 }
 
-# Input: <state file> <row as rendered>. The key is the row's second column.
+# Input: <state file> <row as rendered>. The key is the row's second column; a title item has
+# none and is ignored.
 function fzf_groups::_pick_row() {
   local state="${1:?state}" row="${2?row}" key
   key="${row#*$'\t'}"
   key="${key%%$'\t'*}"
   [[ -n "${key}" && "${key}" != "${row}" ]] || return 0
   fzf_groups::_pick "${state}" "${key}"
+}
+
+# Input: <state file>. Output: the command the selection assembles, for the footer: --cmd, then
+# each group's value in order, the values colored. Two lines (cmd, then the values indented)
+# when one would not fit fzf's width, which fzf passes as FZF_COLUMNS.
+function fzf_groups::_command() {
+    local state="${1:?state}" cmd values line
+    cmd="$(jq -r '.cmd // ""' "${state}")"
+    values="$(jq -r '.sel as $sel | .typed as $typed
+      | [.spec.groups[] | .name as $n | .options[] | select(.key == $sel[$n])
+         | ($typed[.key] // "") as $t | ((.value // "{}") | gsub("\\{\\}"; $t))] | join(" ")' "${state}")"
+    line="${cmd:+${cmd} }${values}"
+    if [[ -n "${cmd}" && -n "${FZF_COLUMNS:-}" ]] && (( ${#line} > FZF_COLUMNS - 2 )); then
+        print -r -- "${cmd}"
+        print -r -- $'  \e[36m'"${values}"$'\e[0m'
+    else
+        print -r -- "${cmd:+${cmd} }"$'\e[36m'"${values}"$'\e[0m'
+    fi
 }
 
 # Input: <state file>. Output: {group: value} with {} in a prompt option's value replaced by
@@ -124,14 +151,16 @@ function fzf_groups::_selection() {
     | from_entries' "${1:?state}"
 }
 
-# Input: <spec JSON> [--title T]. Output: the selection JSON on alt-⏎ (rc 0); nothing and
-# FZF_GROUP_BACK_RC on esc; nothing and rc 1 on a bad spec or a broken fzf.
+# Input: <spec JSON> [--title T] [--cmd C]. Output: the selection JSON on ⏎ (rc 0); nothing
+# and FZF_GROUP_BACK_RC on esc; nothing and rc 1 on a bad spec or a broken fzf. --cmd is the
+# command the values complete, shown in the footer.
 function fzf_groups::pick() {
-  local spec="${1:?spec}" title="builder"
+  local spec="${1:?spec}" title="builder" cmd=""
   shift
   while (( $# > 0 )); do
     case "${1}" in
       --title) title="${2:?--title needs a value}"; shift 2 ;;
+      --cmd)   cmd="${2?--cmd needs a value}"; shift 2 ;;
       *) log::err "fzf_groups::pick: unknown option | option='${1}'"; return 1 ;;
     esac
   done
@@ -144,28 +173,35 @@ function fzf_groups::pick() {
 
   local state
   state="$(mktemp "${TMPDIR:-/tmp}/fzf_groups.XXXXXX")" || return 1
-  jq -c '{spec: ., sel: ([.groups[] | {key: .name, value: .default}] | from_entries), typed: {}}' <<< "${spec}" > "${state}"
+  jq -c --arg cmd "${cmd}" '{spec: ., cmd: $cmd, sel: ([.groups[] | {key: .name, value: .default}] | from_entries), typed: {}}' <<< "${spec}" > "${state}"
 
   local cb="zsh ${(q)FZF_GROUPS_SELF}"
+  # Every change re-renders the rows and the footer's command.
+  local refresh="reload(${cb} render ${(q)state})+transform-footer(${cb} command ${(q)state})"
   local -a binds
   local line key has_prompt
   # A key with no prompt updates the state silently; one with a prompt takes the terminal.
   for line in ${(f)"$(jq -r '.groups[].options[] | "\(.key)\t\(if .prompt then 1 else 0 end)"' <<< "${spec}")"}; do
     key="${line%%$'\t'*}"; has_prompt="${line#*$'\t'}"
     if [[ "${has_prompt}" == 1 ]]; then
-      binds+=(--bind "${key}:execute(${cb} pick ${(q)state} ${(q)key})+reload(${cb} render ${(q)state})")
+      binds+=(--bind "${key}:execute(${cb} pick ${(q)state} ${(q)key})+${refresh}")
     else
-      binds+=(--bind "${key}:execute-silent(${cb} pick ${(q)state} ${(q)key})+reload(${cb} render ${(q)state})")
+      binds+=(--bind "${key}:execute-silent(${cb} pick ${(q)state} ${(q)key})+${refresh}")
     fi
   done
-  binds+=(--bind "space:execute(${cb} pick-row ${(q)state} {})+reload(${cb} render ${(q)state})")
-  binds+=(--bind "enter:execute(${cb} pick-row ${(q)state} {})+reload(${cb} render ${(q)state})")
-  binds+=(--bind "alt-enter:accept")
+  binds+=(--bind "space:execute(${cb} pick-row ${(q)state} {})+${refresh}")
+  # ⏎ keeps fzf's accept. The cursor starts on the first option (item 1 is the first title,
+  # --sync so the list is there when start fires), the footer is filled in, and the cursor
+  # steps over a title item, which has no key column, in whichever direction it was moving.
+  binds+=(--bind "start:pos(2)+transform-footer(${cb} command ${(q)state})")
+  local k
+  for k in down ctrl-j ctrl-n; do binds+=(--bind "${k}:down+transform([ -z {2} ] && echo down)"); done
+  for k in up ctrl-k ctrl-p; do binds+=(--bind "${k}:up+transform([ -z {2} ] && echo up)"); done
 
   local rc=0
   fzf_groups::_render "${state}" | fzf_groups::_fzf --no-input --layout=reverse --no-info --cycle \
-      --delimiter $'\t' --with-nth '3..' \
-      --header "(${title}) — alt-⏎ run · esc back · a key, space or ⏎ selects" \
+      --read0 --ansi --sync --delimiter $'\t' --with-nth '3..' --footer-border=top \
+      --header "(${title}) — ⏎ run · esc back · a key or space selects" \
       "${binds[@]}" >/dev/null || rc=$?
   if (( rc == 0 )); then
     fzf_groups::_selection "${state}"
@@ -184,8 +220,9 @@ function fzf_groups::pick() {
 if [[ "${ZSH_EVAL_CONTEXT}" == "toplevel" ]]; then
   case "${1:-}" in
     render)   fzf_groups::_render "${2:?state}" ;;
+    command)  fzf_groups::_command "${2:?state}" ;;
     pick)     fzf_groups::_pick "${2:?state}" "${3:?key}" ;;
     pick-row) fzf_groups::_pick_row "${2:?state}" "${3?row}" ;;
-    *) print -u2 "usage: zsh fzf_groups.zsh render|pick|pick-row <state> …"; exit 2 ;;
+    *) print -u2 "usage: zsh fzf_groups.zsh render|command|pick|pick-row <state> …"; exit 2 ;;
   esac
 fi

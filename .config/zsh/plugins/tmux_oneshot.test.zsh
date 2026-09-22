@@ -252,7 +252,7 @@ _set_picks "verbose"
 _t "groups: values in group order, before flags" "typing current --words 300 --verbose" \
   "$(tmux_oneshot::_assemble "${_grouped}")"
 _t "groups: the screen gets the entry's spec and name" \
-  '{"groups":[{"name":"action","default":"n","options":[{"key":"n","label":"next","value":"next"}]},{"name":"words","default":"5","options":[{"key":"5","label":"50","value":"--words 50"}]}]} --title typing' \
+  '{"groups":[{"name":"action","default":"n","options":[{"key":"n","label":"next","value":"next"}]},{"name":"words","default":"5","options":[{"key":"5","label":"50","value":"--words 50"}]}]} --title typing --cmd typing' \
   "$(grep -- '--title typing' "${_calls_file}" | tail -1)"
 print -n 'BACK' > "${_groups_file}"
 tmux_oneshot::_assemble "${_grouped}" > /dev/null 2>&1
