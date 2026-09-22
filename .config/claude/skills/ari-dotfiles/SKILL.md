@@ -240,7 +240,10 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
 - **Submodules**: declared in `~/.gitmodules`; today `~/.config/chrome-exoskeleton/`
   (with `~/.config/bin/exo`) — see **Submodules** and `/ari-dotfile-submodule-chrome-exoskeleton`
 - **Harness**: `~/.config/bin/dotfiles` (init, pull, push, status, logs, git) — see **Pushing**
-  and **Bootstrapping a machine**; the push is token-pinned to `DOTFILES_GITHUB_LOGIN`
+  and **Bootstrapping a machine**; the push is token-pinned to `DOTFILES_GITHUB_LOGIN`.
+  The file in `bin` is only the entrypoint; the program is `~/.config/dotfiles/lib/*.zsh`,
+  one module per concern, each independent at source time (its README has the rules and
+  the check)
 
 ### Local (ldf)
 - **Zsh plugins**: `~/.local/share/zsh/plugins/`, sourced after the shared dir
