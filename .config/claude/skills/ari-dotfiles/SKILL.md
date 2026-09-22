@@ -307,12 +307,13 @@ push; `dotfiles push` and `dotfiles logs` are under **Pushing**.
   its tracking config, hooks and checkout. A directory at the old name that is not a bare repo
   is left alone with a warning; both names present is an error to settle by hand. The local
   tier is per machine and is not migrated.
-- **Local init hooks.** Its last step runs every executable in `~/.local/share/dotfiles/init.d/`
-  in name order. When something in the local tier depends on a file outside `~/.local` (a
+- **Local init hooks.** Its last step runs every executable in `~/.local/share/dotfiles/init.d/`.
+  When something in the local tier depends on a file outside `~/.local` (a
   LaunchAgent plist under `~/Library`, a compiled helper under `~/.local/state`), the tier ships
   a hook there that installs it, so a fresh machine gets it from `dotfiles init` and not from
-  memory. A hook is idempotent and treats `--dry-run` as plan-only; `50-aws-sso-autologin`
-  (which runs `aws-sso-autologin --install`) is the model.
+  memory. A hook is idempotent, independent of the other hooks (their order is irrelevant),
+  and treats `--dry-run` as plan-only; `aws-sso-autologin` (which runs
+  `aws-sso-autologin --install`) is the model.
 
 Hook setup for both tiers is documented in `~/.config/git/dotfiles-hooks/README.md`
 and `~/.config/git/local-dotfiles-hooks/README.md`; those are the versioned source.

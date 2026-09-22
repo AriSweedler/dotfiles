@@ -51,9 +51,9 @@ ${c_bold}Environment:${c_rst}
 
 ${c_bold}Local init hooks:${c_rst} ${LOCAL_INIT_HOOKS_DIR}/*
 Executables the local tier ships to install what it needs outside ~/.local: a LaunchAgent
-plist under ~/Library, a compiled helper under ~/.local/state. init runs them last, in name
-order; each must be idempotent and treat --dry-run as plan-only. One failing hook fails init
-after every hook has run.
+plist under ~/Library, a compiled helper under ~/.local/state. init runs them last; each is
+idempotent, independent of the others, and treats --dry-run as plan-only. One failing hook
+fails init after every hook has run.
 
 ${c_bold}Logs:${c_rst} ${LOG_DIR}/<repo>.log (last run) and .log.bak.1 (the run before).
 Pushes are token-pinned to ${DOTFILES_GITHUB_LOGIN}: no gh account switch, no ssh key swap.

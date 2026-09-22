@@ -133,11 +133,12 @@ init_fetch() {
 }
 
 #######################################
-# Run the local tier's init hooks: every executable in LOCAL_INIT_HOOKS_DIR, in name order.
-# A hook installs whatever its tier needs outside the tier's worktree — a LaunchAgent plist
-# under ~/Library, a compiled helper under ~/.local/state — so a fresh machine gets it from
-# `dotfiles init` and not from memory. Contract: idempotent, and --dry-run means plan only.
-# Every hook runs even after one fails; the step fails if any did.
+# Run the local tier's init hooks: every executable in LOCAL_INIT_HOOKS_DIR. A hook installs
+# whatever its tier needs outside the tier's worktree — a LaunchAgent plist under ~/Library,
+# a compiled helper under ~/.local/state — so a fresh machine gets it from `dotfiles init` and
+# not from memory. Contract: idempotent, --dry-run means plan only, independent of the other
+# hooks (so their order is irrelevant). Every hook runs even after one fails; the step fails
+# if any did.
 #######################################
 init_local_hooks() {
   local -a hooks=("${LOCAL_INIT_HOOKS_DIR}"/*(N-.x:t))
