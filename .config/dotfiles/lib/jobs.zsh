@@ -68,7 +68,9 @@ jobs_with_timeout() {
   return "${rc}"
 }
 
-# True (0) when an every:<seconds> job is due: no success stamp, or one older than the period.
+# True (0) when an every:<seconds> job is due: never run, or last run longer ago than the
+# period. The stamp marks a run, not a success: a failing weekly check must wait a week, not
+# retry on every five-minute tick.
 jobs_due() {
   local stamp="${JOBS_STATE_DIR}/${1}.ran" seconds="${2}"
   [[ -f "${stamp}" ]] || return 0
@@ -85,8 +87,8 @@ jobs_run_count() {
 
 #######################################
 # Run one job for a trigger. Its output goes to ~/.local/state/dotfiles/jobs/<name>.log
-# (plain text, the previous run in .log.bak.1) and to stdout; a success touches the stamp
-# jobs_due reads. One log line here either way.
+# (plain text, the previous run in .log.bak.1) and to stdout; the run touches the stamp
+# jobs_due reads and records its rc beside it. One log line here either way.
 # Arguments: name, trigger
 #######################################
 jobs_run_one() {
@@ -101,8 +103,9 @@ jobs_run_one() {
     print -r -- "# $(date -u +%FT%TZ) dotfiles jobs run ${name} (${trigger}) timeout=${limit}s"
     jobs_with_timeout "${limit}" "${plugin}" "${trigger}" 2>&1
   } | strip_ansi | tee "${logfile}" || rc=$?   # pipefail: the group exits with the plugin's rc
+  touch "${JOBS_STATE_DIR}/${name}.ran"
+  print -r -- "${rc}" > "${JOBS_STATE_DIR}/${name}.rc"
   if (( rc == 0 )); then
-    touch "${JOBS_STATE_DIR}/${name}.ran"
     log::info "job ok | name='${name}' tier='${JOB_TIER[${name}]}' trigger='${trigger}' took='$(elapsed "${start}")s' log='${logfile}'"
   elif (( rc == 124 )); then
     log::err "job timed out | name='${name}' tier='${JOB_TIER[${name}]}' trigger='${trigger}' limit='${limit}s' log='${logfile}'"
@@ -151,12 +154,15 @@ jobs_list() {
   jobs_discover
   print -r -- "${c_bold}jobs${c_rst} (${JOBS_LABEL}: on unlock, at login, every ${JOBS_INTERVAL_SECONDS}s)"
   if (( ${#JOB_PATH} == 0 )); then print -r -- "  none | roots='${JOBS_ROOT_DF}, ${JOBS_ROOT_LDF}'"; return 0; fi
-  local name stamp last
-  printf '  %-4s %-20s %-22s %s\n' tier name triggers 'last success'
+  local name stamp last rc
+  printf '  %-4s %-20s %-22s %-20s %s\n' tier name triggers 'last run' rc
   for name in "${(@ko)JOB_PATH}"; do
-    stamp="${JOBS_STATE_DIR}/${name}.ran"; last=never
-    [[ -f "${stamp}" ]] && last="$(date -r "${stamp}" '+%Y-%m-%dT%H:%M:%S')"
-    printf '  %-4s %-20s %-22s %s\n' "${JOB_TIER[${name}]}" "${name}" "$(jobs_triggers "${JOB_PATH[${name}]}")" "${last}"
+    stamp="${JOBS_STATE_DIR}/${name}.ran"; last=never; rc=-
+    if [[ -f "${stamp}" ]]; then
+      last="$(date -r "${stamp}" '+%Y-%m-%dT%H:%M:%S')"
+      [[ -f "${JOBS_STATE_DIR}/${name}.rc" ]] && rc="$(<"${JOBS_STATE_DIR}/${name}.rc")"
+    fi
+    printf '  %-4s %-20s %-22s %-20s %s\n' "${JOB_TIER[${name}]}" "${name}" "$(jobs_triggers "${JOB_PATH[${name}]}")" "${last}" "${rc}"
   done
   if launchctl print "gui/$(id -u)/${JOBS_LABEL}" >/dev/null 2>&1; then
     print -r -- "  launchd: loaded, runs since load=$(jobs_run_count)"
@@ -272,6 +278,7 @@ jobs_write_plist() {
     }' | plutil -convert xml1 - -o "${rendered}"
   plutil -lint -s "${rendered}"
   if cmp -s "${rendered}" "${JOBS_PLIST}"; then rm -f "${rendered}"; jobs_plist_changed=0; return 0; fi
+  mkdir -p "${JOBS_PLIST:h}"   # a fresh account may not have ~/Library/LaunchAgents yet
   mv "${rendered}" "${JOBS_PLIST}"
   chmod 0644 "${JOBS_PLIST}"
   jobs_plist_changed=1

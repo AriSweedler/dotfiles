@@ -344,7 +344,7 @@ push; `dotfiles push` and `dotfiles logs` are under **Pushing**.
 - **Jobs.** Its last step, `dotfiles jobs install`, installs the one launchd job
   (`com.<user>.dotfiles-jobs`: screen unlock, login, every 5 minutes) that runs the job
   plugins of both tiers, and boots out the per-plugin jobs it replaced (git-health's,
-  aws-sso-autologin's). `new-machine`'s `dotfiles_jobs` step checks it is loaded. The
+  aws-sso-autologin's, new-machine's weekly verify). `new-machine`'s `dotfiles_jobs` step checks it is loaded. The
   plugin contract is `~/.config/dotfiles/jobs/README.md`; see **Cutpoints**.
 
 Hook setup for both tiers is documented in `~/.config/git/dotfiles-hooks/README.md`

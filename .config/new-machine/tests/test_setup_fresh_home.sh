@@ -24,8 +24,8 @@ assert_eq "df hooksPath set" "${NEW_MACHINE_DF_HOOKS}" "$(df_git config --local 
 assert_file "local-dotfiles bare repo created" "${NEW_MACHINE_LDF_GIT_DIR}/HEAD"
 assert_eq "ldf hooksPath set" "${NEW_MACHINE_LDF_HOOKS}" "$(git --git-dir="${NEW_MACHINE_LDF_GIT_DIR}" config --local --get core.hooksPath)"
 assert_eq "ldf info/exclude == template" "$(rules "${TEMPLATE}")" "$(rules "${NEW_MACHINE_LDF_GIT_DIR}/info/exclude")"
-assert_file "weekly plist installed" "${HOME}/Library/LaunchAgents/com.$(id -un).new-machine-verify.plist"
-assert_file "weekly job loaded" "${LAUNCHCTL_SHIM_STATE}/com.$(id -un).new-machine-verify"
+assert_file "jobs plist installed" "${HOME}/Library/LaunchAgents/com.$(id -un).dotfiles-jobs.plist"
+assert_file "jobs job loaded" "${LAUNCHCTL_SHIM_STATE}/com.$(id -un).dotfiles-jobs"
 assert_json "status ok or warn" "${f}" '.status == "ok" or .status == "warn"' true
 assert_json "no step failed or errored" "${f}" '[.steps[] | select(.status=="fail" or .status=="error") | .step + "=" + .reason] | join(",")' ""
 assert_json "no step aborted" "${f}" '[.steps[] | select(.status=="skip" and .reason=="aborted")] | length' 0
@@ -34,7 +34,7 @@ assert_json "manual remote step is manual" "${f}" '.steps[] | select(.step=="loc
 assert_contains "manual step: remote add" "$(jq -c '.steps[] | select(.step=="local_dotfiles_repo")' "${f}")" "git ldf remote add origin"
 assert_contains "manual step: first push" "$(jq -c '.steps[] | select(.step=="local_dotfiles_repo")' "${f}")" "git ldf push --set-upstream origin main"
 assert_eq "curl never called" "" "$(shim_log curl)"
-assert_json "weekly_verify converged" "${f}" '.steps[] | select(.step=="weekly_verify") | .status' ok
+assert_json "dotfiles_jobs converged" "${f}" '.steps[] | select(.step=="dotfiles_jobs") | .status' ok
 assert_json "dotfiles_repo converged" "${f}" '.steps[] | select(.step=="dotfiles_repo") | .status' ok
 
 if (( FAIL > 0 )); then jq -c '.steps[] | {step, status, reason, detail, applied}' "${f}" >&2; fi

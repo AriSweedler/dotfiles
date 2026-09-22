@@ -1,7 +1,7 @@
 <!-- new-machine-report v1 fingerprint=38bb0f918c80e4aa run_id=20260910T002640 first_seen=2026-09-10 kind=error -->
 # new-machine weekly check COULD NOT RUN — testhost, 2026-09-10 00:26
 
-2 of 12 checks could not run, 2 warnings. First seen 2026-09-10 (1 week). This file is rewritten only when the set of
+2 of 11 checks could not run, 2 warnings. First seen 2026-09-10 (1 week). This file is rewritten only when the set of
 problems changes; the same failure gets a banner, not a new file. Deleting it means "acknowledged".
 State lives in /tmp/nmtest/home/.local/state/new-machine/ · machine-readable: last-check.json
 
@@ -63,5 +63,5 @@ Trail:    /tmp/nmtest/home/.local/state/new-machine/verify.log
 
 ## What "fixed" looks like
 
-`new-machine check` exits 0 and prints `status: ok`. The next Monday run (or `new-machine verify` now) moves this
+`new-machine check` exits 0 and prints `status: ok`. The next weekly run (or `new-machine verify` now) moves this
 file to /tmp/nmtest/home/.local/state/new-machine/reports/ and posts "verified OK".

@@ -14,7 +14,8 @@ A plugin is one executable file named for the job. Its second line says when it 
 - `unlock` — the screen was unlocked.
 - `load` — the job was (re)loaded: login, or `dotfiles jobs install`.
 - `every:<seconds>` — due on a tick, and at load, once that long has passed since the plugin
-  last exited 0.
+  last ran, whatever it exited with: a failing weekly check waits a week, it does not retry
+  every five minutes. `dotfiles jobs list` shows the last run and its rc.
 
 An optional `# timeout: <seconds>` line caps a run (default 900); the framework kills a
 plugin that overruns, children first, and logs it as timed out. One hung plugin must not
@@ -26,7 +27,7 @@ success. Plugins are independent of one another, so the order they run in is irr
 no name carries a number. A job with a CLI of its own (git-health, aws-sso-autologin) keeps it
 in a `bin/` and leaves a shim here that execs it.
 
-    dotfiles jobs list          plugins of both tiers, triggers, last success, launchd state
+    dotfiles jobs list          plugins of both tiers, triggers, last run and rc, launchd state
     dotfiles jobs run <name>    run one now (trigger 'manual')
     dotfiles jobs install       the launchd job; idempotent; `dotfiles init` runs it
 

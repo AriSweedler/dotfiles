@@ -48,7 +48,7 @@ assert_eq "df hooksPath set by new-machine" "${NEW_MACHINE_DF_HOOKS}" "$(df_git 
 assert_json "setup status ok or warn" "${f}" '.status == "ok" or .status == "warn"' true
 assert_json "no step failed or errored" "${f}" '[.steps[] | select(.status=="fail" or .status=="error") | .step + "=" + .reason] | join(",")' ""
 assert_json "dotfiles_repo converged" "${f}" '.steps[] | select(.step=="dotfiles_repo") | .status' ok
-assert_json "weekly_verify converged" "${f}" '.steps[] | select(.step=="weekly_verify") | .status' ok
+assert_json "dotfiles_jobs converged" "${f}" '.steps[] | select(.step=="dotfiles_jobs") | .status' ok
 assert_eq "curl never called" "" "$(shim_log curl)"
 if (( FAIL > 0 )); then jq -c '.steps[] | {step, status, reason, detail, applied}' "${f}" >&2; printf '%s\n' "${ERR}" | tail -n 20 >&2; fi
 

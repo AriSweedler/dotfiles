@@ -323,7 +323,7 @@ report::render() {
 
 ## What "fixed" looks like
 
-\`new-machine check\` exits 0 and prints \`status: ok\`. The next Monday run (or \`new-machine verify\` now) moves this
+\`new-machine check\` exits 0 and prints \`status: ok\`. The next weekly run (or \`new-machine verify\` now) moves this
 file to ${state_dir}/reports/ and posts "verified OK".
 EOF
 }
@@ -476,7 +476,7 @@ report::decide() {
     weeks="${last_weeks}"
     report_path="${last_report_path}"
     report_sha="${last_sha}"
-    hud_message="new-machine: check could not run ($(jq -r 'join(", ")' <<< "${error_reasons}")); retrying next Monday"
+    hud_message="new-machine: check could not run ($(jq -r 'join(", ")' <<< "${error_reasons}")); retrying next week"
     hud_seconds=8
   elif [[ "${fp}" == "${last_fp}" && "${force}" == false ]]; then
     action=unchanged

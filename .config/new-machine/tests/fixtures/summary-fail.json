@@ -54,10 +54,7 @@
     {"step": "terminal_nerdfont", "status": "warn", "reason": "manual_font",
      "detail": "Set a Nerd Font as the terminal font\n  * Terminal.app: Preferences -> Profiles -> Text -> Font\n  * iTerm2: Preferences -> Profiles -> Text -> Change Font\nInstalled: font-caskaydia-mono-nerd-font",
      "fix": null, "manual": true, "actionable": false, "items": [], "rc": 0, "duration_ms": 310,
-     "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/terminal_nerdfont.log", "applied": false},
-    {"step": "weekly_verify", "status": "ok", "reason": "loaded", "detail": "label='com.testuser.new-machine-verify'", "fix": null,
-     "manual": false, "actionable": false, "items": [], "rc": 0, "duration_ms": 71,
-     "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/weekly_verify.log", "applied": false}
+     "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/terminal_nerdfont.log", "applied": false}
   ],
   "brew": {
     "undeclared": [

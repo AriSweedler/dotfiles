@@ -17,7 +17,7 @@ f="$(out_json)"
 assert_eq "bob_neovim fails" fail "$(step_get bob_neovim .status)"
 assert_eq "claude fails" fail "$(step_get claude .status)"
 assert_eq "claude reason claude_missing" claude_missing "$(step_get claude .reason)"
-for step in terminal_nerdfont karabiner claude_notifications claude_skills dotfiles_jobs weekly_verify; do
+for step in terminal_nerdfont karabiner claude_notifications claude_skills dotfiles_jobs; do
   status="$(step_get "${step}" .status)"
   if [[ -n "${status}" && "${status}" != null ]]; then pass "${step} ran after the failures (${status})"
   else fail "${step} ran after the failures" "status='${status}'"; fi

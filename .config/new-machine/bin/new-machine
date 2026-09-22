@@ -33,7 +33,7 @@ fi
 # The run identity is this process's to derive (NEW_MACHINE_NOW under the state dir); only the
 # step subprocesses inherit it, never the caller's shell.
 unset RUN_ID RUN_DIR
-for lib in common brew launchd report dotfiles decree steps; do
+for lib in common brew report dotfiles decree steps; do
   if [[ ! -r "${NEW_MACHINE_SHARED_DIR}/lib/${lib}.zsh" ]]; then
     print -u2 "[ERROR] missing lib | path='${NEW_MACHINE_SHARED_DIR}/lib/${lib}.zsh'"
     exit 3
@@ -54,8 +54,7 @@ ${bold}Usage:${rst}
   new-machine setup    [--only STEP,...] [--dry-run] [--json]   check every step; apply where actionable; re-check
   new-machine check    [--only STEP,...] [--json]               read-only; exit 0 ok|warn, 1 fail, 2 error
   new-machine apply    STEP [--dry-run]                         = setup --only STEP
-  new-machine verify   [--force-report] [--no-notify] [--json]  what launchd runs: check + report + stamp + hud
-  new-machine verify   --install | --uninstall | --status [--dry-run]
+  new-machine verify   [--force-report] [--no-notify] [--json]  the weekly dotfiles jobs plugin: check + report + stamp + hud
   new-machine steps                                             list steps: name, needs, has_apply, description
   new-machine brew triage   [--json]                            describe undeclared/orphaned/duplicate brew items
   new-machine brew decree   ITEM... (--global|--local|--ignore-global|--ignore-local) [--reason TEXT] [--dry-run] [--no-push]
@@ -420,7 +419,7 @@ main() {
     fi
   done
 
-  local only="" dry_run=0 json=0 force_report=0 verify_mode=run
+  local only="" dry_run=0 json=0 force_report=0
   case "${sub}" in
     setup|check)
       while (( $# > 0 )); do
@@ -448,27 +447,17 @@ main() {
       run::main setup "${step}" "${dry_run}" "${json}"
       ;;
     verify)
+      # Scheduled by the dotfiles jobs framework (~/.config/dotfiles/jobs/new-machine-verify,
+      # weekly); this subcommand only runs the check.
       while (( $# > 0 )); do
         case "${1}" in
-          --install) verify_mode=install; shift ;;
-          --uninstall) verify_mode=uninstall; shift ;;
-          --status) verify_mode=status; shift ;;
-          --dry-run) dry_run=1; shift ;;
           --force-report) force_report=1; shift ;;
           --no-notify) export NM_NO_NOTIFY=1; shift ;;
           --json) json=1; shift ;;
           *) usage_error "unknown flag | flag='${1}'" ;;
         esac
       done
-      case "${verify_mode}" in
-        run)
-          (( ! dry_run )) || usage_error "--dry-run applies to --install/--uninstall only"
-          verify::run "${force_report}" "${json}"
-          ;;
-        install) export NM_DRY_RUN="${dry_run}"; launchd::install ;;
-        uninstall) export NM_DRY_RUN="${dry_run}"; launchd::uninstall ;;
-        status) launchd::status ;;
-      esac
+      verify::run "${force_report}" "${json}"
       ;;
     steps)
       (( $# == 0 )) || usage_error "unknown flag | flag='${1}'"

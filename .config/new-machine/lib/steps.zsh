@@ -9,7 +9,7 @@ typeset -g NEW_MACHINE_STEPS_LOADED=1
 
 typeset -gra STEPS=(brew brew_pkgs brew_drift dotfiles_repo local_dotfiles_repo bob_neovim claude
                     terminal_nerdfont karabiner claude_notifications claude_skills chrome_exoskeleton
-                    dotfiles_jobs weekly_verify)
+                    dotfiles_jobs)
 typeset -gA STEP_NEEDS=([brew_pkgs]=brew [brew_drift]=brew [terminal_nerdfont]=brew [chrome_exoskeleton]=dotfiles_repo [dotfiles_jobs]=dotfiles_repo)
 typeset -gA STEP_DESC=(
   [brew]="Homebrew is installed"
@@ -25,12 +25,11 @@ typeset -gA STEP_DESC=(
   [claude_skills]="every skill a dotfiles tier holds is symlinked into ~/.claude/skills and no link dangles"
   [chrome_exoskeleton]="the Chrome Exoskeleton submodule has its dependencies (which wire its hooks) and a built dist/"
   [dotfiles_jobs]="dotfiles jobs launchd job (runs the job plugins of both tiers) installed and loaded"
-  [weekly_verify]="new-machine weekly verify launchd job installed, current, and loaded"
 )
 
 typeset -gr BREW_INSTALLER="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
 typeset -gr CLAUDE_INSTALLER="https://claude.ai/install.sh"
-typeset -gra STEP_LIBS=(common brew launchd steps)
+typeset -gra STEP_LIBS=(common brew steps)
 
 # ── Runner ───────────────────────────────────────────────────────────────────
 
@@ -682,39 +681,4 @@ apply::dotfiles_jobs() {
     return 1
   fi
   run_cmd_mutating zsh "${harness}" jobs install
-}
-
-# ── weekly_verify ────────────────────────────────────────────────────────────
-check::weekly_verify() {
-  local label plist
-  label="$(launchd::label)"
-  plist="$(launchd::plist_path)"
-  if [[ ! -f "${plist}" ]]; then
-    verdict fail not_installed -d "plist missing | path='${plist}'" -f "new-machine verify --install"
-    return 0
-  fi
-  if ! plutil -lint -s "${plist}" >/dev/null 2>&1; then
-    verdict fail plist_drift -d "plist does not lint | path='${plist}'" -f "new-machine verify --install"
-    return 0
-  fi
-  local installed rendered
-  installed="$(plutil -convert json -o - "${plist}" 2>/dev/null | jq -S . 2>/dev/null || true)"
-  rendered="$(launchd::render_plist | plutil -convert json -o - - 2>/dev/null | jq -S . 2>/dev/null || true)"
-  if [[ -z "${rendered}" ]]; then
-    verdict error render_failed -d "launchd::render_plist produced nothing"
-    return 0
-  fi
-  if [[ "${installed}" != "${rendered}" ]]; then
-    verdict fail plist_drift -d "installed plist differs from launchd::render_plist | path='${plist}'" -f "new-machine verify --install"
-    return 0
-  fi
-  if ! launchd::is_loaded; then
-    verdict fail not_loaded -d "job not loaded | label='${label}'" -f "new-machine verify --install"
-    return 0
-  fi
-  verdict ok loaded -d "label='${label}'"
-}
-
-apply::weekly_verify() {
-  run_cmd_mutating "${NEW_MACHINE_SHARED_DIR}/bin/new-machine" verify --install
 }

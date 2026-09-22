@@ -205,10 +205,18 @@ world_empty_home() {
   _assert_in_fix "${HOME}"
   [[ "${HOME}" == "${FIX}/home" ]] || abort "world_empty_home: unexpected HOME ${HOME}"
   if [[ "${NEW_MACHINE_SHARED_DIR}" != "${FIX}/shared/new-machine" ]]; then
-    mkdir -p "${FIX}/shared/zsh/plugins"
-    rm -rf "${FIX}/shared/new-machine"
+    rm -rf "${FIX}/shared/new-machine" "${FIX}/shared/dotfiles"
+    mkdir -p "${FIX}/shared/zsh/plugins" "${FIX}/shared/bin" "${FIX}/shared/dotfiles" "${FIX}/shared/claude/skills/ari-skill-shellscripts/lib"
     cp -R "${NEW_MACHINE_SHARED_DIR}" "${FIX}/shared/new-machine"
     cp "${NEW_MACHINE_SHARED_DIR}/../zsh/plugins/log.zsh" "${NEW_MACHINE_SHARED_DIR}/../zsh/plugins/log_rotate.zsh" "${FIX}/shared/zsh/plugins/"
+    # The dotfiles harness (entrypoint, modules, job plugins, the plugins and logging lib it
+    # sources), from the real shared checkout this test tree lives in: dotfiles_repo's apply runs
+    # `dotfiles init` from the checkout seed_df_remote builds out of this staging copy.
+    local real_config; real_config="$(dirname "${REPO_DIR}")"
+    cp "${real_config}/zsh/plugins/strip_ansi.zsh" "${FIX}/shared/zsh/plugins/"
+    cp "${real_config}/bin/dotfiles" "${FIX}/shared/bin/dotfiles"
+    cp -R "${real_config}/dotfiles/." "${FIX}/shared/dotfiles/"
+    cp "${real_config}/claude/skills/ari-skill-shellscripts/lib/logging.zsh" "${FIX}/shared/claude/skills/ari-skill-shellscripts/lib/"
     export NEW_MACHINE_SHARED_DIR="${FIX}/shared/new-machine"
   fi
   rm -rf "${HOME}"
@@ -429,10 +437,19 @@ bump_now_secs() { NEW_MACHINE_NOW=$((NEW_MACHINE_NOW + $1)); export NEW_MACHINE_
 
 # A remote for the shared dotfiles: the df-remote seed tree plus the current shared config and
 # code, committed into a bare repo at $FIX/remotes/dotfiles.git (what DOTFILES_REMOTE points at).
+# The dotfiles harness travels too (entrypoint, modules, job plugins, the logging lib it
+# falls back to before skills are linked): dotfiles_repo's apply runs `dotfiles init` from
+# the checkout, and init's last step installs the jobs launchd job.
 seed_df_remote() {
   local work="${FIX}/remotes/dotfiles-work" bare="${FIX}/remotes/dotfiles.git" shared="${NEW_MACHINE_SHARED_DIR}"
-  mkdir -p "${work}/.config/new-machine/lib" "${work}/.config/new-machine/bin" "${work}/.config/zsh/plugins" "${work}/.config/git"
+  local config; config="$(dirname "${shared}")"
+  mkdir -p "${work}/.config/new-machine/lib" "${work}/.config/new-machine/bin" "${work}/.config/zsh/plugins" "${work}/.config/git" \
+           "${work}/.config/bin" "${work}/.config/dotfiles" "${work}/.config/claude/skills/ari-skill-shellscripts/lib"
   cp -R "${TESTS_DIR}/fixtures/df-remote/." "${work}/"
+  cp "${config}/bin/dotfiles" "${work}/.config/bin/dotfiles"
+  cp -R "${config}/dotfiles/." "${work}/.config/dotfiles/"
+  cp "${config}/claude/skills/ari-skill-shellscripts/lib/logging.zsh" "${work}/.config/claude/skills/ari-skill-shellscripts/lib/"
+  cp "${config}/zsh/plugins/strip_ansi.zsh" "${work}/.config/zsh/plugins/"
   cp "${shared}/Brewfile" "${shared}/local-dotfiles-exclude" "${work}/.config/new-machine/"
   if [[ -f "${shared}/Brewfile.ignore" ]]; then cp "${shared}/Brewfile.ignore" "${work}/.config/new-machine/"; fi
   cp -R "${shared}/lib/." "${work}/.config/new-machine/lib/"
@@ -440,6 +457,7 @@ seed_df_remote() {
   cp "${shared}/../zsh/plugins/log.zsh" "${shared}/../zsh/plugins/log_rotate.zsh" "${work}/.config/zsh/plugins/"
   printf '[user]\n\tname = new-machine tests\n\temail = tests@example.invalid\n[init]\n\tdefaultBranch = main\n' > "${work}/.config/git/config"
   chmod +x "${work}"/.config/bin/* "${work}"/.config/claude/bin/* "${work}"/.config/new-machine/bin/*
+  find "${work}/.config/dotfiles/jobs" -type f ! -name '*.md' -exec chmod +x {} +   # plugins, not the README
   git init -q --bare --initial-branch=main "${bare}"
   git --git-dir="${bare}" --work-tree="${work}" add -A -- "${work}"
   git --git-dir="${bare}" --work-tree="${work}" -c user.name=seed -c user.email=seed@example.invalid commit -q -m "seed dotfiles remote"
@@ -479,8 +497,7 @@ ldf_git() { git --git-dir="${NEW_MACHINE_LDF_GIT_DIR}" --work-tree="${HOME}/.loc
 # ── The non-brew steps' happy path ───────────────────────────────────────────
 
 # Everything the non-brew checks look at, in its "ok" state: sorted karabiner.json, the claude
-# notification hook, a loaded dotfiles-jobs job, and the weekly job's plist rendered by the lib
-# itself (so weekly_verify compares equal). Shim logs are reset afterwards so a following
+# notification hook, a loaded dotfiles-jobs job. Shim logs are reset afterwards so a following
 # read-only run can still assert_no_mutation.
 seed_home_baseline() {
   local uid label plist
@@ -498,14 +515,6 @@ seed_home_baseline() {
   jq -n --arg label "${label}" '{Label: $label, ProgramArguments: ["/bin/zsh", "dotfiles", "jobs", "tick"], StartInterval: 300}' \
     | plutil -convert xml1 - -o "${plist}"
   touch "${LAUNCHCTL_SHIM_STATE}/${label}"
-
-  zfn launchd.zsh launchd::render_plist
-  if (( RC != 0 )) || [[ -z "${OUT}" ]]; then
-    fail "seed_home_baseline: launchd::render_plist" "rc=${RC} ${ERR}"
-  else
-    printf '%s\n' "${OUT}" > "${HOME}/Library/LaunchAgents/com.$(id -un).new-machine-verify.plist"
-    touch "${LAUNCHCTL_SHIM_STATE}/com.$(id -un).new-machine-verify"
-  fi
   shim_logs_reset
 }
 

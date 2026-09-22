@@ -22,9 +22,9 @@ fi
   --config branch.main.remote=origin --config branch.main.merge=refs/heads/main \
   "${DOTFILES_REMOTE:-https://github.com/AriSweedler/dotfiles.git}" "$GIT_DIR"
 
-# A no-op once HOME is populated; refuses, listing them, to overwrite files it does not own.
-git --git-dir="$GIT_DIR" --work-tree="$HOME" checkout
+# A no-op once HOME is populated (its branch chatter to stderr); refuses, listing them, to overwrite files it does not own.
+git --git-dir="$GIT_DIR" --work-tree="$HOME" checkout 1>&2
 
-# The checkout carries the dotfiles harness; it finishes the dotfiles (hooks, submodules, skills, key).
-zsh "$HOME/.config/bin/dotfiles" init
+# The checkout carries the dotfiles harness; it finishes the dotfiles. Its output goes to stderr so --json's stdout stays new-machine's JSON.
+zsh "$HOME/.config/bin/dotfiles" init 1>&2
 exec "$HOME/.config/new-machine/bin/new-machine" setup "$@"

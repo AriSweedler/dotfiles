@@ -49,7 +49,7 @@ readonly JOBS_TIMEOUT_SECONDS=900           # a plugin's run is killed after thi
 # launchd's PATH has no Homebrew; plugins shell out to jq, terminal-notifier, python3.
 readonly JOBS_LAUNCHD_PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 # The per-plugin jobs this framework replaced; install boots them out and removes their plists.
-readonly -a JOBS_LEGACY_LABELS=("com.$(id -un).git-health" "com.$(id -un).aws-sso-autologin")
+readonly -a JOBS_LEGACY_LABELS=("com.$(id -un).git-health" "com.$(id -un).aws-sso-autologin" "com.$(id -un).new-machine-verify")
 typeset -gA JOB_PATH=() JOB_TIER=()         # name → executable, name → df | ldf; filled by jobs_discover
 
 # Flags, set by main.

@@ -38,9 +38,9 @@ git --git-dir=~/dotfiles.git --work-tree=~ checkout
 `new-machine setup` is idempotent: Homebrew, the packages in the shared
 `~/.config/new-machine/Brewfile` plus this machine's
 `~/.local/share/new-machine/Brewfile` (`brew bundle`), both dotfiles bare repos
-and their hooks, neovim, Claude Code, and the launchd jobs. It also installs a
-weekly `new-machine verify` (Monday 10:05) that leaves one
-`~/Desktop/new-machine-FAILED.md` when the machine drifts from this baseline.
+and their hooks, neovim, Claude Code, and the one `dotfiles jobs` launchd job, whose
+weekly `new-machine verify` plugin leaves one `~/Desktop/new-machine-FAILED.md` when
+the machine drifts from this baseline.
 `new-machine brew triage` lists brew packages no Brewfile declares;
 `new-machine brew decree <name> --global|--local` settles each one. `vi_newmachbrew`
 edits the shared Brewfile.
