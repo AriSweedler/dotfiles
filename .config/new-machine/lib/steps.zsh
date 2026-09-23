@@ -21,7 +21,7 @@ typeset -gA STEP_DESC=(
   [claude]="Claude Code installed"
   [terminal_nerdfont]="a Nerd Font cask is installed and at least one Terminal.app profile uses a Nerd Font"
   [karabiner]="karabiner.json exists, is valid JSON, and is jq -S sorted; healthcheck runs when present"
-  [claude_notifications]="Claude Code notification hook points at notification-fire.sh and terminal-notifier resolves"
+  [claude_notifications]="Claude Code hooks wired: Notification → notification-fire.sh, PreToolUse guard → pretooluse-headless-chrome-guard.sh; terminal-notifier resolves"
   [claude_skills]="every skill a dotfiles tier holds is symlinked into ~/.claude/skills and no link dangles"
   [chrome_exoskeleton]="the Chrome Exoskeleton submodule has its dependencies (which wire its hooks) and a built dist/"
   [dotfiles_jobs]="dotfiles jobs launchd job (runs the job plugins of both tiers) installed and loaded"
@@ -542,11 +542,18 @@ check::claude_notifications() {
     verdict fail hook_mismatch -d "hook='${current}' expected='${expected}' settings='${settings}'" -f "new-machine apply claude_notifications"
     return 0
   fi
+  # The headless-Chrome guard is a second hook initialize.sh wires (PreToolUse, matcher Bash).
+  local guard="${HOME}/.config/claude/bin/pretooluse-headless-chrome-guard.sh" guard_hooks
+  guard_hooks="$(jq -r --arg cmd "${guard}" '[.hooks.PreToolUse // [] | .[].hooks[]? | select(.command == $cmd)] | length' "${settings}" 2>/dev/null || echo 0)"
+  if [[ "${guard_hooks}" != 1 ]]; then
+    verdict fail guard_mismatch -d "PreToolUse guard hooks=${guard_hooks} expected=1 | guard='${guard}' settings='${settings}'" -f "new-machine apply claude_notifications"
+    return 0
+  fi
   if [[ -z "${NEW_MACHINE_NOTIFIER}" ]] || ! command -v "${NEW_MACHINE_NOTIFIER}" >/dev/null 2>&1; then
     verdict fail notifier_missing -d "terminal-notifier not found (initialize.sh installs it)" -f "new-machine apply claude_notifications"
     return 0
   fi
-  verdict ok configured -d "hook='${current}' notifier='${NEW_MACHINE_NOTIFIER}'"
+  verdict ok configured -d "hook='${current}' guard='${guard}' notifier='${NEW_MACHINE_NOTIFIER}'"
 }
 
 apply::claude_notifications() {

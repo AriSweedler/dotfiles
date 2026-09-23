@@ -163,9 +163,14 @@ assert_eq "reason hook_mismatch" hook_mismatch "$(reason_of claude_notifications
 dry_step claude_notifications
 assert_contains "dry-run logs the notifications apply plan" "${ERR}" "would run apply::claude_notifications"
 assert_json "settings.json untouched by the dry-run" "${HOME}/.claude/settings.json" '.hooks.Notification[0].hooks[0].command' "/somewhere/else.sh"
+jq -n --arg cmd "${HOME}/.config/claude/bin/notification-fire.sh" '{hooks: {Notification: [{hooks: [{type: "command", command: $cmd}]}]}}' > "${HOME}/.claude/settings.json"
+check_step claude_notifications
+assert_eq "notification wired but no PreToolUse guard → fail" fail "$(status_of claude_notifications)"
+assert_eq "reason guard_mismatch" guard_mismatch "$(reason_of claude_notifications)"
 "${HOME}/.config/claude/bin/initialize.sh"
 check_step claude_notifications
-assert_eq "hook wired → ok" ok "$(status_of claude_notifications)"
+assert_eq "both hooks wired → ok" ok "$(status_of claude_notifications)"
+assert_json "guard hook wired" "${HOME}/.claude/settings.json" '.hooks.PreToolUse[0].hooks[0].command' "${HOME}/.config/claude/bin/pretooluse-headless-chrome-guard.sh"
 
 # ── dotfiles_jobs ────────────────────────────────────────────────────────────────
 JOBS_LABEL="com.$(id -un).dotfiles-jobs"

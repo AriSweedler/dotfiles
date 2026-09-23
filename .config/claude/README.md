@@ -1,4 +1,4 @@
-# Claude Code notification scripts
+# Claude Code hooks: notifications and the headless-Chrome guard
 
 macOS desktop notifications for Claude Code, with one-click jump back to the
 exact tmux pane that fired the notification. Also exposes a programmatic
@@ -16,7 +16,8 @@ and run the click action without finding it on screen, plus a
 │   ├── notification-click-handler.sh   # invoked when the banner is clicked
 │   ├── notification-click-simulator.sh # invoke the click action programmatically
 │   ├── quickchat.sh                    # random Rocket League quickchat (CLI toy / fallback msg)
-│   └── initialize.sh                   # idempotent setup (brew + settings.json)
+│   ├── pretooluse-headless-chrome-guard.sh  # PreToolUse (Bash) hook: refuses headless Chrome.app
+│   └── initialize.sh                   # idempotent setup (brew + both settings.json hooks)
 ├── lib/                                # implementation layer (sourced)
 │   ├── notification-lib.sh             # constants, log, helpers
 │   └── tmux-pane.sh                    # tmux_target_pane() — current pane
@@ -83,6 +84,9 @@ each script's runs in their own directory keeps them easy to correlate.
 1. Installs `terminal-notifier` via Homebrew if missing.
 2. Updates `~/.claude/settings.json` so the `Notification` hook points at
    `bin/notification-fire.sh`.
+3. Adds a `PreToolUse` hook (matcher `Bash`) running
+   `bin/pretooluse-headless-chrome-guard.sh`, gated with
+   `"if": "Bash(*--headless*)"`; other `PreToolUse` entries are kept.
 
 It is wired into `new-machine setup` (the `claude_notifications` step)
 so a fresh machine gets it as part of the regular bootstrap. Safe to run by
@@ -96,6 +100,35 @@ The `claude_notifications` step also runs in the Monday `new-machine verify`
 launchd job, so hook drift surfaces in the background. From a shell,
 `claude::hook::check` runs that one step read-only and `claude::hook::register`
 applies it (both in `~/.config/zsh/plugins/claude.zsh`).
+
+## Headless Chrome guard
+
+`bin/pretooluse-headless-chrome-guard.sh` is a Claude Code `PreToolUse` hook on
+the Bash tool. It exits 2, which blocks the call and feeds its stderr back to
+Claude, when a command launches the installed Chrome.app headless: the bare
+`/Applications/Google Chrome*.app/Contents/MacOS/…` binary (Chrome, Canary,
+Beta, Dev) or `open -a "Google Chrome" … --args --headless`. Every such launch
+steals focus twice while Chrome is the running browser: opening a page
+activates the running Chrome, and about 6 s in the instance asks
+LaunchServices to set the https handler, which CoreServicesUIAgent answers by
+ordering its windows front (measured 2026-09-23 with an `lsappinfo front`
+tracer and the unified log). Playwright's browsers are separate bundles and
+are not affected, so the message points at `~/.config/bin/chrome-headless`,
+which runs chrome-headless-shell (default) or Google Chrome for Testing
+(`--full`) with the same Chromium flags.
+
+`settings.json` gates the hook with `"if": "Bash(*--headless*)"`, so Claude
+Code only spawns it for commands that mention `--headless`; the script matches
+the hook's JSON as raw text and spawns nothing itself. Pipe-test it by hand:
+
+```sh
+jq -nc '{tool_name:"Bash",tool_input:{command:"open -a \"Google Chrome\" --args --headless"}}' \
+  | ~/.config/claude/bin/pretooluse-headless-chrome-guard.sh; echo $?   # 2, message on stderr
+```
+
+`new-machine check --only claude_notifications` reports the guard missing from
+`settings.json` as `guard_mismatch`; `initialize.sh` (or
+`new-machine apply claude_notifications`) wires it.
 
 ## Karabiner integration
 
