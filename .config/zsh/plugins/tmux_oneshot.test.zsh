@@ -458,6 +458,47 @@ ${_xdg_d}/tmux_oneshot/a.json
 ${_xdg_d}/tmux_oneshot/b.json" "$(EDITOR="${_editor}" _fresh --edit 2>/dev/null)"
 _t "--edit unknown name: rc 1" "1" "$(EDITOR="${_editor}" _fresh --edit nope >/dev/null 2>&1; echo $?)"
 
+# ---------------------------------------------------------------------------
+# Cache: a second load over unchanged sources reuses the index (same inode: no
+# rewrite), still replays its diagnostics and hands the picker its renders; a
+# changed or removed source, a render knob, --debug or a torn cache rebuilds.
+# ---------------------------------------------------------------------------
+( _fresh --list > /dev/null 2>&1 )
+local _ino_before
+_ino_before="$(stat -f %i "${_index}")"
+_err_out="$(_fresh --list 2>&1 >/dev/null)"
+_t "unchanged sources: the index is reused, not rewritten" "yes" "$([[ "${_ino_before}" == "$(stat -f %i "${_index}")" ]] && echo yes)"
+_t "cached load replays the shadow warning" "1" "$(print -r -- "${_err_out}" | grep -c 'Shadowed oneshot')"
+_t "cached load replays the key-clash error" "1" "$(print -r -- "${_err_out}" | grep -c 'Duplicate direct key dropped')"
+_t "cached load bumps the collision counters" "shadowed=1 keyclash=1" \
+  "$(unset TMUX_ONESHOT_DB; TMUX_ONESHOT_LOAD_SHADOWED=0 TMUX_ONESHOT_LOAD_KEYCLASH=0; tmux_oneshot::_load 2>/dev/null; echo "shadowed=${TMUX_ONESHOT_LOAD_SHADOWED} keyclash=${TMUX_ONESHOT_LOAD_KEYCLASH}")"
+_t "cached load hands the picker the rendered menu and keys" "cached=1 menu=same keys=ctrl-g,ctrl-k" \
+  "$(unset TMUX_ONESHOT_DB; tmux_oneshot::_load 2>/dev/null; _m=same; [[ "${TMUX_ONESHOT_MENU_CACHED}" == "$(tmux_oneshot::_menu)" ]] || _m=differs; echo "cached=${TMUX_ONESHOT_RENDER_CACHED} menu=${_m} keys=${TMUX_ONESHOT_KEYS_CACHED}")"
+_t "a rebuild hands the picker its renders too" "1" \
+  "$(unset TMUX_ONESHOT_DB; tmux_oneshot::_load --force 2>/dev/null; echo "${TMUX_ONESHOT_RENDER_CACHED}")"
+_t "single-file mode never claims a cached render" "0" \
+  "$(export TMUX_ONESHOT_DB="${_db}"; tmux_oneshot::_load; echo "${TMUX_ONESHOT_RENDER_CACHED}")"
+# Same second as the build above: only the content can tell this edit apart.
+_ino_before="$(stat -f %i "${_index}")"
+cat > "${_xdg_d}/tmux_oneshot/b.json" << 'EOF'
+[
+  {"menu": {"name": "l2", "text": "local two"}, "cmd": "echo l2", "key": "ctrl-g"},
+  {"menu": {"name": "l3", "text": "local three"}, "cmd": "echo l3"}
+]
+EOF
+_t "an edited source rebuilds, whatever its mtime" "g1 dup g3 l1 l2 l3" "$(_fresh --list 2>/dev/null | paste -sd' ' -)"
+_t "an edited source rewrote the index" "yes" "$([[ "${_ino_before}" != "$(stat -f %i "${_index}")" ]] && echo yes)"
+rm -f "${_xdg_d}/tmux_oneshot/b.json"
+_t "a removed source rebuilds" "g1 dup g3 l1" "$(_fresh --list 2>/dev/null | paste -sd' ' -)"
+_ino_before="$(stat -f %i "${_index}")"
+( _fresh --debug > /dev/null 2>&1 )
+_t "--debug rebuilds even when the cache is fresh" "yes" "$([[ "${_ino_before}" != "$(stat -f %i "${_index}")" ]] && echo yes)"
+_ino_before="$(stat -f %i "${_index}")"
+_t "a changed render knob rebuilds" "yes" "$(TMUX_ONESHOT_NAME_MAX=12 _fresh --list >/dev/null 2>&1; [[ "${_ino_before}" != "$(stat -f %i "${_index}")" ]] && echo yes)"
+rm -f "${_index}.meta"
+_t "a torn cache (no .meta) rebuilds" "g1 dup g3 l1" "$(_fresh --list 2>/dev/null | paste -sd' ' -)"
+_t "a torn cache is whole again after the rebuild" "yes" "$([[ -f "${_index}.meta" && -f "${_index}.menu" && -f "${_index}.keys" ]] && echo yes)"
+
 export XDG_CONFIG_HOME="${_saved_xdg_c}" XDG_DATA_HOME="${_saved_xdg_d}" XDG_STATE_HOME="${_saved_xdg_s}"
 export TMUX_ONESHOT_DB="${_db}"
 _t "real index untouched by the loading tests" "${_real_index_before}" \

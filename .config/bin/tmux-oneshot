@@ -16,7 +16,10 @@
 # _GENERATED (non-empty) skip a tier. The merge is written to
 # ${XDG_STATE_HOME}/tmux_oneshot/index.json and TMUX_ONESHOT_DB points at it;
 # a TMUX_ONESHOT_DB exported by the caller is used as-is instead (single-file
-# mode — tests, one-off debugging).
+# mode — tests, one-off debugging). Beside the index sit its cache siblings
+# (index.json.{meta,menu,keys,collisions,skipped}), reused while every source's
+# content is unchanged, so a launch on a fresh cache spawns nothing before fzf;
+# --debug rebuilds them.
 #
 # Minimal entry: {"cmd": "killall Dock"}. Full schema (everything but one of
 # cmd/subcommands is optional):
@@ -115,6 +118,12 @@ source "${HOME}/.config/zsh/plugins/log.zsh"
 source "${HOME}/.config/zsh/plugins/fzf_group.zsh"
 source "${HOME}/.config/zsh/plugins/fzf_groups.zsh"
 
+# Builtins for the launch path: on a Mac with an endpoint agent every process spawn
+# costs ~17 ms, so mkdir/mv/rm/stat are zsh modules here, not commands (log.zsh
+# already loads strftime).
+zmodload -F zsh/files b:zf_mkdir b:zf_mv b:zf_rm
+zmodload -F zsh/stat b:zstat
+
 function tmux_oneshot() {
   local dep
   for dep in jq fzf; do
@@ -128,7 +137,10 @@ function tmux_oneshot() {
     -h|--help) tmux_oneshot::action::help; return 0;;
     --files)   tmux_oneshot::action::files; return $?;;
   esac
-  tmux_oneshot::_load || return 1
+  # --debug is the health check: it rebuilds the cache rather than trusting it.
+  local -a load_args
+  (( ${@[(I)--debug]} )) && load_args=(--force)
+  tmux_oneshot::_load "${load_args[@]}" || return 1
 
   local -a fzf_args
   while [[ "${1:-}" == -* ]]; do
@@ -178,7 +190,7 @@ ${c_cyan}Options:${c_rst}
   ${c_green}--dry-run <name>${c_rst}   print the entry's fields, its surface and assembled cmd; no eval
   ${c_green}--surface <s>${c_rst}      popup, popup_pane or window for this launch (see Surface)
   ${c_green}--edit [name]${c_rst}      \$EDITOR on every source file, or on the one defining <name>
-  ${c_green}--debug${c_rst}            non-interactive: sources, render, index, preview and key checks
+  ${c_green}--debug${c_rst}            non-interactive: sources, render, index, preview and key checks; rebuilds the cache
   ${c_green}--log${c_rst}              print the per-run stderr log (popup errors land here)
   ${c_green}-h, --help${c_rst}         show this help
 
@@ -276,8 +288,17 @@ TMUX_ONESHOT_JQ_MERGEDEF='
 # TMUX_ONESHOT_DB=<index>, so every reader keeps its one-file contract. A
 # caller-exported TMUX_ONESHOT_DB means single-file mode (tests, debugging):
 # nothing is loaded.
+#
+# The merge, its renders and its diagnostics are cached beside the index (see
+# _cache_stamp) and reused while nothing they were built from has changed: a launch
+# that finds the cache fresh spawns no jq at all. --force rebuilds regardless (--debug).
 function tmux_oneshot::_load() {
+  # The renders below belong to the managed index alone: single-file mode, or a
+  # load that fails, leaves the picker rendering live.
+  TMUX_ONESHOT_RENDER_CACHED=0
   [[ -n "${TMUX_ONESHOT_DB:-}" ]] && return 0
+  local force=0
+  [[ "${1:-}" == --force ]] && force=1
   local -a files
   files=(${(f)"$(tmux_oneshot::_files)"})
   if (( ${#files} == 0 )); then
@@ -289,8 +310,22 @@ function tmux_oneshot::_load() {
     return 1
   fi
 
+  local index="${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/index.json"
+  # Checked up front so an unwritable state dir is one error, not mkdir's or
+  # the redirection's message plus ours.
+  if ! { [[ -d "${index:h}" ]] || zf_mkdir -p "${index:h}" 2>/dev/null } || [[ ! -w "${index:h}" ]]; then
+    log::fail "Index dir not writable | dir='${index:h}'"
+    return 1
+  fi
+  local stamp
+  stamp="$(tmux_oneshot::_cache_stamp "${files[@]}")"
+  if (( ! force )) && tmux_oneshot::_cache_read "${index}" "${stamp}"; then
+    export TMUX_ONESHOT_DB="${index}"
+    return 0
+  fi
+
   local line tier f part
-  local -a parts
+  local -a parts skipped
   for line in "${files[@]}"; do
     tier="${line%%$'\t'*}"; f="${line#*$'\t'}"
     if ! part="$(jq -c --arg tier "${tier}" --arg src "${f}" \
@@ -298,6 +333,7 @@ function tmux_oneshot::_load() {
         "${f}" 2>/dev/null)"; then
       log::err "Skipping oneshot file: not a JSON list | path='${f}'"
       (( TMUX_ONESHOT_LOAD_SKIPPED += 1 ))
+      skipped+=("${f}")
       continue
     fi
     parts+=("${part}")
@@ -307,28 +343,36 @@ function tmux_oneshot::_load() {
     return 1
   fi
 
-  local index="${XDG_STATE_HOME:-${HOME}/.local/state}/tmux_oneshot/index.json"
-  # Checked up front so an unwritable state dir is one error, not mkdir's or
-  # the redirection's message plus ours.
-  if ! mkdir -p "${index:h}" 2>/dev/null || [[ ! -w "${index:h}" ]]; then
-    log::fail "Index dir not writable | dir='${index:h}'"
-    return 1
-  fi
   # Written beside, then mv'd: two concurrent popups never read a half file.
   if ! printf '%s\n' "${parts[@]}" \
       | jq -s "${TMUX_ONESHOT_JQ_MERGEDEF} add | merge_names | drop_clashing_keys" > "${index}.$$"; then
-    rm -f "${index}.$$"
+    zf_rm -f "${index}.$$"
     log::fail "Cannot write index | path='${index}'"
     return 1
   fi
-  mv "${index}.$$" "${index}"
+  zf_mv -f "${index}.$$" "${index}"
   export TMUX_ONESHOT_DB="${index}"
-  tmux_oneshot::_report_collisions "${parts[@]}"
+  tmux_oneshot::_collisions_tsv "${parts[@]}" > "${index}.collisions.$$"
+  zf_mv -f "${index}.collisions.$$" "${index}.collisions"
+  tmux_oneshot::_report_collision_lines < "${index}.collisions"
+  tmux_oneshot::_cache_write "${index}" "${stamp}" "${skipped[@]}"
 }
 
-# Input: the tagged per-file arrays. Logs one warn per shadowed name and one
+# Input: the tagged per-file arrays. Output: one "kind\tname\tkept\tdropped" line
+# per shadowed name (shadow) and per dropped key (key) — what
+# _report_collision_lines logs and what the cache replays.
+function tmux_oneshot::_collisions_tsv() {
+  printf '%s\n' "$@" | jq -rs "${TMUX_ONESHOT_JQ_MERGEDEF}"'
+    add
+    | (group_by(k) | .[] | select(length > 1) | . as $g
+        | "shadow\t\($g[0] | k)\t\($g[-1] | loc)\t\($g[:-1][] | loc)"),
+      (merge_names | . as $m | clashing_keys[] as $i
+        | "key\t\($m[$i].key)\t\($m | map(select(.key == $m[$i].key))[0] | loc)\t\($m[$i] | loc)")'
+}
+
+# Input (stdin): _collisions_tsv lines. Logs one warn per shadowed name and one
 # error per dropped key; bumps the counters --debug fails on.
-function tmux_oneshot::_report_collisions() {
+function tmux_oneshot::_report_collision_lines() {
   local kind name kept dropped
   while IFS=$'\t' read -r kind name kept dropped; do
     case "${kind}" in
@@ -341,12 +385,73 @@ function tmux_oneshot::_report_collisions() {
         (( TMUX_ONESHOT_LOAD_KEYCLASH += 1 ))
         ;;
     esac
-  done < <(printf '%s\n' "$@" | jq -rs "${TMUX_ONESHOT_JQ_MERGEDEF}"'
-    add
-    | (group_by(k) | .[] | select(length > 1) | . as $g
-        | "shadow\t\($g[0] | k)\t\($g[-1] | loc)\t\($g[:-1][] | loc)"),
-      (merge_names | . as $m | clashing_keys[] as $i
-        | "key\t\($m[$i].key)\t\($m | map(select(.key == $m[$i].key))[0] | loc)\t\($m[$i] | loc)")')
+  done
+  return 0
+}
+
+# Cache: the index, its renders (menu, --expect keys) and its load diagnostics
+# (skipped files, collisions) live beside index.json and are reused while the stamp
+# matches. The stamp is the *content* of every source, not its mtime (a same-second
+# edit must not read as fresh), plus this script's mtime and size (the jq programs
+# live here) and the render knobs. Everything but .meta is written first and .meta
+# last, so a torn cache is a stale one. Reading it is exec-free.
+typeset -g TMUX_ONESHOT_MENU_CACHED='' TMUX_ONESHOT_KEYS_CACHED=''
+typeset -gi TMUX_ONESHOT_RENDER_CACHED=0
+
+# Input: the "tier\tfile" list. Output: the stamp text.
+function tmux_oneshot::_cache_stamp() {
+  local self="${(%):-%x}" line
+  local -a st
+  zstat -A st -- "${self}" 2>/dev/null || st=()
+  # zstat -A order: … 8 = size, 10 = mtime.
+  print -r -- "tmux-oneshot cache · script ${st[10]:-0}:${st[8]:-0} · name_max=${TMUX_ONESHOT_NAME_MAX} key_style=${(q)TMUX_ONESHOT_KEY_STYLE}"
+  for line in "$@"; do
+    print -r -- "── ${line}"
+    print -r -- "$(<"${line#*$'\t'}")"
+  done 2>/dev/null
+  print -r -- "── end"
+}
+
+# Input: <index> <stamp>. rc 0 when the cache beside <index> was built from exactly
+# this stamp; the renders are then in the *_CACHED globals and the remembered skips
+# and collisions are replayed, so a cached launch logs what a fresh one would.
+function tmux_oneshot::_cache_read() {
+  local index="${1:?}" stamp="${2:?}" f
+  for f in "${index}" "${index}.meta" "${index}.menu" "${index}.keys" "${index}.collisions" "${index}.skipped"; do
+    [[ -f "${f}" ]] || return 1
+  done
+  [[ "$(<"${index}.meta")" == "${stamp}" ]] || return 1
+  TMUX_ONESHOT_MENU_CACHED="$(<"${index}.menu")"
+  TMUX_ONESHOT_KEYS_CACHED="$(<"${index}.keys")"
+  TMUX_ONESHOT_RENDER_CACHED=1
+  local p
+  for p in "${(@f)$(<"${index}.skipped")}"; do
+    [[ -n "${p}" ]] || continue
+    log::err "Skipping oneshot file: not a JSON list | path='${p}'"
+    (( TMUX_ONESHOT_LOAD_SKIPPED += 1 ))
+  done
+  tmux_oneshot::_report_collision_lines < "${index}.collisions"
+  return 0
+}
+
+# Input: <index> <stamp> [skipped file…]. Renders the menu and the --expect list
+# (whose reserved-key errors therefore log on the rebuild, and on --debug) and
+# writes every cache file, .meta last.
+function tmux_oneshot::_cache_write() {
+  local index="${1:?}" stamp="${2:?}"
+  shift 2
+  local menu keys
+  menu="$(tmux_oneshot::_menu)"
+  keys="$(tmux_oneshot::_expect_keys)"
+  print -r -- "${menu}" > "${index}.menu.$$" && zf_mv -f "${index}.menu.$$" "${index}.menu"
+  print -r -- "${keys}" > "${index}.keys.$$" && zf_mv -f "${index}.keys.$$" "${index}.keys"
+  : > "${index}.skipped.$$"
+  (( $# > 0 )) && print -rl -- "$@" > "${index}.skipped.$$"
+  zf_mv -f "${index}.skipped.$$" "${index}.skipped"
+  print -r -- "${stamp}" > "${index}.meta.$$" && zf_mv -f "${index}.meta.$$" "${index}.meta"
+  TMUX_ONESHOT_MENU_CACHED="${menu}"
+  TMUX_ONESHOT_KEYS_CACHED="${keys}"
+  TMUX_ONESHOT_RENDER_CACHED=1
   return 0
 }
 
@@ -547,12 +652,21 @@ TMUX_ONESHOT_JQ_PREVIEW='if ($i | startswith("g:")) then ($i[2:]) as $g | "group
 # rule in _resolve_pick is the determinism guarantee.
 function tmux_oneshot::_pick() {
   local menu out rc keys
-  menu="$(tmux_oneshot::_menu)"
+  # A fresh cache (_load) already holds both renders: nothing spawns before fzf.
+  if (( TMUX_ONESHOT_RENDER_CACHED )); then
+    menu="${TMUX_ONESHOT_MENU_CACHED}"
+  else
+    menu="$(tmux_oneshot::_menu)"
+  fi
   if [[ -z "${menu}" ]]; then
     log::err "No entries | db='${TMUX_ONESHOT_DB}'"
     return 1
   fi
-  keys="$(tmux_oneshot::_expect_keys)"
+  if (( TMUX_ONESHOT_RENDER_CACHED )); then
+    keys="${TMUX_ONESHOT_KEYS_CACHED}"
+  else
+    keys="$(tmux_oneshot::_expect_keys)"
+  fi
   local -a key_args
   [[ -n "${keys}" ]] && key_args+=(--expect="${keys}")
   out="$(tmux_oneshot::_fzf --select-1 --ansi "$@" "${TMUX_ONESHOT_FZF_MATCH_ARGS[@]}" \
@@ -1135,9 +1249,10 @@ if [[ "${ZSH_EVAL_CONTEXT}" == "toplevel" ]]; then
   fi
 
   source "${HOME}/.config/zsh/plugins/log_rotate.zsh"
-  mkdir -p "${TMUX_ONESHOT_LOG:h}"
+  [[ -d "${TMUX_ONESHOT_LOG:h}" ]] || zf_mkdir -p "${TMUX_ONESHOT_LOG:h}"
   log_rotate "${TMUX_ONESHOT_LOG}" 4
-  print -r -- "── $(date -u +%Y-%m-%dT%H:%M:%SZ) tmux-oneshot $* (pid $$)" >> "${TMUX_ONESHOT_LOG}"
+  strftime -s _tmux_oneshot_ts '%Y-%m-%dT%H:%M:%S%z' "${epochtime[1]}"
+  print -r -- "── ${_tmux_oneshot_ts} tmux-oneshot $* (pid $$)" >> "${TMUX_ONESHOT_LOG}"
   # stderr → tee (log + live tty), stdout untouched via fd 3. tee as a
   # pipeline member (not a >(…) procsubst) so the shell waits for it and the
   # log is complete at exit — zsh does not track procsubst pids.
@@ -1151,8 +1266,9 @@ if [[ "${ZSH_EVAL_CONTEXT}" == "toplevel" ]]; then
   _tmux_oneshot_rcf="${TMUX_ONESHOT_LOG}.rc"
   { { tmux_oneshot "$@" 2>&1 >&3; print -rn -- "$?" > "${_tmux_oneshot_rcf}" } \
     | strip_ansi_tee "${TMUX_ONESHOT_LOG}" } 3>&1
-  _tmux_oneshot_rc="$(cat "${_tmux_oneshot_rcf}" 2>/dev/null)"
-  rm -f "${_tmux_oneshot_rcf}"
+  _tmux_oneshot_rc=''
+  [[ -f "${_tmux_oneshot_rcf}" ]] && _tmux_oneshot_rc="$(<"${_tmux_oneshot_rcf}")"
+  zf_rm -f "${_tmux_oneshot_rcf}"
   : "${_tmux_oneshot_rc:=1}"
   print -r -- "── exit rc=${_tmux_oneshot_rc}" >> "${TMUX_ONESHOT_LOG}"
   if [[ -f "${TMUX_ONESHOT_LOG}.failed" ]]; then

@@ -14,6 +14,15 @@
 # Net result after the run writes again: the current log plus <keep> backups.
 # Creates the parent directory if needed. No-op when <logfile> doesn't exist
 # yet (nothing to rotate). Returns non-zero on a bad <keep> or mkdir failure.
+#
+# Exec-free: mkdir/mv/rm are the zsh/files builtins. A rotation is up to six of
+# them, and on a Mac with an endpoint agent every process spawn costs ~17 ms —
+# this runs at the top of every Karabiner binding and every tmux-oneshot launch.
+zmodload -F zsh/files b:zf_mkdir b:zf_mv b:zf_rm 2>/dev/null || {
+  function zf_mkdir() { command mkdir "$@" }
+  function zf_mv() { command mv "$@" }
+  function zf_rm() { command rm "$@" }
+}
 function log_rotate() {
   emulate -L zsh
   local logfile="${1:?log_rotate: <logfile> required}"
@@ -25,19 +34,19 @@ function log_rotate() {
   fi
 
   local dir="${logfile:h}"
-  [[ -d "${dir}" ]] || mkdir -p "${dir}" || return 1
+  [[ -d "${dir}" ]] || zf_mkdir -p "${dir}" || return 1
 
   # Nothing to rotate until the first log exists.
   [[ -e "${logfile}" ]] || return 0
 
   # Drop the oldest beyond `keep`, then shift each backup up one slot, newest
   # first so we never clobber a slot we still need.
-  rm -f "${logfile}.bak.${keep}"
+  zf_rm -f "${logfile}.bak.${keep}"
   local i
   for (( i = keep - 1; i >= 1; i-- )); do
-    [[ -e "${logfile}.bak.${i}" ]] && mv -f "${logfile}.bak.${i}" "${logfile}.bak.$(( i + 1 ))"
+    [[ -e "${logfile}.bak.${i}" ]] && zf_mv -f "${logfile}.bak.${i}" "${logfile}.bak.$(( i + 1 ))"
   done
-  mv -f "${logfile}" "${logfile}.bak.1"
+  zf_mv -f "${logfile}" "${logfile}.bak.1"
 }
 
 # log_init [name] [keep=4] — set $LOG_FILE for a per-script log and rotate the
