@@ -1,18 +1,23 @@
 #!/usr/bin/env zsh
-# Hyper+O: the tmux-oneshot picker from any app. Karabiner has no tty, so open
-# it as a popup on the most recently active tmux client and bring Terminal
-# forward; with no tmux client, run it in a fresh Terminal window. Extra args
-# pass through (`oneshot-popup caffeinate` runs that entry with no picker).
+# Hyper+O: the tmux-oneshot picker from any app, as a popup on the tmux client used
+# last; with no tmux server or client, in a fresh Terminal window. Extra args pass
+# through (`oneshot-popup caffeinate` runs that entry with no picker).
+#
+# Latency is this script's whole job, and on a Mac with an endpoint agent every
+# process spawn costs ~17 ms, so the popup path is one exec: tmux itself resolves the
+# target (the most recently active session's most recently active client) and expands
+# -d against that client's current pane. Terminal is not brought forward here — the
+# Karabiner rule does that natively (software_function.open_application), in parallel,
+# the instant the key goes down (src/shortcuts.ts).
 set -u
-source "${HOME}/.config/zsh/plugins/log.zsh"
-client="$(tmux list-clients -F '#{client_activity} #{client_name}' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)"
-if [[ -n "${client}" ]]; then
-  session="$(tmux display-message -p -c "${client}" '#{session_name}')"
-  open -a Terminal
-  tmux display-popup -c "${client}" -t "${session}" -E -T ' oneshot ' -b rounded -w 80% -h 60% \
-    -d '#{pane_current_path}' "${HOME}/.config/bin/tmux-oneshot" "$@"
-else
-  log::warn "No tmux client; opening the picker in a Terminal window"
-  /usr/bin/osascript -e 'tell application "Terminal" to do script "exec $HOME/.config/bin/tmux-oneshot"' \
-                     -e 'tell application "Terminal" to activate' > /dev/null
+err="$(tmux display-popup -E -T ' oneshot ' -b rounded -w 80% -h 60% \
+  -d '#{pane_current_path}' "${HOME}/.config/bin/tmux-oneshot" "$@" 2>&1)"; rc=$?
+# -E hands back the picker's own rc (esc is 130, a failed entry its rc) with nothing
+# on stderr; only tmux's own complaint (no server, no client) means no popup opened.
+if (( rc == 0 )) || [[ -z "${err}" ]]; then
+  exit "${rc}"
 fi
+source "${HOME}/.config/zsh/plugins/log.zsh"
+log::warn "No tmux popup; opening the picker in a Terminal window | tmux='${err}'"
+/usr/bin/osascript -e 'tell application "Terminal" to do script "exec $HOME/.config/bin/tmux-oneshot"' \
+                   -e 'tell application "Terminal" to activate' > /dev/null

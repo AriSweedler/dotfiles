@@ -16,6 +16,11 @@ export const shortcuts = [
 
   rule('Hyper+O → oneshot picker (tmux popup on the active client; Terminal window without tmux)')
     .manipulators([
-      map('o', 'Hyper').to(karabiner_script("oneshot-popup")),
+      // Terminal comes forward natively — no shell, dispatched the instant the key goes
+      // down and not awaited — so it is frontmost by the time the popup lands. The
+      // shell_command that opens the popup runs in parallel with it.
+      map('o', 'Hyper')
+        .to({ software_function: { open_application: { bundle_identifier: 'com.apple.Terminal' } } })
+        .to(karabiner_script("oneshot-popup")),
     ]),
 ]

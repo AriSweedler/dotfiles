@@ -62,21 +62,36 @@ export const karabiner_script = (
   const logDir = `/tmp/karabiner.${scriptPathRel}`
   const logFile = `${logDir}/log.txt`
 
+  // Two shells for the whole run (Karabiner's sh, then one zsh that execs nothing
+  // but the script): the log dir is made only when missing, and the rotation, the
+  // date line and the timer are zsh builtins. On a Mac with an endpoint agent every
+  // process spawn costs ~17 ms, and this wrapper used to spend eight of them
+  // (mkdir, a zsh for log_rotate and its rm/mv, date, a second zsh) before the
+  // script even started — a fifth of Hyper+O's latency.
+  // The zsh program sits in sh single quotes, so it contains none itself.
   // \${...} escapes TS interpolation. Bare $VAR passes through to the shell untouched.
   return {
     shell_command: `
-mkdir -p "${logDir}"
-zsh -c 'source "$HOME/.config/zsh/plugins/log_rotate.zsh" && log_rotate "$1" "$2"' _ "${logFile}" "${logKeep}" 2>/dev/null || true
-{
+d="${logDir}"; [ -d "$d" ] || mkdir -p "$d"
+exec zsh -c '
+  zmodload zsh/datetime
+  source "$HOME/.config/zsh/plugins/log_rotate.zsh"
+  log_rotate "$1" "$2" 2>/dev/null
   export REPO_ROOT="${karabinerRoot.replace(os.homedir(), "$HOME")}"
   export REPO_LIB="\${REPO_ROOT}/src/scripts/lib"
   export PATH="${pathPrefix}:\${PATH}"
-  set -x
-  date
-  cd "\${REPO_ROOT:?}"
-  echo "Invoking ${scriptPathAbs}${argsSuffix}"
-  zsh -c 'zmodload zsh/datetime; typeset -F _s=$EPOCHREALTIME; "$@"; _rc=$?; typeset -F _e=$EPOCHREALTIME; printf "elapsed_ms=%.0f rc=%d\\n" $(( (_e - _s) * 1000 )) $_rc; exit $_rc' _ "${scriptPathAbs}"${argsSuffix}
-} &> "${logFile}"
+  {
+    strftime "%a %b %e %H:%M:%S %Z %Y" "$EPOCHSECONDS"
+    cd "\${REPO_ROOT:?}"
+    print -r -- "Invoking ${scriptPathAbs}${argsSuffix}"
+    typeset -F _s=$EPOCHREALTIME
+    "${scriptPathAbs}"${argsSuffix}
+    _rc=$?
+    typeset -F _e=$EPOCHREALTIME
+    printf "elapsed_ms=%.0f rc=%d\\n" $(( (_e - _s) * 1000 )) $_rc
+    exit $_rc
+  } &> "$1"
+' _ "${logFile}" "${logKeep}"
 `
   }
 }
