@@ -219,6 +219,13 @@ Every piece of technical jargon or literal token MUST be wrapped in backticks. L
 - GOOD: `Set `STATSD_HOST` before starting `statsd`.`
 - BAD: `Set STATSD_HOST before starting statsd.` — env var and daemon name unbackticked
 
+### Code blocks
+
+A command, a multi-line literal, or anything the reader copies goes in a fenced code block. Drive's import turns a fence into a native Docs code block (rounded grey box, monospace, language label), and `/ari-hemingway--share-gdoc` gives a fence inside an aside the same grey (`#F1F3F4`); an inline code span in a sentence stays unshaded. Never write a command as a line of inline code spans: the import lands it as unshaded monospace with no block edge.
+
+- GOOD: a fence holding `export SERVICE_NAME=taskworker-service-ai-embed` and the two `export` lines after it.
+- BAD: `` `export` `SERVICE_NAME=taskworker-service-ai-embed` `` on its own line — code spans, not a block.
+
 ## Document conventions
 
 ### Title, sections, footer
@@ -270,6 +277,24 @@ Every diagram is an inline image that links to its mermaid.live source in fullsc
 4. `/ari-hemingway--share-gdoc` checks both invariants at publish time and fails on an image that spills or lacks a `mermaid.live/view#` link.
 
 See `/ari-hemingway--lib` for the failure contract when `/ari-diagram-mermaid` fails.
+
+### Asides
+
+An aside is optional content the reader opens on purpose: a manual fallback, a rationale, an edge case. It lives in its own tab, so the main tab stays short and the content is one click away.
+
+1. **Mark the sentence** with ` ([aside n ℹ️](#aside-n))` after its period: parentheses plain, inner text a link whose URL is the anchor `#aside-n`. `n` counts up from 1 in body order and is never reused. The anchor is how `/ari-hemingway--share-gdoc` finds the marker; the inner text is what the reader clicks, so it stays `aside n ℹ️` (blue, underlined, big enough to hit). The marker is the only place the word `aside` and the emoji appear.
+2. **Write the content** as a `# Aside n: <title>` section after `# Useful links` and before the footer, one per marker. The title is plain words (markup is stripped) and `Aside n: <title>` is at most 50 characters, the Docs tab-title limit. Bodies take paragraphs, `code` spans, `[text](url)` links (a code span inside the link text stays monospace and linked; bold is dropped), and fenced code blocks (each block becomes one shaded Roboto Mono paragraph, as in the main tab). A Drive URL in an aside is written as a markdown link and becomes a smart chip in the tab. Lists, tables, images, and headings fail the publish by aside number.
+3. **Refer to an aside** from anywhere else (a body sentence, `# Useful links`, another aside) as `[<title>](#aside-n)`, the text exactly the aside's title. It renders as a plain link to the tab, named like the tab, so it stays searchable; a chip cannot point at a tab. Any other text fails the publish naming the aside and the text.
+4. **Publishing does the rest.** `/ari-hemingway--share-gdoc` moves each section into a tab titled `Aside n: <title>`, points the marker and every reference at the tab, chips the tab's Drive links, and opens and closes the tab with an italic `← Return to main article` link set off by a rule (a paragraph border; the Docs API has no horizontal rule). The return link lands on the heading above the marker, or on a bookmark at the marker when the optional Apps Script step is set up. Markers and sections must pair up one to one, or the publish fails naming the odd ones.
+
+Asides hide in the editor and viewer only: a PDF export prints every tab. A doc with asides needs `--tab t.0` in `/ari-gsw-doc-to-md`.
+
+- GOOD: `Once that merges, wait one week for the report card to clear your deleted rows. ([aside 3 ℹ️](#aside-3))` with `# Aside 3: Manual cleanup` after `# Useful links`.
+- GOOD: `The grunt path is in [Manual cleanup](#aside-3).` — a reference, named like the tab.
+- BAD: `rows.[aside 3 ℹ️](#aside-3)` — no space, no parentheses, so the link glues to the sentence.
+- BAD: `(see [manual cleanup](#aside-3))` — neither the marker form nor the exact title.
+- BAD: `see [Aside 3: Manual cleanup](#aside-3)` — a reference carries the title only, never the `Aside n:` prefix.
+- BAD: a `# Aside 3:` section with no `#aside-3` marker in the body — the publish fails.
 
 ### Tables
 

@@ -1,6 +1,6 @@
 ---
 name: ari-hemingway--share-gdoc
-description: "Publish a markdown draft as a Google Doc in one command — create, optionally inside a given Drive folder, or update an existing doc in place — and finish it: every Drive link a smart chip, table header rows styled (bold, centered, grey), every table's columns sized so it is shortest with no mid-word breaks, every image checked to fit one page and to link to its mermaid.live source. Dry-runs first; the doc is created only on confirm."
+description: "Publish a markdown draft as a Google Doc in one command — create, optionally inside a given Drive folder, or update an existing doc in place — and finish it: every Drive link a smart chip, table header rows styled (bold, centered, grey), every table's columns sized so it is shortest with no mid-word breaks, every image checked to fit one page and to link to its mermaid.live source, every aside section rebuilt as its own tab. Dry-runs first; the doc is created only on confirm."
 ---
 
 # Publish to Google Doc
@@ -13,9 +13,11 @@ Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-g
 - **Table header rows** become bold, centered, and grey (`#D9D9D9`) in the same batch. The row is already pinned: Drive's markdown import sets `tableRowStyle.tableHeader` on every table's first row, and the PDF export repeats it on each page the table spans. The verify read checks that flag on every table and fails when it is missing.
 - **Every table takes the column widths that make it shortest, and no column is narrower than its widest token.** `bin/gdoc_table_widths.zsh` predicts each cell's wrapped line count from Arial and Roboto Mono metrics (bold for the header row), sets each column's floor at its widest unbreakable token plus padding so nothing breaks mid-word, then searches whole-point transfers between every pair of columns for the fewest lines; ties move width toward the earlier column so terms stay on one line where that is free. Every column is set `FIXED_WIDTH` in the same batch. `--table-widths START:w1,w2,...` on `gdoc_finish.zsh` replaces the model for one table and is logged.
 - **A table that cannot fit fails the finish step; nothing is guessed.** When the column floors sum past the text width, the Doc is still created, the log names the table, the deficit in points and the widest token per column, and the exit is non-zero. Fold a column or shorten the token in the draft and re-run with `--doc`.
+- **Fenced code blocks need no fix-up in the main tab.** Drive's markdown import lands a fence as a native Docs code block: the PDF export draws the rounded grey box with its language label, even though the document JSON shows only Roboto Mono paragraphs behind a Private Use Area placeholder (U+E907) on the first line. Aside tabs are filled through the API, which cannot insert that building block, so `gdoc_asides.zsh` shades each fenced block's paragraph with the same grey (`#F1F3F4`) instead.
 - **Images are checked, not fixed.** Every inline image must fit the page content box and link to `https://mermaid.live/view#...` (the fullscreen form, not `/edit#`); the Diagrams rule in `/ari-hemingway--format-gdoc` says how to author that, and the verify read fails otherwise.
 - **Layout is measured from the PDF export.** The Docs API reports no geometry, so after every publish the finish step exports the doc to PDF, logs the page count and every table's rendered height in points beside the model's prediction for the widths the doc now has, and warns when they differ by more than one and a half lines (a single extra wrapped line is model rounding, not a layout problem). Pass `--render-pages DIR` to also get one PNG per page (PDFKit through `swift`, nothing to install) when wrapping needs a look, since heights alone do not show a mid-word break.
 - **One read, one batch, one read.** The batch is pinned to the revision it was built from (`writeControl.requiredRevisionId`), so a concurrent edit fails the batch instead of corrupting the doc.
+- **Asides become tabs, rebuilt on every publish.** `bin/gdoc_asides.zsh` strips every `# Aside n:` section (the Asides rule in `/ari-hemingway--format-gdoc`) out of the body before the upload, then, after the fix-up batch, deletes any tab titled `Aside n:`, adds one tab per section, fills it (return link with a bottom border, `Aside n: <title>` as H1, the body with an empty paragraph between blocks as the import lays out the main tab, one empty paragraph, return link with a top border), chips the tab's Drive links with `insertRichLink` after the same `files.get` pre-check as the main pass, and turns every `#aside-n` link into a link to that tab: the marker, and each reference whose text is the aside's title. Rebuilding every time is not optional: the markdown re-import deletes every tab but the first and drops tab links. The return link targets the heading above the marker; with `--bookmarks` it targets a bookmark the Apps Script in `bin/gas/` adds at the marker (see Asides setup below). The split fails before anything uploads on: a marker without a section or a section without a marker, a reference whose text is not the title, `Aside n: <title>` over 50 characters (the Docs tab-title limit), or unsupported aside content (lists, tables, images, headings), each naming the aside number. Both batches are pinned to the revision they were built from, and a verify read fails the rebuild if any Drive link in an aside tab is still plain.
 
 ## Preconditions
 
@@ -32,6 +34,8 @@ Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-g
 - `bin/gdoc_table_widths.zsh` (+ `gdoc_table_widths.py`, per `/ari-skill-pythonscripts`) — the column-width planner for tables of any column count: one JSON line per table with the current and best widths, modeled line counts, predicted heights, the widest token per column, and whether the table can fit at all. Read-only; `gdoc_finish.zsh` calls it before the batch and again for the verify read.
 - `bin/gdoc_table_heights.zsh` — measures every table in a PDF exported from Docs from the cell clip rectangles the export draws: rendered height in points per table, summed across pages, with and without the header row Docs repeats on each page. `gdoc_finish.zsh` calls it; run it by hand on a before and after export to judge a change.
 - `bin/gdoc_render_pages.zsh` (+ `gdoc_render_pages.swift`) — renders a PDF export to one PNG per page with PDFKit; needs `swift` from the Xcode command line tools and nothing from brew.
+- `bin/gdoc_asides.zsh` (+ `gdoc_asides.py`, per `/ari-skill-pythonscripts`) — `--split` writes the draft without its aside sections after checking markers, sections, references, and tab-title length; `--rebuild` deletes stale `Aside n:` tabs, adds and fills one per section, chips their Drive links, and links every marker and reference. `--doc` takes an id or URL. `gdoc_publish.zsh` runs both; run `--rebuild` by hand after any other body replace. `--dry-run` prints the batches; `--first-tab-title` renames the first tab, which the import resets to `Tab 1`; `--bookmarks --script-id ID` adds the Apps Script bookmark step.
+- `bin/gas/Asides.gs` (+ `appsscript.json`) — the Apps Script project for `--bookmarks`: `addMarkerBookmarks(docId, maxN)` puts a bookmark at each marker in the first tab and returns `{n: bookmarkId}`. Optional; see Asides setup.
 
 ## Workflow
 
@@ -59,6 +63,22 @@ The script creates (or updates) the doc, then runs `gdoc_finish.zsh` on it.
 
 `gdoc_finish.zsh` runs inside Publish; nothing to emit. Read its log: one `Applied fix-up batch` line, one `Table columns resized`, `Table columns kept`, or `Table columns overridden` line per table, then the verify lines, ending with one `Rendered table` line per table that carries `predicted_pt` and `drift_pt`. A non-zero exit after "Doc created" means a check failed: an image wider or taller than one page, an image whose link is not the `mermaid.live/view#` form, a Drive link the chip pass could not convert (a target the caller cannot open, or a non-Drive URL styled as one), or a `Table cannot fit the text width` line naming the deficit and the widest token per column. The doc exists at that point; record its URL, fix the draft per `/ari-hemingway--format-gdoc` (for an unfit table: fold a column, or shorten or split the named token), and re-run with `--doc <url>`. A `Rendered table drifts from the model` warning means the layout differs from the prediction by more than one and a half lines; re-run with `--check-only --render-pages <dir>` and look at the page before touching widths by hand.
 
+### Rebuild asides
+
+`gdoc_asides.zsh --rebuild` runs inside Publish after the fix-up; nothing to emit. Read its log: one `aside section split out | n= title= marker= blocks= body_references= drive_links=` line per section at staging, then one `stale aside tab deleted` line per tab the last publish left, and one `aside tab rebuilt | n= title= tab= return=heading|bookmark chips= body_references= marker_range=` line per section. `No asides to rebuild` means the draft has none. A failure names the aside: `markers and aside sections do not pair up` lists the odd numbers, `reference text must be the aside title` names the text and the expected title, `aside tab title too long` names the title and the 50-character limit, `unsupported content in aside` names the kind and the line, `Drive link target in aside is unreadable` names the URL, `marker not found in first tab` means the body changed under the rebuild, and `aside tab Drive links are not all chips` is the verify read. Fix the draft and re-run with `--doc <url>`.
+
+### Asides setup (optional bookmarks)
+
+By default the return link lands on the heading above the marker. To land on the marker itself, the Docs API needs a bookmark it cannot create; Apps Script can. One-time setup, each step by the user:
+
+1. `gws auth login -s script` (adds the `script.projects` and `script.deployments` scopes; keep the existing ones).
+2. Enable the Google Apps Script API at script.google.com/home/usersettings, and in the `airtable-gws-cli` GCP project.
+3. `gws script projects create --json '{"title":"gdoc asides bookmarks"}'`, then `gws script +push --script <scriptId> --dir $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gas`.
+4. In the Apps Script editor: Project Settings → Google Cloud Platform (GCP) Project → Change project → the `airtable-gws-cli` project number. `scripts.run` requires the caller's OAuth client and the script to share a GCP project; no API sets this.
+5. `gws script projects versions create --params '{"scriptId":"<scriptId>"}'`, then `deployments create` as API executable; the deployment id is the `--script-id`.
+
+Then publish with `--bookmarks --script-id <id>` on `gdoc_asides.zsh --rebuild`. Bookmarks die on the re-import like the tabs do; the rebuild recreates them.
+
 ### Report
 
 Relay the URL the script printed, as a raw `docs.google.com` URL. There is no manual step: header rows are pinned by the import and verified by the script. If the draft has its own hemingway investigation folder, record the URL in its `scratchpad.md`.
@@ -71,7 +91,13 @@ To verify a doc someone edited by hand, or to redo the fix-up after manual table
 zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_finish.zsh --doc <id|url> --check-only
 ```
 
-Drop `--check-only` to apply the fix-up batch. Both are idempotent: a chip is not a plain link, so a second run finds nothing to convert, and a table already at its planned widths is kept. Add `--render-pages <dir>` to either form to inspect the rendered pages.
+Drop `--check-only` to apply the fix-up batch. Both are idempotent: a chip is not a plain link, so a second run finds nothing to convert, and a table already at its planned widths is kept. Add `--render-pages <dir>` to either form to inspect the rendered pages. Neither touches aside tabs; for those:
+
+```zsh
+zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_asides.zsh --rebuild --file <path/to/output.md> --doc <id|url> --dry-run
+```
+
+Drop `--dry-run` to rebuild. It reads the sections from the draft, so the draft must be the one the doc was published from.
 
 ### Measure a change
 

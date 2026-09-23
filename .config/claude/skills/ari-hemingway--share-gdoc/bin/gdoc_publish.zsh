@@ -2,8 +2,9 @@
 # Publish a markdown draft as a Google Doc and finish it in the same run: create (inside a
 # Drive folder with --folder, or in My Drive) or update in place with --doc via Drive's
 # markdown→Docs conversion, then style table header rows and verify every image fits one
-# page (gdoc_finish.zsh). Prints the URL. The draft's first line is the Doc title and is
-# not uploaded as body; --title overrides.
+# page (gdoc_finish.zsh), then rebuild the draft's asides as tabs (gdoc_asides.zsh; the
+# import deletes every tab but the first). Prints the URL. The draft's first line is the
+# Doc title and is not uploaded as body; --title overrides.
 
 set -euo pipefail
 
@@ -40,6 +41,7 @@ check_prerequisites() {
     command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
   done
   [[ -f "${SCRIPT_DIR}/gdoc_finish.zsh" ]] || missing+=("${SCRIPT_DIR}/gdoc_finish.zsh")
+  [[ -f "${SCRIPT_DIR}/gdoc_asides.zsh" ]] || missing+=("${SCRIPT_DIR}/gdoc_asides.zsh")
   if (( ${#missing} > 0 )); then
     log::err "Missing required commands or files | missing='${(j:, :)missing}'"
     return 1
@@ -110,6 +112,21 @@ upload_doc() {
   echo "updated"
 }
 
+#######################################
+# Rebuild the draft's asides as tabs on the published Doc; a no-op for a draft without asides.
+# Arguments: $1 - doc id, $2 - full draft path, $3 - aside count, $4 - first tab title ("" = leave)
+#######################################
+rebuild_asides() {
+  local doc="${1}" draft="${2}" n_asides="${3}" first_tab_title="${4}"
+  if (( n_asides == 0 )); then
+    log::info "No asides to rebuild | doc='${doc}'"
+    return 0
+  fi
+  local -a flags
+  [[ -n "${first_tab_title}" ]] && flags+=(--first-tab-title "${first_tab_title}")
+  zsh "${SCRIPT_DIR}/gdoc_asides.zsh" --rebuild --file "${draft}" --doc "${doc}" "${flags[@]}" > /dev/null
+}
+
 # --- Help ---
 
 help() {
@@ -124,11 +141,13 @@ ${c_bold}Options:${c_rst}
   --title TITLE      Doc title; keeps the whole file as body
   --doc ID_OR_URL    Update this existing Doc in place (replaces its whole body)
   --folder ID_OR_URL Create the Doc inside this Drive folder (id or drive.google.com/drive/folders URL); not with --doc
+  --first-tab-title T  With asides: rename the first tab (the import resets it to "Tab 1")
   --dry-run          Validate the Drive request; create/update nothing
   -h, --help         Show this help
 
 ${c_bold}Output:${c_rst} the Doc URL on stdout. Non-zero exit after "Doc created" means finishing failed
-(e.g. an image taller than one page); fix the draft and re-run with --doc URL.
+(e.g. an image taller than one page) or the aside tabs could not be rebuilt; fix the draft and
+re-run with --doc URL.
 EOH
 }
 
@@ -138,13 +157,14 @@ main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local file="" title="" doc="" folder="" dry_run=false
+  local file="" title="" doc="" folder="" first_tab_title="" dry_run=false
   while (( $# > 0 )); do case "${1}" in
     -h|--help)  help; return 0 ;;
     --file)     file="${2:?--file requires a value}"; shift 2 ;;
     --title)    title="${2:?--title requires a value}"; shift 2 ;;
     --doc)      doc="${2:?--doc requires a value}"; shift 2 ;;
     --folder)   folder="${2:?--folder requires a value}"; shift 2 ;;
+    --first-tab-title) first_tab_title="${2:?--first-tab-title requires a value}"; shift 2 ;;
     --dry-run)  dry_run=true; shift ;;
     -*)         log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)          log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
@@ -176,7 +196,12 @@ main() {
     log::err "Title line must be plain text, not a heading | title='${title}'"
     return 1
   fi
-  log::info "Staged body | title='${title}' body='${work}/body.md' bytes='$(wc -c < "${work}/body.md" | tr -d ' ')'"
+  # Aside sections leave the body before upload and come back as tabs after finishing; the
+  # full draft is kept because the rebuild reads the sections from it.
+  cp "${work}/body.md" "${work}/draft.md"
+  local n_asides
+  n_asides="$(zsh "${SCRIPT_DIR}/gdoc_asides.zsh" --split --file "${work}/draft.md" --body-out "${work}/body.md" --force)" || return 1
+  log::info "Staged body | title='${title}' body='${work}/body.md' bytes='$(wc -c < "${work}/body.md" | tr -d ' ')' asides='${n_asides}'"
 
   local folder_name=""
   if [[ -n "${folder}" ]]; then
@@ -188,7 +213,7 @@ main() {
   local action
   action="$(upload_doc "${title}" "${doc}" "${folder}" "${dry_run}" "${work}/drive_reply.json")"
   if [[ "${dry_run}" == "true" ]]; then
-    log::ok "Dry run valid | action='${action}' folder='${folder}' folder_name='${folder_name}' reply='${work}/drive_reply.json'"
+    log::ok "Dry run valid | action='${action}' folder='${folder}' folder_name='${folder_name}' asides='${n_asides}' reply='${work}/drive_reply.json'"
     return 0
   fi
 
@@ -203,6 +228,7 @@ main() {
 
   local finish_rc=0
   zsh "${SCRIPT_DIR}/gdoc_finish.zsh" --doc "${doc_id}" || finish_rc=$?
+  rebuild_asides "${doc_id}" "${work}/draft.md" "${n_asides}" "${first_tab_title}" || finish_rc=$?
   echo "${url}"
   return "${finish_rc}"
 }
