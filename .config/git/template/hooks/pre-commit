@@ -39,7 +39,7 @@ e - edit the offending file then ask again
 # A file has trailing whitespace
 function trailing_whitespace() {
   local -r file="${1:?}"
-  if grep -q '\s$' "$file"; then
+  if grep -Iq '\s$' "$file"; then  # -I: binary files (PNG, fonts) never match
     return 1
   fi
 }
