@@ -43,6 +43,7 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
+source "${SKILLS_DIR}/ari-hemingway--lib/lib/drive.zsh"
 
 # --- Prerequisites ---
 
@@ -502,6 +503,7 @@ main() {
   fi
 
   # === LOGIC ===
+  drive::check_token_scopes || return 1
   local work
   work="$(mktemp -d /tmp/gdoc_finish.XXXXXX)"
   fetch_doc "${doc}" "${work}/doc.json"

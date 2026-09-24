@@ -4,12 +4,13 @@
 # gdoc_asides.py; gdoc_publish.zsh runs both modes on every publish.
 #
 # Usage: zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_asides.zsh --split --file DRAFT.md --body-out BODY.md [--force]
-#        zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_asides.zsh --rebuild --file DRAFT.md --doc ID [--dry-run] [--first-tab-title T] [--bookmarks --script-id ID]
+#        zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_asides.zsh --rebuild --file DRAFT.md --doc ID [--dry-run] [--first-tab-title T]
 set -euo pipefail
 
 readonly SCRIPT_DIR="${0:A:h}"
-# Through the symlink farm, not ${SCRIPT_DIR:h:h}: skills are spread across dotfiles tiers.
+# Through the symlink farm, not ${SCRIPT_DIR:h:h}: skills are spread across dotfiles tiers. The
+# hemingway lib holds the Docs helpers this script shares with gdoc_bookmarks.py.
 readonly SKILLS_DIR="${HOME}/.claude/skills"
-export PYTHONPATH="${SKILLS_DIR}/ari-skill-pythonscripts/lib${PYTHONPATH:+:${PYTHONPATH}}"
+export PYTHONPATH="${SKILLS_DIR}/ari-skill-pythonscripts/lib:${SKILLS_DIR}/ari-hemingway--lib/lib${PYTHONPATH:+:${PYTHONPATH}}"
 export PYTHONDONTWRITEBYTECODE=1
 exec python3 "${SCRIPT_DIR}/gdoc_asides.py" "${@}"

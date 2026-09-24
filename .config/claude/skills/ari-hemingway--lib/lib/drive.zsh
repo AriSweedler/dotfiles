@@ -4,7 +4,7 @@
 #
 #   source "${SKILLS_DIR}/ari-hemingway--lib/lib/drive.zsh"
 #
-# Provides: drive::folder_id_from, drive::gws_call, drive::resolve_folder.
+# Provides: drive::folder_id_from, drive::gws_call, drive::resolve_folder, drive::check_token_scopes.
 
 if [[ -n "${_ARI_DRIVE_LIB_LOADED:-}" ]]; then
   return 0
@@ -14,6 +14,9 @@ typeset -g _ARI_DRIVE_LIB_LOADED=1
 readonly DRIVE_FOLDER_MIME="application/vnd.google-apps.folder"
 readonly DRIVE_FOLDER_FIELDS="id,name,mimeType,driveId,capabilities/canAddChildren"
 readonly DRIVE_GWS_TIMEOUT_SECS=30
+# Publishing a Doc needs both; `gws auth login` REPLACES the token's scope set on every run, so a
+# login for another service silently drops them and every Drive call then answers 403.
+readonly DRIVE_REQUIRED_SCOPES=(https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/drive)
 
 source "${SKILLS_DIR:-${HOME}/.claude/skills}/ari-skill-shellscripts/lib/run_with_timeout.zsh"
 
@@ -47,6 +50,34 @@ drive::gws_call() {
     log::err "gws call failed | args='${*}' exit_code='${exit_code}' error='$(tail -n 1 "${reply_file}.err" 2>/dev/null || true)'"
   fi
   return "${exit_code}"
+}
+
+#######################################
+# Fail early, with the login command that fixes it, when the gws token lacks the documents or
+# drive scope. The command lists the token's current scopes plus the missing ones, since a
+# login replaces the whole set. `gws auth status` prints JSON on its own and rejects --format.
+# Globals: DRIVE_REQUIRED_SCOPES
+# Returns: 1 when a required scope is missing or the status call fails
+#######################################
+drive::check_token_scopes() {
+  local status_json
+  if ! status_json="$(gws auth status 2>/dev/null)"; then
+    log::err "gws auth status failed; cannot verify token scopes | fix='gws auth login'"
+    return 1
+  fi
+  local -a have missing
+  have=("${(@f)$(print -r -- "${status_json}" | jq -r '.scopes[]?')}")
+  local scope
+  for scope in "${DRIVE_REQUIRED_SCOPES[@]}"; do
+    (( ${have[(Ie)${scope}]} )) || missing+=("${scope}")
+  done
+  if (( ${#missing} == 0 )); then
+    return 0
+  fi
+  local -a wanted
+  wanted=("${have[@]}" "${missing[@]}")
+  log::err "gws token lacks the scopes publishing needs; a login replaces the whole scope set, so pass every scope | missing='${(j:,:)missing}' fix='gws auth login --scopes ${(uj:,:)wanted}'"
+  return 1
 }
 
 #######################################

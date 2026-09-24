@@ -3,8 +3,9 @@
 # Drive folder with --folder, or in My Drive) or update in place with --doc via Drive's
 # markdown→Docs conversion, then style table header rows and verify every image fits one
 # page (gdoc_finish.zsh), then rebuild the draft's asides as tabs (gdoc_asides.zsh; the
-# import deletes every tab but the first). Prints the URL. The draft's first line is the
-# Doc title and is not uploaded as body; --title overrides.
+# import deletes every tab but the first), then bookmark the draft's #bm- runs and aside
+# markers when the structure-bookmark skill's setup passes. Prints the URL. The draft's first
+# line is the Doc title and is not uploaded as body; --title overrides.
 
 set -euo pipefail
 
@@ -17,6 +18,8 @@ readonly SKILLS_DIR="${HOME}/.claude/skills"
 
 readonly DOC_MIME="application/vnd.google-apps.document"
 readonly REPLY_FIELDS="id,name,parents,webViewLink"
+# The bookmark step is another skill's script; without it, return links stay on headings.
+readonly BOOKMARKS="${SKILLS_DIR}/ari-hemingway--structure-bookmark/bin/gdoc_bookmarks.zsh"
 
 # --- Logging ---
 
@@ -127,6 +130,28 @@ rebuild_asides() {
   zsh "${SCRIPT_DIR}/gdoc_asides.zsh" --rebuild --file "${draft}" --doc "${doc}" "${flags[@]}" > /dev/null
 }
 
+#######################################
+# Bookmark the draft's #bm- runs and aside markers when the structure-bookmark setup passes;
+# otherwise warn once with the first missing prerequisite and leave the heading links.
+# Globals: BOOKMARKS
+# Arguments: $1 - doc id, $2 - full draft path
+#######################################
+apply_bookmarks() {
+  local doc="${1}" draft="${2}"
+  if [[ ! -f "${BOOKMARKS}" ]]; then
+    log::warn "Bookmark skill not installed; return links stay on headings | path='${BOOKMARKS}'"
+    return 0
+  fi
+  local setup
+  if ! setup="$(zsh "${BOOKMARKS}" --check-setup 2>/dev/null)"; then
+    local missing
+    missing="$(print -r -- "${setup}" | awk '/^MISSING/ {print; exit}')"
+    log::warn "Bookmarks skipped; return links stay on headings | missing='${missing}'"
+    return 0
+  fi
+  zsh "${BOOKMARKS}" --apply --doc "${doc}" --file "${draft}" > /dev/null
+}
+
 # --- Help ---
 
 help() {
@@ -146,8 +171,9 @@ ${c_bold}Options:${c_rst}
   -h, --help         Show this help
 
 ${c_bold}Output:${c_rst} the Doc URL on stdout. Non-zero exit after "Doc created" means finishing failed
-(e.g. an image taller than one page) or the aside tabs could not be rebuilt; fix the draft and
-re-run with --doc URL.
+(e.g. an image taller than one page), the aside tabs could not be rebuilt, or the bookmark step
+failed after its setup check passed; fix the draft and re-run with --doc URL. A missing bookmark
+setup is a WARN, not a failure.
 EOH
 }
 
@@ -184,6 +210,7 @@ main() {
   fi
 
   # === LOGIC ===
+  drive::check_token_scopes || return 1
   # gws refuses --upload paths outside the cwd, so stage the body in a temp dir and cd there.
   local work
   work="$(mktemp -d /tmp/gdoc_publish.XXXXXX)"
@@ -229,6 +256,7 @@ main() {
   local finish_rc=0
   zsh "${SCRIPT_DIR}/gdoc_finish.zsh" --doc "${doc_id}" || finish_rc=$?
   rebuild_asides "${doc_id}" "${work}/draft.md" "${n_asides}" "${first_tab_title}" || finish_rc=$?
+  apply_bookmarks "${doc_id}" "${work}/draft.md" || finish_rc=$?
   echo "${url}"
   return "${finish_rc}"
 }
