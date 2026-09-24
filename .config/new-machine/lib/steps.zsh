@@ -696,6 +696,16 @@ steps::plugged_dir() {
   print -r -- "${HOME}/.config/plugged"
 }
 
+# Where bin/plugged's build lands: the shared Swift cache through swift-pkg, else SwiftPM's .build/.
+steps::plugged_binary() {
+  local dir="${1}" swift_pkg="${HOME}/.config/bin/swift-pkg"
+  if [[ -x "${swift_pkg}" ]]; then
+    zsh "${swift_pkg}" --path "${dir}"
+  else
+    print -r -- "${dir}/.build/release/plugged"
+  fi
+}
+
 check::plugged() {
   local dir
   dir="$(steps::plugged_dir)"
@@ -717,11 +727,13 @@ check::plugged() {
     verdict fail hooks_unwired -d "hooksPath='${hooks:-unset}'" -f "new-machine apply plugged"
     return 0
   fi
-  if [[ ! -x "${dir}/.build/release/plugged" ]]; then
-    verdict fail not_built -d "no release binary | path='${dir}/.build/release/plugged'" -f "new-machine apply plugged"
+  local binary
+  binary="$(steps::plugged_binary "${dir}")"
+  if [[ ! -x "${binary}" ]]; then
+    verdict fail not_built -d "no release binary | path='${binary}'" -f "new-machine apply plugged"
     return 0
   fi
-  verdict ok built -d "hooks='${hooks}' binary='.build/release/plugged'"
+  verdict ok built -d "hooks='${hooks}' binary='${binary}'"
 }
 
 apply::plugged() {
