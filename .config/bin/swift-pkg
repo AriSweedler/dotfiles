@@ -1,0 +1,63 @@
+#!/usr/bin/env zsh
+# swift-pkg — run a SwiftPM package's release binary from the shared Swift cache. The build
+# products live under $XDG_CACHE_HOME/swift/pkg/<name>, never in the package's .build/, and a
+# warm call skips SwiftPM entirely (its own up-to-date check costs seconds). See
+# ~/.config/zsh/plugins/swift_cache.zsh.
+set -euo pipefail
+
+readonly LOG_LIB="${XDG_CONFIG_HOME:-$HOME/.config}/zsh/plugins/log.zsh"
+if [[ ! -r "${LOG_LIB}" ]]; then
+  print -u2 "[ERROR] missing logging lib | path='${LOG_LIB}'"
+  exit 1
+fi
+source "${LOG_LIB}"
+source "${XDG_CONFIG_HOME:-$HOME/.config}/zsh/plugins/swift_cache.zsh"
+
+help() {
+  cat <<EOH
+swift-pkg — build a Swift package once into \$XDG_CACHE_HOME/swift/pkg/<name> and run it
+
+Usage:
+  swift-pkg [--build] [--product NAME] [-n] <package-dir> [args...]
+  swift-pkg --path [--product NAME] <package-dir>
+
+Options:
+  --build          Build now (even when up to date), print the binary path, do not run
+  --product NAME   Executable product when it is not named after the package directory
+  -n, --print      Build only if stale, print the binary path, do not run
+  --path           Print where the binary lives; builds nothing (for checks)
+  -h, --help       Show this help
+
+Everything after <package-dir> is passed to the binary. Exit code is the binary's.
+SWIFT_CACHE_SWIFTPM_DEFAULT=1 keeps SwiftPM's package cache at Apple's default location.
+EOH
+}
+
+main() {
+  local -a flags=()
+  local mode=run product=""
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)  help; return 0 ;;
+    --build)    flags+=(--build); mode=print; shift ;;
+    --product)  product="${2:?--product needs a name}"; flags+=(--product "${product}"); shift 2 ;;
+    -n|--print) mode=print; shift ;;
+    --path)     mode=path; shift ;;
+    -*)         log::err "unknown flag | flag='${1}'"; help; return 1 ;;
+    *)          break ;;
+  esac; done
+  (( $# > 0 )) || { log::err "missing <package-dir>"; help; return 1; }
+  local dir="${1}"; shift
+  if [[ "${mode}" == path ]]; then
+    swift_cache::pkg_binary "${dir}" "${product}"
+    return 0
+  fi
+  local bin
+  bin="$(swift_cache::pkg_bin_for "${flags[@]}" "${dir}")" || return 1
+  if [[ "${mode}" == print ]]; then
+    print -r -- "${bin}"
+    return 0
+  fi
+  exec "${bin}" "$@"
+}
+
+main "$@"

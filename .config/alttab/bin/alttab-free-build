@@ -40,7 +40,8 @@ readonly BUNDLE_ID="com.lwouis.alt-tab-macos"
 readonly INSTALL_APP="/Applications/AltTab.app"
 readonly BREW_CASK="alt-tab"
 readonly SCHEME="Release"
-readonly DERIVED_DATA="DerivedData"             # relative to the clone; gitignored upstream
+source "${HOME}/.config/zsh/plugins/swift_cache.zsh"
+readonly DERIVED_DATA="$(swift_cache::derived_data_path alttab-free)"   # kept between runs: rebuilds are incremental
 
 DRY_RUN=false
 
@@ -213,8 +214,7 @@ EOF
 #######################################
 build_app() {
   local src="${1}"
-  local build_log="${src}/${DERIVED_DATA}/alttab-free-build.log"
-  mkdir -p "${src}/${DERIVED_DATA}"
+  local build_log="${DERIVED_DATA}/alttab-free-build.log"
   log::info "Building; this takes a minute or more | scheme='${SCHEME}' log='${build_log}'"
   if ! ( cd "${src}" && xcodebuild -project alt-tab-macos.xcodeproj -scheme "${SCHEME}" \
           -configuration "${SCHEME}" -derivedDataPath "${DERIVED_DATA}" build >"${build_log}" 2>&1 ); then
@@ -293,8 +293,9 @@ remove_brew_cask() {
 }
 
 #######################################
-# Replace /Applications/AltTab.app with the built bundle and drop the DerivedData copy,
-# so Spotlight and LaunchServices see exactly one AltTab.
+# Replace /Applications/AltTab.app with the built bundle and drop the bundle from DerivedData
+# (the rest stays for the next incremental build), so Spotlight and LaunchServices see
+# exactly one AltTab.
 # Arguments: $1 built app bundle
 #######################################
 install_app() {
@@ -421,7 +422,7 @@ main() {
     return 1
   fi
 
-  local built_app="${src}/${DERIVED_DATA}/Build/Products/${SCHEME}/AltTab.app"
+  local built_app="${DERIVED_DATA}/Build/Products/${SCHEME}/AltTab.app"
   log::debug "Parsed args | ref='${ref}' src='${src}' patch='${patch}' identity='${identity}' build_only='${build_only}' launch='${launch}'"
 
   if [[ "${DRY_RUN}" == "true" ]]; then
@@ -432,7 +433,7 @@ main() {
 3. write ${src}/config/local.xcconfig (identity, version, deployment target 12.0, warnings not errors)
 4. xcodebuild scheme ${SCHEME} -> ${built_app}
 5. codesign --verify; check bundle id ${BUNDLE_ID}
-6. quit AltTab; brew uninstall --cask ${BREW_CASK} if installed; replace ${INSTALL_APP}; delete the DerivedData copy
+6. quit AltTab; brew uninstall --cask ${BREW_CASK} if installed; replace ${INSTALL_APP}; delete the built bundle from ${DERIVED_DATA}
 7. defaults write ${BUNDLE_ID} updatePolicy 0
 8. tccutil reset ScreenCapture/Accessibility ${BUNDLE_ID} if the code requirement changed
 9. open ${INSTALL_APP}"

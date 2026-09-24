@@ -1,7 +1,8 @@
 #!/usr/bin/env zsh
 # Render every page of a Google Docs PDF export to PNG so a caller can inspect the layout
-# (table wraps, mid-word breaks) that heights alone do not reveal. Uses PDFKit through `swift`,
-# which ships with Xcode's command line tools; nothing to install with brew.
+# (table wraps, mid-word breaks) that heights alone do not reveal. Uses PDFKit from a Swift
+# renderer that swift-run compiles once into the shared Swift cache; Xcode's command line
+# tools are all it needs, nothing to install with brew.
 set -euo pipefail
 
 readonly SCRIPT_DIR="${0:A:h}"
@@ -16,6 +17,7 @@ source "${LIB_LOGGING}"
 # --- Constants ---
 
 readonly RENDERER="${SCRIPT_DIR}/gdoc_render_pages.swift"
+readonly SWIFT_RUN="${HOME}/.config/bin/swift-run"
 readonly DEFAULT_SCALE="1.4"
 
 # --- Prerequisites ---
@@ -27,7 +29,7 @@ readonly DEFAULT_SCALE="1.4"
 #######################################
 check_prerequisites() {
   local missing=()
-  command -v swift >/dev/null 2>&1 || missing+=("swift (Xcode command line tools)")
+  [[ -x "${SWIFT_RUN}" ]] || missing+=("${SWIFT_RUN}")
   [[ -f "${RENDERER}" ]] || missing+=("${RENDERER}")
   if (( ${#missing} > 0 )); then
     log::err "Missing required commands or files | missing='${(j:, :)missing}'"
@@ -39,7 +41,7 @@ check_prerequisites() {
 
 help() {
   cat <<EOH
-${c_green}gdoc_render_pages${c_rst} — render a PDF export to one PNG per page (PDFKit via swift)
+${c_green}gdoc_render_pages${c_rst} — render a PDF export to one PNG per page (PDFKit via swift-run)
 
 ${c_bold}Usage:${c_rst}
   zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_render_pages.zsh --pdf FILE.pdf --out DIR [--scale N]
@@ -79,7 +81,7 @@ main() {
   # === LOGIC ===
   local listing count
   listing="$(mktemp)"
-  swift "${RENDERER}" "${pdf}" "${out}" "${scale}" > "${listing}"
+  "${SWIFT_RUN}" "${RENDERER}" "${pdf}" "${out}" "${scale}" > "${listing}"
   count="$(wc -l < "${listing}" | tr -d ' ')"
   cat "${listing}"
   log::ok "Rendered pages | pdf='${pdf}' out='${out}' pages='${count}' scale='${scale}'"

@@ -7,7 +7,8 @@
 #   1. A Swift binary (pbpastelinks-extract) reads every NSPasteboard flavor and returns
 #      HTML to stdout: public.html, Chromium's web-custom-data (including Slack's Quill
 #      JSON), public.rtf via NSAttributedString, Apple Web Archive. Source lives at
-#      ${SWIFT_SRC}; it's lazy-compiled to ${SWIFT_BIN} on first run.
+#      ${SWIFT_SRC}; swift-run compiles it once per source and toolchain into the shared
+#      Swift cache.
 #   2. The plain-text flavor (pbpaste) is the text a plain paste would produce, the source
 #      app's own rendering, so nothing but the links is at stake. Without one, the text is
 #      derived from the HTML.
@@ -29,7 +30,7 @@ readonly LOG_LIB="${HOME}/.config/zsh/plugins/log.zsh"
 source "${LOG_LIB}"
 
 readonly SWIFT_SRC="${HOME}/.config/bin/pbpastelinks-extract.swift"
-readonly SWIFT_BIN="${HOME}/.cache/pbpastelinks/extract"
+readonly SWIFT_RUN="${HOME}/.config/bin/swift-run"
 
 #######################################
 # Verify required binaries exist.
@@ -41,33 +42,12 @@ check_prerequisites() {
   for cmd in pbcopy pbpaste perl swiftc; do
     command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
   done
+  [[ -x "${SWIFT_RUN}" ]] || missing+=("${SWIFT_RUN}")
+  [[ -r "${SWIFT_SRC}" ]] || missing+=("${SWIFT_SRC}")
   if (( ${#missing} > 0 )); then
-    log::err "missing required commands | missing='${(j:, :)missing}'"
+    log::err "missing required commands or files | missing='${(j:, :)missing}'"
     return 1
   fi
-}
-
-#######################################
-# Compile the Swift extractor to ${SWIFT_BIN} if missing or older than source.
-# Globals: SWIFT_SRC, SWIFT_BIN
-# Returns: 1 on compile failure
-#######################################
-ensure_extractor() {
-  if [[ ! -r "${SWIFT_SRC}" ]]; then
-    log::err "missing swift source | path='${SWIFT_SRC}'"
-    return 1
-  fi
-  if [[ -x "${SWIFT_BIN}" && "${SWIFT_BIN}" -nt "${SWIFT_SRC}" ]]; then
-    return 0
-  fi
-  log::info "compiling extractor | src='${SWIFT_SRC}' bin='${SWIFT_BIN}'"
-  mkdir -p "${SWIFT_BIN:h}"
-  if swiftc -O -o "${SWIFT_BIN}" "${SWIFT_SRC}"; then
-    log::info "compiled | bin='${SWIFT_BIN}'"
-    return 0
-  fi
-  log::err "swift compile failed | src='${SWIFT_SRC}'"
-  return 1
 }
 
 help() {
@@ -133,18 +113,14 @@ main() {
     log::warn() { :; }
   fi
 
-  if [[ "${rebuild}" == "true" && -e "${SWIFT_BIN}" ]]; then
-    log::info "force rebuild | removing='${SWIFT_BIN}'"
-    rm -f "${SWIFT_BIN}"
-  fi
-
-  ensure_extractor || return 1
+  local -a run_flags=()
+  [[ "${rebuild}" == "true" ]] && run_flags+=(--rebuild)
 
   # === LOGIC ===
   # The extractor emits its own diagnostic block to stderr on failure (FAIL/hint/flavor
   # list/preview) and one "hit" line on success; its exit code passes through.
   local html rc=0
-  html="$("${SWIFT_BIN}")" || rc="${?}"
+  html="$("${SWIFT_RUN}" "${run_flags[@]}" "${SWIFT_SRC}")" || rc="${?}"
   if (( rc != 0 )); then
     return "${rc}"
   fi

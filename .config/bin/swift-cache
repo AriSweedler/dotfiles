@@ -1,0 +1,39 @@
+#!/usr/bin/env zsh
+# swift-cache — inspect and maintain the shared Swift build cache that swift-run and
+# swift-pkg fill. See ~/.config/zsh/plugins/swift_cache.zsh for the layout.
+set -euo pipefail
+
+readonly LOG_LIB="${XDG_CONFIG_HOME:-$HOME/.config}/zsh/plugins/log.zsh"
+if [[ ! -r "${LOG_LIB}" ]]; then
+  print -u2 "[ERROR] missing logging lib | path='${LOG_LIB}'"
+  exit 1
+fi
+source "${LOG_LIB}"
+source "${XDG_CONFIG_HOME:-$HOME/.config}/zsh/plugins/swift_cache.zsh"
+
+help() {
+  cat <<EOH
+swift-cache — the shared Swift build cache under \$XDG_CACHE_HOME/swift
+
+Usage:
+  swift-cache status            toolchain, every cached tool and package, sizes
+  swift-cache prune             drop binaries no tool points at and packages whose source is gone
+  swift-cache rebuild <name>    force one tool or package to build again
+  swift-cache path              print the cache root
+  swift-cache -h | --help
+EOH
+}
+
+main() {
+  case "${1:-}" in
+    status)  swift_cache::status ;;
+    prune)   swift_cache::prune ;;
+    rebuild) swift_cache::rebuild "${2:?rebuild needs a name}" ;;
+    path)    swift_cache::root ;;
+    -h|--help|help) help ;;
+    "")      help >&2; return 2 ;;
+    *)       log::err "unknown command | command='${1}'"; help >&2; return 2 ;;
+  esac
+}
+
+main "$@"
