@@ -7,7 +7,7 @@ const meta = {
 }
 
 const dict = {
-  d: deeplink("extensions/raycast/raycast/confetti"),
+  d: deeplink("extensions/raycast/raycast/confetti", { title: "Confetti", allowId: "builtin_command_confetti" }),
   s: script("script-example"),
   e: script("karabiner-edit-index"),
   r: script("karabiner-recompile"),
@@ -17,5 +17,5 @@ const dict = {
   v: app("Karabiner-EventViewer"),
 }
 
-const karabinerMode = new AriMode(meta, dict)
+export const karabinerMode = new AriMode(meta, dict)
 export default karabinerMode.asRule()

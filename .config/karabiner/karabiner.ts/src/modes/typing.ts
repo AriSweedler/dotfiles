@@ -51,10 +51,13 @@ const dict = {
   "s": typingTest("status"),
   "#": url(MONKEYTYPE_NUMBERS_URL, "numbers"),
   "x": typingBuilder,
-  "r": deeplink("extensions/raycast/typing-practice/start-typing-practice"),
+  "r": deeplink("extensions/raycast/typing-practice/start-typing-practice", {
+    title: "Typing Practice",
+    allowId: "builtin_command_typingPractice_start",
+  }),
 }
 
 export const typingBuilderRules = argBuilderRules(typingBuilder)
 
-const typingMode = new AriMode(meta, dict)
+export const typingMode = new AriMode(meta, dict)
 export default typingMode.asRule()

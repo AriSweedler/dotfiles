@@ -1,16 +1,21 @@
-import { hyperLayer, map, BasicManipulator, FromKeyCode, LayerKeyParam, Rule, ToEvent } from "karabiner.ts"
+import { hyperLayer, map, rule, BasicManipulator, FromKeyCode, LayerKeyParam, Modifier, Rule, ToEvent } from "karabiner.ts"
 import { Action, actionToTos, describeAction, helpLine } from "./actions.ts"
 import { argBuilderOpenEvents } from "./argbuilder.ts"
 import { allDevices } from "./devices.ts"
 
 // Re-export the action vocabulary so mode files keep a single import site.
-export { app, deeplink, key_code, script, url, which_keyboard } from "./actions.ts"
+export { app, deeplink, key_code, script, titleCase, url, which_keyboard } from "./actions.ts"
 export type { Action } from "./actions.ts"
 
-type Meta = {
-  entrypoint: string
+export type Meta = {
+  // The Hyper+<entrypoint> layer key. A mode without one has no layer (asRule() refuses) and
+  // reaches its actions only through directModifiers.
+  entrypoint?: string
   layerName: string
   description: string
+  // When set, every key of the dict also fires as a direct chord <directModifiers>+<key>,
+  // no layer needed (directRules()). Window management uses ["control", "option"].
+  directModifiers?: Modifier[]
 }
 
 // Karabiner runs shell_command with launchd's minimal PATH, so the notifier
@@ -104,13 +109,39 @@ export class AriMode {
   }
 
   asRule() {
-    const rule = hyperLayer(this.meta.entrypoint as LayerKeyParam, this.meta.layerName)
+    if (!this.meta.entrypoint) {
+      throw new Error(`mode has no layer entrypoint; use directRules() | layer=${this.meta.layerName}`)
+    }
+    const built = hyperLayer(this.meta.entrypoint as LayerKeyParam, this.meta.layerName)
       .description(this.toDescription())
       .leaderMode()
       .notification()
       .manipulators(this.toManipulators())
       .build()
-    this.patchShiftedKeys(rule)
-    return rule
+    this.patchShiftedKeys(built)
+    return built
+  }
+
+  // One rule per dict key: <directModifiers>+<key> fires the same action without the layer.
+  // Interactive kinds (argbuilder, which_keyboard) have no single to-list and are skipped.
+  directRules(): Rule[] {
+    const mods = this.meta.directModifiers ?? []
+    if (mods.length === 0) return []
+    return Object.entries(this.actionDict)
+      .filter(([, action]) => action.kind !== "argbuilder" && action.kind !== "which_keyboard")
+      .map(([key, action]) => {
+        const shifted = key in SHIFTED_KEYS
+        const fromMods: Modifier[] = shifted ? [...mods, "shift"] : mods
+        return rule(`${this.meta.layerName} direct: ${fromMods.join("+")}+${key} → ${describeAction(action)}`)
+          .manipulators([mapFrom(key).to(actionToTos(action))])
+          .build()
+      })
+      .map((built, i) => {
+        // hyperLayer-free path: set the mandatory modifiers on the single manipulator.
+        const [key] = Object.entries(this.actionDict).filter(([, a]) => a.kind !== "argbuilder" && a.kind !== "which_keyboard")[i]
+        const manipulator = built.manipulators[0] as BasicManipulator
+        manipulator.from.modifiers = { mandatory: key in SHIFTED_KEYS ? [...mods, "shift"] : mods }
+        return built
+      })
   }
 }

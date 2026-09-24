@@ -3,6 +3,7 @@
   "description": "karabiner config in karabiner.ts",
   "scripts": {
     "build": "tsx src/index.ts",
+    "bindings": "tsx src/generate_bindings.ts --stdout",
     "update": "npm update karabiner.ts"
   },
   "devDependencies": {

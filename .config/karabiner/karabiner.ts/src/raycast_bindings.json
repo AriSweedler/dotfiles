@@ -1,158 +1,303 @@
-[
-  {
-    "alias": "clipboard-history",
-    "title": "Clipboard History",
-    "path": "extensions/raycast/clipboard-history/clipboard-history",
-    "chord": "hyper+4"
-  },
-  {
-    "alias": "calendar-my-schedule",
-    "title": "My Schedule",
-    "path": "extensions/raycast/calendar/my-schedule",
-    "chord": "opt+s"
-  },
-  {
-    "alias": "go-aws",
-    "title": "Go AWS",
-    "path": "extensions/arisweedler/raycast-go-aws/command-go-aws",
-    "chord": "hyper+s"
-  },
-  {
-    "alias": "go-links",
-    "title": "Search Go Links (Auto-Open)",
-    "path": "extensions/benmusch/raycast-airtable-go-links/command-go-links",
-    "chord": "hyper+g"
-  },
-  {
-    "alias": "emoji-symbols",
-    "title": "Search Emoji & Symbols",
-    "path": "extensions/raycast/emoji-symbols/search-emoji-symbols",
-    "chord": "ctrl+cmd+spacebar"
-  },
-  {
-    "alias": "snippets",
-    "title": "Search Snippets",
-    "path": "extensions/raycast/snippets/search-snippets",
-    "chord": "hyper+grave_accent_and_tilde"
-  },
-  {
-    "alias": "wm-almost-maximize",
-    "title": "Almost Maximize",
-    "path": "extensions/raycast/window-management/almost-maximize",
-    "chord": "ctrl+opt+return_or_enter"
-  },
-  {
-    "alias": "wm-bottom-left-quarter",
-    "title": "Bottom Left Quarter",
-    "path": "extensions/raycast/window-management/bottom-left-quarter",
-    "chord": "ctrl+opt+j"
-  },
-  {
-    "alias": "wm-bottom-right-quarter",
-    "title": "Bottom Right Quarter",
-    "path": "extensions/raycast/window-management/bottom-right-quarter",
-    "chord": "ctrl+opt+k"
-  },
-  {
-    "alias": "wm-bottom-right-sixth",
-    "title": "Bottom Right Sixth",
-    "path": "extensions/raycast/window-management/bottom-right-sixth",
-    "chord": "ctrl+opt+r"
-  },
-  {
-    "alias": "wm-center",
-    "title": "Center",
-    "path": "extensions/raycast/window-management/center",
-    "chord": "ctrl+opt+c"
-  },
-  {
-    "alias": "wm-center-half",
-    "title": "Center Half",
-    "path": "extensions/raycast/window-management/center-half",
-    "chord": "ctrl+opt+m"
-  },
-  {
-    "alias": "wm-center-third",
-    "title": "Center Third",
-    "path": "extensions/raycast/window-management/center-third",
-    "chord": "ctrl+opt+w"
-  },
-  {
-    "alias": "wm-first-third",
-    "title": "First Third",
-    "path": "extensions/raycast/window-management/first-third",
-    "chord": "ctrl+opt+q"
-  },
-  {
-    "alias": "wm-last-third",
-    "title": "Last Third",
-    "path": "extensions/raycast/window-management/last-third",
-    "chord": "ctrl+opt+e"
-  },
-  {
-    "alias": "wm-left-half",
-    "title": "Left Half",
-    "path": "extensions/raycast/window-management/left-half",
-    "chord": "ctrl+opt+h"
-  },
-  {
-    "alias": "wm-make-larger",
-    "title": "Make Larger",
-    "path": "extensions/raycast/window-management/make-larger",
-    "chord": "ctrl+opt+equal_sign"
-  },
-  {
-    "alias": "wm-make-smaller",
-    "title": "Make Smaller",
-    "path": "extensions/raycast/window-management/make-smaller",
-    "chord": "ctrl+opt+hyphen"
-  },
-  {
-    "alias": "wm-next-desktop",
-    "title": "Next Desktop",
-    "path": "extensions/raycast/window-management/next-desktop",
-    "chord": "ctrl+opt+close_bracket"
-  },
-  {
-    "alias": "wm-next-display",
-    "title": "Next Display",
-    "path": "extensions/raycast/window-management/next-display",
-    "chord": "ctrl+opt+period"
-  },
-  {
-    "alias": "wm-previous-desktop",
-    "title": "Previous Desktop",
-    "path": "extensions/raycast/window-management/previous-desktop",
-    "chord": "ctrl+opt+open_bracket"
-  },
-  {
-    "alias": "wm-previous-display",
-    "title": "Previous Display",
-    "path": "extensions/raycast/window-management/previous-display",
-    "chord": "ctrl+opt+comma"
-  },
-  {
-    "alias": "wm-restore",
-    "title": "Restore",
-    "path": "extensions/raycast/window-management/restore",
-    "chord": "ctrl+opt+delete_or_backspace"
-  },
-  {
-    "alias": "wm-right-half",
-    "title": "Right Half",
-    "path": "extensions/raycast/window-management/right-half",
-    "chord": "ctrl+opt+l"
-  },
-  {
-    "alias": "wm-top-left-quarter",
-    "title": "Top Left Quarter",
-    "path": "extensions/raycast/window-management/top-left-quarter",
-    "chord": "ctrl+opt+u"
-  },
-  {
-    "alias": "wm-top-right-quarter",
-    "title": "Top Right Quarter",
-    "path": "extensions/raycast/window-management/top-right-quarter",
-    "chord": "ctrl+opt+i"
-  }
-]
+{
+  "$generated": "by bake from karabiner.ts/src/*.ts (modes/*.ts, raycast_shortcuts.ts); do not edit",
+  "bindings": [
+    {
+      "allowId": "extension_raycast-go-aws.command-go-aws__dev",
+      "chords": [
+        "hyper+s"
+      ],
+      "path": "extensions/arisweedler/raycast-go-aws/command-go-aws",
+      "title": "Go AWS"
+    },
+    {
+      "allowId": "extension_raycast-airtable-go-links.command-go-links__dev",
+      "chords": [
+        "hyper+g"
+      ],
+      "path": "extensions/benmusch/raycast-airtable-go-links/command-go-links",
+      "title": "Search Go Links (Auto-Open)"
+    },
+    {
+      "allowId": "builtin_command_calendar_schedule",
+      "chords": [
+        "opt+s"
+      ],
+      "path": "extensions/raycast/calendar/my-schedule",
+      "title": "My Schedule"
+    },
+    {
+      "allowId": "builtin_command_clipboardHistory",
+      "chords": [
+        "hyper+4"
+      ],
+      "path": "extensions/raycast/clipboard-history/clipboard-history",
+      "title": "Clipboard History"
+    },
+    {
+      "allowId": "builtin_command_searchEmoji",
+      "chords": [
+        "ctrl+cmd+spacebar"
+      ],
+      "path": "extensions/raycast/emoji-symbols/search-emoji-symbols",
+      "title": "Search Emoji & Symbols"
+    },
+    {
+      "allowId": "builtin_command_confetti",
+      "chords": [
+        "hyper+k d"
+      ],
+      "path": "extensions/raycast/raycast/confetti",
+      "title": "Confetti"
+    },
+    {
+      "allowId": "builtin_command_searchSnippets",
+      "chords": [
+        "hyper+grave_accent_and_tilde"
+      ],
+      "path": "extensions/raycast/snippets/search-snippets",
+      "title": "Search Snippets"
+    },
+    {
+      "allowId": "builtin_command_typingPractice_start",
+      "chords": [
+        "hyper+t r"
+      ],
+      "path": "extensions/raycast/typing-practice/start-typing-practice",
+      "title": "Typing Practice"
+    },
+    {
+      "allowId": "builtin_command_windowManagementMaximizeAlmost",
+      "chords": [
+        "ctrl+opt+return_or_enter"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/almost-maximize",
+      "title": "Almost Maximize"
+    },
+    {
+      "allowId": "builtin_command_windowManagementBottomCenterSixth",
+      "chords": [
+        "ctrl+opt+x"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/bottom-center-sixth",
+      "title": "Bottom Center Sixth"
+    },
+    {
+      "allowId": "builtin_command_windowManagementBottomLeftQuarter",
+      "chords": [
+        "ctrl+opt+j"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/bottom-left-quarter",
+      "title": "Bottom Left Quarter"
+    },
+    {
+      "allowId": "builtin_command_windowManagementBottomLeftSixth",
+      "chords": [
+        "ctrl+opt+z"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/bottom-left-sixth",
+      "title": "Bottom Left Sixth"
+    },
+    {
+      "allowId": "builtin_command_windowManagementBottomRightQuarter",
+      "chords": [
+        "ctrl+opt+k"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/bottom-right-quarter",
+      "title": "Bottom Right Quarter"
+    },
+    {
+      "allowId": "builtin_command_windowManagementBottomRightSixth",
+      "chords": [
+        "ctrl+opt+v"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/bottom-right-sixth",
+      "title": "Bottom Right Sixth"
+    },
+    {
+      "allowId": "builtin_command_windowManagementCenter",
+      "chords": [
+        "ctrl+opt+c"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/center",
+      "title": "Center"
+    },
+    {
+      "allowId": "builtin_command_windowManagementCenterThird",
+      "chords": [
+        "ctrl+opt+w"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/center-third",
+      "title": "Center Third"
+    },
+    {
+      "allowId": "builtin_command_windowManagementFirstThird",
+      "chords": [
+        "ctrl+opt+q"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/first-third",
+      "title": "First Third"
+    },
+    {
+      "allowId": "builtin_command_windowManagementLastThird",
+      "chords": [
+        "ctrl+opt+e"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/last-third",
+      "title": "Last Third"
+    },
+    {
+      "allowId": "builtin_command_windowManagementLeftHalf",
+      "chords": [
+        "ctrl+opt+h"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/left-half",
+      "title": "Left Half"
+    },
+    {
+      "allowId": "builtin_command_windowManagementMakeLarger",
+      "chords": [
+        "ctrl+opt+equal_sign"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/make-larger",
+      "title": "Make Larger"
+    },
+    {
+      "allowId": "builtin_command_windowManagementMakeSmaller",
+      "chords": [
+        "ctrl+opt+hyphen"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/make-smaller",
+      "title": "Make Smaller"
+    },
+    {
+      "allowId": "builtin_command_windowManagementNextDesktop",
+      "chords": [
+        "ctrl+opt+close_bracket"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/next-desktop",
+      "title": "Next Desktop"
+    },
+    {
+      "allowId": "builtin_command_windowManagementNextDisplay",
+      "chords": [
+        "ctrl+opt+period"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/next-display",
+      "title": "Next Display"
+    },
+    {
+      "allowId": "builtin_command_windowManagementPreviousDesktop",
+      "chords": [
+        "ctrl+opt+open_bracket"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/previous-desktop",
+      "title": "Previous Desktop"
+    },
+    {
+      "allowId": "builtin_command_windowManagementPreviousDisplay",
+      "chords": [
+        "ctrl+opt+comma"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/previous-display",
+      "title": "Previous Display"
+    },
+    {
+      "allowId": "builtin_command_windowManagementReasonableSize",
+      "chords": [
+        "ctrl+opt+r"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/reasonable-size",
+      "title": "Reasonable Size"
+    },
+    {
+      "allowId": "builtin_command_windowManagementRestore",
+      "chords": [
+        "ctrl+opt+delete_or_backspace"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/restore",
+      "title": "Restore"
+    },
+    {
+      "allowId": "builtin_command_windowManagementRightHalf",
+      "chords": [
+        "ctrl+opt+l"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/right-half",
+      "title": "Right Half"
+    },
+    {
+      "allowId": "builtin_command_windowManagementToggleFullscreen",
+      "chords": [
+        "ctrl+opt+f"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/toggle-fullscreen",
+      "title": "Toggle Fullscreen"
+    },
+    {
+      "allowId": "builtin_command_windowManagementTopCenterSixth",
+      "chords": [
+        "ctrl+opt+s"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/top-center-sixth",
+      "title": "Top Center Sixth"
+    },
+    {
+      "allowId": "builtin_command_windowManagementTopLeftQuarter",
+      "chords": [
+        "ctrl+opt+u"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/top-left-quarter",
+      "title": "Top Left Quarter"
+    },
+    {
+      "allowId": "builtin_command_windowManagementTopLeftSixth",
+      "chords": [
+        "ctrl+opt+a"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/top-left-sixth",
+      "title": "Top Left Sixth"
+    },
+    {
+      "allowId": "builtin_command_windowManagementTopRightQuarter",
+      "chords": [
+        "ctrl+opt+i"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/top-right-quarter",
+      "title": "Top Right Quarter"
+    },
+    {
+      "allowId": "builtin_command_windowManagementTopRightSixth",
+      "chords": [
+        "ctrl+opt+d"
+      ],
+      "keepFocus": true,
+      "path": "extensions/raycast/window-management/top-right-sixth",
+      "title": "Top Right Sixth"
+    }
+  ]
+}

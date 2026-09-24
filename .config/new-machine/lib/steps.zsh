@@ -8,9 +8,9 @@
 typeset -g NEW_MACHINE_STEPS_LOADED=1
 
 typeset -gra STEPS=(brew brew_pkgs brew_drift dotfiles_repo local_dotfiles_repo bob_neovim claude
-                    terminal_nerdfont karabiner claude_notifications claude_skills chrome_exoskeleton
+                    terminal_nerdfont karabiner raycast_allow claude_notifications claude_skills chrome_exoskeleton
                     plugged dotfiles_jobs)
-typeset -gA STEP_NEEDS=([brew_pkgs]=brew [brew_drift]=brew [terminal_nerdfont]=brew [chrome_exoskeleton]=dotfiles_repo [plugged]=dotfiles_repo [dotfiles_jobs]=dotfiles_repo)
+typeset -gA STEP_NEEDS=([brew_pkgs]=brew [brew_drift]=brew [terminal_nerdfont]=brew [raycast_allow]=dotfiles_repo [chrome_exoskeleton]=dotfiles_repo [plugged]=dotfiles_repo [dotfiles_jobs]=dotfiles_repo)
 typeset -gA STEP_DESC=(
   [brew]="Homebrew is installed"
   [brew_pkgs]="every item declared in the merged Brewfiles is installed (brew bundle check/install --no-upgrade)"
@@ -21,6 +21,7 @@ typeset -gA STEP_DESC=(
   [claude]="Claude Code installed"
   [terminal_nerdfont]="a Nerd Font cask is installed and at least one Terminal.app profile uses a Nerd Font"
   [karabiner]="karabiner.json exists, is valid JSON, and is jq -S sorted; healthcheck runs when present"
+  [raycast_allow]="every Raycast command bound in Karabiner is on Raycast's deeplink allow-list, so no 'Always allow' prompt (raycast-link --allow)"
   [claude_notifications]="Claude Code hooks wired: Notification → notification-fire.sh, PreToolUse guard → pretooluse-headless-chrome-guard.sh; terminal-notifier resolves"
   [claude_skills]="every skill a dotfiles tier holds is symlinked into ~/.claude/skills and no link dangles"
   [chrome_exoskeleton]="the Chrome Exoskeleton submodule has its dependencies (which wire its hooks) and a built dist/"
@@ -525,6 +526,45 @@ check::karabiner() {
 
 apply::karabiner() {
   run_cmd_mutating "${HOME}/.config/karabiner/bin/bake"
+}
+
+# ── raycast_allow ────────────────────────────────────────────────────────────
+# Every Raycast command Karabiner binds is launched by deeplink, and Raycast asks "Always allow"
+# once per command unless its id is in com.raycast.macos alwaysAllowCommandDeeplinking. The ids
+# are declared beside the bindings (raycast_bindings.json, allowId); raycast-link --allow writes
+# the missing ones. Compile state is the karabiner step's verdict, so only the allow column of
+# raycast-link --check is read here.
+check::raycast_allow() {
+  local raycast_link="${HOME}/.config/bin/raycast-link"
+  if [[ ! -d /Applications/Raycast.app ]]; then
+    verdict skip no_raycast -d "Raycast is not installed"
+    return 0
+  fi
+  if [[ ! -x "${raycast_link}" ]]; then
+    verdict fail raycast_link_missing -d "raycast-link missing | path='${raycast_link}'" -f "new-machine apply dotfiles_repo"
+    return 0
+  fi
+  if ! command -v defaults >/dev/null 2>&1; then
+    verdict skip no_defaults -d "defaults not found; cannot read Raycast's plist"
+    return 0
+  fi
+  local out
+  out="$("${raycast_link}" --check 2>/dev/null)" || true
+  local -a lines=("${(@f)out}")
+  local -a not_allowed=(${(M)lines:#* NOT-ALLOWED}) no_id=(${(M)lines:#* no-allow-id})
+  if (( ${#not_allowed} )); then
+    verdict fail raycast_not_allowed -d "commands Raycast would still ask to confirm | count='${#not_allowed}'"$'\n'"${(F)not_allowed}" -f "new-machine apply raycast_allow"
+    return 0
+  fi
+  if (( ${#no_id} )); then
+    verdict warn raycast_no_allow_id -d "bindings without an allowId | count='${#no_id}'"$'\n'"${(F)no_id}" -f "add allowId to the deeplink in karabiner.ts/src (modes/*.ts or raycast_shortcuts.ts; its header says how to find one), then bake"
+    return 0
+  fi
+  verdict ok allowed -d "every binding is on Raycast's allow-list | count='${#lines}'"
+}
+
+apply::raycast_allow() {
+  run_cmd_mutating "${HOME}/.config/bin/raycast-link" --allow
 }
 
 # ── claude_notifications ─────────────────────────────────────────────────────

@@ -1,17 +1,16 @@
 import { map, rule, type FromKeyParam, type Modifier } from "karabiner.ts"
-import { actionToTos, deeplink, to_key_code } from "./utils/actions.ts"
-import bindings from "./raycast_bindings.json"
+import { actionToTos, to_key_code } from "./utils/actions.ts"
+import { raycastShortcuts } from "./raycast_shortcuts.ts"
 
-// Raycast actions bound in Karabiner, declared once in raycast_bindings.json. The raycast-link
-// widget (zsh/plugins/raycast_link.zsh) renders "<Raycast: Clipboard History | key: '✦4'>" from
-// the same file this compiles, so the key Claude prints is the key Karabiner has. Raycast's own hotkeys live in its
-// encrypted store and cannot be read, which is why the source of truth is here.
+// Compiles raycast_shortcuts.ts (direct chord → Raycast deeplink) into Karabiner rules. The
+// window-management chords come from modes/window.ts (directModifiers), not from here. The
+// raycast-link widget reads raycast_bindings.json, which bake GENERATES from both tables
+// (generate_bindings.ts); nothing reads that JSON at compile time.
 //
-// Chord grammar: "+"-joined lowercase tokens, modifiers first, one key last. The key is a
-// karabiner key name (a-z, 0-9, spacebar, return_or_enter, equal_sign, open_bracket, …) or one
-// of the symbol aliases in utils/actions.ts (=, -, [, ], ., ,, `, ⏎, ⌫):
+// Chord grammar: "+"-joined tokens, modifiers first, one key last. The key is a karabiner key
+// name (a-z, 0-9, spacebar, return_or_enter, equal_sign, open_bracket, …) or one of the symbol
+// aliases in utils/actions.ts (=, -, [, ], ., ,, `, ⏎, ⌫):
 //   hyper+4   cmd+shift+k   ctrl+opt+return_or_enter   ctrl+opt+]   hyper+`
-type Binding = { alias: string; title: string; path: string; chord: string }
 
 const MODIFIER_ALIASES: Record<string, Modifier[]> = {
   hyper: ["control", "option", "shift", "command"],
@@ -28,7 +27,7 @@ const MODIFIER_ALIASES: Record<string, Modifier[]> = {
   caps_lock: ["caps_lock"],
 }
 
-const parseChord = (chord: string): { key: FromKeyParam; modifiers: Modifier[] } => {
+export const parseChord = (chord: string): { key: FromKeyParam; modifiers: Modifier[] } => {
   const tokens = chord.split("+")
   const rawKey = tokens.pop()
   if (!rawKey) throw new Error(`chord has no key | chord=${chord}`)
@@ -42,9 +41,9 @@ const parseChord = (chord: string): { key: FromKeyParam; modifiers: Modifier[] }
   return { key: key as unknown as FromKeyParam, modifiers: [...modifiers] }
 }
 
-export const raycastRules = (bindings as Binding[]).map((binding) => {
-  const { key, modifiers } = parseChord(binding.chord)
+export const raycastRules = raycastShortcuts.map(({ chord, action }) => {
+  const { key, modifiers } = parseChord(chord)
   let manipulator = map(key, modifiers)
-  for (const to of actionToTos(deeplink(binding.path))) manipulator = manipulator.to(to)
-  return rule(`${binding.title} → raycast://${binding.path}`).manipulators([manipulator])
+  for (const to of actionToTos(action)) manipulator = manipulator.to(to)
+  return rule(`${action.title} → raycast://${action.path}`).manipulators([manipulator])
 })

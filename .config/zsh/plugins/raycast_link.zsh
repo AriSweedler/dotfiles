@@ -2,20 +2,40 @@
 # brackets wrap the link and are not part of it:
 #   <[Raycast: Clipboard History | key: '✦4'](raycast://extensions/raycast/clipboard-history/clipboard-history)>
 #
-# Bindings are declared once, in karabiner.ts/src/raycast_bindings.json. karabiner.ts compiles
-# that file into Karabiner rules (src/raycast.ts) and this plugin renders it, so the binding a
-# message shows is the binding the keyboard has. Raycast's own hotkeys sit in its encrypted store
-# and cannot be read or set from a shell; the Karabiner binding is the one that is versioned.
+# The bindings live in karabiner.ts's TypeScript tables (src/modes/*.ts, src/raycast_shortcuts.ts),
+# which bake compiles into Karabiner rules. This plugin asks the same toolchain for them
+# (`tsx src/generate_bindings.ts --stdout`, the module `npm run build` also uses to write
+# src/raycast_bindings.json), so what a message shows is what the keyboard has; that JSON file
+# is bake's artifact for reading and diffing (canonicalised by json-sort, like every generated
+# JSON in the dotfiles), not an input here. To change a binding: edit the table, run bake.
+# Raycast's own hotkey settings stay empty for anything bound here; its encrypted store cannot
+# be read or set from a shell anyway.
 #
-# Usage: raycast_link <alias> [--plain] | --list | --check | --set <alias> <chord> [--path P --title T]
-# Env (tests point these at fixtures): RAYCAST_LINK_BINDINGS, RAYCAST_LINK_KARABINER_JSON,
-# RAYCAST_LINK_BAKE.
+# An entry is addressed by its command slug, the last segment of the deeplink path
+# (clipboard-history, left-half, my-schedule), or by the full path. Chords: a direct chord is
+# "ctrl+opt+h" (rendered ⌃⌥H); a layer chord is "hyper+k d" (space = then, rendered ✦K D).
+# --check verifies direct chords against the compiled karabiner.json exactly (`open -g` iff
+# keepFocus); layer chords are reported as `layer`, not verified.
+#
+# Raycast asks "Always allow" once per command launched by deeplink and keeps the answers in the
+# plain plist com.raycast.macos (alwaysAllowCommandDeeplinking, <id> = 1); each binding's allowId
+# names its key, and --allow writes the missing ones so the prompt never shows. bake and
+# new-machine run --allow.
+#
+# Usage: raycast_link <slug|path> [--plain] | --list | --check | --allow [--dry-run]
+# Env: RAYCAST_LINK_KARABINER_TS (the karabiner.ts checkout), RAYCAST_LINK_KARABINER_JSON,
+# RAYCAST_LINK_DEFAULTS_DOMAIN (a domain name or a plist path), RAYCAST_LINK_BINDINGS_CMD (test
+# seam: a command whose stdout is the bindings JSON, e.g. `cat fixture.json`).
 
 (( ${+functions[log::info]} )) || source "${${(%):-%x}:A:h}/log.zsh"
 
-: "${RAYCAST_LINK_BINDINGS:=${XDG_CONFIG_HOME:-${HOME}/.config}/karabiner/karabiner.ts/src/raycast_bindings.json}"
+: "${RAYCAST_LINK_KARABINER_TS:=${XDG_CONFIG_HOME:-${HOME}/.config}/karabiner/karabiner.ts}"
 : "${RAYCAST_LINK_KARABINER_JSON:=${XDG_CONFIG_HOME:-${HOME}/.config}/karabiner/karabiner.json}"
-: "${RAYCAST_LINK_BAKE:=${XDG_CONFIG_HOME:-${HOME}/.config}/karabiner/bin/bake}"
+: "${RAYCAST_LINK_DEFAULTS_DOMAIN:=com.raycast.macos}"
+: "${RAYCAST_LINK_BINDINGS_CMD:=}"
+typeset -gr RAYCAST_LINK_ALLOW_KEY="alwaysAllowCommandDeeplinking"
+# One generator run per invocation; keyed by the seam so a test that swaps fixtures reloads.
+typeset -g RAYCAST_LINK_BINDINGS_CACHE="" RAYCAST_LINK_BINDINGS_CACHE_KEY=""
 
 # Raycast's shortcut convention, the one place to edit: the Karabiner Hyper set is ✦, any other
 # modifier set is glyphs in macOS order with no separators, keys get their glyph or upper-case.
@@ -27,7 +47,7 @@ typeset -gA RAYCAST_LINK_GLYPHS=(
   grave_accent_and_tilde '`'  semicolon ';'  quote "'"  slash /  backslash '\'
 )
 # Symbol and word aliases for keys, normalized to karabiner key names before anything else
-# looks at them; the same set utils/actions.ts accepts, so the JSON may use either spelling.
+# looks at them; the same set utils/actions.ts accepts, so a table may use either spelling.
 typeset -gA RAYCAST_LINK_KEY_ALIASES=(
   '=' equal_sign  '-' hyphen  minus hyphen
   '[' open_bracket  ']' close_bracket  '.' period  ',' comma
@@ -47,7 +67,67 @@ typeset -gA RAYCAST_LINK_MODIFIER_ALIASES=(
   caps caps_lock  caps_lock caps_lock
 )
 
-# Input: a chord like hyper+4 or cmd+shift+k. Output: two lines, the key and the modifiers in
+# --- bindings source ---
+
+# Loads the bindings document into RAYCAST_LINK_BINDINGS_CACHE (current shell, so callers may
+# read the global after this returns). Runs the seam command when set, else the karabiner.ts
+# generator through its own tsx.
+function raycast_link::load_bindings() {
+  local key="${RAYCAST_LINK_BINDINGS_CMD}|${RAYCAST_LINK_KARABINER_TS}" out
+  if [[ -n "${RAYCAST_LINK_BINDINGS_CACHE}" && "${RAYCAST_LINK_BINDINGS_CACHE_KEY}" == "${key}" ]]; then
+    return 0
+  fi
+  if [[ -n "${RAYCAST_LINK_BINDINGS_CMD}" ]]; then
+    if ! out="$(eval "${RAYCAST_LINK_BINDINGS_CMD}")"; then
+      log::err "Bindings command failed | cmd='${RAYCAST_LINK_BINDINGS_CMD}'"
+      return 1
+    fi
+  else
+    local tsx="${RAYCAST_LINK_KARABINER_TS}/node_modules/.bin/tsx"
+    if [[ ! -x "${tsx}" ]]; then
+      log::err "karabiner.ts not built | fix='run bake' tsx='${tsx}'"
+      return 1
+    fi
+    if ! out="$(cd "${RAYCAST_LINK_KARABINER_TS}" && "${tsx}" src/generate_bindings.ts --stdout 2>/dev/null)"; then
+      log::err "Bindings generator failed | fix='run bake' dir='${RAYCAST_LINK_KARABINER_TS}'"
+      return 1
+    fi
+    # Modules the generator imports log their setup on stdout (karabiner_script prints the repo
+    # and npm paths); the document is the one line that is a JSON object.
+    out="$(print -r -- "${out}" | awk '/^\{/ { line = $0 } END { print line }')"
+  fi
+  if ! print -r -- "${out}" | jq -e '.bindings | type == "array"' >/dev/null 2>&1; then
+    log::err "Bindings output is not the expected JSON | expected='{\"bindings\": [...]}' head='${${out//$'\n'/ }[1,80]}'"
+    return 1
+  fi
+  RAYCAST_LINK_BINDINGS_CACHE="${out}"
+  RAYCAST_LINK_BINDINGS_CACHE_KEY="${key}"
+}
+
+# Output: one compact JSON line per binding, in generator order (sorted by path).
+function raycast_link::entries() {
+  print -r -- "${RAYCAST_LINK_BINDINGS_CACHE}" | jq -c '.bindings[]'
+}
+
+# Input: an entry. Output: its command slug, the last segment of the path.
+function raycast_link::slug() {
+  print -r -- "${1}" | jq -r '.path | split("/") | last'
+}
+
+# Input: a slug or a full path. Output: the entry; exit 1 naming the known slugs when absent.
+function raycast_link::entry() {
+  local selector="${1}" entry
+  entry="$(print -r -- "${RAYCAST_LINK_BINDINGS_CACHE}" | jq -c --arg s "${selector}" '.bindings[] | select(.path == $s or (.path | split("/") | last) == $s)')"
+  if [[ -z "${entry}" ]]; then
+    log::err "Unknown command | selector='${selector}' known='$(print -r -- "${RAYCAST_LINK_BINDINGS_CACHE}" | jq -r '[.bindings[].path | split("/") | last] | join(", ")')' source='karabiner.ts/src (modes/*.ts, raycast_shortcuts.ts)'"
+    return 1
+  fi
+  print -r -- "${entry}"
+}
+
+# --- chords ---
+
+# Input: one combo like hyper+4 or cmd+shift+k. Output: two lines, the key and the modifiers in
 # canonical order (space-joined, may be empty). Exit 1 with a log::err on a bad token.
 function raycast_link::parse_chord() {
   local chord="${1}" token modifier key
@@ -76,7 +156,7 @@ function raycast_link::parse_chord() {
   print -r -- "${(j: :)ordered}"
 }
 
-# Input: a chord. Output: its glyph string, e.g. ✦4, ⌃⌥⇧K, ⌘⇧⏎.
+# Input: one combo. Output: its glyph string, e.g. ✦4, ⌃⌥⇧K, ⇧⌘⏎.
 function raycast_link::render_binding() {
   local -a parsed
   parsed=("${(@f)$(raycast_link::parse_chord "${1}")}")
@@ -97,52 +177,153 @@ function raycast_link::render_binding() {
   print -r -- "${out}"
 }
 
-# Input: alias. Output: its entry as one compact JSON line; exit 1 naming the file when absent.
-function raycast_link::entry() {
-  local alias_="${1}" entry
-  if [[ ! -r "${RAYCAST_LINK_BINDINGS}" ]]; then
-    log::err "Bindings file missing | file='${RAYCAST_LINK_BINDINGS}'"
-    return 1
-  fi
-  entry="$(jq -c --arg a "${alias_}" '.[] | select(.alias == $a)' "${RAYCAST_LINK_BINDINGS}")"
-  if [[ -z "${entry}" ]]; then
-    log::err "Unknown alias | alias='${alias_}' file='${RAYCAST_LINK_BINDINGS}' known='$(jq -r '[.[].alias] | join(", ")' "${RAYCAST_LINK_BINDINGS}")'"
-    return 1
-  fi
-  print -r -- "${entry}"
+# Input: a chord, direct ("ctrl+opt+h") or layer ("hyper+k d", space = then). Output: glyphs per
+# step, space-joined: ⌃⌥H, ✦K D.
+function raycast_link::render_chord() {
+  local step rendered
+  local -a out
+  for step in "${(@s: :)1}"; do
+    rendered="$(raycast_link::render_binding "${step}")" || return 1
+    out+=("${rendered}")
+  done
+  print -r -- "${(j: :)out}"
 }
 
-# Input: path, key, canonical modifiers. Exit 0 iff the compiled karabiner.json has a manipulator
-# from that key with exactly those mandatory modifiers whose first to-event opens the deeplink.
+# Input: an entry. Output: every chord rendered, space-joined.
+function raycast_link::render_entry_chords() {
+  local chord
+  local -a out
+  for chord in "${(@f)$(print -r -- "${1}" | jq -r '.chords[]')}"; do
+    out+=("$(raycast_link::render_chord "${chord}")")
+  done
+  print -r -- "${(j: :)out}"
+}
+
+# --- compiled state ---
+
+# Input: path, key, canonical modifiers, keepFocus (true/false). Exit 0 iff the compiled
+# karabiner.json has a manipulator from that key with exactly those mandatory modifiers whose
+# first to-event opens the deeplink in the form the entry asks for: `open -g` iff keepFocus.
 function raycast_link::compiled_has() {
-  local path_="${1}" key="${2}" modifiers="${3}" want found
+  local path_="${1}" key="${2}" modifiers="${3}" keep_focus="${4:-false}" want found cmd
   [[ -r "${RAYCAST_LINK_KARABINER_JSON}" ]] || return 1
   want="$(print -r -- "${modifiers}" | tr ' ' '\n' | sed '/^$/d' | sort | paste -sd, -)"
-  found="$(jq -r --arg cmd "open raycast://${path_}" --arg key "${key}" \
+  cmd="open raycast://${path_}"
+  [[ "${keep_focus}" == true ]] && cmd="open -g raycast://${path_}"
+  found="$(jq -r --arg cmd "${cmd}" --arg key "${key}" \
     '[.profiles[].complex_modifications.rules[].manipulators[]
       | select((.to[0].shell_command? // "") == $cmd and (.from.key_code? // "") == $key)
       | ((.from.modifiers.mandatory // []) | sort | join(","))] | .[]' "${RAYCAST_LINK_KARABINER_JSON}" 2>/dev/null)"
   [[ $'\n'"${found}"$'\n' == *$'\n'"${want}"$'\n'* ]]
 }
 
-# Input: an entry JSON line. Exit 0 iff it is compiled.
-function raycast_link::entry_compiled() {
-  local entry="${1}"
+# Input: an entry. Output: OK when every direct chord is compiled, MISSING when any is not,
+# layer when the entry has only layer chords (not verified).
+function raycast_link::entry_status() {
+  local entry="${1}" chord path_ keep_focus status_word=layer
   local -a parsed
-  parsed=("${(@f)$(raycast_link::parse_chord "$(print -r -- "${entry}" | jq -r .chord)")}")
-  (( ${#parsed} >= 1 )) || return 1
-  raycast_link::compiled_has "$(print -r -- "${entry}" | jq -r .path)" "${parsed[1]}" "${parsed[2]:-}"
+  path_="$(print -r -- "${entry}" | jq -r .path)"
+  keep_focus="$(print -r -- "${entry}" | jq -r '.keepFocus // false')"
+  for chord in "${(@f)$(print -r -- "${entry}" | jq -r '.chords[]')}"; do
+    [[ "${chord}" == *" "* ]] && continue
+    parsed=("${(@f)$(raycast_link::parse_chord "${chord}")}")
+    if (( ${#parsed} == 0 )) || ! raycast_link::compiled_has "${path_}" "${parsed[1]}" "${parsed[2]:-}" "${keep_focus}"; then
+      status_word=MISSING
+    elif [[ "${status_word}" == layer ]]; then
+      status_word=OK
+    fi
+  done
+  print -r -- "${status_word}"
 }
 
-# Input: alias, plain flag (0/1). Output: the widget line.
+# --- Raycast allow-list ---
+
+# Output: the ids Raycast already allows, one per line. `defaults read` prints the dict in the
+# old plist syntax (`"id" = 1;`), the same for a domain name and for a plist path, so it is
+# parsed rather than exported; a domain without the key reads as empty.
+function raycast_link::allowed_ids() {
+  defaults read "${RAYCAST_LINK_DEFAULTS_DOMAIN}" "${RAYCAST_LINK_ALLOW_KEY}" 2>/dev/null \
+    | awk '$0 ~ /= 1;[[:space:]]*$/ { key = $1; gsub(/"/, "", key); print key }'
+  return 0
+}
+
+# Input: an entry, the allowed ids (newline-joined). Output: allowed | NOT-ALLOWED | no-allow-id.
+function raycast_link::entry_allow_state() {
+  local entry="${1}" allowed="${2}" id
+  id="$(print -r -- "${entry}" | jq -r '.allowId // empty')"
+  if [[ -z "${id}" ]]; then
+    print -r -- "no-allow-id"
+  elif [[ $'\n'"${allowed}"$'\n' == *$'\n'"${id}"$'\n'* ]]; then
+    print -r -- "allowed"
+  else
+    print -r -- "NOT-ALLOWED"
+  fi
+}
+
+# Write the allowIds Raycast does not yet allow, and only those, so the deeplink confirmation
+# never shows for a bound command. Idempotent; exit 0 when nothing is missing. With dry_run=1
+# nothing is written and the would-be additions are reported.
+function raycast_link::allow() {
+  local dry_run="${1:-0}" entry alias_ id allowed state
+  local -a added already no_id would_ids
+  if ! command -v defaults >/dev/null 2>&1; then
+    log::err "defaults not found; cannot sync Raycast's allow-list | domain='${RAYCAST_LINK_DEFAULTS_DOMAIN}'"
+    return 1
+  fi
+  allowed="$(raycast_link::allowed_ids)"
+  for entry in "${(@f)$(raycast_link::entries)}"; do
+    alias_="$(raycast_link::slug "${entry}")"
+    state="$(raycast_link::entry_allow_state "${entry}" "${allowed}")"
+    case "${state}" in
+      allowed)     already+=("${alias_}") ;;
+      no-allow-id) no_id+=("${alias_}") ;;
+      NOT-ALLOWED)
+        id="$(print -r -- "${entry}" | jq -r .allowId)"
+        would_ids+=("${id}")
+        if (( dry_run )); then
+          added+=("${alias_}")
+        elif defaults write "${RAYCAST_LINK_DEFAULTS_DOMAIN}" "${RAYCAST_LINK_ALLOW_KEY}" -dict-add "${id}" -bool true; then
+          added+=("${alias_}")
+        else
+          log::err "defaults write failed | domain='${RAYCAST_LINK_DEFAULTS_DOMAIN}' id='${id}' alias='${alias_}'"
+          return 1
+        fi ;;
+    esac
+  done
+  if (( dry_run )); then
+    log::info "Raycast allow-list dry run | would_add='${#added}' already='${#already}' no_allow_id='${#no_id}' domain='${RAYCAST_LINK_DEFAULTS_DOMAIN}' would_add_aliases='${(j:, :)added}'"
+    cat <<EOF
+dry_run=1
+would_add=${#added}
+already=${#already}
+no_allow_id=${#no_id}
+would_add_aliases=${(j:,:)added}
+would_add_ids=${(j:,:)would_ids}
+no_allow_id_aliases=${(j:,:)no_id}
+EOF
+    return 0
+  fi
+  log::info "Raycast allow-list synced | added='${#added}' already='${#already}' no_allow_id='${#no_id}' domain='${RAYCAST_LINK_DEFAULTS_DOMAIN}' added_aliases='${(j:, :)added}' no_allow_id_aliases='${(j:, :)no_id}'"
+  cat <<EOF
+added=${#added}
+already=${#already}
+no_allow_id=${#no_id}
+added_aliases=${(j:,:)added}
+no_allow_id_aliases=${(j:,:)no_id}
+EOF
+}
+
+# --- modes ---
+
+# Input: slug or path, plain flag (0/1). Output: the widget line; the key shown is the first chord.
 function raycast_link::widget() {
-  local alias_="${1}" plain="${2}" entry title path_ chord binding suffix=""
-  entry="$(raycast_link::entry "${alias_}")" || return 1
+  local selector="${1}" plain="${2}" entry title path_ first binding suffix=""
+  entry="$(raycast_link::entry "${selector}")" || return 1
   title="$(print -r -- "${entry}" | jq -r .title)"
   path_="$(print -r -- "${entry}" | jq -r .path)"
-  chord="$(print -r -- "${entry}" | jq -r .chord)"
-  binding="$(raycast_link::render_binding "${chord}")" || return 1
-  raycast_link::entry_compiled "${entry}" || suffix=" (not compiled yet)"
+  first="$(print -r -- "${entry}" | jq -r '.chords[0]')"
+  binding="$(raycast_link::render_chord "${first}")" || return 1
+  [[ "$(raycast_link::entry_status "${entry}")" == MISSING ]] && suffix=" (not compiled yet)"
   local text="Raycast: ${title} | key: '${binding}'${suffix}"
   if (( plain )); then
     print -r -- "<${text}> raycast://${path_}"
@@ -151,93 +332,66 @@ function raycast_link::widget() {
   fi
 }
 
-# Output: one line per binding: alias, binding, title, deeplink.
+# Output: one line per binding: slug, every chord rendered, title, deeplink.
 function raycast_link::list() {
-  local entry alias_ chord
-  [[ -r "${RAYCAST_LINK_BINDINGS}" ]] || { log::err "Bindings file missing | file='${RAYCAST_LINK_BINDINGS}'"; return 1; }
-  for entry in "${(@f)$(jq -c '.[]' "${RAYCAST_LINK_BINDINGS}")}"; do
-    alias_="$(print -r -- "${entry}" | jq -r .alias)"
-    chord="$(print -r -- "${entry}" | jq -r .chord)"
-    print -r -- "${alias_}  $(raycast_link::render_binding "${chord}")  $(print -r -- "${entry}" | jq -r .title)  raycast://$(print -r -- "${entry}" | jq -r .path)"
+  local entry
+  for entry in "${(@f)$(raycast_link::entries)}"; do
+    print -r -- "$(raycast_link::slug "${entry}")  $(raycast_link::render_entry_chords "${entry}")  $(print -r -- "${entry}" | jq -r .title)  raycast://$(print -r -- "${entry}" | jq -r .path)"
   done
 }
 
-# Output: OK or MISSING per alias against the compiled karabiner.json; exit 1 if any is missing.
+# Output: per slug, OK / MISSING (direct chords against the compiled karabiner.json) or layer
+# (only layer chords, not verified), the chords, then the Raycast allow state. Exit 1 only on a
+# MISSING; the allow state is advisory, --allow fixes it.
 function raycast_link::check() {
-  local entry alias_ status_word rc=0
-  [[ -r "${RAYCAST_LINK_BINDINGS}" ]] || { log::err "Bindings file missing | file='${RAYCAST_LINK_BINDINGS}'"; return 1; }
-  for entry in "${(@f)$(jq -c '.[]' "${RAYCAST_LINK_BINDINGS}")}"; do
-    alias_="$(print -r -- "${entry}" | jq -r .alias)"
-    if raycast_link::entry_compiled "${entry}"; then
-      status_word=OK
-    else
-      status_word=MISSING; rc=1
-    fi
-    print -r -- "${status_word} ${alias_} $(raycast_link::render_binding "$(print -r -- "${entry}" | jq -r .chord)")"
+  local entry alias_ status_word allowed rc=0
+  allowed="$(raycast_link::allowed_ids)"
+  for entry in "${(@f)$(raycast_link::entries)}"; do
+    alias_="$(raycast_link::slug "${entry}")"
+    status_word="$(raycast_link::entry_status "${entry}")"
+    [[ "${status_word}" == MISSING ]] && rc=1
+    print -r -- "${status_word} ${alias_} $(raycast_link::render_entry_chords "${entry}") $(raycast_link::entry_allow_state "${entry}" "${allowed}")"
   done
-  (( rc )) && log::err "Bindings not compiled | karabiner_json='${RAYCAST_LINK_KARABINER_JSON}' fix='run bake (raycast-link --set does)'"
+  (( rc )) && log::err "Bindings not compiled | karabiner_json='${RAYCAST_LINK_KARABINER_JSON}' fix='run bake'"
   return "${rc}"
-}
-
-# Input: alias, chord, optional path and title (required for a new alias). Upserts the JSON,
-# runs bake so Karabiner picks the rule up, then checks.
-function raycast_link::set() {
-  local alias_="${1}" chord="${2}" path_="${3:-}" title="${4:-}" tmp existing
-  raycast_link::parse_chord "${chord}" >/dev/null || return 1
-  [[ -r "${RAYCAST_LINK_BINDINGS}" ]] || { log::err "Bindings file missing | file='${RAYCAST_LINK_BINDINGS}'"; return 1; }
-  existing="$(jq -c --arg a "${alias_}" '.[] | select(.alias == $a)' "${RAYCAST_LINK_BINDINGS}")"
-  if [[ -z "${existing}" && ( -z "${path_}" || -z "${title}" ) ]]; then
-    log::err "New alias needs --path and --title | alias='${alias_}' path='${path_}' title='${title}'"
-    return 1
-  fi
-  tmp="${RAYCAST_LINK_BINDINGS}.tmp.$$"
-  jq --arg a "${alias_}" --arg c "${chord}" --arg p "${path_}" --arg t "${title}" '
-    if any(.[]; .alias == $a) then
-      map(if .alias == $a then .chord = $c | (if $p != "" then .path = $p else . end) | (if $t != "" then .title = $t else . end) else . end)
-    else
-      . + [{alias: $a, title: $t, path: $p, chord: $c}]
-    end' "${RAYCAST_LINK_BINDINGS}" > "${tmp}" && mv "${tmp}" "${RAYCAST_LINK_BINDINGS}"
-  log::info "Binding written | alias='${alias_}' chord='${chord}' file='${RAYCAST_LINK_BINDINGS}'"
-  if [[ ! -x "${RAYCAST_LINK_BAKE}" ]]; then
-    log::err "bake not found | bake='${RAYCAST_LINK_BAKE}'"
-    return 1
-  fi
-  XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-${HOME}/.config}" "${RAYCAST_LINK_BAKE}" >&2 || { log::err "bake failed | bake='${RAYCAST_LINK_BAKE}'"; return 1; }
-  raycast_link::check
 }
 
 function raycast_link::help() {
   cat >&2 <<EOF
 raycast-link — a Raycast action as a link with its Karabiner binding
 
-  raycast-link <alias>            markdown: <[Raycast: Title | key: '✦4'](raycast://path)>
-  raycast-link <alias> --plain    <Raycast: Title | key: '✦4'> raycast://path
-  raycast-link --list             one line per binding
-  raycast-link --check            OK/MISSING per binding against the compiled karabiner.json
-  raycast-link --set <alias> <chord> [--path P --title T]   upsert, bake, check
+  raycast-link <slug|path>          markdown: <[Raycast: Title | key: '✦4'](raycast://path)>
+  raycast-link <slug|path> --plain  <Raycast: Title | key: '✦4'> raycast://path
+                                  slug = the deeplink path's last segment: clipboard-history, left-half, my-schedule
+  raycast-link --list             one line per binding: slug, every chord (✦K D = Hyper+K then D), title, deeplink
+  raycast-link --check            OK/MISSING per binding (direct chords, against the compiled karabiner.json;
+                                  layer chords show as 'layer' and are not verified), plus allowed/NOT-ALLOWED/no-allow-id
+  raycast-link --allow [--dry-run]   write the missing allowIds to Raycast's plist so no deeplink asks "Always allow"
 
-Bindings: ${RAYCAST_LINK_BINDINGS}
+Bindings come from karabiner.ts's tables: ${RAYCAST_LINK_KARABINER_TS}/src/modes/*.ts and
+src/raycast_shortcuts.ts, read through its generator. To change one, edit the table and run bake
+(which also regenerates src/raycast_bindings.json, an artifact for reading, and runs --allow).
 EOF
 }
 
 function raycast_link() {
-  local mode="" alias_="" chord="" path_="" title="" plain=0
+  local mode="" selector="" plain=0 dry_run=0
   while (( $# > 0 )); do case "${1}" in
-    -h|--help) raycast_link::help; return 0 ;;
-    --plain)   plain=1; shift ;;
-    --list)    mode=list; shift ;;
-    --check)   mode=check; shift ;;
-    --set)     mode=set; alias_="${2:?--set needs <alias> <chord>}"; chord="${3:?--set needs <alias> <chord>}"; shift 3 ;;
-    --path)    path_="${2:?--path needs a value}"; shift 2 ;;
-    --title)   title="${2:?--title needs a value}"; shift 2 ;;
-    -*)        log::err "Unknown flag | flag='${1}'"; raycast_link::help; return 1 ;;
-    *)         [[ -z "${mode}" ]] && mode=widget; alias_="${1}"; shift ;;
+    -h|--help)  raycast_link::help; return 0 ;;
+    --plain)    plain=1; shift ;;
+    --dry-run)  dry_run=1; shift ;;
+    --list)     mode=list; shift ;;
+    --check)    mode=check; shift ;;
+    --allow)    mode=allow; shift ;;
+    -*)         log::err "Unknown flag | flag='${1}' hint='to change a binding, edit karabiner.ts/src/modes/*.ts or raycast_shortcuts.ts and run bake'"; raycast_link::help; return 1 ;;
+    *)          [[ -z "${mode}" ]] && mode=widget; selector="${1}"; shift ;;
   esac; done
+  [[ -n "${mode}" ]] || { raycast_link::help; return 1; }
+  raycast_link::load_bindings || return 1
   case "${mode}" in
-    widget) raycast_link::widget "${alias_}" "${plain}" ;;
+    widget) raycast_link::widget "${selector}" "${plain}" ;;
     list)   raycast_link::list ;;
     check)  raycast_link::check ;;
-    set)    raycast_link::set "${alias_}" "${chord}" "${path_}" "${title}" ;;
-    *)      raycast_link::help; return 1 ;;
+    allow)  raycast_link::allow "${dry_run}" ;;
   esac
 }

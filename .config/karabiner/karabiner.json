@@ -1664,1033 +1664,6 @@
             ]
           },
           {
-            "description": "(hyper + w): Window management\n\n• `⌫` → restore\n• `⏎` → almost-maximize\n• `h` → left-half\n• `l` → right-half\n• `q` → left-third\n• `w` → center-third\n• `e` → right-third\n• `u` → top-left-quarter\n• `i` → top-right-quarter\n• `j` → bottom-left-quarter\n• `k` → bottom-right-quarter\n• `c` → center\n• `r` → reasonable-size\n• `f` → toggle-fullscreen\n• `-` → make-smaller\n• `=` → make-larger\n• `,` → previous-display\n• `.` → next-display\n• `[` → previous-desktop\n• `]` → next-desktop",
-            "manipulators": [
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_unless",
-                    "value": 1
-                  },
-                  {
-                    "name": "__layer",
-                    "type": "variable_unless",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "w",
-                  "modifiers": {
-                    "mandatory": [
-                      "command",
-                      "option",
-                      "control",
-                      "shift"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 1
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 1
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": "(hyper + w): Window management\n\n• `⌫` → restore\n• `⏎` → almost-maximize\n• `h` → left-half\n• `l` → right-half\n• `q` → left-third\n• `w` → center-third\n• `e` → right-third\n• `u` → top-left-quarter\n• `i` → top-right-quarter\n• `j` → bottom-left-quarter\n• `k` → bottom-right-quarter\n• `c` → center\n• `r` → reasonable-size\n• `f` → toggle-fullscreen\n• `-` → make-smaller\n• `=` → make-larger\n• `,` → previous-display\n• `.` → next-display\n• `[` → previous-desktop\n• `]` → next-desktop"
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "delete_or_backspace",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "delete_or_backspace",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "return_or_enter",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "return_or_enter",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "h",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "h",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "l",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "l",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "q",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "q",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "w",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "w",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "e",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "e",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "u",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "u",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "i",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "i",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "j",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "j",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "k",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "k",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "c",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "c",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "r",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "r",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "f",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "f",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "hyphen",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "hyphen",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "equal_sign",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "equal_sign",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "comma",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "comma",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "period",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "period",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "open_bracket",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "open_bracket",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "close_bracket",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "key_code": "close_bracket",
-                    "modifiers": [
-                      "control",
-                      "option"
-                    ]
-                  },
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "escape",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              },
-              {
-                "conditions": [
-                  {
-                    "name": "window-mode",
-                    "type": "variable_if",
-                    "value": 1
-                  }
-                ],
-                "from": {
-                  "key_code": "caps_lock",
-                  "modifiers": {
-                    "mandatory": [
-                      "any"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "set_variable": {
-                      "name": "window-mode",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_variable": {
-                      "name": "__layer",
-                      "value": 0
-                    }
-                  },
-                  {
-                    "set_notification_message": {
-                      "id": "layer-window-mode",
-                      "text": ""
-                    }
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
             "description": "argbuilder: typing",
             "manipulators": [
               {
@@ -3835,6 +2808,52 @@
             ]
           },
           {
+            "description": "Search Emoji & Symbols → raycast://extensions/raycast/emoji-symbols/search-emoji-symbols",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "spacebar",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "command"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open raycast://extensions/raycast/emoji-symbols/search-emoji-symbols"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "Search Snippets → raycast://extensions/raycast/snippets/search-snippets",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "grave_accent_and_tilde",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option",
+                      "shift",
+                      "command"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open raycast://extensions/raycast/snippets/search-snippets"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
             "description": "Go AWS → raycast://extensions/arisweedler/raycast-go-aws/command-go-aws",
             "manipulators": [
               {
@@ -3883,405 +2902,7 @@
             ]
           },
           {
-            "description": "Search Emoji & Symbols → raycast://extensions/raycast/emoji-symbols/search-emoji-symbols",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "spacebar",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "command"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open raycast://extensions/raycast/emoji-symbols/search-emoji-symbols"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Search Snippets → raycast://extensions/raycast/snippets/search-snippets",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "grave_accent_and_tilde",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option",
-                      "shift",
-                      "command"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open raycast://extensions/raycast/snippets/search-snippets"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Almost Maximize → raycast://extensions/raycast/window-management/almost-maximize",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "return_or_enter",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open -g raycast://extensions/raycast/window-management/almost-maximize"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Bottom Left Quarter → raycast://extensions/raycast/window-management/bottom-left-quarter",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "j",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open -g raycast://extensions/raycast/window-management/bottom-left-quarter"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Bottom Right Quarter → raycast://extensions/raycast/window-management/bottom-right-quarter",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "k",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open -g raycast://extensions/raycast/window-management/bottom-right-quarter"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Bottom Right Sixth → raycast://extensions/raycast/window-management/bottom-right-sixth",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "r",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open -g raycast://extensions/raycast/window-management/bottom-right-sixth"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Center → raycast://extensions/raycast/window-management/center",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "c",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open -g raycast://extensions/raycast/window-management/center"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Center Half → raycast://extensions/raycast/window-management/center-half",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "m",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open -g raycast://extensions/raycast/window-management/center-half"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Center Third → raycast://extensions/raycast/window-management/center-third",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "w",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open -g raycast://extensions/raycast/window-management/center-third"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "First Third → raycast://extensions/raycast/window-management/first-third",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "q",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open -g raycast://extensions/raycast/window-management/first-third"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Last Third → raycast://extensions/raycast/window-management/last-third",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "e",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open -g raycast://extensions/raycast/window-management/last-third"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Left Half → raycast://extensions/raycast/window-management/left-half",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "h",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open -g raycast://extensions/raycast/window-management/left-half"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Make Larger → raycast://extensions/raycast/window-management/make-larger",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "equal_sign",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open -g raycast://extensions/raycast/window-management/make-larger"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Make Smaller → raycast://extensions/raycast/window-management/make-smaller",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "hyphen",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open -g raycast://extensions/raycast/window-management/make-smaller"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Next Desktop → raycast://extensions/raycast/window-management/next-desktop",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "close_bracket",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open -g raycast://extensions/raycast/window-management/next-desktop"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Next Display → raycast://extensions/raycast/window-management/next-display",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "period",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open -g raycast://extensions/raycast/window-management/next-display"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Previous Desktop → raycast://extensions/raycast/window-management/previous-desktop",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "open_bracket",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open -g raycast://extensions/raycast/window-management/previous-desktop"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Previous Display → raycast://extensions/raycast/window-management/previous-display",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "comma",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open -g raycast://extensions/raycast/window-management/previous-display"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
-            "description": "Restore → raycast://extensions/raycast/window-management/restore",
+            "description": "window-management direct: control+option+⌫ → deeplink: extensions/raycast/window-management/restore",
             "manipulators": [
               {
                 "from": {
@@ -4303,7 +2924,51 @@
             ]
           },
           {
-            "description": "Right Half → raycast://extensions/raycast/window-management/right-half",
+            "description": "window-management direct: control+option+⏎ → deeplink: extensions/raycast/window-management/almost-maximize",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "return_or_enter",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/almost-maximize"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+h → deeplink: extensions/raycast/window-management/left-half",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "h",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/left-half"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+l → deeplink: extensions/raycast/window-management/right-half",
             "manipulators": [
               {
                 "from": {
@@ -4325,7 +2990,73 @@
             ]
           },
           {
-            "description": "Top Left Quarter → raycast://extensions/raycast/window-management/top-left-quarter",
+            "description": "window-management direct: control+option+q → deeplink: extensions/raycast/window-management/first-third",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "q",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/first-third"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+w → deeplink: extensions/raycast/window-management/center-third",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "w",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/center-third"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+e → deeplink: extensions/raycast/window-management/last-third",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "e",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/last-third"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+u → deeplink: extensions/raycast/window-management/top-left-quarter",
             "manipulators": [
               {
                 "from": {
@@ -4347,7 +3078,7 @@
             ]
           },
           {
-            "description": "Top Right Quarter → raycast://extensions/raycast/window-management/top-right-quarter",
+            "description": "window-management direct: control+option+i → deeplink: extensions/raycast/window-management/top-right-quarter",
             "manipulators": [
               {
                 "from": {
@@ -4362,6 +3093,380 @@
                 "to": [
                   {
                     "shell_command": "open -g raycast://extensions/raycast/window-management/top-right-quarter"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+j → deeplink: extensions/raycast/window-management/bottom-left-quarter",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "j",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/bottom-left-quarter"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+k → deeplink: extensions/raycast/window-management/bottom-right-quarter",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "k",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/bottom-right-quarter"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+c → deeplink: extensions/raycast/window-management/center",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "c",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/center"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+r → deeplink: extensions/raycast/window-management/reasonable-size",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "r",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/reasonable-size"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+f → deeplink: extensions/raycast/window-management/toggle-fullscreen",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "f",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/toggle-fullscreen"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+a → deeplink: extensions/raycast/window-management/top-left-sixth",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "a",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/top-left-sixth"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+s → deeplink: extensions/raycast/window-management/top-center-sixth",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "s",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/top-center-sixth"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+d → deeplink: extensions/raycast/window-management/top-right-sixth",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "d",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/top-right-sixth"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+z → deeplink: extensions/raycast/window-management/bottom-left-sixth",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "z",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/bottom-left-sixth"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+x → deeplink: extensions/raycast/window-management/bottom-center-sixth",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "x",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/bottom-center-sixth"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+v → deeplink: extensions/raycast/window-management/bottom-right-sixth",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "v",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/bottom-right-sixth"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+- → deeplink: extensions/raycast/window-management/make-smaller",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "hyphen",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/make-smaller"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+= → deeplink: extensions/raycast/window-management/make-larger",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "equal_sign",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/make-larger"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+, → deeplink: extensions/raycast/window-management/previous-display",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "comma",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/previous-display"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+. → deeplink: extensions/raycast/window-management/next-display",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "period",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/next-display"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+[ → deeplink: extensions/raycast/window-management/previous-desktop",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "open_bracket",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/previous-desktop"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+] → deeplink: extensions/raycast/window-management/next-desktop",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "close_bracket",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/next-desktop"
                   }
                 ],
                 "type": "basic"

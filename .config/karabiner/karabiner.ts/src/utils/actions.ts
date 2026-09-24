@@ -6,7 +6,19 @@ import { karabiner_script } from "./macros.ts"
 // generation lives in argbuilder.ts so this module stays import-cycle-free.
 
 // --- Types ---
-export type Deeplink = { kind: "deeplink"; path: string }
+// A deeplink carries what the raycast-link widget needs (generate_bindings.ts): the path is the
+// identity (its last segment, the command slug, is how the widget is addressed), title defaults
+// to the slug title-cased, allowId is the key Raycast stores under alwaysAllowCommandDeeplinking
+// once "Always allow" is clicked (raycast-link --allow writes it).
+export type Deeplink = {
+  kind: "deeplink"
+  path: string
+  title: string
+  keepFocus?: boolean
+  allowId?: string
+}
+export type DeeplinkOptions = { title?: string; keepFocus?: boolean; allowId?: string }
+export const deeplinkSlug = (path: string): string => path.split("/").filter(Boolean).pop() ?? path
 export type Url = { kind: "url"; url: string; label?: string }
 export type Script = { kind: "script"; name: string; args?: string[] }
 export type App = { kind: "app"; name: string }
@@ -26,7 +38,15 @@ export type ArgBuilder = {
 export type Action = Deeplink | Url | Script | App | KeyCode | WhichKeyboard | ArgBuilder
 
 // --- Constructors (the argbuilder constructor lives with its engine) ---
-export const deeplink = (path: string): Deeplink => ({ kind: "deeplink", path })
+export const titleCase = (slug: string): string =>
+  slug.split(/[-_]+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(" ")
+export const deeplink = (path: string, opts: DeeplinkOptions = {}): Deeplink => ({
+  kind: "deeplink",
+  path,
+  title: opts.title ?? titleCase(deeplinkSlug(path)),
+  ...(opts.keepFocus ? { keepFocus: true } : {}),
+  ...(opts.allowId ? { allowId: opts.allowId } : {}),
+})
 export const url = (u: string, label?: string): Url => ({ kind: "url", url: u, label })
 export const script = (name: string, args?: string[]): Script => ({ kind: "script", name, args })
 export const app = (name: string): App => ({ kind: "app", name })
@@ -69,7 +89,9 @@ export const to_key_code = (key: string): ToKeyCode => KEY_CODE_ALIASES[key] ?? 
 export const actionToTos = (action: Action): ToEvent[] => {
   switch (action.kind) {
     case "deeplink":
-      return [{ shell_command: `open raycast://${action.path}` }]
+      // keepFocus adds -g so the front window stays frontmost: Raycast's window commands act on
+      // whatever is in front, and a plain `open` activates Raycast first. Opt-in per action.
+      return [{ shell_command: `open${action.keepFocus ? " -g" : ""} raycast://${action.path}` }]
     case "url":
       return [{ shell_command: `open ${JSON.stringify(action.url)}` }]
     case "script":

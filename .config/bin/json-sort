@@ -1,0 +1,4 @@
+#!/usr/bin/env zsh
+# Thin wrapper for non-interactive callers (bake, scripts); logic lives in the plugin.
+source "${ZDOTDIR:-${HOME}/.config/zsh}/plugins/json_sort.zsh"
+json_sort "$@"

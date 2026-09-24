@@ -14,5 +14,5 @@ const dict = {
   "z": app("Zoom"),
 }
 
-const applicationMode = new AriMode(meta, dict)
+export const applicationMode = new AriMode(meta, dict)
 export default applicationMode.asRule()
