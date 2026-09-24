@@ -17,6 +17,6 @@ git df config core.hooksPath ~/.config/git/dotfiles-hooks
 ## Hooks
 
 - **pre-commit** — Ensures `karabiner.json` is sorted by key before committing
-  (run `bake` from `~/.config/karabiner` to fix), and refuses a
-  `.config/chrome-exoskeleton` submodule pointer bump whose commit is not yet on
-  the framework repo's `origin/main` (push the framework first).
+  (run `bake` from `~/.config/karabiner` to fix), and refuses a submodule pointer
+  bump (every path in `~/.gitmodules`) whose commit is not yet on that repo's
+  `origin/main` (push the submodule first: `dotfiles push --submodules`).

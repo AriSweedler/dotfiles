@@ -17,37 +17,50 @@ log::err()  { echo -e "${C_RED}[ERROR]${C_RST} $*" >&2; }
 log::warn() { echo -e "${C_YELLOW}[WARN]${C_RST} $*" >&2; }
 log::info() { echo -e "${C_GREEN}[INFO]${C_RST} $*" >&2; }
 
-# A chrome-exoskeleton submodule pointer bump must reference a commit already on
-# the framework's origin/main, or every other machine's `git df submodule update`
-# fails to check it out.
-check_exoskeleton_pointer() {
-  local rel=".config/chrome-exoskeleton"
+# A submodule pointer bump must reference a commit already on that repo's
+# origin/main, or every other machine's `git df submodule update` fails to
+# check it out.
+check_submodule_pointer() {
+  local rel="${1}" name="${1##*/}"
   if ! git diff --cached --name-only | grep -qx "${rel}"; then
     return 0
   fi
-  local fw sha
-  fw="$(git rev-parse --show-toplevel)/${rel}"
+  local sub sha
+  sub="$(git rev-parse --show-toplevel)/${rel}"
   sha="$(git diff --cached -- "${rel}" | awk '/^\+Subproject commit/ {print $3}')"
   [[ -n "${sha}" ]] || return 0
   # The local origin/main first (a `dotfiles push` bump has just set it: no network);
   # only a miss asks the remote, in case another tool pushed without refreshing it.
-  if git -C "${fw}" merge-base --is-ancestor "${sha}" origin/main 2>/dev/null; then
+  if git -C "${sub}" merge-base --is-ancestor "${sha}" origin/main 2>/dev/null; then
     return 0
   fi
-  log::info "Checking chrome-exoskeleton ${sha:0:8} against the remote's main..."
-  if ! git -C "${fw}" fetch -q origin main 2>/dev/null; then
-    log::warn "Could not fetch chrome-exoskeleton origin; checking against the last fetch."
+  log::info "Checking ${name} ${sha:0:8} against the remote's main..."
+  if ! git -C "${sub}" fetch -q origin main 2>/dev/null; then
+    log::warn "Could not fetch ${name} origin; checking against the last fetch."
   fi
-  if ! git -C "${fw}" merge-base --is-ancestor "${sha}" origin/main 2>/dev/null; then
-    log::err "chrome-exoskeleton pointer ${sha:0:8} is not on origin/main."
-    log::warn "Push the framework repo first (dotfiles push --submodules), then re-run the commit."
+  if ! git -C "${sub}" merge-base --is-ancestor "${sha}" origin/main 2>/dev/null; then
+    log::err "${name} pointer ${sha:0:8} is not on origin/main."
+    log::warn "Push the submodule first (dotfiles push --submodules), then re-run the commit."
     return 1
   fi
-  log::info "chrome-exoskeleton pointer is published."
+  log::info "${name} pointer is published."
+}
+
+# Every path declared in the worktree's .gitmodules. The file, not the index:
+# `dotfiles push` bumps with `commit -- <path>`, whose temporary index still
+# holds HEAD's .gitmodules, so a just-added submodule is only in the file.
+check_submodule_pointers() {
+  local modules rel
+  modules="$(git rev-parse --show-toplevel)/.gitmodules"
+  [[ -f "${modules}" ]] || return 0
+  while read -r _ rel; do
+    [[ -n "${rel}" ]] || continue
+    check_submodule_pointer "${rel}" || return 1
+  done < <(git config -f "${modules}" --get-regexp '^submodule\..*\.path$' || true)
 }
 
 main() {
-  check_exoskeleton_pointer || return 1
+  check_submodule_pointers || return 1
 
   # git diff --cached --name-only emits paths relative to the repo root, and
   # the bare repo's worktree is $HOME — so match the repo-relative path, not an
