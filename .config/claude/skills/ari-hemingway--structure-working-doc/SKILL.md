@@ -171,4 +171,10 @@ When no row is `todo`, `running` or `review`, re-enter Present.
 
 ### Output
 
-Follow the `Output` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`. `output.md` is `draft.md` with each ask file inlined under `## <n> <Title>` in table order, so one file travels. When the user named a durable path, copy the whole folder there and record it under `Durable copy`.
+Follow the `Output` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`. `output.md` is `draft.md` with each ask file inlined under `## <n> <Title>` in table order, so one file travels; build it mechanically:
+
+```zsh
+zsh $HOME/.claude/skills/ari-hemingway--structure-working-doc/bin/asks.zsh inline --file <folder>/asks.json --draft <folder>/draft.md --out <folder>/output.md
+```
+
+The table in `output.md` is the plain one (no file links). Transfer: the file is on disk; never copy it to the clipboard unasked. When the user named a durable path, copy the whole folder there and record it under `Durable copy`; otherwise say once more that the folder lives under `/tmp`.

@@ -55,6 +55,7 @@ ${c_bold}Commands:${c_rst}
   check                                                                    violations + missing ask files; prints "OK: N rows, ready: ..."
   table   [--links] [--open]                                               the ordered markdown table (--open hides done/dropped rows; refuses on violations)
   graph                                                                    the same DAG as a Mermaid flowchart
+  inline  [--draft DRAFT.md] [--out OUTPUT.md]                             output.md: the draft's head, the plain table, every ask inlined in order, the draft's tail
 
 ${c_bold}Options:${c_rst}
   --file ASKS.json   the table (required; created by add when missing). asks/ sits beside it.
@@ -197,22 +198,73 @@ cmd_graph() {
   jq_lib -r 'include "asks"; mermaid' "${file}"
 }
 
+# output.md = the draft's head (title, summary), the plain table, every ask file inlined under
+# "## <position> <title>" with its own headings demoted one level, then the draft's tail from
+# "## Decisions" on. One file that travels without the folder.
+cmd_inline() {
+  local file="${1}" draft="${2}" out="${3}"
+  [[ -r "${draft}" ]] || { log::err "Draft not found | draft='${draft}'"; return 1; }
+  check_or_refuse "${file}" "output" || return 1
+  local dir="${file:h}" line phase=head
+  {
+    while IFS= read -r line; do
+      case "${phase}" in
+        head) [[ "${line}" == "## Asks" ]] && { phase=skip; continue; }; print -r -- "${line}" ;;
+        skip) [[ "${line}" == "## Decisions" ]] && { phase=tail; break; } ;;
+      esac
+    done < "${draft}"
+    print -r -- "## Asks"
+    print
+    jq_lib -r 'include "asks"; table_md(false)' "${file}"
+    print
+    local pos id title first
+    jq_lib -r 'include "asks"; position as $pos | ordered[] | "\($pos[.id])\t\(.id)\t\(.title)"' "${file}" \
+    | while IFS=$'\t' read -r pos id title; do
+        print -r -- "## ${pos} ${title}"
+        print
+        first=true
+        while IFS= read -r line || [[ -n "${line}" ]]; do
+          if [[ "${first}" == true ]]; then
+            first=false
+            [[ "${line}" == '# '* ]] && continue
+          fi
+          [[ "${line}" == '## '* ]] && line="#${line}"
+          print -r -- "${line}"
+        done < "${dir}/asks/${id}.md"
+        print
+      done
+    if [[ "${phase}" == tail ]]; then
+      print -r -- "## Decisions"
+      while IFS= read -r line; do print -r -- "${line}"; done
+    fi
+  } > "${out}" < <(
+    # the tail: everything after the "## Decisions" line
+    local seen=false l
+    while IFS= read -r l; do
+      if [[ "${seen}" == true ]]; then print -r -- "${l}"; elif [[ "${l}" == "## Decisions" ]]; then seen=true; fi
+    done < "${draft}"
+  )
+  log::ok "Output written | file='${out}' lines='$(wc -l < "${out}" | tr -d ' ')' words='$(wc -w < "${out}" | tr -d ' ')'"
+}
+
 # --- Main ---
 
 main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local cmd="" file="" id="" title="" needs="" needs_given=0 ask_status="" owner="" dispatch="" links=false open=false
+  local cmd="" file="" id="" title="" needs="" needs_given=0 ask_status="" owner="" dispatch="" links=false open=false draft="" out=""
   (( $# > 0 )) || { help; return 1; }
   case "${1}" in
     -h|--help) help; return 0 ;;
-    add|set|check|table|graph) cmd="${1}"; shift ;;
+    add|set|check|table|graph|inline) cmd="${1}"; shift ;;
     *) log::err "Unknown command | command='${1}'"; help; return 1 ;;
   esac
   while (( $# > 0 )); do case "${1}" in
     -h|--help)   help; return 0 ;;
     --file)      file="${2:?--file requires a value}"; shift 2 ;;
+    --draft)     draft="${2:?--draft requires a value}"; shift 2 ;;
+    --out)       out="${2:?--out requires a value}"; shift 2 ;;
     --id)        id="${2:?--id requires a value}"; shift 2 ;;
     --title)     title="${2:?--title requires a value}"; shift 2 ;;
     --needs)     needs="${2-}"; needs_given=1; shift 2 ;;
@@ -238,6 +290,7 @@ main() {
     check) cmd_check "${file}" ;;
     table) cmd_table "${file}" "${links}" "${open}" ;;
     graph) cmd_graph "${file}" ;;
+    inline) cmd_inline "${file}" "${draft:-${file:h}/draft.md}" "${out:-${file:h}/output.md}" ;;
   esac
 }
 
