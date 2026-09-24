@@ -30,3 +30,53 @@ function claude::hook::check() {
 function claude::hook::register() {
   new-machine apply claude_notifications "$@"
 }
+
+# Claude Code prints "Resume this session with: claude --resume <uuid>" on exit. Pull the
+# last such id out of a text stream. Pure stdin → stdout; rc 1 when there is none.
+function claude::resume_id_from_text() {
+  local id
+  id=$(grep -oE 'claude --resume [0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}' | tail -1 | awk '{print $3}')
+  [[ -n "$id" ]] || return 1
+  print -r -- "$id"
+}
+
+# ~/.claude/projects/<slug>: the absolute path with every / and . turned into -.
+function claude::project_slug() {
+  local p="${1:-$PWD}"
+  p="${p//\//-}"
+  print -r -- "${p//./-}"
+}
+
+function claude::newest_session_for_cwd() {
+  local dir="${HOME}/.claude/projects/$(claude::project_slug)"
+  local -a files=("${dir}"/*.jsonl(Nom))
+  (( ${#files} )) || return 1
+  print -r -- "${files[1]:t:r}"
+}
+
+# reclaude — resume the Claude session this pane just left. The id comes from the pane's
+# own scrollback (the same capture tcap reads, never the clipboard), else the newest
+# session file for this directory. `-n` prints the command instead of running it;
+# anything else is passed through to claude.
+function claude::resume_recent() {
+  local dry_run=false
+  [[ "${1:-}" == "-n" ]] && { dry_run=true; shift; }
+  local id source
+  if [[ -n "$TMUX" ]]; then
+    id=$(tmux capture-pane -p -J -S - | claude::resume_id_from_text) && source="scrollback"
+  fi
+  if [[ -z "$id" ]]; then
+    id=$(claude::newest_session_for_cwd) && source="newest session for $(claude::project_slug)"
+  fi
+  if [[ -z "$id" ]]; then
+    log::err "No resumable session found | tmux='${TMUX:+yes}' cwd='${PWD}'"
+    return 1
+  fi
+  log::info "Resuming | id='${id}' source='${source}'"
+  if $dry_run; then
+    print -r -- "claude --resume ${id} $*"
+    return 0
+  fi
+  claude --resume "$id" "$@"
+}
+alias reclaude='claude::resume_recent'
