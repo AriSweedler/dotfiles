@@ -1,0 +1,50 @@
+[
+  {
+    "keyword": "@@s",
+    "name": "Sweedler.com email",
+    "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
+  },
+  {
+    "keyword": "~!",
+    "name": "Name",
+    "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
+  },
+  {
+    "keyword": "~#",
+    "name": "Phone number",
+    "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
+  },
+  {
+    "keyword": "~&",
+    "name": "City",
+    "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
+  },
+  {
+    "keyword": "~*",
+    "name": "Zip code",
+    "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
+  },
+  {
+    "keyword": "~@",
+    "name": "email",
+    "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
+  },
+  {
+    "keyword": "~^",
+    "name": "Home",
+    "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
+  },
+  {
+    "keyword": "~~@",
+    "name": "Airtable email long",
+    "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
+  },
+  {
+    "name": "recruiterEmail",
+    "text": "Please remove this email address from your company’s recruiting and outreach mailing lists, and confirm once this has been completed. This is my work email address, and I do not consider it appropriate for recruiting solicitations.\n\nThanks,\nAri"
+  },
+  {
+    "name": "removeEmail",
+    "text": "Please remove my email address from all marketing and promotional mailing lists associated with your company, and confirm once the removal has been completed.\n\nThanks,\nAri"
+  }
+]

@@ -33,3 +33,6 @@
 /bin/claude
 /bin/pyairtable
 !/share/plugged/
+# Raycast snippets: the private tier is versioned; the import manifest is machine state.
+!/share/raycast-snippets/
+/share/raycast-snippets/manifest.json
