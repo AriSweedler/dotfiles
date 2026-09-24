@@ -632,6 +632,10 @@ check::chrome_exoskeleton() {
     verdict warn node_missing -d "node is not on PATH and no env.zsh provides it" -f "brew install node   (or set it up in ~/.local/share/chrome-exoskeleton/env.zsh)" -m
     return 0
   fi
+  if ! steps::submodule_identity_ok "${fw}"; then
+    verdict fail identity_drift -d "local user.name/user.email are not the personal identity" -f "new-machine apply chrome_exoskeleton"
+    return 0
+  fi
   local hooks
   hooks="$(git -C "${fw}" config core.hooksPath 2>/dev/null || true)"
   if [[ ! -d "${fw}/node_modules" || "${hooks}" != ".githooks" ]]; then
@@ -656,16 +660,38 @@ apply::chrome_exoskeleton() {
     log::warn "node is not on PATH; skipping | fix='brew install node, or ~/.local/share/chrome-exoskeleton/env.zsh'"
     return 0
   fi
+  steps::submodule_identity_apply "${fw}" || return 1
   if [[ ! -d "${fw}/node_modules" || "$(git -C "${fw}" config core.hooksPath 2>/dev/null)" != ".githooks" ]]; then
     run_cmd_mutating zsh "${fw}/bin/exo" deps ci || return 1
   fi
   run_cmd_mutating zsh "${fw}/bin/exo" build
 }
 
+# ── submodule identity ───────────────────────────────────────────────────────
+# Every dotfiles submodule is a public personal repo, so its commits carry the personal
+# identity whatever the global or work config says. Local config is not cloned, so each
+# submodule's apply step pins it on a fresh checkout and its check refuses a drift.
+typeset -gr SUBMODULE_GIT_NAME="Ari Sweedler"
+typeset -gr SUBMODULE_GIT_EMAIL="ari@sweedler.com"
+
+# True (0) when the repo at $1 has the personal identity in its local config.
+steps::submodule_identity_ok() {
+  local dir="${1}"
+  [[ "$(git -C "${dir}" config --local user.name 2>/dev/null)" == "${SUBMODULE_GIT_NAME}" ]] &&
+    [[ "$(git -C "${dir}" config --local user.email 2>/dev/null)" == "${SUBMODULE_GIT_EMAIL}" ]]
+}
+
+steps::submodule_identity_apply() {
+  local dir="${1}"
+  steps::submodule_identity_ok "${dir}" && return 0
+  run_cmd_mutating git -C "${dir}" config user.name "${SUBMODULE_GIT_NAME}" || return 1
+  run_cmd_mutating git -C "${dir}" config user.email "${SUBMODULE_GIT_EMAIL}"
+}
+
 # ── plugged ──────────────────────────────────────────────────────────────────
 # A shared-tier submodule (dotfiles_repo initializes it): a Swift package whose wrapper
-# builds release on first use. Hooks are plain local config, so a fresh checkout has none
-# until this step sets core.hooksPath; the build needs the Xcode command line tools.
+# builds release on first use. Hooks and identity are plain local config, so a fresh
+# checkout has neither until this step sets them; the build needs the Xcode command line tools.
 steps::plugged_dir() {
   print -r -- "${HOME}/.config/plugged"
 }
@@ -679,6 +705,10 @@ check::plugged() {
   fi
   if ! command -v swift >/dev/null 2>&1; then
     verdict warn swift_missing -d "swift is not on PATH" -f "xcode-select --install" -m
+    return 0
+  fi
+  if ! steps::submodule_identity_ok "${dir}"; then
+    verdict fail identity_drift -d "local user.name/user.email are not the personal identity" -f "new-machine apply plugged"
     return 0
   fi
   local hooks
@@ -705,6 +735,7 @@ apply::plugged() {
     log::warn "swift is not on PATH; skipping | fix='xcode-select --install'"
     return 0
   fi
+  steps::submodule_identity_apply "${dir}" || return 1
   if [[ "$(git -C "${dir}" config core.hooksPath 2>/dev/null)" != ".githooks" ]]; then
     run_cmd_mutating git -C "${dir}" config core.hooksPath .githooks || return 1
   fi

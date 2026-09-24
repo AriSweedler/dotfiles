@@ -32,16 +32,23 @@ from the local tier at the submodule's local root (`/ari-dotfiles` Cutpoints).
 | Bootstrap | `new-machine` step `<name>` with `STEP_NEEDS=dotfiles_repo`; a clause in `dotfiles init`'s `init done … next=` line | df | `~/.config/new-machine/lib/steps.zsh`, `~/.config/dotfiles/lib/init.zsh` |
 | Skill | `/ari-dotfile--submodule-<name>` | repo | the repo's commands, hooks, workflow, failures; everything else is here |
 
-Commit identity in the repo is the personal address (what
-`git -C ~/.config/chrome-exoskeleton config user.email` prints), never the
-work one: the repo is public, files and messages alike.
+**Commits carry the personal identity only**: `user.name "Ari Sweedler"`,
+`user.email ari@sweedler.com`, set in the repo's `--local` config before the
+first commit, never inherited from the global or work config. The repo is
+public, files and messages alike. Local config is not cloned, so the repo's
+`new-machine` apply step pins both keys on a fresh checkout
+(`steps::submodule_identity_apply` in `~/.config/new-machine/lib/steps.zsh`)
+and its check fails on drift; after any commit,
+`git -C ~/.config/<name> log -1 --format='%an <%ae> %cn <%ce>'` must print that
+identity twice.
 
 ## Creating one
 
 Claude does 1–5 and 8–10; the user does 6, 7 and 11. Nothing here pushes.
 
 1. **Repo.** `git init -b main ~/.config/<name>`;
-   `git -C ~/.config/<name> config user.email <personal address>`;
+   `git -C ~/.config/<name> config user.name "Ari Sweedler"`;
+   `git -C ~/.config/<name> config user.email ari@sweedler.com`;
    `git -C ~/.config/<name> remote add origin https://github.com/AriSweedler/<name>.git`.
    Write `bin/<name>`, its `check` and `build`, `README.md`, `.gitignore`.
 2. **Hooks.** `.githooks/pre-commit` (`exec` the check) and `.githooks/commit-msg`
@@ -120,6 +127,8 @@ only. Bump by hand only when the repo was pushed some other way
 
 ```
 git -C ~/.config/<name> status -sb              → ## main...origin/main
+git -C ~/.config/<name> config --local --get-regexp '^user\.'
+                                                → user.email ari@sweedler.com / user.name Ari Sweedler
 cd ~ && git df submodule status                 →  <sha> .config/<name> (heads/main)   leading space, not +
 git df status --short -- ~/.config/<name>       → (empty)
 <name> check                                    → … [OK] …
