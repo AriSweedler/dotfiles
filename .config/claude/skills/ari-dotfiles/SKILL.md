@@ -198,9 +198,11 @@ Some `~/.config` directories are git submodules of the shared repo: their files
 belong to another repo, and the shared tier records only a commit hash for the
 directory, the **pointer**, which is what every other machine checks out.
 `cd ~ && git df submodule status` lists them. Today: `.config/chrome-exoskeleton`
-(upstream `github.com/AriSweedler/chrome-exoskeleton`, public; the repo itself
-is `/ari-dotfile--submodule-chrome-exoskeleton`'s job). The layout every
-submodule follows and the recipe for a new one: `/ari-dotfile--submodule`.
+(upstream `github.com/AriSweedler/chrome-exoskeleton`, public;
+`/ari-dotfile--submodule-chrome-exoskeleton`) and `.config/plugged` (upstream
+`github.com/AriSweedler/plugged`, public; `/ari-dotfile--submodule-plugged`).
+The layout every submodule follows and the recipe for a new one:
+`/ari-dotfile--submodule`.
 
 `git df add` refuses a file inside a submodule (`fatal: Pathspec '…' is in
 submodule '…'`); the only path it accepts there is the directory itself, the
@@ -270,8 +272,9 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
 - **Nvim**: `~/.config/nvim/`, lazy.nvim specs in `lua/plugins/`, `lazy = true` by default
 - **Claude skills**: `~/.config/claude/skills/<name>/`, symlinked from `~/.claude/skills/<name>`
 - **Submodules**: declared in `~/.gitmodules`; today `~/.config/chrome-exoskeleton/`
-  (with `~/.config/bin/exo`) — see **Submodules**, `/ari-dotfile--submodule` (layout, creating one)
-  and `/ari-dotfile--submodule-chrome-exoskeleton`
+  (with `~/.config/bin/exo`) and `~/.config/plugged/` (with `~/.config/bin/plugged`) — see
+  **Submodules**, `/ari-dotfile--submodule` (layout, creating one),
+  `/ari-dotfile--submodule-chrome-exoskeleton` and `/ari-dotfile--submodule-plugged`
 - **Jobs framework**: `~/.config/dotfiles/lib/jobs.zsh`; shared plugins in `~/.config/dotfiles/jobs/`
   (README = the plugin contract) — see **Cutpoints**
 - **Harness**: `~/.config/bin/dotfiles` (init, pull, push, status, logs, git, jobs) — see **Pushing**

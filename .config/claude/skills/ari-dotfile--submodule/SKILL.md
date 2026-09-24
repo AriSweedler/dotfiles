@@ -165,4 +165,4 @@ Never `--no-verify`, in any repo. Never edit `denylist.txt` to make a check pass
 | Path | Driver | Upstream | Skill | Local root | State |
 |---|---|---|---|---|---|
 | `~/.config/chrome-exoskeleton/` | `exo` | `github.com/AriSweedler/chrome-exoskeleton` | `/ari-dotfile--submodule-chrome-exoskeleton` | `~/.local/share/chrome-exoskeleton/` (plugins, `env.zsh`, `denylist.txt`) | declared |
-| `~/.config/plugged/` | `plugged` | `github.com/AriSweedler/plugged` | `/ari-dotfile--submodule-plugged` | `~/.local/share/plugged/` (`denylist.txt`) | planned; not yet in `~/.gitmodules` |
+| `~/.config/plugged/` | `plugged` | `github.com/AriSweedler/plugged` | `/ari-dotfile--submodule-plugged` | `~/.local/share/plugged/` (`denylist.txt`) | declared |
