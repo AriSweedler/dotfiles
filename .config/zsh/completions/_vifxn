@@ -1,7 +1,16 @@
 #compdef vifxn
 
+_vifxn_names() {
+  local -a names
+  names=(${(k)functions} ${(k)aliases})
+  _describe 'functions and aliases' names
+}
+
 _vifxn() {
-  _describe 'function names' ${(k)functions}
+  _arguments \
+    '(-p --print)'{-p,--print}'[print the defining file instead of opening it]' \
+    '(-a --alias)'{-a,--alias}'[follow an alias to the first word of its body]' \
+    '1: :_vifxn_names'
 }
 
 _vifxn "$@"

@@ -1,29 +1,56 @@
 # Edit the file a shell function, alias, or PATH command is defined in.
-# With -p/--print, print the defining file's path instead of opening $EDITOR.
-local print_only=0
-local -a pflag=()
-if [[ "$1" == "-p" || "$1" == "--print" ]]; then
-  print_only=1
-  pflag=(-p)
-  shift
-fi
+#   -p/--print  print the defining file's path instead of opening $EDITOR
+#   -a/--alias  follow an alias to the first word of its body. Off by default
+#               because the first word is only a guess (`sudo foo`, `FOO=1 bar`);
+#               without it an alias resolves to its own definition line and the
+#               body is logged so the caller can pick the word to follow.
+local print_only=0 follow_alias=0
+local -a passthrough=()
+while (( $# )); do
+  case "$1" in
+    -p|--print) print_only=1; passthrough+=(-p); shift ;;
+    -a|--alias) follow_alias=1; passthrough+=(--alias); shift ;;
+    --) shift; break ;;
+    -*) log::err "Unknown flag | flag='$1'"; return 2 ;;
+    *) break ;;
+  esac
+done
 
 local -r func_name="${1:?}"
 
 local type
 type="$(type "${func_name}")"
 
-# Resolve to a file path. 'jump' names the function to seek to when editing;
-# it stays empty when there's no 'name() {' header to land on (autoload files,
+# Resolve to a file path. 'jump_arg' is the $EDITOR argument that lands on the
+# definition; it stays empty when there's nothing to land on (autoload files,
 # PATH scripts).
-local file jump=""
+local file jump_arg=""
 if grep -q "is an alias for" <<< "${type}"; then
-  # Re-run for the first word of the expanded alias.
-  local alias_target
-  alias_target="$(awk -F 'is an alias for ' '{print $2}' <<< "${type}" | awk '{print $1}')"
-  log::info "Resolving alias to function | alias='${func_name}' target='${alias_target}'"
-  vifxn "${pflag[@]}" "${alias_target}"
-  return $?
+  local alias_body="${type#* is an alias for }"
+  local -a body_words=(${(z)alias_body})
+  local first_word="${body_words[1]}"
+  if (( follow_alias )); then
+    log::info "Following alias | alias='${func_name}' target='${first_word}' body='${alias_body}'"
+    vifxn "${passthrough[@]}" "${first_word}"
+    return $?
+  fi
+  # zsh does not record where an alias was defined, so search the sourced
+  # plugin trees for its alias line.
+  # extendedglob for (#m) is set in a subshell: left on here it changes how
+  # log.zsh's case patterns match in the calls below.
+  local re_name hit
+  re_name="$(setopt extendedglob; print -r -- "${func_name//(#m)[][\\.*^$+?()|\{\}]/\\${MATCH}}")"
+  hit="$(grep -rnE "^[[:space:]]*alias[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*['\"]?${re_name}['\"]?=" \
+    "${ZDOTDIR:-${HOME}/.config/zsh}" "${XDG_DATA_HOME:-${HOME}/.local/share}/zsh/plugins" 2>/dev/null | head -n1)"
+  log::info "Alias, not followed | alias='${func_name}' body='${alias_body}' first_word='${first_word}'"
+  log::info "Pass --alias to follow the first word, or vifxn the word you mean"
+  if [[ -z "${hit}" ]]; then
+    log::err "Alias definition line not found | alias='${func_name}'"
+    return 1
+  fi
+  file="${hit%%:*}"
+  local line="${${hit#*:}%%:*}"
+  jump_arg="+${line}"
 elif grep -q "is /" <<< "${type}"; then
   # A command on PATH (script or binary); only editable if it's text.
   file="${type##* }"
@@ -41,19 +68,19 @@ elif grep -q "shell function" <<< "${type}"; then
   # Already loaded (plugin or loaded autoload): the file is the last word.
   # Autoload files live under */functions/ and have no header to jump to.
   file="${type##* }"
-  [[ "${file}" != */functions/* ]] && jump="${func_name}"
+  [[ "${file}" != */functions/* ]] && jump_arg="+/\<\zs${func_name}\ze() {$"
 else
   log::err "Function does not exist | func_name='${func_name}'"
   log::warn "type ${func_name}='${type}'"
   return 1
 fi
 
-# Print the path, or open it in $EDITOR (jumping to the definition if known).
+# Print the path, or open it in $EDITOR (landing on the definition if known).
 if (( print_only )); then
   print -r -- "${file}"
   return
 fi
 
 local -a editor_args=()
-[[ -n "${jump}" ]] && editor_args+=(+"/\<\zs${jump}\ze() {$")
+[[ -n "${jump_arg}" ]] && editor_args+=("${jump_arg}")
 run_cmd "$EDITOR" "${editor_args[@]}" "${file}"
