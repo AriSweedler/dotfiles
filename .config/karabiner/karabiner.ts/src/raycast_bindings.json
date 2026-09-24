@@ -4,5 +4,155 @@
     "title": "Clipboard History",
     "path": "extensions/raycast/clipboard-history/clipboard-history",
     "chord": "hyper+4"
+  },
+  {
+    "alias": "calendar-my-schedule",
+    "title": "My Schedule",
+    "path": "extensions/raycast/calendar/my-schedule",
+    "chord": "opt+s"
+  },
+  {
+    "alias": "go-aws",
+    "title": "Go AWS",
+    "path": "extensions/arisweedler/raycast-go-aws/command-go-aws",
+    "chord": "hyper+s"
+  },
+  {
+    "alias": "go-links",
+    "title": "Search Go Links (Auto-Open)",
+    "path": "extensions/benmusch/raycast-airtable-go-links/command-go-links",
+    "chord": "hyper+g"
+  },
+  {
+    "alias": "emoji-symbols",
+    "title": "Search Emoji & Symbols",
+    "path": "extensions/raycast/emoji-symbols/search-emoji-symbols",
+    "chord": "ctrl+cmd+spacebar"
+  },
+  {
+    "alias": "snippets",
+    "title": "Search Snippets",
+    "path": "extensions/raycast/snippets/search-snippets",
+    "chord": "hyper+grave_accent_and_tilde"
+  },
+  {
+    "alias": "wm-almost-maximize",
+    "title": "Almost Maximize",
+    "path": "extensions/raycast/window-management/almost-maximize",
+    "chord": "ctrl+opt+return_or_enter"
+  },
+  {
+    "alias": "wm-bottom-left-quarter",
+    "title": "Bottom Left Quarter",
+    "path": "extensions/raycast/window-management/bottom-left-quarter",
+    "chord": "ctrl+opt+j"
+  },
+  {
+    "alias": "wm-bottom-right-quarter",
+    "title": "Bottom Right Quarter",
+    "path": "extensions/raycast/window-management/bottom-right-quarter",
+    "chord": "ctrl+opt+k"
+  },
+  {
+    "alias": "wm-bottom-right-sixth",
+    "title": "Bottom Right Sixth",
+    "path": "extensions/raycast/window-management/bottom-right-sixth",
+    "chord": "ctrl+opt+r"
+  },
+  {
+    "alias": "wm-center",
+    "title": "Center",
+    "path": "extensions/raycast/window-management/center",
+    "chord": "ctrl+opt+c"
+  },
+  {
+    "alias": "wm-center-half",
+    "title": "Center Half",
+    "path": "extensions/raycast/window-management/center-half",
+    "chord": "ctrl+opt+m"
+  },
+  {
+    "alias": "wm-center-third",
+    "title": "Center Third",
+    "path": "extensions/raycast/window-management/center-third",
+    "chord": "ctrl+opt+w"
+  },
+  {
+    "alias": "wm-first-third",
+    "title": "First Third",
+    "path": "extensions/raycast/window-management/first-third",
+    "chord": "ctrl+opt+q"
+  },
+  {
+    "alias": "wm-last-third",
+    "title": "Last Third",
+    "path": "extensions/raycast/window-management/last-third",
+    "chord": "ctrl+opt+e"
+  },
+  {
+    "alias": "wm-left-half",
+    "title": "Left Half",
+    "path": "extensions/raycast/window-management/left-half",
+    "chord": "ctrl+opt+h"
+  },
+  {
+    "alias": "wm-make-larger",
+    "title": "Make Larger",
+    "path": "extensions/raycast/window-management/make-larger",
+    "chord": "ctrl+opt+equal_sign"
+  },
+  {
+    "alias": "wm-make-smaller",
+    "title": "Make Smaller",
+    "path": "extensions/raycast/window-management/make-smaller",
+    "chord": "ctrl+opt+hyphen"
+  },
+  {
+    "alias": "wm-next-desktop",
+    "title": "Next Desktop",
+    "path": "extensions/raycast/window-management/next-desktop",
+    "chord": "ctrl+opt+close_bracket"
+  },
+  {
+    "alias": "wm-next-display",
+    "title": "Next Display",
+    "path": "extensions/raycast/window-management/next-display",
+    "chord": "ctrl+opt+period"
+  },
+  {
+    "alias": "wm-previous-desktop",
+    "title": "Previous Desktop",
+    "path": "extensions/raycast/window-management/previous-desktop",
+    "chord": "ctrl+opt+open_bracket"
+  },
+  {
+    "alias": "wm-previous-display",
+    "title": "Previous Display",
+    "path": "extensions/raycast/window-management/previous-display",
+    "chord": "ctrl+opt+comma"
+  },
+  {
+    "alias": "wm-restore",
+    "title": "Restore",
+    "path": "extensions/raycast/window-management/restore",
+    "chord": "ctrl+opt+delete_or_backspace"
+  },
+  {
+    "alias": "wm-right-half",
+    "title": "Right Half",
+    "path": "extensions/raycast/window-management/right-half",
+    "chord": "ctrl+opt+l"
+  },
+  {
+    "alias": "wm-top-left-quarter",
+    "title": "Top Left Quarter",
+    "path": "extensions/raycast/window-management/top-left-quarter",
+    "chord": "ctrl+opt+u"
+  },
+  {
+    "alias": "wm-top-right-quarter",
+    "title": "Top Right Quarter",
+    "path": "extensions/raycast/window-management/top-right-quarter",
+    "chord": "ctrl+opt+i"
   }
 ]

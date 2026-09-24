@@ -52,8 +52,14 @@ const KEY_CODE_ALIASES: Record<string, ToKeyCode> = {
   ".": "period",
   "[": "open_bracket",
   "]": "close_bracket",
+  "`": "grave_accent_and_tilde",
+  ";": "semicolon",
+  "'": "quote",
+  "/": "slash",
+  "\\": "backslash",
+  "space": "spacebar",
 }
-const to_key_code = (key: string): ToKeyCode => KEY_CODE_ALIASES[key] ?? (key as ToKeyCode)
+export const to_key_code = (key: string): ToKeyCode => KEY_CODE_ALIASES[key] ?? (key as ToKeyCode)
 
 // --- Rendering ---
 

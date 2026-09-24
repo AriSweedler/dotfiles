@@ -21,8 +21,20 @@
 # modifier set is glyphs in macOS order with no separators, keys get their glyph or upper-case.
 typeset -gA RAYCAST_LINK_GLYPHS=(
   control ⌃  option ⌥  shift ⇧  command ⌘  caps_lock ⇪  fn fn
-  return_or_enter ⏎  delete_or_backspace ⌫  tab ⇥  spacebar ␣  escape ⎋
+  return_or_enter ⏎  delete_or_backspace ⌫  tab ⇥  spacebar Space  escape ⎋
   up_arrow ↑  down_arrow ↓  left_arrow ←  right_arrow →
+  equal_sign =  hyphen -  open_bracket [  close_bracket ]  period .  comma ,
+  grave_accent_and_tilde '`'  semicolon ';'  quote "'"  slash /  backslash '\'
+)
+# Symbol and word aliases for keys, normalized to karabiner key names before anything else
+# looks at them; the same set utils/actions.ts accepts, so the JSON may use either spelling.
+typeset -gA RAYCAST_LINK_KEY_ALIASES=(
+  '=' equal_sign  '-' hyphen  minus hyphen
+  '[' open_bracket  ']' close_bracket  '.' period  ',' comma
+  '`' grave_accent_and_tilde  ';' semicolon  "'" quote  / slash  '\' backslash
+  '⏎' return_or_enter  return return_or_enter
+  '⌫' delete_or_backspace  delete delete_or_backspace
+  space spacebar
 )
 typeset -ga RAYCAST_LINK_MODIFIER_ORDER=(fn control option shift command caps_lock)
 typeset -gr RAYCAST_LINK_HYPER_SET="control option shift command"
@@ -38,16 +50,19 @@ typeset -gA RAYCAST_LINK_MODIFIER_ALIASES=(
 # Input: a chord like hyper+4 or cmd+shift+k. Output: two lines, the key and the modifiers in
 # canonical order (space-joined, may be empty). Exit 1 with a log::err on a bad token.
 function raycast_link::parse_chord() {
-  local chord="${1:l}" token modifier key
+  local chord="${1}" token modifier key
   local -a tokens ordered
   local -A have
   tokens=("${(@s:+:)chord}")
   key="${tokens[-1]:-}"
+  key="${key:l}"
+  key="${RAYCAST_LINK_KEY_ALIASES[${key}]:-${key}}"
   if [[ ! "${key}" =~ '^[a-z0-9_]+$' ]]; then
-    log::err "Invalid key | key='${key}' chord='${1}' expected='a-z, 0-9, or a karabiner key name like return_or_enter'"
+    log::err "Invalid key | key='${key}' chord='${1}' expected='a-z, 0-9, a karabiner key name like return_or_enter, or one of ${(kj: :)RAYCAST_LINK_KEY_ALIASES}'"
     return 1
   fi
   for token in "${(@)tokens[1,-2]}"; do
+    token="${token:l}"
     if [[ -z "${RAYCAST_LINK_MODIFIER_ALIASES[${token}]:-}" ]]; then
       log::err "Unknown modifier | modifier='${token}' chord='${1}' valid='${(kj:, :)RAYCAST_LINK_MODIFIER_ALIASES}'"
       return 1
