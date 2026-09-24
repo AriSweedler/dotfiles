@@ -99,7 +99,7 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
 | `No such remote`, `Remote is not on github.com` | a rewired or broken checkout | `dotfiles status`, then **Submodules** |
 | DNS, timeout, TLS | network | retry; nothing was lost |
 | a hook's own `[ERROR]` lines | the repo's pre-push hook refused | fix what it names; NEVER `--no-verify` |
-| local log: `[EXO-PREPUSH] failed` | the local tier's pre-push hook ran the exoskeleton suite and it failed; the commit stands | `/ari-dotfile-submodule-chrome-exoskeleton` § When it fails, then push again |
+| local log: `[EXO-PREPUSH] failed` | the local tier's pre-push hook ran the exoskeleton suite and it failed; the commit stands | `/ari-dotfile--submodule-chrome-exoskeleton` § When it fails, then push again |
 
 ## Placement rules
 
@@ -121,7 +121,7 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
   use only as an employee is ldf (`~/.local/share/chrome-exoskeleton/plugins/`);
   everything else is a file of the framework repo at `~/.config/chrome-exoskeleton/`,
   a submodule (see **Submodules**). Building, testing and the framework's own
-  push are `/ari-dotfile-submodule-chrome-exoskeleton`'s job.
+  push are `/ari-dotfile--submodule-chrome-exoskeleton`'s job.
 - **Split mixed files.** Keep the generic mechanism in config and parameterize
   the company detail from local:
   ```zsh
@@ -176,7 +176,7 @@ Exoskeleton is the model.
 |---|---|---|
 | zsh startup, `source_zsh_dir` in `~/.config/zsh/plugins/` | `~/.local/share/zsh/plugins/*.zsh` (secrets in `*.secret.zsh`, untracked) | sourced after the shared plugins |
 | `dotfiles jobs` (`~/.config/dotfiles/lib/jobs.zsh`; shared plugins `~/.config/dotfiles/jobs/`) | `~/.local/share/dotfiles/jobs/<name>` | one launchd job runs both roots' plugins on unlock, login and a 5-minute tick; `dotfiles jobs list` |
-| Chrome Exoskeleton, `exo` (`~/.config/chrome-exoskeleton/`) | `~/.local/share/chrome-exoskeleton/plugins/<name>/` | `exo link` mounts both roots; `/ari-dotfile-submodule-chrome-exoskeleton` |
+| Chrome Exoskeleton, `exo` (`~/.config/chrome-exoskeleton/`) | `~/.local/share/chrome-exoskeleton/plugins/<name>/` | `exo link` mounts both roots; `/ari-dotfile--submodule-chrome-exoskeleton` |
 | Claude skills, `/ari-dotfiles-skill-registry` (`~/.config/claude/skills/`) | `~/.local/share/claude-skills/<name>/` | symlinked into `~/.claude/skills` |
 | `new-machine` Brewfile (`~/.config/new-machine/Brewfile`) | `~/.local/share/new-machine/Brewfile` | merged for `brew bundle` |
 | `open-any` (`~/.config/zsh/plugins/open_any.zsh`) | `~/.local/bin/open-*` | discovered by name across both bin tiers |
@@ -199,7 +199,8 @@ belong to another repo, and the shared tier records only a commit hash for the
 directory, the **pointer**, which is what every other machine checks out.
 `cd ~ && git df submodule status` lists them. Today: `.config/chrome-exoskeleton`
 (upstream `github.com/AriSweedler/chrome-exoskeleton`, public; the repo itself
-is `/ari-dotfile-submodule-chrome-exoskeleton`'s job).
+is `/ari-dotfile--submodule-chrome-exoskeleton`'s job). The layout every
+submodule follows and the recipe for a new one: `/ari-dotfile--submodule`.
 
 `git df add` refuses a file inside a submodule (`fatal: Pathspec '…' is in
 submodule '…'`); the only path it accepts there is the directory itself, the
@@ -269,7 +270,8 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
 - **Nvim**: `~/.config/nvim/`, lazy.nvim specs in `lua/plugins/`, `lazy = true` by default
 - **Claude skills**: `~/.config/claude/skills/<name>/`, symlinked from `~/.claude/skills/<name>`
 - **Submodules**: declared in `~/.gitmodules`; today `~/.config/chrome-exoskeleton/`
-  (with `~/.config/bin/exo`) — see **Submodules** and `/ari-dotfile-submodule-chrome-exoskeleton`
+  (with `~/.config/bin/exo`) — see **Submodules**, `/ari-dotfile--submodule` (layout, creating one)
+  and `/ari-dotfile--submodule-chrome-exoskeleton`
 - **Jobs framework**: `~/.config/dotfiles/lib/jobs.zsh`; shared plugins in `~/.config/dotfiles/jobs/`
   (README = the plugin contract) — see **Cutpoints**
 - **Harness**: `~/.config/bin/dotfiles` (init, pull, push, status, logs, git, jobs) — see **Pushing**
