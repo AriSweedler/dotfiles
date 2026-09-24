@@ -32,6 +32,7 @@ Interactive figure: one `<figure class="x-fig" id="fig-<slug>" data-aspect="W:H"
 ```
 
 Static figure: the same wrapper with `data-static` (the validator then requires only the `id`), an `<a href="<live_url>" rel="external">` around `<img src="assets/<name>.png" alt="...">`, and a `<figcaption>`. The image is the baked `ink_url` PNG saved under `articles/<slug>/assets/`; the link is the baked `live_url` (`mermaid.live/view#`, never `/edit#`). Bake both with `/ari-diagram-mermaid`; never retype either URL.
+- One viewport per figure. A figure and its whole panel (controls, stepper, caption) fit on one screen together: the runtime caps the canvas so box plus panel stay within about 95vh and lets the width follow the aspect ratio, but the author keeps the figure inside that budget in the first place: an aspect no taller than 1:1 (3:2 or 16:9 by default), at most three controls under the canvas, a one-line caption. A reader never scrolls between the drawing and the slider that drives it.
 
 ## Prose refs and state links
 
