@@ -9,8 +9,8 @@ typeset -g NEW_MACHINE_STEPS_LOADED=1
 
 typeset -gra STEPS=(brew brew_pkgs brew_drift dotfiles_repo local_dotfiles_repo bob_neovim claude
                     terminal_nerdfont karabiner claude_notifications claude_skills chrome_exoskeleton
-                    dotfiles_jobs)
-typeset -gA STEP_NEEDS=([brew_pkgs]=brew [brew_drift]=brew [terminal_nerdfont]=brew [chrome_exoskeleton]=dotfiles_repo [dotfiles_jobs]=dotfiles_repo)
+                    plugged dotfiles_jobs)
+typeset -gA STEP_NEEDS=([brew_pkgs]=brew [brew_drift]=brew [terminal_nerdfont]=brew [chrome_exoskeleton]=dotfiles_repo [plugged]=dotfiles_repo [dotfiles_jobs]=dotfiles_repo)
 typeset -gA STEP_DESC=(
   [brew]="Homebrew is installed"
   [brew_pkgs]="every item declared in the merged Brewfiles is installed (brew bundle check/install --no-upgrade)"
@@ -24,6 +24,7 @@ typeset -gA STEP_DESC=(
   [claude_notifications]="Claude Code hooks wired: Notification → notification-fire.sh, PreToolUse guard → pretooluse-headless-chrome-guard.sh; terminal-notifier resolves"
   [claude_skills]="every skill a dotfiles tier holds is symlinked into ~/.claude/skills and no link dangles"
   [chrome_exoskeleton]="the Chrome Exoskeleton submodule has its dependencies (which wire its hooks) and a built dist/"
+  [plugged]="the plugged submodule has its hooks wired (core.hooksPath=.githooks) and a built release binary"
   [dotfiles_jobs]="dotfiles jobs launchd job (runs the job plugins of both tiers) installed and loaded"
 )
 
@@ -659,6 +660,55 @@ apply::chrome_exoskeleton() {
     run_cmd_mutating zsh "${fw}/bin/exo" deps ci || return 1
   fi
   run_cmd_mutating zsh "${fw}/bin/exo" build
+}
+
+# ── plugged ──────────────────────────────────────────────────────────────────
+# A shared-tier submodule (dotfiles_repo initializes it): a Swift package whose wrapper
+# builds release on first use. Hooks are plain local config, so a fresh checkout has none
+# until this step sets core.hooksPath; the build needs the Xcode command line tools.
+steps::plugged_dir() {
+  print -r -- "${HOME}/.config/plugged"
+}
+
+check::plugged() {
+  local dir
+  dir="$(steps::plugged_dir)"
+  if [[ ! -x "${dir}/bin/plugged" ]]; then
+    verdict skip no_submodule -d "plugged not checked out | path='${dir}'" -f "new-machine apply dotfiles_repo"
+    return 0
+  fi
+  if ! command -v swift >/dev/null 2>&1; then
+    verdict warn swift_missing -d "swift is not on PATH" -f "xcode-select --install" -m
+    return 0
+  fi
+  local hooks
+  hooks="$(git -C "${dir}" config core.hooksPath 2>/dev/null || true)"
+  if [[ "${hooks}" != ".githooks" ]]; then
+    verdict fail hooks_unwired -d "hooksPath='${hooks:-unset}'" -f "new-machine apply plugged"
+    return 0
+  fi
+  if [[ ! -x "${dir}/.build/release/plugged" ]]; then
+    verdict fail not_built -d "no release binary | path='${dir}/.build/release/plugged'" -f "new-machine apply plugged"
+    return 0
+  fi
+  verdict ok built -d "hooks='${hooks}' binary='.build/release/plugged'"
+}
+
+apply::plugged() {
+  local dir
+  dir="$(steps::plugged_dir)"
+  if [[ ! -x "${dir}/bin/plugged" ]]; then
+    log::err "plugged not checked out | path='${dir}' fix='new-machine apply dotfiles_repo'"
+    return 1
+  fi
+  if ! command -v swift >/dev/null 2>&1; then
+    log::warn "swift is not on PATH; skipping | fix='xcode-select --install'"
+    return 0
+  fi
+  if [[ "$(git -C "${dir}" config core.hooksPath 2>/dev/null)" != ".githooks" ]]; then
+    run_cmd_mutating git -C "${dir}" config core.hooksPath .githooks || return 1
+  fi
+  run_cmd_mutating zsh "${dir}/bin/plugged-dev" build
 }
 
 # ── dotfiles_jobs ────────────────────────────────────────────────────────────

@@ -150,7 +150,7 @@ cmd_init() {
   step "ssh key" init_ssh_key || return 1
   step fetch init_fetch || return 1
   step jobs jobs_install || return 1
-  log::info "init done | took='$(elapsed "${start}")s' next='per-submodule setup (chrome-exoskeleton: exo deps ci && exo build) or new-machine setup'"
+  log::info "init done | took='$(elapsed "${start}")s' next='per-submodule setup (chrome-exoskeleton: exo deps ci && exo build; plugged: plugged-dev build) or new-machine setup'"
   step status cmd_status
 }
 
