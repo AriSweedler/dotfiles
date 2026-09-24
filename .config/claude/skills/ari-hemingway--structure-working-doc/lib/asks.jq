@@ -40,14 +40,21 @@ def ready:
   by_id as $m
   | [ rows[] | select(.status == "todo") | select(all((.needs // [])[]; $m[.] | settled)) | .id ];
 
-def cell_needs($pos): (.needs // []) | map($pos[.]) | sort | map(tostring) | join(", ") | if . == "" then "-" else . end;
+def unsettled_needs($m): (.needs // []) | map(select($m[.] | settled | not));
+def cell_needs($pos; $needs): $needs | map($pos[.]) | sort | map(tostring) | join(", ") | if . == "" then "-" else . end;
 
-def table_md($links):
+# $open hides settled rows and settled Needs; positions stay those of the full table.
+def table_md($links; $open):
   position as $pos
+  | by_id as $m
   | ["| # | Ask | Needs | Status | Owner |", "|---|---|---|---|---|"]
     + [ ordered[]
-        | "| \($pos[.id]) | \(if $links then "[\(.title)](asks/\(.id).md)" else .title end) | \(cell_needs($pos)) | \(.status) | \(.owner // "-") |" ]
+        | select(($open | not) or (settled | not))
+        | (if $open then unsettled_needs($m) else (.needs // []) end) as $needs
+        | "| \($pos[.id]) | \(if $links then "[\(.title)](asks/\(.id).md)" else .title end) | \(cell_needs($pos; $needs)) | \(.status) | \(.owner // "-") |" ]
   | .[];
+def table_md($links): table_md($links; false);
+def hidden_count: [ rows[] | select(settled) ] | length;
 
 def node_id: gsub("-"; "_");
 def mermaid:

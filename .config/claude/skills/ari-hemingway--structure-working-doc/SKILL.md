@@ -74,8 +74,9 @@ Four sections, always in this order, from `templates/ask.md`:
 - The table MUST pass the mechanical check before it is shown and again before Output. `table` refuses to render a failing table; fix every violation, never present one.
   ```zsh
   zsh $HOME/.claude/skills/ari-hemingway--structure-working-doc/bin/asks.zsh check --file <folder>/asks.json
-  zsh $HOME/.claude/skills/ari-hemingway--structure-working-doc/bin/asks.zsh table --file <folder>/asks.json
+  zsh $HOME/.claude/skills/ari-hemingway--structure-working-doc/bin/asks.zsh table --open --file <folder>/asks.json
   ```
+- In chat the table hides finished work: `table --open` omits `done` and `dropped` rows and drops settled rows from Needs cells; positions stay those of the full table so they match `draft.md`, and a trailing line counts the hidden rows. `draft.md` and `output.md` carry the full table (`table --links`). The user need not look at what is finished; the record keeps it.
 - The table is how the DAG surfaces to the user, in chat, in one message. When a flow chart can be shown in chat, show `asks.zsh graph` (a Mermaid `flowchart LR` of the same rows) instead; until then the table is the surface, and the graph is baked into `draft.md` only on request via `/ari-diagram-mermaid`.
 - Glyphs in table cells are ASCII or single-cell symbols; no emoji with variation selectors, no keycaps.
 
@@ -112,7 +113,7 @@ Scratchpad fields appended after `Last phase`:
 
 ## File storage
 
-- `bin/asks.zsh` — `add` a row (creates `asks/<id>.md` from the template), `set` title/needs/status/owner/dispatch, `check` (violations, missing files, ready set; exits 1 on any violation), `table` (`--links` for draft.md), `graph` (Mermaid). All writes go through jq to a temp file, then mv.
+- `bin/asks.zsh` — `add` a row (creates `asks/<id>.md` from the template), `set` title/needs/status/owner/dispatch, `check` (violations, missing files, ready set; exits 1 on any violation), `table` (`--open` for chat, `--links` for draft.md), `graph` (Mermaid). All writes go through jq to a temp file, then mv.
 - `lib/asks.jq` — the flattening (`ordered`, `position`), `violations`, `ready`, `table_md`, `mermaid`.
 - `templates/ask.md` — the four sections of an ask file.
 
@@ -124,7 +125,7 @@ Collect the subject (a phrase the user would type again to resume, dated when th
 
 ### Restore context
 
-Follow the `Restore context` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`. On resume, run `check` and print the table before anything else, then continue at Track.
+Follow the `Restore context` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`. On resume, run `check` and print the table (`table --open`) before anything else, then continue at Track.
 
 ### Capture
 
@@ -134,7 +135,7 @@ Print: `Capture complete — {n} asks from {m} messages. Next: Order.`
 
 ### Order
 
-Run `check`; fix violations by editing Needs, never by dropping a row the user asked for. Run `table` and print it in chat, in one message, no paraphrase, followed by the ready set. Wait. Apply the user's merges, splits and reorderings with `set`, re-check, re-present until accepted.
+Run `check`; fix violations by editing Needs, never by dropping a row the user asked for. Run `table --open` and print it in chat, in one message, no paraphrase, followed by the ready set. Wait. Apply the user's merges, splits and reorderings with `set`, re-check, re-present until accepted.
 
 Print: `Order complete — {n} rows, 0 violations, ready: {ids}. Next: Draft.`
 
@@ -162,7 +163,7 @@ Print: `Dispatch complete — {k} asks started ({vehicles}). Next: Track.`
 
 ### Track
 
-On each task notification: read the ask file's `## Result` (copy the agent's final report there verbatim when the agent could not write it), verify the Brief's definition of done, set status `done` or `review`, run `check`, re-render `draft.md`, and print one line. On each new user message that carries an ask: add the row at once, quote it, re-check, and print the table only when the row count or order changed.
+On each task notification: read the ask file's `## Result` (copy the agent's final report there verbatim when the agent could not write it), verify the Brief's definition of done, set status `done` or `review`, run `check`, re-render `draft.md`, and print one line. On each new user message that carries an ask: add the row at once, quote it, re-check, and print the table (`table --open`) only when the open rows or their order changed.
 
 Print per event: `Track — {id} {status}: {one line}. Ready now: {ids or none}.`
 

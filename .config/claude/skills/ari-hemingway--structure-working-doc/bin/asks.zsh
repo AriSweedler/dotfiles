@@ -53,7 +53,7 @@ ${c_bold}Commands:${c_rst}
   add     --id SLUG --title "..." [--needs a,b] [--status S] [--owner O]   append a row; create asks/SLUG.md from the template
   set     --id SLUG [--title "..."] [--needs a,b] [--status S] [--owner O] [--dispatch VEHICLE:REF]
   check                                                                    violations + missing ask files; prints "OK: N rows, ready: ..."
-  table   [--links]                                                        the ordered markdown table (refuses on violations)
+  table   [--links] [--open]                                               the ordered markdown table (--open hides done/dropped rows; refuses on violations)
   graph                                                                    the same DAG as a Mermaid flowchart
 
 ${c_bold}Options:${c_rst}
@@ -178,9 +178,17 @@ cmd_check() {
 }
 
 cmd_table() {
-  local file="${1}" links="${2}"
+  local file="${1}" links="${2}" open="${3}"
   check_or_refuse "${file}" "table" || return 1
-  jq_lib -r --argjson links "${links}" 'include "asks"; table_md($links)' "${file}"
+  jq_lib -r --argjson links "${links}" --argjson open "${open}" 'include "asks"; table_md($links; $open)' "${file}"
+  if [[ "${open}" == true ]]; then
+    local hidden
+    hidden="$(jq_lib 'include "asks"; hidden_count' "${file}")"
+    if (( hidden > 0 )); then
+      echo ""
+      echo "${hidden} settled rows hidden (full table in draft.md)"
+    fi
+  fi
 }
 
 cmd_graph() {
@@ -195,7 +203,7 @@ main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local cmd="" file="" id="" title="" needs="" needs_given=0 ask_status="" owner="" dispatch="" links=false
+  local cmd="" file="" id="" title="" needs="" needs_given=0 ask_status="" owner="" dispatch="" links=false open=false
   (( $# > 0 )) || { help; return 1; }
   case "${1}" in
     -h|--help) help; return 0 ;;
@@ -212,6 +220,7 @@ main() {
     --owner)     owner="${2:?--owner requires a value}"; shift 2 ;;
     --dispatch)  dispatch="${2:?--dispatch requires a value}"; shift 2 ;;
     --links)     links=true; shift ;;
+    --open)      open=true; shift ;;
     -*)          log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)           log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
   esac; done
@@ -227,7 +236,7 @@ main() {
     add)   cmd_add "${file}" "${id}" "${title}" "${needs}" "${ask_status:-${DEFAULT_STATUS}}" "${owner:-${DEFAULT_OWNER}}" ;;
     set)   cmd_set "${file}" "${id}" "${title}" "${needs}" "${needs_given}" "${ask_status}" "${owner}" "${dispatch}" ;;
     check) cmd_check "${file}" ;;
-    table) cmd_table "${file}" "${links}" ;;
+    table) cmd_table "${file}" "${links}" "${open}" ;;
     graph) cmd_graph "${file}" ;;
   esac
 }
