@@ -72,11 +72,17 @@ Claude does 1–5 and 8–10; the user does 6, 7 and 11. Nothing here pushes.
 7. **Declare, then the user pushes.**
    `cd ~ && git df submodule add https://github.com/AriSweedler/<name>.git .config/<name>`:
    the path is already a repo, so nothing is cloned; `.gitmodules` and the
-   pointer are staged. The user runs `dotfiles push --submodules`: it pushes the
-   repo as the personal account, sets its `origin/main`, and commits the pointer
-   alone (`<name>: bump to <sha> (<subject>)`); `.gitmodules` stays staged.
-8. **Declaration commit.**
-   `git df commit -m "<name>: declare the submodule (<what it is>)" -- ~/.gitmodules`.
+   gitlink are staged. The user runs `dotfiles push --submodules`: it pushes the
+   repo as the personal account and sets its `origin/main`. It bumps nothing for
+   a brand-new submodule (HEAD holds no pointer to compare), so both stay staged.
+   Until step 8 lands, any plain `git df commit` sweeps them in: commit by
+   pathspec meanwhile, or do step 8 at once.
+8. **Declaration commit**, the "init" commit: `.gitmodules` and the gitlink together.
+   `git df commit -m "<name>: declare the submodule (<what it is>)" -- ~/.gitmodules ~/.config/<name>`.
+   The df pre-commit checks the gitlink against the repo's `origin/main`, which the push
+   just set. Later pushes bump the pointer in their own commits; a new submodule is
+   two commits by design (the user's call: "we aren't guarding commits as a rare
+   resource"), never folded into one.
 9. **Bootstrap.** In `~/.config/new-machine/lib/steps.zsh`: `<name>` appended
    to `STEPS`, `[<name>]=dotfiles_repo` in `STEP_NEEDS`, a `STEP_DESC` line,
    `check::<name>` (`skip` when `~/.config/<name>/bin/<name>` is missing, fix
