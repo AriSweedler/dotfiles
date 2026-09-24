@@ -1,5 +1,6 @@
-# raycast_link — the widget that names a Raycast action with its Karabiner binding; the angle
-# brackets wrap the link and are not part of it:
+# raycast_link — the `link` subsystem of ari-raycast (bin/ari-raycast, plugin raycast.zsh): the
+# widget that names a Raycast action with its Karabiner binding; the angle brackets wrap the
+# link and are not part of it:
 #   <[Raycast: Clipboard History | key: '✦4'](raycast://extensions/raycast/clipboard-history/clipboard-history)>
 #
 # The bindings live in karabiner.ts's TypeScript tables (src/modes/*.ts, src/raycast_shortcuts.ts),
@@ -33,7 +34,8 @@
 : "${RAYCAST_LINK_KARABINER_JSON:=${XDG_CONFIG_HOME:-${HOME}/.config}/karabiner/karabiner.json}"
 : "${RAYCAST_LINK_DEFAULTS_DOMAIN:=com.raycast.macos}"
 : "${RAYCAST_LINK_BINDINGS_CMD:=}"
-typeset -gr RAYCAST_LINK_ALLOW_KEY="alwaysAllowCommandDeeplinking"
+# Guarded so re-sourcing (plugin loader plus the dispatcher) never trips "read-only variable".
+(( ${+RAYCAST_LINK_ALLOW_KEY} )) || typeset -gr RAYCAST_LINK_ALLOW_KEY="alwaysAllowCommandDeeplinking"
 # One generator run per invocation; keyed by the seam so a test that swaps fixtures reloads.
 typeset -g RAYCAST_LINK_BINDINGS_CACHE="" RAYCAST_LINK_BINDINGS_CACHE_KEY=""
 
@@ -57,7 +59,7 @@ typeset -gA RAYCAST_LINK_KEY_ALIASES=(
   space spacebar
 )
 typeset -ga RAYCAST_LINK_MODIFIER_ORDER=(fn control option shift command caps_lock)
-typeset -gr RAYCAST_LINK_HYPER_SET="control option shift command"
+(( ${+RAYCAST_LINK_HYPER_SET} )) || typeset -gr RAYCAST_LINK_HYPER_SET="control option shift command"
 typeset -gA RAYCAST_LINK_MODIFIER_ALIASES=(
   hyper "${RAYCAST_LINK_HYPER_SET}"
   cmd command  command command
@@ -358,15 +360,15 @@ function raycast_link::check() {
 
 function raycast_link::help() {
   cat >&2 <<EOF
-raycast-link — a Raycast action as a link with its Karabiner binding
+ari-raycast link — a Raycast action as a link with its Karabiner binding
 
-  raycast-link <slug|path>          markdown: <[Raycast: Title | key: '✦4'](raycast://path)>
-  raycast-link <slug|path> --plain  <Raycast: Title | key: '✦4'> raycast://path
+  ari-raycast link <slug|path>          markdown: <[Raycast: Title | key: '✦4'](raycast://path)>
+  ari-raycast link <slug|path> --plain  <Raycast: Title | key: '✦4'> raycast://path
                                   slug = the deeplink path's last segment: clipboard-history, left-half, my-schedule
-  raycast-link --list             one line per binding: slug, every chord (✦K D = Hyper+K then D), title, deeplink
-  raycast-link --check            OK/MISSING per binding (direct chords, against the compiled karabiner.json;
+  ari-raycast link list             one line per binding: slug, every chord (✦K D = Hyper+K then D), title, deeplink
+  ari-raycast link check            OK/MISSING per binding (direct chords, against the compiled karabiner.json;
                                   layer chords show as 'layer' and are not verified), plus allowed/NOT-ALLOWED/no-allow-id
-  raycast-link --allow [--dry-run]   write the missing allowIds to Raycast's plist so no deeplink asks "Always allow"
+  ari-raycast link allow [--dry-run]   write the missing allowIds to Raycast's plist so no deeplink asks "Always allow"
 
 Bindings come from karabiner.ts's tables: ${RAYCAST_LINK_KARABINER_TS}/src/modes/*.ts and
 src/raycast_shortcuts.ts, read through its generator. To change one, edit the table and run bake

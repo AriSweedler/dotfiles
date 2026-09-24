@@ -2,7 +2,7 @@ import { deeplink, type Deeplink } from "./utils/actions.ts"
 
 // Raycast commands on a direct chord, no layer. raycast.ts compiles each into a Karabiner rule
 // and bake generates raycast_bindings.json from this table (plus the modes' deeplinks); the
-// raycast-link widget reads the same generator and addresses an entry by the last segment of
+// ari-raycast link widget reads the same generator and addresses an entry by the last segment of
 // its path (clipboard-history, my-schedule, …). Chord grammar: "+"-joined tokens, modifiers
 // first (hyper, cmd, ctrl, opt, shift, fn), one key last (a-z, 0-9, a karabiner key name, or a
 // symbol alias from utils/actions.ts such as ` or ⏎). Raycast's own hotkey settings stay empty
@@ -12,7 +12,7 @@ import { deeplink, type Deeplink } from "./utils/actions.ts"
 // to find one, run the command once by deeplink, accept, then
 //   defaults read com.raycast.macos alwaysAllowCommandDeeplinking
 // (builtin_command_<camelCase> for Raycast's own commands, extension_<name>.<command>__dev for
-// a dev extension). raycast-link --allow writes them so the prompt never shows.
+// a dev extension). ari-raycast link allow writes them so the prompt never shows.
 export type RaycastShortcut = { chord: string; action: Deeplink }
 
 export const raycastShortcuts: RaycastShortcut[] = [

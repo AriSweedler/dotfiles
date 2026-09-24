@@ -1,0 +1,277 @@
+#!/usr/bin/env zsh
+# ari-raycast — one entrypoint for everything that keeps Raycast in parity with the dotfiles.
+#   ari-raycast link <slug|path> [--plain]        the widget: <[Raycast: Title | key: '✦4'](raycast://…)>
+#   ari-raycast link list | check | allow [--dry-run]
+#   ari-raycast snippets sync | list | check | adopt | pull FILE | diff FILE | move NAME --to shared|local
+#                        | fmt | reset-manifest [NAME...] [--dry-run]
+#   ari-raycast sync [--dry-run]                  every subsystem's sync, in order
+# Run: ari-raycast help   (or: zsh $HOME/.config/bin/ari-raycast help)
+#
+# Logging: the whole ari-raycast stack uses the dotfiles' zsh/plugins/log.zsh, because the
+# subsystem plugins (raycast_link.zsh, raycast_snippets.zsh, json_sort.zsh) already source it;
+# the skill lib's logging.zsh defines the same log::* names and is therefore not sourced here.
+
+set -euo pipefail
+
+readonly SCRIPT_DIR="${0:A:h}"
+readonly PLUGINS_DIR="${ZDOTDIR:-${HOME}/.config/zsh}/plugins"
+readonly LIB_LOGGING="${PLUGINS_DIR}/log.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+readonly LIB_RAYCAST="${PLUGINS_DIR}/raycast.zsh"
+if [[ ! -r "${LIB_RAYCAST}" ]]; then
+  log::err "missing raycast dispatcher plugin | path='${LIB_RAYCAST}'"
+  exit 1
+fi
+source "${LIB_RAYCAST}"
+
+# --- Constants ---
+
+readonly VALID_SUBSYSTEMS=(link snippets sync help)
+readonly LINK_VERBS=(list check allow help)
+readonly SNIPPETS_VERBS=(sync list check adopt pull diff move fmt reset-manifest help)
+readonly SNIPPET_TIERS=(shared local)
+readonly MUTATING=("link allow" "snippets sync" "snippets adopt" "snippets pull" "snippets move" "snippets fmt" "snippets reset-manifest" "sync")
+# log.zsh's colours are echo -e sequences; heredocs need the real escapes.
+readonly h_green=$'\e[32m' h_bold=$'\e[1m' h_rst=$'\e[0m'
+
+# --- Prerequisites ---
+
+#######################################
+# Check that required binaries are installed.
+# Globals: None
+# Arguments: None
+# Returns: 1 if any are missing
+#######################################
+check_prerequisites() {
+  local missing=()
+  for cmd in jq defaults; do
+    command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
+  done
+  if (( ${#missing} > 0 )); then
+    log::err "Missing required commands | missing='${(j:, :)missing}'"
+    return 1
+  fi
+}
+
+#######################################
+# Check if a value is in an array of valid options.
+# Arguments:
+#   $1 - value to check
+#   $2.. - valid options
+# Returns: 0 if valid, 1 if not
+#######################################
+is_valid_option() {
+  local val="${1}"; shift
+  for opt in "${@}"; do
+    [[ "${val}" == "${opt}" ]] && return 0
+  done
+  return 1
+}
+
+# --- Help ---
+
+help() {
+  cat <<EOF
+${h_green}ari-raycast${h_rst} — keep Raycast in parity with the dotfiles
+
+${h_bold}Usage:${h_rst}
+  ari-raycast link <slug|path> [--plain]       a Raycast action as a link with its Karabiner key
+  ari-raycast link list | check | allow [--dry-run]
+  ari-raycast snippets sync [--dry-run] | list | check | adopt [--dry-run] | pull FILE [--dry-run] | diff FILE
+                       | move NAME --to shared|local [--dry-run] | fmt [--dry-run] | reset-manifest [NAME...] [--dry-run]
+  ari-raycast sync [--dry-run]                 every subsystem's sync, in order: ${(j:, :)ARI_RAYCAST_SYNC_STEPS}
+  ari-raycast <subsystem> help                 that subsystem's usage
+  ari-raycast help
+
+${h_bold}Subsystems:${h_rst} ${(j:, :)ARI_RAYCAST_SUBSYSTEMS}
+
+${h_bold}Options:${h_rst}
+  --dry-run     on a mutating verb, print the plan and change nothing
+  --plain       link: the widget without markdown, for terminals
+  --to TIER     snippets move: the destination, ${(j:|:)SNIPPET_TIERS}
+  -h, --help    this help
+
+${h_bold}Where things live:${h_rst}
+  bindings   karabiner.ts tables (~/.config/karabiner/karabiner.ts/src/modes/*.ts, raycast_shortcuts.ts), compiled by bake
+  snippets   two files, merged with local winning by name; one rule: personal data stays in the local tier, shared is
+             for snippets safe in a public repo (plus fmt's placeholders, name and keyword only)
+             shared  ~/.config/raycast-snippets/snippets.json       (git df, public remote)
+             local   ~/.local/share/raycast-snippets/snippets.json  (git ldf, private remote), manifest beside it
+EOF
+}
+
+help_link() {
+  cat <<EOF
+${h_green}ari-raycast link${h_rst} — a Raycast action as a link with its Karabiner key
+
+${h_bold}Usage:${h_rst}
+  ari-raycast link <slug|path>            markdown: <[Raycast: Title | key: '✦4'](raycast://path)>
+  ari-raycast link <slug|path> --plain    <Raycast: Title | key: '✦4'> raycast://path
+  ari-raycast link list                   one line per binding: slug, every chord, title, deeplink
+  ari-raycast link check                  OK/MISSING per binding (direct chords, against the compiled karabiner.json;
+                                          layer chords show as 'layer'), plus allowed/NOT-ALLOWED/no-allow-id
+  ari-raycast link allow [--dry-run]      write the missing allowIds to Raycast's plist so no deeplink asks "Always allow"
+
+slug = the deeplink path's last segment: clipboard-history, left-half, my-schedule. Bindings come from
+karabiner.ts's tables through its generator; to change one, edit the table and run bake.
+EOF
+}
+
+help_snippets() {
+  cat <<EOF
+${h_green}ari-raycast snippets${h_rst} — Raycast Snippets from two versioned files, shared and local, merged with local winning
+
+${h_bold}Usage:${h_rst}
+  ari-raycast snippets sync [--dry-run]           import what is new or changed since the last sync (Raycast shows one
+                                                  review per deeplink; confirm with Enter); names gone from the files are
+                                                  listed for you to delete in Raycast; parity findings follow as warn lines
+  ari-raycast snippets list                       state (new|changed|synced), tier (shared|local|local>shared|placeholder),
+                                                  name, keyword, first line
+  ari-raycast snippets check                      parity: a warn per active placeholder (fill the local file) and per local
+                                                  snippet without one (run fmt); exit 1 when two names share a keyword
+  ari-raycast snippets adopt [--dry-run]          first run where Raycast already holds the files' snippets: write the
+                                                  manifest from the merged set, import nothing
+  ari-raycast snippets pull FILE [--dry-run]      a Raycast export (Export Snippets) is the truth: known names updated in
+                                                  the tier that wins them, unknown names added to the LOCAL tier
+  ari-raycast snippets diff FILE                  merged set versus a Raycast export, by name
+  ari-raycast snippets move NAME --to shared|local [--dry-run]   relocate one snippet; leaving shared leaves a placeholder
+  ari-raycast snippets fmt [--dry-run]            rewrite both files canonical (keyword order, json-sort keys); give shared
+                                                  a placeholder for every local name, fix drifted placeholder keywords
+  ari-raycast snippets reset-manifest [NAME...] [--dry-run]   forget names (all when none), e.g. after a cancelled review
+
+Raycast cannot be told to delete: changed and removed snippets are printed for you to delete by hand. Without a
+manifest, sync refuses until adopt or pull has said what Raycast holds.
+${h_bold}One rule:${h_rst} personal data stays in the local tier; the shared tier is for snippets safe in a public repo.
+${h_bold}Tiers:${h_rst} shared ~/.config/raycast-snippets/snippets.json (git df, public remote)
+       local  ~/.local/share/raycast-snippets/snippets.json (git ldf, private remote), manifest beside it
+${h_bold}Placeholders:${h_rst} for every local snippet, shared holds {name, keyword, text: "OVERRIDE WITH A <local file> file"}:
+       here local overrides it; on a machine without the local file Raycast imports the reminder. No text crosses tiers.
+${h_bold}Seeding:${h_rst} Raycast → "Export Snippets" → save anywhere → ari-raycast snippets pull <that file>
+EOF
+}
+
+# --- Main ---
+
+main() {
+  check_prerequisites || exit 1
+
+  # === PARSE ===
+  local subsystem="" verb="" dry_run=false plain=false to_tier=""
+  local -a positional
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)   help; return 0 ;;
+    --dry-run)   dry_run=true; shift ;;
+    --plain)     plain=true; shift ;;
+    --to)        to_tier="${2:?--to requires a tier: ${(j:|:)SNIPPET_TIERS}}"; shift 2 ;;
+    -*)          log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)           positional+=("${1}"); shift ;;
+  esac; done
+
+  # === MASSAGE ===
+  subsystem="${positional[1]:-help}"
+  verb="${positional[2]:-}"
+  local -a rest=("${(@)positional[3,-1]}")
+  subsystem="${subsystem:l}"
+  to_tier="${to_tier:l}"
+  # `link <slug>` has no verb: anything that is not a verb is the slug.
+  if [[ "${subsystem}" == link && -n "${verb}" ]] && ! is_valid_option "${verb}" "${LINK_VERBS[@]}"; then
+    rest=("${verb}" "${rest[@]}")
+    verb="widget"
+  fi
+  [[ "${subsystem}" == sync || "${subsystem}" == help ]] && [[ -n "${verb}" ]] && rest=("${verb}" "${rest[@]}") && verb=""
+  local -a extra
+  [[ "${dry_run}" == true ]] && extra+=(--dry-run)
+
+  # === VALIDATE ===
+  if ! is_valid_option "${subsystem}" "${VALID_SUBSYSTEMS[@]}"; then
+    log::err "Unknown subsystem | subsystem='${subsystem}' valid='${(j:, :)VALID_SUBSYSTEMS}'"
+    help
+    return 1
+  fi
+  case "${subsystem}" in
+    link)
+      if [[ -z "${verb}" ]]; then
+        log::err "link needs a slug, a path, or a verb | valid='<slug|path> [--plain], ${(j:, :)LINK_VERBS}'"
+        help_link
+        return 1
+      fi
+      if [[ "${verb}" != widget ]] && (( ${#rest} > 0 )); then
+        log::err "Unexpected arguments | verb='${verb}' arguments='${(j: :)rest}'"
+        help_link
+        return 1
+      fi ;;
+    snippets)
+      if [[ -z "${verb}" ]] || ! is_valid_option "${verb}" "${SNIPPETS_VERBS[@]}"; then
+        log::err "Unknown snippets verb | verb='${verb}' valid='${(j:, :)SNIPPETS_VERBS}'"
+        help_snippets
+        return 1
+      fi
+      if [[ "${verb}" == pull || "${verb}" == diff ]] && (( ${#rest} != 1 )); then
+        log::err "${verb} needs exactly one FILE | arguments='${(j: :)rest}'"
+        help_snippets
+        return 1
+      fi
+      if [[ "${verb}" == move ]]; then
+        if (( ${#rest} != 1 )) || [[ -z "${to_tier}" ]]; then
+          log::err "move needs exactly one NAME and --to TIER | arguments='${(j: :)rest}' to='${to_tier}' tiers='${(j:, :)SNIPPET_TIERS}'"
+          help_snippets
+          return 1
+        fi
+        if ! is_valid_option "${to_tier}" "${SNIPPET_TIERS[@]}"; then
+          log::err "Unknown tier | to='${to_tier}' valid='${(j:, :)SNIPPET_TIERS}'"
+          return 1
+        fi
+      fi ;;
+    sync|help)
+      if (( ${#rest} > 0 )); then
+        log::err "Unexpected arguments | subsystem='${subsystem}' arguments='${(j: :)rest}'"
+        help
+        return 1
+      fi ;;
+  esac
+  if [[ "${dry_run}" == true ]] && ! is_valid_option "${subsystem} ${verb}" "${MUTATING[@]}" && ! is_valid_option "${subsystem}" "${MUTATING[@]}"; then
+    log::err "--dry-run applies to mutating verbs only | given='${subsystem} ${verb}' mutating='${(j:, :)MUTATING}'"
+    return 1
+  fi
+  if [[ "${plain}" == true && "${subsystem} ${verb}" != "link widget" ]]; then
+    log::err "--plain applies to the link widget only | given='${subsystem} ${verb}'"
+    return 1
+  fi
+  if [[ -n "${to_tier}" && "${subsystem} ${verb}" != "snippets move" ]]; then
+    log::err "--to applies to snippets move only | given='${subsystem} ${verb}'"
+    return 1
+  fi
+
+  # === LOGIC ===
+  case "${subsystem}" in
+    help) help ;;
+    sync) run_cmd ari_raycast::sync "${extra[@]}" ;;
+    link)
+      case "${verb}" in
+        help)   help_link ;;
+        widget) [[ "${plain}" == true ]] && raycast_link "${rest[1]}" --plain || raycast_link "${rest[1]}" ;;
+        list)   raycast_link --list ;;
+        check)  raycast_link --check ;;
+        allow)  run_cmd raycast_link --allow "${extra[@]}" ;;
+      esac ;;
+    snippets)
+      case "${verb}" in
+        help)           help_snippets ;;
+        list)           raycast_snippets --list ;;
+        check)          raycast_snippets --check ;;
+        diff)           raycast_snippets --diff "${rest[1]}" ;;
+        sync)           run_cmd raycast_snippets --sync "${extra[@]}" ;;
+        adopt)          run_cmd raycast_snippets --adopt "${extra[@]}" ;;
+        pull)           run_cmd raycast_snippets --pull "${rest[1]}" "${extra[@]}" ;;
+        move)           run_cmd raycast_snippets --move "${rest[1]}" --to "${to_tier}" "${extra[@]}" ;;
+        fmt)            run_cmd raycast_snippets --fmt "${extra[@]}" ;;
+        reset-manifest) run_cmd raycast_snippets --reset-manifest "${rest[@]}" "${extra[@]}" ;;
+      esac ;;
+  esac
+}
+
+main "${@}"

@@ -6,7 +6,7 @@ import type { Meta } from "../utils/mode.ts"
 // acts on it; nothing here replays a Raycast hotkey, and Raycast's own hotkey settings stay
 // empty for these commands. Window management has no layer (meta has no entrypoint): the
 // direct chords are the whole interface. bake generates raycast_bindings.json from this table
-// and the raycast-link widget reads the same generator, so the key Claude prints is the key
+// and the ari-raycast link widget reads the same generator, so the key Claude prints is the key
 // this file compiles.
 //
 // TODO: On my 34 inch monitor, I may want a different set of entries for this.

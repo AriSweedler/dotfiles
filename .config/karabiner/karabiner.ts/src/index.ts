@@ -22,5 +22,5 @@ writeToProfile("Default", [
   ...windowDirectRules,
 ])
 
-// The raycast-link widget reads this artifact; it is generated from the same tables, every build.
+// The ari-raycast link widget reads this artifact; it is generated from the same tables, every build.
 writeBindings()

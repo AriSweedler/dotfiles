@@ -8,9 +8,9 @@
 typeset -g NEW_MACHINE_STEPS_LOADED=1
 
 typeset -gra STEPS=(brew brew_pkgs brew_drift dotfiles_repo local_dotfiles_repo bob_neovim claude
-                    terminal_nerdfont karabiner raycast_allow claude_notifications claude_skills chrome_exoskeleton
+                    terminal_nerdfont karabiner raycast_sync claude_notifications claude_skills chrome_exoskeleton
                     plugged dotfiles_jobs)
-typeset -gA STEP_NEEDS=([brew_pkgs]=brew [brew_drift]=brew [terminal_nerdfont]=brew [raycast_allow]=dotfiles_repo [chrome_exoskeleton]=dotfiles_repo [plugged]=dotfiles_repo [dotfiles_jobs]=dotfiles_repo)
+typeset -gA STEP_NEEDS=([brew_pkgs]=brew [brew_drift]=brew [terminal_nerdfont]=brew [raycast_sync]=dotfiles_repo [chrome_exoskeleton]=dotfiles_repo [plugged]=dotfiles_repo [dotfiles_jobs]=dotfiles_repo)
 typeset -gA STEP_DESC=(
   [brew]="Homebrew is installed"
   [brew_pkgs]="every item declared in the merged Brewfiles is installed (brew bundle check/install --no-upgrade)"
@@ -21,7 +21,7 @@ typeset -gA STEP_DESC=(
   [claude]="Claude Code installed"
   [terminal_nerdfont]="a Nerd Font cask is installed and at least one Terminal.app profile uses a Nerd Font"
   [karabiner]="karabiner.json exists, is valid JSON, and is jq -S sorted; healthcheck runs when present"
-  [raycast_allow]="every Raycast command bound in Karabiner is on Raycast's deeplink allow-list, so no 'Always allow' prompt (raycast-link --allow)"
+  [raycast_sync]="Raycast in parity with the dotfiles: every Karabiner-bound command on its deeplink allow-list, the versioned snippets imported (ari-raycast sync)"
   [claude_notifications]="Claude Code hooks wired: Notification → notification-fire.sh, PreToolUse guard → pretooluse-headless-chrome-guard.sh; terminal-notifier resolves"
   [claude_skills]="every skill a dotfiles tier holds is symlinked into ~/.claude/skills and no link dangles"
   [chrome_exoskeleton]="the Chrome Exoskeleton submodule has its dependencies (which wire its hooks) and a built dist/"
@@ -528,43 +528,45 @@ apply::karabiner() {
   run_cmd_mutating "${HOME}/.config/karabiner/bin/bake"
 }
 
-# ── raycast_allow ────────────────────────────────────────────────────────────
-# Every Raycast command Karabiner binds is launched by deeplink, and Raycast asks "Always allow"
-# once per command unless its id is in com.raycast.macos alwaysAllowCommandDeeplinking. The ids
-# are declared beside the bindings (raycast_bindings.json, allowId); raycast-link --allow writes
-# the missing ones. Compile state is the karabiner step's verdict, so only the allow column of
-# raycast-link --check is read here.
-check::raycast_allow() {
-  local raycast_link="${HOME}/.config/bin/raycast-link"
+# ── raycast_sync ─────────────────────────────────────────────────────────────
+# `ari-raycast sync` walks every Raycast subsystem (link allow: the deeplink allow-list; snippets
+# sync: the versioned snippets), each idempotent. The check is its --dry-run: a subsystem that
+# reports pending work fails the step, a subsystem that errors fails it with its tail, and a
+# subsystem's `warn` lines (a snippets placeholder this machine has not filled in) make it a
+# warn. Compile state of the bindings is the karabiner step's verdict, not this one's.
+check::raycast_sync() {
+  local ari_raycast="${HOME}/.config/bin/ari-raycast"
   if [[ ! -d /Applications/Raycast.app ]]; then
     verdict skip no_raycast -d "Raycast is not installed"
     return 0
   fi
-  if [[ ! -x "${raycast_link}" ]]; then
-    verdict fail raycast_link_missing -d "raycast-link missing | path='${raycast_link}'" -f "new-machine apply dotfiles_repo"
+  if [[ ! -x "${ari_raycast}" ]]; then
+    verdict fail ari_raycast_missing -d "ari-raycast missing | path='${ari_raycast}'" -f "new-machine apply dotfiles_repo"
     return 0
   fi
-  if ! command -v defaults >/dev/null 2>&1; then
-    verdict skip no_defaults -d "defaults not found; cannot read Raycast's plist"
-    return 0
-  fi
-  local out
-  out="$("${raycast_link}" --check 2>/dev/null)" || true
+  local out rc=0
+  out="$("${ari_raycast}" sync --dry-run 2>/dev/null)" || rc=$?
   local -a lines=("${(@f)out}")
-  local -a not_allowed=(${(M)lines:#* NOT-ALLOWED}) no_id=(${(M)lines:#* no-allow-id})
-  if (( ${#not_allowed} )); then
-    verdict fail raycast_not_allowed -d "commands Raycast would still ask to confirm | count='${#not_allowed}'"$'\n'"${(F)not_allowed}" -f "new-machine apply raycast_allow"
+  local -a failed=(${(M)lines:#FAIL *})
+  local total="${${(M)lines:#total_pending=*}[1]#total_pending=}"
+  if (( rc )) || (( ${#failed} )); then
+    verdict fail raycast_sync_failed -d "a Raycast subsystem could not report | rc='${rc}'"$'\n'"${(F)lines}" -f "run the failing subsystem by hand: ari-raycast <subsystem> help"
     return 0
   fi
-  if (( ${#no_id} )); then
-    verdict warn raycast_no_allow_id -d "bindings without an allowId | count='${#no_id}'"$'\n'"${(F)no_id}" -f "add allowId to the deeplink in karabiner.ts/src (modes/*.ts or raycast_shortcuts.ts; its header says how to find one), then bake"
+  if (( ${total:-0} > 0 )); then
+    verdict fail raycast_pending -d "Raycast is behind the dotfiles | pending='${total}'"$'\n'"${(F)${(M)lines:#ok *}}" -f "new-machine apply raycast_sync"
     return 0
   fi
-  verdict ok allowed -d "every binding is on Raycast's allow-list | count='${#lines}'"
+  local -a warned=(${(M)lines:#warn *})
+  if (( ${#warned} )); then
+    verdict warn raycast_parity -m -d "${(F)warned}" -f "fill in the local snippets file, then: ari-raycast snippets fmt"
+    return 0
+  fi
+  verdict ok in_sync -d "$(print -r -- "${(F)${(M)lines:#ok *}}" | tr '\n' ';')"
 }
 
-apply::raycast_allow() {
-  run_cmd_mutating "${HOME}/.config/bin/raycast-link" --allow
+apply::raycast_sync() {
+  run_cmd_mutating "${HOME}/.config/bin/ari-raycast" sync
 }
 
 # ── claude_notifications ─────────────────────────────────────────────────────

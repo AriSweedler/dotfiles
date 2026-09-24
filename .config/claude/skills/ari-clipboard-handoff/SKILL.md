@@ -18,9 +18,9 @@ Whenever Claude needs Ari to run or paste something, the command or text goes in
 
 ## File storage
 
-- `bin/handoff.zsh` — `--print --cmd CMD --expect TEXT [--step N [--blocking | --not-blocking]] [--interactive | --capture [--capture-dir DIR]]` renders the block (bare, `! CMD`, or `run_log [--dir DIR] -- CMD`); `--copy (--text TEXT | --file PATH)` copies and prints `copied_chars=` and `previous clipboard: second entry in <Raycast: Clipboard History | key: '✦4'> raycast://…`, the widget's plain form. `HANDOFF_RAYCAST_LINK` overrides the widget's path.
+- `bin/handoff.zsh` — `--print --cmd CMD --expect TEXT [--step N [--blocking | --not-blocking]] [--interactive | --capture [--capture-dir DIR]]` renders the block (bare, `! CMD`, or `run_log [--dir DIR] -- CMD`); `--copy (--text TEXT | --file PATH)` copies and prints `copied_chars=` and `previous clipboard: second entry in <Raycast: Clipboard History | key: '✦4'> raycast://…`, the widget's plain form. `HANDOFF_ARI_RAYCAST` overrides the entrypoint's path.
 - `bin/pretooluse_bash_pbcopy_guard.sh` — Claude Code PreToolUse hook for the Bash tool: reads `.tool_input.command` (so a description that mentions pbcopy never trips it; without `jq` it falls back to the raw input) and exits 2 with a message when `pbcopy` is in command position: at the start, after a separator (`|`, `;`, `&`, `(`, a newline), as a path (`/usr/bin/pbcopy`), or behind a wrapper (`xargs`, `sudo`, `env`, `command`, `exec`, `nohup`, `time`). The word inside a quoted argument, as an argument of another command (`true pbcopy`), or as a fragment of a longer name (`xyz-pbcopy-abc`, `pbcopy-wrapper`) passes, as does a command carrying `HANDOFF_CLIP_OK=1`. Installed per Setup.
-- The widget is not in this skill. `raycast-link` (`~/.config/bin/raycast-link`, logic in `~/.config/zsh/plugins/raycast_link.zsh`) renders a Raycast action as a link with its Karabiner binding. The bindings live in karabiner.ts's TypeScript tables (`~/.config/karabiner/karabiner.ts/src/modes/*.ts`, `src/raycast_shortcuts.ts`), which bake compiles into Karabiner; the widget reads them through the same generator, and `src/raycast_bindings.json` is bake's generated artifact for reading, not an input. `raycast-link --check` says whether every binding is compiled and on Raycast's allow-list; to change a binding, edit the table and run bake.
+- The widget is not in this skill. `ari-raycast link` (`~/.config/bin/ari-raycast`, logic in `~/.config/zsh/plugins/raycast_link.zsh`) renders a Raycast action as a link with its Karabiner binding. The bindings live in karabiner.ts's TypeScript tables (`~/.config/karabiner/karabiner.ts/src/modes/*.ts`, `src/raycast_shortcuts.ts`), which bake compiles into Karabiner; the widget reads them through the same generator, and `src/raycast_bindings.json` is bake's generated artifact for reading, not an input. `ari-raycast link check` says whether every binding is compiled and on Raycast's allow-list; to change a binding, edit the table and run bake.
 
 ## Workflow
 
@@ -67,7 +67,7 @@ Repeat its `previous clipboard:` line in the message. If `pbcopy` is missing, th
 When Ari says the clipboard was clobbered, print the widget and tell him the displaced entry is the second item in that list; Claude never restores and never reads the history.
 
 ```zsh
-raycast-link clipboard-history
+ari-raycast link clipboard-history
 ```
 
 It prints `<[Raycast: Clipboard History | key: '✦4'](raycast://extensions/raycast/clipboard-history/clipboard-history)>`: the angle brackets wrap one link that opens the history, and the key opens it from the keyboard. Paste that line as is; when the link text ends in `(not compiled yet)`, the binding is declared but Karabiner has not been rebaked, so say so.
@@ -116,4 +116,4 @@ Then, via `/update-config`, add this entry to the `PreToolUse` list in `~/.claud
 
 Verify with the Bash call `false && pbcopy` (safe: `false &&` short-circuits, so pbcopy never runs even if the hook is off); the guard must deny it.
 
-**Widget.** The dotfiles install `raycast-link` and its binding; `raycast-link --check` must print `OK clipboard-history ✦4 allowed` (run `bake` under `~/.config/karabiner/bin` if it says MISSING or NOT-ALLOWED). Karabiner owns every key bound in those tables, so Raycast's own hotkey settings stay empty for them: if Raycast still holds a hotkey for a command bound here, clear it there. That step is Ari's.
+**Widget.** The dotfiles install `ari-raycast` and the binding; `ari-raycast link check` must print `OK clipboard-history ✦4 allowed` (run `bake` under `~/.config/karabiner/bin` if it says MISSING or NOT-ALLOWED). Karabiner owns every key bound in those tables, so Raycast's own hotkey settings stay empty for them: if Raycast still holds a hotkey for a command bound here, clear it there. That step is Ari's.
