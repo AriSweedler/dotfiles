@@ -18,8 +18,8 @@
 #   PreToolUse: {"matcher":"Bash","hooks":[{"type":"command",
 #     "command":"/Users/arisweedler/.config/claude/bin/pretooluse-pbcopy-guard.sh","if":"Bash(*pbcopy*)","timeout":5}]}
 #
-# Manual test (safe: `true` ignores its arguments, so the clipboard is never written even
-# if the hook is not firing): echo '{"tool_input":{"command":"true pbcopy"}}' | zsh <this file>; echo $?
+# Manual test (safe: `false &&` short-circuits, so pbcopy never runs even if the hook is not
+# firing): echo '{"tool_input":{"command":"false && pbcopy"}}' | zsh <this file>; echo $?
 # Expect exit 2 and the message; with HANDOFF_CLIP_OK=1 in the command, exit 0.
 
 set -u
@@ -30,9 +30,12 @@ main() {
   # Match only the command text, so a description that mentions pbcopy never trips the guard.
   command="$(printf '%s' "${input}" | jq -r '.tool_input.command // empty' 2>/dev/null)" || command="${input}"
   [[ -n "${command}" ]] || command="${input}"
-  # pbcopy as a command token: bare or path-qualified (/usr/bin/pbcopy), never a fragment of a
-  # longer name (xyz-pbcopy-abc, pbcopyish, pbcopy-wrapper, my.pbcopy).
-  local pbcopy_cmd='(^|[^A-Za-z0-9_.-])pbcopy([^A-Za-z0-9_.-]|$)'
+  # pbcopy in COMMAND position only: at the start, after a separator (| ; & ( { ` newline), as a
+  # path (/usr/bin/pbcopy), or behind a wrapper (xargs, sudo, env, command, exec, nohup, time,
+  # -exec). A quoted argument that merely contains the word ("... and pbcopy guard") does not
+  # count, and neither does a fragment of a longer name (xyz-pbcopy-abc, pbcopyish, my.pbcopy).
+  local sep='[|;&({`'$'\n'']'
+  local pbcopy_cmd="(^|${sep}[[:space:]]*|/|(xargs|sudo|env|command|exec|nohup|time|-exec)[[:space:]]+)pbcopy([[:space:];|&)<>]|\$)"
   [[ "${command}" =~ ${pbcopy_cmd} ]] || return 0
   [[ "${command}" == *HANDOFF_CLIP_OK=1* ]] && return 0
 
