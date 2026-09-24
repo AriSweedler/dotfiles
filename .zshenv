@@ -14,8 +14,4 @@ export XDG_STATE_HOME="$HOME/.local/state"
 # XDG_CONFIG_DIRS
 # If $XDG_CONFIG_DIRS is either not set or empty, a value equal to /etc/xdg should be used.
 
-# macOS /etc/zshrc disables zsh's `log` builtin for interactive shells. But
-# non-interactive shells (e.g. spawned by claude) to not get the same benefits.
-# This is useful for when claude wants to read system logs (debugging when stuff
-# has been plugged into USB ports)
-disable log
+[[ -r "${ZDOTDIR}/.zshenv" ]] && source "${ZDOTDIR}/.zshenv"
