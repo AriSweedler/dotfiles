@@ -32,3 +32,4 @@
 # Symlinks into tool-managed installs (claude version dir, pipx venv).
 /bin/claude
 /bin/pyairtable
+!/share/plugged/
