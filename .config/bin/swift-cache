@@ -19,6 +19,8 @@ Usage:
   swift-cache status            toolchain, every cached tool and package, sizes
   swift-cache prune             drop binaries no tool points at and packages whose source is gone
   swift-cache rebuild <name>    force one tool or package to build again
+  swift-cache bench [--cold]    time `<tool> --help` for every cached entry (warm: cache overhead
+                                plus process start; --cold rebuilds first, so compile cost shows)
   swift-cache path              print the cache root
   swift-cache -h | --help
 EOH
@@ -29,6 +31,7 @@ main() {
     status)  swift_cache::status ;;
     prune)   swift_cache::prune ;;
     rebuild) swift_cache::rebuild "${2:?rebuild needs a name}" ;;
+    bench)   swift_cache::bench "${2:-}" ;;
     path)    swift_cache::root ;;
     -h|--help|help) help ;;
     "")      help >&2; return 2 ;;

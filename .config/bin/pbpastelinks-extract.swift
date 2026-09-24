@@ -16,6 +16,16 @@
 import Cocoa
 import Foundation
 
+// --help exits before the pasteboard is read: the no-side-effect probe swift-cache bench uses.
+if CommandLine.arguments.dropFirst().contains(where: { $0 == "--help" || $0 == "-h" }) {
+    print("""
+    usage: pbpastelinks-extract [--help]
+      Reads the clipboard's rich-text flavors and prints HTML to stdout. Takes no other
+      arguments; pbpastelinks runs it through swift-run.
+    """)
+    exit(0)
+}
+
 let pb = NSPasteboard.general
 
 func log(_ msg: String) {

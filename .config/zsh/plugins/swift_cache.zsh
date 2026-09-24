@@ -89,6 +89,9 @@ swift_cache::bin_for() {
   name="${src:t:r}"
   bin="${root}/bin/${name}-${key}"
   if [[ "${force}" == false && -x "${bin}" ]]; then
+    # A hit after a toolchain or source revert lands on an older key: repoint the current
+    # link so status and prune see the binary that actually runs.
+    [[ "$(readlink "${root}/bin/${name}" 2>/dev/null)" == "${name}-${key}" ]] || ln -sfn "${name}-${key}" "${root}/bin/${name}"
     print -r -- "${bin}"
     return 0
   fi
@@ -303,4 +306,46 @@ swift_cache::rebuild() {
     log::err "nothing cached under that name | name='${name}' hint='swift-cache status'"
     return 1
   fi
+}
+
+# Time `<tool> --help` for every cached entry: the run path with no side effects, so the
+# number is the cache's own overhead plus process start. --cold rebuilds each entry first,
+# so the same table shows compile cost. Every Swift tool in the dotfiles accepts --help.
+#   swift_cache::bench [--cold]
+swift_cache::bench() {
+  zmodload zsh/datetime
+  local cold=false
+  [[ "${1:-}" == "--cold" ]] && cold=true
+  local root; root="$(swift_cache::root)"
+  printf '%-28s %-8s %8s  %s\n' "tool" "kind" "seconds" "status"
+  local link name src dir bin t0 t1 rc
+  for link in "${root}"/bin/*(N@); do
+    name="${link:t}"
+    src="$(<"${link}.src" 2>/dev/null)" || continue
+    [[ -r "${src}" ]] || { printf '%-28s %-8s %8s  %s\n' "${name}" "file" "-" "source missing: ${src}"; continue; }
+    t0="${EPOCHREALTIME}"
+    if [[ "${cold}" == true ]]; then
+      bin="$(swift_cache::bin_for --force "${src}" 2>/dev/null)" || { printf '%-28s %-8s %8s  %s\n' "${name}" "file" "-" "compile failed"; continue; }
+    else
+      bin="$(swift_cache::bin_for "${src}" 2>/dev/null)" || { printf '%-28s %-8s %8s  %s\n' "${name}" "file" "-" "compile failed"; continue; }
+    fi
+    "${bin}" --help >/dev/null 2>&1; rc=$?
+    t1="${EPOCHREALTIME}"
+    printf '%-28s %-8s %8.3f  %s\n' "${name}" "file" "$(( t1 - t0 ))" "$([[ ${rc} -eq 0 ]] && print -r -- "--help ok" || print -r -- "--help exit ${rc}")"
+  done
+  local scratch
+  for scratch in "${root}"/pkg/*(N/); do
+    name="${scratch:t}"
+    dir="$(<"${scratch}/.source" 2>/dev/null)" || continue
+    [[ -d "${dir}" ]] || { printf '%-28s %-8s %8s  %s\n' "${name}" "pkg" "-" "source missing: ${dir}"; continue; }
+    t0="${EPOCHREALTIME}"
+    if [[ "${cold}" == true ]]; then
+      bin="$(swift_cache::pkg_bin_for --build "${dir}" 2>/dev/null)" || { printf '%-28s %-8s %8s  %s\n' "${name}" "pkg" "-" "build failed"; continue; }
+    else
+      bin="$(swift_cache::pkg_bin_for "${dir}" 2>/dev/null)" || { printf '%-28s %-8s %8s  %s\n' "${name}" "pkg" "-" "build failed"; continue; }
+    fi
+    "${bin}" --help >/dev/null 2>&1; rc=$?
+    t1="${EPOCHREALTIME}"
+    printf '%-28s %-8s %8.3f  %s\n' "${name}" "pkg" "$(( t1 - t0 ))" "$([[ ${rc} -eq 0 ]] && print -r -- "--help ok" || print -r -- "--help exit ${rc}")"
+  done
 }
