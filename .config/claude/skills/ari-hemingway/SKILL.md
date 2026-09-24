@@ -41,10 +41,11 @@ What are you writing?
 (5) design doc              → ari-hemingway--structure-design-doc           [planned]
 (6) scaffold article        → ari-hemingway--structure-scaffold  (break a topic into definitions + subsystems)
 (7) interactive explainer   → ari-hemingway--structure-ciechanowski  (one linear toy-to-real article with a figure per concept, for the explainers site)
-(8) other — tell me what destination and the doc's purpose
+(8) working doc             → ari-hemingway--structure-working-doc  (a session with many orthogonal asks: one file per ask, a dependency-ordered table, dispatch to agents)
+(9) other — tell me what destination and the doc's purpose
 ```
 
-Auto-detect if possible: if the user pasted a Google Doc URL → `subsystem-explainer` update mode is likely. If the session is a PR branch with uncommitted changes → `pr-description`. If the user wants to "break down", "come up to speed on", or "define the parts of" a topic they lack vocabulary for → `scaffold`. If the user wants an "interactive explainer", a "Ciechanowski-style" article, or something for `explainers.sweedler.com` → `ciechanowski` (it runs `scaffold` in Skeleton mode itself). Print the inferred shape with evidence and ask to confirm.
+Auto-detect if possible: if the user pasted a Google Doc URL → `subsystem-explainer` update mode is likely. If the session is a PR branch with uncommitted changes → `pr-description`. If the user wants to "break down", "come up to speed on", or "define the parts of" a topic they lack vocabulary for → `scaffold`. If the user wants an "interactive explainer", a "Ciechanowski-style" article, or something for `explainers.sweedler.com` → `ciechanowski` (it runs `scaffold` in Skeleton mode itself). If the session has piled up several unrelated asks, or the user wants a working doc, a task table with dependencies, or to fan asks out to agents → `working-doc`. Print the inferred shape with evidence and ask to confirm.
 
 If no matching sibling is installed, STOP and print:
 ```
@@ -56,7 +57,7 @@ No structure sibling installed for {shape}. Options:
 
 ### 2. Invoke the structure skill
 
-Invoke the sibling via the Skill tool — do not Read its SKILL.md first. The Skill tool loads the full file. The sibling handles acquire (investigation) and format internally, per its own SKILL.md.
+Invoke the sibling via the Skill tool — do not Read its SKILL.md first. The Skill tool loads the full file. The sibling handles acquire (investigation) and format internally, per its own SKILL.md. Two sub-structures apply to any shape bound for a Google Doc, inside the sibling's Draft step: `/ari-hemingway--structure-aside` (optional content in its own tab, one marker per aside) and `/ari-hemingway--structure-bookmark` (a link that lands on a sentence, not a section); `/ari-hemingway--share-gdoc` publishes both.
 
 Wait for the sibling to reach its `Present` step (draft ready).
 
