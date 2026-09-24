@@ -3788,6 +3788,30 @@
                 "type": "basic"
               }
             ]
+          },
+          {
+            "description": "Clipboard History → raycast://extensions/raycast/clipboard-history/clipboard-history",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "4",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option",
+                      "shift",
+                      "command"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open raycast://extensions/raycast/clipboard-history/clipboard-history"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
           }
         ]
       },

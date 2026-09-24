@@ -4,6 +4,7 @@ import applicationMode from "./modes/application.ts"
 import karabinerMode from "./modes/karabiner.ts"
 import typingMode, { typingBuilderRules } from "./modes/typing.ts"
 import windowMode from "./modes/window.ts"
+import { raycastRules } from "./raycast.ts"
 import { shortcuts } from "./shortcuts.ts"
 
 writeToProfile("Default", [
@@ -16,4 +17,5 @@ writeToProfile("Default", [
   // They sit after every layer so an active layer beats a stale menu.
   ...typingBuilderRules,
   ...shortcuts,
+  ...raycastRules,
 ])

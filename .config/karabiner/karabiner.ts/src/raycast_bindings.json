@@ -1,0 +1,8 @@
+[
+  {
+    "alias": "clipboard-history",
+    "title": "Clipboard History",
+    "path": "extensions/raycast/clipboard-history/clipboard-history",
+    "chord": "hyper+4"
+  }
+]
