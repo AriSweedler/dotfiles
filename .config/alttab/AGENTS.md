@@ -14,7 +14,10 @@ All of these are true, and you have verified each with a command, not an assumpt
 2. AltTab is running from `/Applications`: `ps -o comm= -p "$(pgrep -x AltTab)"`.
 3. Spotlight knows exactly one AltTab: `mdfind "kMDItemCFBundleIdentifier == 'com.lwouis.alt-tab-macos'"`.
 4. The Homebrew cask is gone: `brew list --cask alt-tab` fails (skip if Homebrew is absent).
-5. The updater is manual: `defaults read com.lwouis.alt-tab-macos updatePolicy` prints `0`.
+5. The updater is manual: `defaults read com.lwouis.alt-tab-macos updatePolicy` prints `0` AND
+   `defaults read com.lwouis.alt-tab-macos SUEnableAutomaticChecks` prints `0`. AltTab copies
+   `updatePolicy` from Sparkle's `SUEnableAutomaticChecks` on launch, so the first alone drifts
+   back to auto-check and the update window returns.
 6. Accessibility and Screen Recording are granted to this binary. Verify with the TCC database if
    the terminal has Full Disk Access (see Verification), otherwise by the person confirming the
    switcher opens with thumbnails and no permission prompt appears.
@@ -39,6 +42,9 @@ All of these are true, and you have verified each with a command, not an assumpt
 - Do not commit or push dotfiles changes unless asked.
 - Before running the script for real, show the person the `--dry-run` plan and get a yes. It
   quits their window switcher, removes the brew cask, replaces the app, and resets permissions.
+- `--build-only` is safe to run yourself: nothing installed, nothing quit. It leaves a second
+  `AltTab.app` in DerivedData that Spotlight lists until it is installed or deleted; delete it
+  when you are done testing (path in the Failure playbook).
 
 ## Procedure
 
@@ -54,6 +60,7 @@ brew list --cask alt-tab 2>/dev/null && echo "brew cask present"
 pgrep -x AltTab && echo running
 zsh ~/.config/alttab/bin/alttab-free-cert --status   # exit 0 = certificate present and trusted
 alttab-free-build --help
+cat ~/.config/alttab/free.patch.ref     # the upstream tag the patch targets; the script's default --ref
 ```
 
 - `TeamIdentifier=QXD7GW8FHY` means the official build is installed. Expected; the script replaces it.
@@ -90,11 +97,13 @@ Summarize the plan in three lines and ask for a go-ahead.
 alttab-free-build
 ```
 
-Expect a minute or two of silence during compilation. During the first build Keychain may ask
-whether `codesign` may use the "AltTab Free Local" key; they choose Always Allow. Parse the
+Expect a minute or two of silence during compilation (about 70 s on an M4 Max; the DerivedData
+under `~/.cache/swift/derived/alttab-free` is kept between runs, but xcodebuild's fixed work
+dominates, so a rebuild is not much faster than the first build). During the first build Keychain
+may ask whether `codesign` may use the "AltTab Free Local" key; they choose Always Allow. Parse the
 trailing `key=value` lines: `installed`, `permissions_reset`, `identity`, `cdhash`, `version`,
 `commit`. If it exits non-zero, go to the failure playbook; the build log is
-`~/.cache/alttab-free/src/DerivedData/alttab-free-build.log`.
+`~/.cache/swift/derived/alttab-free/alttab-free-build.log`.
 
 ### 4. Permissions, only if `permissions_reset=true`
 
@@ -138,11 +147,52 @@ and why they must decline in-app updates, and that re-running the script is safe
 permissions because the certificate does not change. If you fell back to the human check for
 permissions, say so.
 
+## Upstream released a new version
+
+The signal is usually AltTab's own update window ("11.7.1 is available"). The person declines
+it: accepting would replace the patched build with the stock one. The rebuild is theirs to
+finish; the patch move is yours.
+
+1. Confirm the release and the current base:
+   `gh api repos/lwouis/alt-tab-macos/releases/latest --jq .tag_name` and
+   `cat ~/.config/alttab/free.patch.ref`.
+2. Move the patch. This works in a throwaway worktree beside the clone, never in `/Applications`:
+   ```sh
+   alttab-free-build --rebase-patch vX.Y.Z
+   ```
+   It commits `free.patch` on top of its current base tag, runs `git rebase` onto the new tag (a
+   three-way merge, which follows moved context that a plain `git apply` rejects), and on success
+   rewrites `free.patch` (header `Base:` line included) and `free.patch.ref`, then removes the
+   worktree.
+3. If it stops on conflicts, it names the files and leaves the worktree at
+   `~/.cache/alttab-free/rebase`. Resolve each conflict yourself, keeping the patch's intent:
+   Pro stays locked apart from shortcut slot 2. The usual shape is upstream adding lines at the
+   top of a function the patch gutted (a `#if DEBUG` mock hook, a new guard): keep upstream's new
+   lines and the patch's replacement body, with an explicit `return` where the patch relied on a
+   single-expression body. Then run the three commands the script printed (`git add`, the
+   `rebase --continue` with `GIT_EDITOR=true`, `alttab-free-build --finish-patch`).
+4. Prove it builds without installing: `alttab-free-build --build-only --identity -` (about 70 s).
+   Read `free.patch`'s header and the hunk list (`grep -E '^\+\+\+|^@@' free.patch`) and check the
+   "What it changes" list still matches what the hunks do.
+5. The person installs: `alttab-free-build` (Procedure steps 2 to 6; permissions survive because
+   the certificate is unchanged). Delete the build-only bundle first if it is still there.
+6. Commit `free.patch`, `free.patch.ref` and anything else that changed on the shared tier
+   (`git df add …; git df commit`), only when asked; the push is the person's.
+
+If the rebase applies cleanly but the build then fails, the conflict was semantic. Read the
+`error:` lines in the build log and fix the files in the clone at `~/.cache/alttab-free/src`,
+which the build left at the new tag with the patch applied. Then regenerate the patch from the
+clone, keeping the prose header: `{ sed -n '1,/^diff --git/p' free.patch | sed '$d';
+git -C ~/.cache/alttab-free/src diff; } > free.patch.new && mv free.patch.new free.patch`.
+`free.patch.ref` already names the new tag.
+
 ## Failure playbook
 
 | Symptom | Cause | What to do |
 |---|---|---|
-| `Patch does not apply` | `--ref` newer than `v11.6.1` | Prefer `--ref v11.6.1`. If they want the newer version: check out the tag in the clone, port the changes listed in `free.patch`'s header by hand, `git diff > free.patch` keeping the header, re-run with `--patch`. Keep Pro locked apart from slot 2. |
+| `Patch does not apply` | `--ref` is not the tag in `free.patch.ref` | Build the default ref, or move the patch first: **Upstream released a new version**. |
+| `Rebase stopped on conflicts` | upstream changed a patched function | Resolve in `~/.cache/alttab-free/rebase` per **Upstream released a new version** step 3, then `--finish-patch`. |
+| `No patch rebase in progress` from `--finish-patch` | the worktree is gone or `--rebase-patch` never ran | Run `--rebase-patch vX.Y.Z` again. |
 | Build error about `MACOSX_DEPLOYMENT_TARGET` or deprecations reported as errors | `config/local.xcconfig` missing or overridden | Confirm the file exists in the clone with `MACOSX_DEPLOYMENT_TARGET = 12.0` and `SWIFT_TREAT_WARNINGS_AS_ERRORS = NO`; re-run. |
 | `xcodebuild` license or `xcode-select` errors | Xcode not set up | Person runs the two `sudo` commands from Preflight. |
 | `No signing certificate "AltTab Free Local" found` or `ambiguous` during the build | Certificate missing, untrusted, or duplicated | `zsh ~/.config/alttab/bin/alttab-free-cert --status`. Missing or untrusted: step 1. Duplicated: the person deletes the extras in Keychain Access. |
@@ -150,10 +200,10 @@ permissions, say so.
 | `errSecInternalComponent` during the build, or a Keychain dialog about `codesign` | Keychain blocks codesign's use of the key | The person chooses Always Allow. Without a dialog: Keychain Access > login > Keys > AltTab Free Local > Access Control > allow all applications; rebuild. |
 | Screen Recording prompt repeats every few seconds | Permission rows keyed to a previous signature (ad-hoc or Homebrew build); AltTab re-checks on a timer | Quit AltTab. Run `tccutil reset ScreenCapture com.lwouis.alt-tab-macos` and `tccutil reset Accessibility com.lwouis.alt-tab-macos`. Reopen. Redo step 4. |
 | System Settings shows AltTab on, yet it still asks | Same stale rows | Same fix, or have them remove the row with − and add the app again. |
-| Two AltTab entries in Spotlight or in System Settings' app list | Build-folder copy still present | `rm -rf ~/.cache/alttab-free/src/DerivedData/Build/Products/Release/AltTab.app`. |
+| Two AltTab entries in Spotlight or in System Settings' app list | A `--build-only` bundle still present | `rm -rf ~/.cache/swift/derived/alttab-free/Build/Products/Release/AltTab.app`. |
 | A Keychain password prompt at launch | Should not happen; the patch skips the Keychain | Have them click Deny or Cancel, note it, and report it. Do not enter a password. |
 | Switcher size or style changed on its own | Pro values downgrade to Free on lock | Expected. They pick a Free value in Settings. |
-| AltTab offers an update | Updater not pinned, or they clicked Check for updates | Decline. `defaults write com.lwouis.alt-tab-macos updatePolicy -string 0`. |
+| AltTab offers an update | Upstream released; or the pin drifted (a build before 2026-09-24 pinned only `updatePolicy`, which AltTab resets from Sparkle's `SUEnableAutomaticChecks` on launch); or they clicked Check for updates | Decline. Move the patch (**Upstream released a new version**). Re-pin with the app quit: `defaults write com.lwouis.alt-tab-macos updatePolicy -string 0; defaults write com.lwouis.alt-tab-macos SUEnableAutomaticChecks -bool false; defaults write com.lwouis.alt-tab-macos SUAutomaticallyUpdate -bool false` (the install step does this). |
 
 ## Phrasing the human steps
 

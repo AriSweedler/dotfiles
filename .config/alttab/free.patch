@@ -7,7 +7,7 @@ default (hold ⌥ and press the key above Tab to switch between the active app's
 which the official Free tier blocks at the key press. Every other Pro feature stays locked:
 App Icons and Titles styles, Auto size, Search, Search-on-release, shortcut slots 3-9.
 
-Base: lwouis/alt-tab-macos tag v11.6.1 (https://github.com/lwouis/alt-tab-macos)
+Base: lwouis/alt-tab-macos tag v11.7.1 (https://github.com/lwouis/alt-tab-macos)
 Apply: git apply free.patch            (from the repo root)
 Build + install: ~/.config/alttab/bin/alttab-free-build
 
@@ -24,10 +24,10 @@ What it changes
   App                   first-launch Settings no longer waits for the Welcome letter
 
 diff --git a/src/App.swift b/src/App.swift
-index 1a647f0..dedc609 100644
+index af247375..adc2e995 100644
 --- a/src/App.swift
 +++ b/src/App.swift
-@@ -233,8 +233,7 @@ class App: AppCenterApplication {
+@@ -237,8 +237,7 @@ class App: AppCenterApplication {
      /// "now" for the Welcome prompt. Kept narrow on purpose: the other Day-X prompts are gated by
      /// trial age and don't fire on the very first launch.
      private static func willShowDay1WelcomeOnAppLaunch() -> Bool {
@@ -38,7 +38,7 @@ index 1a647f0..dedc609 100644
  
      private static func deferFirstLaunchSettingsUntilDay1WelcomeCloses() {
 diff --git a/src/Menubar.swift b/src/Menubar.swift
-index 32d8633..62f8ae6 100644
+index e53b1aa1..25591d38 100644
 --- a/src/Menubar.swift
 +++ b/src/Menubar.swift
 @@ -81,29 +81,12 @@ class Menubar {
@@ -76,7 +76,7 @@ index 32d8633..62f8ae6 100644
  
      private static func toggleUpgradeMenuItem(_ show: Bool) {
 diff --git a/src/preferences/settings-window/SettingsWindow.swift b/src/preferences/settings-window/SettingsWindow.swift
-index 866329e..22f3a13 100644
+index 9c1c6c3e..bf7b8f54 100644
 --- a/src/preferences/settings-window/SettingsWindow.swift
 +++ b/src/preferences/settings-window/SettingsWindow.swift
 @@ -507,26 +507,12 @@ class SettingsWindow: NSWindow {
@@ -109,10 +109,10 @@ index 866329e..22f3a13 100644
  
      @objc private func upgradeButtonClicked() {
 diff --git a/src/preferences/settings-window/tabs/UpgradeTab.swift b/src/preferences/settings-window/tabs/UpgradeTab.swift
-index 191b71f..55b0016 100644
+index c06d97ea..a441245e 100644
 --- a/src/preferences/settings-window/tabs/UpgradeTab.swift
 +++ b/src/preferences/settings-window/tabs/UpgradeTab.swift
-@@ -463,8 +463,7 @@ class UpgradeTab {
+@@ -448,8 +448,7 @@ class UpgradeTab {
      }
  
      static func navigateToUpgradeTab() {
@@ -121,12 +121,12 @@ index 191b71f..55b0016 100644
 +        // FREE BUILD: Pro-only controls snap back to the stored Free value; there is no Upgrade page.
      }
  
-     static func showAutoActivating(_ licenseKey: String) {
+     static func showAutoActivating() {
 diff --git a/src/preferences/settings-window/tabs/controls/ControlsTab.swift b/src/preferences/settings-window/tabs/controls/ControlsTab.swift
-index af569dc..3f6f615 100644
+index fd06a217..88203457 100644
 --- a/src/preferences/settings-window/tabs/controls/ControlsTab.swift
 +++ b/src/preferences/settings-window/tabs/controls/ControlsTab.swift
-@@ -585,7 +585,8 @@ class ControlsTab {
+@@ -559,7 +559,8 @@ class ControlsTab {
      private static func addShortcutSlot() {
          let currentCount = Preferences.shortcutCount
          guard currentCount < Preferences.maxShortcutCount else { return }
@@ -137,10 +137,10 @@ index af569dc..3f6f615 100644
              return
          }
 diff --git a/src/pro/license/LicenseManager.swift b/src/pro/license/LicenseManager.swift
-index 4386913..1ebf11f 100644
+index 15492cdd..8d648b0a 100644
 --- a/src/pro/license/LicenseManager.swift
 +++ b/src/pro/license/LicenseManager.swift
-@@ -176,37 +176,18 @@ class LicenseManager {
+@@ -202,40 +202,21 @@ class LicenseManager {
          }
      }
  
@@ -148,6 +148,9 @@ index 4386913..1ebf11f 100644
 +    // trialStartDate is written, the Keychain is never read, and the license server is never
 +    // contacted.
      func computeState() -> LicenseState {
+         #if DEBUG
+         if hasMockedLicense { return state }
+         #endif
 -        if keychain.value(account: Self.keychainKeyAccount) != nil {
 -            let lastValidationResult = defaults.bool(forKey: "lastValidationResult")
 -            guard lastValidationResult else { return .trialExpired }
@@ -161,7 +164,7 @@ index 4386913..1ebf11f 100644
 -            return .pro
 -        }
 -        return computeTrialState()
-+        .trialExpired
++        return .trialExpired
      }
  
      private func computeTrialState() -> LicenseState {
@@ -184,7 +187,7 @@ index 4386913..1ebf11f 100644
  
      func revalidateWithServer() {
 diff --git a/src/pro/scheduling/ProTransitionManager.swift b/src/pro/scheduling/ProTransitionManager.swift
-index 1b4aaa2..931f6ee 100644
+index ac5e09c8..393aded8 100644
 --- a/src/pro/scheduling/ProTransitionManager.swift
 +++ b/src/pro/scheduling/ProTransitionManager.swift
 @@ -140,8 +140,8 @@ class ProTransitionManager {
@@ -196,7 +199,7 @@ index 1b4aaa2..931f6ee 100644
 -        onAction?(action)
      }
  
-     // MARK: - Pass-through accessors for external callers (QAMenu, Day35FinalWindow, etc.)
+     // Pass-through accessors. The setters are what `QAMenu`'s Reset row writes, so they only look
 @@ -164,7 +164,7 @@ class ProTransitionManager {
      // MARK: - Lifecycle
  

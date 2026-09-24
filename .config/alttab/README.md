@@ -12,9 +12,10 @@ and the Pro appearance options stay locked.
 
 | File | Purpose |
 |---|---|
-| `bin/alttab-free-build` | Clones upstream, applies the patch, builds, installs, fixes permissions. On `PATH` via `~/.config/bin`. |
+| `bin/alttab-free-build` | Clones upstream, applies the patch, builds, installs, fixes permissions. On `PATH` via `~/.config/bin`. Also moves the patch to a new upstream tag (`--rebase-patch`). |
 | `bin/alttab-free-cert` | Creates and trusts the local code-signing certificate the build is signed with, once per machine. Called by the build script; safe to run by hand. |
-| `free.patch` | The source change. Its header lists exactly what it alters. Targets upstream tag `v11.6.1`. |
+| `free.patch` | The source change. Its header lists exactly what it alters and the upstream tag it targets (`Base:` line). |
+| `free.patch.ref` | That tag on its own, one line; the script's default `--ref`. `--rebase-patch` rewrites both files together. |
 | `README.md` | This file. |
 | `AGENTS.md` | Instructions for an LLM agent doing this on a new machine with you. |
 
@@ -40,19 +41,23 @@ and the Pro appearance options stay locked.
 alttab-free-build
 ```
 
-It takes a minute or two, most of it compiling. The script:
+It takes a minute or two, most of it xcodebuild. The script:
 
 1. Makes sure the local code-signing certificate `AltTab Free Local` exists and is trusted
    (`bin/alttab-free-cert`). First time only: it is generated into your login keychain and macOS
    asks for an administrator password to trust it. Every later run finds it and moves on.
-2. Clones `lwouis/alt-tab-macos` into `~/.cache/alttab-free/src` (or reuses it) at tag `v11.6.1`.
+2. Clones `lwouis/alt-tab-macos` into `~/.cache/alttab-free/src` (or reuses it) at the tag in
+   `free.patch.ref`.
 3. Applies `free.patch`.
 4. Writes `config/local.xcconfig`: sign with that certificate, macOS 12 deployment target,
    upstream deprecation warnings not treated as errors.
-5. Builds the Release scheme and verifies the signature and bundle id.
+5. Builds the Release scheme into `~/.cache/swift/derived/alttab-free` (kept between runs) and
+   verifies the signature and bundle id.
 6. Quits AltTab, removes the Homebrew cask, replaces `/Applications/AltTab.app`, and deletes the
    build-folder copy so Spotlight sees one AltTab.
-7. Sets the in-app updater to manual. The official update feed would reinstall Pro.
+7. Sets the in-app updater to manual, both AltTab's `updatePolicy` and Sparkle's
+   `SUEnableAutomaticChecks` and `SUAutomaticallyUpdate`; AltTab copies the first from the second
+   on launch, so one alone does not hold. The official update feed would reinstall Pro.
 8. Resets the Accessibility and Screen Recording records if the app's code requirement changed.
    With the certificate it does not change between rebuilds, so this happens on the first
    install and then only if you switch signing identity.
@@ -107,14 +112,20 @@ The next `alttab-free-build` creates a new certificate, and you grant once more.
 
 ## Updating to a newer AltTab
 
+When AltTab's own update window appears, decline it, then move the patch to the new tag:
+
 ```sh
-alttab-free-build --ref v11.7.0
+alttab-free-build --rebase-patch v11.7.1     # commits free.patch on its base tag, git-rebases it onto v11.7.1
+alttab-free-build --build-only               # prove it builds; installs nothing
+alttab-free-build                            # install; permissions survive (same certificate)
 ```
 
-If the patch no longer applies, the script stops and says so. Regenerate it: check out the new
-tag in the clone, make the changes the header of `free.patch` describes, then
-`git diff > ~/.config/alttab/free.patch` and paste the header back on top. Do not widen the patch
-beyond the second shortcut slot.
+The rebase is a three-way merge, so it follows code that merely moved. When upstream changed a
+line the patch also changes, it stops, names the files, and leaves a worktree at
+`~/.cache/alttab-free/rebase`. Resolve the conflicts there (keep Pro locked; only shortcut slot 2
+is allowed), run the `git add` and `git rebase --continue` it printed, then
+`alttab-free-build --finish-patch` rewrites `free.patch` and `free.patch.ref` and removes the
+worktree. `AGENTS.md` has the step-by-step for an agent.
 
 ## If something is off
 
@@ -125,8 +136,9 @@ beyond the second shortcut slot.
 | `The authorization was canceled by the user` | The trust dialog was dismissed | Run `zsh ~/.config/alttab/bin/alttab-free-cert` again; it only re-applies trust |
 | Build fails with `errSecInternalComponent`, or a Keychain dialog asks about `codesign` | Keychain will not let codesign use the key silently | Choose **Always Allow** in the dialog. Without a dialog: Keychain Access > login > Keys > "AltTab Free Local" > Access Control > allow all applications, then rebuild |
 | System Settings shows AltTab on, but it still asks | Same stale rows | Same fix, or remove the row with **−** and add the app again |
-| Two AltTabs in Spotlight | Build-folder copy left behind | `rm -rf ~/.cache/alttab-free/src/DerivedData/Build/Products/Release/AltTab.app` |
-| Build fails | See `~/.cache/alttab-free/src/DerivedData/alttab-free-build.log` | Deployment-target and deprecation errors mean `config/local.xcconfig` was not written |
+| Two AltTabs in Spotlight | A `--build-only` copy left behind | `rm -rf ~/.cache/swift/derived/alttab-free/Build/Products/Release/AltTab.app` |
+| Build fails | See `~/.cache/swift/derived/alttab-free/alttab-free-build.log` | Deployment-target and deprecation errors mean `config/local.xcconfig` was not written |
+| `Patch does not apply` | `--ref` is not the tag in `free.patch.ref` | Move the patch first: "Updating to a newer AltTab" |
 | Switcher size or style changed on its own | Auto size, App Icons and Titles styles are Pro | Expected. Pick a Free value in Settings |
 | ⌥` does nothing | A build from before slot 2 was allowed, or slot 2 was removed in Settings | Rebuild with `alttab-free-build`. In Settings > Controls, the **+** button re-adds slot 2; set it to hold ⌥, press `, "Active app" |
 

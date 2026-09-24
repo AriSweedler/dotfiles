@@ -30,9 +30,14 @@ source "${LIB_LOGGING}"
 # --- Constants ---
 
 readonly UPSTREAM_URL="https://github.com/lwouis/alt-tab-macos.git"
-readonly DEFAULT_REF="v11.6.1"                  # the tag free.patch was written against
 readonly DEFAULT_PATCH="${SCRIPT_DIR:h}/free.patch"
+# The tag free.patch was written against lives beside the patch, so --rebase-patch can move
+# both together without editing this script.
+readonly PATCH_REF_FILE="${DEFAULT_PATCH}.ref"
+readonly DEFAULT_REF="$( [[ -r "${PATCH_REF_FILE}" ]] && tr -d '[:space:]' < "${PATCH_REF_FILE}" || print -r -- "v11.6.1" )"
 readonly DEFAULT_SRC="${XDG_CACHE_HOME:-${HOME}/.cache}/alttab-free/src"
+readonly REBASE_WORKTREE="${DEFAULT_SRC:h}/rebase"     # where --rebase-patch works; removed when done
+readonly REBASE_BRANCH="free-rebase"
 readonly CERT_SCRIPT="${SCRIPT_DIR}/alttab-free-cert"
 readonly LOCAL_IDENTITY="AltTab Free Local"     # created on first use by alttab-free-cert
 readonly DEFAULT_IDENTITY="${LOCAL_IDENTITY}"   # "-" for ad-hoc
@@ -312,16 +317,22 @@ install_app() {
 
 #######################################
 # Set the in-app updater to manual. The official Sparkle feed would replace this build with Pro.
+# AltTab mirrors its updatePolicy from Sparkle's own SUEnableAutomaticChecks on launch, so pinning
+# updatePolicy alone is undone the next time the app starts: Sparkle's two keys are pinned too.
 #######################################
 pin_update_policy() {
-  local current
-  current="$(defaults read "${BUNDLE_ID}" updatePolicy 2>/dev/null || true)"
-  if [[ "${current}" == "0" ]]; then
+  local policy checks auto
+  policy="$(defaults read "${BUNDLE_ID}" updatePolicy 2>/dev/null || true)"
+  checks="$(defaults read "${BUNDLE_ID}" SUEnableAutomaticChecks 2>/dev/null || true)"
+  auto="$(defaults read "${BUNDLE_ID}" SUAutomaticallyUpdate 2>/dev/null || true)"
+  if [[ "${policy}" == "0" && "${checks}" == "0" && "${auto}" == "0" ]]; then
     log::debug "Update policy already manual"
     return 0
   fi
-  log::info "Pinning updater to manual | previous='${current:-unset}'"
+  log::info "Pinning updater to manual | updatePolicy='${policy:-unset}' SUEnableAutomaticChecks='${checks:-unset}' SUAutomaticallyUpdate='${auto:-unset}'"
   run_cmd defaults write "${BUNDLE_ID}" updatePolicy -string "0"
+  run_cmd defaults write "${BUNDLE_ID}" SUEnableAutomaticChecks -bool false
+  run_cmd defaults write "${BUNDLE_ID}" SUAutomaticallyUpdate -bool false
 }
 
 #######################################
@@ -349,6 +360,124 @@ needs_permission_reset() {
   echo "true"
 }
 
+# --- Patch maintenance ---
+
+# Identity for the throwaway commits in the cache clone; they never leave this machine.
+readonly -a REBASE_GIT_ID=(-c user.name=alttab-free-build -c user.email=alttab-free-build@localhost)
+
+# The throwaway checkout --rebase-patch works in, beside the clone.
+rebase_worktree_for() {
+  print -r -- "${1:h}/rebase"
+}
+
+#######################################
+# The prose header of the patch: everything before its first diff line, with the Base line
+# rewritten for the new ref. git apply ignores the header; people read it.
+# Arguments: $1 patch file, $2 new ref
+#######################################
+patch_header() {
+  local patch="${1}" new_ref="${2}" line
+  while IFS= read -r line; do
+    [[ "${line}" == diff\ --git* ]] && break
+    [[ "${line}" == Base:* ]] && line="Base: lwouis/alt-tab-macos tag ${new_ref} (https://github.com/lwouis/alt-tab-macos)"
+    print -r -- "${line}"
+  done < "${patch}"
+}
+
+#######################################
+# Rewrite the patch from a rebased worktree: header, then the diff from the new ref to HEAD;
+# record the new ref beside the patch.
+# Arguments: $1 worktree, $2 new ref, $3 patch file
+#######################################
+write_patch() {
+  local wt="${1}" new_ref="${2}" patch="${3}" tmp
+  tmp="$(mktemp)"
+  { patch_header "${patch}" "${new_ref}"; git -C "${wt}" diff "${new_ref}" HEAD; } > "${tmp}"
+  mv -f "${tmp}" "${patch}"
+  print -r -- "${new_ref}" > "${patch}.ref"
+  log::ok "Patch regenerated | patch='${patch}' ref='${new_ref}' hunks='$(grep -c '^@@' "${patch}")'"
+  log::info "Next: alttab-free-build --build-only to prove it builds, then alttab-free-build to install"
+}
+
+#######################################
+# Remove the rebase worktree and its branch when present.
+# Arguments: $1 src dir
+#######################################
+drop_rebase_worktree() {
+  local src="${1}" wt
+  wt="$(rebase_worktree_for "${src}")"
+  [[ -d "${wt}" ]] && run_cmd git -C "${src}" worktree remove --force "${wt}"
+  git -C "${src}" worktree prune
+  if git -C "${src}" show-ref --verify --quiet "refs/heads/${REBASE_BRANCH}"; then
+    run_cmd git -C "${src}" branch -q -D "${REBASE_BRANCH}"
+  fi
+  return 0
+}
+
+#######################################
+# Move the patch to a new upstream ref: commit it on the ref it targets, git rebase onto the
+# new ref (a three-way merge, which follows moved context that git apply cannot), regenerate the
+# patch. A conflict leaves the worktree for a person; --finish-patch completes the move.
+# Arguments: $1 src dir, $2 patch file, $3 old ref, $4 new ref
+# Returns: 1 on conflict or failure
+#######################################
+rebase_patch() {
+  local src="${1}" patch="${2}" old_ref="${3}" new_ref="${4}" wt
+  wt="$(rebase_worktree_for "${src}")"
+  ensure_clone "${src}" "${old_ref}"
+  lvl=DEBUG run_cmd git -C "${src}" fetch --quiet --tags origin "${old_ref}" "${new_ref}"
+  drop_rebase_worktree "${src}"
+  run_cmd git -C "${src}" worktree add --quiet -b "${REBASE_BRANCH}" "${wt}" "${old_ref}"
+  if ! git -C "${wt}" apply "${patch}"; then
+    log::err "Patch does not apply to its own base | patch='${patch}' ref='${old_ref}'"
+    return 1
+  fi
+  run_cmd git -C "${wt}" add -A
+  run_cmd git -C "${wt}" "${REBASE_GIT_ID[@]}" -c core.hooksPath=/dev/null commit --quiet -m "free tier patch (against ${old_ref})"
+  print -r -- "${new_ref}" > "${wt}/.free-rebase-target"
+  print -r -- "${patch}" > "${wt}/.free-rebase-patch"
+  log::info "Rebasing the patch | from='${old_ref}' onto='${new_ref}' worktree='${wt}'"
+  if git -C "${wt}" "${REBASE_GIT_ID[@]}" -c core.hooksPath=/dev/null rebase --quiet "${new_ref}" >/dev/null 2>&1; then
+    write_patch "${wt}" "${new_ref}" "${patch}"
+    drop_rebase_worktree "${src}"
+    return 0
+  fi
+  local -a conflicted=( "${(@f)$(git -C "${wt}" diff --name-only --diff-filter=U)}" )
+  log::err "Rebase stopped on conflicts | files='${(j:, :)conflicted}' worktree='${wt}'"
+  log::WARN "Resolve each file in ${wt} (keep Pro locked apart from shortcut slot 2), then:
+  git -C ${wt} add ${(j: :)conflicted}
+  GIT_EDITOR=true git -C ${wt} ${REBASE_GIT_ID[*]} -c core.hooksPath=/dev/null rebase --continue
+  alttab-free-build --finish-patch"
+  return 1
+}
+
+#######################################
+# After the conflicts are resolved and the rebase continued: regenerate the patch from the
+# worktree and remove it.
+# Arguments: $1 src dir
+#######################################
+finish_patch() {
+  local src="${1}" wt
+  wt="$(rebase_worktree_for "${src}")"
+  if [[ ! -d "${wt}" || ! -r "${wt}/.free-rebase-target" ]]; then
+    log::err "No patch rebase in progress | worktree='${wt}' hint='alttab-free-build --rebase-patch REF'"
+    return 1
+  fi
+  if [[ -d "$(git -C "${wt}" rev-parse --git-path rebase-merge)" ]]; then
+    log::err "The rebase has not been continued | worktree='${wt}' hint='git add the resolved files, then git rebase --continue'"
+    return 1
+  fi
+  if [[ -n "$(git -C "${wt}" diff --name-only --diff-filter=U)" ]]; then
+    log::err "Unmerged files remain | worktree='${wt}'"
+    return 1
+  fi
+  local new_ref patch
+  new_ref="$(<"${wt}/.free-rebase-target")"
+  patch="$(<"${wt}/.free-rebase-patch")"
+  write_patch "${wt}" "${new_ref}" "${patch}"
+  drop_rebase_worktree "${src}"
+}
+
 # --- Help ---
 
 help() {
@@ -357,6 +486,7 @@ ${c_green}alttab-free-build${c_rst} — build AltTab as the permanent Free tier 
 
 ${c_bold}Usage:${c_rst}
   alttab-free-build [OPTIONS]
+  alttab-free-build --rebase-patch REF | --finish-patch
 
 ${c_bold}Options:${c_rst}
   --ref REF          Upstream tag or branch to build (default: ${DEFAULT_REF}, what free.patch targets)
@@ -367,6 +497,11 @@ ${c_bold}Options:${c_rst}
                      "-" signs ad-hoc: permissions must be granted again after every rebuild.
   --build-only       Clone, patch, build and verify; do not touch /Applications or permissions
   --no-launch        Install but do not open the app afterwards
+  --rebase-patch REF Upstream released REF: commit free.patch on its current base, git rebase it
+                     onto REF, rewrite free.patch and free.patch.ref. On conflicts the worktree
+                     stays at ${DEFAULT_SRC:h}/rebase with instructions; nothing else changes
+  --finish-patch     After resolving those conflicts and continuing the rebase: rewrite the patch
+                     from the worktree and remove it
   --dry-run          Print the plan and exit without changing anything
   --verbose          Enable debug logging
   -h, --help         Show this help
@@ -374,7 +509,8 @@ ${c_bold}Options:${c_rst}
 ${c_bold}Examples:${c_rst}
   alttab-free-build
   alttab-free-build --build-only
-  alttab-free-build --ref v11.7.0            # newer upstream; fails clearly if the patch no longer applies
+  alttab-free-build --rebase-patch v11.7.1   # upstream released: move the patch, then --build-only, then install
+  alttab-free-build --ref v11.7.0            # build another upstream ref; fails clearly if the patch no longer applies
   alttab-free-build --identity -              # ad-hoc; permissions redone after each rebuild
 
 ${c_bold}After install:${c_rst}
@@ -389,21 +525,23 @@ main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local verbose=false build_only=false launch=true
+  local verbose=false build_only=false launch=true mode=build rebase_to=""
   local ref="${DEFAULT_REF}" src="${DEFAULT_SRC}" patch="${DEFAULT_PATCH}" identity="${DEFAULT_IDENTITY}"
 
   while (( $# > 0 )); do case "${1}" in
-    -h|--help)     help; return 0 ;;
-    --verbose)     verbose=true; shift ;;
-    --dry-run)     DRY_RUN=true; shift ;;
-    --build-only)  build_only=true; shift ;;
-    --no-launch)   launch=false; shift ;;
-    --ref)         ref="${2:?--ref requires a value}"; shift 2 ;;
-    --src)         src="${2:?--src requires a value}"; shift 2 ;;
-    --patch)       patch="${2:?--patch requires a value}"; shift 2 ;;
-    --identity)    identity="${2:?--identity requires a value}"; shift 2 ;;
-    -*)            log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
-    *)             log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
+    -h|--help)       help; return 0 ;;
+    --verbose)       verbose=true; shift ;;
+    --dry-run)       DRY_RUN=true; shift ;;
+    --build-only)    build_only=true; shift ;;
+    --no-launch)     launch=false; shift ;;
+    --rebase-patch)  mode=rebase; rebase_to="${2:?--rebase-patch requires a ref}"; shift 2 ;;
+    --finish-patch)  mode=finish; shift ;;
+    --ref)           ref="${2:?--ref requires a value}"; shift 2 ;;
+    --src)           src="${2:?--src requires a value}"; shift 2 ;;
+    --patch)         patch="${2:?--patch requires a value}"; shift 2 ;;
+    --identity)      identity="${2:?--identity requires a value}"; shift 2 ;;
+    -*)              log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)               log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
   esac; done
 
   export VERBOSE="${verbose}"
@@ -421,6 +559,24 @@ main() {
     log::err "Source dir exists but is not a git clone | src='${src}'"
     return 1
   fi
+  if [[ "${mode}" == rebase && "${rebase_to}" == "${ref}" ]]; then
+    log::err "The patch already targets that ref | ref='${ref}'"
+    return 1
+  fi
+
+  # === PATCH MAINTENANCE ===
+  if [[ "${mode}" == rebase ]]; then
+    if [[ "${DRY_RUN}" == "true" ]]; then
+      log::INFO "Dry run. Would: fetch ${ref} and ${rebase_to}; add worktree $(rebase_worktree_for "${src}") at ${ref}; commit ${patch} there; git rebase onto ${rebase_to}; on success rewrite ${patch} and ${patch}.ref"
+      return 0
+    fi
+    rebase_patch "${src}" "${patch}" "${ref}" "${rebase_to}"
+    return
+  fi
+  if [[ "${mode}" == finish ]]; then
+    finish_patch "${src}"
+    return
+  fi
 
   local built_app="${DERIVED_DATA}/Build/Products/${SCHEME}/AltTab.app"
   log::debug "Parsed args | ref='${ref}' src='${src}' patch='${patch}' identity='${identity}' build_only='${build_only}' launch='${launch}'"
@@ -434,7 +590,7 @@ main() {
 4. xcodebuild scheme ${SCHEME} -> ${built_app}
 5. codesign --verify; check bundle id ${BUNDLE_ID}
 6. quit AltTab; brew uninstall --cask ${BREW_CASK} if installed; replace ${INSTALL_APP}; delete the built bundle from ${DERIVED_DATA}
-7. defaults write ${BUNDLE_ID} updatePolicy 0
+7. defaults write ${BUNDLE_ID} updatePolicy 0, SUEnableAutomaticChecks false, SUAutomaticallyUpdate false
 8. tccutil reset ScreenCapture/Accessibility ${BUNDLE_ID} if the code requirement changed
 9. open ${INSTALL_APP}"
     return 0
