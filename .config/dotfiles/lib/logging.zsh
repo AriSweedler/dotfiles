@@ -1,9 +1,6 @@
-# dotfiles/lib/logging.zsh — the shared logging library plus the two zsh plugins the push logs need.
-#
-# Bootstrap: before `dotfiles init` has linked the skills, ~/.claude/skills is empty and the
-# only reachable copy of the logging lib is the shared tier's own under ~/.config.
-LIB_LOGGING="${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
-[[ -r "${LIB_LOGGING}" ]] || LIB_LOGGING="${HOME}/.config/claude/skills/ari-skill-shellscripts/lib/logging.zsh"
+# dotfiles/lib/logging.zsh — the one log library plus the two zsh plugins the push logs need.
+# All three ship in the shared tier's checkout, so they resolve before any skill is linked.
+LIB_LOGGING="${HOME}/.config/zsh/plugins/log.zsh"
 readonly LIB_LOGGING
 if [[ ! -r "${LIB_LOGGING}" ]]; then
   print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"

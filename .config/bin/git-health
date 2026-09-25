@@ -20,15 +20,7 @@
 # runs git -C <repo> with explicit tasks against an explicit registry.
 set -euo pipefail
 
-# The classic log suite
-c_red='\e[31m'
-c_green='\e[32m'
-c_yellow='\e[33m'
-c_bold='\e[1m'
-c_rst='\e[0m'
-log::err() { echo -e "${c_red}[ERROR]${c_rst}" "$@" >&2 ; }
-log::warn() { echo -e "${c_yellow}[WARN]${c_rst}" "$@" >&2 ; }
-log::info() { echo -e "${c_green}[INFO]${c_rst}" "$@" >&2 ; }
+source "${XDG_CONFIG_HOME:-${HOME}/.config}/zsh/plugins/log.zsh"
 
 readonly STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/git-health"
 readonly REGISTRY="${STATE_DIR}/repos"

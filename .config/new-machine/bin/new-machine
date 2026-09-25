@@ -43,7 +43,7 @@ done
 unset lib
 
 help() {
-  local green=$'\e[32m' bold=$'\e[1m' rst=$'\e[0m'
+  local green="${c_green}" bold="${c_bold}" rst="${c_rst}"
   if [[ ! -t 1 ]]; then
     green='' bold='' rst=''
   fi

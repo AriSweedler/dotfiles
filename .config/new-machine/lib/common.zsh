@@ -22,10 +22,6 @@ fi
 source "${NEW_MACHINE_LOG_LIB}"
 source "${NEW_MACHINE_LOG_ROTATE_LIB}"
 export OTTO_LOG_NOTIF_GROUP=new-machine OTTO_LOG_NOTIF_TITLE=new-machine
-# Log files and launchd captures should not carry escape codes.
-if [[ ! -t 2 ]]; then
-  c_red='' c_green='' c_yellow='' c_blue='' c_magenta='' c_cyan='' c_white='' c_grey='' c_rst=''
-fi
 
 # ── Process environment every run and every subprocess share ─────────────────
 # .zshenv exports the XDG set once HOME is checked out; the first run predates that.
