@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
-# Publish a markdown draft as a Google Doc and finish it in the same run: create (inside a
-# Drive folder with --folder, or in My Drive) or update in place with --doc via Drive's
-# markdown→Docs conversion, then style table header rows and verify every image fits one
+# Publish a markdown draft as a Google Doc and finish it in the same run: create (inside the
+# Drive folder from --folder, else ARI_HEMINGWAY_SCRATCH_DIR) or update in place with --doc
+# via Drive's markdown→Docs conversion, then style table header rows and verify every image fits one
 # page (gdoc_finish.zsh), then rebuild the draft's asides as tabs (gdoc_asides.zsh; the
 # import deletes every tab but the first), then bookmark the draft's #bm- runs and aside
 # markers when the structure-bookmark skill's setup passes. Prints the URL. The draft's first
@@ -67,6 +67,34 @@ doc_id_from() {
 ########################################################################
 # Business logic
 ########################################################################
+
+#######################################
+# Pick the folder a new Doc lands in: --folder when given, else ARI_HEMINGWAY_SCRATCH_DIR.
+# An update (--doc) keeps whatever --folder said so the doc-plus-folder check can reject it.
+# Arguments: $1 - --folder value (id, URL, or empty), $2 - doc id ("" = create)
+# Outputs: the folder id on stdout
+# Returns: 1 when creating with neither source set
+#######################################
+choose_folder() {
+  local folder="${1}" doc="${2}"
+  if [[ -n "${doc}" ]]; then
+    echo "${folder}"
+    return
+  fi
+  if [[ -n "${folder}" ]]; then
+    log::info "Target folder from flag | source='--folder' folder='${folder}'"
+    echo "${folder}"
+    return
+  fi
+  if [[ -n "${ARI_HEMINGWAY_SCRATCH_DIR:-}" ]]; then
+    folder="$(drive::folder_id_from "${ARI_HEMINGWAY_SCRATCH_DIR}")"
+    log::info "folder from ARI_HEMINGWAY_SCRATCH_DIR | source='ARI_HEMINGWAY_SCRATCH_DIR' folder='${folder}'"
+    echo "${folder}"
+    return
+  fi
+  log::err "No folder for the new Doc | fix='pass --folder ID_OR_URL or export ARI_HEMINGWAY_SCRATCH_DIR=ID_OR_URL'"
+  return 1
+}
 
 #######################################
 # Stage the upload body. Without --title the first line is the title and is stripped.
@@ -170,6 +198,10 @@ ${c_bold}Options:${c_rst}
   --dry-run          Validate the Drive request; create/update nothing
   -h, --help         Show this help
 
+${c_bold}Environment:${c_rst}
+  ARI_HEMINGWAY_SCRATCH_DIR  Drive folder (id or URL) a new Doc lands in when --folder is absent;
+                             a create with neither set fails before any Drive call
+
 ${c_bold}Output:${c_rst} the Doc URL on stdout. Non-zero exit after "Doc created" means finishing failed
 (e.g. an image taller than one page), the aside tabs could not be rebuilt, or the bookmark step
 failed after its setup check passed; fix the draft and re-run with --doc URL. A missing bookmark
@@ -199,6 +231,7 @@ main() {
   # === MASSAGE ===
   doc="$(doc_id_from "${doc}")"
   folder="$(drive::folder_id_from "${folder}")"
+  folder="$(choose_folder "${folder}" "${doc}")" || return 1
   [[ -n "${file}" ]] && file="${file:A}"
 
   # === VALIDATE ===

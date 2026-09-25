@@ -1,11 +1,11 @@
 ---
 name: ari-hemingway--share-gdoc
-description: "Publish a markdown draft as a Google Doc in one command — create, optionally inside a given Drive folder, or update an existing doc in place — and finish it: every Drive link a smart chip, table header rows styled (bold, centered, grey), every table's columns sized so it is shortest with no mid-word breaks, every image checked to fit one page and to link to its mermaid.live source, every aside section rebuilt as its own tab. Dry-runs first; the doc is created only on confirm."
+description: "Publish a markdown draft as a Google Doc in one command — create inside a given Drive folder (else the ARI_HEMINGWAY_SCRATCH_DIR folder), or update an existing doc in place — and finish it: every Drive link a smart chip, table header rows styled (bold, centered, grey), every table's columns sized so it is shortest with no mid-word breaks, every image checked to fit one page and to link to its mermaid.live source, every aside section rebuilt as its own tab. Dry-runs first; the doc is created only on confirm."
 ---
 
 # Publish to Google Doc
 
-Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-gdoc`) into a Google Doc with one script call: import the markdown through Drive's Docs conversion, into the caller's Drive folder when `--folder` is given, apply one fix-up batch for what markdown cannot express, then verify from one re-read. The fix-up is part of publishing, never a follow-up.
+Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-gdoc`) into a Google Doc with one script call: import the markdown through Drive's Docs conversion, into the caller's Drive folder (`--folder`, else `ARI_HEMINGWAY_SCRATCH_DIR`), apply one fix-up batch for what markdown cannot express, then verify from one re-read. The fix-up is part of publishing, never a follow-up.
 
 ## Rules
 
@@ -26,7 +26,7 @@ Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-g
 - The draft's first line is the plain-text title (starting with `[🤖 AI generated]` per `/ari-hemingway--format-gdoc`). The script strips that line from the body and uses it as the Doc title; pass `--title` to override and keep the whole file as body.
 - Updating in place (`--doc`) replaces the entire body. Manual edits in the Doc are lost. Say so before updating a doc the user has touched.
 - Docs and folders in shared drives work: the script sets `supportsAllDrives`. A Drive 404 on a doc or folder the user can open therefore means the id is wrong, not that it moved.
-- `--folder <id|url>` creates the Doc inside that folder (a bare id or a `drive.google.com/drive/folders/…` URL). The script first checks that the target exists, is a folder, and accepts new files. The Doc is placed at creation and never moved, so `--folder` together with `--doc` is an error.
+- A new Doc always lands in a folder: `--folder <id|url>` (a bare id or a `drive.google.com/drive/folders/…` URL), else `ARI_HEMINGWAY_SCRATCH_DIR` in the same forms, logged as `folder from ARI_HEMINGWAY_SCRATCH_DIR`. With neither set the script exits non-zero naming both; ask the user for a folder then. The script first checks that the target exists, is a folder, and accepts new files. The Doc is placed at creation and never moved, so `--folder` together with `--doc` is an error.
 
 ## File storage
 
@@ -47,7 +47,7 @@ Emit exactly this one Bash call (add `--doc <id|url>` to update an existing doc,
 zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_publish.zsh --file <path/to/output.md> --dry-run
 ```
 
-It logs the title, the body size, and the target folder's name and id when `--folder` is given, then validates the Drive request without creating anything. Show the user the title, whether this is a create or an update, and the folder, then wait for confirmation.
+It logs the title, the body size, and for a create the target folder's source (`--folder` or `ARI_HEMINGWAY_SCRATCH_DIR`), name and id, then validates the Drive request without creating anything. A create with neither source exits non-zero before any Drive call; ask the user for a folder and re-run. Show the user the title, whether this is a create or an update, and the folder, then wait for confirmation.
 
 ### Publish
 
