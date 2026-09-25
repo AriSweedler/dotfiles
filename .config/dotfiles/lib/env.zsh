@@ -9,7 +9,7 @@ typeset -gx DOTFILES_ROOT="${DOTFILES_LIB:h}"          # …/dotfiles: lib/ step
 typeset -gx DOTFILES_STEPS="${DOTFILES_ROOT}/steps"
 typeset -gx DOTFILES_CMD="${DOTFILES_ROOT}/cmd"
 typeset -gx DOTFILES_CONFIG="${DOTFILES_ROOT:h}"       # the .config of this checkout, not necessarily $HOME's
-typeset -gx DOTFILES_TESTS="${DOTFILES_CONFIG}/new-machine/tests"
+typeset -gx DOTFILES_TESTS="${DOTFILES_ROOT}/tests"
 # The name fix hints print the CLI under.
 typeset -gx CLI_NAME="${CLI_NAME:-dotfiles}"
 

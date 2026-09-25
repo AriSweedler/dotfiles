@@ -5,11 +5,11 @@
 # nothing here may ever read or write outside $FIX once a world exists.
 
 # shellcheck disable=SC2034  # used by the sourcing test files
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TESTS_DIR="${REPO_DIR}/tests"
+TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ORIG_CONFIG_DIR="$(cd "${TESTS_DIR}/../.." && pwd)"     # the ~/.config under test (dotfiles/, bin/, zsh/, …)
+REPO_DIR="${ORIG_CONFIG_DIR}/new-machine"                # the data dir: Brewfile, Brewfile.ignore, local-dotfiles-exclude, bin/bootstrap.sh
 ORIG_HOME="$(cd "${HOME}" && pwd -P)"
 ORIG_PATH="${PATH}"
-ORIG_CONFIG_DIR="$(cd "${REPO_DIR}/.." && pwd)"
 PASS=0
 FAIL=0
 FIX=""

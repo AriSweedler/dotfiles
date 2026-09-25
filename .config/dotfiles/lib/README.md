@@ -35,5 +35,7 @@ Check independence after a change:
 for f in ~/.config/dotfiles/lib/*.zsh ~/.config/dotfiles/cmd/*.zsh; do zsh -f -c "set -euo pipefail; source '$f'" && echo "ok  ${f:t}"; done
 ```
 
-The hermetic suite (`dotfiles test`, `~/.config/new-machine/tests/`) runs every verb in a fake
-HOME with brew/launchctl/curl shims; `dotfiles test <plugin>` runs one zsh plugin suite.
+The hermetic suite (`dotfiles test`, `tests/`) runs every verb in a fake HOME with
+brew/launchctl/curl shims; `dotfiles test <plugin>` runs one zsh plugin suite.
+`~/.config/new-machine/` holds only data: the two tier files, the local-dotfiles exclude
+template, and `bin/bootstrap.sh` at the URL the README gives a fresh Mac.
