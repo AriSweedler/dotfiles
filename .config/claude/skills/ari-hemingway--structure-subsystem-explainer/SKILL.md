@@ -172,15 +172,11 @@ Evaluate in order, first match wins:
 
 If both `update` AND `distill` conditions fire: infer **update-with-distill-context** (fetch doc + use conversation reads as evidence for the diff).
 
-Print the inferred mode with evidence:
+Print one line and continue straight into Gather pointers; do not ask for confirmation:
 ```
-I inferred **{mode}** because {evidence}. Confirm, or pick: (1) Research, (2) Distill, (3) Update.
+Inferred **{mode}**: {evidence}.
 ```
-`{evidence}` cites the trigger: "you pasted a Google Doc URL", "this session contains 12 file reads under services/autoscaler/", etc.
-
-**MUST stop after printing. Do NOT call any tool except to wait for the user reply.**
-
-Ambiguous example: user says "write an explainer for the autoscaler" but has read 8 autoscaler files this session. Infer distill; offer: "If those reads were unrelated context-setting and you want fresh research, pick (1)."
+`{evidence}` cites the trigger: "you pasted a Google Doc URL", "this session contains 12 file reads under services/autoscaler/", etc. The user overrides by naming a mode at any point; on override, set `Mode` in the scratchpad and restart Investigate.
 
 ### Gather pointers
 
@@ -210,7 +206,7 @@ On yes: update scratchpad `Mode: research (switched from distill at {timestamp})
 
 **Distill evidence check (before drafting).** Enumerate the candidate subsystem(s) the session's reads touched. If reads don't cluster around a single subsystem, ask: `The session touched {list}. Which should I distill?` If the user has no answer, STOP.
 
-**Update mode** — fetch the existing doc via `mcp__escalation_mcp_server__google_docs_read_document`. After fetching, print `Target doc: {title} — last edited {date}. Produce update? (y/N)` before proceeding.
+**Update mode** — fetch the existing doc via `mcp__escalation_mcp_server__google_docs_read_document`. After fetching, print `Target doc: {title} — last edited {date}.` and proceed.
 
 On fetch failure, follow the `MCP reliability` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`. Option 3 is "switch to research mode".
 
@@ -259,18 +255,10 @@ Print: `Fact-check complete — {n} claims verified, {k} marked [TODO: verify]. 
 
 ### Present
 
-Follow the `Present` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`.
+Follow the `Present` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`: print the draft path and the `Draft ready` line, then continue into Output without a menu.
 
-**Per-mode option 1 label:**
-- research/distill: `Finalize — write output.md`
-- update: `Finalize — write updated output.md, then update the Doc in place via /ari-hemingway--share-gdoc (replaces the whole body; manual edits in the Doc are lost)`
-
-**Option 4 visible in update mode only.** When the update-mode diff is empty (doc already accurate), option 4 leads the list and is the default.
-
-For update mode, show the diff summary (grouped per "Update-mode diff summary" above) BEFORE the menu.
-
-Print: `Draft ready — awaiting your choice.`
+In update mode, print the diff summary (grouped per "Update-mode diff summary" above) before the `Draft ready` line. An empty diff means the doc is already accurate: print `No changes needed — the doc is already accurate.` and stop instead of publishing.
 
 ### Output
 
-Follow the `Output` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`.
+Follow the `Output` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`. In update mode the publish passes `--doc` to `/ari-hemingway--share-gdoc`, which replaces the whole body; say that manual edits in the Doc are lost before it runs.
