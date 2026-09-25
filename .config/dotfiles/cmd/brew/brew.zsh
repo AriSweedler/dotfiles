@@ -2,7 +2,7 @@
 # `brew bundle check` parser, the merged two-tier Brewfile, the drift classifier driver
 # (lib/brew_classify.jq), the busy guard, and the verdict helpers the brew steps call.
 #
-# Requires common.zsh to be sourced first for the NEW_MACHINE_* contract, the tier file paths,
+# Requires common.zsh to be sourced first for the ARI_DOTFILES_* contract, the tier file paths,
 # log::* and plural. Side-effect-free at source time. stdout is data (JSON or text), stderr
 # is logs. Every brew call here is read-only except brew::apply_pkgs, which goes through
 # run_cmd_mutating. Functions that need the step context (verdict, RUN_DIR, STEP) say so.
@@ -30,14 +30,14 @@ brew::_tsv_json() {
 # Prints the brew executable common.zsh resolved (PATH, then the probe prefixes launchd needs).
 # Returns 1 when there is none.
 brew::bin() {
-  [[ -n "${NEW_MACHINE_BREW}" && -x "${NEW_MACHINE_BREW}" ]] || return 1
-  print -r -- "${NEW_MACHINE_BREW}"
+  [[ -n "${ARI_DOTFILES_BREW}" && -x "${ARI_DOTFILES_BREW}" ]] || return 1
+  print -r -- "${ARI_DOTFILES_BREW}"
 }
 
 # Pids of every running brew (space-separated), empty when idle.
 brew::busy_pids() {
   local pids
-  pids="$(pgrep -f "${NEW_MACHINE_BREW_BUSY_PATTERN}" 2>/dev/null || true)"
+  pids="$(pgrep -f "${ARI_DOTFILES_BREW_BUSY_PATTERN}" 2>/dev/null || true)"
   print -r -- "${pids//$'\n'/ }"
 }
 
@@ -132,7 +132,7 @@ brew::inventory() {
   taps_json="$("${brew}" tap | brew::_lines_json)" || return 1
   list_json="$("${brew}" list --formula --full-name | brew::_lines_json)" || return 1
 
-  local code="${NEW_MACHINE_CODE}"
+  local code="${ARI_DOTFILES_CODE}"
   local vscode_json='[]' vscode_skipped=true extensions
   if [[ -n "${code}" && -x "${code}" ]]; then
     if extensions="$("${code}" --list-extensions 2>/dev/null)"; then
@@ -446,7 +446,7 @@ brew::_tap_info_map() {
     print -r -- '{}'
     return 0
   fi
-  local cache_dir="${NEW_MACHINE_STATE_DIR}/cache/tap-info"
+  local cache_dir="${ARI_DOTFILES_STATE_DIR}/cache/tap-info"
   local tmp
   tmp="$(mktemp -d)" || return 1
   local tap slug repo head
@@ -660,10 +660,10 @@ brew::_declared_file() {
 }
 
 brew::_brew_missing_detail() {
-  local probed="${NEW_MACHINE_BREW}"
+  local probed="${ARI_DOTFILES_BREW}"
   if [[ -z "${probed}" ]]; then
     local prefix
-    for prefix in ${=NEW_MACHINE_BREW_PREFIXES}; do
+    for prefix in ${=ARI_DOTFILES_BREW_PREFIXES}; do
       probed+="${probed:+ }${prefix}/bin/brew"
     done
   fi

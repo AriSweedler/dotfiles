@@ -4,25 +4,48 @@ zmodload zsh/stat
 
 help_jobs() {
   cat <<EOF
-dotfiles jobs [list] | run NAME [--trigger T] | tick --trigger T | unlock | install | uninstall   the job plugins and their launchd job
+the job plugins and the one launchd job that runs them
 
-  One launchd job, ${JOBS_LABEL}: a resident agent that runs the plugins whose triggers match on
-  screen unlock (a distributed notification only a resident observer can hear), at login and every
-  ${JOBS_INTERVAL_SECONDS}s. A plugin is an executable in ${JOBS_ROOT_DF} (shared) or
-  ${JOBS_ROOT_LDF} (this machine) whose header has '# triggers: unlock load' and any
-  '# cron: m h dom mon dow' lines; it gets the trigger as \$1; the engine posts a banner when it ends
-  (an alert, click opens the log, on failure). A '# deps: name...' line names setup run before it:
-  executables in ${DEPS_ROOT_LDF} (this machine, wins) or ${DEPS_ROOT_DF} (shared) whose stdout,
-  NAME=VALUE lines, becomes the plugin's environment; a failing dep blocks the plugin. The README
-  beside the shared plugins has the contract.
+${c_bold}Usage${c_rst}
+  ${DF} jobs [list]
+  ${DF} jobs run NAME [--trigger T]
+  ${DF} jobs tick --trigger T
+  ${DF} jobs unlock
+  ${DF} jobs install [--dry-run] | uninstall
 
-  list               every plugin, its triggers, last run and rc, then the deps they name (the default)
-  run NAME           run one plugin now (trigger 'manual', or --trigger T); output to its log and stdout
-  tick --trigger T   what the agent runs: every plugin due for T (load, tick, screenIsUnlocked)
-  unlock             simulate a screen unlock (SIGUSR1 to the resident agent)
-  install|uninstall  the launchd job (init runs install); --dry-run applies
+  One launchd job, ${JOBS_LABEL}: a resident agent that runs
+  the plugins whose triggers match on screen unlock (a distributed
+  notification only a resident observer can hear), at login and every
+  ${JOBS_INTERVAL_SECONDS}s. A plugin is an executable in $(help::tilde "${JOBS_ROOT_DF}") (shared)
+  or $(help::tilde "${JOBS_ROOT_LDF}") (this machine) whose header has
+  '# triggers: unlock load' and any '# cron: m h dom mon dow' lines; it gets
+  the trigger as \$1; the engine posts a banner when it ends (an alert, click
+  opens the log, on failure). A '# deps: name...' line names setup run before
+  it: executables in $(help::tilde "${DEPS_ROOT_LDF}") (this machine, wins) or
+  $(help::tilde "${DEPS_ROOT_DF}") (shared) whose stdout, NAME=VALUE lines, becomes the
+  plugin's environment; a failing dep blocks the plugin. Logs and success
+  stamps: $(help::tilde "${JOBS_STATE_DIR}"). The README beside the shared plugins
+  has the contract.
 
-  Logs and success stamps: ${JOBS_STATE_DIR}.
+${c_bold}Subcommands${c_rst}
+  list        every plugin, its triggers, last run and rc, then the deps they
+              name (the default)
+  run NAME    run one plugin now; output to its log and stdout
+  tick        what the agent runs: every plugin due for --trigger T (load,
+              tick, screenIsUnlocked)
+  unlock      simulate a screen unlock (SIGUSR1 to the resident agent)
+  install     compile the agent, write the plist and bootstrap the job, each
+              only if changed (the dotfiles_jobs step runs this)
+  uninstall   boot the job out and remove its plist
+
+${c_bold}Flags${c_rst}
+  --trigger T   run, tick: the trigger the plugin sees as \$1 (run: manual)
+  --dry-run     install: print what would change and change nothing
+
+${c_bold}Env${c_rst}
+  $(ENV ARI_DOTFILES_INVOKED_BY)
+      set by the job plugins (dotfiles-jobs); a verb that sees it posts
+      banners instead of logging them
 EOF
 }
 
@@ -668,7 +691,7 @@ cmd_jobs() {
   (( $# > 0 )) && shift
   while (( $# > 0 )); do case "${1}" in
     --trigger) trigger="${2:?--trigger requires a value}"; shift 2 ;;
-    --dry-run) export DOTFILES_DRY_RUN=1; shift ;;
+    --dry-run) export ARI_DOTFILES_DRY_RUN=1; shift ;;
     -*) usage_error "Unknown jobs flag | flag='${1}'" ;;
     *) name="${1}"; shift ;;
   esac; done

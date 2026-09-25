@@ -3,8 +3,8 @@
 # file per verb), steps/ (one file per step). ${0:A} follows the ~/.config/bin symlink, so this
 # runs from any checkout.
 set -euo pipefail
-export DOTFILES_LIB="${${0:A}:h:h}/dotfiles/lib"
-for _module in "${DOTFILES_LIB}"/*.zsh(N) "${DOTFILES_LIB:h}"/cmd/*.zsh(N); do source "${_module}"; done
+export ARI_DOTFILES_LIB="${${0:A}:h:h}/dotfiles/lib"
+for _module in "${ARI_DOTFILES_LIB}"/*.zsh(N) "${ARI_DOTFILES_LIB:h}"/cmd/*.zsh(N); do source "${_module}"; done
 unset _module
-(( ${+functions[main]} )) || { print -u2 "[ERROR] dotfiles: no modules found | dir='${DOTFILES_LIB}'"; exit 1; }
+(( ${+functions[main]} )) || { print -u2 "[ERROR] dotfiles: no modules found | dir='${ARI_DOTFILES_LIB}'"; exit 1; }
 main "${@}"

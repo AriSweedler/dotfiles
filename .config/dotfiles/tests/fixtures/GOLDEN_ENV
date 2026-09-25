@@ -1,7 +1,7 @@
 HOME=/tmp/nmtest/home
 TZ=UTC
-NEW_MACHINE_NOW=1789000000
-NEW_MACHINE_HOST=testhost
-NEW_MACHINE_STATE_DIR=/tmp/nmtest/home/.local/state/new-machine
-NEW_MACHINE_DESKTOP_DIR=/tmp/nmtest/home/Desktop
-NEW_MACHINE_LOCAL_DIR=/tmp/nmtest/home/.local/share/new-machine
+ARI_DOTFILES_NOW=1789000000
+ARI_DOTFILES_HOST=testhost
+ARI_DOTFILES_STATE_DIR=/tmp/nmtest/home/.local/state/new-machine
+ARI_DOTFILES_DESKTOP_DIR=/tmp/nmtest/home/Desktop
+ARI_DOTFILES_LOCAL_DIR=/tmp/nmtest/home/.local/share/new-machine

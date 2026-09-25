@@ -4,11 +4,11 @@ step::declare brew_pkgs --group brew --needs brew --tools brew \
   --desc "every item declared in the merged Brewfiles is installed (brew bundle check/install --no-upgrade)"
 
 check::brew_pkgs() {
-  need_lib "${DOTFILES_BREW_LIB}"
+  need_lib "${ARI_DOTFILES_BREW_LIB}"
   brew::check_pkgs_verdict
 }
 
 apply::brew_pkgs() {
-  need_lib "${DOTFILES_BREW_LIB}"
+  need_lib "${ARI_DOTFILES_BREW_LIB}"
   brew::apply_pkgs
 }

@@ -1,4 +1,4 @@
-# Tests for raycast_snippets.zsh. Two fixture tier dirs (RAYCAST_SNIPPETS_DIRS), a temp manifest,
+# Tests for raycast_snippets.zsh. Two fixture tier dirs (ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS), a temp manifest,
 # and a stub `open` that records the deeplink stand in for the real ones; nothing reaches Raycast
 # and the real tiers and manifest are never touched. Only runs when
 # OTTO_TEST__ZSH_PLUGINS_RAYCAST_SNIPPETS=true
@@ -31,8 +31,8 @@ print -r -- "\$1" >> "${_log}"
 EOF
 chmod +x "${_dir}/bin/open"
 export PATH="${_dir}/bin:${PATH}"
-export RAYCAST_SNIPPETS_DIRS="${_dir}/shared:${_dir}/local"
-export RAYCAST_SNIPPETS_MANIFEST="${_dir}/state/manifest.json"
+export ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS="${_dir}/shared:${_dir}/local"
+export ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST="${_dir}/state/manifest.json"
 _shared="${_dir}/shared/snippets.json"
 _local="${_dir}/local/snippets.json"
 zmodload zsh/stat
@@ -65,7 +65,7 @@ _t "tiers: first dir is shared, last is local" $'shared\t'"${_dir}/shared"$'\nlo
 _t "tier_file: local" "${_local}" "$(raycast_snippets::tier_file local)"
 raycast_snippets::tier_file bogus >/dev/null 2>&1; _rc=$?
 _t "tier_file: unknown label rc 1" "1" "${_rc}"
-_t "placeholder_text: names the local file with HOME as ~" "OVERRIDE WITH A ~/x/y/snippets.json file" "$(RAYCAST_SNIPPETS_DIRS="${HOME}/x:${HOME}/x/y" raycast_snippets::placeholder_text)"
+_t "placeholder_text: names the local file with HOME as ~" "OVERRIDE WITH A ~/x/y/snippets.json file" "$(ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS="${HOME}/x:${HOME}/x/y" raycast_snippets::placeholder_text)"
 _t "normalize: only name/text/keyword, keyword order then keyword-less by name, empty keyword dropped" \
   '[{"name":"addr","text":"1 Main St","keyword":";addr"},{"name":"sig","text":"Ari\nAirtable","keyword":";sig"},{"name":"shrug","text":"¯\\_(ツ)_/¯"}]' \
   "$(raycast_snippets::source | jq -c .entries)"
@@ -85,10 +85,10 @@ _t "no manifest: says adopt or pull" "1" "$(grep -c 'no manifest; run: dotfiles 
 _t "no manifest: nothing opened" "" "$(_urls)"
 _out="$(raycast_snippets --adopt --dry-run 2>/dev/null)"
 _t "adopt --dry-run: counts, writes nothing" $'dry_run=1\nwould_adopt=3' "${_out}"
-_t "adopt --dry-run: still no manifest" "absent" "$([[ -e "${RAYCAST_SNIPPETS_MANIFEST}" ]] && echo present || echo absent)"
+_t "adopt --dry-run: still no manifest" "absent" "$([[ -e "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}" ]] && echo present || echo absent)"
 _out="$(raycast_snippets --adopt 2>/dev/null)"; _rc=$?
 _t "adopt: rc 0, adopted=3" "adopted=3" "${_out}"
-_t "adopt: manifest matches the files" '["addr","shrug","sig"]' "$(jq -c 'keys' "${RAYCAST_SNIPPETS_MANIFEST}")"
+_t "adopt: manifest matches the files" '["addr","shrug","sig"]' "$(jq -c 'keys' "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 _t "adopt: sync is then a no-op" $'snippets: nothing to import | unchanged=3\npending=0' "$(raycast_snippets --sync 2>/dev/null)"
 _t "adopt: nothing opened" "" "$(_urls)"
 raycast_snippets --reset-manifest >/dev/null 2>&1
@@ -99,7 +99,7 @@ _t "dry-run: plan lists every entry as new, canonical order" $'new addr\nnew sig
 _t "dry-run: counters" $'dry_run=1\npending=3\nnew=3\nchanged=0\nunchanged=0\nremoved_in_repo=0\nremoved_names=' "$(print -r -- "${_out}" | grep '=')"
 _t "dry-run: rc 0" "0" "${_rc}"
 _t "dry-run: nothing opened" "" "$(_urls)"
-_t "dry-run: manifest untouched (still empty)" "{}" "$(jq -c . "${RAYCAST_SNIPPETS_MANIFEST}")"
+_t "dry-run: manifest untouched (still empty)" "{}" "$(jq -c . "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 
 _out="$(raycast_snippets --sync 2>/dev/null)"; _rc=$?
 _t "sync: rc 0" "0" "${_rc}"
@@ -111,7 +111,7 @@ _t "sync: payload is exactly the pending set, canonical entries" \
 _t "sync: result line" "snippets: imported=3 changed=0 removed_in_repo=0" "$(print -r -- "${_out}" | grep '^snippets:')"
 _t "sync: manifest records the three names with text and keyword" \
   '{"addr":{"keyword":";addr","text":"1 Main St"},"shrug":{"keyword":null,"text":"¯\\_(ツ)_/¯"},"sig":{"keyword":";sig","text":"Ari\nAirtable"}}' \
-  "$(jq -c . "${RAYCAST_SNIPPETS_MANIFEST}")"
+  "$(jq -c . "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 
 # --- sync: nothing to do ---
 : > "${_log}"
@@ -120,9 +120,9 @@ _t "no-op: says so with the unchanged count" $'snippets: nothing to import | unc
 _t "no-op: rc 0" "0" "${_rc}"
 _t "no-op: nothing opened" "" "$(_urls)"
 local _mtime_before _mtime_after
-_mtime_before="$(zstat +mtime "${RAYCAST_SNIPPETS_MANIFEST}")"
+_mtime_before="$(zstat +mtime "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 raycast_snippets --sync >/dev/null 2>&1
-_mtime_after="$(zstat +mtime "${RAYCAST_SNIPPETS_MANIFEST}")"
+_mtime_after="$(zstat +mtime "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 _t "no-op: manifest not rewritten" "${_mtime_before}" "${_mtime_after}"
 
 # --- sync: changed, new, removed together ---
@@ -142,8 +142,8 @@ _t "sync: payload carries only the pending two, new before changed" '["greet","s
 _t "sync: result and the two delete-by-hand lines" \
   $'snippets: imported=1 changed=1 removed_in_repo=1\nstale in Raycast, delete by hand: sig\nremoved_in_repo, delete by hand in Raycast: shrug' \
   "$(print -r -- "${_out}" | grep -E '^(snippets:|stale|removed_in_repo,)')"
-_t "sync: manifest updated for sig and greet, shrug kept until reset" '["addr","greet","shrug","sig"]' "$(jq -c 'keys' "${RAYCAST_SNIPPETS_MANIFEST}")"
-_t "sync: manifest holds the new sig text" $'Ari\nAirtable, Infra' "$(jq -r '.sig.text' "${RAYCAST_SNIPPETS_MANIFEST}")"
+_t "sync: manifest updated for sig and greet, shrug kept until reset" '["addr","greet","shrug","sig"]' "$(jq -c 'keys' "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
+_t "sync: manifest holds the new sig text" $'Ari\nAirtable, Infra' "$(jq -r '.sig.text' "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 : > "${_log}"
 _out="$(raycast_snippets --sync 2>/dev/null)"
 _t "no-op after a change: removed still reported, nothing opened" $'snippets: nothing to import | unchanged=3\nremoved_in_repo, delete by hand in Raycast: shrug\npending=0' "${_out}"
@@ -152,14 +152,14 @@ _t "no-op after a change: nothing opened" "" "$(_urls)"
 # --- reset-manifest ---
 _out="$(raycast_snippets --reset-manifest shrug --dry-run 2>/dev/null)"
 _t "reset --dry-run: names what it would forget, writes nothing" $'dry_run=1\nwould_forget=1\nnames=shrug' "${_out}"
-_t "reset --dry-run: manifest unchanged" '["addr","greet","shrug","sig"]' "$(jq -c 'keys' "${RAYCAST_SNIPPETS_MANIFEST}")"
+_t "reset --dry-run: manifest unchanged" '["addr","greet","shrug","sig"]' "$(jq -c 'keys' "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 _out="$(raycast_snippets --reset-manifest shrug 2>/dev/null)"
 _t "reset one name: forgotten" "forgotten=1" "${_out}"
-_t "reset one name: gone from the manifest" '["addr","greet","sig"]' "$(jq -c 'keys' "${RAYCAST_SNIPPETS_MANIFEST}")"
+_t "reset one name: gone from the manifest" '["addr","greet","sig"]' "$(jq -c 'keys' "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 _t "reset one name: sync is now a clean no-op" $'snippets: nothing to import | unchanged=3\npending=0' "$(raycast_snippets --sync 2>/dev/null)"
 _out="$(raycast_snippets --reset-manifest 2>/dev/null)"
 _t "reset all: forgotten=3" "forgotten=3" "${_out}"
-_t "reset all: manifest empty" "{}" "$(jq -c . "${RAYCAST_SNIPPETS_MANIFEST}")"
+_t "reset all: manifest empty" "{}" "$(jq -c . "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 _t "reset all: everything pending again" "pending=3" "$(raycast_snippets --sync --dry-run 2>/dev/null | grep '^pending=')"
 
 # --- duplicate names in one file refused; no file anywhere refused ---
@@ -167,10 +167,10 @@ mkdir -p "${_dir}/dupes" "${_dir}/empty"
 cat > "${_dir}/dupes/snippets.json" <<'EOF'
 [{"name":"a","text":"1"},{"name":"a","text":"2"},{"name":"b","text":"3"}]
 EOF
-RAYCAST_SNIPPETS_DIRS="${_dir}/dupes:${_dir}/empty" raycast_snippets --sync --dry-run > /dev/null 2>"${_dir}/dupes.err"; _rc=$?
+ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS="${_dir}/dupes:${_dir}/empty" raycast_snippets --sync --dry-run > /dev/null 2>"${_dir}/dupes.err"; _rc=$?
 _t "duplicate names: sync refuses, rc 1" "1" "${_rc}"
 _t "duplicate names: named with the file" "1" "$(grep -c "Duplicate snippet names in one file | names='a' file='${_dir}/dupes/snippets.json'" "${_dir}/dupes.err")"
-RAYCAST_SNIPPETS_DIRS="${_dir}/nope:${_dir}/empty" raycast_snippets --sync >/dev/null 2>"${_dir}/nofile.err"; _rc=$?
+ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS="${_dir}/nope:${_dir}/empty" raycast_snippets --sync >/dev/null 2>"${_dir}/nofile.err"; _rc=$?
 _t "no file in any tier: rc 1" "1" "${_rc}"
 _t "no file in any tier: names both files" "1" "$(grep -c "No snippets file in any tier | files='${_dir}/nope/snippets.json,${_dir}/empty/snippets.json'" "${_dir}/nofile.err")"
 
@@ -222,7 +222,7 @@ _t "diff: in sync" "in sync" "$(raycast_snippets --diff "${_dir}/export.json" 2>
 
 # --- url form: array ---
 : > "${_log}"; raycast_snippets --reset-manifest >/dev/null 2>&1
-RAYCAST_SNIPPETS_URL_FORM=array raycast_snippets --sync >/dev/null 2>&1
+ARI_DOTFILES_RAYCAST_SNIPPETS_URL_FORM=array raycast_snippets --sync >/dev/null 2>&1
 _t "array form: one snippet= param holding a JSON array of the batch, canonical order" '["zeta","alpha"]' "$(_payloads | jq -c 'map(.name)')"
 _t "array form: exactly one param" "1" "$(_payloads | wc -l | tr -d ' ')"
 
@@ -305,7 +305,7 @@ _t "fmt: idempotent after the fix" "rewritten=0" "$(raycast_snippets --fmt 2>/de
 
 # --- sync imports the merged set and forwards the parity warn ---
 raycast_snippets --adopt >/dev/null 2>&1
-_t "adopt: manifest holds the merged set, Home with the local text" "1 Main" "$(jq -r '.Home.text' "${RAYCAST_SNIPPETS_MANIFEST}")"
+_t "adopt: manifest holds the merged set, Home with the local text" "1 Main" "$(jq -r '.Home.text' "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 _t "sync: no-op plus the active placeholder as a warn line" $'snippets: nothing to import | unchanged=5\npending=0\nwarn placeholder active: orphan (~o) fill in '"${_local}" "$(raycast_snippets --sync 2>/dev/null)"
 _t "sync: nothing opened" "" "$(_urls | grep -c orphan | tr -d ' ' | sed 's/^0$//')"
 : > "${_log}"
@@ -322,12 +322,12 @@ _t "move local→shared: rc 0" "0" "${_rc}"
 _t "move local→shared: the real entry replaces the placeholder" "555" "$(jq -r '.[] | select(.name == "Phone") | .text' "${_shared}")"
 _t "move local→shared: gone from local" '["Home","nokw"]' "$(jq -c 'map(.name)' "${_local}")"
 _t "move local→shared: exactly one Phone in shared" "1" "$(jq '[.[] | select(.name == "Phone")] | length' "${_shared}")"
-_mtime_before="$(zstat +mtime "${RAYCAST_SNIPPETS_MANIFEST}")"
+_mtime_before="$(zstat +mtime "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 _out="$(raycast_snippets --move Phone --to local 2>/dev/null)"; _rc=$?
 _t "move shared→local: rc 0, a placeholder stays behind" $'name=Phone\nfrom='"${_shared}"$'\nto='"${_local}"$'\nplaceholder_left=yes' "${_out}"
 _t "move shared→local: local has the text again" "555" "$(jq -r '.[] | select(.name == "Phone") | .text' "${_local}")"
 _t "move shared→local: shared keeps a placeholder with the keyword" "~# OVERRIDE WITH A ${_local} file" "$(jq -r '.[] | select(.name == "Phone") | "\(.keyword) \(.text)"' "${_shared}")"
-_t "move: manifest untouched (content unchanged)" "${_mtime_before}" "$(zstat +mtime "${RAYCAST_SNIPPETS_MANIFEST}")"
+_t "move: manifest untouched (content unchanged)" "${_mtime_before}" "$(zstat +mtime "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 _t "move: sync still a no-op after both moves" "pending=0" "$(raycast_snippets --sync 2>/dev/null | grep '^pending=')"
 raycast_snippets --move nope --to local >/dev/null 2>"${_dir}/move1.err"; _rc=$?
 _t "move: unknown name refused, rc 1" "1" "${_rc}"
@@ -384,7 +384,7 @@ _t "help mentions the two seeding steps" "1" "$(raycast_snippets --help 2>&1 | g
 _t "help states the one rule" "1" "$(raycast_snippets --help 2>&1 | grep -c 'personal data stays in the local tier; the shared tier is for snippets safe in a public repo')"
 _t "help names both tier files" "2" "$(raycast_snippets --help 2>&1 | grep -c -e "shared ${_dir}/shared/snippets.json" -e "local  ${_dir}/local/snippets.json")"
 
-unset RAYCAST_SNIPPETS_DIRS RAYCAST_SNIPPETS_MANIFEST
+unset ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST
 export PATH="${_saved_path}"
 rm -rf "${_dir}"
 

@@ -4,16 +4,37 @@
 
 help_verify() {
   cat <<EOF
-dotfiles verify [--force-report] [--no-notify] [--json]   the weekly check: healthcheck + one retry + report + banner
+the weekly check: healthcheck, retry, Desktop report, banner
 
-  What the dotfiles-verify job plugin runs on Monday. Every step is checked; steps that errored
-  are retried once after ${NEW_MACHINE_RETRY_SECS}s; the result is compared with the last one and at
-  most one report is written to ${NEW_MACHINE_DESKTOP_DIR} (deleting it = acknowledged).
-  Trail: ${VERIFY_TRAIL}. Log: ${NEW_MACHINE_STATE_DIR}/verify/log.txt.
+${c_bold}Usage${c_rst}
+  ${DF} verify [--force-report] [--no-notify] [--json]
 
-  --force-report   write the report even when the problems are unchanged
-  --no-notify      no banner (interactive runs never banner; NEW_MACHINE_INVOKED_BY marks launchd)
+  What the dotfiles-verify job plugin runs on Monday. Every step is checked;
+  steps that errored are retried once after ${ARI_DOTFILES_RETRY_SECS}s; the result is compared
+  with the last one and at most one report is written to $(help::tilde "${ARI_DOTFILES_DESKTOP_DIR}")
+  (deleting it = acknowledged; a passing run archives it).
+  Trail: $(help::tilde "${VERIFY_TRAIL}")
+  Log:   $(help::tilde "${ARI_DOTFILES_STATE_DIR}")/verify/log.txt
+
+${c_bold}Flags${c_rst}
+  --force-report   write the report even when the set of problems is unchanged
+  --no-notify      no banner (an interactive run never banners; the job does)
   --json           print summary.json instead of the table
+
+${c_bold}Env${c_rst}
+  $(ENV ARI_DOTFILES_STATE_DIR)
+      where runs, the trail and the report archive live
+      (default $(help::tilde "${ARI_DOTFILES_STATE_DIR}"))
+  $(ENV ARI_DOTFILES_DESKTOP_DIR)
+      where the report is written (default $(help::tilde "${ARI_DOTFILES_DESKTOP_DIR}"))
+  $(ENV ARI_DOTFILES_RETRY_SECS)
+      pause before the one retry of errored steps; 0 disables it
+      (default ${ARI_DOTFILES_RETRY_SECS})
+  $(ENV ARI_DOTFILES_INVOKED_BY)
+      set by the job plugin; with it, banners go through terminal-notifier
+      instead of the log
+  $(ENV ARI_DOTFILES_NO_NOTIFY)
+      1 = never banner, whatever set ARI_DOTFILES_INVOKED_BY
 EOF
 }
 
@@ -21,20 +42,20 @@ cmd_verify() {
   local -a force=() quiet=() json=()
   zparseopts -D -F -K -- -force-report=force -no-notify=quiet -json=json || usage_error "verify: bad flags | args='$*'"
   (( $# == 0 )) || usage_error "verify takes no positional arguments | args='$*'"
-  (( ${#quiet} )) && export DOTFILES_NO_NOTIFY=1
+  (( ${#quiet} )) && export ARI_DOTFILES_NO_NOTIFY=1
   steps::load || exit 3
-  need_lib "${DOTFILES_CMD}/verify/report.zsh"
+  need_lib "${ARI_DOTFILES_CMD}/verify/report.zsh"
   lock::acquire verify
-  mkdir -p "${NEW_MACHINE_STATE_DIR}"
-  local LOG_DIR="${NEW_MACHINE_STATE_DIR}"
+  mkdir -p "${ARI_DOTFILES_STATE_DIR}"
+  local LOG_DIR="${ARI_DOTFILES_STATE_DIR}"
   log_init verify 8
   log::redirect_all_output_to_logfile "${LOG_FILE}"
   local -a selected=("${STEPS[@]}")
-  export DOTFILES_DRY_RUN=0
+  export ARI_DOTFILES_DRY_RUN=0
   run::begin check
-  log::info "verify | run_id='${RUN_ID}' invoked_by='${NEW_MACHINE_INVOKED_BY:-interactive}'"
+  log::info "verify | run_id='${RUN_ID}' invoked_by='${ARI_DOTFILES_INVOKED_BY:-interactive}'"
   steps::run_all
-  steps::retry_errored "${NEW_MACHINE_RETRY_SECS}"
+  steps::retry_errored "${ARI_DOTFILES_RETRY_SECS}"
   run::summarize
   verify::decide_and_notify "${#force}"
   run::end "${#json}"

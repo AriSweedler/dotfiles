@@ -11,7 +11,7 @@ world_empty_home
 seed_df_remote
 export BOB_SHIM_LS="Installed: v0.11.2 Used"
 
-export DOTFILES_REMOTE="${FIX}/remotes/no-such-remote.git"
+export ARI_DOTFILES_REMOTE="${FIX}/remotes/no-such-remote.git"
 export BREW_SHIM_ALLOW_MUTATION=1
 nm setup --json
 assert_eq "setup with a bad remote exits 1" 1 "${RC}"
@@ -20,13 +20,13 @@ assert_eq "dotfiles_repo fails" fail "$(step_get dotfiles_repo .status)"
 ldf_status="$(step_get local_dotfiles_repo .status)"
 if [[ "${ldf_status}" == ok || "${ldf_status}" == warn ]]; then pass "local_dotfiles_repo still ran and passed (${ldf_status})"
 else fail "local_dotfiles_repo still ran and passed" "status='${ldf_status}'"; fi
-assert_file "local repo was created despite the earlier failure" "${NEW_MACHINE_LDF_GIT_DIR}/HEAD"
+assert_file "local repo was created despite the earlier failure" "${ARI_DOTFILES_LDF_GIT_DIR}/HEAD"
 assert_json "every step recorded" "${f}" '.steps|length' "${EXPECTED_STEPS}"
 unset BREW_SHIM_ALLOW_MUTATION
-export DOTFILES_REMOTE="${FIX}/remotes/dotfiles.git"
+export ARI_DOTFILES_REMOTE="${FIX}/remotes/dotfiles.git"
 
 shim_remove brew
-export NEW_MACHINE_BREW_PREFIXES=""
+export ARI_DOTFILES_BREW_PREFIXES=""
 bump_now_secs 60
 nm setup --dry-run --json
 f="$(out_json)"
@@ -35,8 +35,8 @@ assert_eq "brew applied=would_apply" would_apply "$(step_get brew .applied)"
 assert_contains "dry-run logs the brew install plan" "${ERR}" "would run apply::brew"
 assert_contains "dry-run plan names the Homebrew installer" "$(cat "$(newest_run_dir)/brew.log")" "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
 assert_eq "curl never called" "" "$(shim_log curl)"
-# The repo group runs before brew (bootstrap's first work is init); everything after brew is aborted.
-repo_steps='["dotfiles_repo","local_dotfiles_repo","claude_skills","dotfiles_jobs"]'
+# The repo group runs before brew (the dotfiles themselves come first); everything after brew is aborted.
+repo_steps='["dotfiles_repo","local_dotfiles_repo","claude_skills","ssh_key","dotfiles_jobs"]'
 assert_json "steps after brew skip aborted" "${f}" "[.steps[] | select(.step != \"brew\" and ((.step | IN(${repo_steps}[])) | not))] | all(.status == \"skip\" and .reason == \"aborted\")" true
 assert_json "repo steps ran before the abort" "${f}" "[.steps[] | select(.step | IN(${repo_steps}[])) | .reason] | all(. != \"aborted\")" true
 assert_json "every step recorded after the abort" "${f}" '.steps|length' "${EXPECTED_STEPS}"

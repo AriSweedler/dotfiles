@@ -27,7 +27,7 @@ assert_eq "decree without a tier flag exits 64" 64 "${RC}"
 
 nm steps
 assert_eq "steps exits 0" 0 "${RC}"
-names=(brew brew_pkgs brew_drift dotfiles_repo local_dotfiles_repo bob_neovim claude terminal_nerdfont karabiner raycast_sync claude_notifications claude_skills chrome_exoskeleton plugged dotfiles_jobs)
+names=(brew brew_pkgs brew_drift dotfiles_repo local_dotfiles_repo ssh_key bob_neovim claude terminal_nerdfont karabiner raycast_sync claude_notifications claude_skills chrome_exoskeleton plugged dotfiles_jobs)
 listed=0
 for s in "${names[@]}"; do
   if grep -qE "(^|[[:space:]])${s}([[:space:]]|$)" <<< "${OUT}"; then listed=$((listed + 1)); else fail "steps lists ${s}" "${OUT}"; fi
@@ -43,7 +43,8 @@ assert_json "steps|length matches the registry" "${f}" '.steps|length' "${EXPECT
 nm --help
 assert_eq "--help exits 0" 0 "${RC}"
 for verb in healthcheck setup apply steps verify brew push init jobs; do
-  assert_contains "--help lists ${verb}" "${OUT}" "dotfiles ${verb}"
+  if grep -qE "^  ${verb}[[:space:]]+[a-z]" <<< "${OUT}"; then pass "--help lists ${verb} with a description"
+  else fail "--help lists ${verb} with a description" "${OUT}"; fi
 done
 nm push --help
 assert_eq "a verb answers --help" 0 "${RC}"

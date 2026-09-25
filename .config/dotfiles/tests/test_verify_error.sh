@@ -14,16 +14,16 @@ green_world() {
   seed_ldf_remote
   seed_home_baseline
   export BOB_SHIM_LS="Installed: v0.11.2 Used"
-  export NEW_MACHINE_INVOKED_BY=launchd
-  export NEW_MACHINE_RETRY_SECS=0
-  REPORT="${NEW_MACHINE_DESKTOP_DIR}/${REPORT_NAME}"
-  LR="${NEW_MACHINE_STATE_DIR}/last_result.json"
+  export ARI_DOTFILES_INVOKED_BY=launchd
+  export ARI_DOTFILES_RETRY_SECS=0
+  REPORT="${ARI_DOTFILES_DESKTOP_DIR}/${REPORT_NAME}"
+  LR="${ARI_DOTFILES_STATE_DIR}/last_result.json"
 }
 verify() { bump_now_secs 60; shim_logs_reset; nm verify; }
 
 # ── transient: brew busy ──────────────────────────────────────────────────────
 green_world
-mkdir -p "${NEW_MACHINE_STATE_DIR}"
+mkdir -p "${ARI_DOTFILES_STATE_DIR}"
 jq -n '{schema: 1, run_id: "20260901T100500", ts: "2026-09-01T10:05:00Z", status: "fail", fingerprint: "deadbeefdeadbeef",
         first_seen: "2026-09-01", weeks_failing: 1, report_path: null, report_sha256: null, consecutive_errors: 0,
         brew_undeclared: ["formula/x"]}' > "${LR}"
@@ -62,7 +62,7 @@ world_teardown
 
 # ── retry: the fixture flips to satisfied after the first bundle check ────────
 green_world
-export NEW_MACHINE_RETRY_SECS=1
+export ARI_DOTFILES_RETRY_SECS=1
 world_bundle_check garbage
 (
   for _ in $(printf '%s ' {1..200}); do
@@ -77,8 +77,8 @@ WORLD_PIDS+=("${flipper}")
 verify
 wait "${flipper}" 2>/dev/null || true
 assert_eq "verify with a successful retry exits 0" 0 "${RC}"
-assert_json "brew_pkgs ok after the retry" "${NEW_MACHINE_STATE_DIR}/last-check.json" '.steps[] | select(.step=="brew_pkgs") | .status' ok
-assert_json "run status ok or warn" "${NEW_MACHINE_STATE_DIR}/last-check.json" '.status == "ok" or .status == "warn"' true
+assert_json "brew_pkgs ok after the retry" "${ARI_DOTFILES_STATE_DIR}/last-check.json" '.steps[] | select(.step=="brew_pkgs") | .status' ok
+assert_json "run status ok or warn" "${ARI_DOTFILES_STATE_DIR}/last-check.json" '.status == "ok" or .status == "warn"' true
 assert_eq "bundle check ran twice" 2 "$(grep -c 'bundle check' "${BREW_SHIM_LOG_DIR}/brew.log")"
 assert_no_file "no report after a recovered run" "${REPORT}"
 assert_json "fingerprint empty after the recovered pass" "${LR}" '.fingerprint' ""

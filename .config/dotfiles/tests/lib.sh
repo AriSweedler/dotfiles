@@ -19,7 +19,7 @@ ERR=""
 RC=0
 HERMETIC_ENV=()
 # How many steps the registry declares; every `.steps|length` assertion reads this.
-EXPECTED_STEPS=15
+EXPECTED_STEPS=16
 
 pass() { PASS=$((PASS + 1)); printf '  ok   %s\n' "$1"; }
 fail() { FAIL=$((FAIL + 1)); printf '  FAIL %s\n       %s\n' "$1" "$2" >&2; }
@@ -119,29 +119,31 @@ world_new() {
   export TZ=UTC
   export XDG_CONFIG_HOME="${HOME}/.config" XDG_DATA_HOME="${HOME}/.local/share"
   export XDG_STATE_HOME="${HOME}/.local/state" XDG_CACHE_HOME="${HOME}/.cache"
-  export NEW_MACHINE_SHARED_DIR="${HOME}/.config/new-machine"
-  export NEW_MACHINE_LOCAL_DIR="${XDG_DATA_HOME}/new-machine"
-  export NEW_MACHINE_STATE_DIR="${XDG_STATE_HOME}/new-machine"
-  export NEW_MACHINE_DESKTOP_DIR="${HOME}/Desktop"
-  export NEW_MACHINE_LAUNCH_AGENTS_DIR="${HOME}/Library/LaunchAgents"
-  export NEW_MACHINE_DF_GIT_DIR="${HOME}/dotfiles.git" NEW_MACHINE_LDF_GIT_DIR="${HOME}/.local/local-dotfiles.git"
-  export NEW_MACHINE_DF_HOOKS="${HOME}/.config/git/dotfiles-hooks" NEW_MACHINE_LDF_HOOKS="${HOME}/.config/git/local-dotfiles-hooks"
-  export DOTFILES_REMOTE="${FIX}/remotes/dotfiles.git"
-  export NEW_MACHINE_BREW_PREFIXES=""
-  export NEW_MACHINE_NOW=1789000000 NEW_MACHINE_HOST=testhost
+  export ARI_DOTFILES_SHARED_DIR="${HOME}/.config/new-machine"
+  export ARI_DOTFILES_LOCAL_DIR="${XDG_DATA_HOME}/new-machine"
+  export ARI_DOTFILES_STATE_DIR="${XDG_STATE_HOME}/new-machine"
+  export ARI_DOTFILES_DESKTOP_DIR="${HOME}/Desktop"
+  export ARI_DOTFILES_LAUNCH_AGENTS_DIR="${HOME}/Library/LaunchAgents"
+  export ARI_DOTFILES_DF_GIT_DIR="${HOME}/dotfiles.git" ARI_DOTFILES_LDF_GIT_DIR="${HOME}/.local/local-dotfiles.git"
+  export ARI_DOTFILES_DF_HOOKS="${HOME}/.config/git/dotfiles-hooks" ARI_DOTFILES_LDF_HOOKS="${HOME}/.config/git/local-dotfiles-hooks"
+  export ARI_DOTFILES_REMOTE="${FIX}/remotes/dotfiles.git"
+  export ARI_DOTFILES_BREW_PREFIXES=""
+  export ARI_DOTFILES_NOW=1789000000 ARI_DOTFILES_HOST=testhost
   # The default 60 s retry would stall every erroring verify test; the retry test sets its own.
-  export NEW_MACHINE_RETRY_SECS=0
+  export ARI_DOTFILES_RETRY_SECS=0
   export BREW_SHIM_LOG_DIR="${FIX}/shimlog" LAUNCHCTL_SHIM_STATE="${FIX}/launchctl"
   export XCODE_SELECT_SHIM_STATE="${FIX}/xcode-select"
   export GIT_CONFIG_NOSYSTEM=1
   mkdir -p "${BREW_SHIM_LOG_DIR}" "${LAUNCHCTL_SHIM_STATE}"
-  unset NEW_MACHINE_INVOKED_BY BREW_SHIM_ALLOW_MUTATION BREW_SHIM_FIXTURE BOB_SHIM_LS BOB_SHIM_RC
-  unset NEW_MACHINE_BREW NEW_MACHINE_NOTIFIER NEW_MACHINE_CODE NEW_MACHINE_CHECK_TIMEOUT_SECS
+  unset ARI_DOTFILES_INVOKED_BY BREW_SHIM_ALLOW_MUTATION BREW_SHIM_FIXTURE BOB_SHIM_LS BOB_SHIM_RC
+  unset ARI_DOTFILES_BREW ARI_DOTFILES_NOTIFIER ARI_DOTFILES_CODE ARI_DOTFILES_CHECK_TIMEOUT_SECS
+  # The local tier exports the ssh key's names into interactive shells; a world has no key unless a test says so.
+  unset ARI_DOTFILES_SSH_KEY_OP_ITEM ARI_DOTFILES_SSH_KEY_OP_VAULT ARI_DOTFILES_SSH_KEY_PATH OP_SHIM_PASSPHRASE TEST_SSH_AUTH_SOCK
   # The default busy pattern would see a real brew running on this machine; start_busy_brew
   # points it at a sleeper the test owns.
-  export NEW_MACHINE_BREW_BUSY_PATTERN="nm-tests-no-such-process-$$"
+  export ARI_DOTFILES_BREW_BUSY_PATTERN="nm-tests-no-such-process-$$"
   # The Raycast step probes the app bundle; the world has none, so the step skips.
-  export ARI_RAYCAST_APP="${FIX}/no-raycast"
+  export ARI_DOTFILES_RAYCAST_APP="${FIX}/no-raycast"
 
   # Hermetic PATH: symlinks to the real binaries named in real-tools.txt, then the shims.
   mkdir -p "${FIX}/tools" "${FIX}/shims"
@@ -215,20 +217,20 @@ world_teardown() {
 world_empty_home() {
   _assert_in_fix "${HOME}"
   [[ "${HOME}" == "${FIX}/home" ]] || abort "world_empty_home: unexpected HOME ${HOME}"
-  if [[ "${NEW_MACHINE_SHARED_DIR}" != "${FIX}/shared/new-machine" ]]; then
+  if [[ "${ARI_DOTFILES_SHARED_DIR}" != "${FIX}/shared/new-machine" ]]; then
     rm -rf "${FIX}/shared/new-machine" "${FIX}/shared/dotfiles"
     mkdir -p "${FIX}/shared/zsh/plugins" "${FIX}/shared/bin" "${FIX}/shared/dotfiles" "${FIX}/shared/claude/skills/ari-skill-shellscripts/lib"
-    cp -R "${NEW_MACHINE_SHARED_DIR}" "${FIX}/shared/new-machine"
-    cp "${NEW_MACHINE_SHARED_DIR}/../zsh/plugins/log.zsh" "${NEW_MACHINE_SHARED_DIR}/../zsh/plugins/log_rotate.zsh" "${FIX}/shared/zsh/plugins/"
-    # The dotfiles harness (entrypoint, modules, job plugins, the plugins and logging lib it
-    # sources), from the real shared checkout this test tree lives in: dotfiles_repo's apply runs
-    # `dotfiles init` from the checkout seed_df_remote builds out of this staging copy.
+    cp -R "${ARI_DOTFILES_SHARED_DIR}" "${FIX}/shared/new-machine"
+    cp "${ARI_DOTFILES_SHARED_DIR}/../zsh/plugins/log.zsh" "${ARI_DOTFILES_SHARED_DIR}/../zsh/plugins/log_rotate.zsh" "${FIX}/shared/zsh/plugins/"
+    # The dotfiles program (entrypoint, modules, job plugins, the plugins and logging lib it
+    # sources), from the real shared checkout this test tree lives in: seed_df_remote builds the
+    # fake remote out of this staging copy, so a checkout made from it carries the program.
     local real_config; real_config="$(dirname "${REPO_DIR}")"
     cp "${real_config}/zsh/plugins/strip_ansi.zsh" "${FIX}/shared/zsh/plugins/"
     cp "${real_config}/bin/dotfiles" "${FIX}/shared/bin/dotfiles"
     cp -R "${real_config}/dotfiles/." "${FIX}/shared/dotfiles/"
     cp "${real_config}/claude/skills/ari-skill-shellscripts/lib/logging.zsh" "${FIX}/shared/claude/skills/ari-skill-shellscripts/lib/"
-    export NEW_MACHINE_SHARED_DIR="${FIX}/shared/new-machine"
+    export ARI_DOTFILES_SHARED_DIR="${FIX}/shared/new-machine"
   fi
   rm -rf "${HOME}"
   mkdir -p "${HOME}/Desktop" "${HOME}/Library/LaunchAgents"
@@ -251,12 +253,12 @@ world_use_fixture() {
   done < <(find "${dst}/prefix" -name INSTALL_RECEIPT.json 2>/dev/null)
   export BREW_SHIM_FIXTURE="${dst}"
   if [[ -f "${dst}/Brewfile.global" ]]; then
-    mkdir -p "${NEW_MACHINE_SHARED_DIR}"
-    cp "${dst}/Brewfile.global" "${NEW_MACHINE_SHARED_DIR}/Brewfile"
+    mkdir -p "${ARI_DOTFILES_SHARED_DIR}"
+    cp "${dst}/Brewfile.global" "${ARI_DOTFILES_SHARED_DIR}/Brewfile"
     if [[ -d "${HOME}/.config/new-machine" ]]; then cp "${dst}/Brewfile.global" "${HOME}/.config/new-machine/Brewfile"; fi
   fi
-  rm -f "${NEW_MACHINE_SHARED_DIR}/Brewfile.ignore" "${HOME}/.config/new-machine/Brewfile.ignore"
-  rm -f "${NEW_MACHINE_LOCAL_DIR}/Brewfile" "${NEW_MACHINE_LOCAL_DIR}/Brewfile.ignore"
+  rm -f "${ARI_DOTFILES_SHARED_DIR}/Brewfile.ignore" "${HOME}/.config/new-machine/Brewfile.ignore"
+  rm -f "${ARI_DOTFILES_LOCAL_DIR}/Brewfile" "${ARI_DOTFILES_LOCAL_DIR}/Brewfile.ignore"
 }
 
 # Select which canned `brew bundle check` transcript the shim replays.
@@ -279,8 +281,8 @@ fixture_file_subst() {
 }
 
 world_local_brewfile() {
-  mkdir -p "${NEW_MACHINE_LOCAL_DIR}"
-  fixture_file_subst "${BREW_SHIM_FIXTURE}/Brewfile.local.$1" "${NEW_MACHINE_LOCAL_DIR}/Brewfile"
+  mkdir -p "${ARI_DOTFILES_LOCAL_DIR}"
+  fixture_file_subst "${BREW_SHIM_FIXTURE}/Brewfile.local.$1" "${ARI_DOTFILES_LOCAL_DIR}/Brewfile"
 }
 
 # world_ignore <global|local> <variant>: install a Brewfile.ignore variant into one tier.
@@ -288,13 +290,13 @@ world_ignore() {
   local tier="$1" variant="$2"
   case "${tier}" in
     global)
-      fixture_file_subst "${BREW_SHIM_FIXTURE}/Brewfile.ignore.${variant}" "${NEW_MACHINE_SHARED_DIR}/Brewfile.ignore"
+      fixture_file_subst "${BREW_SHIM_FIXTURE}/Brewfile.ignore.${variant}" "${ARI_DOTFILES_SHARED_DIR}/Brewfile.ignore"
       if [[ -d "${HOME}/.config/new-machine" ]]; then
         fixture_file_subst "${BREW_SHIM_FIXTURE}/Brewfile.ignore.${variant}" "${HOME}/.config/new-machine/Brewfile.ignore"
       fi ;;
     local)
-      mkdir -p "${NEW_MACHINE_LOCAL_DIR}"
-      fixture_file_subst "${BREW_SHIM_FIXTURE}/Brewfile.ignore.${variant}" "${NEW_MACHINE_LOCAL_DIR}/Brewfile.ignore" ;;
+      mkdir -p "${ARI_DOTFILES_LOCAL_DIR}"
+      fixture_file_subst "${BREW_SHIM_FIXTURE}/Brewfile.ignore.${variant}" "${ARI_DOTFILES_LOCAL_DIR}/Brewfile.ignore" ;;
     *) abort "world_ignore: bad tier ${tier}" ;;
   esac
 }
@@ -355,10 +357,11 @@ shim_log() { local f="${BREW_SHIM_LOG_DIR}/$1.log"; if [[ -f "${f}" ]]; then cat
 hermetic_env() {
   HERMETIC_ENV=("HOME=${HOME}" "PATH=${PATH}" "TZ=${TZ:-UTC}" "GIT_CONFIG_NOSYSTEM=1")
   local v
-  for v in "${!XDG_@}" "${!NEW_MACHINE_@}" "${!ARI_RAYCAST_@}" "${!BREW_SHIM_@}" "${!BOB_SHIM_@}" "${!LAUNCHCTL_SHIM_@}" "${!XCODE_SELECT_SHIM_@}"; do
+  for v in "${!XDG_@}" "${!ARI_DOTFILES_@}" "${!BREW_SHIM_@}" "${!BOB_SHIM_@}" "${!LAUNCHCTL_SHIM_@}" "${!XCODE_SELECT_SHIM_@}" "${!OP_SHIM_@}"; do
     HERMETIC_ENV+=("${v}=${!v}")
   done
-  if [[ -n "${DOTFILES_REMOTE+x}" ]]; then HERMETIC_ENV+=("DOTFILES_REMOTE=${DOTFILES_REMOTE}"); fi
+  # The ssh agent a test started for itself; the real one never reaches the code.
+  if [[ -n "${TEST_SSH_AUTH_SOCK:-}" ]]; then HERMETIC_ENV+=("SSH_AUTH_SOCK=${TEST_SSH_AUTH_SOCK}"); fi
 }
 
 # nm ARGS...: the CLI under env -i with only the contract's variables; captures OUT, ERR, RC.
@@ -379,7 +382,7 @@ nm_run() {
   ERR="$(cat "${FIX}/nm.err")"
 }
 
-# bs ARGS...: bin/bootstrap.sh as the one-liner runs it. NEW_MACHINE_SHARED_DIR is withheld so
+# bs ARGS...: bin/bootstrap.sh as the one-liner runs it. ARI_DOTFILES_SHARED_DIR is withheld so
 # the hand-off has to find new-machine in the checkout it just made; bs_argv and bs_pipe are the
 # `sh -c "$(curl …)"` and `curl … | sh` shapes.
 bs() { bs_run /bin/sh "${REPO_DIR}/bin/bootstrap.sh" "$@"; }
@@ -391,7 +394,7 @@ bs_env() {
   BS_ENV=()
   local v
   for v in "${HERMETIC_ENV[@]}"; do
-    [[ "${v}" == NEW_MACHINE_SHARED_DIR=* ]] || BS_ENV+=("${v}")
+    [[ "${v}" == ARI_DOTFILES_SHARED_DIR=* ]] || BS_ENV+=("${v}")
   done
 }
 
@@ -443,7 +446,7 @@ step_get() {
 
 newest_run_dir() {
   local d latest=""
-  for d in "${NEW_MACHINE_STATE_DIR}"/runs/*/; do
+  for d in "${ARI_DOTFILES_STATE_DIR}"/runs/*/; do
     [[ -d "${d}" ]] && latest="${d}"
   done
   printf '%s' "${latest%/}"
@@ -451,19 +454,18 @@ newest_run_dir() {
 
 sha256() { shasum -a 256 "$1" | cut -c1-64; }
 
-# Seconds and days move NEW_MACHINE_NOW; consecutive runs must not share a run id.
-bump_now() { NEW_MACHINE_NOW=$((NEW_MACHINE_NOW + $1 * 86400)); export NEW_MACHINE_NOW; }
-bump_now_secs() { NEW_MACHINE_NOW=$((NEW_MACHINE_NOW + $1)); export NEW_MACHINE_NOW; }
+# Seconds and days move ARI_DOTFILES_NOW; consecutive runs must not share a run id.
+bump_now() { ARI_DOTFILES_NOW=$((ARI_DOTFILES_NOW + $1 * 86400)); export ARI_DOTFILES_NOW; }
+bump_now_secs() { ARI_DOTFILES_NOW=$((ARI_DOTFILES_NOW + $1)); export ARI_DOTFILES_NOW; }
 
 # ── Fake dotfiles repos ──────────────────────────────────────────────────────
 
 # A remote for the shared dotfiles: the df-remote seed tree plus the current shared config and
-# code, committed into a bare repo at $FIX/remotes/dotfiles.git (what DOTFILES_REMOTE points at).
-# The dotfiles harness travels too (entrypoint, modules, job plugins, the logging lib it
-# falls back to before skills are linked): dotfiles_repo's apply runs `dotfiles init` from
-# the checkout, and init's last step installs the jobs launchd job.
+# code, committed into a bare repo at $FIX/remotes/dotfiles.git (what ARI_DOTFILES_REMOTE points at).
+# The dotfiles program travels too (entrypoint, modules, job plugins, the logging lib it
+# falls back to before skills are linked): what a real clone carries.
 seed_df_remote() {
-  local work="${FIX}/remotes/dotfiles-work" bare="${FIX}/remotes/dotfiles.git" shared="${NEW_MACHINE_SHARED_DIR}"
+  local work="${FIX}/remotes/dotfiles-work" bare="${FIX}/remotes/dotfiles.git" shared="${ARI_DOTFILES_SHARED_DIR}"
   local config; config="$(dirname "${shared}")"
   mkdir -p "${work}/.config/new-machine/bin" "${work}/.config/zsh/plugins" "${work}/.config/git" \
            "${work}/.config/bin" "${work}/.config/dotfiles" "${work}/.config/claude/skills/ari-skill-shellscripts/lib"
@@ -487,33 +489,33 @@ seed_df_remote() {
 # An origin for the local-dotfiles repo (push tests). seed_fake_repos must have run.
 seed_ldf_remote() {
   git init -q --bare --initial-branch=main "${FIX}/remotes/local-dotfiles.git"
-  git --git-dir="${NEW_MACHINE_LDF_GIT_DIR}" remote add origin "${FIX}/remotes/local-dotfiles.git"
+  git --git-dir="${ARI_DOTFILES_LDF_GIT_DIR}" remote add origin "${FIX}/remotes/local-dotfiles.git"
   # A bootstrapped machine has run `git ldf push --set-upstream origin main`; a bare `git push`
   # needs that tracking config even before the first commit exists.
-  git --git-dir="${NEW_MACHINE_LDF_GIT_DIR}" config branch.main.remote origin
-  git --git-dir="${NEW_MACHINE_LDF_GIT_DIR}" config branch.main.merge refs/heads/main
+  git --git-dir="${ARI_DOTFILES_LDF_GIT_DIR}" config branch.main.remote origin
+  git --git-dir="${ARI_DOTFILES_LDF_GIT_DIR}" config branch.main.merge refs/heads/main
 }
 
 # The two bare repos as they exist on a bootstrapped machine: dotfiles.git tracking the files
 # currently under $HOME/.config (so decree commits land on top of a real HEAD), and an empty
 # local-dotfiles.git carrying the template exclude. Both with hooksPath wired.
 seed_fake_repos() {
-  git init -q --bare --initial-branch=main "${NEW_MACHINE_DF_GIT_DIR}"
+  git init -q --bare --initial-branch=main "${ARI_DOTFILES_DF_GIT_DIR}"
   local -a files=()
   local f
   while IFS= read -r f; do files+=("${f}"); done < <(find "${HOME}/.config" -type f | sort)
-  git --git-dir="${NEW_MACHINE_DF_GIT_DIR}" --work-tree="${HOME}" add -- "${files[@]}"
-  git --git-dir="${NEW_MACHINE_DF_GIT_DIR}" --work-tree="${HOME}" commit -q -m "seed dotfiles"
-  git --git-dir="${NEW_MACHINE_DF_GIT_DIR}" config --local core.hooksPath "${NEW_MACHINE_DF_HOOKS}"
+  git --git-dir="${ARI_DOTFILES_DF_GIT_DIR}" --work-tree="${HOME}" add -- "${files[@]}"
+  git --git-dir="${ARI_DOTFILES_DF_GIT_DIR}" --work-tree="${HOME}" commit -q -m "seed dotfiles"
+  git --git-dir="${ARI_DOTFILES_DF_GIT_DIR}" config --local core.hooksPath "${ARI_DOTFILES_DF_HOOKS}"
 
-  git init -q --bare --initial-branch=main "${NEW_MACHINE_LDF_GIT_DIR}"
-  mkdir -p "${NEW_MACHINE_LDF_GIT_DIR}/info"
-  cp "${NEW_MACHINE_SHARED_DIR}/local-dotfiles-exclude" "${NEW_MACHINE_LDF_GIT_DIR}/info/exclude"
-  git --git-dir="${NEW_MACHINE_LDF_GIT_DIR}" config --local core.hooksPath "${NEW_MACHINE_LDF_HOOKS}"
+  git init -q --bare --initial-branch=main "${ARI_DOTFILES_LDF_GIT_DIR}"
+  mkdir -p "${ARI_DOTFILES_LDF_GIT_DIR}/info"
+  cp "${ARI_DOTFILES_SHARED_DIR}/local-dotfiles-exclude" "${ARI_DOTFILES_LDF_GIT_DIR}/info/exclude"
+  git --git-dir="${ARI_DOTFILES_LDF_GIT_DIR}" config --local core.hooksPath "${ARI_DOTFILES_LDF_HOOKS}"
 }
 
-df_git() { git --git-dir="${NEW_MACHINE_DF_GIT_DIR}" --work-tree="${HOME}" "$@"; }
-ldf_git() { git --git-dir="${NEW_MACHINE_LDF_GIT_DIR}" --work-tree="${HOME}/.local" "$@"; }
+df_git() { git --git-dir="${ARI_DOTFILES_DF_GIT_DIR}" --work-tree="${HOME}" "$@"; }
+ldf_git() { git --git-dir="${ARI_DOTFILES_LDF_GIT_DIR}" --work-tree="${HOME}/.local" "$@"; }
 
 # ── The non-brew steps' happy path ───────────────────────────────────────────
 
@@ -546,7 +548,7 @@ start_busy_brew() {
   # its stderr is dropped so the eventual kill does not print "Terminated" into the test output.
   bash -c "sleep 300; true # ${marker}" 2>/dev/null &
   WORLD_PIDS+=("$!")
-  export NEW_MACHINE_BREW_BUSY_PATTERN="${marker}"
+  export ARI_DOTFILES_BREW_BUSY_PATTERN="${marker}"
   # pgrep must see it before the CLI runs.
   local i
   for i in 1 2 3 4 5 6 7 8 9 10; do

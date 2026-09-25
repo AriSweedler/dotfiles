@@ -1,10 +1,9 @@
 # dotfiles/lib/lock.zsh — one run at a time for the verbs that write RUN_DIR and state
-# (healthcheck, setup, apply, verify). push, init and pull never take it. The caller installs
-# `trap lock::release EXIT`.
+# (healthcheck, setup, apply, verify, and init, which is setup's repo group). push never takes it.
 zmodload zsh/datetime
 zmodload -F zsh/stat b:zstat
 
-typeset -g LOCK_DIR="${NEW_MACHINE_STATE_DIR}/lock.d"
+typeset -g LOCK_DIR="${ARI_DOTFILES_STATE_DIR}/lock.d"
 typeset -g LOCK_HELD=0
 
 # verify.log is verify's data trail (one line per verify run); interactive runs only log.
@@ -15,7 +14,7 @@ lock::trail() {
 # lock::acquire <mode>: exits 4 while a live, young holder has it; a stale or dead holder is taken over.
 lock::acquire() {
   local mode="${1}"
-  mkdir -p "${NEW_MACHINE_STATE_DIR}"
+  mkdir -p "${ARI_DOTFILES_STATE_DIR}"
   if ! mkdir "${LOCK_DIR}" 2>/dev/null; then
     local pid=""
     if [[ -s "${LOCK_DIR}/pid" ]]; then
@@ -24,7 +23,7 @@ lock::acquire() {
     if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
       local -i age
       age=$(( EPOCHSECONDS - $(zstat +mtime "${LOCK_DIR}") ))
-      if (( age <= NEW_MACHINE_LOCK_MAX_AGE_SECS )); then
+      if (( age <= ARI_DOTFILES_LOCK_MAX_AGE_SECS )); then
         lock::trail "${mode}" "busy | pid='${pid}' age='${age}'"
         hud "${CLI_NAME}: skipped, another run holds the lock" 3
         exit 4

@@ -8,7 +8,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 world_new
 world_use_fixture drift
 TAP_DIR="${BREW_SHIM_FIXTURE}/prefix/Library/Taps/hashicorp/homebrew-tap"
-CACHE_DIR="${NEW_MACHINE_STATE_DIR}/cache/tap-info"
+CACHE_DIR="${ARI_DOTFILES_STATE_DIR}/cache/tap-info"
 
 git_tap() { git -C "${TAP_DIR}" -c user.name=t -c user.email=t@t "$@" > /dev/null 2>&1; }
 tapinfo_calls() { grep -c "^tap-info --json $1\$" "${BREW_SHIM_LOG_DIR}/brew.log" || true; }

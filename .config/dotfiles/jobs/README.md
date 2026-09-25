@@ -61,6 +61,6 @@ in a `bin/` and leaves a shim here that execs it.
     dotfiles jobs list          plugins of both tiers, triggers, last run and rc, agent state
     dotfiles jobs run <name>    run one now (trigger 'manual')
     dotfiles jobs unlock        simulate a screen unlock (SIGUSR1 to the agent)
-    dotfiles jobs install       the launchd job; idempotent; `dotfiles init` runs it
+    dotfiles jobs install       the launchd job; idempotent; the dotfiles_jobs step runs it
 
 Only a real lock and unlock proves the observer; the simulation proves everything after it.

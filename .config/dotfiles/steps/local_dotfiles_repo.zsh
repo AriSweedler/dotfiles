@@ -4,7 +4,7 @@ step::declare local_dotfiles_repo --group repo \
   --desc "local dotfiles bare repo exists with the allowlist, hooks, and a remote"
 
 check::local_dotfiles_repo() {
-  local git_dir="${NEW_MACHINE_LDF_GIT_DIR}" exclude="${NEW_MACHINE_LDF_GIT_DIR}/info/exclude"
+  local git_dir="${ARI_DOTFILES_LDF_GIT_DIR}" exclude="${ARI_DOTFILES_LDF_GIT_DIR}/info/exclude"
   if [[ ! -d "${git_dir}" ]]; then
     verdict fail missing_bare_repo -d "no bare repo | git_dir='${git_dir}'" -f "${CLI_NAME} apply local_dotfiles_repo"
     return 0
@@ -23,8 +23,8 @@ check::local_dotfiles_repo() {
   fi
   local hooks
   hooks="$(tier::hooks_path "${git_dir}")"
-  if [[ "${hooks}" != "${NEW_MACHINE_LDF_HOOKS}" ]]; then
-    verdict fail hooks_path -d "core.hooksPath='${hooks}' expected='${NEW_MACHINE_LDF_HOOKS}'" -f "${CLI_NAME} apply local_dotfiles_repo"
+  if [[ "${hooks}" != "${ARI_DOTFILES_LDF_HOOKS}" ]]; then
+    verdict fail hooks_path -d "core.hooksPath='${hooks}' expected='${ARI_DOTFILES_LDF_HOOKS}'" -f "${CLI_NAME} apply local_dotfiles_repo"
     return 0
   fi
   # The machine keeps its own allowlist; the tool only points at the difference.
@@ -56,7 +56,7 @@ check::local_dotfiles_repo() {
 # info/exclude is the allowlist that makes `git ldf add -A` safe. Installed from the versioned
 # template over git's stock (comment-only) file; a machine whose rules differ keeps its copy.
 apply::local_dotfiles_repo() {
-  local git_dir="${NEW_MACHINE_LDF_GIT_DIR}" exclude="${NEW_MACHINE_LDF_GIT_DIR}/info/exclude"
+  local git_dir="${ARI_DOTFILES_LDF_GIT_DIR}" exclude="${ARI_DOTFILES_LDF_GIT_DIR}/info/exclude"
   if [[ ! -d "${git_dir}" ]]; then
     run_mut git init --bare "${git_dir}" || return 1
   fi
@@ -69,6 +69,6 @@ apply::local_dotfiles_repo() {
     run_mut mkdir -p "${exclude:h}" || rc=1
     run_mut cp "${LDF_EXCLUDE_TEMPLATE}" "${exclude}" || rc=1
   fi
-  tier::ensure_hooks_path "${git_dir}" "${NEW_MACHINE_LDF_HOOKS}" || rc=1
+  tier::ensure_hooks_path "${git_dir}" "${ARI_DOTFILES_LDF_HOOKS}" || rc=1
   return "${rc}"
 }

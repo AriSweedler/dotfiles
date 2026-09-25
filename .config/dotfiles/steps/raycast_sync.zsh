@@ -7,11 +7,11 @@ step::declare raycast_sync --group tools --needs dotfiles_repo \
   --desc "Raycast in parity with the dotfiles: every Karabiner-bound command on its deeplink allow-list, the versioned snippets imported (dotfiles raycast sync)"
 
 step::raycast_sync::load() {
-  need_lib "${DOTFILES_CONFIG}/zsh/plugins/raycast.zsh"
+  need_lib "${ARI_DOTFILES_CONFIG}/zsh/plugins/raycast.zsh"
 }
 
 check::raycast_sync() {
-  if [[ ! -d "${ARI_RAYCAST_APP:-/Applications/Raycast.app}" ]]; then
+  if [[ ! -d "${ARI_DOTFILES_RAYCAST_APP:-/Applications/Raycast.app}" ]]; then
     verdict skip no_raycast -d "Raycast is not installed"
     return 0
   fi

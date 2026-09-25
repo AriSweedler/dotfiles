@@ -3,19 +3,35 @@ zmodload zsh/datetime   # EPOCHREALTIME / EPOCHSECONDS
 
 help_push() {
   cat <<EOF
-dotfiles push [--submodules|--shared|--local|--no-submodules|--no-shared|--no-local] [--dry-run]   publish every tier (dfp)
+publish every tier: submodules, pointer bumps, shared, local
 
-  Pushes every submodule with something to push, in parallel (one log each), commits the shared
-  tier's pointer bumps, then pushes the shared tier, all as ${DOTFILES_GITHUB_LOGIN} by its gh
-  token; the local tier alongside, to its own remote with the ssh agent's key (its pre-push hook
-  included). Repos already at origin are skipped silently; a submodule failure blocks the shared
-  push. Human-only: Claude Code is denied 'dotfiles push'.
+${c_bold}Usage${c_rst}
+  ${DF} push [--submodules] [--shared] [--local] [--dry-run]
+  ${DF} push [--no-submodules] [--no-shared] [--no-local] [--dry-run]
 
-  --submodules | --shared | --local   only these parts (none = all three)
-  --no-submodules | --no-shared | --no-local   leave a part out
-  --dry-run                            the would-push lines, no network
+  Pushes every submodule with something to push, in parallel (one log each),
+  commits the shared tier's pointer bumps, then pushes the shared tier, all as
+  ${ARI_DOTFILES_GITHUB_LOGIN} by its gh token; the local tier alongside, to its own remote
+  with the ssh agent's key (its pre-push hook included). Repos already at
+  origin are skipped silently; a submodule failure blocks the shared push.
+  Logs: $(help::tilde "${LOG_DIR}")/<repo>.log ('dotfiles logs'). Once per
+  machine: env -u GITHUB_TOKEN gh auth login. Human-only: Claude Code is denied
+  'dotfiles push'.
 
-  Logs: ${LOG_DIR}/<repo>.log ('dotfiles logs'). Once per machine: env -u GITHUB_TOKEN gh auth login
+${c_bold}Flags${c_rst}
+  --submodules      only the submodules (a selecting flag names the scope
+                    exactly; none = all three parts)
+  --shared          only the shared tier
+  --local           only the local tier
+  --no-submodules   leave the submodules out
+  --no-shared       leave the shared tier out
+  --no-local        leave the local tier out
+  --dry-run         the would-push lines, no network
+
+${c_bold}Env${c_rst}
+  $(ENV ARI_DOTFILES_GITHUB_LOGIN)
+      the GitHub account every personal push authenticates as, by its gh
+      token (default ${ARI_DOTFILES_GITHUB_LOGIN})
 EOF
 }
 
@@ -25,21 +41,21 @@ EOF
 # IDENTITY_TTL_SECONDS) answers it for a known token. Runs before the first personal push only.
 #######################################
 load_token() {
-  if ! TOKEN="$(env -u GITHUB_TOKEN gh auth token -u "${DOTFILES_GITHUB_LOGIN}" 2>/dev/null)" || [[ -z "${TOKEN}" ]]; then
-    log::err "Personal account is not logged into gh | login='${DOTFILES_GITHUB_LOGIN}' fix='env -u GITHUB_TOKEN gh auth login   (HTTPS; pick ${DOTFILES_GITHUB_LOGIN})'"; return 1
+  if ! TOKEN="$(env -u GITHUB_TOKEN gh auth token -u "${ARI_DOTFILES_GITHUB_LOGIN}" 2>/dev/null)" || [[ -z "${TOKEN}" ]]; then
+    log::err "Personal account is not logged into gh | login='${ARI_DOTFILES_GITHUB_LOGIN}' fix='env -u GITHUB_TOKEN gh auth login   (HTTPS; pick ${ARI_DOTFILES_GITHUB_LOGIN})'"; return 1
   fi
   local fingerprint cached_fingerprint="" cached_login="" verified_at=0 who
   fingerprint="$(print -rn -- "${TOKEN}" | shasum -a 256 | awk '{print $1}')"
   if [[ -f "${IDENTITY_CACHE}" ]]; then read -r cached_fingerprint cached_login verified_at < "${IDENTITY_CACHE}" || true; fi
-  if [[ "${cached_fingerprint}" == "${fingerprint}" && "${cached_login}" == "${DOTFILES_GITHUB_LOGIN}" && "${verified_at}" == <-> ]] &&
+  if [[ "${cached_fingerprint}" == "${fingerprint}" && "${cached_login}" == "${ARI_DOTFILES_GITHUB_LOGIN}" && "${verified_at}" == <-> ]] &&
      (( EPOCHSECONDS - verified_at < IDENTITY_TTL_SECONDS )); then
-    log::info "pushing as | login='${DOTFILES_GITHUB_LOGIN}' identity='cached'"; return 0
+    log::info "pushing as | login='${ARI_DOTFILES_GITHUB_LOGIN}' identity='cached'"; return 0
   fi
   who="$(GH_TOKEN="${TOKEN}" gh api user -q .login 2>/dev/null || true)"
-  if [[ "${who}" != "${DOTFILES_GITHUB_LOGIN}" ]]; then log::err "Token identity mismatch | expected='${DOTFILES_GITHUB_LOGIN}' got='${who:-<none>}'"; return 1; fi
+  if [[ "${who}" != "${ARI_DOTFILES_GITHUB_LOGIN}" ]]; then log::err "Token identity mismatch | expected='${ARI_DOTFILES_GITHUB_LOGIN}' got='${who:-<none>}'"; return 1; fi
   mkdir -p "${STATE_DIR}"
-  ( umask 077; print -r -- "${fingerprint} ${DOTFILES_GITHUB_LOGIN} ${EPOCHSECONDS}" > "${IDENTITY_CACHE}" )
-  log::info "pushing as | login='${DOTFILES_GITHUB_LOGIN}' identity='verified'"
+  ( umask 077; print -r -- "${fingerprint} ${ARI_DOTFILES_GITHUB_LOGIN} ${EPOCHSECONDS}" > "${IDENTITY_CACHE}" )
+  log::info "pushing as | login='${ARI_DOTFILES_GITHUB_LOGIN}' identity='verified'"
 }
 
 #######################################
@@ -75,15 +91,15 @@ push_target() {
 # to origin as configured and git refreshes its tracking ref itself.
 #######################################
 push_repo() {
-  local repo="${1}" branch sha url refspec out flag dest actor="${DOTFILES_GITHUB_LOGIN}"
-  local -a auth=(-c credential.helper= -c 'credential.helper=!f() { echo "username=${DOTFILES_PUSH_LOGIN}"; echo "password=${DOTFILES_PUSH_TOKEN}"; }; f')
+  local repo="${1}" branch sha url refspec out flag dest actor="${ARI_DOTFILES_GITHUB_LOGIN}"
+  local -a auth=(-c credential.helper= -c 'credential.helper=!f() { echo "username=${ARI_DOTFILES_PUSH_LOGIN}"; echo "password=${ARI_DOTFILES_PUSH_TOKEN}"; }; f')
   print -r -- "# $(date -u +%FT%TZ) dotfiles push -> ${repo}"
   push_target "${repo}" || return 1
   refspec="refs/heads/${branch}:refs/heads/${branch}"; dest="${url}"
   if [[ "${repo}" == local ]]; then
     dest=origin; actor="the ssh agent's key"; auth=()
   else
-    local -x DOTFILES_PUSH_LOGIN="${DOTFILES_GITHUB_LOGIN}" DOTFILES_PUSH_TOKEN="${TOKEN}"   # what the helper answers; git's environment, never argv
+    local -x ARI_DOTFILES_PUSH_LOGIN="${ARI_DOTFILES_GITHUB_LOGIN}" ARI_DOTFILES_PUSH_TOKEN="${TOKEN}"   # what the helper answers; git's environment, never argv
   fi
   log::info "Pushing | repo='${repo}' branch='${branch}' sha='${sha:0:7}' url='${url}' as='${actor}' head_author='$(repo_git "${repo}" log -1 --format='%an <%ae>' "${sha}")'"
   if ! out="$(repo_git "${repo}" "${auth[@]}" push --porcelain "${dest}" "${refspec}" 2>&1)"; then
@@ -236,7 +252,7 @@ cmd_push() {
   # Selecting flags name the scope exactly (none = every part); excluding flags then remove from it.
   local -a only=() skip=()
   while (( $# > 0 )); do case "${1}" in
-    --dry-run) export DOTFILES_DRY_RUN=1; shift ;;
+    --dry-run) export ARI_DOTFILES_DRY_RUN=1; shift ;;
     --submodules|--shared|--local)          only+=("${1#--}"); shift ;;
     --no-submodules|--no-shared|--no-local) skip+=("${1#--no-}"); shift ;;
     *) usage_error "push: unknown argument | argument='${1}'" ;;

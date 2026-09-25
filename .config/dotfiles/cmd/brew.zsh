@@ -3,25 +3,57 @@
 
 help_brew() {
   cat <<EOF
-dotfiles brew triage|decree|undecree|merged|inventory   settle Homebrew drift in the two Brewfiles
+settle Homebrew drift in the two Brewfiles
 
-  dotfiles brew triage   [--json]                describe undeclared, orphaned and duplicate items
-  dotfiles brew decree   ITEM.. (--global|--local|--ignore-global|--ignore-local) [--reason TEXT] [--dry-run] [--no-push]
-                                                 declare an item in a tier's Brewfile (or ignore it), and commit
-  dotfiles brew undecree ITEM.. [--dry-run] [--no-push]
-  dotfiles brew merged                           print the merged Brewfile (debugging)
-  dotfiles brew inventory [--json]               what is installed, from receipts
+${c_bold}Usage${c_rst}
+  ${DF} brew triage [--json]
+  ${DF} brew decree ITEM.. (--global|--local|--ignore-global|--ignore-local)
+                          [--reason TEXT] [--dry-run] [--no-push]
+  ${DF} brew undecree ITEM.. [--dry-run] [--no-push]
+  ${DF} brew merged
+  ${DF} brew inventory [--json]
+  ${DF} brew <subcommand> --help
 
-  ITEM = [formula:|cask:|tap:|vscode:]name; the kind prefix may be omitted when exactly one kind matches.
-  Tiers: global ${GLOBAL_BREWFILE} (git df, committed, never pushed by the tool)
-         local  ${LOCAL_BREWFILE} (git ldf, committed and pushed)
-  Nothing here touches brew's own state; the brew_pkgs step installs, the brew_drift step reports.
+  Declared state is two Brewfiles: global $(help::tilde "${GLOBAL_BREWFILE}")
+  (git df, committed, never pushed by the tool) and local
+  $(help::tilde "${LOCAL_BREWFILE}") (git ldf, committed and pushed).
+  Nothing here touches brew's own state; the brew_pkgs step installs, the
+  brew_drift step reports. ITEM is [formula:|cask:|tap:|vscode:]name; the kind
+  may be omitted when exactly one kind matches.
+
+${c_bold}Subcommands${c_rst}
+  triage      describe undeclared, orphaned and duplicate items, with the
+              commands that settle each
+  decree      declare an item in a tier's Brewfile, or ignore it, and commit
+  undecree    remove the lines decree wrote for the item, and commit
+  merged      print the merged Brewfile (debugging)
+  inventory   what is installed, from receipts
+
+${c_bold}Flags${c_rst}
+  --json      triage, inventory: JSON instead of text
+  --dry-run   decree, undecree: print the lines, paths and git commands; touch
+              nothing
+  --no-push   decree, undecree: skip the local tier's push
+  each subcommand's --help has the rest
+
+${c_bold}Env${c_rst}
+  $(ENV ARI_DOTFILES_GLOBAL_DIR)
+      directory of the global Brewfile
+      (default $(help::tilde "${ARI_DOTFILES_GLOBAL_DIR}"))
+  $(ENV ARI_DOTFILES_LOCAL_DIR)
+      directory of the local Brewfile
+      (default $(help::tilde "${ARI_DOTFILES_LOCAL_DIR}"))
+  $(ENV ARI_DOTFILES_NO_PUSH)
+      1 skips the local tier's push after a decree commit
+  $(ENV ARI_DOTFILES_BREW)
+      the brew binary (default: probed on PATH, then under
+      ARI_DOTFILES_BREW_PREFIXES)
 EOF
 }
 
 cmd_brew() {
-  need_lib "${DOTFILES_CMD}/brew/brew.zsh"
-  need_lib "${DOTFILES_CMD}/brew/decree.zsh"
+  need_lib "${ARI_DOTFILES_CMD}/brew/brew.zsh"
+  need_lib "${ARI_DOTFILES_CMD}/brew/decree.zsh"
   local sub="${1:-}"
   [[ -n "${sub}" ]] || usage_error "brew needs a subcommand | known='triage decree undecree merged inventory'"
   shift

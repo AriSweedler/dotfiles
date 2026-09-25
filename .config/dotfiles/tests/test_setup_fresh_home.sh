@@ -9,21 +9,21 @@ world_new
 world_use_fixture satisfied
 world_empty_home
 seed_df_remote
-export DOTFILES_REMOTE="${FIX}/remotes/dotfiles.git"
+export ARI_DOTFILES_REMOTE="${FIX}/remotes/dotfiles.git"
 export BREW_SHIM_ALLOW_MUTATION=1
 export BOB_SHIM_LS="Installed: v0.11.2 Used"
-TEMPLATE="${NEW_MACHINE_SHARED_DIR}/local-dotfiles-exclude"
+TEMPLATE="${ARI_DOTFILES_SHARED_DIR}/local-dotfiles-exclude"
 rules() { grep -vE '^[[:space:]]*(#|$)' "$1" || true; }
 
 nm setup --json
 assert_eq "setup exits 0" 0 "${RC}"
 f="$(out_json)"
-assert_file "bare dotfiles repo cloned" "${NEW_MACHINE_DF_GIT_DIR}/HEAD"
+assert_file "bare dotfiles repo cloned" "${ARI_DOTFILES_DF_GIT_DIR}/HEAD"
 assert_file "worktree has the log lib" "${HOME}/.config/zsh/plugins/log.zsh"
-assert_eq "df hooksPath set" "${NEW_MACHINE_DF_HOOKS}" "$(df_git config --local --get core.hooksPath)"
-assert_file "local-dotfiles bare repo created" "${NEW_MACHINE_LDF_GIT_DIR}/HEAD"
-assert_eq "ldf hooksPath set" "${NEW_MACHINE_LDF_HOOKS}" "$(git --git-dir="${NEW_MACHINE_LDF_GIT_DIR}" config --local --get core.hooksPath)"
-assert_eq "ldf info/exclude == template" "$(rules "${TEMPLATE}")" "$(rules "${NEW_MACHINE_LDF_GIT_DIR}/info/exclude")"
+assert_eq "df hooksPath set" "${ARI_DOTFILES_DF_HOOKS}" "$(df_git config --local --get core.hooksPath)"
+assert_file "local-dotfiles bare repo created" "${ARI_DOTFILES_LDF_GIT_DIR}/HEAD"
+assert_eq "ldf hooksPath set" "${ARI_DOTFILES_LDF_HOOKS}" "$(git --git-dir="${ARI_DOTFILES_LDF_GIT_DIR}" config --local --get core.hooksPath)"
+assert_eq "ldf info/exclude == template" "$(rules "${TEMPLATE}")" "$(rules "${ARI_DOTFILES_LDF_GIT_DIR}/info/exclude")"
 assert_file "jobs plist installed" "${HOME}/Library/LaunchAgents/com.$(id -un).dotfiles-jobs.plist"
 assert_file "jobs job loaded" "${LAUNCHCTL_SHIM_STATE}/com.$(id -un).dotfiles-jobs"
 assert_json "status ok or warn" "${f}" '.status == "ok" or .status == "warn"' true
@@ -53,6 +53,6 @@ if (( RC == 0 || RC == 1 )); then pass "setup --dry-run exits by verdict (rc=${R
 assert_eq "dry-run created nothing outside the state dir" "${before}" "$(snapshot)"
 assert_no_mutation "dry-run mutates nothing"
 assert_contains "dry-run announces the dotfiles clone" "${ERR}" "would run apply::dotfiles_repo"
-assert_no_file "dry-run cloned nothing" "${NEW_MACHINE_DF_GIT_DIR}"
+assert_no_file "dry-run cloned nothing" "${ARI_DOTFILES_DF_GIT_DIR}"
 
 report

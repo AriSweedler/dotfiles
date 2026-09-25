@@ -12,8 +12,8 @@ seed_fake_repos
 seed_ldf_remote
 df_git remote add origin "${FIX}/remotes/dotfiles.git"
 
-LOCAL="${NEW_MACHINE_LOCAL_DIR}/Brewfile"
-LOCAL_IGNORE="${NEW_MACHINE_LOCAL_DIR}/Brewfile.ignore"
+LOCAL="${ARI_DOTFILES_LOCAL_DIR}/Brewfile"
+LOCAL_IGNORE="${ARI_DOTFILES_LOCAL_DIR}/Brewfile.ignore"
 GLOBAL="${HOME}/.config/new-machine/Brewfile"
 GLOBAL_IGNORE="${HOME}/.config/new-machine/Brewfile.ignore"
 MARKER="# ── decreed via 'new-machine brew decree'; move into a section when tidying ──"

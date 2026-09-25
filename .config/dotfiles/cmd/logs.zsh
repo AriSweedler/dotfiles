@@ -2,10 +2,22 @@
 
 help_logs() {
   cat <<EOF
-dotfiles logs [--repo NAME] [--previous]   the push logs (NAME = 'shared', 'local' or a submodule path)
+the push logs, per repo
 
-  ${LOG_DIR}/<repo>.log holds the last push of each repo, .log.bak.1 … .${KEEP_BACKUPS} the runs
-  before; --previous shows the run before the last one.
+${c_bold}Usage${c_rst}
+  ${DF} logs [--repo NAME] [--previous]
+
+  $(help::tilde "${LOG_DIR}")/<repo>.log holds the last push of each repo;
+  .log.bak.1 through .log.bak.${KEEP_BACKUPS} hold the runs before. NAME is 'shared',
+  'local' or a submodule path.
+
+${c_bold}Flags${c_rst}
+  --repo NAME   one repo's log instead of all of them
+  --previous    the run before the last one (.log.bak.1)
+
+${c_bold}Env${c_rst}
+  $(ENV XDG_STATE_HOME)
+      the logs live under it, at dotfiles/push (default ~/.local/state)
 EOF
 }
 

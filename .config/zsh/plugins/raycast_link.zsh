@@ -24,24 +24,24 @@
 # raycast_sync step run --allow.
 #
 # Usage: raycast_link <slug|path> [--plain] | --list | --check | --allow [--dry-run]
-# Env: RAYCAST_LINK_KARABINER_TS (the karabiner.ts checkout), RAYCAST_LINK_KARABINER_JSON,
-# RAYCAST_LINK_DEFAULTS_DOMAIN (a domain name or a plist path), RAYCAST_LINK_BINDINGS_CMD (test
+# Env: ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS (the karabiner.ts checkout), ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON,
+# ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN (a domain name or a plist path), ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD (test
 # seam: a command whose stdout is the bindings JSON, e.g. `cat fixture.json`).
 
 (( ${+functions[log::info]} )) || source "${${(%):-%x}:A:h}/log.zsh"
 
-: "${RAYCAST_LINK_KARABINER_TS:=${XDG_CONFIG_HOME:-${HOME}/.config}/karabiner/karabiner.ts}"
-: "${RAYCAST_LINK_KARABINER_JSON:=${XDG_CONFIG_HOME:-${HOME}/.config}/karabiner/karabiner.json}"
-: "${RAYCAST_LINK_DEFAULTS_DOMAIN:=com.raycast.macos}"
-: "${RAYCAST_LINK_BINDINGS_CMD:=}"
+: "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS:=${XDG_CONFIG_HOME:-${HOME}/.config}/karabiner/karabiner.ts}"
+: "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON:=${XDG_CONFIG_HOME:-${HOME}/.config}/karabiner/karabiner.json}"
+: "${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN:=com.raycast.macos}"
+: "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD:=}"
 # Guarded so re-sourcing (plugin loader plus the dispatcher) never trips "read-only variable".
-(( ${+RAYCAST_LINK_ALLOW_KEY} )) || typeset -gr RAYCAST_LINK_ALLOW_KEY="alwaysAllowCommandDeeplinking"
+(( ${+ARI_DOTFILES_RAYCAST_LINK_ALLOW_KEY} )) || typeset -gr ARI_DOTFILES_RAYCAST_LINK_ALLOW_KEY="alwaysAllowCommandDeeplinking"
 # One generator run per invocation; keyed by the seam so a test that swaps fixtures reloads.
-typeset -g RAYCAST_LINK_BINDINGS_CACHE="" RAYCAST_LINK_BINDINGS_CACHE_KEY=""
+typeset -g ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE="" ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE_KEY=""
 
 # Raycast's shortcut convention, the one place to edit: the Karabiner Hyper set is ✦, any other
 # modifier set is glyphs in macOS order with no separators, keys get their glyph or upper-case.
-typeset -gA RAYCAST_LINK_GLYPHS=(
+typeset -gA ARI_DOTFILES_RAYCAST_LINK_GLYPHS=(
   control ⌃  option ⌥  shift ⇧  command ⌘  caps_lock ⇪  fn fn
   return_or_enter ⏎  delete_or_backspace ⌫  tab ⇥  spacebar Space  escape ⎋
   up_arrow ↑  down_arrow ↓  left_arrow ←  right_arrow →
@@ -50,7 +50,7 @@ typeset -gA RAYCAST_LINK_GLYPHS=(
 )
 # Symbol and word aliases for keys, normalized to karabiner key names before anything else
 # looks at them; the same set utils/actions.ts accepts, so a table may use either spelling.
-typeset -gA RAYCAST_LINK_KEY_ALIASES=(
+typeset -gA ARI_DOTFILES_RAYCAST_LINK_KEY_ALIASES=(
   '=' equal_sign  '-' hyphen  minus hyphen
   '[' open_bracket  ']' close_bracket  '.' period  ',' comma
   '`' grave_accent_and_tilde  ';' semicolon  "'" quote  / slash  '\' backslash
@@ -58,10 +58,10 @@ typeset -gA RAYCAST_LINK_KEY_ALIASES=(
   '⌫' delete_or_backspace  delete delete_or_backspace
   space spacebar
 )
-typeset -ga RAYCAST_LINK_MODIFIER_ORDER=(fn control option shift command caps_lock)
-(( ${+RAYCAST_LINK_HYPER_SET} )) || typeset -gr RAYCAST_LINK_HYPER_SET="control option shift command"
-typeset -gA RAYCAST_LINK_MODIFIER_ALIASES=(
-  hyper "${RAYCAST_LINK_HYPER_SET}"
+typeset -ga ARI_DOTFILES_RAYCAST_LINK_MODIFIER_ORDER=(fn control option shift command caps_lock)
+(( ${+ARI_DOTFILES_RAYCAST_LINK_HYPER_SET} )) || typeset -gr ARI_DOTFILES_RAYCAST_LINK_HYPER_SET="control option shift command"
+typeset -gA ARI_DOTFILES_RAYCAST_LINK_MODIFIER_ALIASES=(
+  hyper "${ARI_DOTFILES_RAYCAST_LINK_HYPER_SET}"
   cmd command  command command
   ctrl control  control control
   opt option  option option  alt option
@@ -71,27 +71,27 @@ typeset -gA RAYCAST_LINK_MODIFIER_ALIASES=(
 
 # --- bindings source ---
 
-# Loads the bindings document into RAYCAST_LINK_BINDINGS_CACHE (current shell, so callers may
+# Loads the bindings document into ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE (current shell, so callers may
 # read the global after this returns). Runs the seam command when set, else the karabiner.ts
 # generator through its own tsx.
 function raycast_link::load_bindings() {
-  local key="${RAYCAST_LINK_BINDINGS_CMD}|${RAYCAST_LINK_KARABINER_TS}" out
-  if [[ -n "${RAYCAST_LINK_BINDINGS_CACHE}" && "${RAYCAST_LINK_BINDINGS_CACHE_KEY}" == "${key}" ]]; then
+  local key="${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD}|${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS}" out
+  if [[ -n "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE}" && "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE_KEY}" == "${key}" ]]; then
     return 0
   fi
-  if [[ -n "${RAYCAST_LINK_BINDINGS_CMD}" ]]; then
-    if ! out="$(eval "${RAYCAST_LINK_BINDINGS_CMD}")"; then
-      log::err "Bindings command failed | cmd='${RAYCAST_LINK_BINDINGS_CMD}'"
+  if [[ -n "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD}" ]]; then
+    if ! out="$(eval "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD}")"; then
+      log::err "Bindings command failed | cmd='${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD}'"
       return 1
     fi
   else
-    local tsx="${RAYCAST_LINK_KARABINER_TS}/node_modules/.bin/tsx"
+    local tsx="${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS}/node_modules/.bin/tsx"
     if [[ ! -x "${tsx}" ]]; then
       log::err "karabiner.ts not built | fix='run bake' tsx='${tsx}'"
       return 1
     fi
-    if ! out="$(cd "${RAYCAST_LINK_KARABINER_TS}" && "${tsx}" src/generate_bindings.ts --stdout 2>/dev/null)"; then
-      log::err "Bindings generator failed | fix='run bake' dir='${RAYCAST_LINK_KARABINER_TS}'"
+    if ! out="$(cd "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS}" && "${tsx}" src/generate_bindings.ts --stdout 2>/dev/null)"; then
+      log::err "Bindings generator failed | fix='run bake' dir='${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS}'"
       return 1
     fi
     # Modules the generator imports log their setup on stdout (karabiner_script prints the repo
@@ -102,13 +102,13 @@ function raycast_link::load_bindings() {
     log::err "Bindings output is not the expected JSON | expected='{\"bindings\": [...]}' head='${${out//$'\n'/ }[1,80]}'"
     return 1
   fi
-  RAYCAST_LINK_BINDINGS_CACHE="${out}"
-  RAYCAST_LINK_BINDINGS_CACHE_KEY="${key}"
+  ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE="${out}"
+  ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE_KEY="${key}"
 }
 
 # Output: one compact JSON line per binding, in generator order (sorted by path).
 function raycast_link::entries() {
-  print -r -- "${RAYCAST_LINK_BINDINGS_CACHE}" | jq -c '.bindings[]'
+  print -r -- "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE}" | jq -c '.bindings[]'
 }
 
 # Input: an entry. Output: its command slug, the last segment of the path.
@@ -119,9 +119,9 @@ function raycast_link::slug() {
 # Input: a slug or a full path. Output: the entry; exit 1 naming the known slugs when absent.
 function raycast_link::entry() {
   local selector="${1}" entry
-  entry="$(print -r -- "${RAYCAST_LINK_BINDINGS_CACHE}" | jq -c --arg s "${selector}" '.bindings[] | select(.path == $s or (.path | split("/") | last) == $s)')"
+  entry="$(print -r -- "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE}" | jq -c --arg s "${selector}" '.bindings[] | select(.path == $s or (.path | split("/") | last) == $s)')"
   if [[ -z "${entry}" ]]; then
-    log::err "Unknown command | selector='${selector}' known='$(print -r -- "${RAYCAST_LINK_BINDINGS_CACHE}" | jq -r '[.bindings[].path | split("/") | last] | join(", ")')' source='karabiner.ts/src (modes/*.ts, raycast_shortcuts.ts)'"
+    log::err "Unknown command | selector='${selector}' known='$(print -r -- "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE}" | jq -r '[.bindings[].path | split("/") | last] | join(", ")')' source='karabiner.ts/src (modes/*.ts, raycast_shortcuts.ts)'"
     return 1
   fi
   print -r -- "${entry}"
@@ -138,20 +138,20 @@ function raycast_link::parse_chord() {
   tokens=("${(@s:+:)chord}")
   key="${tokens[-1]:-}"
   key="${key:l}"
-  key="${RAYCAST_LINK_KEY_ALIASES[${key}]:-${key}}"
+  key="${ARI_DOTFILES_RAYCAST_LINK_KEY_ALIASES[${key}]:-${key}}"
   if [[ ! "${key}" =~ '^[a-z0-9_]+$' ]]; then
-    log::err "Invalid key | key='${key}' chord='${1}' expected='a-z, 0-9, a karabiner key name like return_or_enter, or one of ${(kj: :)RAYCAST_LINK_KEY_ALIASES}'"
+    log::err "Invalid key | key='${key}' chord='${1}' expected='a-z, 0-9, a karabiner key name like return_or_enter, or one of ${(kj: :)ARI_DOTFILES_RAYCAST_LINK_KEY_ALIASES}'"
     return 1
   fi
   for token in "${(@)tokens[1,-2]}"; do
     token="${token:l}"
-    if [[ -z "${RAYCAST_LINK_MODIFIER_ALIASES[${token}]:-}" ]]; then
-      log::err "Unknown modifier | modifier='${token}' chord='${1}' valid='${(kj:, :)RAYCAST_LINK_MODIFIER_ALIASES}'"
+    if [[ -z "${ARI_DOTFILES_RAYCAST_LINK_MODIFIER_ALIASES[${token}]:-}" ]]; then
+      log::err "Unknown modifier | modifier='${token}' chord='${1}' valid='${(kj:, :)ARI_DOTFILES_RAYCAST_LINK_MODIFIER_ALIASES}'"
       return 1
     fi
-    for modifier in ${=RAYCAST_LINK_MODIFIER_ALIASES[${token}]}; do have[${modifier}]=1; done
+    for modifier in ${=ARI_DOTFILES_RAYCAST_LINK_MODIFIER_ALIASES[${token}]}; do have[${modifier}]=1; done
   done
-  for modifier in "${RAYCAST_LINK_MODIFIER_ORDER[@]}"; do
+  for modifier in "${ARI_DOTFILES_RAYCAST_LINK_MODIFIER_ORDER[@]}"; do
     (( ${+have[${modifier}]} )) && ordered+=("${modifier}")
   done
   print -r -- "${key}"
@@ -164,13 +164,13 @@ function raycast_link::render_binding() {
   parsed=("${(@f)$(raycast_link::parse_chord "${1}")}")
   (( ${#parsed} >= 1 )) && [[ -n "${parsed[1]}" ]] || return 1
   local key="${parsed[1]}" modifiers="${parsed[2]:-}" out="" modifier
-  if [[ "${modifiers}" == "${RAYCAST_LINK_HYPER_SET}" ]]; then
+  if [[ "${modifiers}" == "${ARI_DOTFILES_RAYCAST_LINK_HYPER_SET}" ]]; then
     out="✦"
   else
-    for modifier in ${=modifiers}; do out+="${RAYCAST_LINK_GLYPHS[${modifier}]}"; done
+    for modifier in ${=modifiers}; do out+="${ARI_DOTFILES_RAYCAST_LINK_GLYPHS[${modifier}]}"; done
   fi
-  if [[ -n "${RAYCAST_LINK_GLYPHS[${key}]:-}" ]]; then
-    out+="${RAYCAST_LINK_GLYPHS[${key}]}"
+  if [[ -n "${ARI_DOTFILES_RAYCAST_LINK_GLYPHS[${key}]:-}" ]]; then
+    out+="${ARI_DOTFILES_RAYCAST_LINK_GLYPHS[${key}]}"
   elif [[ "${key}" =~ '^[a-z]$' ]]; then
     out+="${key:u}"
   else
@@ -208,14 +208,14 @@ function raycast_link::render_entry_chords() {
 # first to-event opens the deeplink in the form the entry asks for: `open -g` iff keepFocus.
 function raycast_link::compiled_has() {
   local path_="${1}" key="${2}" modifiers="${3}" keep_focus="${4:-false}" want found cmd
-  [[ -r "${RAYCAST_LINK_KARABINER_JSON}" ]] || return 1
+  [[ -r "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON}" ]] || return 1
   want="$(print -r -- "${modifiers}" | tr ' ' '\n' | sed '/^$/d' | sort | paste -sd, -)"
   cmd="open raycast://${path_}"
   [[ "${keep_focus}" == true ]] && cmd="open -g raycast://${path_}"
   found="$(jq -r --arg cmd "${cmd}" --arg key "${key}" \
     '[.profiles[].complex_modifications.rules[].manipulators[]
       | select((.to[0].shell_command? // "") == $cmd and (.from.key_code? // "") == $key)
-      | ((.from.modifiers.mandatory // []) | sort | join(","))] | .[]' "${RAYCAST_LINK_KARABINER_JSON}" 2>/dev/null)"
+      | ((.from.modifiers.mandatory // []) | sort | join(","))] | .[]' "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON}" 2>/dev/null)"
   [[ $'\n'"${found}"$'\n' == *$'\n'"${want}"$'\n'* ]]
 }
 
@@ -244,7 +244,7 @@ function raycast_link::entry_status() {
 # old plist syntax (`"id" = 1;`), the same for a domain name and for a plist path, so it is
 # parsed rather than exported; a domain without the key reads as empty.
 function raycast_link::allowed_ids() {
-  defaults read "${RAYCAST_LINK_DEFAULTS_DOMAIN}" "${RAYCAST_LINK_ALLOW_KEY}" 2>/dev/null \
+  defaults read "${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN}" "${ARI_DOTFILES_RAYCAST_LINK_ALLOW_KEY}" 2>/dev/null \
     | awk '$0 ~ /= 1;[[:space:]]*$/ { key = $1; gsub(/"/, "", key); print key }'
   return 0
 }
@@ -269,7 +269,7 @@ function raycast_link::allow() {
   local dry_run="${1:-0}" entry alias_ id allowed state
   local -a added already no_id would_ids
   if ! command -v defaults >/dev/null 2>&1; then
-    log::err "defaults not found; cannot sync Raycast's allow-list | domain='${RAYCAST_LINK_DEFAULTS_DOMAIN}'"
+    log::err "defaults not found; cannot sync Raycast's allow-list | domain='${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN}'"
     return 1
   fi
   allowed="$(raycast_link::allowed_ids)"
@@ -284,16 +284,16 @@ function raycast_link::allow() {
         would_ids+=("${id}")
         if (( dry_run )); then
           added+=("${alias_}")
-        elif defaults write "${RAYCAST_LINK_DEFAULTS_DOMAIN}" "${RAYCAST_LINK_ALLOW_KEY}" -dict-add "${id}" -bool true; then
+        elif defaults write "${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN}" "${ARI_DOTFILES_RAYCAST_LINK_ALLOW_KEY}" -dict-add "${id}" -bool true; then
           added+=("${alias_}")
         else
-          log::err "defaults write failed | domain='${RAYCAST_LINK_DEFAULTS_DOMAIN}' id='${id}' alias='${alias_}'"
+          log::err "defaults write failed | domain='${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN}' id='${id}' alias='${alias_}'"
           return 1
         fi ;;
     esac
   done
   if (( dry_run )); then
-    log::info "Raycast allow-list dry run | would_add='${#added}' already='${#already}' no_allow_id='${#no_id}' domain='${RAYCAST_LINK_DEFAULTS_DOMAIN}' would_add_aliases='${(j:, :)added}'"
+    log::info "Raycast allow-list dry run | would_add='${#added}' already='${#already}' no_allow_id='${#no_id}' domain='${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN}' would_add_aliases='${(j:, :)added}'"
     cat <<EOF
 dry_run=1
 would_add=${#added}
@@ -305,7 +305,7 @@ no_allow_id_aliases=${(j:,:)no_id}
 EOF
     return 0
   fi
-  log::info "Raycast allow-list synced | added='${#added}' already='${#already}' no_allow_id='${#no_id}' domain='${RAYCAST_LINK_DEFAULTS_DOMAIN}' added_aliases='${(j:, :)added}' no_allow_id_aliases='${(j:, :)no_id}'"
+  log::info "Raycast allow-list synced | added='${#added}' already='${#already}' no_allow_id='${#no_id}' domain='${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN}' added_aliases='${(j:, :)added}' no_allow_id_aliases='${(j:, :)no_id}'"
   cat <<EOF
 added=${#added}
 already=${#already}
@@ -354,7 +354,7 @@ function raycast_link::check() {
     [[ "${status_word}" == MISSING ]] && rc=1
     print -r -- "${status_word} ${alias_} $(raycast_link::render_entry_chords "${entry}") $(raycast_link::entry_allow_state "${entry}" "${allowed}")"
   done
-  (( rc )) && log::err "Bindings not compiled | karabiner_json='${RAYCAST_LINK_KARABINER_JSON}' fix='run bake'"
+  (( rc )) && log::err "Bindings not compiled | karabiner_json='${ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON}' fix='run bake'"
   return "${rc}"
 }
 
@@ -370,7 +370,7 @@ dotfiles raycast link — a Raycast action as a link with its Karabiner binding
                                   layer chords show as 'layer' and are not verified), plus allowed/NOT-ALLOWED/no-allow-id
   dotfiles raycast link allow [--dry-run]   write the missing allowIds to Raycast's plist so no deeplink asks "Always allow"
 
-Bindings come from karabiner.ts's tables: ${RAYCAST_LINK_KARABINER_TS}/src/modes/*.ts and
+Bindings come from karabiner.ts's tables: ${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS}/src/modes/*.ts and
 src/raycast_shortcuts.ts, read through its generator. To change one, edit the table and run bake
 (which also regenerates src/raycast_bindings.json, an artifact for reading, and runs --allow).
 EOF

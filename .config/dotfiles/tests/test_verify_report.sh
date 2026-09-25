@@ -12,9 +12,9 @@ seed_fake_repos
 seed_ldf_remote
 seed_home_baseline
 export BOB_SHIM_LS="Installed: v0.11.2 Used"
-export NEW_MACHINE_INVOKED_BY=launchd
-REPORT="${NEW_MACHINE_DESKTOP_DIR}/new-machine-FAILED.md"
-STATE="${NEW_MACHINE_STATE_DIR}"
+export ARI_DOTFILES_INVOKED_BY=launchd
+REPORT="${ARI_DOTFILES_DESKTOP_DIR}/new-machine-FAILED.md"
+STATE="${ARI_DOTFILES_STATE_DIR}"
 
 nm verify
 assert_eq "verify exits 1" 1 "${RC}"

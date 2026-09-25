@@ -88,7 +88,7 @@ tier::submodule_identity_apply() {
 
 # --- Committing to a tier (the brew model's decree/undecree) ---
 tier::is_no_push() {
-  case "${DOTFILES_NO_PUSH:-0}" in 0|false|no|"") return 1 ;; esac
+  case "${ARI_DOTFILES_NO_PUSH:-0}" in 0|false|no|"") return 1 ;; esac
   return 0
 }
 
@@ -115,7 +115,7 @@ tier::index_clean() {
 #
 # Refuses when the index already holds unrelated changes, so the commit contains exactly the
 # given paths. Hooks run normally; a rejection leaves the files edited but uncommitted and is
-# reported verbatim. The local tier pushes unless DOTFILES_NO_PUSH; a failed push is a warning,
+# reported verbatim. The local tier pushes unless ARI_DOTFILES_NO_PUSH; a failed push is a warning,
 # not an error, because the weekly local_dotfiles_repo check surfaces unpushed commits later.
 # Returns 0 committed, 1 refused or rejected, 64 usage.
 tier::commit() {

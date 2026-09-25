@@ -11,8 +11,8 @@ seed_fake_repos
 seed_ldf_remote
 seed_home_baseline
 export BOB_SHIM_LS="Installed: v0.11.2 Used"
-export NEW_MACHINE_INVOKED_BY=launchd
-STATE="${NEW_MACHINE_STATE_DIR}"
+export ARI_DOTFILES_INVOKED_BY=launchd
+STATE="${ARI_DOTFILES_STATE_DIR}"
 LOCK="${STATE}/lock.d"
 verify() { bump_now_secs 60; shim_logs_reset; nm verify; }
 
@@ -39,7 +39,7 @@ assert_eq "live holder's pid file untouched" "${live_pid}" "$(cat "${LOCK}/pid")
 assert_contains "notifier says another run holds the lock" "$(shim_log terminal-notifier)" "holds the lock"
 assert_contains "trail notes busy" "$(cat "${STATE}/verify.log")" "busy"
 
-export NEW_MACHINE_LOCK_MAX_AGE_SECS=1
+export ARI_DOTFILES_LOCK_MAX_AGE_SECS=1
 touch -t 202001010000 "${LOCK}"
 verify
 if (( RC != 4 )); then pass "ancient live holder: run proceeds (rc=${RC})"; else fail "ancient live holder: run proceeds" "exit 4"; fi
@@ -48,7 +48,7 @@ assert_no_file "lock released after the takeover run" "${LOCK}"
 
 # A run that exits non-zero must release the lock too: zsh skips the EXIT trap when ERR_EXIT
 # ends the shell, so the CLI's exit has to be explicit.
-unset NEW_MACHINE_LOCK_MAX_AGE_SECS
+unset ARI_DOTFILES_LOCK_MAX_AGE_SECS
 shim_remove claude
 bump_now_secs 60
 nm check --only claude

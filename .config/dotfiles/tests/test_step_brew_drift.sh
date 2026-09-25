@@ -20,12 +20,12 @@ assert_contains "fix names triage" "$(step_get brew_drift .fix)" "brew triage"
 assert_json "items cover undeclared + orphan" "${FIX}/out.json" '.steps[] | select(.step=="brew_drift") | .items | length' 13
 assert_json "everything is new on the first run" "${FIX}/out.json" '.brew.undeclared | all(.new == true)' true
 
-mkdir -p "${NEW_MACHINE_STATE_DIR}"
-jq -n '{schema: 1, status: "fail", fingerprint: "0123456789abcdef", brew_undeclared: ["formula/gh", "cask/google-chrome"]}' > "${NEW_MACHINE_STATE_DIR}/last_result.json"
+mkdir -p "${ARI_DOTFILES_STATE_DIR}"
+jq -n '{schema: 1, status: "fail", fingerprint: "0123456789abcdef", brew_undeclared: ["formula/gh", "cask/google-chrome"]}' > "${ARI_DOTFILES_STATE_DIR}/last_result.json"
 check_drift
 assert_json "previously seen items are not new" "${FIX}/out.json" '[.brew.undeclared[] | select(.new == false) | .kind + "/" + .name] | sort | join(",")' "cask/google-chrome,formula/gh"
 assert_json "only the delta is new" "${FIX}/out.json" '[.brew.undeclared[] | select(.new == true)] | length' 10
-rm -f "${NEW_MACHINE_STATE_DIR}/last_result.json"
+rm -f "${ARI_DOTFILES_STATE_DIR}/last_result.json"
 
 # Everything ignored (and the orphan repaired) is a clean machine.
 fixture_remove_formula spacectl spacelift-io/spacelift/spacectl

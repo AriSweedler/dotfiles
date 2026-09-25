@@ -9,7 +9,7 @@ world_new
 world_use_fixture drift
 seed_fake_repos
 seed_ldf_remote
-LOCAL="${NEW_MACHINE_LOCAL_DIR}/Brewfile"
+LOCAL="${ARI_DOTFILES_LOCAL_DIR}/Brewfile"
 MARKER="# ── decreed via 'new-machine brew decree'; move into a section when tidying ──"
 
 decree() { bump_now_secs 60; nm brew decree "$@"; assert_eq "decree $* exits 0" 0 "${RC}"; }

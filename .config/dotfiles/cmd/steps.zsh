@@ -2,10 +2,22 @@
 
 help_steps() {
   cat <<EOF
-dotfiles steps   list every step: name, group, needs, tools, apply, description
+every step in run order, with its group, needs, tools and apply
 
-  One file each under ${DOTFILES_STEPS}; adding a file adds a step. Order is by group
-  (${(j:, :)STEP_GROUPS}), then by --needs, then by name.
+${c_bold}Usage${c_rst}
+  ${DF} steps
+
+  A step is one file under $(help::tilde "${ARI_DOTFILES_STEPS}") that declares itself,
+    step::declare NAME --group G [--needs a,b] [--tools t] --desc D
+  and defines check::NAME and, when it can fix what it finds, apply::NAME.
+  Adding the file adds the step. Run order: the groups in order
+  (${(j:, :)STEP_GROUPS}); inside a group, a step runs after the steps its
+  --needs names (each must have ended ok or warn, or the step is skipped);
+  ties by name. 'tools' names binaries the runner probes before the check.
+
+${c_bold}Env${c_rst}
+  $(ENV ARI_DOTFILES_STEPS)
+      the steps directory (default $(help::tilde "${ARI_DOTFILES_STEPS}"))
 EOF
 }
 

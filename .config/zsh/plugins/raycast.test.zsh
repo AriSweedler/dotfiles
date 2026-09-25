@@ -25,7 +25,7 @@ local _dir _rc _out _calls
 _dir="$(mktemp -d /tmp/raycast-test.XXXXX)"
 _calls="${_dir}/calls"
 mkdir -p "${_dir}/Raycast.app"
-export ARI_RAYCAST_APP="${_dir}/Raycast.app"
+export ARI_DOTFILES_RAYCAST_APP="${_dir}/Raycast.app"
 
 # --- every plugin sources twice in one zsh (plugin loader plus dispatcher) without a peep ---
 local _plugins="${HOME}/.config/zsh/plugins" _p
@@ -79,7 +79,7 @@ _out="$(ari_raycast sync 2>/dev/null)"; _rc=$?
 _t "sync: a failing step is reported and the run continues" "1" "$(print -r -- "${_out}" | grep -c "^FAIL snippets sync | rc='7'")"
 _t "sync: a failing step makes rc 1" "1" "${_rc}"
 _t "sync: the other step still ran" "1" "$(print -r -- "${_out}" | grep -c "^ok link allow")"
-_out="$(ARI_RAYCAST_APP="${_dir}/nope.app" ari_raycast sync 2>/dev/null)"; _rc=$?
+_out="$(ARI_DOTFILES_RAYCAST_APP="${_dir}/nope.app" ari_raycast sync 2>/dev/null)"; _rc=$?
 _t "sync: skips when Raycast is not installed" "skip raycast not installed | app='${_dir}/nope.app'" "${_out}"
 _t "sync: skip is rc 0" "0" "${_rc}"
 
@@ -91,13 +91,13 @@ EOF
 print -r -- '{"profiles":[{"complex_modifications":{"rules":[]}}]}' > "${_dir}/karabiner.json"
 _t "bin: link <slug> renders the widget" \
   "<[Raycast: Clipboard History | key: '✦4' (not compiled yet)](raycast://extensions/raycast/clipboard-history/clipboard-history)>" \
-  "$(RAYCAST_LINK_BINDINGS_CMD="cat ${_dir}/bindings.json" RAYCAST_LINK_KARABINER_JSON="${_dir}/karabiner.json" _bin link clipboard-history 2>/dev/null)"
+  "$(ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="cat ${_dir}/bindings.json" ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON="${_dir}/karabiner.json" _bin link clipboard-history 2>/dev/null)"
 _t "bin: --plain" \
   "<Raycast: Clipboard History | key: '✦4' (not compiled yet)> raycast://extensions/raycast/clipboard-history/clipboard-history" \
-  "$(RAYCAST_LINK_BINDINGS_CMD="cat ${_dir}/bindings.json" RAYCAST_LINK_KARABINER_JSON="${_dir}/karabiner.json" _bin link clipboard-history --plain 2>/dev/null)"
+  "$(ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="cat ${_dir}/bindings.json" ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON="${_dir}/karabiner.json" _bin link clipboard-history --plain 2>/dev/null)"
 mkdir -p "${_dir}/shared" "${_dir}/local"
 print -r -- '[]' > "${_dir}/shared/snippets.json"
-local _env=(RAYCAST_SNIPPETS_DIRS="${_dir}/shared:${_dir}/local" RAYCAST_SNIPPETS_MANIFEST="${_dir}/m.json")
+local _env=(ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS="${_dir}/shared:${_dir}/local" ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST="${_dir}/m.json")
 env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets sync >/dev/null 2>&1; _rc=$?
 _t "bin: snippets sync without a manifest refuses" "1" "${_rc}"
 _t "bin: snippets adopt then sync is a no-op" $'snippets: nothing to import | unchanged=0\npending=0' \
@@ -123,9 +123,9 @@ _bin snippets move --to local >/dev/null 2>&1; _rc=$?; _t "bin: move without NAM
 _bin snippets list --to local >/dev/null 2>&1; _rc=$?; _t "bin: --to on another verb rc 1" "1" "${_rc}"
 _t "bin: move --dry-run reaches the plugin with --to" "name=nobody" \
   "$(print -r -- '[{"name":"nobody","text":"x"}]' > "${_dir}/local/snippets.json"; env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets move nobody --to shared --dry-run 2>/dev/null | grep '^name=')"
-_t "bin: sync --dry-run skips without Raycast" "skip raycast not installed | app='${_dir}/nope.app'" "$(ARI_RAYCAST_APP="${_dir}/nope.app" _bin sync --dry-run 2>/dev/null | grep '^skip')"
+_t "bin: sync --dry-run skips without Raycast" "skip raycast not installed | app='${_dir}/nope.app'" "$(ARI_DOTFILES_RAYCAST_APP="${_dir}/nope.app" _bin sync --dry-run 2>/dev/null | grep '^skip')"
 
-unset ARI_RAYCAST_APP
+unset ARI_DOTFILES_RAYCAST_APP
 unfunction raycast_link raycast_snippets _bin
 rm -rf "${_dir}"
 

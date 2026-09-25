@@ -2,7 +2,7 @@
 # report::render against the golden files under fixtures/GOLDEN_ENV, and report::fingerprint's
 # invariants (permutation-proof, item-sensitive, warn-blind, empty on a pass).
 #
-#   NM_BLESS_GOLDEN=1 bash tests/test_report_render.sh   # rewrite the goldens from the renderer
+#   ARI_DOTFILES_BLESS_GOLDEN=1 bash tests/test_report_render.sh   # rewrite the goldens from the renderer
 set -u
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -27,13 +27,13 @@ render() {
 check_golden() {
   local name="$1" golden="$2"
   if (( RC == 0 )); then pass "${name}: render exits 0"; else fail "${name}: render exits 0" "rc=${RC} ${ERR}"; fi
-  if [[ "${NM_BLESS_GOLDEN:-0}" == 1 ]]; then
+  if [[ "${ARI_DOTFILES_BLESS_GOLDEN:-0}" == 1 ]]; then
     cp "${FIX}/render.out" "${golden}"
     pass "${name}: golden blessed at ${golden}"
     return
   fi
   if [[ ! -f "${golden}" ]]; then
-    fail "${name}: golden present" "missing ${golden} (create it with NM_BLESS_GOLDEN=1 once the render is reviewed)"
+    fail "${name}: golden present" "missing ${golden} (create it with ARI_DOTFILES_BLESS_GOLDEN=1 once the render is reviewed)"
     return
   fi
   if cmp -s "${golden}" "${FIX}/render.out"; then pass "${name}: byte-for-byte equal to the golden"

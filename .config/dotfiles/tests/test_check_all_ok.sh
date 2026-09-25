@@ -18,10 +18,10 @@ assert_json "every step ran" "${f}" '.steps|length' "${EXPECTED_STEPS}"
 assert_json "no step failed or errored" "${f}" '[.steps[] | select(.status=="fail" or .status=="error") | .step + "=" + .reason] | join(",")' ""
 # terminal_nerdfont's manual reminder is the one warn the spec lets a green machine carry.
 assert_json "status ok" "${f}" '.status=="ok" or (.status=="warn" and ([.steps[] | select(.status=="warn")] | all(.step=="terminal_nerdfont" and .reason=="manual_font")))' true
-assert_no_file "no Desktop report" "${NEW_MACHINE_DESKTOP_DIR}/new-machine-FAILED.md"
+assert_no_file "no Desktop report" "${ARI_DOTFILES_DESKTOP_DIR}/new-machine-FAILED.md"
 assert_no_mutation "check is read-only"
-assert_file "last-check.json written" "${NEW_MACHINE_STATE_DIR}/last-check.json"
-assert_json "last-check.json is the summary" "${NEW_MACHINE_STATE_DIR}/last-check.json" '.mode' check
+assert_file "last-check.json written" "${ARI_DOTFILES_STATE_DIR}/last-check.json"
+assert_json "last-check.json is the summary" "${ARI_DOTFILES_STATE_DIR}/last-check.json" '.mode' check
 
 if (( FAIL > 0 )); then jq -c '.steps[] | {step, status, reason, detail}' "${f}" >&2; fi
 report

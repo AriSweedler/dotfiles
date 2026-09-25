@@ -3,17 +3,37 @@
 
 help_healthcheck() {
   cat <<EOF
-dotfiles healthcheck [--only STEP,..] [--group GROUP] [--json]   every step's check reported, nothing applied
+every step's check, reported; nothing applied
 
-  Runs each step's check:: in its own zsh under a watchdog and prints one line per step, then
-  the roll-up. Exit 0 when every step is ok, warn or skip; 1 when one failed; 2 when one could
-  not be checked (a busy brew, a timeout, a crash). Nothing is changed, with or without --dry-run.
+${c_bold}Usage${c_rst}
+  ${DF} healthcheck [--only STEP,..] [--group GROUP] [--json]
 
-  --only STEP,..   exactly these steps (needs are a gate, not an auto-include)
+  Runs each step's check in its own zsh under a watchdog and prints one line
+  per step, then the roll-up. Exit 0 when every step is ok, warn or skip; 1
+  when one failed; 2 when one could not be checked (a busy brew, a timeout, a
+  crash). Nothing is changed, with or without --dry-run. Results land in
+  $(help::tilde "${ARI_DOTFILES_STATE_DIR}")/runs/<run id>/ and last-check.json;
+  'dotfiles steps' lists the steps.
+
+${c_bold}Flags${c_rst}
+  --only STEP,..   exactly these steps; a step's needs are a gate, not an
+                   auto-include
   --group GROUP    one group: ${(j:, :)STEP_GROUPS}
-  --json           print summary.json instead of the table (stdout is data, stderr is logs)
+  --json           print summary.json instead of the table (stdout is data,
+                   stderr is logs)
 
-  Results: ${NEW_MACHINE_STATE_DIR}/runs/<run id>/ and last-check.json. 'dotfiles steps' lists the steps.
+${c_bold}Env${c_rst}
+  $(ENV ARI_DOTFILES_STATE_DIR)
+      where runs and summaries are written
+      (default $(help::tilde "${ARI_DOTFILES_STATE_DIR}"))
+  $(ENV ARI_DOTFILES_CHECK_TIMEOUT_SECS)
+      seconds a check may run before it is killed and reported as error
+      timed_out (default ${ARI_DOTFILES_CHECK_TIMEOUT_SECS})
+  $(ENV ARI_DOTFILES_LOCK_MAX_AGE_SECS)
+      a live lock older than this is taken over (default ${ARI_DOTFILES_LOCK_MAX_AGE_SECS})
+  $(ENV ARI_DOTFILES_BREW_PREFIXES)
+      where brew and other tools are probed when not on PATH, as under launchd
+      (default '${ARI_DOTFILES_BREW_PREFIXES}')
 EOF
 }
 
@@ -22,7 +42,7 @@ cmd_healthcheck() {
   zparseopts -D -F -K -- -only:=only -group:=group -json=json -dry-run=dry || usage_error "healthcheck: bad flags | args='$*'"
   (( $# == 0 )) || usage_error "healthcheck takes no positional arguments | args='$*'"
   # A read-only run is its own dry run: the flag changes nothing here.
-  export DOTFILES_DRY_RUN=0
+  export ARI_DOTFILES_DRY_RUN=0
   run::main check "${only[2]:-}" "${group[2]:-}" "${#json}"
 }
 

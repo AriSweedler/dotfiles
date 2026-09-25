@@ -41,7 +41,7 @@ step::declare() {
 
 # Source every step file, then validate and order. Exit 3 on a registry that does not add up.
 steps::load() {
-  local dir="${1:-${DOTFILES_STEPS}}" file
+  local dir="${1:-${ARI_DOTFILES_STEPS}}" file
   for file in "${dir}"/*.zsh(N); do source "${file}" || return 3; done
   steps::validate || return 3
   steps::order
@@ -151,8 +151,8 @@ step::run_isolated() {
   export STEP="${name}"
   with_timeout "${timeout_secs}" env NO_COLOR=1 zsh -c '
     set -euo pipefail
-    for f in "${DOTFILES_LIB}"/*.zsh(N); do source "${f}"; done
-    source "${DOTFILES_STEPS}/${STEP}.zsh"
+    for f in "${ARI_DOTFILES_LIB}"/*.zsh(N); do source "${f}"; done
+    source "${ARI_DOTFILES_STEPS}/${STEP}.zsh"
     "'"${kind}"'::${STEP}"'
 }
 
@@ -161,7 +161,7 @@ step::run_check() {
   local name="${1}" check_file="${2}" log_file="${3}"
   local rc=0
   local -F start="${EPOCHREALTIME}"
-  step::run_isolated check "${name}" "${NEW_MACHINE_CHECK_TIMEOUT_SECS}" > "${check_file}" 2>> "${log_file}" || rc=$?
+  step::run_isolated check "${name}" "${ARI_DOTFILES_CHECK_TIMEOUT_SECS}" > "${check_file}" 2>> "${log_file}" || rc=$?
   local -i elapsed_ms
   (( elapsed_ms = (EPOCHREALTIME - start) * 1000 ))
   local timed_out=0 verdict_status=""
@@ -170,15 +170,15 @@ step::run_check() {
   fi
   if (( rc == 143 || rc == 137 )); then
     timed_out=1
-  elif (( NEW_MACHINE_CHECK_TIMEOUT_SECS > 0 && elapsed_ms >= NEW_MACHINE_CHECK_TIMEOUT_SECS * 1000 )) \
+  elif (( ARI_DOTFILES_CHECK_TIMEOUT_SECS > 0 && elapsed_ms >= ARI_DOTFILES_CHECK_TIMEOUT_SECS * 1000 )) \
        && ! { (( rc == 0 )) && [[ "${verdict_status}" == (ok|warn) ]]; }; then
     # The watchdog fired, so brew under the check was killed; anything but a clean ok/warn reached
     # after that describes the kill, not the machine.
     timed_out=1
   fi
   if (( timed_out )); then
-    log::err "check timed out | step='${name}' secs='${NEW_MACHINE_CHECK_TIMEOUT_SECS}'" 2>> "${log_file}"
-    verdict::synth "${name}" error timed_out "timed out after ${NEW_MACHINE_CHECK_TIMEOUT_SECS}s" > "${check_file}"
+    log::err "check timed out | step='${name}' secs='${ARI_DOTFILES_CHECK_TIMEOUT_SECS}'" 2>> "${log_file}"
+    verdict::synth "${name}" error timed_out "timed out after ${ARI_DOTFILES_CHECK_TIMEOUT_SECS}s" > "${check_file}"
   elif (( rc != 0 )) || [[ -z "${verdict_status}" ]]; then
     local tail_text
     tail_text="$(tail_lines "${log_file}" 10)"
@@ -203,7 +203,7 @@ step::record_synth() {
 }
 step::record_skip() { step::record_synth "${1}" skip "${2}"; }
 
-# step::run <name> [attempt]. Reads DOTFILES_MODE (check|setup), DOTFILES_DRY_RUN, RUN_DIR. Attempt
+# step::run <name> [attempt]. Reads ARI_DOTFILES_MODE (check|setup), ARI_DOTFILES_DRY_RUN, RUN_DIR. Attempt
 # 2 is verify's retry: the check lands in <name>.check.2.json and replaces the result.
 # Preflight first: every need must have ended ok or warn, every tool must resolve; then the check;
 # then, in setup, the apply and the recheck.
@@ -224,7 +224,7 @@ step::run() {
   local tool
   for tool in ${(s:,:)STEP_TOOLS[${name}]}; do
     if [[ -z "$(probe_tool "${tool}")" ]]; then
-      step::record_synth "${name}" error tool_missing "${tool} not found on PATH or under ${NEW_MACHINE_BREW_PREFIXES:-<no prefixes>}"
+      step::record_synth "${name}" error tool_missing "${tool} not found on PATH or under ${ARI_DOTFILES_BREW_PREFIXES:-<no prefixes>}"
       return 0
     fi
   done
@@ -238,7 +238,7 @@ step::run() {
   actionable="$(jq -r '.actionable' "${check_file}")"
   log::info "check | step='${name}' status='${step_status}' reason='$(jq -r '.reason' "${check_file}")'"
 
-  if [[ "${DOTFILES_MODE:-check}" == setup && "${actionable}" == true ]] && step::is_fixable "${name}"; then
+  if [[ "${ARI_DOTFILES_MODE:-check}" == setup && "${actionable}" == true ]] && step::is_fixable "${name}"; then
     if is_dry_run; then
       log::info "dry-run, would run apply::${name} | fix='$(jq -r '.fix // ""' "${check_file}")'"
       # The apply body runs with every mutation logged instead of executed, so the plan it prints is the real one.
@@ -247,7 +247,7 @@ step::run() {
     else
       log::info "apply::${name}"
       local apply_rc=0
-      step::run_isolated apply "${name}" "${NEW_MACHINE_APPLY_TIMEOUT_SECS}" >> "${log_file}" 2>&1 || apply_rc=$?
+      step::run_isolated apply "${name}" "${ARI_DOTFILES_APPLY_TIMEOUT_SECS}" >> "${log_file}" 2>&1 || apply_rc=$?
       local -a apply_tail=("${(f)$(tail_lines "${log_file}" 10)}")
       log::info "apply done | step='${name}' rc='${apply_rc}'"
       local recheck_file="${RUN_DIR}/${name}.recheck.json"
@@ -281,7 +281,7 @@ steps::run_all() {
       continue
     fi
     step::run "${name}"
-    if [[ -n "${STEP_ABORT_ON}" && "${name}" == "${STEP_ABORT_ON}" && "${DOTFILES_MODE}" == setup && "$(step::result_status "${name}")" == (fail|error) ]]; then
+    if [[ -n "${STEP_ABORT_ON}" && "${name}" == "${STEP_ABORT_ON}" && "${ARI_DOTFILES_MODE}" == setup && "$(step::result_status "${name}")" == (fail|error) ]]; then
       aborted=1
     fi
   done
@@ -306,13 +306,13 @@ steps::retry_errored() {
 
 # --- A run: begin, summarize, end ---
 
-# RUN_ID derives from NEW_MACHINE_NOW alone (the report marker depends on it), so a rerun in the
+# RUN_ID derives from ARI_DOTFILES_NOW alone (the report marker depends on it), so a rerun in the
 # same second reuses the directory; wiping it keeps stale artifacts out of the summary. Only a
 # directory under <state>/runs/ is ever removed.
 run::begin() {
   local mode="${1}"
-  export DOTFILES_MODE="${mode}"
-  if [[ "${RUN_DIR}" == "${NEW_MACHINE_STATE_DIR}/runs/"?* ]]; then
+  export ARI_DOTFILES_MODE="${mode}"
+  if [[ "${RUN_DIR}" == "${ARI_DOTFILES_STATE_DIR}/runs/"?* ]]; then
     rm -rf -- "${RUN_DIR}"
   fi
   mkdir -p "${RUN_DIR}"
@@ -325,7 +325,7 @@ run::begin() {
 # summary.json (schema 1, roll-up error > fail > warn > ok) → last-<mode>.json; old runs pruned to 8.
 run::summarize() {
   local ts name
-  strftime -s ts '%Y-%m-%dT%H:%M:%S%z' "${NEW_MACHINE_NOW}"
+  strftime -s ts '%Y-%m-%dT%H:%M:%S%z' "${ARI_DOTFILES_NOW}"
   local -a result_files=()
   for name in "${STEPS[@]}"; do
     if [[ -f "${RUN_DIR}/${name}.result.json" ]]; then
@@ -336,7 +336,7 @@ run::summarize() {
   if [[ -s "${RUN_DIR}/drift.json" ]]; then
     brew_arg=(--slurpfile brew "${RUN_DIR}/drift.json")
   fi
-  jq -n --arg run_id "${RUN_ID}" --arg host "${NEW_MACHINE_HOST}" --arg mode "${DOTFILES_MODE}" --arg ts "${ts}" \
+  jq -n --arg run_id "${RUN_ID}" --arg host "${ARI_DOTFILES_HOST}" --arg mode "${ARI_DOTFILES_MODE}" --arg ts "${ts}" \
         --slurpfile steps <(cat -- "${result_files[@]}") "${brew_arg[@]}" '
     ($steps | map(.status)) as $s
     | {schema: 1, run_id: $run_id, ts: $ts, host: $host, mode: $mode,
@@ -344,8 +344,8 @@ run::summarize() {
                 elif any($s[]; .=="warn") then "warn" else "ok" end),
        counts: ($steps | group_by(.status) | map({(.[0].status): length}) | add // {}),
        steps: $steps, brew: ($brew[0] // null)}' > "${RUN_DIR}/summary.json"
-  cp "${RUN_DIR}/summary.json" "${NEW_MACHINE_STATE_DIR}/last-${DOTFILES_MODE}.json"
-  local -a runs=("${NEW_MACHINE_STATE_DIR}"/runs/*(N/On))
+  cp "${RUN_DIR}/summary.json" "${ARI_DOTFILES_STATE_DIR}/last-${ARI_DOTFILES_MODE}.json"
+  local -a runs=("${ARI_DOTFILES_STATE_DIR}"/runs/*(N/On))
   local dir
   for dir in "${runs[@]:8}"; do
     rm -rf -- "${dir}"
@@ -375,8 +375,7 @@ run::print_manual() {
   done < <(jq -r '.steps[] | select(.manual and (.status=="warn" or .status=="fail")) | "Manual step (\(.step) \(.reason)):\n\(.detail)" | @json' "${summary}")
 }
 
-# Prints the run (JSON or the human table) and ends the process. The exit is explicit because zsh
-# skips the EXIT trap when ERR_EXIT ends the shell from inside a function, which would leak the lock.
+# Prints the run (JSON or the human table) and ends the process.
 run::end() {
   local json="${1:-0}"
   if (( json )); then
@@ -385,6 +384,12 @@ run::end() {
     run::print_human
     run::print_manual
   fi
+  run::exit
+}
+
+# Ends the process with the run's exit code. Explicit, because zsh skips the EXIT trap when
+# ERR_EXIT ends the shell (a nonzero return out of main included), which would leak the lock.
+run::exit() {
   local run_status rc=0
   run_status="$(jq -r '.status' "${RUN_DIR}/summary.json")"
   verdict::exit_code "${run_status}" || rc=$?

@@ -5,18 +5,18 @@ step::declare brew --group brew --abort --desc "Homebrew is installed"
 typeset -g BREW_INSTALLER="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
 
 check::brew() {
-  if [[ -z "${NEW_MACHINE_BREW}" ]]; then
-    verdict fail brew_missing -d "brew not found on PATH or under ${NEW_MACHINE_BREW_PREFIXES:-<no prefixes>}" \
+  if [[ -z "${ARI_DOTFILES_BREW}" ]]; then
+    verdict fail brew_missing -d "brew not found on PATH or under ${ARI_DOTFILES_BREW_PREFIXES:-<no prefixes>}" \
       -f "${CLI_NAME} apply brew"
     return 0
   fi
   local version
-  if ! version="$("${NEW_MACHINE_BREW}" --version 2>/dev/null)"; then
-    verdict fail brew_missing -d "brew not found at ${NEW_MACHINE_BREW} (--version failed)" -f "${CLI_NAME} apply brew"
+  if ! version="$("${ARI_DOTFILES_BREW}" --version 2>/dev/null)"; then
+    verdict fail brew_missing -d "brew not found at ${ARI_DOTFILES_BREW} (--version failed)" -f "${CLI_NAME} apply brew"
     return 0
   fi
   local -a version_lines=("${(f)version}")
-  verdict ok present -d "${version_lines[1]} | brew='${NEW_MACHINE_BREW}'"
+  verdict ok present -d "${version_lines[1]} | brew='${ARI_DOTFILES_BREW}'"
 }
 
 apply::brew() {

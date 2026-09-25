@@ -25,11 +25,11 @@ check::claude_notifications() {
     verdict fail guard_mismatch -d "PreToolUse guard hooks=${guard_hooks} expected=1 | guard='${guard}' settings='${settings}'" -f "${CLI_NAME} apply claude_notifications"
     return 0
   fi
-  if [[ -z "${NEW_MACHINE_NOTIFIER}" ]] || ! command -v "${NEW_MACHINE_NOTIFIER}" >/dev/null 2>&1; then
+  if [[ -z "${ARI_DOTFILES_NOTIFIER}" ]] || ! command -v "${ARI_DOTFILES_NOTIFIER}" >/dev/null 2>&1; then
     verdict fail notifier_missing -d "terminal-notifier not found (initialize.sh installs it)" -f "${CLI_NAME} apply claude_notifications"
     return 0
   fi
-  verdict ok configured -d "hook='${current}' guard='${guard}' notifier='${NEW_MACHINE_NOTIFIER}'"
+  verdict ok configured -d "hook='${current}' guard='${guard}' notifier='${ARI_DOTFILES_NOTIFIER}'"
 }
 
 apply::claude_notifications() {

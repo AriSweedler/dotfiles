@@ -7,8 +7,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 world_new
 world_use_fixture satisfied
-TEMPLATE="${NEW_MACHINE_SHARED_DIR}/local-dotfiles-exclude"
-EXCLUDE="${NEW_MACHINE_LDF_GIT_DIR}/info/exclude"
+TEMPLATE="${ARI_DOTFILES_SHARED_DIR}/local-dotfiles-exclude"
+EXCLUDE="${ARI_DOTFILES_LDF_GIT_DIR}/info/exclude"
 rules() { grep -vE '^[[:space:]]*(#|$)' "$1" || true; }
 
 check_ldf() { bump_now_secs 60; nm check --only local_dotfiles_repo --json; out_json > /dev/null; }
@@ -21,9 +21,9 @@ assert_eq "reason missing_bare_repo" missing_bare_repo "$(step_get local_dotfile
 bump_now_secs 60
 nm apply local_dotfiles_repo
 assert_eq "apply exits 0" 0 "${RC}"
-assert_file "bare repo created" "${NEW_MACHINE_LDF_GIT_DIR}/HEAD"
+assert_file "bare repo created" "${ARI_DOTFILES_LDF_GIT_DIR}/HEAD"
 assert_eq "info/exclude rules == template rules" "$(rules "${TEMPLATE}")" "$(rules "${EXCLUDE}")"
-assert_eq "hooksPath set" "${NEW_MACHINE_LDF_HOOKS}" "$(git --git-dir="${NEW_MACHINE_LDF_GIT_DIR}" config --local --get core.hooksPath)"
+assert_eq "hooksPath set" "${ARI_DOTFILES_LDF_HOOKS}" "$(git --git-dir="${ARI_DOTFILES_LDF_GIT_DIR}" config --local --get core.hooksPath)"
 
 check_ldf
 assert_eq "no remote → warn" warn "$(step_get local_dotfiles_repo .status)"

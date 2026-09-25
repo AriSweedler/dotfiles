@@ -1,4 +1,4 @@
-# Tests for raycast_link.zsh. A fixture bindings document (through the RAYCAST_LINK_BINDINGS_CMD
+# Tests for raycast_link.zsh. A fixture bindings document (through the ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD
 # seam), a fixture karabiner.json, and a temp plist stand in for the real files; a stub `open`
 # fails the suite if anything is opened; the real com.raycast.macos is never touched. The last
 # section runs the real karabiner.ts generator (read-only) and checks the generated contract.
@@ -53,9 +53,9 @@ cat > "${_dir}/karabiner.json" <<'EOF'
      "to":[{"shell_command":"open -g raycast://extensions/raycast/window-management/left-half"}]}]}
 ]}}]}
 EOF
-export RAYCAST_LINK_BINDINGS_CMD="cat ${_dir}/bindings.json"
-export RAYCAST_LINK_KARABINER_JSON="${_dir}/karabiner.json"
-export RAYCAST_LINK_DEFAULTS_DOMAIN="${_dir}/raycast.plist"
+export ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="cat ${_dir}/bindings.json"
+export ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON="${_dir}/karabiner.json"
+export ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN="${_dir}/raycast.plist"
 
 # --- chord parsing ---
 _t "parse: hyper+4 → key 4, the Hyper set in canonical order" $'4\ncontrol option shift command' "$(raycast_link::parse_chord hyper+4)"
@@ -95,11 +95,11 @@ _t "chord: direct chord unchanged" "⌃⌥H" "$(raycast_link::render_chord 'ctrl
 raycast_link::load_bindings; _rc=$?
 _t "load: seam command loads the document" "0" "${_rc}"
 _t "load: entries in document order, addressed by slug" $'clipboard-history\nconfetti\nleft-half' "$(raycast_link::entries | while IFS= read -r e; do raycast_link::slug "${e}"; done)"
-RAYCAST_LINK_BINDINGS_CMD="false" raycast_link --list >/dev/null 2>&1; _rc=$?
+ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="false" raycast_link --list >/dev/null 2>&1; _rc=$?
 _t "load: failing seam command rc 1" "1" "${_rc}"
-RAYCAST_LINK_BINDINGS_CMD="echo '{\"nope\":1}'" raycast_link --list >/dev/null 2>&1; _rc=$?
+ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="echo '{\"nope\":1}'" raycast_link --list >/dev/null 2>&1; _rc=$?
 _t "load: wrong shape rc 1" "1" "${_rc}"
-RAYCAST_LINK_BINDINGS_CMD="" RAYCAST_LINK_KARABINER_TS="${_dir}/no-such-checkout" raycast_link --list >/dev/null 2>&1; _rc=$?
+ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="" ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS="${_dir}/no-such-checkout" raycast_link --list >/dev/null 2>&1; _rc=$?
 _t "load: unbuilt karabiner.ts rc 1 (fix: run bake)" "1" "${_rc}"
 
 # --- widget ---
@@ -134,12 +134,12 @@ _t "check: OK for direct chords, layer for layer-only, allow column" \
   $'OK clipboard-history ✦4 NOT-ALLOWED\nlayer confetti ✦K D NOT-ALLOWED\nOK left-half ⌃⌥H no-allow-id' "${_out}"
 _t "check: rc 0 when nothing is MISSING (layer and allow state do not fail)" "0" "${_rc}"
 jq '.profiles[0].complex_modifications.rules[1].manipulators[0].to[0].shell_command = "open raycast://extensions/raycast/window-management/left-half"' "${_dir}/karabiner.json" > "${_dir}/k3.json"
-_t "check: keepFocus entry compiled without -g is MISSING" "1" "$(RAYCAST_LINK_KARABINER_JSON="${_dir}/k3.json" raycast_link --check 2>/dev/null | grep -c '^MISSING left-half ⌃⌥H no-allow-id$')"
-RAYCAST_LINK_KARABINER_JSON="${_dir}/k3.json" raycast_link --check >/dev/null 2>&1; _rc=$?
+_t "check: keepFocus entry compiled without -g is MISSING" "1" "$(ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON="${_dir}/k3.json" raycast_link --check 2>/dev/null | grep -c '^MISSING left-half ⌃⌥H no-allow-id$')"
+ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON="${_dir}/k3.json" raycast_link --check >/dev/null 2>&1; _rc=$?
 _t "check: rc 1 on a MISSING" "1" "${_rc}"
 jq '.profiles[0].complex_modifications.rules[0].manipulators[0].from.modifiers.mandatory = ["command","option"]' "${_dir}/karabiner.json" > "${_dir}/k2.json"
-_t "check: wrong modifier set is MISSING and marks the widget" "1" "$(RAYCAST_LINK_KARABINER_JSON="${_dir}/k2.json" raycast_link clipboard-history | grep -c "key: '✦4' (not compiled yet)\](raycast://.*)>$")"
-RAYCAST_LINK_KARABINER_JSON="${_dir}/nope.json" raycast_link --check >/dev/null 2>&1; _rc=$?
+_t "check: wrong modifier set is MISSING and marks the widget" "1" "$(ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON="${_dir}/k2.json" raycast_link clipboard-history | grep -c "key: '✦4' (not compiled yet)\](raycast://.*)>$")"
+ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON="${_dir}/nope.json" raycast_link --check >/dev/null 2>&1; _rc=$?
 _t "check: missing karabiner.json makes direct chords MISSING, rc 1" "1" "${_rc}"
 
 # --- removed modes ---
@@ -150,7 +150,7 @@ _t "--keep-focus is gone: unknown flag rc 1" "1" "${_rc}"
 
 # --- allow-list (temp plist) ---
 _t "allowed_ids: empty domain reads as no ids, rc 0" "" "$(raycast_link::allowed_ids)"
-defaults write "${RAYCAST_LINK_DEFAULTS_DOMAIN}" alwaysAllowCommandDeeplinking -dict-add builtin_command_clipboardHistory -bool true
+defaults write "${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN}" alwaysAllowCommandDeeplinking -dict-add builtin_command_clipboardHistory -bool true
 _t "allowed_ids: parses the defaults read dict" "builtin_command_clipboardHistory" "$(raycast_link::allowed_ids)"
 _out="$(raycast_link --allow --dry-run 2>/dev/null)"; _rc=$?
 _t "allow --dry-run: reports what it would add, writes nothing" $'dry_run=1\nwould_add=1\nalready=1\nno_allow_id=1\nwould_add_aliases=confetti\nwould_add_ids=builtin_command_confetti\nno_allow_id_aliases=left-half' "${_out}"
@@ -169,7 +169,7 @@ _t "check: allow column after --allow" \
 local _kts="${XDG_CONFIG_HOME:-${HOME}/.config}/karabiner/karabiner.ts"
 if [[ -x "${_kts}/node_modules/.bin/tsx" ]]; then
   local _gen
-  _gen="$(RAYCAST_LINK_BINDINGS_CMD="" RAYCAST_LINK_KARABINER_TS="${_kts}" zsh -c 'source "${HOME}/.config/zsh/plugins/raycast_link.zsh"; raycast_link::load_bindings && print -r -- "${RAYCAST_LINK_BINDINGS_CACHE}"')"
+  _gen="$(ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="" ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS="${_kts}" zsh -c 'source "${HOME}/.config/zsh/plugins/raycast_link.zsh"; raycast_link::load_bindings && print -r -- "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE}"')"
   _t "generated: parses, has a bindings array, no alias field" "true" "$(print -r -- "${_gen}" | jq '(.bindings | type == "array") and ([.bindings[] | has("alias")] | any | not)')"
   _t "generated: 34 entries (26 window management + 6 shortcuts + confetti + typing practice)" "34" "$(print -r -- "${_gen}" | jq '.bindings | length')"
   _t "generated: paths unique and sorted, slugs unique" "true" "$(print -r -- "${_gen}" | jq '([.bindings[].path] | (length == (unique | length)) and (. == sort)) and ([.bindings[].path | split("/") | last] | length == (unique | length))')"
@@ -183,8 +183,8 @@ else
   log::warn "raycast_link: karabiner.ts not built, skipping the generated-contract checks | tsx='${_kts}/node_modules/.bin/tsx'"
 fi
 
-unset RAYCAST_LINK_BINDINGS_CMD RAYCAST_LINK_KARABINER_JSON RAYCAST_LINK_DEFAULTS_DOMAIN
-RAYCAST_LINK_BINDINGS_CACHE="" RAYCAST_LINK_BINDINGS_CACHE_KEY=""
+unset ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN
+ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE="" ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE_KEY=""
 export PATH="${_saved_path}"
 rm -rf "${_dir}"
 

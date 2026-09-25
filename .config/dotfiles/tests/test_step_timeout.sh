@@ -9,7 +9,7 @@ world_new
 world_use_fixture satisfied
 seed_fake_repos
 seed_home_baseline
-export NEW_MACHINE_CHECK_TIMEOUT_SECS=1
+export ARI_DOTFILES_CHECK_TIMEOUT_SECS=1
 
 sleepers() { pgrep -f 'sleep 30' | sort || true; }
 # `sleep 30` processes that appeared since <before>, after giving the kill a moment to land.

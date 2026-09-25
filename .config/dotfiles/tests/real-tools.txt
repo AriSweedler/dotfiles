@@ -41,3 +41,7 @@ diff
 cut
 base64
 cc
+awk
+ssh-add
+ssh-agent
+ssh-keygen

@@ -8,7 +8,7 @@ world_new
 world_use_fixture drift
 G="${BREW_SHIM_FIXTURE}/Brewfile.global"
 L="${BREW_SHIM_FIXTURE}/Brewfile.local.dup"
-run_id="$(TZ=UTC date -r "${NEW_MACHINE_NOW}" '+%Y%m%dT%H%M%S')"
+run_id="$(TZ=UTC date -r "${ARI_DOTFILES_NOW}" '+%Y%m%dT%H%M%S')"
 
 zfn brew.zsh brewfile::merge "${FIX}/merged" "${G}" "${L}"
 assert_eq "merge exits 0" 0 "${RC}"

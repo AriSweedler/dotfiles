@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# brew off PATH (launchd's world): found through NEW_MACHINE_BREW_PREFIXES, or a clean fail.
+# brew off PATH (launchd's world): found through ARI_DOTFILES_BREW_PREFIXES, or a clean fail.
 set -u
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -11,13 +11,13 @@ cp "${TESTS_DIR}/shims/brew" "${FIX}/opt/homebrew/bin/brew"
 chmod +x "${FIX}/opt/homebrew/bin/brew"
 shim_remove brew
 
-export NEW_MACHINE_BREW_PREFIXES="${FIX}/opt/homebrew"
+export ARI_DOTFILES_BREW_PREFIXES="${FIX}/opt/homebrew"
 nm check --only brew --json
 f="$(out_json)"
 assert_eq "brew found through the prefix probe" ok "$(step_get brew .status)"
 assert_contains "probe used the prefix path" "$(step_get brew .detail)$(step_get brew .reason)${ERR}" "Homebrew"
 
-export NEW_MACHINE_BREW_PREFIXES=""
+export ARI_DOTFILES_BREW_PREFIXES=""
 bump_now_secs 60
 nm check --json
 assert_eq "check without brew exits 1" 1 "${RC}"

@@ -20,11 +20,10 @@ fi
 # tracking config is what lets a bare `git df push` work.
 [ -d "$GIT_DIR" ] || git clone --bare --config remote.origin.pushurl=git@github.com:AriSweedler/dotfiles.git \
   --config branch.main.remote=origin --config branch.main.merge=refs/heads/main \
-  "${DOTFILES_REMOTE:-https://github.com/AriSweedler/dotfiles.git}" "$GIT_DIR"
+  "${ARI_DOTFILES_REMOTE:-https://github.com/AriSweedler/dotfiles.git}" "$GIT_DIR"
 
 # A no-op once HOME is populated (its branch chatter to stderr); refuses, listing them, to overwrite files it does not own.
 git --git-dir="$GIT_DIR" --work-tree="$HOME" checkout 1>&2
 
-# The checkout carries the harness; init finishes the dotfiles, setup the machine. init's output goes to stderr so --json's stdout stays setup's JSON.
-zsh "$HOME/.config/bin/dotfiles" init 1>&2
+# The checkout carries the program; setup does the rest, the dotfiles themselves (its repo group) first.
 exec "$HOME/.config/bin/dotfiles" setup "$@"

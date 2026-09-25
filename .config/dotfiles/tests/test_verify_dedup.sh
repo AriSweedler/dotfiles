@@ -12,9 +12,9 @@ seed_fake_repos
 seed_ldf_remote
 seed_home_baseline
 export BOB_SHIM_LS="Installed: v0.11.2 Used"
-export NEW_MACHINE_INVOKED_BY=launchd
-REPORT="${NEW_MACHINE_DESKTOP_DIR}/new-machine-FAILED.md"
-STATE="${NEW_MACHINE_STATE_DIR}"
+export ARI_DOTFILES_INVOKED_BY=launchd
+REPORT="${ARI_DOTFILES_DESKTOP_DIR}/new-machine-FAILED.md"
+STATE="${ARI_DOTFILES_STATE_DIR}"
 LR="${STATE}/last_result.json"
 
 verify() { bump_now_secs 60; shim_logs_reset; nm verify "$@"; }
@@ -55,13 +55,13 @@ assert_eq "four archived reports" 4 "$(count_reports)"
 assert_contains "new report names the new item" "$(cat "${REPORT}")" "cowsay2"
 assert_contains "new report has the new-since line" "$(cat "${REPORT}")" "New since the last run"
 assert_json "weeks_failing reset to 1" "${LR}" '.weeks_failing' 1
-assert_json "first_seen is the new run's day" "${LR}" '.first_seen' "$(TZ=UTC date -r "${NEW_MACHINE_NOW}" '+%Y-%m-%d')"
+assert_json "first_seen is the new run's day" "${LR}" '.first_seen' "$(TZ=UTC date -r "${ARI_DOTFILES_NOW}" '+%Y-%m-%d')"
 assert_contains "notifier announces the new report" "$(shim_log terminal-notifier)" "problems"
 
 printf '\nmy notes\n' >> "${REPORT}"
 fixture_add_formula cowsay3
 verify
-edited=("${NEW_MACHINE_DESKTOP_DIR}"/new-machine-FAILED.*.edited.md)
+edited=("${ARI_DOTFILES_DESKTOP_DIR}"/new-machine-FAILED.*.edited.md)
 assert_eq "edited report renamed aside" 1 "${#edited[@]}"
 if [[ "$(basename "${edited[0]}")" =~ ^new-machine-FAILED\.[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9a-f]{8}\.edited\.md$ ]]; then pass "edited file named new-machine-FAILED.<date>-<fp8>.edited.md"
 else fail "edited file named new-machine-FAILED.<date>-<fp8>.edited.md" "${edited[0]}"; fi
@@ -111,7 +111,7 @@ fixture_add_formula cowsay4
 verify
 assert_eq "foreign file left at the canonical path" "not ours" "$(cat "${REPORT}")"
 fp8="$(lr .fingerprint | cut -c1-8)"
-COLL="${NEW_MACHINE_DESKTOP_DIR}/new-machine-FAILED.${fp8}.md"
+COLL="${ARI_DOTFILES_DESKTOP_DIR}/new-machine-FAILED.${fp8}.md"
 assert_file "report written beside the foreign file" "${COLL}"
 assert_eq "last_result points at the collision copy" "${COLL}" "$(lr .report_path)"
 { printf 'my triage\n'; tail -n +2 "${COLL}"; printf '\ncollision notes\n'; } > "${COLL}.tmp"
@@ -121,8 +121,8 @@ verify
 fixture_remove_formula cowsay5
 verify
 assert_contains "marker-edited collision report keeps its notes" "$(cat "${COLL}")" "collision notes"
-assert_file "recurring fingerprint writes a numbered copy" "${NEW_MACHINE_DESKTOP_DIR}/new-machine-FAILED.${fp8}.2.md"
-assert_eq "numbered copy is the current report" "${NEW_MACHINE_DESKTOP_DIR}/new-machine-FAILED.${fp8}.2.md" "$(lr .report_path)"
+assert_file "recurring fingerprint writes a numbered copy" "${ARI_DOTFILES_DESKTOP_DIR}/new-machine-FAILED.${fp8}.2.md"
+assert_eq "numbered copy is the current report" "${ARI_DOTFILES_DESKTOP_DIR}/new-machine-FAILED.${fp8}.2.md" "$(lr .report_path)"
 assert_no_mutation "verify runs never mutate"
 
 if (( FAIL > 0 )); then printf '%s\n' "${ERR}" | tail -n 30 >&2; fi

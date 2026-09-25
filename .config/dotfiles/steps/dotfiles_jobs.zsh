@@ -4,7 +4,7 @@ step::declare dotfiles_jobs --group repo --needs dotfiles_repo \
   --desc "dotfiles jobs launchd job (runs the job plugins of both tiers) installed and loaded"
 
 check::dotfiles_jobs() {
-  local label="com.$(id -un).dotfiles-jobs" plist="${NEW_MACHINE_LAUNCH_AGENTS_DIR}/com.$(id -un).dotfiles-jobs.plist"
+  local label="com.$(id -un).dotfiles-jobs" plist="${ARI_DOTFILES_LAUNCH_AGENTS_DIR}/com.$(id -un).dotfiles-jobs.plist"
   if [[ ! -f "${plist}" ]]; then
     verdict fail not_installed -d "plist missing | path='${plist}'" -f "${CLI_NAME} apply dotfiles_jobs"
     return 0
@@ -20,11 +20,8 @@ check::dotfiles_jobs() {
   verdict ok loaded -d "label='${label}'"
 }
 
+# jobs_install lives with the jobs verb; it is idempotent and dry-run aware itself.
 apply::dotfiles_jobs() {
-  local harness="${HOME}/.config/bin/dotfiles"
-  if [[ ! -f "${harness}" ]]; then
-    log::err "dotfiles harness missing | expected='${harness}' fix='${CLI_NAME} apply dotfiles_repo'"
-    return 1
-  fi
-  run_mut zsh "${harness}" jobs install
+  need_lib "${ARI_DOTFILES_CMD}/jobs.zsh" || return 3
+  jobs_install
 }

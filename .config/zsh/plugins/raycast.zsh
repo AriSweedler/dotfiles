@@ -9,19 +9,19 @@
 # callable on its own; this file only routes, and holds the one array `sync` walks, so adding a
 # subsystem is a line here plus its plugin. The raycast_sync step runs `sync --dry-run`; bake
 # calls `link allow`, because a bindings change only touches the allow-list.
-# Env: ARI_RAYCAST_APP (Raycast's app bundle; absent = `sync` skips, exit 0).
+# Env: ARI_DOTFILES_RAYCAST_APP (Raycast's app bundle; absent = `sync` skips, exit 0).
 
 (( ${+functions[log::info]} )) || source "${${(%):-%x}:A:h}/log.zsh"
 (( ${+functions[raycast_link]} )) || source "${${(%):-%x}:A:h}/raycast_link.zsh"
 (( ${+functions[raycast_snippets]} )) || source "${${(%):-%x}:A:h}/raycast_snippets.zsh"
 
 # Guarded so re-sourcing (plugin loader plus the dispatcher) never trips "read-only variable".
-(( ${+ARI_RAYCAST_SUBSYSTEMS} )) || typeset -gra ARI_RAYCAST_SUBSYSTEMS=(link snippets)
+(( ${+ARI_DOTFILES_RAYCAST_SUBSYSTEMS} )) || typeset -gra ARI_DOTFILES_RAYCAST_SUBSYSTEMS=(link snippets)
 # What `ari-raycast sync` runs, in order. Each step accepts --dry-run and prints its work as
 # key=value counters (would_add=, pending=, added=, imported=, changed=), which sync reports and
 # sums, plus `warn <text>` lines, which sync forwards (the raycast_sync step shows them as a warn).
-typeset -ga ARI_RAYCAST_SYNC_STEPS=("link allow" "snippets sync")
-: "${ARI_RAYCAST_APP:=/Applications/Raycast.app}"
+typeset -ga ARI_DOTFILES_RAYCAST_SYNC_STEPS=("link allow" "snippets sync")
+: "${ARI_DOTFILES_RAYCAST_APP:=/Applications/Raycast.app}"
 
 function ari_raycast::help() {
   cat >&2 <<EOF
@@ -32,10 +32,10 @@ Usage:
   dotfiles raycast link list | check | allow [--dry-run]
   dotfiles raycast snippets sync [--dry-run] | list | check | adopt | pull FILE | diff FILE
                           | move NAME --to shared|local | fmt | reset-manifest [NAME...]
-  dotfiles raycast sync [--dry-run]               every subsystem's sync, in order: ${(j:, :)ARI_RAYCAST_SYNC_STEPS}
+  dotfiles raycast sync [--dry-run]               every subsystem's sync, in order: ${(j:, :)ARI_DOTFILES_RAYCAST_SYNC_STEPS}
   dotfiles raycast <subsystem> help               that subsystem's usage
 
-Subsystems: ${(j:, :)ARI_RAYCAST_SUBSYSTEMS}. Bindings live in karabiner.ts's tables and compile
+Subsystems: ${(j:, :)ARI_DOTFILES_RAYCAST_SUBSYSTEMS}. Bindings live in karabiner.ts's tables and compile
 through bake. Snippets live in two files, merged with local winning by name:
   shared  ~/.config/raycast-snippets/snippets.json (git df, public remote)
   local   ~/.local/share/raycast-snippets/snippets.json (git ldf, private remote), manifest beside it
@@ -94,11 +94,11 @@ function ari_raycast::sync() {
     --dry-run) extra=(--dry-run); shift ;;
     *)         log::err "Unknown sync argument | argument='${1}' valid='--dry-run'"; return 1 ;;
   esac; done
-  if [[ ! -d "${ARI_RAYCAST_APP}" ]]; then
-    print -r -- "skip raycast not installed | app='${ARI_RAYCAST_APP}'"
+  if [[ ! -d "${ARI_DOTFILES_RAYCAST_APP}" ]]; then
+    print -r -- "skip raycast not installed | app='${ARI_DOTFILES_RAYCAST_APP}'"
     return 0
   fi
-  for step in "${ARI_RAYCAST_SYNC_STEPS[@]}"; do
+  for step in "${ARI_DOTFILES_RAYCAST_SYNC_STEPS[@]}"; do
     words=(${=step})
     sub_rc=0
     out="$(ari_raycast "${words[@]}" "${extra[@]}" 2>&1)" || sub_rc=$?
@@ -127,6 +127,6 @@ function ari_raycast() {
     sync)           ari_raycast::sync "$@" ;;
     link)           ari_raycast::link "$@" ;;
     snippets)       ari_raycast::snippets "$@" ;;
-    *)              log::err "Unknown subsystem | subsystem='${subsystem}' valid='${(j:, :)ARI_RAYCAST_SUBSYSTEMS}, sync, help'"; ari_raycast::help; return 1 ;;
+    *)              log::err "Unknown subsystem | subsystem='${subsystem}' valid='${(j:, :)ARI_DOTFILES_RAYCAST_SUBSYSTEMS}, sync, help'"; ari_raycast::help; return 1 ;;
   esac
 }

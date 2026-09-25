@@ -3,10 +3,21 @@ zmodload zsh/datetime   # EPOCHREALTIME / EPOCHSECONDS
 
 help_status() {
   cat <<EOF
-dotfiles status   both tiers (branch, ahead/behind, uncommitted), the submodules, the last push per repo
+both tiers, the submodules, the last push of each repo
 
-  Submodule prefixes as 'git submodule status' prints them: space = at the committed pointer,
-  + = elsewhere (a commit awaiting its bump), - = not initialized.
+${c_bold}Usage${c_rst}
+  ${DF} status
+
+  Each tier's branch, ahead/behind origin and uncommitted count; each
+  submodule with the prefix 'git submodule status' prints (space = at the
+  committed pointer, + = elsewhere, a commit awaiting its bump, - = not
+  initialized); the timestamp and verdict of each repo's last push log.
+
+${c_bold}Env${c_rst}
+  $(ENV ARI_DOTFILES_DF_GIT_DIR)
+      the shared tier's bare repo (default $(help::tilde "${ARI_DOTFILES_DF_GIT_DIR}"))
+  $(ENV ARI_DOTFILES_LDF_GIT_DIR)
+      the local tier's bare repo (default $(help::tilde "${ARI_DOTFILES_LDF_GIT_DIR}"))
 EOF
 }
 

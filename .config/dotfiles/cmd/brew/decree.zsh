@@ -12,8 +12,8 @@
 #   decree::undecree ITEM... [--dry-run] [--no-push]
 # ITEM = [formula:|cask:|tap:|vscode:]name; the kind may be omitted when exactly one kind matches.
 #
-# Reads: NEW_MACHINE_STATE_DIR, NEW_MACHINE_NOW, RUN_DIR, RUN_ID, LAST_RESULT_FILE, HOME, NM_DRY_RUN,
-# NM_NO_PUSH; brew and the tier file paths come from brew::bin, brew::global_brewfile and friends.
+# Reads: ARI_DOTFILES_STATE_DIR, ARI_DOTFILES_NOW, RUN_DIR, RUN_ID, LAST_RESULT_FILE, HOME, ARI_DOTFILES_DRY_RUN,
+# ARI_DOTFILES_NO_PUSH; brew and the tier file paths come from brew::bin, brew::global_brewfile and friends.
 
 (( ${+DECREE_MARKER} )) || typeset -gr DECREE_MARKER="# ── decreed via 'new-machine brew decree'; move into a section when tidying ──"
 (( ${+DECREE_KEYWORD} )) || typeset -grA DECREE_KEYWORD=([formula]=brew [cask]=cask [tap]=tap [vscode]=vscode)
@@ -643,8 +643,8 @@ decree::decree() {
         if (( $# < 2 )); then log::err "--reason needs a value"; decree::help_decree >&2; return 64; fi
         reason="${2}"; shift ;;
       --reason=*) reason="${1#--reason=}" ;;
-      --dry-run) export DOTFILES_DRY_RUN=1 ;;
-      --no-push) export DOTFILES_NO_PUSH=1 ;;
+      --dry-run) export ARI_DOTFILES_DRY_RUN=1 ;;
+      --no-push) export ARI_DOTFILES_NO_PUSH=1 ;;
       --) shift; items+=("$@"); break ;;
       -*) log::err "unknown flag | flag='${1}'"; decree::help_decree >&2; return 64 ;;
       *) items+=("${1}") ;;
@@ -879,8 +879,8 @@ decree::undecree() {
   while (( $# )); do
     case "${1}" in
       -h|--help) decree::help_undecree; return 0 ;;
-      --dry-run) export DOTFILES_DRY_RUN=1 ;;
-      --no-push) export DOTFILES_NO_PUSH=1 ;;
+      --dry-run) export ARI_DOTFILES_DRY_RUN=1 ;;
+      --no-push) export ARI_DOTFILES_NO_PUSH=1 ;;
       --) shift; items+=("$@"); break ;;
       -*) log::err "unknown flag | flag='${1}'"; decree::help_undecree >&2; return 64 ;;
       *) items+=("${1}") ;;

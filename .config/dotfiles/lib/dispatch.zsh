@@ -14,48 +14,74 @@ usage_error() {
   exit 64
 }
 
+# --- Help ---
+# Every help_<verb> is one heredoc in one shape, hand-wrapped at 80 columns:
+#   line 1        the one-line description (what the verb table shows)
+#   Usage         one form per line, the entrypoint grey: ${DF} <verb> [args]
+#   a paragraph   what it does
+#   Flags         two aligned columns, every flag the verb takes
+#   Env           one variable per line, grey, its description indented on the next line
+# ${DF} and ${ENV} are the two colour helpers those heredocs use. DF is set by help::colors: the
+# log lib (and its c_* variables) is sourced after this file.
+typeset -g DF=""
+# A variable name, grey, for an Env section.
+ENV() { print -rn -- "${c_grey}${1}${c_rst}"; }
+# $HOME as ~, for paths in help.
+help::tilde() { print -r -- "${1/#${HOME}/~}"; }
+# Colours only on a terminal; DF is the grey entrypoint the heredocs print.
+help::colors() {
+  [[ -t 1 ]] || log::colors_off
+  DF="${c_grey}dotfiles${c_rst}"
+}
+
 # The verb's help, or a bare line for one without.
 help_verb() {
   local verb="${1}"
+  help::colors
   if (( ${+functions[help_${verb}]} )); then "help_${verb}"; else print -r -- "dotfiles ${verb}"; fi
 }
 
-# dotfiles --help: the header and one synopsis per verb. --verbose --help: every verb's whole help.
+# dotfiles --help: the verbs, grey, with their descriptions. --verbose --help: every verb's whole help.
 help() {
-  [[ -t 1 ]] || log::colors_off
-  local verb
+  help::colors
+  local verb width=0
+  local -a names=("${(@f)$(verbs)}")
   cat <<EOF
 ${c_green}dotfiles${c_rst} — the two-tier dotfiles, and the machine they describe
 
-${c_bold}Usage:${c_rst} dotfiles [--dry-run] [--verbose] [--timing] [--local] <verb> [args]
-       dotfiles <verb> --help        dotfiles --verbose --help (every verb's help)
+${c_bold}Usage${c_rst}
+  ${DF} [--dry-run] [--verbose] [--timing] <verb> [args]
+  ${DF} <verb> --help
+  ${DF} --verbose --help                every verb's help, one after another
 
-${c_bold}Verbs:${c_rst}
 EOF
   if log::is_debug_on; then
-    for verb in "${(@f)$(verbs)}"; do
-      print
+    for verb in "${names[@]}"; do
+      print -r -- "${c_grey}── dotfiles ${verb} ──${c_rst}"
       help_verb "${verb}"
     done
-  else
-    for verb in "${(@f)$(verbs)}"; do
-      print -r -- "  $(help_verb "${verb}" | head -n 1)"
-    done
+    return 0
   fi
+  for verb in "${names[@]}"; do (( ${#verb} > width )) && width=${#verb}; done
+  print -r -- "${c_bold}Verbs${c_rst}"
+  for verb in "${names[@]}"; do
+    printf '  %s%-*s%s  %s\n' "${c_grey}" "${width}" "${verb}" "${c_rst}" "$(help_verb "${verb}" | head -n 1)"
+  done
   cat <<EOF
 
-${c_bold}Flags before the verb:${c_rst}
-  --dry-run    print what would change and change nothing (also accepted after a mutating verb)
-  --verbose    log::debug lines; with --help, every verb's help
-  --timing     log every timed step's duration (slow ones are logged regardless)
-  --local      git and --dir act on the local tier instead of the shared one
-  --dir        print the tier's bare repo path and exit
+${c_bold}Tiers${c_rst}
+  ${c_grey}shared${c_rst}
+      $(help::tilde "${TIER_GIT_DIR[shared]}"), work tree ~, every machine (git df)
+  ${c_grey}local${c_rst}
+      $(help::tilde "${TIER_GIT_DIR[local]}"), work tree ~/.local, this machine (git ldf)
 
-${c_bold}Tiers:${c_rst} shared ${TIER_GIT_DIR[shared]} (work tree ~, git df) · local ${TIER_GIT_DIR[local]} (work tree ~/.local, git ldf)
-${c_bold}Steps:${c_rst}  one file each in ${DOTFILES_STEPS}; 'dotfiles steps' lists them, 'dotfiles healthcheck' runs their checks.
-${c_bold}Env:${c_rst}    DOTFILES_REMOTE (${DOTFILES_REMOTE}), DOTFILES_GITHUB_LOGIN (${DOTFILES_GITHUB_LOGIN}),
-        DOTFILES_SSH_KEY_OP_ITEM/VAULT/PATH (from the local tier), DOTFILES_SLOW_STEP (${DOTFILES_SLOW_STEP}s), NEW_MACHINE_* seams
-${c_bold}Exit:${c_rst}   0 ok|warn · 1 fail · 2 error (a check could not run) · 3 preflight · 4 another run holds the lock · 64 usage
+${c_bold}Exit codes${c_rst}
+  0   every step ok, warn or skip
+  1   a step failed
+  2   a check could not run (busy brew, timeout, crash)
+  3   preflight: HOME, macOS, jq, the step registry
+  4   another run holds the lock
+  64  usage
 EOF
 }
 
@@ -65,7 +91,7 @@ main() {
   while (( $# > 0 )); do case "${1}" in
     -h|--help)      want_help=1; shift ;;
     --verbose|-v)   export VERBOSE=true; shift ;;
-    --dry-run)      export DOTFILES_DRY_RUN=1; shift ;;
+    --dry-run)      export ARI_DOTFILES_DRY_RUN=1; shift ;;
     --timing)       TIMING=true; shift ;;
     --local)        GIT_TIER=local; shift ;;
     --dir)          PRINT_DIR=true; shift ;;

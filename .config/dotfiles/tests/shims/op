@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Fake 1Password CLI: `op item get <item> [--vault V] --fields password --reveal` prints
+# $OP_SHIM_PASSPHRASE; every call is logged, so a check that reached 1Password shows up in
+# op.log. Anything else fails loudly.
+set -u
+printf '%s\n' "$*" >> "${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/op.log"
+case "$*" in
+  "item get "*" --fields password --reveal") printf '%s\n' "${OP_SHIM_PASSPHRASE:?OP_SHIM_PASSPHRASE unset}" ;;
+  *) printf 'op shim: unsupported: %s\n' "$*" >&2; exit 64 ;;
+esac

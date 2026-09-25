@@ -10,8 +10,8 @@
 set -euo pipefail
 
 readonly SCRIPT_DIR="${0:A:h}"
-readonly NEW_MACHINE_DIR="${SCRIPT_DIR:h}"
-readonly LOG_LIB="${NEW_MACHINE_DIR:h}/zsh/plugins/log.zsh"
+readonly ARI_DOTFILES_DIR="${SCRIPT_DIR:h}"
+readonly LOG_LIB="${ARI_DOTFILES_DIR:h}/zsh/plugins/log.zsh"
 if [[ ! -r "${LOG_LIB}" ]]; then
   print -u2 "[ERROR] missing logging lib | path='${LOG_LIB}'"
   exit 3
@@ -20,7 +20,7 @@ source "${LOG_LIB}"
 export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 HOMEBREW_NO_ENV_HINTS=1 HOMEBREW_COLOR=0 HOMEBREW_NO_EMOJI=1
 
 readonly OUT_DIR="${1:-${SCRIPT_DIR}/fixtures/this-machine}"
-readonly SHARED_BREWFILE="${NEW_MACHINE_DIR}/Brewfile"
+readonly SHARED_BREWFILE="${ARI_DOTFILES_DIR}/Brewfile"
 
 if ! command -v brew &> /dev/null; then
   log::err "brew not on PATH"

@@ -13,7 +13,7 @@ rules:
 Domain libraries load on demand with `need_lib`: `cmd/brew/{brew,decree}.zsh` (the Homebrew
 model), `cmd/verify/report.zsh` (the weekly report). Every check and apply runs in a fresh zsh
 that sources `lib/` and the step's file, so only exported environment reaches a step
-(`DOTFILES_DRY_RUN`, `DOTFILES_MODE`, `STEP`, `RUN_DIR`, the `NEW_MACHINE_*` seams).
+(`ARI_DOTFILES_DRY_RUN`, `ARI_DOTFILES_MODE`, `STEP`, `RUN_DIR`, the `ARI_DOTFILES_*` seams).
 
 Rules that keep the entrypoint trivial:
 

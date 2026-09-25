@@ -2,10 +2,10 @@
 # libraries on demand, and the small text helpers every module reaches for.
 zmodload zsh/datetime   # EPOCHREALTIME / EPOCHSECONDS
 
-# The one dry-run predicate. DOTFILES_DRY_RUN is exported by --dry-run, so it crosses into every
+# The one dry-run predicate. ARI_DOTFILES_DRY_RUN is exported by --dry-run, so it crosses into every
 # step subprocess and every tool the harness execs.
 is_dry_run() {
-  case "${DOTFILES_DRY_RUN:-0}" in 0|false|no|"") return 1 ;; esac
+  case "${ARI_DOTFILES_DRY_RUN:-0}" in 0|false|no|"") return 1 ;; esac
   return 0
 }
 
@@ -21,11 +21,11 @@ run_cmd_mutating() { run_mut "${@}"; }   # the brew model's name for it
 elapsed() { printf '%.2f' $(( EPOCHREALTIME - ${1} )); }
 
 # Run a labelled command and time it: every one under --timing, otherwise only one slower than
-# DOTFILES_SLOW_STEP, so a slow run names its culprit. A network round trip sets its own bar:
+# ARI_DOTFILES_SLOW_STEP, so a slow run names its culprit. A network round trip sets its own bar:
 # `slow=5 timed pull …`.
 timed() {
   local label="${1}"; shift
-  local start="${EPOCHREALTIME}" rc=0 took threshold="${slow:-${DOTFILES_SLOW_STEP}}"
+  local start="${EPOCHREALTIME}" rc=0 took threshold="${slow:-${ARI_DOTFILES_SLOW_STEP}}"
   "${@}" || rc=$?
   took="$(elapsed "${start}")"
   if [[ "${TIMING}" == true ]]; then

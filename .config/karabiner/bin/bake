@@ -94,7 +94,7 @@ function bake::allow() {
 		echo "dotfiles harness not installed, skipping Raycast allow-list sync | path='${dotfiles_bin}'" >&2
 		return
 	fi
-	if [[ ! -d "${ARI_RAYCAST_APP:-/Applications/Raycast.app}" ]]; then
+	if [[ ! -d "${ARI_DOTFILES_RAYCAST_APP:-/Applications/Raycast.app}" ]]; then
 		echo "Raycast not installed, skipping allow-list sync" >&2
 		return
 	fi

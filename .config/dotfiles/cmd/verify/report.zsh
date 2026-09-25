@@ -1,6 +1,6 @@
 # The weekly Desktop report: fingerprint, render, decide, write. Requires common.zsh to be
 # sourced first (the CLI, every step subprocess and the test harness's zfn all do) for the
-# NEW_MACHINE_* contract, log::*, note and plural. Side-effect-free at source time.
+# ARI_DOTFILES_* contract, log::*, note and plural. Side-effect-free at source time.
 #
 # Public contract:
 #   report::fingerprint <summary.json> [fail|error]
@@ -27,7 +27,7 @@ if (( ! ${+REPORT_BASENAME} )); then
   typeset -gr REPORT_BASENAME='new-machine-FAILED.md'
 fi
 
-report::_today() { local d; strftime -s d '%Y-%m-%d' "${NEW_MACHINE_NOW}"; print -r -- "${d}"; }
+report::_today() { local d; strftime -s d '%Y-%m-%d' "${ARI_DOTFILES_NOW}"; print -r -- "${d}"; }
 
 # The given path when nothing sits there, else the first free `<stem>.N.md` beside it.
 report::_free_path() {
@@ -44,7 +44,7 @@ report::_free_path() {
 # else gets a numbered one, so the archive keeps every render (§4.2).
 report::_archive_target() {
   local from="${1}" first_seen="${2}" fp8="${3}"
-  local to="${NEW_MACHINE_STATE_DIR}/reports/${first_seen}-${fp8}.md"
+  local to="${ARI_DOTFILES_STATE_DIR}/reports/${first_seen}-${fp8}.md"
   if [[ -e "${to}" ]] && ! cmp -s "${from}" "${to}"; then
     to="$(report::_free_path "${to}")"
   fi
@@ -183,8 +183,8 @@ report::render() {
       *) print -u2 -r -- "report::render: bad flag ${1}"; return 64 ;;
     esac
   done
-  local state_dir="${NEW_MACHINE_STATE_DIR}" desktop_dir="${NEW_MACHINE_DESKTOP_DIR}" local_dir="${NEW_MACHINE_LOCAL_DIR}"
-  local now="${NEW_MACHINE_NOW}" host="${NEW_MACHINE_HOST}" run_id run_status stamp fp
+  local state_dir="${ARI_DOTFILES_STATE_DIR}" desktop_dir="${ARI_DOTFILES_DESKTOP_DIR}" local_dir="${ARI_DOTFILES_LOCAL_DIR}"
+  local now="${ARI_DOTFILES_NOW}" host="${ARI_DOTFILES_HOST}" run_id run_status stamp fp
   run_id="$(jq -r '.run_id // "unknown"' "${summary}")"
   run_status="$(jq -r '.status // "error"' "${summary}")"
   if [[ -z "${kind}" ]]; then
@@ -357,7 +357,7 @@ report::_inspect() {
 report::_old_report_action() {
   local existing="${1}" mode="${2}" canonical="${3}" fp8="${4}"
   if [[ "${existing}" == null ]]; then return 0; fi
-  local file marker sha_matches first_seen efp8 desktop_dir="${NEW_MACHINE_DESKTOP_DIR}"
+  local file marker sha_matches first_seen efp8 desktop_dir="${ARI_DOTFILES_DESKTOP_DIR}"
   file="$(jq -r .path <<< "${existing}")"
   marker="$(jq -r .marker <<< "${existing}")"
   sha_matches="$(jq -r .sha_matches <<< "${existing}")"
@@ -399,7 +399,7 @@ report::decide() {
       *) print -u2 -r -- "report::decide: bad flag ${1}"; return 64 ;;
     esac
   done
-  local state_dir="${NEW_MACHINE_STATE_DIR}" desktop_dir="${NEW_MACHINE_DESKTOP_DIR}" report today
+  local state_dir="${ARI_DOTFILES_STATE_DIR}" desktop_dir="${ARI_DOTFILES_DESKTOP_DIR}" report today
   report="${desktop_dir}/${REPORT_BASENAME}"
   today="$(report::_today)"
 
@@ -554,7 +554,7 @@ report::write() {
     print -u2 -r -- "report::write: decision file missing | path='${decision}'"
     return 64
   fi
-  local state_dir="${NEW_MACHINE_STATE_DIR}"
+  local state_dir="${ARI_DOTFILES_STATE_DIR}"
   mkdir -p "${state_dir}/reports"
 
   local action kind fp first_seen weeks report_path report_sha previous run_id ts run_status errors undeclared
