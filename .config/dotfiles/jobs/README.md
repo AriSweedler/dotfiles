@@ -32,7 +32,8 @@ plugin that overruns, children first, and logs it as timed out. One hung plugin 
 hold the job, because launchd runs one instance at a time.
 
 The framework runs the plugin with the trigger as `$1`, keeps its output in
-`~/.local/state/dotfiles/jobs/<name>.log` (the previous run in `.log.bak.1`), stamps the run,
+`~/.local/state/dotfiles/jobs/<name>.log` (the five runs before it in `.log.bak.1` …
+`.log.bak.5`), stamps the run,
 and tells the user how it ended: on success a two-second banner carrying the plugin's last
 output line, on failure or timeout a persistent alert whose click opens the log. So a plugin
 prints a one-line summary last and posts no completion banner of its own; a notification a

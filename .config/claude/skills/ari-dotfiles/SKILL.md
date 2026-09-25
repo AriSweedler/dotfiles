@@ -73,7 +73,7 @@ cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
   line says how many were checked, pushed and bumped); a failed submodule or
   a refused bump blocks the shared push, nothing else blocks anything.
   Each repo's output lands in `~/.local/state/dotfiles/push/<repo>.log`
-  (`shared`, `local`, or the submodule path; `.log.bak.1` = the run before).
+  (`shared`, `local`, or the submodule path; `.log.bak.1` … `.log.bak.5` = the five runs before).
   After committing, end with: "Run `dotfiles push` when ready."
 - **Local: push after every ldf commit.** No confirmation needed; `dotfiles
   push` also picks up a local commit left unpushed.

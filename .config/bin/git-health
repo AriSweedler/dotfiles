@@ -19,6 +19,7 @@
 # uses re-breaks on the next machine. This script depends on neither: launchd runs it, it
 # runs git -C <repo> with explicit tasks against an explicit registry.
 set -euo pipefail
+zmodload zsh/datetime
 
 source "${XDG_CONFIG_HOME:-${HOME}/.config}/zsh/plugins/log.zsh"
 
@@ -77,6 +78,9 @@ done
 
 mkdir -p "${STATE_DIR}"
 export GIT_TERMINAL_PROMPT=0
+# Each git_step of the current tick as name=Ns, in run order, for the health line: a slow
+# tick must name its step (one that spanned a laptop sleep shows a single huge one).
+typeset -ga step_took=()
 
 # The health record lives in LOG_FILE (stdout too, for interactive runs); launchd captures
 # stderr separately. note() lines are the script's data trail — grep this file for history.
@@ -100,8 +104,9 @@ resolve_repo() {
 }
 
 #######################################
-# Run one mutating git step; honors --dry-run, logs failures without aborting the tick.
-# Globals: repo, dry_run
+# Run one mutating git step; honors --dry-run, logs failures without aborting the tick,
+# records its wall-clock in step_took.
+# Globals: repo, dry_run, step_took
 # Arguments: step name, then the git subcommand and its args
 # Returns: the git exit code (0 under --dry-run)
 #######################################
@@ -112,8 +117,9 @@ git_step() {
         log::info "dry-run, would run | step='${step}' cmd='git -C ${repo} $*'"
         return 0
     fi
-    local out rc=0
+    local out rc=0 started="${EPOCHREALTIME}"
     out=$(git -C "${repo}" "$@" 2>&1) || rc=$?
+    step_took+=("${step}=$(printf '%.2f' $(( EPOCHREALTIME - started )))s")
     if (( rc != 0 )); then
         note "${step} rc=${rc} | ${out//$'\n'/ // }"
     fi
@@ -169,13 +175,25 @@ measure() {
 }
 
 #######################################
-# Report health; self-heal on degradation; notify only when self-heal fails.
-# Globals: repo, pack_count, loose_count, problems, dry_run
+# The timing suffix of a verdict line: the tick's wall-clock and each step's share.
+# Globals: step_took
+# Arguments: the tick's start EPOCHREALTIME
+#######################################
+timing() {
+    printf "took='%.2fs' steps='%s'" $(( EPOCHREALTIME - ${1} )) "${(j: :)step_took}"
+}
+
+#######################################
+# Report health; self-heal on degradation; notify only when self-heal fails. Every verdict
+# line carries the counts the tick started from and its timing.
+# Globals: repo, pack_count, loose_count, problems, dry_run, step_took
+# Arguments: the tick's start EPOCHREALTIME, the pre-tick before_packs/before_loose pairs
 # Returns: 0 healthy or self-healed, 1 unhealthy after self-heal
 #######################################
 report_health() {
+    local started="${1}" before="${2}"
     if (( ${#problems[@]} == 0 )); then
-        note "healthy | packs='${pack_count}' loose='${loose_count}'"
+        note "healthy | packs='${pack_count}' loose='${loose_count}' ${before} $(timing "${started}")"
         return 0
     fi
 
@@ -184,12 +202,12 @@ report_health() {
 
     measure
     if (( ${#problems[@]} == 0 )); then
-        note "self-healed | packs='${pack_count}' loose='${loose_count}'"
+        note "self-healed | packs='${pack_count}' loose='${loose_count}' ${before} $(timing "${started}")"
         return 0
     fi
 
     local summary="${(j:, :)problems}"
-    note "UNHEALTHY after self-heal | ${summary}"
+    note "UNHEALTHY after self-heal | ${summary} | ${before} $(timing "${started}")"
     if (( ! dry_run )); then
         alert "${repo:t} .git needs manual maintenance" "${summary} — self-heal failed; click to open the log"
     fi
@@ -198,13 +216,17 @@ report_health() {
 
 #######################################
 # Tick + health-check one repo.
-# Globals: repo (set by caller)
+# Globals: repo (set by caller), step_took (reset here)
 # Returns: report_health's exit code
 #######################################
 do_tick() {
+    local started="${EPOCHREALTIME}" before
+    step_took=()
+    measure
+    before="before_packs='${pack_count}' before_loose='${loose_count}'"
     run_tick
     measure
-    report_health
+    report_health "${started}" "${before}"
 }
 
 #######################################
@@ -353,7 +375,6 @@ do_all() {
 case "${mode}" in
     all)
         # Only a healthy end posts a banner; a degraded repo already notified from report_health.
-        zmodload zsh/datetime
         tick_started="${EPOCHREALTIME}"
         all_rc=0
         do_all || all_rc=1
