@@ -161,6 +161,12 @@ typeset -g JOBS_LAUNCHD_PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bi
 # The per-plugin jobs this framework replaced; install boots them out and removes their plists.
 typeset -ga JOBS_LEGACY_LABELS=("com.$(id -un).git-health" "com.$(id -un).aws-sso-autologin" "com.$(id -un).new-machine-verify")
 typeset -gA JOB_PATH=() JOB_TIER=()         # name → executable, name → df | ldf; filled by jobs_discover
+# A plugin's `# deps:` names run as its setup first; the local root wins (how *this* machine provides X).
+typeset -g DEPS_ROOT_DF="${HOME}/.config/dotfiles/deps"
+typeset -g DEPS_ROOT_LDF="${XDG_DATA_HOME}/dotfiles/deps"
+typeset -g JOBS_DEP_TIMEOUT_SECONDS=120       # a dep is setup, not the job; one that takes longer is hung
+typeset -g JOBS_DEP_FAILED_RC=125             # the run's rc when a dep blocked the plugin (124 is the timeout)
+typeset -gA DEP_PATH=() DEP_TIER=()         # name → executable, name → df | ldf; filled by deps_discover
 
 # What the test harness asserts hermeticity against: where HOME, brew and PATH resolve.
 env_probe() {

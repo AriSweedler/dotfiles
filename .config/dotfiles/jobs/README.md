@@ -31,6 +31,22 @@ An optional `# timeout: <seconds>` line caps a run (default 900); the framework 
 plugin that overruns, children first, and logs it as timed out. One hung plugin must not
 hold the job, because launchd runs one instance at a time.
 
+A plugin that needs setup names it on a `# deps:` line:
+
+    # deps: node
+
+Each name is an executable under `~/.local/share/dotfiles/deps/` (this machine) or
+`~/.config/dotfiles/deps/` (shared). The local one wins: a dep says how this machine provides
+something, and the machine knows best. The framework runs a plugin's deps in order before the
+plugin, every time it runs, with the plugin's name as `$1` and 120 s each. A dep's stdout is
+its contribution to the plugin's environment, `NAME=VALUE` lines and nothing else, exported
+before the plugin starts; its stderr is setup chatter and goes to the plugin's log. A dep that
+is unknown, exits non-zero, overruns, or prints anything but `NAME=VALUE` blocks the plugin:
+the run is recorded with rc 125, the log says which dep and why, and the alert says "blocked".
+`dotfiles jobs list` shows every dep, its tier, and the plugins that want it. This machine's
+`node` dep activates the company node venv and prints the resulting `PATH`, so the checks in
+`dotfiles-verify` that shell out to node find it under launchd.
+
 The framework runs the plugin with the trigger as `$1`, keeps its output in
 `~/.local/state/dotfiles/jobs/<name>.log` (the five runs before it in `.log.bak.1` …
 `.log.bak.5`), stamps the run,

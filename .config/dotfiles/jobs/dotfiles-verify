@@ -1,6 +1,7 @@
 #!/usr/bin/env zsh
 # cron: 5 10 * * 1
 # timeout: 1800
+# deps: node
 # Weekly `dotfiles verify`: does this machine still match the baseline? A failure leaves
 # ~/Desktop/new-machine-FAILED.md and notifies (NEW_MACHINE_INVOKED_BY set = not interactive).
 export NEW_MACHINE_INVOKED_BY=dotfiles-jobs NO_COLOR=1

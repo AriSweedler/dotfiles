@@ -11,9 +11,12 @@ dotfiles jobs [list] | run NAME [--trigger T] | tick --trigger T | unlock | inst
   ${JOBS_INTERVAL_SECONDS}s. A plugin is an executable in ${JOBS_ROOT_DF} (shared) or
   ${JOBS_ROOT_LDF} (this machine) whose header has '# triggers: unlock load' and any
   '# cron: m h dom mon dow' lines; it gets the trigger as \$1; the engine posts a banner when it ends
-  (an alert, click opens the log, on failure). The README beside the shared plugins has the contract.
+  (an alert, click opens the log, on failure). A '# deps: name...' line names setup run before it:
+  executables in ${DEPS_ROOT_LDF} (this machine, wins) or ${DEPS_ROOT_DF} (shared) whose stdout,
+  NAME=VALUE lines, becomes the plugin's environment; a failing dep blocks the plugin. The README
+  beside the shared plugins has the contract.
 
-  list               every plugin, its triggers, last run and rc (the default)
+  list               every plugin, its triggers, last run and rc, then the deps they name (the default)
   run NAME           run one plugin now (trigger 'manual', or --trigger T); output to its log and stdout
   tick --trigger T   what the agent runs: every plugin due for T (load, tick, screenIsUnlocked)
   unlock             simulate a screen unlock (SIGUSR1 to the resident agent)
@@ -33,6 +36,7 @@ jobs_roots() {
 
 # Fill JOB_PATH (name → executable) and JOB_TIER (name → df | ldf). Non-executables (a
 # README) are not plugins. A name present in both tiers runs from the shared one, logged.
+# The deps the plugins may name are discovered alongside.
 jobs_discover() {
   JOB_PATH=(); JOB_TIER=()
   local root tier file name
@@ -44,6 +48,29 @@ jobs_discover() {
         log::err "job defined in both tiers; the shared one runs | name='${name}' shadowed='${file}'"; continue
       fi
       JOB_PATH[${name}]="${file}"; JOB_TIER[${name}]="${tier}"
+    done
+  done
+  deps_discover
+}
+
+# Every directory that may hold deps: the local tier's first, then the shared tier's. A dep
+# says how this machine provides something (node, a login), so the machine's answer wins and
+# the shared one is the fallback; the reverse of jobs, where a duplicate is a mistake.
+deps_roots() {
+  print -r -- "${DEPS_ROOT_LDF}"
+  print -r -- "${DEPS_ROOT_DF}"
+}
+
+# Fill DEP_PATH (name → executable) and DEP_TIER (name → df | ldf); the first root wins.
+deps_discover() {
+  DEP_PATH=(); DEP_TIER=()
+  local root tier file name
+  for root in "${(@f)$(deps_roots)}"; do
+    tier=ldf; [[ "${root}" == "${DEPS_ROOT_DF}" ]] && tier=df
+    for file in "${root}"/*(N-.x); do
+      name="${file:t}"
+      [[ -n "${DEP_PATH[${name}]:-}" ]] && continue
+      DEP_PATH[${name}]="${file}"; DEP_TIER[${name}]="${tier}"
     done
   done
 }
@@ -74,6 +101,15 @@ jobs_timeout() {
   line="$(grep -m1 -E '^# timeout:' "${1}" 2>/dev/null || true)"
   line="${${line#\# timeout:}##[[:space:]]##}"
   [[ "${line}" == <-> ]] && print -r -- "${line}" || print -r -- "${JOBS_TIMEOUT_SECONDS}"
+}
+
+# A plugin's deps, the names on its `# deps:` header line, in the order they run.
+jobs_deps() {
+  setopt local_options extended_glob
+  local line
+  line="$(grep -m1 -E '^# deps:' "${1}" 2>/dev/null || true)"
+  line="${line#\# deps:}"
+  print -r -- "${line##[[:space:]]##}"
 }
 
 #######################################
@@ -179,18 +215,73 @@ jobs_is_cron_due() {
   (( $(zstat +mtime "${stamp}") < prev ))
 }
 
-# The agent's pid from launchd, or nothing when the job is not running.
+# The agent's pid from launchd, or nothing when the job is not running (launchctl exits 113
+# then). Parsed in zsh: the hermetic suite allows no awk.
 jobs_agent_pid() {
-  local pid
-  pid="$(launchctl print "gui/$(id -u)/${JOBS_LABEL}" 2>/dev/null | awk '/^[[:space:]]*pid = /{print $3; exit}')"
-  [[ "${pid}" == <-> ]] && print -r -- "${pid}"
+  local -a lines
+  lines=("${(@f)$(launchctl print "gui/$(id -u)/${JOBS_LABEL}" 2>/dev/null || true)}")
+  local line pid
+  line="${${(@M)lines:#*pid = *}[1]:-}"   # (@) keeps the matches an array, so [1] is a line, not a character
+  pid="${line##*= }"
+  if [[ "${pid}" == <-> ]]; then print -r -- "${pid}"; fi
+}
+
+#######################################
+# Run a plugin's deps, the names on its `# deps:` line, in order, and export what each prints.
+# A dep is setup for the job: its stdout is its contribution to the job's environment, one
+# NAME=VALUE per line and nothing else; its stderr is setup chatter and lands in the job log with
+# the rest of the run. An unknown name, a non-zero exit, a timeout or a stray stdout line blocks
+# the job, and the line printed here says which dep and why.
+# Arguments: name, plugin
+# Returns: 0 when every dep ran clean, 1 otherwise
+#######################################
+jobs_run_deps() {
+  setopt local_options extended_glob   # the # quantifier in the NAME=VALUE pattern
+  local name="${1}" plugin="${2}" dep exe tmp line rc start
+  local -a lines
+  for dep in ${=$(jobs_deps "${plugin}")}; do
+    exe="${DEP_PATH[${dep}]:-}"
+    if [[ -z "${exe}" ]]; then
+      print -r -- "# dep ${dep}: unknown | roots='${DEPS_ROOT_LDF}, ${DEPS_ROOT_DF}'"; return 1
+    fi
+    start="${EPOCHREALTIME}"; rc=0
+    tmp="${JOBS_STATE_DIR}/${name}.dep"   # the dep's stdout; kept until the next dep overwrites it
+    jobs_with_timeout "${JOBS_DEP_TIMEOUT_SECONDS}" "${exe}" "${name}" >"${tmp}" || rc=$?
+    lines=("${(@f)$(<"${tmp}")}")
+    if (( rc )); then
+      print -r -- "# dep ${dep}: failed | rc='${rc}' exe='${exe}'"; return 1
+    fi
+    local exported=0
+    for line in "${lines[@]}"; do
+      [[ -z "${line}" ]] && continue
+      if [[ "${line}" != [A-Za-z_][A-Za-z0-9_]#=* ]]; then
+        print -r -- "# dep ${dep}: stdout must be NAME=VALUE lines | got='${line}'"; return 1
+      fi
+      export "${line}"; exported=$(( exported + 1 ))
+    done
+    print -r -- "# dep ${dep} ok | tier='${DEP_TIER[${dep}]}' vars='${exported}' took='$(elapsed "${start}")s'"
+  done
+  return 0
+}
+
+#######################################
+# A plugin's deps, then the plugin, in the caller's subshell: what the deps export reaches the
+# plugin and nothing after it. A dep that fails blocks the plugin.
+# Arguments: name, plugin, trigger, limit
+# Returns: the plugin's rc (124 on its limit), or JOBS_DEP_FAILED_RC
+#######################################
+jobs_run_guarded() {
+  local name="${1}" plugin="${2}" trigger="${3}" limit="${4}"
+  jobs_run_deps "${name}" "${plugin}" || return "${JOBS_DEP_FAILED_RC}"
+  jobs_with_timeout "${limit}" "${plugin}" "${trigger}"
 }
 
 #######################################
 # Run one job for a trigger. Its output goes to ~/.local/state/dotfiles/jobs/<name>.log
-# (plain text, the previous run in .log.bak.1) and to stdout; the run touches the stamp the
-# cron due check reads and records its rc beside it. One log line here either way, and a
-# notification from jobs_notify_finish: the engine reports every ending, so a plugin need not.
+# (plain text, the KEEP_BACKUPS runs before it in .log.bak.N) and to stdout; the run touches
+# the stamp the cron due check reads and records its rc beside it. One log line here either
+# way, and a notification from jobs_notify_finish: the engine reports every ending, so a
+# plugin need not.
 # Arguments: name, trigger
 #######################################
 jobs_run_one() {
@@ -203,7 +294,7 @@ jobs_run_one() {
   log_rotate "${logfile}" "${KEEP_BACKUPS}"
   {
     print -r -- "# $(date -u +%FT%TZ) dotfiles jobs run ${name} (${trigger}) timeout=${limit}s"
-    jobs_with_timeout "${limit}" "${plugin}" "${trigger}" 2>&1
+    jobs_run_guarded "${name}" "${plugin}" "${trigger}" "${limit}" 2>&1
   } | strip_ansi | tee "${logfile}" || rc=$?   # pipefail: the group exits with the plugin's rc
   touch "${JOBS_STATE_DIR}/${name}.ran"
   print -r -- "${rc}" > "${JOBS_STATE_DIR}/${name}.rc"
@@ -212,6 +303,8 @@ jobs_run_one() {
     log::info "job ok | name='${name}' tier='${JOB_TIER[${name}]}' trigger='${trigger}' took='${took}s' log='${logfile}'"
   elif (( rc == 124 )); then
     log::err "job timed out | name='${name}' tier='${JOB_TIER[${name}]}' trigger='${trigger}' limit='${limit}s' log='${logfile}'"
+  elif (( rc == JOBS_DEP_FAILED_RC )); then
+    log::err "job blocked, a dep failed | name='${name}' tier='${JOB_TIER[${name}]}' trigger='${trigger}' took='${took}s' log='${logfile}'"
   else
     log::err "job failed | name='${name}' tier='${JOB_TIER[${name}]}' trigger='${trigger}' rc='${rc}' took='${took}s' log='${logfile}'"
   fi
@@ -277,6 +370,29 @@ jobs_schedule() {
   print -r -- "${out}"
 }
 
+# The deps block of the list: every dep a plugin names or a root holds, with the tier that
+# provides it (or "missing") and the plugins that want it.
+jobs_list_deps() {
+  local name dep
+  local -A wanted=()
+  for name in "${(@k)JOB_PATH}"; do
+    for dep in ${=$(jobs_deps "${JOB_PATH[${name}]}")}; do
+      wanted[${dep}]="${wanted[${dep}]:+${wanted[${dep}]} }${name}"
+    done
+  done
+  local -a names=("${(@k)wanted}" "${(@k)DEP_PATH}")
+  (( ${#names} )) || return 0
+  print -r -- "  ${c_bold}deps${c_rst} (a plugin's '# deps:' line, run as its setup; ${DEPS_ROOT_LDF} wins over ${DEPS_ROOT_DF})"
+  printf '  %-4s %-20s %s\n' tier name 'wanted by'
+  for dep in "${(@uo)names}"; do
+    if [[ -n "${DEP_PATH[${dep}]:-}" ]]; then
+      printf '  %-4s %-20s %s\n' "${DEP_TIER[${dep}]}" "${dep}" "${wanted[${dep}]:--}"
+    else
+      printf '  %-4s %-20s %s\n' - "${dep}" "${wanted[${dep}]} (${c_red}missing${c_rst})"
+    fi
+  done
+}
+
 jobs_list() {
   jobs_discover
   print -r -- "${c_bold}jobs${c_rst} (${JOBS_LABEL}: on unlock, at login, every ${JOBS_INTERVAL_SECONDS}s)"
@@ -291,6 +407,7 @@ jobs_list() {
     fi
     printf '  %-4s %-20s %-22s %-20s %s\n' "${JOB_TIER[${name}]}" "${name}" "$(jobs_schedule "${JOB_PATH[${name}]}")" "${last}" "${rc}"
   done
+  jobs_list_deps
   local pid; pid="$(jobs_agent_pid)"
   if [[ -n "${pid}" ]]; then
     print -r -- "  agent: running (pid ${pid}); 'dotfiles jobs unlock' simulates an unlock"
@@ -355,7 +472,8 @@ jobs_click_command() {
 jobs_notify_finish() {
   local name="${1}" rc="${2}" took="${3}" logfile="${4}" last verdict
   jobs_notifier_bin >/dev/null || return 0
-  last="$(grep -v -E '^# |^[[:space:]]*$' "${logfile}" 2>/dev/null | tail -n 1 | cut -c1-140)"
+  # grep exits 1 when only header lines remain (a plugin that printed nothing, a blocked run).
+  last="$(grep -v -E '^# |^[[:space:]]*$' "${logfile}" 2>/dev/null | tail -n 1 | cut -c1-140 || true)"
   if (( rc == 0 )); then
     jobs_notify -remove "dotfiles-jobs-${name}" || true
     jobs_notify -group dotfiles-jobs -title "dotfiles jobs" -message "${name} ok in ${took}s${last:+ · ${last}}" || return 0
@@ -363,7 +481,7 @@ jobs_notify_finish() {
     jobs_notify -remove dotfiles-jobs || true
     return 0
   fi
-  verdict="failed (rc ${rc})"; (( rc == 124 )) && verdict="timed out"
+  verdict="failed (rc ${rc})"; (( rc == 124 )) && verdict="timed out"; (( rc == JOBS_DEP_FAILED_RC )) && verdict="blocked: a dep failed"
   jobs_notify -group "dotfiles-jobs-${name}" -title "dotfiles jobs: ${name} ${verdict}" \
     -message "${last:-no output} — click to open the log" -execute "$(jobs_click_command "${logfile}")" || true
 }
