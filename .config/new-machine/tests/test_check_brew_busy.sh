@@ -18,7 +18,7 @@ for step in brew_pkgs brew_drift; do
   assert_contains "${step} detail names the pid" "$(step_get "${step}" .detail)" "${busy_pid}"
 done
 assert_json "every step has a status" "${f}" '[.steps[] | select((.status // "") == "")] | length' 0
-assert_json "13 steps ran" "${f}" '.steps|length' 13
+assert_json "every step ran" "${f}" '.steps|length' "${EXPECTED_STEPS}"
 assert_eq "brew itself is ok" ok "$(step_get brew .status)"
 assert_json "other steps still ran" "${f}" '[.steps[] | select(.step=="dotfiles_repo" or .step=="claude" or .step=="bob_neovim") | .status] | all(. != "skip" and . != "error")' true
 assert_no_mutation "busy check is read-only"

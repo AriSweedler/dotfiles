@@ -21,7 +21,7 @@ ldf_status="$(step_get local_dotfiles_repo .status)"
 if [[ "${ldf_status}" == ok || "${ldf_status}" == warn ]]; then pass "local_dotfiles_repo still ran and passed (${ldf_status})"
 else fail "local_dotfiles_repo still ran and passed" "status='${ldf_status}'"; fi
 assert_file "local repo was created despite the earlier failure" "${NEW_MACHINE_LDF_GIT_DIR}/HEAD"
-assert_json "every step recorded" "${f}" '.steps|length' 13
+assert_json "every step recorded" "${f}" '.steps|length' "${EXPECTED_STEPS}"
 unset BREW_SHIM_ALLOW_MUTATION
 export DOTFILES_REMOTE="${FIX}/remotes/dotfiles.git"
 
@@ -36,7 +36,7 @@ assert_contains "dry-run logs the brew install plan" "${ERR}" "would run apply::
 assert_contains "dry-run plan names the Homebrew installer" "$(cat "$(newest_run_dir)/brew.log")" "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
 assert_eq "curl never called" "" "$(shim_log curl)"
 assert_json "remaining steps skip aborted" "${f}" '[.steps[] | select(.step != "brew")] | all(.status == "skip" and .reason == "aborted")' true
-assert_json "13 steps recorded" "${f}" '.steps|length' 13
+assert_json "every step recorded after the abort" "${f}" '.steps|length' "${EXPECTED_STEPS}"
 
 bump_now_secs 60
 nm check --json

@@ -536,7 +536,7 @@ apply::karabiner() {
 # warn. Compile state of the bindings is the karabiner step's verdict, not this one's.
 check::raycast_sync() {
   local ari_raycast="${HOME}/.config/bin/ari-raycast"
-  if [[ ! -d /Applications/Raycast.app ]]; then
+  if [[ ! -d "${ARI_RAYCAST_APP:-/Applications/Raycast.app}" ]]; then
     verdict skip no_raycast -d "Raycast is not installed"
     return 0
   fi

@@ -22,7 +22,7 @@ for step in terminal_nerdfont karabiner claude_notifications claude_skills dotfi
   if [[ -n "${status}" && "${status}" != null ]]; then pass "${step} ran after the failures (${status})"
   else fail "${step} ran after the failures" "status='${status}'"; fi
 done
-assert_json "13 steps recorded" "${f}" '.steps|length' 13
+assert_json "every step recorded" "${f}" '.steps|length' "${EXPECTED_STEPS}"
 
 unset BOB_SHIM_RC
 world_bundle_check garbage

@@ -18,6 +18,8 @@ OUT=""
 ERR=""
 RC=0
 HERMETIC_ENV=()
+# How many steps the registry declares; every `.steps|length` assertion reads this.
+EXPECTED_STEPS=15
 
 pass() { PASS=$((PASS + 1)); printf '  ok   %s\n' "$1"; }
 fail() { FAIL=$((FAIL + 1)); printf '  FAIL %s\n       %s\n' "$1" "$2" >&2; }
@@ -138,6 +140,8 @@ world_new() {
   # The default busy pattern would see a real brew running on this machine; start_busy_brew
   # points it at a sleeper the test owns.
   export NEW_MACHINE_BREW_BUSY_PATTERN="nm-tests-no-such-process-$$"
+  # The Raycast step probes the app bundle; the world has none, so the step skips.
+  export ARI_RAYCAST_APP="${FIX}/no-raycast"
 
   # Hermetic PATH: symlinks to the real binaries named in real-tools.txt, then the shims.
   mkdir -p "${FIX}/tools" "${FIX}/shims"
@@ -344,7 +348,7 @@ shim_log() { local f="${BREW_SHIM_LOG_DIR}/$1.log"; if [[ -f "${f}" ]]; then cat
 hermetic_env() {
   HERMETIC_ENV=("HOME=${HOME}" "PATH=${PATH}" "TZ=${TZ:-UTC}" "GIT_CONFIG_NOSYSTEM=1")
   local v
-  for v in "${!XDG_@}" "${!NEW_MACHINE_@}" "${!BREW_SHIM_@}" "${!BOB_SHIM_@}" "${!LAUNCHCTL_SHIM_@}" "${!XCODE_SELECT_SHIM_@}"; do
+  for v in "${!XDG_@}" "${!NEW_MACHINE_@}" "${!ARI_RAYCAST_@}" "${!BREW_SHIM_@}" "${!BOB_SHIM_@}" "${!LAUNCHCTL_SHIM_@}" "${!XCODE_SELECT_SHIM_@}"; do
     HERMETIC_ENV+=("${v}=${!v}")
   done
   if [[ -n "${DOTFILES_REMOTE+x}" ]]; then HERMETIC_ENV+=("DOTFILES_REMOTE=${DOTFILES_REMOTE}"); fi

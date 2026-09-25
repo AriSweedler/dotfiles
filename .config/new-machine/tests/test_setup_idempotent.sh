@@ -33,7 +33,7 @@ assert_eq "dotfiles git log unchanged" "${df_log_before}" "$(df_git log --format
 assert_eq "local-dotfiles git log unchanged" "${ldf_log_before}" "$(git --git-dir="${NEW_MACHINE_LDF_GIT_DIR}" log --format=%H 2>/dev/null || printf 'unborn')"
 assert_json "no step applied on the second run" "${f}" '[.steps[] | select(.applied == true or .applied == "would_apply")] | length' 0
 assert_json "second run has no fail or error" "${f}" '[.steps[] | select(.status=="fail" or .status=="error")] | length' 0
-assert_json "13 steps" "${f}" '.steps|length' 13
+assert_json "every step recorded" "${f}" '.steps|length' "${EXPECTED_STEPS}"
 
 if (( FAIL > 0 )); then jq -c '.steps[] | {step, status, reason, detail, applied}' "${f}" >&2; fi
 report
