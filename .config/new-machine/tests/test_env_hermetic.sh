@@ -7,7 +7,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 world_new
 world_use_fixture satisfied
 
-zfn common.zsh nm::env_probe
+zfn env.zsh env_probe
 assert_eq "env_probe exits 0" 0 "${RC}"
 f="$(out_json)"
 probe_home="$(jq -r .home "${f}")"
@@ -25,7 +25,7 @@ mkdir -p "${FIX}/cwd"
 snapshot() { find "${FIX}" -mindepth 1 -not -name 'source.out' -not -name 'source.err' | sort; }
 before="$(snapshot)"
 hermetic_env
-for lib in "${REPO_DIR}"/lib/*.zsh; do
+for lib in "${ORIG_CONFIG_DIR}"/dotfiles/lib/*.zsh "${ORIG_CONFIG_DIR}"/dotfiles/cmd/brew/*.zsh "${ORIG_CONFIG_DIR}"/dotfiles/cmd/verify/*.zsh; do
   name="$(basename "${lib}")"
   if env -i "${HERMETIC_ENV[@]}" "${FIX}/tools/zsh" -c 'cd "$2" && source "$1"' _ "${lib}" "${FIX}/cwd" \
        > "${FIX}/source.out" 2> "${FIX}/source.err"; then pass "source ${name} exits 0"

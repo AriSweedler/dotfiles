@@ -43,7 +43,7 @@ assert_file "local Brewfile created" "${LOCAL}"
 assert_contains "local Brewfile carries the header" "$(cat "${LOCAL}")" "Packages for THIS machine only"
 assert_contains "local Brewfile carries the marker" "$(cat "${LOCAL}")" "${MARKER}"
 assert_eq "brew \"gh\" sits under the marker" 'brew "gh"' "$(block_lines "${LOCAL}")"
-assert_eq "ldf commit subject" "new-machine: declare formula gh (local)" "$(ldf_subject)"
+assert_eq "ldf commit subject" "dotfiles: declare formula gh (local)" "$(ldf_subject)"
 assert_eq "ldf origin main advanced" "$(ldf_head)" "$(ldf_origin_main)"
 assert_eq "df HEAD unchanged" "${df_before}" "$(df_head)"
 
@@ -52,7 +52,7 @@ df_remote_before="$(git ls-remote "${FIX}/remotes/dotfiles.git" | sort)"
 decree cask:google-chrome --global --reason "browser"
 assert_eq "decree cask --global exits 0" 0 "${RC}"
 assert_contains "global Brewfile gained the cask with its reason" "$(cat "${GLOBAL}")" 'cask "google-chrome"  # browser'
-assert_eq "df commit subject" "new-machine: declare cask google-chrome (global)" "$(df_subject)"
+assert_eq "df commit subject" "dotfiles: declare cask google-chrome (global)" "$(df_subject)"
 assert_contains "global decree ends with the push reminder" "${OUT}${ERR}" 'Run `dotfiles push` when ready.'
 assert_eq "df remote refs untouched" "${df_remote_before}" "$(git ls-remote "${FIX}/remotes/dotfiles.git" | sort)"
 
@@ -65,7 +65,7 @@ assert_contains "names the tier it is declared in" "${OUT}${ERR}" "already decla
 decree spacectl --local
 assert_eq "orphaned keg → exit 1" 1 "${RC}"
 assert_contains "orphan refusal prints the reinstall recipe" "${OUT}${ERR}" "brew uninstall spacectl && brew tap spacelift-io/spacelift && brew install --cask spacelift-io/spacelift/spacectl"
-assert_contains "orphan refusal prints the follow-up decree" "${OUT}${ERR}" "new-machine brew decree cask:spacelift-io/spacelift/spacectl --local"
+assert_contains "orphan refusal prints the follow-up decree" "${OUT}${ERR}" "dotfiles brew decree cask:spacelift-io/spacelift/spacectl --local"
 assert_eq "refusals commit nothing" "${ldf_before}" "$(ldf_head)"
 
 # ── decree bk@3 --local adds the tap in the same commit ───────────────────────
@@ -89,7 +89,7 @@ decree hashicorp/tap/terraform --global
 assert_eq "decree terraform --global exits 0" 0 "${RC}"
 assert_contains "synthesized formula line" "$(cat "${GLOBAL}")" 'brew "hashicorp/tap/terraform"'
 assert_contains "tap line with trusted: true" "$(cat "${GLOBAL}")" 'tap "hashicorp/tap", trusted: true'
-assert_eq "df commit subject" "new-machine: declare formula hashicorp/tap/terraform (global)" "$(df_subject)"
+assert_eq "df commit subject" "dotfiles: declare formula hashicorp/tap/terraform (global)" "$(df_subject)"
 
 # ── --ignore-local libtiff, then --global removes the ignore ──────────────────
 decree libtiff --ignore-local --reason dep
@@ -97,7 +97,7 @@ assert_eq "ignore-local exits 0" 0 "${RC}"
 assert_file "local Brewfile.ignore created" "${LOCAL_IGNORE}"
 assert_contains "ignore line written" "$(cat "${LOCAL_IGNORE}")" "formula libtiff"
 assert_contains "ignore line carries the reason" "$(cat "${LOCAL_IGNORE}")" "# dep"
-assert_eq "ignore commit subject" "new-machine: ignore formula libtiff (local): dep" "$(ldf_subject)"
+assert_eq "ignore commit subject" "dotfiles: ignore formula libtiff (local): dep" "$(ldf_subject)"
 assert_eq "ignore pushed" "$(ldf_head)" "$(ldf_origin_main)"
 bump_now_secs 60
 nm brew triage --json
@@ -161,7 +161,7 @@ assert_contains "dry-run prints the git commands" "${OUT}${ERR}" "commit"
 ldf_git remote remove origin
 decree python@3.10 --local
 assert_eq "decree without an origin exits 0" 0 "${RC}"
-assert_eq "commit stands" "new-machine: declare formula python@3.10 (local)" "$(ldf_subject)"
+assert_eq "commit stands" "dotfiles: declare formula python@3.10 (local)" "$(ldf_subject)"
 assert_contains "stderr points at git ldf push" "${ERR}" "git ldf push"
 
 # ── the block stays sorted: taps, then formulae by name ───────────────────────

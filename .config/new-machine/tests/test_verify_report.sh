@@ -28,7 +28,7 @@ content="$(cat "${REPORT}")"
 assert_contains "What failed" "${content}" "## What failed"
 assert_contains "brew_pkgs row" "${content}" "| brew_pkgs | formula cowsay | needs to be installed |"
 assert_contains "Undeclared brew items" "${content}" "## Undeclared brew items"
-assert_contains "decree gh --global" "${content}" "new-machine brew decree formula:gh --global"
+assert_contains "decree gh --global" "${content}" "dotfiles brew decree formula:gh --global"
 assert_contains "ignore-local form" "${content}" "--ignore-local --reason"
 assert_contains "How to feed this to Claude" "${content}" "## How to feed this to Claude"
 assert_contains "the literal claude line" "${content}" "claude \"Read ${REPORT}"
@@ -36,7 +36,7 @@ assert_contains "/ari-dotfiles" "${content}" "/ari-dotfiles"
 assert_contains "NEVER push" "${content}" "NEVER push"
 assert_contains "git ldf push" "${content}" "git ldf push"
 assert_contains "Run dotfiles push when ready" "${content}" "Run dotfiles push when ready"
-assert_contains "tests/run.sh" "${content}" "tests/run.sh"
+assert_contains "dotfiles test" "${content}" '`dotfiles test` must pass'
 assert_contains "What fixed looks like" "${content}" '## What "fixed" looks like'
 assert_contains "raw log path under the fake state dir" "${content}" "${STATE}/verify/log.txt"
 assert_contains "orphan recipe" "${content}" "brew uninstall spacectl && brew tap spacelift-io/spacelift && brew install --cask spacelift-io/spacelift/spacectl"
@@ -58,7 +58,7 @@ assert_json "status fail" "${LR}" '.status' fail
 
 notif="$(shim_log terminal-notifier)"
 assert_contains "notifier announces problems" "${notif}" "problems"
-assert_contains "notifier click opens the report in a tmux editor window" "${notif}" "-execute ${HOME}/.config/bin/tmux-edit-window -n new-machine ${REPORT}"
+assert_contains "notifier click opens the report in a tmux editor window" "${notif}" "-execute ${HOME}/.config/bin/tmux-edit-window -n dotfiles ${REPORT}"
 assert_not_contains "notifier never hands the report to -open (Xcode)" "${notif}" "-open file://"
 assert_no_mutation "verify is read-only"
 # One summary line per run; event notes (report written, archived, ...) may accompany it.

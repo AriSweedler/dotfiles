@@ -177,10 +177,17 @@ world_install_config() {
   cp "${REPO_DIR}/Brewfile" "${dir}/new-machine/Brewfile"
   cp "${REPO_DIR}/local-dotfiles-exclude" "${dir}/new-machine/local-dotfiles-exclude"
   if [[ -f "${REPO_DIR}/Brewfile.ignore" ]]; then cp "${REPO_DIR}/Brewfile.ignore" "${dir}/new-machine/Brewfile.ignore"; fi
-  rm -f "${dir}/new-machine/lib" "${dir}/new-machine/bin"
-  ln -s "${REPO_DIR}/lib" "${dir}/new-machine/lib"
+  rm -f "${dir}/new-machine/bin"
   ln -s "${REPO_DIR}/bin" "${dir}/new-machine/bin"
-  cp "${ORIG_CONFIG_DIR}/zsh/plugins/log.zsh" "${ORIG_CONFIG_DIR}/zsh/plugins/log_rotate.zsh" "${dir}/zsh/plugins/"
+  # The program (kernel, verbs, steps): code by symlink, from the same checkout.
+  mkdir -p "${dir}/dotfiles" "${dir}/bin"
+  rm -f "${dir}/dotfiles/lib" "${dir}/dotfiles/cmd" "${dir}/dotfiles/steps" "${dir}/bin/dotfiles"
+  ln -s "${ORIG_CONFIG_DIR}/dotfiles/lib" "${dir}/dotfiles/lib"
+  ln -s "${ORIG_CONFIG_DIR}/dotfiles/cmd" "${dir}/dotfiles/cmd"
+  ln -s "${ORIG_CONFIG_DIR}/dotfiles/steps" "${dir}/dotfiles/steps"
+  ln -s "${ORIG_CONFIG_DIR}/bin/dotfiles" "${dir}/bin/dotfiles"
+  cp "${ORIG_CONFIG_DIR}/zsh/plugins/log.zsh" "${ORIG_CONFIG_DIR}/zsh/plugins/log_rotate.zsh" \
+     "${ORIG_CONFIG_DIR}/zsh/plugins/strip_ansi.zsh" "${dir}/zsh/plugins/"
 }
 
 # Idempotent; the EXIT trap may run it after an explicit call.
@@ -355,7 +362,13 @@ hermetic_env() {
 }
 
 # nm ARGS...: the CLI under env -i with only the contract's variables; captures OUT, ERR, RC.
-nm() { nm_run "${REPO_DIR}/bin/new-machine" "$@"; }
+# The entrypoint is `dotfiles`; `check` is its `healthcheck`, spelled the old way in the tests.
+nm() {
+  local verb="${1:-}"
+  (( $# > 0 )) && shift
+  [[ "${verb}" != check ]] || verb=healthcheck
+  nm_run "${ORIG_CONFIG_DIR}/bin/dotfiles" "${verb}" "$@"
+}
 
 nm_run() {
   local script="$1"; shift
@@ -399,15 +412,20 @@ bs_run_stdin() {
   ERR="$(cat "${FIX}/nm.err")"
 }
 
-# zfn LIB FN ARGS...: one pure lib function, in the same hermetic environment as the CLI.
-# common.zsh is sourced first because every lib reads the env contract it defines; it guards
-# against being sourced twice.
+# zfn LIB FN ARGS...: one pure lib function, in the same hermetic environment as the CLI. The
+# kernel (dotfiles/lib/*.zsh) is sourced first because every lib reads the env contract it
+# defines; LIB is a kernel module, or a domain lib under cmd/brew or cmd/verify, by basename.
 zfn() {
   local lib="$1" fn="$2"; shift 2
+  local lib_path candidate
+  for candidate in "${ORIG_CONFIG_DIR}/dotfiles/lib/${lib}" "${ORIG_CONFIG_DIR}/dotfiles/cmd/brew/${lib}" "${ORIG_CONFIG_DIR}/dotfiles/cmd/verify/${lib}"; do
+    if [[ -f "${candidate}" ]]; then lib_path="${candidate}"; break; fi
+  done
+  [[ -n "${lib_path:-}" ]] || abort "zfn: no such lib ${lib}"
   hermetic_env
   RC=0
-  env -i "${HERMETIC_ENV[@]}" "${FIX}/tools/zsh" -c 'source "$1"; if [[ "$2" != "$1" ]]; then source "$2"; fi; shift 2; "$@"' _ \
-    "${REPO_DIR}/lib/common.zsh" "${REPO_DIR}/lib/${lib}" "${fn}" "$@" > "${FIX}/zfn.out" 2> "${FIX}/zfn.err" || RC=$?
+  env -i "${HERMETIC_ENV[@]}" "${FIX}/tools/zsh" -c 'for f in "$1"/*.zsh(N); do source "${f}"; done; if [[ "$2" != "$1"/* ]]; then source "$2"; fi; shift 2; "$@"' _ \
+    "${ORIG_CONFIG_DIR}/dotfiles/lib" "${lib_path}" "${fn}" "$@" > "${FIX}/zfn.out" 2> "${FIX}/zfn.err" || RC=$?
   OUT="$(cat "${FIX}/zfn.out")"
   ERR="$(cat "${FIX}/zfn.err")"
 }
@@ -447,7 +465,7 @@ bump_now_secs() { NEW_MACHINE_NOW=$((NEW_MACHINE_NOW + $1)); export NEW_MACHINE_
 seed_df_remote() {
   local work="${FIX}/remotes/dotfiles-work" bare="${FIX}/remotes/dotfiles.git" shared="${NEW_MACHINE_SHARED_DIR}"
   local config; config="$(dirname "${shared}")"
-  mkdir -p "${work}/.config/new-machine/lib" "${work}/.config/new-machine/bin" "${work}/.config/zsh/plugins" "${work}/.config/git" \
+  mkdir -p "${work}/.config/new-machine/bin" "${work}/.config/zsh/plugins" "${work}/.config/git" \
            "${work}/.config/bin" "${work}/.config/dotfiles" "${work}/.config/claude/skills/ari-skill-shellscripts/lib"
   cp -R "${TESTS_DIR}/fixtures/df-remote/." "${work}/"
   cp "${config}/bin/dotfiles" "${work}/.config/bin/dotfiles"
@@ -456,7 +474,6 @@ seed_df_remote() {
   cp "${config}/zsh/plugins/strip_ansi.zsh" "${work}/.config/zsh/plugins/"
   cp "${shared}/Brewfile" "${shared}/local-dotfiles-exclude" "${work}/.config/new-machine/"
   if [[ -f "${shared}/Brewfile.ignore" ]]; then cp "${shared}/Brewfile.ignore" "${work}/.config/new-machine/"; fi
-  cp -R "${shared}/lib/." "${work}/.config/new-machine/lib/"
   cp -R "${shared}/bin/." "${work}/.config/new-machine/bin/"
   cp "${shared}/../zsh/plugins/log.zsh" "${shared}/../zsh/plugins/log_rotate.zsh" "${work}/.config/zsh/plugins/"
   printf '[user]\n\tname = new-machine tests\n\temail = tests@example.invalid\n[init]\n\tdefaultBranch = main\n' > "${work}/.config/git/config"

@@ -1,9 +1,9 @@
 #!/bin/sh
 # Fresh Mac to the dotfiles baseline in one line (README "New machine"):
 #   sh -c "$(curl -fsSL https://raw.githubusercontent.com/AriSweedler/dotfiles/main/.config/new-machine/bin/bootstrap.sh)"
-# POSIX sh because nothing from the dotfiles exists yet. Does only what `new-machine setup`
-# cannot do for itself: a working git and the checkout that contains new-machine. Homebrew,
-# packages, hooks and launchd are new-machine's steps, so re-running this is safe.
+# POSIX sh because nothing from the dotfiles exists yet. Does only what `dotfiles setup` cannot
+# do for itself: a working git and the checkout that contains it. Homebrew, packages, hooks and
+# launchd are its steps, so re-running this is safe.
 set -eu
 GIT_DIR="$HOME/dotfiles.git"
 
@@ -25,6 +25,6 @@ fi
 # A no-op once HOME is populated (its branch chatter to stderr); refuses, listing them, to overwrite files it does not own.
 git --git-dir="$GIT_DIR" --work-tree="$HOME" checkout 1>&2
 
-# The checkout carries the dotfiles harness; it finishes the dotfiles. Its output goes to stderr so --json's stdout stays new-machine's JSON.
+# The checkout carries the harness; init finishes the dotfiles, setup the machine. init's output goes to stderr so --json's stdout stays setup's JSON.
 zsh "$HOME/.config/bin/dotfiles" init 1>&2
-exec "$HOME/.config/new-machine/bin/new-machine" setup "$@"
+exec "$HOME/.config/bin/dotfiles" setup "$@"

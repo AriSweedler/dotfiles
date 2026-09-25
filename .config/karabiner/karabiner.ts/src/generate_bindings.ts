@@ -16,7 +16,7 @@ import { raycastShortcuts } from "./raycast_shortcuts.ts"
 // path's last segment (the command slug), so slugs must be unique. Two outputs of one document:
 //   - `npm run build` (index.ts) writes src/raycast_bindings.json, a generated artifact that is
 //     committed for reading and diffing; nothing consumes it at runtime.
-//   - `npm run bindings` (this file with --stdout) prints it; the ari-raycast link widget (zsh)
+//   - `npm run bindings` (this file with --stdout) prints it; the `dotfiles raycast link` widget (zsh)
 //     takes its bindings from that, so it always sees the tables as they are now.
 
 const MODES: AriMode[] = [applicationMode, karabinerMode, typingMode, windowMode]

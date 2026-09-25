@@ -1,4 +1,4 @@
-# lib/decree.zsh — `new-machine brew triage | decree | undecree`. Sourced by bin/new-machine after
+# cmd/brew/decree.zsh — `dotfiles brew triage | decree | undecree`. Loaded by cmd/brew.zsh after
 # lib/common.zsh, lib/brew.zsh and lib/dotfiles.zsh; defines functions and constants only.
 #
 # Both tiers' Brewfile and Brewfile.ignore are edited only inside a trailing "decree block" that
@@ -6,7 +6,7 @@
 # tool's own lines from Ari's. brew::declared stays the authority for what a Brewfile declares;
 # the line scanning here only locates text to report or edit.
 #
-# Entry points (each takes the CLI args after `new-machine brew <sub>` and returns the exit code):
+# Entry points (each takes the CLI args after `dotfiles brew <sub>` and returns the exit code):
 #   decree::triage   [--json]
 #   decree::decree   ITEM... (--global|--local|--ignore-global|--ignore-local) [--reason TEXT] [--dry-run] [--no-push]
 #   decree::undecree ITEM... [--dry-run] [--no-push]
@@ -15,15 +15,15 @@
 # Reads: NEW_MACHINE_STATE_DIR, NEW_MACHINE_NOW, RUN_DIR, RUN_ID, LAST_RESULT_FILE, HOME, NM_DRY_RUN,
 # NM_NO_PUSH; brew and the tier file paths come from brew::bin, brew::global_brewfile and friends.
 
-(( ${+DECREE_MARKER} )) || readonly DECREE_MARKER="# ── decreed via 'new-machine brew decree'; move into a section when tidying ──"
+(( ${+DECREE_MARKER} )) || typeset -gr DECREE_MARKER="# ── decreed via 'new-machine brew decree'; move into a section when tidying ──"
 (( ${+DECREE_KEYWORD} )) || typeset -grA DECREE_KEYWORD=([formula]=brew [cask]=cask [tap]=tap [vscode]=vscode)
 (( ${+DECREE_KIND_OF_KEYWORD} )) || typeset -grA DECREE_KIND_OF_KEYWORD=([brew]=formula [cask]=cask [tap]=tap [vscode]=vscode)
 (( ${+DECREE_KIND_ORDER} )) || typeset -grA DECREE_KIND_ORDER=([tap]=0 [formula]=1 [cask]=2 [vscode]=3)
-(( ${+DECREE_BREWFILE_LINE_RE} )) || readonly DECREE_BREWFILE_LINE_RE="^[[:space:]]*(brew|cask|tap|vscode)[[:space:]]+[\"']([^\"']+)[\"']"
-(( ${+DECREE_IGNORE_LINE_RE} )) || readonly DECREE_IGNORE_LINE_RE='^[[:space:]]*(formula|cask|tap|vscode|include-declared)[[:space:]]+([^[:space:]#]+)'
+(( ${+DECREE_BREWFILE_LINE_RE} )) || typeset -gr DECREE_BREWFILE_LINE_RE="^[[:space:]]*(brew|cask|tap|vscode)[[:space:]]+[\"']([^\"']+)[\"']"
+(( ${+DECREE_IGNORE_LINE_RE} )) || typeset -gr DECREE_IGNORE_LINE_RE='^[[:space:]]*(formula|cask|tap|vscode|include-declared)[[:space:]]+([^[:space:]#]+)'
 (( ${+DECREE_LOCAL_BREWFILE_HEADER} )) || typeset -gra DECREE_LOCAL_BREWFILE_HEADER=(
   "# Packages for THIS machine only (local tier, git ldf). Applied together with the shared"
-  "# ~/.config/new-machine/Brewfile by \`new-machine setup\`. Add with \`new-machine brew decree <name> --local\`;"
+  "# ~/.config/new-machine/Brewfile by \`${CLI_NAME} setup\`. Add with \`${CLI_NAME} brew decree <name> --local\`;"
   "# move a line into the shared file by hand when every machine should have it."
 )
 (( ${+DECREE_IGNORE_HEADER} )) || typeset -gra DECREE_IGNORE_HEADER=(
@@ -34,7 +34,7 @@
 
 # canon($k; $n) for jq programs run with `--slurpfile m "${DECREE_ALIAS_MAP}"`: the alias map's
 # single value, else the name itself; taps and include paths are identity, extension ids lowercase.
-(( ${+DECREE_JQ_CANON} )) || readonly DECREE_JQ_CANON='
+(( ${+DECREE_JQ_CANON} )) || typeset -gr DECREE_JQ_CANON='
   def canon($k; $n):
     if $k == "tap" or $k == "include-declared" then $n
     elif $k == "vscode" then ($n | ascii_downcase)
@@ -407,7 +407,7 @@ decree::block_write() {  # <file> [header line]...
   local sorted
   sorted="$(decree::block_sorted)"
   [[ -n "${sorted}" ]] && out+=("${(@f)sorted}")
-  if nm::is_dry_run; then
+  if is_dry_run; then
     print -r -- "would write: ${file}"
     return 0
   fi
@@ -454,8 +454,8 @@ decree::block_tap_lines() {  # <tap>
 # ── help ─────────────────────────────────────────────────────────────────────────────────────
 
 decree::help_triage() {
+  print -r -- "${CLI_NAME} brew triage [--json]"
   cat <<'EOF'
-new-machine brew triage [--json]
 
 Lists every installed brew item (formula, cask, tap, VS Code extension) that neither Brewfile
 declares, with the three commands that settle it, then orphaned kegs, duplicates, declared
@@ -469,8 +469,8 @@ EOF
 }
 
 decree::help_decree() {
+  print -r -- "${CLI_NAME} brew decree ITEM... (--global|--local|--ignore-global|--ignore-local) [--reason TEXT] [--dry-run] [--no-push]"
   cat <<'EOF'
-new-machine brew decree ITEM... (--global|--local|--ignore-global|--ignore-local) [--reason TEXT] [--dry-run] [--no-push]
 
 Copies the installed item's declaration (the verbatim `brew bundle dump` line) into the tier's
 Brewfile decree block and commits it; --ignore-* records the item in the tier's Brewfile.ignore
@@ -492,8 +492,8 @@ EOF
 }
 
 decree::help_undecree() {
+  print -r -- "${CLI_NAME} brew undecree ITEM... [--dry-run] [--no-push]"
   cat <<'EOF'
-new-machine brew undecree ITEM... [--dry-run] [--no-push]
 
 Removes the line(s) decree wrote for the item from whichever tier holds them (Brewfile or
 Brewfile.ignore, decree block only; hand-placed lines are reported and left alone), drops the
@@ -537,9 +537,9 @@ decree::orphan_recipe() {  # <full name> <hint>
   local name="${1}" hint="${2}" keg="${1:t}" tap="${1:h}"
   if [[ "${hint}" == *"ships cask"* && "${name}" == */*/* ]]; then
     print -r -- "  brew uninstall ${keg} && brew tap ${tap} && brew install --cask ${name}"
-    print -r -- "  then: new-machine brew decree cask:${name} --local"
+    print -r -- "  then: ${CLI_NAME} brew decree cask:${name} --local"
   elif [[ "${hint}" == "tap not tapped" && "${name}" == */*/* ]]; then
-    print -r -- "  brew tap ${tap}   # ${hint}; then re-run new-machine brew triage"
+    print -r -- "  brew tap ${tap}   # ${hint}; then re-run ${CLI_NAME} brew triage"
   else
     print -r -- "  brew uninstall ${keg}   # ${hint}"
   fi
@@ -559,9 +559,9 @@ decree::triage_render() {  # <drift.json>
         [[ -n "${since}" ]] && tag="new since ${since}"
       fi
       printf '%-8s %-34s (%s)   %s\n' "${kind}" "${name}" "${tap}" "${tag}"
-      print -r -- "  every machine : new-machine brew decree ${kind}:${name} --global"
-      print -r -- "  this machine  : new-machine brew decree ${kind}:${name} --local"
-      print -r -- "  never declare : new-machine brew decree ${kind}:${name} --ignore-local --reason \"…\""
+      print -r -- "  every machine : ${CLI_NAME} brew decree ${kind}:${name} --global"
+      print -r -- "  this machine  : ${CLI_NAME} brew decree ${kind}:${name} --local"
+      print -r -- "  never declare : ${CLI_NAME} brew decree ${kind}:${name} --ignore-local --reason \"…\""
     done < <(jq -r --arg k "${kind}" '.undeclared[] | select(.kind == $k)
                | [.name, (.tap // "-"), ((.new // false) | tostring)] | @tsv' "${drift}")
   done
@@ -620,10 +620,10 @@ decree::commit_message() {  # <verb> <tier> <suffix> <item line>... ; suffix is 
   local verb="${1}" tier="${2}" suffix="${3}"; shift 3
   local -a items=("$@")
   if (( ${#items} == 1 )); then
-    print -r -- "new-machine: ${verb} ${items[1]} (${tier})${suffix}"
+    print -r -- "${CLI_NAME}: ${verb} ${items[1]} (${tier})${suffix}"
     return 0
   fi
-  print -r -- "new-machine: ${verb} ${#items} items (${tier})${suffix}"
+  print -r -- "${CLI_NAME}: ${verb} ${#items} items (${tier})${suffix}"
   print -r -- ""
   local item
   for item in "${items[@]}"; do print -r -- "- ${item}"; done
@@ -643,8 +643,8 @@ decree::decree() {
         if (( $# < 2 )); then log::err "--reason needs a value"; decree::help_decree >&2; return 64; fi
         reason="${2}"; shift ;;
       --reason=*) reason="${1#--reason=}" ;;
-      --dry-run) export NM_DRY_RUN=1 ;;
-      --no-push) export NM_NO_PUSH=1 ;;
+      --dry-run) export DOTFILES_DRY_RUN=1 ;;
+      --no-push) export DOTFILES_NO_PUSH=1 ;;
       --) shift; items+=("$@"); break ;;
       -*) log::err "unknown flag | flag='${1}'"; decree::help_decree >&2; return 64 ;;
       *) items+=("${1}") ;;
@@ -666,7 +666,7 @@ decree::decree() {
     decree::help_decree >&2
     return 64
   fi
-  nm::is_dry_run && log::warn "dry-run: no file is written, nothing is committed"
+  is_dry_run && log::warn "dry-run: no file is written, nothing is committed"
 
   decree::snapshot || return $?
 
@@ -784,11 +784,11 @@ decree::decree() {
   local -a paths add ign_add ign_del subj body
   # Every tier about to be edited must be able to take the commit, or the refusal would leave
   # an edited, uncommitted tier file behind.
-  if ! nm::is_dry_run; then
+  if ! is_dry_run; then
     for t in global local; do
       decree::plan_lines add "add_${t}"; decree::plan_lines ign_add "ign_add_${t}"; decree::plan_lines ign_del "ign_del_${t}"
       (( ${#add} + ${#ign_add} + ${#ign_del} )) || continue
-      dotfiles::index_clean "${t}" || return 1
+      tier::index_clean "${t}" || return 1
     done
   fi
   for t in global local; do
@@ -843,14 +843,14 @@ decree::decree() {
       [[ "${message}" == *$'\n'* ]] || message="${message}"$'\n'
       message="${message}"$'\n'"${(F)${(@)body/#/- }}"
     fi
-    if dotfiles::commit "${t}" "${message}" "${paths[@]}"; then
+    if tier::commit "${t}" "${message}" "${paths[@]}"; then
       committed=$(( committed + 1 ))
     else
       failed=1
     fi
   done
 
-  if nm::is_dry_run; then
+  if is_dry_run; then
     log::info "dry-run: re-classification skipped"
     return 0
   fi
@@ -879,8 +879,8 @@ decree::undecree() {
   while (( $# )); do
     case "${1}" in
       -h|--help) decree::help_undecree; return 0 ;;
-      --dry-run) export NM_DRY_RUN=1 ;;
-      --no-push) export NM_NO_PUSH=1 ;;
+      --dry-run) export DOTFILES_DRY_RUN=1 ;;
+      --no-push) export DOTFILES_NO_PUSH=1 ;;
       --) shift; items+=("$@"); break ;;
       -*) log::err "unknown flag | flag='${1}'"; decree::help_undecree >&2; return 64 ;;
       *) items+=("${1}") ;;
@@ -892,7 +892,7 @@ decree::undecree() {
     decree::help_undecree >&2
     return 64
   fi
-  nm::is_dry_run && log::warn "dry-run: no file is written, nothing is committed"
+  is_dry_run && log::warn "dry-run: no file is written, nothing is committed"
 
   decree::snapshot --no-classify || return $?
 
@@ -955,11 +955,11 @@ decree::undecree() {
 
   local committed=0 failed=0
   local -a paths del_brew del_ign subj body taps
-  if ! nm::is_dry_run; then
+  if ! is_dry_run; then
     for t in global local; do
       decree::plan_lines del_brew "del_brew_${t}"; decree::plan_lines del_ign "del_ign_${t}"
       (( ${#del_brew} + ${#del_ign} )) || continue
-      dotfiles::index_clean "${t}" || return 1
+      tier::index_clean "${t}" || return 1
     done
   fi
   for t in global local; do
@@ -1007,7 +1007,7 @@ decree::undecree() {
       [[ "${message}" == *$'\n'* ]] || message="${message}"$'\n'
       message="${message}"$'\n'"${(F)${(@)body/#/- }}"
     fi
-    if dotfiles::commit "${t}" "${message}" "${paths[@]}"; then
+    if tier::commit "${t}" "${message}" "${paths[@]}"; then
       committed=$(( committed + 1 ))
     else
       failed=1

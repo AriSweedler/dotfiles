@@ -1,5 +1,5 @@
 # Allowlist for the per-machine local-dotfiles repo (~/.local/local-dotfiles.git).
-# new-machine setup installs this as info/exclude on a fresh machine; a machine
+# `dotfiles setup` installs this as info/exclude on a fresh machine; a machine
 # that has edited its copy keeps it. Only hand-written local config is tracked;
 # tool-managed data, state, and caches under ~/.local never are.
 /*

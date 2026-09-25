@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 # Hand Ari a command or text: render the uniform chat block, or (only when he asked) copy
 # text to the clipboard. Recovery of a clobbered clipboard is Raycast's Clipboard History,
-# named through the `ari-raycast link` widget; this script never reads or restores the clipboard.
+# named through the `dotfiles raycast link` widget; this script never reads or restores the clipboard.
 # Run: zsh $HOME/.claude/skills/ari-clipboard-handoff/bin/handoff.zsh --help
 
 set -euo pipefail
@@ -17,8 +17,8 @@ source "${LIB_LOGGING}"
 
 # --- Environment variables ---
 
-# The dotfiles entrypoint whose `link` subsystem names Raycast's Clipboard History with its Karabiner binding.
-readonly ARI_RAYCAST="${HANDOFF_ARI_RAYCAST:-${XDG_CONFIG_HOME:-${HOME}/.config}/bin/ari-raycast}"
+# The dotfiles entrypoint; `dotfiles raycast link` names Raycast's Clipboard History with its Karabiner binding.
+readonly DOTFILES_BIN="${HANDOFF_DOTFILES_BIN:-${XDG_CONFIG_HOME:-${HOME}/.config}/bin/dotfiles}"
 
 # --- Constants ---
 
@@ -119,16 +119,16 @@ print_block() {
 
 #######################################
 # Name Raycast's Clipboard History with its binding, via the dotfiles widget when installed.
-# Globals: ARI_RAYCAST, HISTORY_FALLBACK
+# Globals: DOTFILES_BIN, HISTORY_FALLBACK
 # Returns: the plain widget line on stdout
 #######################################
 history_widget() {
   local line
-  if [[ -x "${ARI_RAYCAST}" ]] && line="$("${ARI_RAYCAST}" link clipboard-history --plain 2>/dev/null)" && [[ -n "${line}" ]]; then
+  if [[ -x "${DOTFILES_BIN}" ]] && line="$("${DOTFILES_BIN}" raycast link clipboard-history --plain 2>/dev/null)" && [[ -n "${line}" ]]; then
     echo "${line}"
     return
   fi
-  log::warn "ari-raycast unavailable; naming Clipboard History without its binding | ari_raycast='${ARI_RAYCAST}'"
+  log::warn "dotfiles raycast unavailable; naming Clipboard History without its binding | dotfiles_bin='${DOTFILES_BIN}'"
   echo "${HISTORY_FALLBACK}"
 }
 
@@ -177,7 +177,7 @@ ${c_bold}Options:${c_rst}
   -h, --help         Show this help
 
 ${c_bold}Environment:${c_rst}
-  HANDOFF_ARI_RAYCAST   Path of the ari-raycast entrypoint (default ${ARI_RAYCAST})
+  HANDOFF_DOTFILES_BIN  Path of the dotfiles entrypoint (default ${DOTFILES_BIN})
 
 ${c_bold}Examples:${c_rst}
   ${SELF} --print --step 1 --blocking --cmd 'gws auth login --scopes …' --expect 'scope_count 16 in gws auth status' --interactive

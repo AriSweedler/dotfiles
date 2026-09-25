@@ -1,4 +1,4 @@
-# raycast_link — the `link` subsystem of ari-raycast (bin/ari-raycast, plugin raycast.zsh): the
+# raycast_link — the `link` subsystem of `dotfiles raycast` (router: plugin raycast.zsh): the
 # widget that names a Raycast action with its Karabiner binding; the angle brackets wrap the
 # link and are not part of it:
 #   <[Raycast: Clipboard History | key: '✦4'](raycast://extensions/raycast/clipboard-history/clipboard-history)>
@@ -20,8 +20,8 @@
 #
 # Raycast asks "Always allow" once per command launched by deeplink and keeps the answers in the
 # plain plist com.raycast.macos (alwaysAllowCommandDeeplinking, <id> = 1); each binding's allowId
-# names its key, and --allow writes the missing ones so the prompt never shows. bake and
-# new-machine run --allow.
+# names its key, and --allow writes the missing ones so the prompt never shows. bake and the
+# raycast_sync step run --allow.
 #
 # Usage: raycast_link <slug|path> [--plain] | --list | --check | --allow [--dry-run]
 # Env: RAYCAST_LINK_KARABINER_TS (the karabiner.ts checkout), RAYCAST_LINK_KARABINER_JSON,
@@ -360,15 +360,15 @@ function raycast_link::check() {
 
 function raycast_link::help() {
   cat >&2 <<EOF
-ari-raycast link — a Raycast action as a link with its Karabiner binding
+dotfiles raycast link — a Raycast action as a link with its Karabiner binding
 
-  ari-raycast link <slug|path>          markdown: <[Raycast: Title | key: '✦4'](raycast://path)>
-  ari-raycast link <slug|path> --plain  <Raycast: Title | key: '✦4'> raycast://path
+  dotfiles raycast link <slug|path>          markdown: <[Raycast: Title | key: '✦4'](raycast://path)>
+  dotfiles raycast link <slug|path> --plain  <Raycast: Title | key: '✦4'> raycast://path
                                   slug = the deeplink path's last segment: clipboard-history, left-half, my-schedule
-  ari-raycast link list             one line per binding: slug, every chord (✦K D = Hyper+K then D), title, deeplink
-  ari-raycast link check            OK/MISSING per binding (direct chords, against the compiled karabiner.json;
+  dotfiles raycast link list             one line per binding: slug, every chord (✦K D = Hyper+K then D), title, deeplink
+  dotfiles raycast link check            OK/MISSING per binding (direct chords, against the compiled karabiner.json;
                                   layer chords show as 'layer' and are not verified), plus allowed/NOT-ALLOWED/no-allow-id
-  ari-raycast link allow [--dry-run]   write the missing allowIds to Raycast's plist so no deeplink asks "Always allow"
+  dotfiles raycast link allow [--dry-run]   write the missing allowIds to Raycast's plist so no deeplink asks "Always allow"
 
 Bindings come from karabiner.ts's tables: ${RAYCAST_LINK_KARABINER_TS}/src/modes/*.ts and
 src/raycast_shortcuts.ts, read through its generator. To change one, edit the table and run bake

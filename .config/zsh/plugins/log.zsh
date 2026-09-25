@@ -29,7 +29,7 @@ log::colors_off() {
 if [[ -t 2 && -z "${NO_COLOR:-}" ]]; then log::colors_on; else log::colors_off; fi
 
 # --- Preamble: ' [ts] [caller]', fork-free (strftime + funcstack), or nothing ---
-log::preamble_on() {
+log::is_preamble_on() {
   [[ -n "${OTTO_NO_PREAMBLE:-}" || -n "${AT_LOG_SKIP_PREAMBLE:-}" ]] && return 1
   case "${LOG_PREAMBLE:-}" in
     1|true|on) return 0 ;;
@@ -50,7 +50,7 @@ log::_caller() {
   print -rn -- "${funcstack[$i]:-main}"
 }
 log::preamble() {
-  log::preamble_on || return 0
+  log::is_preamble_on || return 0
   local ts
   strftime -s ts "%Y-%m-%dT%H:%M:%S" "${epochtime[1]}"
   printf ' [%s.%09dZ] [%s]' "${ts}" "${epochtime[2]}" "$(log::_caller)"
@@ -69,12 +69,12 @@ log::err() {
   [[ -n "${f}" ]] && print -r -- "$*" >> "${f}"
   return 0
 }
-log::debug_on() {
+log::is_debug_on() {
   [[ "${VERBOSE:-}" == (true|1) ]] && return 0
   [[ -n "${OTTO_DEBUG:-}" && "${OTTO_DEBUG}" != 0 ]] && return 0
   [[ -n "${AT_DEBUG:-}" && -f "${AT_DEBUG}" ]]
 }
-log::debug() { log::debug_on || return 0; log::_line "${c_grey}" '[DEBUG]' "$@"; }
+log::debug() { log::is_debug_on || return 0; log::_line "${c_grey}" '[DEBUG]' "$@"; }
 log::_err()   { log::err "$@"; }
 log::_debug() { log::debug "$@"; }
 

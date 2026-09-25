@@ -41,18 +41,18 @@ Trail:    /tmp/nmtest/home/.local/state/new-machine/verify.log
 
 1. In a terminal: `cd ~` and paste this one line:
 
-    claude "Read /tmp/nmtest/home/Desktop/new-machine-FAILED.md and /tmp/nmtest/home/.local/state/new-machine/verify/log.txt. Load the /ari-dotfiles skill first and follow its two-tier rules: shared tier (~/.config, git df) commit and NEVER push, end with 'Run dotfiles push when ready'; local tier (~/.local, git ldf) commit and then git ldf push. Diagnose why 'new-machine check' cannot run on this machine and fix it; do not silence the check. Finish with 'new-machine check --json' and show me the output."
+    claude "Read /tmp/nmtest/home/Desktop/new-machine-FAILED.md and /tmp/nmtest/home/.local/state/new-machine/verify/log.txt. Load the /ari-dotfiles skill first and follow its two-tier rules: shared tier (~/.config, git df) commit and NEVER push, end with 'Run dotfiles push when ready'; local tier (~/.local, git ldf) commit and then git ldf push. Diagnose why 'dotfiles healthcheck' cannot run on this machine and fix it; do not silence the check. Finish with 'dotfiles healthcheck --json' and show me the output."
 
 2. Rules for the fix (the /ari-dotfiles skill is canonical):
    - Declared brew state is the two Brewfiles: /tmp/nmtest/home/.config/new-machine/Brewfile (global, df) and
      /tmp/nmtest/home/.local/share/new-machine/Brewfile (local, ldf), plus `Brewfile.ignore` beside each.
-     Undeclared items are settled with `new-machine brew decree …`, never by editing brew's state and never with
+     Undeclared items are settled with `dotfiles brew decree …`, never by editing brew's state and never with
      `brew bundle cleanup`, `brew upgrade`, or `brew bundle add`.
-   - Do not install anything to make the check pass except `new-machine apply <step>`, which installs only what
+   - Do not install anything to make the check pass except `dotfiles apply <step>`, which installs only what
      the Brewfiles declare. Orphaned kegs need a human: propose the command, do not run it.
    - Never `--no-verify`; never commit a `*.secret.zsh`.
-   - If a finding is a false alarm, fix the checker in /tmp/nmtest/home/.config/new-machine/ and add a
-     tests/test_*.sh case that reproduces it; `bash /tmp/nmtest/home/.config/new-machine/tests/run.sh` must pass.
+   - If a finding is a false alarm, fix the checker in /tmp/nmtest/home/.config/dotfiles/steps/<step>.zsh and add a
+     tests/test_*.sh case that reproduces it; `dotfiles test` must pass.
    - Before fixing a row, read the prior fixes for that step; a repeat usually means the last fix's
      assumption broke (a tool renamed a binary, launchd's PATH changed):
        git df log --oneline --grep='fix(new-machine/<step>)'
@@ -63,5 +63,5 @@ Trail:    /tmp/nmtest/home/.local/state/new-machine/verify.log
 
 ## What "fixed" looks like
 
-`new-machine check` exits 0 and prints `status: ok`. The next weekly run (or `new-machine verify` now) moves this
+`dotfiles healthcheck` exits 0 and prints `status: ok`. The next weekly run (or `dotfiles verify` now) moves this
 file to /tmp/nmtest/home/.local/state/new-machine/reports/ and posts "verified OK".

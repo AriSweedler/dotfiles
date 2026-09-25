@@ -19,8 +19,8 @@ done < "${FX}/GOLDEN_ENV"
 # render <summary> <log> [render flags] → $FIX/render.out under the pinned golden environment
 render() {
   RC=0
-  env "${genv[@]}" zsh -c 'source "$1"; source "$2"; shift 2; "$@"' _ \
-    "${REPO_DIR}/lib/common.zsh" "${REPO_DIR}/lib/report.zsh" report::render "$@" > "${FIX}/render.out" 2> "${FIX}/render.err" || RC=$?
+  env "${genv[@]}" zsh -c 'for f in "$1"/*.zsh(N); do source "${f}"; done; source "$2"; shift 2; "$@"' _ \
+    "${ORIG_CONFIG_DIR}/dotfiles/lib" "${ORIG_CONFIG_DIR}/dotfiles/cmd/verify/report.zsh" report::render "$@" > "${FIX}/render.out" 2> "${FIX}/render.err" || RC=$?
   ERR="$(cat "${FIX}/render.err")"
 }
 
@@ -49,7 +49,7 @@ assert_contains "fail: title" "${out}" "# new-machine weekly check FAILED — te
 assert_contains "fail: What failed" "${out}" "## What failed"
 assert_contains "fail: brew_pkgs row" "${out}" "| brew_pkgs | formula cowsay | needs to be installed | global |"
 assert_contains "fail: undeclared table" "${out}" "## Undeclared brew items"
-assert_contains "fail: decree command" "${out}" "new-machine brew decree formula:gh --global"
+assert_contains "fail: decree command" "${out}" "dotfiles brew decree formula:gh --global"
 assert_contains "fail: new since line" "${out}" "New since the last run: formula gh, cask codex."
 assert_contains "fail: needs a human" "${out}" "## Needs a human"
 assert_contains "fail: orphan recipe" "${out}" "brew uninstall spacectl && brew tap spacelift-io/spacelift && brew install --cask spacelift-io/spacelift/spacectl"
@@ -74,7 +74,7 @@ jq '(.steps[] | select(.step == "brew_pkgs")) |= (.status = "warn" | .reason = "
   "${FX}/summary-fail.json" > "${FIX}/tapwarn.json"
 render "${FIX}/tapwarn.json" "${FX}/log.txt"
 assert_eq "tap warn: render exits 0" 0 "${RC}"
-assert_contains "tap warn: spec wording" "$(cat "${FIX}/render.out")" '- brew_pkgs: tap homebrew/autoupdate needs to be tapped (`new-machine setup` taps it; or delete the line)'
+assert_contains "tap warn: spec wording" "$(cat "${FIX}/render.out")" '- brew_pkgs: tap homebrew/autoupdate needs to be tapped (`dotfiles setup` taps it; or delete the line)'
 assert_not_contains "manual_font never reaches the weekly notes" "$(cat "${FIX}/render.out")" "terminal_nerdfont:"
 
 render "${FX}/summary-error.json" "${FX}/log.txt"
@@ -84,7 +84,7 @@ assert_contains "error: marker kind" "$(head -n 1 "${FIX}/render.out")" "kind=er
 assert_contains "error: title" "${out}" "# new-machine weekly check COULD NOT RUN — testhost, 2026-09-10 00:26"
 assert_contains "error: section" "${out}" "## The check itself could not run"
 assert_contains "error: brew_drift row" "${out}" "| brew_drift | timed_out |"
-assert_contains "error: Claude task" "${out}" "Diagnose why 'new-machine check' cannot run on this machine and fix it; do not silence the check."
+assert_contains "error: Claude task" "${out}" "Diagnose why 'dotfiles healthcheck' cannot run on this machine and fix it; do not silence the check."
 
 # ── fingerprint ───────────────────────────────────────────────────────────────
 fp() { zfn report.zsh report::fingerprint "$@"; printf '%s' "${OUT}"; }

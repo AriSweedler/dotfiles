@@ -7,7 +7,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 world_new
 world_use_fixture satisfied
 
-for f in "${REPO_DIR}/bin/new-machine" "${REPO_DIR}"/lib/*.zsh; do
+for f in "${ORIG_CONFIG_DIR}/bin/dotfiles" "${ORIG_CONFIG_DIR}"/dotfiles/lib/*.zsh "${ORIG_CONFIG_DIR}"/dotfiles/cmd/*.zsh "${ORIG_CONFIG_DIR}"/dotfiles/steps/*.zsh; do
   if zsh -n "${f}" 2> "${FIX}/syntax.err"; then pass "zsh -n $(basename "${f}")"
   else fail "zsh -n $(basename "${f}")" "$(cat "${FIX}/syntax.err")"; fi
 done
@@ -40,7 +40,17 @@ assert_eq "check --json prints one JSON object" 1 "$(jq -s 'map(select(type=="ob
 assert_json "schema == 1" "${f}" '.schema' 1
 assert_json "steps|length matches the registry" "${f}" '.steps|length' "${EXPECTED_STEPS}"
 
-nm_run "${HOME}/.config/new-machine/bin/setup-new-machine" --help
-assert_eq "setup-new-machine --help works through the symlinked \$0" 0 "${RC}"
+nm --help
+assert_eq "--help exits 0" 0 "${RC}"
+for verb in healthcheck setup apply steps verify brew push init jobs; do
+  assert_contains "--help lists ${verb}" "${OUT}" "dotfiles ${verb}"
+done
+nm push --help
+assert_eq "a verb answers --help" 0 "${RC}"
+assert_contains "push --help is push's help" "${OUT}" "publish every tier"
+nm --verbose --help
+assert_contains "--verbose --help prints every verb's help" "${OUT}" "Pushes every submodule"
+nm nosuch
+assert_eq "unknown verb exits 64" 64 "${RC}"
 
 report

@@ -1,8 +1,8 @@
-# Packages every machine gets. Installed by `new-machine setup` via `brew bundle`,
+# Packages every machine gets. Installed by `dotfiles setup` via `brew bundle`,
 # merged with the local tier's ~/.local/share/new-machine/Brewfile. Work-specific
 # tools (bazelisk, awscli, spr, ...) are installed by company tooling, not here.
 # Commented-out entries were deliberately excluded; don't uncomment without asking.
-# Add entries with `new-machine brew decree <name> --global`.
+# Add entries with `dotfiles brew decree <name> --global`.
 
 # Unix essentials
 brew "awk"
@@ -43,7 +43,7 @@ brew "jenv"
 # cask "intellij-idea"
 
 # Editor
-brew "bob"          # nvim version manager; new-machine setup installs neovim through it
+brew "bob"          # nvim version manager; the bob_neovim step installs neovim through it
 
 # Lang: misc
 brew "lua"

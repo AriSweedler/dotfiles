@@ -1,6 +1,27 @@
-# dotfiles/lib/jobs.zsh — `dotfiles jobs`: one launchd job runs every job plugin, from both tiers.
+# dotfiles/cmd/jobs.zsh — `dotfiles jobs`: one launchd job runs every job plugin, from both tiers.
 zmodload zsh/datetime
 zmodload zsh/stat
+
+help_jobs() {
+  cat <<EOF
+dotfiles jobs [list] | run NAME [--trigger T] | tick --trigger T | unlock | install | uninstall   the job plugins and their launchd job
+
+  One launchd job, ${JOBS_LABEL}: a resident agent that runs the plugins whose triggers match on
+  screen unlock (a distributed notification only a resident observer can hear), at login and every
+  ${JOBS_INTERVAL_SECONDS}s. A plugin is an executable in ${JOBS_ROOT_DF} (shared) or
+  ${JOBS_ROOT_LDF} (this machine) whose header has '# triggers: unlock load' and any
+  '# cron: m h dom mon dow' lines; it gets the trigger as \$1; the engine posts a banner when it ends
+  (an alert, click opens the log, on failure). The README beside the shared plugins has the contract.
+
+  list               every plugin, its triggers, last run and rc (the default)
+  run NAME           run one plugin now (trigger 'manual', or --trigger T); output to its log and stdout
+  tick --trigger T   what the agent runs: every plugin due for T (load, tick, screenIsUnlocked)
+  unlock             simulate a screen unlock (SIGUSR1 to the resident agent)
+  install|uninstall  the launchd job (init runs install); --dry-run applies
+
+  Logs and success stamps: ${JOBS_STATE_DIR}.
+EOF
+}
 
 # --- plugins ---
 
@@ -56,24 +77,14 @@ jobs_timeout() {
 }
 
 #######################################
-# Run a command, killing it (children first, then itself) after a limit. One hung plugin
-# must not hold the job: launchd never spawns a second instance while one runs, so a hang
-# would swallow every later trigger. Returns the command's rc, or 124 on the limit.
-# The watchdog holds no file descriptor and its sleep is killed with it: a background
-# `sleep` that inherited the caller's stdout would keep the pipe open, and the pipeline
-# reading it would wait the whole limit.
+# Run a plugin under the kernel's watchdog. One hung plugin must not hold the job: launchd
+# never spawns a second instance while one runs, so a hang would swallow every later trigger.
+# Returns the command's rc, or 124 on the limit (with_timeout kills the tree with TERM, then KILL).
 # Arguments: seconds, command...
 #######################################
 jobs_with_timeout() {
-  local seconds="${1}"; shift
-  local pid watchdog rc=0
-  "${@}" &
-  pid=$!
-  { sleep "${seconds}"; pkill -TERM -P "${pid}" 2>/dev/null; kill -TERM "${pid}" 2>/dev/null; sleep 5; pkill -KILL -P "${pid}" 2>/dev/null; kill -KILL "${pid}" 2>/dev/null; } >/dev/null 2>&1 </dev/null &
-  watchdog=$!
-  wait "${pid}" || rc=$?
-  pkill -P "${watchdog}" 2>/dev/null || true
-  kill "${watchdog}" 2>/dev/null || true
+  local rc=0
+  with_timeout "${@}" || rc=$?
   (( rc == 143 || rc == 137 )) && rc=124
   return "${rc}"
 }
@@ -107,7 +118,7 @@ jobs_cron_dow() {
 }
 
 # Returns 0 when a five-field expression is well formed, 2 otherwise (with the offending field).
-jobs_cron_valid() {
+jobs_is_cron_valid() {
   local -a f=("${@}")
   (( ${#f} == 5 )) || return 2
   local rc
@@ -157,10 +168,10 @@ jobs_cron_previous() {
 # warned about and never due.
 # Arguments: name, expression
 #######################################
-jobs_cron_due() {
+jobs_is_cron_due() {
   local name="${1}" expr="${2}" stamp="${JOBS_STATE_DIR}/${1}.ran" prev
   local -a f=(${=expr})
-  if ! jobs_cron_valid "${f[@]}"; then
+  if ! jobs_is_cron_valid "${f[@]}"; then
     log::warn "bad cron trigger; ignored | job='${name}' cron='${expr}' want='minute hour day-of-month month day-of-week'"; return 1
   fi
   prev="$(jobs_cron_previous "${f[@]}")" || return 1
@@ -214,7 +225,7 @@ jobs_run_one() {
 # not ignored.
 # Arguments: name, trigger
 #######################################
-jobs_plugin_due() {
+jobs_is_plugin_due() {
   local name="${1}" trigger="${2}" plugin="${JOB_PATH[${name}]}" t expr
   local periodic=1; [[ "${trigger}" == tick || "${trigger}" == load ]] && periodic=0
   for t in ${=$(jobs_triggers "${plugin}")}; do
@@ -226,7 +237,7 @@ jobs_plugin_due() {
   if (( periodic == 0 )); then
     for expr in "${(@f)$(jobs_crons "${plugin}")}"; do
       [[ -n "${expr}" ]] || continue
-      jobs_cron_due "${name}" "${expr}" && return 0
+      jobs_is_cron_due "${name}" "${expr}" && return 0
     done
   fi
   return 1
@@ -247,7 +258,7 @@ jobs_tick() {
   esac
   jobs_discover
   for name in "${(@ko)JOB_PATH}"; do
-    jobs_plugin_due "${name}" "${trigger}" || continue
+    jobs_is_plugin_due "${name}" "${trigger}" || continue
     ran=$(( ran + 1 ))
     jobs_run_one "${name}" "${trigger}" || rc=1
   done
@@ -292,17 +303,12 @@ jobs_list() {
 
 # --- notifications: the engine reports how every job ended, so no plugin can forget to ---
 
-# terminal-notifier, probed by absolute path because launchd's PATH may lack Homebrew. Without
-# it there is no banner: an osascript banner cannot be removed and would sit in Notification
-# Center forever.
+# terminal-notifier, probed by absolute path (probe_tool) because launchd's PATH may lack
+# Homebrew. Without it there is no banner: an osascript banner cannot be removed and would sit
+# in Notification Center forever.
 jobs_notifier_bin() {
-  local tn p
-  tn="$(command -v terminal-notifier 2>/dev/null || true)"
-  if [[ -z "${tn}" ]]; then
-    for p in /opt/homebrew/bin/terminal-notifier /usr/local/bin/terminal-notifier; do
-      [[ -x "${p}" ]] && { tn="${p}"; break; }
-    done
-  fi
+  local tn
+  tn="$(probe_tool terminal-notifier)"
   [[ -n "${tn}" ]] || return 1
   print -r -- "${tn}"
 }
@@ -502,12 +508,12 @@ jobs_install() {
   for label in "${JOBS_LEGACY_LABELS[@]}"; do
     plist="${HOME}/Library/LaunchAgents/${label}.plist"
     [[ -f "${plist}" ]] || launchctl print "gui/$(id -u)/${label}" >/dev/null 2>&1 || continue
-    if [[ "${DRY_RUN}" == true ]]; then log::info "dry-run, would remove legacy job | label='${label}'"; continue; fi
+    if is_dry_run; then log::info "dry-run, would remove legacy job | label='${label}'"; continue; fi
     launchctl bootout "gui/$(id -u)/${label}" 2>/dev/null || true
     rm -f "${plist}"
     log::info "removed legacy job | label='${label}' plist='${plist}'"
   done
-  if [[ "${DRY_RUN}" == true ]]; then
+  if is_dry_run; then
     log::info "dry-run, would compile the agent, write the plist and bootstrap, each only if changed | label='${JOBS_LABEL}' plist='${JOBS_PLIST}'"; return 0
   fi
   mkdir -p "${JOBS_STATE_DIR}"
@@ -540,12 +546,13 @@ jobs_simulate_unlock() {
 # --- command ---
 
 cmd_jobs() {
-  local sub="${JOBS_ARGS[1]:-list}" trigger=manual name=""
-  local -a rest=("${JOBS_ARGS[@]:1}")
-  while (( ${#rest} > 0 )); do case "${rest[1]}" in
-    --trigger) trigger="${rest[2]:?--trigger requires a value}"; rest=("${rest[@]:2}") ;;
-    -*) log::err "Unknown jobs flag | flag='${rest[1]}'"; return 1 ;;
-    *) name="${rest[1]}"; rest=("${rest[@]:1}") ;;
+  local sub="${1:-list}" trigger=manual name=""
+  (( $# > 0 )) && shift
+  while (( $# > 0 )); do case "${1}" in
+    --trigger) trigger="${2:?--trigger requires a value}"; shift 2 ;;
+    --dry-run) export DOTFILES_DRY_RUN=1; shift ;;
+    -*) usage_error "Unknown jobs flag | flag='${1}'" ;;
+    *) name="${1}"; shift ;;
   esac; done
   case "${sub}" in
     list) jobs_list ;;

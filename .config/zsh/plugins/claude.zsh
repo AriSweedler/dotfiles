@@ -22,13 +22,13 @@ function vi_::claude_settings_local() {
 }
 alias vi_cset=vi_::claude_settings_local
 
-# Notification hook wiring is new-machine's claude_notifications step; the Monday
+# Notification hook wiring is the dotfiles' claude_notifications step; the Monday
 # launchd verify runs it in the background, so nothing here runs at shell startup.
 function claude::hook::check() {
-  new-machine check --only claude_notifications "$@"
+  dotfiles healthcheck --only claude_notifications "$@"
 }
 function claude::hook::register() {
-  new-machine apply claude_notifications "$@"
+  dotfiles apply claude_notifications "$@"
 }
 
 # Claude Code prints "Resume this session with: claude --resume <uuid>" on exit. Pull the

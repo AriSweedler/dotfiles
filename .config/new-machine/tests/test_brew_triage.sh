@@ -21,15 +21,15 @@ bump_now_secs 60
 nm brew triage
 assert_eq "triage with drift exits 1" 1 "${RC}"
 assert_row "row for formula gh" formula gh
-assert_contains "every-machine command" "${OUT}" "new-machine brew decree formula:gh --global"
-assert_contains "this-machine command" "${OUT}" "new-machine brew decree formula:gh --local"
-assert_contains "never-declare command" "${OUT}" "new-machine brew decree formula:gh --ignore-local --reason"
+assert_contains "every-machine command" "${OUT}" "dotfiles brew decree formula:gh --global"
+assert_contains "this-machine command" "${OUT}" "dotfiles brew decree formula:gh --local"
+assert_contains "never-declare command" "${OUT}" "dotfiles brew decree formula:gh --ignore-local --reason"
 assert_row "cask row" cask google-chrome
-assert_contains "cask commands use the cask: prefix" "${OUT}" "new-machine brew decree cask:google-chrome --local"
+assert_contains "cask commands use the cask: prefix" "${OUT}" "dotfiles brew decree cask:google-chrome --local"
 assert_row "tap row" tap hashicorp/tap
 assert_row "vscode row" vscode ms-python.python
 assert_contains "orphan recipe" "${OUT}" "brew uninstall spacectl && brew tap spacelift-io/spacelift && brew install --cask spacelift-io/spacelift/spacectl"
-assert_contains "orphan follow-up decree" "${OUT}" "new-machine brew decree cask:spacelift-io/spacelift/spacectl --local"
+assert_contains "orphan follow-up decree" "${OUT}" "dotfiles brew decree cask:spacelift-io/spacelift/spacectl --local"
 assert_contains "ignored section names the item" "${OUT}" "libtiff"
 assert_contains "ignored section prints the reason" "${OUT}" "library brew marks on-request"
 

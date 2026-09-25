@@ -45,7 +45,7 @@ assert_file "second consecutive error files the ERROR report" "${REPORT}"
 assert_contains "marker kind=error" "$(head -n 1 "${REPORT}")" "kind=error"
 assert_contains "ERROR section" "$(cat "${REPORT}")" "## The check itself could not run"
 assert_contains "ERROR report names brew_busy" "$(cat "${REPORT}")" "brew_busy"
-assert_contains "ERROR Claude task" "$(cat "${REPORT}")" "Diagnose why 'new-machine check' cannot run"
+assert_contains "ERROR Claude task" "$(cat "${REPORT}")" "Diagnose why 'dotfiles healthcheck' cannot run"
 assert_no_mutation "erroring verify is read-only"
 world_teardown
 

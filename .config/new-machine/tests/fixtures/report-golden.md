@@ -19,9 +19,9 @@ State lives in /tmp/nmtest/home/.local/state/new-machine/ · machine-readable: l
 
 | kind | name | from | every machine | this machine | never declare |
 |---|---|---|---|---|---|
-| formula | gh | homebrew/core | `new-machine brew decree formula:gh --global` | `new-machine brew decree formula:gh --local` | `new-machine brew decree formula:gh --ignore-local --reason "…"` |
-| formula | python@3.10 | homebrew/core | `new-machine brew decree formula:python@3.10 --global` | `new-machine brew decree formula:python@3.10 --local` | `new-machine brew decree formula:python@3.10 --ignore-local --reason "…"` |
-| cask | codex | homebrew/cask | `new-machine brew decree cask:codex --global` | `new-machine brew decree cask:codex --local` | `new-machine brew decree cask:codex --ignore-local --reason "…"` |
+| formula | gh | homebrew/core | `dotfiles brew decree formula:gh --global` | `dotfiles brew decree formula:gh --local` | `dotfiles brew decree formula:gh --ignore-local --reason "…"` |
+| formula | python@3.10 | homebrew/core | `dotfiles brew decree formula:python@3.10 --global` | `dotfiles brew decree formula:python@3.10 --local` | `dotfiles brew decree formula:python@3.10 --ignore-local --reason "…"` |
+| cask | codex | homebrew/cask | `dotfiles brew decree cask:codex --global` | `dotfiles brew decree cask:codex --local` | `dotfiles brew decree cask:codex --ignore-local --reason "…"` |
 
 New since the last run: formula gh, cask codex.
 
@@ -29,7 +29,7 @@ New since the last run: formula gh, cask codex.
 
 - `spacelift-io/spacelift/spacectl` is an orphaned keg: the tap converted the formula to a cask. Run
   `brew uninstall spacectl && brew tap spacelift-io/spacelift && brew install --cask spacelift-io/spacelift/spacectl`,
-  then `new-machine brew decree cask:spacelift-io/spacelift/spacectl --local`.
+  then `dotfiles brew decree cask:spacelift-io/spacelift/spacectl --local`.
 
 ## Also noted (warnings, no report on their own)
 
@@ -62,18 +62,18 @@ Trail:    /tmp/nmtest/home/.local/state/new-machine/verify.log
 
 1. In a terminal: `cd ~` and paste this one line:
 
-    claude "Read /tmp/nmtest/home/Desktop/new-machine-FAILED.md and /tmp/nmtest/home/.local/state/new-machine/verify/log.txt. Load the /ari-dotfiles skill first and follow its two-tier rules: shared tier (~/.config, git df) commit and NEVER push, end with 'Run dotfiles push when ready'; local tier (~/.local, git ldf) commit and then git ldf push. Fix every row under 'What failed', following the rules below it (check prior fixes with git df log first; commit with the fix(new-machine/<step>) header). For brew items run 'new-machine brew triage' and propose one 'new-machine brew decree ...' per item; I decide the tier. Finish with 'new-machine check --json' and show me the output."
+    claude "Read /tmp/nmtest/home/Desktop/new-machine-FAILED.md and /tmp/nmtest/home/.local/state/new-machine/verify/log.txt. Load the /ari-dotfiles skill first and follow its two-tier rules: shared tier (~/.config, git df) commit and NEVER push, end with 'Run dotfiles push when ready'; local tier (~/.local, git ldf) commit and then git ldf push. Fix every row under 'What failed', following the rules below it (check prior fixes with git df log first; commit with the fix(new-machine/<step>) header). For brew items run 'dotfiles brew triage' and propose one 'dotfiles brew decree ...' per item; I decide the tier. Finish with 'dotfiles healthcheck --json' and show me the output."
 
 2. Rules for the fix (the /ari-dotfiles skill is canonical):
    - Declared brew state is the two Brewfiles: /tmp/nmtest/home/.config/new-machine/Brewfile (global, df) and
      /tmp/nmtest/home/.local/share/new-machine/Brewfile (local, ldf), plus `Brewfile.ignore` beside each.
-     Undeclared items are settled with `new-machine brew decree …`, never by editing brew's state and never with
+     Undeclared items are settled with `dotfiles brew decree …`, never by editing brew's state and never with
      `brew bundle cleanup`, `brew upgrade`, or `brew bundle add`.
-   - Do not install anything to make the check pass except `new-machine apply <step>`, which installs only what
+   - Do not install anything to make the check pass except `dotfiles apply <step>`, which installs only what
      the Brewfiles declare. Orphaned kegs need a human: propose the command, do not run it.
    - Never `--no-verify`; never commit a `*.secret.zsh`.
-   - If a finding is a false alarm, fix the checker in /tmp/nmtest/home/.config/new-machine/ and add a
-     tests/test_*.sh case that reproduces it; `bash /tmp/nmtest/home/.config/new-machine/tests/run.sh` must pass.
+   - If a finding is a false alarm, fix the checker in /tmp/nmtest/home/.config/dotfiles/steps/<step>.zsh and add a
+     tests/test_*.sh case that reproduces it; `dotfiles test` must pass.
    - Before fixing a row, read the prior fixes for that step; a repeat usually means the last fix's
      assumption broke (a tool renamed a binary, launchd's PATH changed):
        git df log --oneline --grep='fix(new-machine/<step>)'
@@ -84,5 +84,5 @@ Trail:    /tmp/nmtest/home/.local/state/new-machine/verify.log
 
 ## What "fixed" looks like
 
-`new-machine check` exits 0 and prints `status: ok`. The next weekly run (or `new-machine verify` now) moves this
+`dotfiles healthcheck` exits 0 and prints `status: ok`. The next weekly run (or `dotfiles verify` now) moves this
 file to /tmp/nmtest/home/.local/state/new-machine/reports/ and posts "verified OK".

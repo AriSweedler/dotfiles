@@ -1,6 +1,6 @@
 # The weekly Desktop report: fingerprint, render, decide, write. Requires common.zsh to be
 # sourced first (the CLI, every step subprocess and the test harness's zfn all do) for the
-# NEW_MACHINE_* contract, log::*, note and nm::plural. Side-effect-free at source time.
+# NEW_MACHINE_* contract, log::*, note and plural. Side-effect-free at source time.
 #
 # Public contract:
 #   report::fingerprint <summary.json> [fail|error]
@@ -24,7 +24,7 @@
 #       extended with {report: written|unchanged|archived|left_edited|none, last_result: {…}}.
 
 if (( ! ${+REPORT_BASENAME} )); then
-  readonly REPORT_BASENAME='new-machine-FAILED.md'
+  typeset -gr REPORT_BASENAME='new-machine-FAILED.md'
 fi
 
 report::_today() { local d; strftime -s d '%Y-%m-%d' "${NEW_MACHINE_NOW}"; print -r -- "${d}"; }
@@ -72,7 +72,7 @@ report::fingerprint() {
 # Shared jq prelude for the row renderers. Table cells must stay on one line and must not
 # contain an unescaped pipe.
 if (( ! ${+REPORT_JQ_PRELUDE} )); then
-readonly REPORT_JQ_PRELUDE='
+typeset -gr REPORT_JQ_PRELUDE='
   def kind_rank: {"formula":0,"cask":1,"tap":2,"vscode":3}[.] // 9;
   def cell: tostring | gsub("\n"; " ⏎ ") | gsub("\\|"; "\\|");
   def code: if . == null or . == "" then "—" else "`" + . + "`" end;
@@ -110,12 +110,12 @@ report::_rows_errors() {
 }
 
 report::_rows_undeclared() {
-  jq -r "${REPORT_JQ_PRELUDE}"'
+  jq -r --arg cli "${CLI_NAME}" "${REPORT_JQ_PRELUDE}"'
     (.brew.undeclared // []) | sort_by([(.kind | kind_rank), .name])[]
     | "| \(.kind) | \(.name | cell) | \((.tap // "—") | cell)"
-      + " | `new-machine brew decree \(.kind):\(.name) --global`"
-      + " | `new-machine brew decree \(.kind):\(.name) --local`"
-      + " | `new-machine brew decree \(.kind):\(.name) --ignore-local --reason \"…\"` |"' "${1}"
+      + " | `\($cli) brew decree \(.kind):\(.name) --global`"
+      + " | `\($cli) brew decree \(.kind):\(.name) --local`"
+      + " | `\($cli) brew decree \(.kind):\(.name) --ignore-local --reason \"…\"` |"' "${1}"
 }
 
 report::_line_new_since() {
@@ -127,28 +127,28 @@ report::_line_new_since() {
 }
 
 report::_bullets_human() {
-  jq -r "${REPORT_JQ_PRELUDE}"'
+  jq -r --arg cli "${CLI_NAME}" "${REPORT_JQ_PRELUDE}"'
     def keg: split("/") | last;
     def tap: split("/") | if length >= 3 then (.[0:2] | join("/")) else "" end;
     def tiers: (.tiers // (if (.tier // "") == "" then [] else [.tier] end));
     [ (.brew.orphan_keg // [])[]
       | .name as $n | ($n | keg) as $keg | ($n | tap) as $tap | (.hint // "") as $h
       | if ($h | startswith("the tap now ships cask")) then
-          "- `\($n)` is an orphaned keg: the tap converted the formula to a cask. Run\n  `brew uninstall \($keg) && brew tap \($tap) && brew install --cask \($n)`,\n  then `new-machine brew decree cask:\($n) --local`."
+          "- `\($n)` is an orphaned keg: the tap converted the formula to a cask. Run\n  `brew uninstall \($keg) && brew tap \($tap) && brew install --cask \($n)`,\n  then `\($cli) brew decree cask:\($n) --local`."
         elif $h == "tap not tapped" then
           "- `\($n)` is an orphaned keg: its tap \($tap) is not tapped. Run `brew tap \($tap)` to restore it, or\n  `brew uninstall \($keg)` if it is no longer wanted."
         else
           "- `\($n)` is an orphaned keg (\(if $h == "" then "formula removed from tap" else $h end)): a fresh machine cannot install it. Run\n  `brew uninstall \($keg)` if it is no longer wanted; otherwise find where the formula moved and declare that."
         end ]
     + [ (.brew.declared_orphan // [])[]
-        | "- \(.kind) `\(.name)` is declared\(if (tiers | length) > 0 then " in " + (tiers | join(", ")) else "" end) but its keg is orphaned (see above): a fresh machine cannot install it. Repair the keg, then\n  `new-machine brew undecree \(.kind):\(.name)` and decree the replacement." ]
+        | "- \(.kind) `\(.name)` is declared\(if (tiers | length) > 0 then " in " + (tiers | join(", ")) else "" end) but its keg is orphaned (see above): a fresh machine cannot install it. Repair the keg, then\n  `\($cli) brew undecree \(.kind):\(.name)` and decree the replacement." ]
     + [ (.brew.duplicate // [])[]
-        | "- \(.kind) `\(.name)` is declared twice (\(tiers | join(", "))): remove one line by hand, or `new-machine brew undecree \(.kind):\(.name)` if decree wrote it." ]
+        | "- \(.kind) `\(.name)` is declared twice (\(tiers | join(", "))): remove one line by hand, or `\($cli) brew undecree \(.kind):\(.name)` if decree wrote it." ]
     | .[]' "${1}"
 }
 
 report::_bullets_noted() {
-  jq -r "${REPORT_JQ_PRELUDE}"'
+  jq -r --arg cli "${CLI_NAME}" "${REPORT_JQ_PRELUDE}"'
     def oneline: gsub("\n"; "; ");
     def amb: nm + (if (type == "object" and (.candidates // []) != []) then " → " + (.candidates | join(", ")) else "" end);
     [ .steps[] | select(.status == "warn" and .reason != "manual_font") | . as $st
@@ -156,7 +156,7 @@ report::_bullets_noted() {
           "- \(.step): \((if (.detail // "") == "" then .reason else .detail end) | oneline)\($st.fix | fixsfx)"
         else .items[]
           | if .kind == "tap" and .problem == "needs to be tapped" then
-              "- \($st.step): tap \(.name) needs to be tapped (`new-machine setup` taps it; or delete the line)"
+              "- \($st.step): tap \(.name) needs to be tapped (`\($cli) setup` taps it; or delete the line)"
             else "- \($st.step): \(.kind) \(.name) \(.problem // "")\($st.fix | fixsfx)" end
         end ]
     + [ (.brew.untrusted_taps // [])[] | "- brew_drift: declared tap \(nm) lacks `trusted: true`" ]
@@ -213,7 +213,7 @@ report::render() {
   else
     lead="${fails} of ${total} checks failed"
   fi
-  lead+=", $(nm::plural "${warns}" warning warnings)."
+  lead+=", $(plural "${warns}" warning warnings)."
 
   print -r -- "<!-- new-machine-report v1 fingerprint=${fp} run_id=${run_id} first_seen=${first_seen} kind=${kind} -->"
   if [[ "${kind}" == error ]]; then
@@ -222,7 +222,7 @@ report::render() {
     print -r -- "# new-machine weekly check FAILED — ${host}, ${stamp}"
   fi
   print -r -- ""
-  print -r -- "${lead} First seen ${first_seen} ($(nm::plural "${weeks}" week weeks)). This file is rewritten only when the set of"
+  print -r -- "${lead} First seen ${first_seen} ($(plural "${weeks}" week weeks)). This file is rewritten only when the set of"
   print -r -- 'problems changes; the same failure gets a banner, not a new file. Deleting it means "acknowledged".'
   print -r -- "State lives in ${state_dir}/ · machine-readable: last-check.json"
   print -r -- ""
@@ -292,27 +292,27 @@ report::render() {
 
   local task
   if [[ "${kind}" == error ]]; then
-    task="Diagnose why 'new-machine check' cannot run on this machine and fix it; do not silence the check."
+    task="Diagnose why '${CLI_NAME} healthcheck' cannot run on this machine and fix it; do not silence the check."
   else
-    task="Fix every row under 'What failed', following the rules below it (check prior fixes with git df log first; commit with the fix(new-machine/<step>) header). For brew items run 'new-machine brew triage' and propose one 'new-machine brew decree ...' per item; I decide the tier."
+    task="Fix every row under 'What failed', following the rules below it (check prior fixes with git df log first; commit with the fix(new-machine/<step>) header). For brew items run '${CLI_NAME} brew triage' and propose one '${CLI_NAME} brew decree ...' per item; I decide the tier."
   fi
   cat <<EOF
 ## How to feed this to Claude
 
 1. In a terminal: \`cd ~\` and paste this one line:
 
-    claude "Read ${report_path} and ${log_path}. Load the /ari-dotfiles skill first and follow its two-tier rules: shared tier (~/.config, git df) commit and NEVER push, end with 'Run dotfiles push when ready'; local tier (~/.local, git ldf) commit and then git ldf push. ${task} Finish with 'new-machine check --json' and show me the output."
+    claude "Read ${report_path} and ${log_path}. Load the /ari-dotfiles skill first and follow its two-tier rules: shared tier (~/.config, git df) commit and NEVER push, end with 'Run dotfiles push when ready'; local tier (~/.local, git ldf) commit and then git ldf push. ${task} Finish with '${CLI_NAME} healthcheck --json' and show me the output."
 
 2. Rules for the fix (the /ari-dotfiles skill is canonical):
    - Declared brew state is the two Brewfiles: ${HOME}/.config/new-machine/Brewfile (global, df) and
      ${local_dir}/Brewfile (local, ldf), plus \`Brewfile.ignore\` beside each.
-     Undeclared items are settled with \`new-machine brew decree …\`, never by editing brew's state and never with
+     Undeclared items are settled with \`${CLI_NAME} brew decree …\`, never by editing brew's state and never with
      \`brew bundle cleanup\`, \`brew upgrade\`, or \`brew bundle add\`.
-   - Do not install anything to make the check pass except \`new-machine apply <step>\`, which installs only what
+   - Do not install anything to make the check pass except \`${CLI_NAME} apply <step>\`, which installs only what
      the Brewfiles declare. Orphaned kegs need a human: propose the command, do not run it.
    - Never \`--no-verify\`; never commit a \`*.secret.zsh\`.
-   - If a finding is a false alarm, fix the checker in ${HOME}/.config/new-machine/ and add a
-     tests/test_*.sh case that reproduces it; \`bash ${HOME}/.config/new-machine/tests/run.sh\` must pass.
+   - If a finding is a false alarm, fix the checker in ${HOME}/.config/dotfiles/steps/<step>.zsh and add a
+     tests/test_*.sh case that reproduces it; \`${CLI_NAME} test\` must pass.
    - Before fixing a row, read the prior fixes for that step; a repeat usually means the last fix's
      assumption broke (a tool renamed a binary, launchd's PATH changed):
        git df log --oneline --grep='fix(new-machine/<step>)'
@@ -323,7 +323,7 @@ report::render() {
 
 ## What "fixed" looks like
 
-\`new-machine check\` exits 0 and prints \`status: ok\`. The next weekly run (or \`new-machine verify\` now) moves this
+\`${CLI_NAME} healthcheck\` exits 0 and prints \`status: ok\`. The next weekly run (or \`${CLI_NAME} verify\` now) moves this
 file to ${state_dir}/reports/ and posts "verified OK".
 EOF
 }
@@ -460,7 +460,7 @@ report::decide() {
 
   if [[ "${kind}" == pass ]]; then
     action=clear
-    hud_message="new-machine: verified OK (${checks} checks)"
+    hud_message="${CLI_NAME}: verified OK (${checks} checks)"
     hud_seconds=2
     for candidate in "${candidates[@]}"; do
       existing="$(report::_inspect "${candidate}" "${last_sha}")"
@@ -476,7 +476,7 @@ report::decide() {
     weeks="${last_weeks}"
     report_path="${last_report_path}"
     report_sha="${last_sha}"
-    hud_message="new-machine: check could not run ($(jq -r 'join(", ")' <<< "${error_reasons}")); retrying next week"
+    hud_message="${CLI_NAME}: check could not run ($(jq -r 'join(", ")' <<< "${error_reasons}")); retrying next week"
     hud_seconds=8
   elif [[ "${fp}" == "${last_fp}" && "${force}" == false ]]; then
     action=unchanged
@@ -484,7 +484,7 @@ report::decide() {
     weeks=$(( last_weeks + 1 ))
     report_path="${last_report_path}"
     report_sha="${last_sha}"
-    hud_message="new-machine: still failing since ${first_seen} (${weeks} wk) — Desktop report, or: new-machine verify --force-report"
+    hud_message="${CLI_NAME}: still failing since ${first_seen} (${weeks} wk) — Desktop report, or: ${CLI_NAME} verify --force-report"
   else
     action=write
     if [[ "${fp}" == "${last_fp}" ]]; then
@@ -526,7 +526,7 @@ report::decide() {
       done
       report_path="${target}"
     fi
-    hud_message="new-machine: ${problems} problems — report on Desktop"
+    hud_message="${CLI_NAME}: ${problems} problems — report on Desktop"
     hud_open="file://${report_path}"
   fi
 

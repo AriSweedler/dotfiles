@@ -29,7 +29,7 @@ assert_eq "tier held, farm empty → fail" fail "$(step_get claude_skills .statu
 assert_eq "reason links_missing" links_missing "$(step_get claude_skills .reason)"
 assert_contains "detail names foo" "$(step_get claude_skills .detail)" "foo"
 assert_contains "detail names the registry itself" "$(step_get claude_skills .detail)" "ari-dotfiles-skill-registry"
-assert_eq "fix is apply" "new-machine apply claude_skills" "$(step_get claude_skills .fix)"
+assert_eq "fix is apply" "dotfiles apply claude_skills" "$(step_get claude_skills .fix)"
 
 bump_now_secs 60
 nm apply claude_skills

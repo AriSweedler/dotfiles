@@ -3,15 +3,16 @@
 # (lib/brew_classify.jq), the busy guard, and the verdict helpers the brew steps call.
 #
 # Requires common.zsh to be sourced first for the NEW_MACHINE_* contract, the tier file paths,
-# log::* and nm::plural. Side-effect-free at source time. stdout is data (JSON or text), stderr
+# log::* and plural. Side-effect-free at source time. stdout is data (JSON or text), stderr
 # is logs. Every brew call here is read-only except brew::apply_pkgs, which goes through
 # run_cmd_mutating. Functions that need the step context (verdict, RUN_DIR, STEP) say so.
 
+# -g: this file is sourced from inside a function (need_lib), where a bare readonly would be local.
 if (( ! ${+BREW_LIB_DIR} )); then
-  readonly BREW_LIB_DIR="${${(%):-%x}:A:h}"
+  typeset -gr BREW_LIB_DIR="${${(%):-%x}:A:h}"
 fi
 if (( ! ${+BREW_KINDS} )); then
-  readonly -a BREW_KINDS=(formula cask tap vscode)
+  typeset -gra BREW_KINDS=(formula cask tap vscode)
 fi
 
 # stdin lines → JSON array of non-empty strings.
@@ -729,22 +730,22 @@ brew::check_pkgs_verdict() {
   if (( n_conflict > 0 )); then
     # Installing would unlink a formula to satisfy the other declaration; a human fixes the Brewfiles.
     verdict fail brewfile_conflict -m \
-      -d "$(nm::plural "${n_conflict}" 'declared formula conflicts' 'declared formulae conflict') with another declaration (needs to be unlinked)" \
+      -d "$(plural "${n_conflict}" 'declared formula conflicts' 'declared formulae conflict') with another declaration (needs to be unlinked)"\
       -f "new-machine brew triage" -i "${items_file}"
     return 0
   fi
   if (( n_missing > 0 )); then
     local detail
-    detail="$(nm::plural "${n_missing}" 'declared item' 'declared items') not installed"
+    detail="$(plural "${n_missing}" 'declared item' 'declared items') not installed"
     if (( n_tap > 0 )); then
-      detail+="; $(nm::plural "${n_tap}" 'tap' 'taps') not tapped"
+      detail+="; $(plural "${n_tap}" 'tap' 'taps') not tapped"
     fi
     verdict fail missing -d "${detail}" -f "new-machine apply brew_pkgs" -i "${items_file}"
     return 0
   fi
   if (( n_tap > 0 )); then
     verdict warn missing_tap -a \
-      -d "$(nm::plural "${n_tap}" 'declared tap' 'declared taps') not tapped" \
+      -d "$(plural "${n_tap}" 'declared tap' 'declared taps') not tapped" \
       -f "new-machine apply brew_pkgs" -i "${items_file}"
     return 0
   fi

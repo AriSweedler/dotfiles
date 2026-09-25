@@ -1,14 +1,14 @@
-# raycast — one entrypoint for everything that keeps Raycast in parity with the dotfiles:
-#   ari-raycast link <slug|path> [--plain]   the widget: <[Raycast: Title | key: '✦4'](raycast://…)>
-#   ari-raycast link list | check | allow [--dry-run]
-#   ari-raycast snippets sync [--dry-run] | list | check | adopt | pull FILE | diff FILE
-#                        | move NAME --to shared|local | fmt | reset-manifest [NAME...]
-#   ari-raycast sync [--dry-run]             every subsystem's sync, in order
-#   ari-raycast help | <subsystem> help
+# raycast — the router behind `dotfiles raycast`, and the interactive function `ari_raycast`:
+#   dotfiles raycast link <slug|path> [--plain]   the widget: <[Raycast: Title | key: '✦4'](raycast://…)>
+#   dotfiles raycast link list | check | allow [--dry-run]
+#   dotfiles raycast snippets sync [--dry-run] | list | check | adopt | pull FILE | diff FILE
+#                             | move NAME --to shared|local | fmt | reset-manifest [NAME...]
+#   dotfiles raycast sync [--dry-run]             every subsystem's sync, in order
+#   dotfiles raycast help | <subsystem> help
 # Each subsystem is its own plugin (raycast_link.zsh, raycast_snippets.zsh) with a function that is
 # callable on its own; this file only routes, and holds the one array `sync` walks, so adding a
-# subsystem is a line here plus its plugin. new-machine calls `ari-raycast sync`; bake calls
-# `ari-raycast link allow`, because a bindings change only touches the allow-list.
+# subsystem is a line here plus its plugin. The raycast_sync step runs `sync --dry-run`; bake
+# calls `link allow`, because a bindings change only touches the allow-list.
 # Env: ARI_RAYCAST_APP (Raycast's app bundle; absent = `sync` skips, exit 0).
 
 (( ${+functions[log::info]} )) || source "${${(%):-%x}:A:h}/log.zsh"
@@ -19,31 +19,33 @@
 (( ${+ARI_RAYCAST_SUBSYSTEMS} )) || typeset -gra ARI_RAYCAST_SUBSYSTEMS=(link snippets)
 # What `ari-raycast sync` runs, in order. Each step accepts --dry-run and prints its work as
 # key=value counters (would_add=, pending=, added=, imported=, changed=), which sync reports and
-# sums, plus `warn <text>` lines, which sync forwards (new-machine shows them as a warn).
+# sums, plus `warn <text>` lines, which sync forwards (the raycast_sync step shows them as a warn).
 typeset -ga ARI_RAYCAST_SYNC_STEPS=("link allow" "snippets sync")
 : "${ARI_RAYCAST_APP:=/Applications/Raycast.app}"
 
 function ari_raycast::help() {
   cat >&2 <<EOF
-ari-raycast — keep Raycast in parity with the dotfiles
+dotfiles raycast — keep Raycast in parity with the dotfiles
 
-  ari-raycast link <slug|path> [--plain]     a Raycast action as a link with its Karabiner key
-  ari-raycast link list | check | allow [--dry-run]
-  ari-raycast snippets sync [--dry-run] | list | check | adopt | pull FILE | diff FILE
-                       | move NAME --to shared|local | fmt | reset-manifest [NAME...]
-  ari-raycast sync [--dry-run]               every subsystem's sync, in order: ${(j:, :)ARI_RAYCAST_SYNC_STEPS}
-  ari-raycast <subsystem> help               that subsystem's usage
-  ari-raycast help
+Usage:
+  dotfiles raycast link <slug|path> [--plain]     a Raycast action as a link with its Karabiner key
+  dotfiles raycast link list | check | allow [--dry-run]
+  dotfiles raycast snippets sync [--dry-run] | list | check | adopt | pull FILE | diff FILE
+                          | move NAME --to shared|local | fmt | reset-manifest [NAME...]
+  dotfiles raycast sync [--dry-run]               every subsystem's sync, in order: ${(j:, :)ARI_RAYCAST_SYNC_STEPS}
+  dotfiles raycast <subsystem> help               that subsystem's usage
 
 Subsystems: ${(j:, :)ARI_RAYCAST_SUBSYSTEMS}. Bindings live in karabiner.ts's tables and compile
-through bake. Snippets live in two files, merged with local winning by name: shared
-~/.config/raycast-snippets/snippets.json (git df, public remote) and local
-~/.local/share/raycast-snippets/snippets.json (git ldf, private). One rule: personal data stays
-in the local tier; shared is for snippets safe in a public repo, plus fmt's placeholders.
+through bake. Snippets live in two files, merged with local winning by name:
+  shared  ~/.config/raycast-snippets/snippets.json (git df, public remote)
+  local   ~/.local/share/raycast-snippets/snippets.json (git ldf, private remote), manifest beside it
+One rule: personal data stays in the local tier; shared is for snippets safe in a public repo,
+plus fmt's placeholders. Interactive shells have the same router as the function ari_raycast.
 EOF
 }
 
 # `link` verbs map onto raycast_link's flags; anything else is a slug or path for the widget.
+# Flags pass through untouched; a read-only mode under --dry-run is the read-only run.
 function ari_raycast::link() {
   local verb="${1:-help}"
   (( $# > 0 )) && shift

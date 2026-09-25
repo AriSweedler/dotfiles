@@ -30,7 +30,7 @@ check_step bob_neovim
 assert_eq "no bob → fail" fail "$(status_of bob_neovim)"
 assert_eq "reason bob_missing" bob_missing "$(reason_of bob_neovim)"
 assert_eq "bob_missing is manual" true "$(step_get bob_neovim .manual)"
-assert_contains "fix points at brew_pkgs" "$(step_get bob_neovim .fix)" "new-machine apply brew_pkgs"
+assert_contains "fix points at brew_pkgs" "$(step_get bob_neovim .fix)" "dotfiles apply brew_pkgs"
 shim_add bob
 
 # ── claude ────────────────────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ world_use_fixture drift
 check_step brew,terminal_nerdfont
 assert_eq "nerd font absent → fail" fail "$(status_of terminal_nerdfont)"
 assert_eq "reason font_missing" font_missing "$(reason_of terminal_nerdfont)"
-assert_contains "fix points at brew_pkgs" "$(step_get terminal_nerdfont .fix)" "new-machine apply brew_pkgs"
+assert_contains "fix points at brew_pkgs" "$(step_get terminal_nerdfont .fix)" "dotfiles apply brew_pkgs"
 world_use_fixture satisfied
 
 # ── karabiner ─────────────────────────────────────────────────────────────────

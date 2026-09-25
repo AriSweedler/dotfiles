@@ -4,7 +4,7 @@ import { raycastShortcuts } from "./raycast_shortcuts.ts"
 
 // Compiles raycast_shortcuts.ts (direct chord → Raycast deeplink) into Karabiner rules. The
 // window-management chords come from modes/window.ts (directModifiers), not from here. The
-// ari-raycast link widget reads raycast_bindings.json, which bake GENERATES from both tables
+// `dotfiles raycast link` widget reads raycast_bindings.json, which bake GENERATES from both tables
 // (generate_bindings.ts); nothing reads that JSON at compile time.
 //
 // Chord grammar: "+"-joined tokens, modifiers first, one key last. The key is a karabiner key

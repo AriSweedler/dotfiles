@@ -81,7 +81,7 @@ _t "canonical order: byte order of keywords, ~@ then ~^ then ~~@, keyword-less l
 # --- first run: no manifest ---
 raycast_snippets --sync --dry-run > /dev/null 2>"${_dir}/nomanifest.err"; _rc=$?
 _t "no manifest: sync refuses, rc 1" "1" "${_rc}"
-_t "no manifest: says adopt or pull" "1" "$(grep -c 'no manifest; run: ari-raycast snippets pull <raycast export> to adopt Raycast.s current state, or ari-raycast snippets adopt to mark the current files as already imported' "${_dir}/nomanifest.err")"
+_t "no manifest: says adopt or pull" "1" "$(grep -c 'no manifest; run: dotfiles raycast snippets pull <raycast export> to adopt Raycast.s current state, or dotfiles raycast snippets adopt to mark the current files as already imported' "${_dir}/nomanifest.err")"
 _t "no manifest: nothing opened" "" "$(_urls)"
 _out="$(raycast_snippets --adopt --dry-run 2>/dev/null)"
 _t "adopt --dry-run: counts, writes nothing" $'dry_run=1\nwould_adopt=3' "${_out}"
@@ -199,7 +199,7 @@ _t "pull: local is canonical json-sort output (keys sorted, 2-space, keyword fir
   $'[\n  {\n    "keyword": "z",\n    "name": "zeta",\n    "text": "new"\n  },\n  {\n    "name": "alpha",\n    "text": "A"\n  }\n]' \
   "$(cat "${_local}")"
 _t "pull: manifest matches the merged set; unpaired local names warned" \
-  $'snippets: nothing to import | unchanged=2\npending=0\nwarn local snippet has no shared placeholder: zeta (z); run ari-raycast snippets fmt\nwarn local snippet has no shared placeholder: alpha (-); run ari-raycast snippets fmt' \
+  $'snippets: nothing to import | unchanged=2\npending=0\nwarn local snippet has no shared placeholder: zeta (z); run dotfiles raycast snippets fmt\nwarn local snippet has no shared placeholder: alpha (-); run dotfiles raycast snippets fmt' \
   "$(raycast_snippets --sync 2>/dev/null)"
 raycast_snippets --pull "${_dir}/nope.json" >/dev/null 2>&1; _rc=$?
 _t "pull: missing export rc 1" "1" "${_rc}"
@@ -269,7 +269,7 @@ _t "override: same name and keyword across tiers is not a collision" "0" "$(rayc
 _out="$(raycast_snippets --check 2>/dev/null)"; _rc=$?
 _t "check: rc 0 with warns" "0" "${_rc}"
 _t "check: active placeholder and unpaired local names" \
-  $'warn placeholder active: orphan (~o) fill in '"${_local}"$'\nwarn local snippet has no shared placeholder: Phone (~#); run ari-raycast snippets fmt\nwarn local snippet has no shared placeholder: nokw (-); run ari-raycast snippets fmt\nwarnings=3' \
+  $'warn placeholder active: orphan (~o) fill in '"${_local}"$'\nwarn local snippet has no shared placeholder: Phone (~#); run dotfiles raycast snippets fmt\nwarn local snippet has no shared placeholder: nokw (-); run dotfiles raycast snippets fmt\nwarnings=3' \
   "${_out}"
 
 # --- fmt: placeholders, keyword fix, idempotent ---
@@ -365,7 +365,7 @@ _t "pull: unknown placeholder went to shared" "~p" "$(jq -r '.[] | select(.name 
 _t "pull: absent name left shared (orphan)" "0" "$(jq '[.[] | select(.name == "orphan")] | length' "${_shared}")"
 _t "pull: no local text in shared" "0" "$(grep -c -e '2 Main' -e '555' -e 'brand new' -e '"plain"' "${_shared}")"
 _t "pull: manifest is the export, so sync is a no-op with parity warns" \
-  $'snippets: nothing to import | unchanged=6\npending=0\nwarn placeholder active: ph (~p) fill in '"${_local}"$'\nwarn local snippet has no shared placeholder: newone (~n); run ari-raycast snippets fmt' \
+  $'snippets: nothing to import | unchanged=6\npending=0\nwarn placeholder active: ph (~p) fill in '"${_local}"$'\nwarn local snippet has no shared placeholder: newone (~n); run dotfiles raycast snippets fmt' \
   "$(raycast_snippets --sync 2>/dev/null)"
 _t "pull then fmt: newone gets its placeholder" "placeholders_added=1" "$(raycast_snippets --fmt 2>/dev/null | grep '^placeholders_added=')"
 
@@ -380,7 +380,7 @@ raycast_snippets --bogus >/dev/null 2>&1; _rc=$?
 _t "unknown flag rc 1" "1" "${_rc}"
 raycast_snippets >/dev/null 2>&1; _rc=$?
 _t "no mode rc 1" "1" "${_rc}"
-_t "help mentions the two seeding steps" "1" "$(raycast_snippets --help 2>&1 | grep -c 'Export Snippets.*ari-raycast snippets pull')"
+_t "help mentions the two seeding steps" "1" "$(raycast_snippets --help 2>&1 | grep -c 'Export Snippets.*dotfiles raycast snippets pull')"
 _t "help states the one rule" "1" "$(raycast_snippets --help 2>&1 | grep -c 'personal data stays in the local tier; the shared tier is for snippets safe in a public repo')"
 _t "help names both tier files" "2" "$(raycast_snippets --help 2>&1 | grep -c -e "shared ${_dir}/shared/snippets.json" -e "local  ${_dir}/local/snippets.json")"
 

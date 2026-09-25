@@ -1,6 +1,6 @@
-# Tests for raycast.zsh, the ari-raycast dispatcher, and the bin. The subsystem functions are
+# Tests for raycast.zsh, the router behind `dotfiles raycast`. The subsystem functions are
 # replaced by stubs after sourcing, so nothing reaches Raycast, the allow-list, or a manifest;
-# the bin is exercised with the same seams the subsystems expose.
+# the verb is exercised through the dotfiles entrypoint with the same seams the subsystems expose.
 # Only runs when OTTO_TEST__ZSH_PLUGINS_RAYCAST=true
 [[ "$OTTO_TEST__ZSH_PLUGINS_RAYCAST" == "true" ]] || return 0
 
@@ -83,50 +83,50 @@ _out="$(ARI_RAYCAST_APP="${_dir}/nope.app" ari_raycast sync 2>/dev/null)"; _rc=$
 _t "sync: skips when Raycast is not installed" "skip raycast not installed | app='${_dir}/nope.app'" "${_out}"
 _t "sync: skip is rc 0" "0" "${_rc}"
 
-# --- the bin, through the real subsystems with their seams ---
-local _bin="${HOME}/.config/bin/ari-raycast"
+# --- the verb, through the real subsystems with their seams ---
+function _bin() { "${HOME}/.config/bin/dotfiles" raycast "$@"; }
 cat > "${_dir}/bindings.json" <<'EOF'
 {"$generated":"fixture","bindings":[{"path":"extensions/raycast/clipboard-history/clipboard-history","title":"Clipboard History","chords":["hyper+4"],"allowId":"builtin_command_clipboardHistory"}]}
 EOF
 print -r -- '{"profiles":[{"complex_modifications":{"rules":[]}}]}' > "${_dir}/karabiner.json"
 _t "bin: link <slug> renders the widget" \
   "<[Raycast: Clipboard History | key: '✦4' (not compiled yet)](raycast://extensions/raycast/clipboard-history/clipboard-history)>" \
-  "$(RAYCAST_LINK_BINDINGS_CMD="cat ${_dir}/bindings.json" RAYCAST_LINK_KARABINER_JSON="${_dir}/karabiner.json" "${_bin}" link clipboard-history 2>/dev/null)"
-_t "bin: --plain anywhere" \
+  "$(RAYCAST_LINK_BINDINGS_CMD="cat ${_dir}/bindings.json" RAYCAST_LINK_KARABINER_JSON="${_dir}/karabiner.json" _bin link clipboard-history 2>/dev/null)"
+_t "bin: --plain" \
   "<Raycast: Clipboard History | key: '✦4' (not compiled yet)> raycast://extensions/raycast/clipboard-history/clipboard-history" \
-  "$(RAYCAST_LINK_BINDINGS_CMD="cat ${_dir}/bindings.json" RAYCAST_LINK_KARABINER_JSON="${_dir}/karabiner.json" "${_bin}" --plain link clipboard-history 2>/dev/null)"
+  "$(RAYCAST_LINK_BINDINGS_CMD="cat ${_dir}/bindings.json" RAYCAST_LINK_KARABINER_JSON="${_dir}/karabiner.json" _bin link clipboard-history --plain 2>/dev/null)"
 mkdir -p "${_dir}/shared" "${_dir}/local"
 print -r -- '[]' > "${_dir}/shared/snippets.json"
 local _env=(RAYCAST_SNIPPETS_DIRS="${_dir}/shared:${_dir}/local" RAYCAST_SNIPPETS_MANIFEST="${_dir}/m.json")
-env "${_env[@]}" "${_bin}" snippets sync >/dev/null 2>&1; _rc=$?
+env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets sync >/dev/null 2>&1; _rc=$?
 _t "bin: snippets sync without a manifest refuses" "1" "${_rc}"
 _t "bin: snippets adopt then sync is a no-op" $'snippets: nothing to import | unchanged=0\npending=0' \
-  "$(env "${_env[@]}" "${_bin}" snippets adopt >/dev/null 2>&1; env "${_env[@]}" "${_bin}" snippets sync 2>/dev/null)"
-_t "bin: snippets check on empty tiers is in parity" $'snippets: tiers in parity | entries=0\nwarnings=0' "$(env "${_env[@]}" "${_bin}" snippets check 2>/dev/null)"
-_t "bin: snippets fmt --dry-run on canonical files" $'dry_run=1\nshared=unchanged\nlocal=absent\nplaceholders_added=0\nkeywords_fixed=0\nrewritten=0' "$(env "${_env[@]}" "${_bin}" snippets fmt --dry-run 2>/dev/null)"
-"${_bin}" help >/dev/null 2>&1; _rc=$?; _t "bin: help rc 0" "0" "${_rc}"
-_t "bin: help lists the subsystems" "1" "$("${_bin}" help 2>/dev/null | grep -c 'Subsystems:.*link, snippets')"
-_t "bin: help names both tier files" "2" "$("${_bin}" help 2>/dev/null | grep -c -e 'shared  ~/.config/raycast-snippets/snippets.json' -e 'local   ~/.local/share/raycast-snippets/snippets.json')"
-_t "bin: help states the one rule" "1" "$("${_bin}" help 2>/dev/null | grep -c 'personal data stays in the local tier')"
-"${_bin}" link help >/dev/null 2>&1; _rc=$?; _t "bin: link help rc 0" "0" "${_rc}"
-"${_bin}" snippets help >/dev/null 2>&1; _rc=$?; _t "bin: snippets help rc 0" "0" "${_rc}"
-_t "bin: snippets help covers move and fmt" "2" "$("${_bin}" snippets help 2>/dev/null | grep -c -e '^  ari-raycast snippets move NAME --to shared|local' -e '^  ari-raycast snippets fmt \[--dry-run\]')"
-"${_bin}" bogus >/dev/null 2>&1; _rc=$?; _t "bin: unknown subsystem rc 1" "1" "${_rc}"
-_t "bin: unknown subsystem names the valid ones and prints help" "2" "$("${_bin}" bogus 2>&1 | grep -c -e "Unknown subsystem | subsystem='bogus' valid='link, snippets, sync, help'" -e 'Usage:' | tr -d ' ')"
+  "$(env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets adopt >/dev/null 2>&1; env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets sync 2>/dev/null)"
+_t "bin: snippets check on empty tiers is in parity" $'snippets: tiers in parity | entries=0\nwarnings=0' "$(env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets check 2>/dev/null)"
+_t "bin: snippets fmt --dry-run on canonical files" $'dry_run=1\nshared=unchanged\nlocal=absent\nplaceholders_added=0\nkeywords_fixed=0\nrewritten=0' "$(env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets fmt --dry-run 2>/dev/null)"
+_bin help >/dev/null 2>&1; _rc=$?; _t "bin: help rc 0" "0" "${_rc}"
+_t "bin: help lists the subsystems" "1" "$(_bin help 2>&1 | grep -c 'Subsystems:.*link, snippets')"
+_t "bin: help names both tier files" "2" "$(_bin help 2>&1 | grep -c -e 'shared  ~/.config/raycast-snippets/snippets.json' -e 'local   ~/.local/share/raycast-snippets/snippets.json')"
+_t "bin: help states the one rule" "1" "$(_bin help 2>&1 | grep -c 'personal data stays in the local tier')"
+_bin link help >/dev/null 2>&1; _rc=$?; _t "bin: link help rc 0" "0" "${_rc}"
+_bin snippets help >/dev/null 2>&1; _rc=$?; _t "bin: snippets help rc 0" "0" "${_rc}"
+_t "bin: snippets help covers move and fmt" "2" "$(_bin snippets help 2>&1 | grep -c -e '^  dotfiles raycast snippets move NAME --to shared|local' -e '^  dotfiles raycast snippets fmt \[--dry-run\]')"
+_bin bogus >/dev/null 2>&1; _rc=$?; _t "bin: unknown subsystem rc 1" "1" "${_rc}"
+_t "bin: unknown subsystem names the valid ones and prints help" "2" "$(_bin bogus 2>&1 | grep -c -e "Unknown subsystem | subsystem='bogus' valid='link, snippets, sync, help'" -e 'Usage:' | tr -d ' ')"
 : > "${_calls}"; ari_raycast snippets adopt --dry-run >/dev/null; _t "route: snippets adopt --dry-run" "snippets --adopt --dry-run" "$(cat "${_calls}")"
-"${_bin}" snippets bogus >/dev/null 2>&1; _rc=$?; _t "bin: unknown verb rc 1" "1" "${_rc}"
-"${_bin}" link list --dry-run >/dev/null 2>&1; _rc=$?; _t "bin: --dry-run on a read-only verb is refused" "1" "${_rc}"
-"${_bin}" snippets pull >/dev/null 2>&1; _rc=$?; _t "bin: pull without FILE rc 1" "1" "${_rc}"
-"${_bin}" snippets move Phone >/dev/null 2>&1; _rc=$?; _t "bin: move without --to rc 1" "1" "${_rc}"
-"${_bin}" snippets move Phone --to attic >/dev/null 2>&1; _rc=$?; _t "bin: move to an unknown tier rc 1" "1" "${_rc}"
-"${_bin}" snippets move --to local >/dev/null 2>&1; _rc=$?; _t "bin: move without NAME rc 1" "1" "${_rc}"
-"${_bin}" snippets list --to local >/dev/null 2>&1; _rc=$?; _t "bin: --to on another verb rc 1" "1" "${_rc}"
+_bin snippets bogus >/dev/null 2>&1; _rc=$?; _t "bin: unknown verb rc 1" "1" "${_rc}"
+_t "bin: --dry-run on a read-only verb is the read-only run" "$(_bin link list 2>/dev/null)" "$(_bin link list --dry-run 2>/dev/null)"
+_bin snippets pull >/dev/null 2>&1; _rc=$?; _t "bin: pull without FILE rc 1" "1" "${_rc}"
+_bin snippets move Phone >/dev/null 2>&1; _rc=$?; _t "bin: move without --to rc 1" "1" "${_rc}"
+_bin snippets move Phone --to attic >/dev/null 2>&1; _rc=$?; _t "bin: move to an unknown tier rc 1" "1" "${_rc}"
+_bin snippets move --to local >/dev/null 2>&1; _rc=$?; _t "bin: move without NAME rc 1" "1" "${_rc}"
+_bin snippets list --to local >/dev/null 2>&1; _rc=$?; _t "bin: --to on another verb rc 1" "1" "${_rc}"
 _t "bin: move --dry-run reaches the plugin with --to" "name=nobody" \
-  "$(print -r -- '[{"name":"nobody","text":"x"}]' > "${_dir}/local/snippets.json"; env "${_env[@]}" "${_bin}" snippets move nobody --to SHARED --dry-run 2>/dev/null | grep '^name=')"
-_t "bin: sync --dry-run skips without Raycast" "skip raycast not installed | app='${_dir}/nope.app'" "$(ARI_RAYCAST_APP="${_dir}/nope.app" "${_bin}" sync --dry-run 2>/dev/null | grep '^skip')"
+  "$(print -r -- '[{"name":"nobody","text":"x"}]' > "${_dir}/local/snippets.json"; env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets move nobody --to shared --dry-run 2>/dev/null | grep '^name=')"
+_t "bin: sync --dry-run skips without Raycast" "skip raycast not installed | app='${_dir}/nope.app'" "$(ARI_RAYCAST_APP="${_dir}/nope.app" _bin sync --dry-run 2>/dev/null | grep '^skip')"
 
 unset ARI_RAYCAST_APP
-unfunction raycast_link raycast_snippets
+unfunction raycast_link raycast_snippets _bin
 rm -rf "${_dir}"
 
 if (( _fail == 0 )); then

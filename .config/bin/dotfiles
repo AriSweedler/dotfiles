@@ -1,7 +1,10 @@
 #!/usr/bin/env zsh
+# dotfiles — the one entrypoint. The program is ~/.config/dotfiles: lib/ (the kernel), cmd/ (one
+# file per verb), steps/ (one file per step). ${0:A} follows the ~/.config/bin symlink, so this
+# runs from any checkout.
 set -euo pipefail
-readonly DOTFILES_LIB="${${0:A}:h:h}/dotfiles/lib"
-for _module in "${DOTFILES_LIB}"/*.zsh(N); do source "${_module}"; done
+export DOTFILES_LIB="${${0:A}:h:h}/dotfiles/lib"
+for _module in "${DOTFILES_LIB}"/*.zsh(N) "${DOTFILES_LIB:h}"/cmd/*.zsh(N); do source "${_module}"; done
 unset _module
 (( ${+functions[main]} )) || { print -u2 "[ERROR] dotfiles: no modules found | dir='${DOTFILES_LIB}'"; exit 1; }
 main "${@}"

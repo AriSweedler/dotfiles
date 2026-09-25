@@ -1,7 +1,23 @@
-# dotfiles/lib/push.zsh — `dotfiles push`: token identity, per-repo pushes, pointer bumps.
+# dotfiles/cmd/push.zsh — `dotfiles push`: token identity, per-repo pushes, pointer bumps.
 zmodload zsh/datetime   # EPOCHREALTIME / EPOCHSECONDS
 
-# --- push ---
+help_push() {
+  cat <<EOF
+dotfiles push [--submodules|--shared|--local|--no-submodules|--no-shared|--no-local] [--dry-run]   publish every tier (dfp)
+
+  Pushes every submodule with something to push, in parallel (one log each), commits the shared
+  tier's pointer bumps, then pushes the shared tier, all as ${DOTFILES_GITHUB_LOGIN} by its gh
+  token; the local tier alongside, to its own remote with the ssh agent's key (its pre-push hook
+  included). Repos already at origin are skipped silently; a submodule failure blocks the shared
+  push. Human-only: Claude Code is denied 'dotfiles push'.
+
+  --submodules | --shared | --local   only these parts (none = all three)
+  --no-submodules | --no-shared | --no-local   leave a part out
+  --dry-run                            the would-push lines, no network
+
+  Logs: ${LOG_DIR}/<repo>.log ('dotfiles logs'). Once per machine: env -u GITHUB_TOKEN gh auth login
+EOF
+}
 
 #######################################
 # Get the login's token from gh and check whose it is. Sets TOKEN. The check is a network
@@ -55,7 +71,7 @@ push_target() {
 # repo's log. One round trip: git's --porcelain verdict for the ref confirms the push (no
 # ls-remote). Personal repos go to their https URL with a one-shot credential helper
 # answering with the login's token (in the environment, never argv), and origin/<branch>
-# is set to the pushed sha (no fetch) so hooks and push_needed see it; the local tier goes
+# is set to the pushed sha (no fetch) so hooks and is_push_needed see it; the local tier goes
 # to origin as configured and git refreshes its tracking ref itself.
 #######################################
 push_repo() {
@@ -91,7 +107,7 @@ push_repo() {
 # ref (refreshed by every push here and by pull): no network. Detached (after a pull)
 # compares HEAD with origin/main. No tracking ref yet counts as needed; the push decides.
 #######################################
-push_needed() {
+is_push_needed() {
   local repo="${1}" branch local_ref=HEAD remote_ref=refs/remotes/origin/main
   branch="$(repo_git "${repo}" branch --show-current 2>/dev/null || true)"
   if [[ -n "${branch}" ]]; then local_ref="refs/heads/${branch}"; remote_ref="refs/remotes/origin/${branch}"; fi
@@ -107,7 +123,7 @@ push_needed() {
 push_begin() {
   local repo="${1}" branch sha url logfile
   logfile="$(log_file "${repo}")"
-  if [[ "${DRY_RUN}" == true ]]; then
+  if is_dry_run; then
     push_target "${repo}" || return 1
     log::info "dry-run, would push | repo='${repo}' branch='${branch}' sha='${sha:0:7}' url='${url}' log='${logfile}'"; return 0
   fi
@@ -134,11 +150,11 @@ push_wait() {
 #######################################
 push_tier() {
   local repo="${1}"
-  if ! repo_present "${repo}"; then
+  if ! is_repo_present "${repo}"; then
     if [[ "${repo}" == shared ]]; then log::err "shared repo not cloned | git_dir='${TIER_GIT_DIR[shared]}' fix='dotfiles init'"; return 1; fi
-    log::info "no local tier on this machine | hint='new-machine apply local_dotfiles_repo'"; return 0
+    log::info "no local tier on this machine | hint='${CLI_NAME} apply local_dotfiles_repo'"; return 0
   fi
-  if ! push_needed "${repo}"; then log::info "${repo} tier up to date | sha='$(repo_git "${repo}" rev-parse --short HEAD 2>/dev/null || true)'"; return 0; fi
+  if ! is_push_needed "${repo}"; then log::info "${repo} tier up to date | sha='$(repo_git "${repo}" rev-parse --short HEAD 2>/dev/null || true)'"; return 0; fi
   push_begin "${repo}" || return 1
   [[ -n "${PIDS[${repo}]:-}" ]] || return 0   # dry-run: nothing running
   if [[ "${repo}" == local ]]; then log::info "local tier pushing in the background | log='$(log_file local)' note='its pre-push hook may run exo check --e2e'"; return 0; fi
@@ -155,7 +171,7 @@ push_tier() {
 #######################################
 bump_pointer() {
   local repo="${1}" pointer head count=1 subject message out
-  repo_present shared || return 2
+  is_repo_present shared || return 2
   pointer="$(repo_git shared ls-tree HEAD -- "${repo}" 2>/dev/null | awk '{print $3}')"
   head="$(repo_git "${repo}" rev-parse HEAD 2>/dev/null || true)"
   [[ -n "${head}" && "${head}" != "${pointer}" ]] || return 2
@@ -167,7 +183,7 @@ bump_pointer() {
   subject="$(repo_git "${repo}" log -1 --format=%s "${head}")"
   message="${repo:t}: bump to ${head:0:7} (${subject})"
   (( count <= 1 )) || message="${repo:t}: bump to ${head:0:7} (${count} commits, latest: ${subject})"
-  if [[ "${DRY_RUN}" == true ]]; then
+  if is_dry_run; then
     log::info "dry-run, would bump | repo='${repo}' from='${pointer:0:7}' to='${head:0:7}' message='${message}'"; return 0
   fi
   # `commit -- <path>` records this path alone; anything else staged in the shared tier stays staged.
@@ -187,13 +203,13 @@ push_submodules() {
   if (( ${#SUBMODULES} == 0 )); then log::info "no submodules declared | file='${GITMODULES}'"; return 0; fi
   local repo rc checked=0 pushed=0 bumped=0 failed=0 verb=pushed start="${EPOCHREALTIME}"
   local -a running=() published=()
-  [[ "${DRY_RUN}" == true ]] && verb=would_push
+  is_dry_run && verb=would_push
   for repo in "${SUBMODULES[@]}"; do
-    if ! repo_present "${repo}"; then log::warn "submodule not checked out; skipping | path='${repo}' fix='dotfiles init'"; continue; fi
+    if ! is_repo_present "${repo}"; then log::warn "submodule not checked out; skipping | path='${repo}' fix='dotfiles init'"; continue; fi
     checked=$(( checked + 1 ))
-    if ! push_needed "${repo}"; then published+=("${repo}"); continue; fi
+    if ! is_push_needed "${repo}"; then published+=("${repo}"); continue; fi
     if ! push_begin "${repo}"; then failed=$(( failed + 1 )); continue; fi
-    if [[ "${DRY_RUN}" == true ]]; then pushed=$(( pushed + 1 )); published+=("${repo}"); continue; fi   # the plan printed counts as would_push
+    if is_dry_run; then pushed=$(( pushed + 1 )); published+=("${repo}"); continue; fi   # the plan printed counts as would_push
     running+=("${repo}")
   done
   if (( ${#running} > 0 )); then
@@ -211,19 +227,30 @@ push_submodules() {
 }
 
 # True (0) when a push part (local | submodules | shared) is in PUSH_SCOPE.
-in_scope() { (( ${PUSH_SCOPE[(Ie)${1}]} )); }
+is_in_scope() { (( ${PUSH_SCOPE[(Ie)${1}]} )); }
 
 # The local tier runs in the background while the submodules push (and their pointer
 # bumps are committed), then the shared tier (only if every submodule made it), then
 # the local result.
 cmd_push() {
+  # Selecting flags name the scope exactly (none = every part); excluding flags then remove from it.
+  local -a only=() skip=()
+  while (( $# > 0 )); do case "${1}" in
+    --dry-run) export DOTFILES_DRY_RUN=1; shift ;;
+    --submodules|--shared|--local)          only+=("${1#--}"); shift ;;
+    --no-submodules|--no-shared|--no-local) skip+=("${1#--no-}"); shift ;;
+    *) usage_error "push: unknown argument | argument='${1}'" ;;
+  esac; done
+  (( ${#only} == 0 )) || PUSH_SCOPE=("${(@)PUSH_PARTS:*only}")
+  PUSH_SCOPE=("${(@)PUSH_SCOPE:|skip}")
+  (( ${#PUSH_SCOPE} )) || usage_error "Empty push scope: every part excluded | parts='${(j:, :)PUSH_PARTS}'"
   local start="${EPOCHREALTIME}" failed=false scope="${(j:, :)PUSH_SCOPE}"
   check_prerequisites git gh || return 1
-  if in_scope local; then push_tier local || failed=true; fi
-  if in_scope submodules && ! push_submodules; then
+  if is_in_scope local; then push_tier local || failed=true; fi
+  if is_in_scope submodules && ! push_submodules; then
     failed=true
-    if in_scope shared; then log::err "shared tier not pushed: a submodule push failed | fix='dotfiles logs, fix, dotfiles push'"; fi
-  elif in_scope shared; then
+    if is_in_scope shared; then log::err "shared tier not pushed: a submodule push failed | fix='dotfiles logs, fix, dotfiles push'"; fi
+  elif is_in_scope shared; then
     push_tier shared || failed=true
   fi
   if [[ -n "${PIDS[local]:-}" ]]; then push_wait local || failed=true; fi

@@ -1,7 +1,14 @@
-# dotfiles/lib/status.zsh — `dotfiles status` and `dotfiles logs`.
+# dotfiles/cmd/status.zsh — `dotfiles status`: both tiers, the submodules, the last push of each repo.
 zmodload zsh/datetime   # EPOCHREALTIME / EPOCHSECONDS
 
-# --- status / logs ---
+help_status() {
+  cat <<EOF
+dotfiles status   both tiers (branch, ahead/behind, uncommitted), the submodules, the last push per repo
+
+  Submodule prefixes as 'git submodule status' prints them: space = at the committed pointer,
+  + = elsewhere (a commit awaiting its bump), - = not initialized.
+EOF
+}
 
 # One line for a tier from a single `git status`: the branch header (with ahead/behind once
 # origin/main is known) and the count of uncommitted paths.
@@ -24,7 +31,7 @@ submodule_lines() {
   while IFS=$'\t' read -r meta repo; do pointers[${repo}]="${meta##* }"; done < <(repo_git shared ls-tree HEAD -- "${SUBMODULES[@]}" 2>/dev/null)
   for repo in "${SUBMODULES[@]}"; do
     pointer="${pointers[${repo}]:-}"
-    if ! repo_present "${repo}"; then print -r -- "  -${pointer} ${repo}"; continue; fi
+    if ! is_repo_present "${repo}"; then print -r -- "  -${pointer} ${repo}"; continue; fi
     head="$(repo_git "${repo}" rev-parse HEAD 2>/dev/null || true)"
     branch="$(repo_git "${repo}" branch --show-current 2>/dev/null || true)"
     prefix=' '; [[ "${head}" == "${pointer}" ]] || prefix='+'
@@ -34,11 +41,12 @@ submodule_lines() {
 }
 
 cmd_status() {
+  (( $# == 0 )) || usage_error "status takes no arguments | args='$*'"
   local start="${EPOCHREALTIME}" logfile when verdict
   local -a logfiles=("${LOG_DIR}"/*.log(N))
   print -r -- "${c_bold}tiers${c_rst}"
   print -r -- "  $(tier_line shared)"
-  if repo_present local; then print -r -- "  $(tier_line local)"; else print -r -- "  local: no repo (new-machine setup)"; fi
+  if is_repo_present local; then print -r -- "  $(tier_line local)"; else print -r -- "  local: no repo (${CLI_NAME} setup)"; fi
   print -r -- "${c_bold}submodules${c_rst} (space = at the pointer, + = elsewhere, - = not initialized)"
   submodule_lines
   print -r -- "${c_bold}last push${c_rst} (${LOG_DIR}; 'dotfiles logs' for the whole run)"
@@ -50,17 +58,4 @@ cmd_status() {
   done
   (( ${#logfiles} > 0 )) || print -r -- "  none yet"
   if [[ "${TIMING}" == true ]]; then log::info "status | took='$(elapsed "${start}")s'"; fi
-}
-
-cmd_logs() {
-  local suffix="" file
-  local -a files
-  [[ "${LOGS_PREVIOUS}" == true ]] && suffix=".bak.1"
-  if [[ -n "${LOGS_REPO}" ]]; then files=("$(log_file "${LOGS_REPO}")${suffix}"); else files=("${LOG_DIR}"/*.log${suffix}(N)); fi
-  if (( ${#files} == 0 )); then log::info "no push logs yet | dir='${LOG_DIR}'"; return 0; fi
-  for file in "${files[@]}"; do
-    if [[ ! -f "${file}" ]]; then log::err "no such log | file='${file}' valid_repos='shared, local, ${(j: :)SUBMODULES}'"; return 1; fi
-    print -r -- "${c_bold}=== ${file:t} ($(date -r "${file}" -u +%FT%TZ)) ===${c_rst}"
-    cat "${file}"
-  done
 }

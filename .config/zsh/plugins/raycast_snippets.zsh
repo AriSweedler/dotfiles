@@ -1,4 +1,4 @@
-# raycast_snippets — the `snippets` subsystem of ari-raycast (bin/ari-raycast, plugin raycast.zsh).
+# raycast_snippets — the `snippets` subsystem of `dotfiles raycast` (router: plugin raycast.zsh).
 # Raycast Snippets from versioned files, one direction: the files are the source and Raycast the
 # mirror. Two tiers, the same split the rest of the dotfiles use, and one rule: personal data
 # stays in the local tier; the shared tier is for snippets safe in a public repo.
@@ -35,7 +35,7 @@
 #
 # Seeding, once, and again after editing snippets inside Raycast:
 #   1. Raycast → search "Export Snippets" → save the JSON anywhere
-#   2. ari-raycast snippets pull <that file>
+#   2. dotfiles raycast snippets pull <that file>
 #
 # Function flags: raycast_snippets --sync [--dry-run] | --list | --check | --adopt [--dry-run]
 #                 | --pull FILE [--dry-run] | --diff FILE | --move NAME --to TIER [--dry-run]
@@ -193,7 +193,7 @@ function raycast_snippets::source() {
         | .files[$e.name] = $file)')"
   done
   if (( present == 0 && allow_empty == 0 )); then
-    log::err "No snippets file in any tier | files='$(raycast_snippets::tier_files | paste -sd, -)' fix='ari-raycast snippets pull <Raycast export>'"
+    log::err "No snippets file in any tier | files='$(raycast_snippets::tier_files | paste -sd, -)' fix='dotfiles raycast snippets pull <Raycast export>'"
     return 1
   fi
   collisions="$(print -r -- "${merged}" | jq -r '
@@ -211,7 +211,7 @@ function raycast_snippets::source() {
 function raycast_snippets::manifest() {
   if [[ -r "${RAYCAST_SNIPPETS_MANIFEST}" ]]; then
     jq -c 'if type == "object" then . else error("manifest is not an object") end' "${RAYCAST_SNIPPETS_MANIFEST}" 2>/dev/null \
-      || { log::err "Manifest invalid | file='${RAYCAST_SNIPPETS_MANIFEST}' fix='ari-raycast snippets reset-manifest'"; return 1; }
+      || { log::err "Manifest invalid | file='${RAYCAST_SNIPPETS_MANIFEST}' fix='dotfiles raycast snippets reset-manifest'"; return 1; }
   else
     print -r -- "{}"
   fi
@@ -243,7 +243,7 @@ function raycast_snippets::parity_lines() {
     | ($src.entries[] | select($src.tiers[.name] == "shared" and (.text | startswith($prefix)))
         | "placeholder active: \(.name) (\(.keyword // "-")) fill in \($local_file)"),
       ($src.entries[] | select($src.tiers[.name] == "local")
-        | "local snippet has no shared placeholder: \(.name) (\(.keyword // "-")); run ari-raycast snippets fmt")'
+        | "local snippet has no shared placeholder: \(.name) (\(.keyword // "-")); run dotfiles raycast snippets fmt")'
 }
 
 # Input: parity lines. Prints each as `warn <line>` (ari-raycast sync forwards those); nothing
@@ -293,7 +293,7 @@ function raycast_snippets::sync() {
   merged="$(raycast_snippets::source)" || return 1
   src="$(print -r -- "${merged}" | jq -c .entries)"
   if [[ ! -e "${RAYCAST_SNIPPETS_MANIFEST}" ]]; then
-    log::err "no manifest; run: ari-raycast snippets pull <raycast export> to adopt Raycast's current state, or ari-raycast snippets adopt to mark the current files as already imported | manifest='${RAYCAST_SNIPPETS_MANIFEST}'"
+    log::err "no manifest; run: dotfiles raycast snippets pull <raycast export> to adopt Raycast's current state, or dotfiles raycast snippets adopt to mark the current files as already imported | manifest='${RAYCAST_SNIPPETS_MANIFEST}'"
     return 1
   fi
   manifest="$(raycast_snippets::manifest)" || return 1
@@ -459,7 +459,7 @@ function raycast_snippets::pull() {
     return 0
   fi
   raycast_snippets::write_manifest "$(raycast_snippets::manifest_of "${export_arr}")"
-  log::info "snippets pulled; run ari-raycast snippets fmt for the placeholders of new local names | export_entries='${after}' collapsed='$(( before - after ))' ${(j: :)report} manifest='${RAYCAST_SNIPPETS_MANIFEST}'"
+  log::info "snippets pulled; run dotfiles raycast snippets fmt for the placeholders of new local names | export_entries='${after}' collapsed='$(( before - after ))' ${(j: :)report} manifest='${RAYCAST_SNIPPETS_MANIFEST}'"
   printf '%s\n' "entries=${after}" "collapsed=$(( before - after ))" "${report[@]}"
 }
 
@@ -608,24 +608,24 @@ EOF
 
 function raycast_snippets::help() {
   cat >&2 <<EOF
-ari-raycast snippets — Raycast Snippets from the versioned files, shared and local
+dotfiles raycast snippets — Raycast Snippets from the versioned files, shared and local
 
-  ari-raycast snippets sync [--dry-run]           import what is new or changed since the last sync in ONE deeplink
+  dotfiles raycast snippets sync [--dry-run]           import what is new or changed since the last sync in ONE deeplink
                                                   (Raycast shows one review; confirm with Enter); nothing pending →
                                                   "nothing to import", no other effect; parity findings follow as warn lines
-  ari-raycast snippets list                       state (new|changed|synced), tier (shared|local|local>shared|placeholder),
+  dotfiles raycast snippets list                       state (new|changed|synced), tier (shared|local|local>shared|placeholder),
                                                   name, keyword, first line
-  ari-raycast snippets check                      parity: warn per active placeholder (fill the local file) and per local
+  dotfiles raycast snippets check                      parity: warn per active placeholder (fill the local file) and per local
                                                   snippet without one (run fmt); exit 1 when two names share a keyword
-  ari-raycast snippets adopt [--dry-run]          first run on a machine whose Raycast already holds the files' snippets:
+  dotfiles raycast snippets adopt [--dry-run]          first run on a machine whose Raycast already holds the files' snippets:
                                                   the manifest is written from the merged set, nothing is imported
-  ari-raycast snippets pull FILE [--dry-run]      a Raycast export is the truth: known names updated in the tier that wins
+  dotfiles raycast snippets pull FILE [--dry-run]      a Raycast export is the truth: known names updated in the tier that wins
                                                   them, unknown names added to the LOCAL tier, absent names removed
-  ari-raycast snippets diff FILE                  merged set versus a Raycast export, by name; writes nothing
-  ari-raycast snippets move NAME --to shared|local [--dry-run]   relocate one snippet; leaving shared leaves a placeholder
-  ari-raycast snippets fmt [--dry-run]            rewrite both files canonical (keyword order, json-sort keys); give shared
+  dotfiles raycast snippets diff FILE                  merged set versus a Raycast export, by name; writes nothing
+  dotfiles raycast snippets move NAME --to shared|local [--dry-run]   relocate one snippet; leaving shared leaves a placeholder
+  dotfiles raycast snippets fmt [--dry-run]            rewrite both files canonical (keyword order, json-sort keys); give shared
                                                   a placeholder for every local name and fix drifted placeholder keywords
-  ari-raycast snippets reset-manifest [NAME...] [--dry-run]   forget names (all when none), e.g. after a cancelled review
+  dotfiles raycast snippets reset-manifest [NAME...] [--dry-run]   forget names (all when none), e.g. after a cancelled review
 
   One rule: personal data stays in the local tier; the shared tier is for snippets safe in a public repo.
   Tiers: shared $(raycast_snippets::tier_file shared 2>/dev/null) (git df, public remote)
@@ -637,7 +637,7 @@ ari-raycast snippets — Raycast Snippets from the versioned files, shared and l
   Order in every file: by keyword (byte order), entries without a keyword last by name; keys sorted by json-sort.
   Raycast cannot be told to delete a snippet: a changed one leaves its old version behind and a removed one stays,
   so both are printed for you to delete by hand. Without a manifest, sync refuses: adopt or pull first.
-  Seeding: Raycast → "Export Snippets" → save anywhere → ari-raycast snippets pull <that file>
+  Seeding: Raycast → "Export Snippets" → save anywhere → dotfiles raycast snippets pull <that file>
   Manifest: ${RAYCAST_SNIPPETS_MANIFEST} (local, not versioned)
 EOF
 }

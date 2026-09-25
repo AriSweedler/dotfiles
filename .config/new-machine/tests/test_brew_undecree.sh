@@ -25,7 +25,7 @@ assert_eq "undecree gh exits 0" 0 "${RC}"
 assert_not_contains "brew \"gh\" removed" "$(cat "${LOCAL}")" 'brew "gh"'
 assert_contains "bk@3 kept" "$(cat "${LOCAL}")" 'brew "buildkite/buildkite/bk@3"'
 assert_contains "tap kept while bk@3 uses it" "$(cat "${LOCAL}")" 'tap "buildkite/buildkite", trusted: true'
-assert_eq "undecree commit subject" "new-machine: undeclare formula gh (local)" "$(ldf_subject)"
+assert_eq "undecree commit subject" "dotfiles: undeclare formula gh (local)" "$(ldf_subject)"
 assert_eq "exactly one commit" "$((commits_before + 1))" "$(ldf_git rev-list --count HEAD)"
 assert_eq "pushed" "$(ldf_git rev-parse HEAD)" "$(git --git-dir="${FIX}/remotes/local-dotfiles.git" rev-parse main)"
 
@@ -33,7 +33,7 @@ undecree bk@3
 assert_eq "undecree bk@3 exits 0" 0 "${RC}"
 assert_not_contains "bk@3 removed" "$(cat "${LOCAL}")" 'buildkite/buildkite/bk@3'
 assert_not_contains "tap removed with its last user" "$(cat "${LOCAL}")" 'tap "buildkite/buildkite"'
-assert_eq "undecree bk@3 commit subject" "new-machine: undeclare formula buildkite/buildkite/bk@3 (local)" "$(ldf_subject)"
+assert_eq "undecree bk@3 commit subject" "dotfiles: undeclare formula buildkite/buildkite/bk@3 (local)" "$(ldf_subject)"
 
 # A line Ari placed by hand, above the marker, is not decree's to remove.
 { printf '%s\n' '# hand-placed section' 'brew "python@3.10"' ''; cat "${LOCAL}"; } > "${LOCAL}.tmp"

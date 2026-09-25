@@ -6,10 +6,10 @@ import { karabiner_script } from "./macros.ts"
 // generation lives in argbuilder.ts so this module stays import-cycle-free.
 
 // --- Types ---
-// A deeplink carries what the ari-raycast link widget needs (generate_bindings.ts): the path is the
+// A deeplink carries what the `dotfiles raycast link` widget needs (generate_bindings.ts): the path is the
 // identity (its last segment, the command slug, is how the widget is addressed), title defaults
 // to the slug title-cased, allowId is the key Raycast stores under alwaysAllowCommandDeeplinking
-// once "Always allow" is clicked (ari-raycast link allow writes it).
+// once "Always allow" is clicked (`dotfiles raycast link allow` writes it).
 export type Deeplink = {
   kind: "deeplink"
   path: string

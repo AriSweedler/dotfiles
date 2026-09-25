@@ -35,7 +35,10 @@ assert_eq "brew applied=would_apply" would_apply "$(step_get brew .applied)"
 assert_contains "dry-run logs the brew install plan" "${ERR}" "would run apply::brew"
 assert_contains "dry-run plan names the Homebrew installer" "$(cat "$(newest_run_dir)/brew.log")" "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
 assert_eq "curl never called" "" "$(shim_log curl)"
-assert_json "remaining steps skip aborted" "${f}" '[.steps[] | select(.step != "brew")] | all(.status == "skip" and .reason == "aborted")' true
+# The repo group runs before brew (bootstrap's first work is init); everything after brew is aborted.
+repo_steps='["dotfiles_repo","local_dotfiles_repo","claude_skills","dotfiles_jobs"]'
+assert_json "steps after brew skip aborted" "${f}" "[.steps[] | select(.step != \"brew\" and ((.step | IN(${repo_steps}[])) | not))] | all(.status == \"skip\" and .reason == \"aborted\")" true
+assert_json "repo steps ran before the abort" "${f}" "[.steps[] | select(.step | IN(${repo_steps}[])) | .reason] | all(. != \"aborted\")" true
 assert_json "every step recorded after the abort" "${f}" '.steps|length' "${EXPECTED_STEPS}"
 
 bump_now_secs 60

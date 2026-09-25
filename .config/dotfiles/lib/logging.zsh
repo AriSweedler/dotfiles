@@ -1,11 +1,12 @@
-# dotfiles/lib/logging.zsh — the one log library plus the two zsh plugins the push logs need.
-# All three ship in the shared tier's checkout, so they resolve before any skill is linked.
-LIB_LOGGING="${HOME}/.config/zsh/plugins/log.zsh"
-readonly LIB_LOGGING
+# dotfiles/lib/logging.zsh — the one log library plus the two zsh plugins the logs need. All
+# three ship in this checkout (DOTFILES_CONFIG from env.zsh; derived here too, so the module
+# sources alone), so they resolve before HOME is checked out and before any skill is linked.
+: "${DOTFILES_CONFIG:=${${(%):-%x}:A:h:h:h}}"
+LIB_LOGGING="${DOTFILES_CONFIG}/zsh/plugins/log.zsh"
 if [[ ! -r "${LIB_LOGGING}" ]]; then
   print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
   exit 1
 fi
 source "${LIB_LOGGING}"
-source "${HOME}/.config/zsh/plugins/log_rotate.zsh"
-source "${HOME}/.config/zsh/plugins/strip_ansi.zsh"   # the push logs are plain text
+source "${DOTFILES_CONFIG}/zsh/plugins/log_rotate.zsh"
+source "${DOTFILES_CONFIG}/zsh/plugins/strip_ansi.zsh"   # the push and job logs are plain text
