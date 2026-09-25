@@ -14,13 +14,12 @@ Siblings MUST:
 - Reference lib sections by heading name (e.g., "Follow the `Resolve permalink SHA` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`"). Do NOT invoke this skill.
 - Use lib's folder root: `/tmp/hemingway/{skill-name}/{topic-slug}/{timestamp}/`. NEVER define a different root.
 - Emit one phase-transition print per workflow step per the format in `## Appendices → Print lines`.
-- Follow the Option 3 confirmation gate, Option 2 manual-SHA validation, and Scrap confirmation gate exactly.
-- Never renumber Present options 2 or 3, add options 5+, or override the print-line format.
+- Follow the permalink Option 3 confirmation gate, Option 2 manual-SHA validation, and Scrap confirmation gate exactly.
+- Run Present → Output without a menu; never add one, and never override the print-line format.
 
 Siblings MAY:
 - Extend the `scratchpad.md` baseline schema by appending fields after `Last phase`.
-- Enable Present option 4 in specific modes and supply mode-specific labels for option 1.
-- Insert a diff summary before the Present menu; siblings own the diff format.
+- Print a diff summary before the `Draft ready` line; siblings own the diff format.
 - Rename workflow step names (e.g., "Investigate" instead of "Research").
 
 ## Preconditions
@@ -265,29 +264,18 @@ If `[TODO: verify]` count exceeds 20% of counted claims, STOP and present four o
 
 ## Present
 
-After Draft + Fact-check, print ONLY the draft file path and the menu. Do NOT re-display the draft body, paraphrase it, show section headers, embed a stats panel (`words/sections/TODOs`), or any "here's what I wrote" framing. The draft is on disk; the user can open it.
+After Draft + Fact-check, print ONLY the draft file path and the `Draft ready` line, then go straight to `## Output`. Do NOT re-display the draft body, paraphrase it, show section headers, embed a stats panel (`words/sections/TODOs`), offer a menu, or wait for a choice. The draft is on disk; the user can open it.
 
 ```
 {path to draft.md}
-
-## Next step
-
-1. Finalize — write output.md
-2. Keep editing — tell me what to change (specific sections, tone, missing details)
-3. Scrap and restart
-4. No changes needed — the doc is already accurate (sibling-enabled only)
+Draft ready — finalizing.
 ```
 
-Rules:
-- **Option 3 MUST confirm.** Prompt `Discard current draft (investigation folder preserved)? (y/N)`. On yes, rename the `{timestamp}` folder to `{timestamp}-scrapped-$(openssl rand -hex 2)` (random suffix prevents collision on repeat scraps), then restart from the sibling's first workflow step.
-- **Option 2 post-selection:** apply edits via full rewrite of `draft.md`, re-run Fact-check on changed sections, re-enter Present. Do NOT skip Fact-check or drop to Output silently.
-- **Empty-diff default (siblings with diff support):** when the diff is empty in update-like modes, reorder so option 4 leads and is the default.
-- **Numbering when option 4 is hidden:** renumber to 1-3; do NOT leave a `(4)` gap.
+The user interjects; the skill never asks:
+- **Change requests** at any point: apply them via full rewrite of `draft.md`, re-run Fact-check on the changed sections, and continue. Do NOT skip Fact-check or drop to Output silently.
+- **Scrap** MUST confirm. Prompt `Discard current draft (investigation folder preserved)? (y/N)`. On yes, rename the `{timestamp}` folder to `{timestamp}-scrapped-$(openssl rand -hex 2)` (random suffix prevents collision on repeat scraps), then restart from the sibling's first workflow step.
 
-Sibling customizations:
-- MAY rename option 1 per mode. Example (from `ari-hemingway--structure-subsystem-explainer` update mode): `Finalize — write updated output.md, then update the Doc in place via /ari-hemingway--share-gdoc`.
-- MAY enable option 4 in specific modes only.
-- MAY insert a diff summary BEFORE the menu.
+Siblings MAY print a diff summary before the `Draft ready` line; siblings own the diff format.
 
 ## Output
 
@@ -302,7 +290,7 @@ Overwrite? (y/N)
 ```
 Default N.
 
-**Publish (gdoc destination).** Do not paste. Invoke `/ari-hemingway--share-gdoc`: it creates the Doc from `output.md` (or updates an existing one in place with `--doc`) and styles every table's header row and checks each image fits one page in the same run. Record the URL in `scratchpad.md`, then skip Transfer.
+**Publish (gdoc destination).** Do not paste. Invoke `/ari-hemingway--share-gdoc`: it creates the Doc from `output.md` (or updates an existing one in place with `--doc`) and styles every table's header row and checks each image fits one page in the same run. Pass `--folder` when the user named a Drive folder; otherwise the publish script falls back to `ARI_HEMINGWAY_SCRATCH_DIR`, and when that is unset too it exits non-zero naming both — only then ask the user for a folder. Record the URL in `scratchpad.md`, then skip Transfer.
 
 **Transfer (other destinations).** Run `zsh $HOME/.claude/skills/ari-hemingway--lib/bin/detect-transfer`. It prints one word to stdout: the transfer method.
 
@@ -333,7 +321,7 @@ Rendered sequence across a typical session:
 Investigate complete — 14 files read, 6 grep queries. Next: Draft.
 Draft complete — 5 sections, 1247 words. Next: Fact-check.
 Fact-check complete — 18 claims verified, 2 marked [TODO: verify]. Next: Present.
-Draft ready — awaiting your choice.
+Draft ready — finalizing.
 Output complete — /tmp/hemingway/subsystem-explainer/widget-cache-invalidation-ab3f9c/20260416-164200-7a3c/output.md, 127 lines, 1247 words. Transfer: wl-copy.
 ```
 
