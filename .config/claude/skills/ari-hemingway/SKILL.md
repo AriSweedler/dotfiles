@@ -59,7 +59,7 @@ No structure sibling installed for {shape}. Options:
 
 Invoke the sibling via the Skill tool — do not Read its SKILL.md first. The Skill tool loads the full file. The sibling handles acquire (investigation) and format internally, per its own SKILL.md. Two sub-structures apply to any shape bound for a Google Doc, inside the sibling's Draft step: `/ari-hemingway--structure-aside` (optional content in its own tab, one marker per aside) and `/ari-hemingway--structure-bookmark` (a link that lands on a sentence, not a section); `/ari-hemingway--share-gdoc` publishes both.
 
-Wait for the sibling to reach its `Present` step (draft ready).
+The sibling runs through Draft, Fact-check, its `Draft ready` line, and `output.md` on its own; there is no menu to answer. Step in only if the user asks for changes.
 
 ### 3. Review prompt
 
@@ -83,11 +83,11 @@ Apply selected findings to the draft (the reviewer is READ-ONLY, so the dispatch
 
 ### 5. Share
 
-Print the final draft path and suggest a destination-appropriate share action:
+As soon as the findings are applied, print the final draft path and take the destination's share action:
 
 | Destination | Share action |
 |---|---|
-| gdoc | Invoke `/ari-hemingway--share-gdoc` — creates (or updates in place) the Doc from the markdown and styles its tables. |
+| gdoc | Invoke `/ari-hemingway--share-gdoc` — creates (or updates in place) the Doc from the markdown and styles its tables. Pass `--folder` when the user named a Drive folder; otherwise the script uses `ARI_HEMINGWAY_SCRATCH_DIR`, and only when that is unset too do you ask for a folder. |
 | explainer | "The article is in the explainers repo; commit it there. Hosting on explainers.sweedler.com is a later share sibling." |
 | slack | "Paste into the target channel / thread. Preserve the formatting — it's already mrkdwn." |
 | pr-description | "Run `gh pr edit {PR} --body-file {path}`." |
@@ -119,7 +119,7 @@ User invocation: `/ari-hemingway explain the multi-cluster rollout subsystem`
 3. Review prompt → user picks `bundle for destination` (gdoc).
 4. Run `/ari-hemingway--review-gdoc`.
 5. Apply findings.
-6. Share: paste into a Google Doc.
+6. Share: `/ari-hemingway--share-gdoc` into the folder the user named, else `ARI_HEMINGWAY_SCRATCH_DIR`.
 
 ## Rules
 
