@@ -88,7 +88,7 @@ each script's runs in their own directory keeps them easy to correlate.
    `bin/pretooluse-headless-chrome-guard.sh`, gated with
    `"if": "Bash(*--headless*)"`; other `PreToolUse` entries are kept.
 
-It is wired into `new-machine setup` (the `claude_notifications` step)
+It is wired into `dotfiles setup` (the `claude_notifications` step)
 so a fresh machine gets it as part of the regular bootstrap. Safe to run by
 hand any time:
 
@@ -96,7 +96,7 @@ hand any time:
 ~/.config/claude/bin/initialize.sh
 ```
 
-The `claude_notifications` step also runs in the Monday `new-machine verify`
+The `claude_notifications` step also runs in the Monday `dotfiles verify`
 launchd job, so hook drift surfaces in the background. From a shell,
 `claude::hook::check` runs that one step read-only and `claude::hook::register`
 applies it (both in `~/.config/zsh/plugins/claude.zsh`).
@@ -128,7 +128,7 @@ jq -nc '{tool_name:"Bash",tool_input:{command:"open -a \"Google Chrome\" --args 
 
 `new-machine check --only claude_notifications` reports the guard missing from
 `settings.json` as `guard_mismatch`; `initialize.sh` (or
-`new-machine apply claude_notifications`) wires it.
+`dotfiles apply claude_notifications`) wires it.
 
 ## Karabiner integration
 

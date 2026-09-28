@@ -14,7 +14,7 @@
      "manual": false, "actionable": false, "items": [], "rc": 0, "duration_ms": 88,
      "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/brew.log", "applied": false},
     {"step": "brew_drift", "status": "fail", "reason": "drift", "detail": "undeclared=3 orphaned=1 declared_orphan=0 duplicate=0",
-     "fix": "new-machine brew triage", "manual": true, "actionable": false,
+     "fix": "dotfiles brew triage", "manual": true, "actionable": false,
      "items": [
        {"kind": "formula", "name": "gh", "problem": "installed but undeclared"},
        {"kind": "formula", "name": "python@3.10", "problem": "installed but undeclared"},
@@ -25,7 +25,7 @@
      "rc": 0, "duration_ms": 1412,
      "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/brew_drift.log", "applied": false},
     {"step": "brew_pkgs", "status": "fail", "reason": "missing", "detail": "1 declared item not installed",
-     "fix": "new-machine apply brew_pkgs", "manual": false, "actionable": true,
+     "fix": "dotfiles apply brew_pkgs", "manual": false, "actionable": true,
      "items": [
        {"kind": "formula", "name": "cowsay", "problem": "needs to be installed", "tier": "global"}
      ],

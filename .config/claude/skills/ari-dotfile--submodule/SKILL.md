@@ -86,8 +86,8 @@ Claude does 1–5 and 8–10; the user does 6, 7 and 11. Nothing here pushes.
 9. **Bootstrap.** In `~/.config/new-machine/lib/steps.zsh`: `<name>` appended
    to `STEPS`, `[<name>]=dotfiles_repo` in `STEP_NEEDS`, a `STEP_DESC` line,
    `check::<name>` (`skip` when `~/.config/<name>/bin/<name>` is missing, fix
-   `new-machine apply dotfiles_repo`; `fail` when `core.hooksPath` is not
-   `.githooks` or the build output is missing, fix `new-machine apply <name>`;
+   `dotfiles apply dotfiles_repo`; `fail` when `core.hooksPath` is not
+   `.githooks` or the build output is missing, fix `dotfiles apply <name>`;
    else `ok`) and `apply::<name>` (wire the hooks, build). Model:
    `check::chrome_exoskeleton` / `apply::chrome_exoskeleton`. Add the repo's
    setup to the `next=` clause of `cmd_init` in `~/.config/dotfiles/lib/init.zsh`.
@@ -153,7 +153,7 @@ Never `--no-verify`, in any repo. Never edit `denylist.txt` to make a check pass
 | `branch --show-current` prints nothing | detached after `git df pull` / `submodule update` | **Working in one**, first rule |
 | pre-commit: the check is red | code | fix, commit again |
 | commit-msg: `denylisted identifier` | the message | reword, commit again |
-| hooks did not run | `core.hooksPath` unset on this checkout | `git -C ~/.config/<name> config core.hooksPath .githooks`, or `new-machine apply <name>` |
+| hooks did not run | `core.hooksPath` unset on this checkout | `git -C ~/.config/<name> config core.hooksPath .githooks`, or `dotfiles apply <name>` |
 | df pre-commit: `<name> pointer … is not on origin/main` | bump before the push | the user runs `dotfiles push --submodules`; re-run the commit, nothing to re-stage |
 | `dotfiles push` log: `Personal account is not logged into gh` / `Token identity mismatch` | gh login | the user: `env -u GITHUB_TOKEN gh auth login` (HTTPS), or `gh auth status` |
 | `dotfiles push` log: `Push rejected` above `remote: Repository not found` | the GitHub repo does not exist | step 6 is the user's |

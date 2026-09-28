@@ -9,11 +9,11 @@ State lives in /tmp/nmtest/home/.local/state/new-machine/ · machine-readable: l
 
 | step | item | problem | tier | fix |
 |---|---|---|---|---|
-| brew_drift | formula gh | installed but undeclared (new) | — | `new-machine brew triage` |
-| brew_drift | formula python@3.10 | installed but undeclared | — | `new-machine brew triage` |
+| brew_drift | formula gh | installed but undeclared (new) | — | `dotfiles brew triage` |
+| brew_drift | formula python@3.10 | installed but undeclared | — | `dotfiles brew triage` |
 | brew_drift | formula spacelift-io/spacelift/spacectl | orphaned: the tap now ships cask spacelift-io/spacelift/spacectl | — | see below |
-| brew_drift | cask codex | installed but undeclared (new) | — | `new-machine brew triage` |
-| brew_pkgs | formula cowsay | needs to be installed | global | `new-machine apply brew_pkgs` |
+| brew_drift | cask codex | installed but undeclared (new) | — | `dotfiles brew triage` |
+| brew_pkgs | formula cowsay | needs to be installed | global | `dotfiles apply brew_pkgs` |
 
 ## Undeclared brew items (decree each one; I decide the tier)
 

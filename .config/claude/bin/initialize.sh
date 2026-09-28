@@ -8,7 +8,7 @@
 #      bin/pretooluse-headless-chrome-guard.sh, gated to commands that mention
 #      --headless.
 #
-# Safe to re-run. Used by `new-machine setup` and runnable on demand.
+# Safe to re-run. Used by `dotfiles setup` and runnable on demand.
 
 set -u
 
