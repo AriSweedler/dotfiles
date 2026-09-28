@@ -77,6 +77,7 @@ cask "instant-space-switcher"
 brew "terminal-notifier"  # Claude Code notification hook (~/.config/claude) and git-health
 
 # ── decreed via 'new-machine brew decree'; move into a section when tidying ──
+brew "gh"  # dotfiles push authenticates by its gh token
 brew "rust-analyzer"
 brew "rustup"
 cask "google-chrome"
