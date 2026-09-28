@@ -25,19 +25,19 @@ from the local tier at the submodule's local root (`/ari-dotfiles` Cutpoints).
 | Declaration | `~/.gitmodules`: `[submodule ".config/<name>"]`, `path`, an https `url` | df | what `dotfiles push`, `dotfiles init`, `dotfiles status` and the skill registry enumerate |
 | Driver | `~/.config/bin/<name> -> ../<name>/bin/<name>` | df | one entry point with subcommands; `~/.config/bin` is on `PATH` |
 | Check, build | `<name> check`, `<name> build` (or the repo's `bin/<name>-dev …`) | repo | each ends in one `[OK]` line; anything else is a failure |
-| Hooks | `.githooks/pre-commit` runs the check; `.githooks/commit-msg` greps the message against the denylist | repo | `core.hooksPath=.githooks` is local config: a fresh checkout has no hooks until the `new-machine` step wires it |
+| Hooks | `.githooks/pre-commit` runs the check; `.githooks/commit-msg` greps the message against the denylist | repo | `core.hooksPath=.githooks` is local config: a fresh checkout has no hooks until `dotfiles apply <name>` wires it |
 | Denylist | `~/.local/share/<name>/denylist.txt`: one regex per line, `#` comments | ldf | what the public repo must never contain; absent → both hooks are no-ops, review by eye |
 | Skills | `~/.config/<name>/skills/<skill>/SKILL.md`, symlinked into `~/.claude/skills` by `/ari-dotfiles-skill-registry` `link` | repo | committed in the repo, never `git df add`ed; `adopt` refuses a submodule |
 | Local plug-in root (optional) | `~/.local/share/<name>/…` | ldf | admitted in both ldf allowlists; discovered at run time; the repo never requires it |
-| Bootstrap | `new-machine` step `<name>` with `STEP_NEEDS=dotfiles_repo`; a clause in `dotfiles init`'s `init done … next=` line | df | `~/.config/new-machine/lib/steps.zsh`, `~/.config/dotfiles/lib/init.zsh` |
+| Bootstrap | `dotfiles` step `<name>`: `step::declare <name> --group tools --needs dotfiles_repo`, `check::<name>`, `apply::<name>` | df | `~/.config/dotfiles/steps/<name>.zsh` |
 | Skill | `/ari-dotfile--submodule-<name>` | repo | the repo's commands, hooks, workflow, failures; everything else is here |
 
 **Commits carry the personal identity only**: `user.name "Ari Sweedler"`,
 `user.email ari@sweedler.com`, set in the repo's `--local` config before the
 first commit, never inherited from the global or work config. The repo is
 public, files and messages alike. Local config is not cloned, so the repo's
-`new-machine` apply step pins both keys on a fresh checkout
-(`steps::submodule_identity_apply` in `~/.config/new-machine/lib/steps.zsh`)
+`dotfiles` apply step pins both keys on a fresh checkout
+(`tier::submodule_identity_apply` in `~/.config/dotfiles/lib/tiers.zsh`)
 and its check fails on drift; after any commit,
 `git -C ~/.config/<name> log -1 --format='%an <%ae> %cn <%ce>'` must print that
 identity twice.
@@ -83,15 +83,14 @@ Claude does 1–5 and 8–10; the user does 6, 7 and 11. Nothing here pushes.
    just set. Later pushes bump the pointer in their own commits; a new submodule is
    two commits by design (the user's call: "we aren't guarding commits as a rare
    resource"), never folded into one.
-9. **Bootstrap.** In `~/.config/new-machine/lib/steps.zsh`: `<name>` appended
-   to `STEPS`, `[<name>]=dotfiles_repo` in `STEP_NEEDS`, a `STEP_DESC` line,
+9. **Bootstrap.** One file, `~/.config/dotfiles/steps/<name>.zsh`:
+   `step::declare <name> --group tools --needs dotfiles_repo --desc "…"`, then
    `check::<name>` (`skip` when `~/.config/<name>/bin/<name>` is missing, fix
-   `dotfiles apply dotfiles_repo`; `fail` when `core.hooksPath` is not
-   `.githooks` or the build output is missing, fix `dotfiles apply <name>`;
-   else `ok`) and `apply::<name>` (wire the hooks, build). Model:
-   `check::chrome_exoskeleton` / `apply::chrome_exoskeleton`. Add the repo's
-   setup to the `next=` clause of `cmd_init` in `~/.config/dotfiles/lib/init.zsh`.
-   `git df add` both, commit.
+   `dotfiles apply dotfiles_repo`; `fail` when the identity, `core.hooksPath`
+   (`.githooks`) or the build output is off, fix `dotfiles apply <name>`;
+   else `ok`) and `apply::<name>` (`tier::submodule_identity_apply`, the hooks,
+   the build, every mutation through `run_mut`). Adding the file adds the step.
+   Model: `steps/plugged.zsh`. `git df add` it, commit.
 10. **Link and record.** `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link`.
     Add a row to **Known submodules** below and to `/ari-dotfiles` § Submodules.
 11. **User: `dotfiles push`.** Then **Verify**.
@@ -140,7 +139,7 @@ git df status --short -- ~/.config/<name>       → (empty)
 <name> check                                    → … [OK] …
 zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/status --all | grep <name>
                                                 → state=linked … source=submodule:.config/<name>
-new-machine check --only <name>                 → ok
+dotfiles healthcheck --only <name>              → ok
 ```
 
 ## When it fails
@@ -164,7 +163,7 @@ Never `--no-verify`, in any repo. Never edit `denylist.txt` to make a check pass
 | `submodule status` prefix `+` | checkout ahead of the pointer | a bump is pending: `dotfiles push`; on a machine that only pulled, `cd ~ && git df submodule update` |
 | `submodule status` prefix `-` | not initialized | `cd ~ && git df submodule update --init -- .config/<name>` (`dotfiles init` does it) |
 | registry `status`: the repo's skill `dangling` or `missing` | skill dir renamed or new | `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link --prune` |
-| `new-machine check`: `submodule_uninitialized` / `submodule_drift` | pointer vs checkout | the two rows above |
+| `dotfiles healthcheck`: `submodule_uninitialized` / `submodule_drift` | pointer vs checkout | the two rows above |
 
 ## Known submodules
 
