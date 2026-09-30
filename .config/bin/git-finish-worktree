@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# `git finish-worktree` will produce a script. The script will remove the
-# worktree, cd to git repo root, and then delete the branch.
+# `git finish-worktree` will produce a script. The script will expunge the
+# worktree's Bazel output base (stopping its server), remove the worktree, cd
+# to git repo root, and then delete the branch.
 #
 # To be used like:
 #
@@ -23,6 +24,7 @@ function main() {
   fi
 
 cat << EOF
+  [ -f MODULE.bazel ] && bazel clean --expunge_async
   git worktree remove .
   cd ..
   cd \$(git rev-parse --show-toplevel)

@@ -1,6 +1,7 @@
 #!/usr/bin/env zsh
 # A lane's worktree: --action open adds a worktree on its branch from a base and links the root's
-# node_modules into it; --action handoff unlinks the symlink, then removes the worktree, keeping the branch.
+# node_modules into it; --action handoff unlinks the symlink, expunges the worktree's Bazel output base
+# (stopping its server), then removes the worktree, keeping the branch.
 # Run: zsh $HOME/.claude/skills/ari-parallel-play/bin/worktree.zsh --help
 
 set -euo pipefail
@@ -130,7 +131,8 @@ link_modules() {
 }
 
 #######################################
-# Unlink the node_modules symlink, then remove the worktree; the branch stays.
+# Unlink the node_modules symlink, expunge the Bazel output base (which stops the worktree's
+# server), then remove the worktree; the branch stays.
 # Globals: DRY_RUN
 # Arguments:
 #   $1 - root; $2 - dir
@@ -154,6 +156,9 @@ handoff_worktree() {
   if (( dirty > 0 )); then
     log::err "Worktree has uncommitted changes; commit or discard them first | dir='${dir}' changed_files='${dirty}'"
     return 1
+  fi
+  if [[ -f "${dir}/MODULE.bazel" ]]; then
+    ( cd "${dir}" && mutate bazel clean --expunge_async )
   fi
   mutate git -C "${root}" worktree remove "${dir}"
   log::info "Branch kept | branch='$(git -C "${root}" branch --list | grep -c . || true) local branches'"
