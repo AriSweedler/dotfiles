@@ -1,27 +1,31 @@
+# Sets REPLY to the ANSI index (15 white or 0 black) that reads best on top of
+# the given 256-color index. REPLY instead of stdout so hot loops need no fork.
 function color::contrast() {
-  local r g b luminance
-  color="$1"
+  local color="$1"
 
   # In the first 16 - use white for '00' only
   if (( color < 16 )); then
-    (( color == 0 )) && printf "15" || printf "0"
+    REPLY=$(( color == 0 ? 15 : 0 ))
     return
   fi
 
   # In the greyscale (last 24) - use white for the first half
   if (( color > 231 )); then # Greyscale ramp
-    (( color < 244 )) && printf "15" || printf "0"
+    REPLY=$(( color < 244 ? 15 : 0 ))
     return
   fi
 
   # For each block of 36 colors - Use white for the first 3rd
   local row=$(( ( (color-16) % 36) / 6 ))
-  (( row < 2 )) && printf "15" || printf "0"
+  REPLY=$(( row < 2 ? 15 : 0 ))
 }
 
 function color::ize() {
-  # Read input
-  local content="$(cat -)"
+  # Read all of stdin with the builtin (no fork); drop the trailing newline a
+  # piped echo leaves, as $(cat) used to.
+  local content
+  IFS= read -r -d '' content
+  content="${content%$'\n'}"
 
   # Because all of the args are key+value - an odd number means we have omitted
   # one. Add '--color' as the implicit key in this case.
@@ -49,7 +53,8 @@ function color::ize() {
   fi
 
   # Do work:
-  printf "\e[48;5;%sm\e[38;5;%sm" "${color}" "$(color::contrast "${color}")"
+  color::contrast "${color}"
+  printf "\e[48;5;%sm\e[38;5;%sm" "${color}" "${REPLY}"
   printf "%s%s%s" "${padding}" "${content}" "${padding}"
   printf "\e[0m"
 }
@@ -64,8 +69,11 @@ function color::xterm() {
     *) log::err "Unknown format | format='${1:-}'"; return 1 ;;
   esac
 
+  # Same cell color::ize would print, built inline: 256 pipes cost ~4s.
+  local i
   for i in {0..255}; do
-    printf "${fmt_str}" "$i" | color::ize "$i" --padding " "
+    color::contrast "${i}"
+    printf "\e[48;5;%dm\e[38;5;%dm ${fmt_str} \e[0m" "$i" "$REPLY" "$i"
     color::xterm::movement "${i}"
   done
 }
