@@ -5,11 +5,9 @@
 	hash = log-to-clipboard '%H'
 
 	swr = switch-recent
-	swbl = switch-branchlog
 	wb = wipebranch
 	yb = yankbranch
 
-	switch-branchlog = "!git branchlog | git switch \"$(fzf --select-1)\""
 	switch-recent = "!f() { git branch --format=\"%(refname:short)\" --sort=-committerdate | fzf --header \"Switch to recent branch\" --preview 'git diff {1} --color=always | delta' | xargs git switch; }; f"
 	wipebranch = "!f() { git branch -D $1; git push origin --delete $1; }; f"
 	yankbranch = "!git branch --show-current | tee /dev/tty | tr -d '\n' | pbcopy"

@@ -49,7 +49,6 @@
 	ls = ls-tree --full-tree -r --abbrev HEAD
 	push-origin = "!git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)"
 	rebase-remote = "!f() { b="${1:?provide a branch}"; o="${2:-origin}" ; git fetch "${o}" && git rebase -i "${o}/${b}" && git branch -f "${b}" "${o}/${b}"; }; f"
-	worka = worktreex-add
 
 [include]
 	path = ~/.config/git/plugin/color.gitconfig
