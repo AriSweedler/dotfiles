@@ -17,7 +17,6 @@ readonly CLICK_SCRIPT="${CLAUDE_BIN_DIR}/notification-click-handler.sh"
 readonly QUICKCHAT_SCRIPT="${CLAUDE_BIN_DIR}/quickchat.sh"
 readonly TMUX_PANE_LIB="${CLAUDE_LIB_DIR}/tmux-pane.sh"
 readonly NOTIFIER="/opt/homebrew/bin/terminal-notifier"
-# -contentImage; the left-hand icon is always the posting app's and cannot be changed.
 readonly CONTENT_IMAGE="${CLAUDE_SCRIPT_ROOT}/assets/claude-code-mascot.png"
 readonly TMUX_BIN="/opt/homebrew/bin/tmux"
 readonly NOTIFICATION_GROUP="claude-notification"
