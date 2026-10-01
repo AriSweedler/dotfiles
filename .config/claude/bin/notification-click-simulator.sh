@@ -7,7 +7,7 @@
 
 set -u
 
-readonly CLAUDE_SCRIPT_ROOT="$(cd -- "$(dirname -- "$0")/.." && pwd)"
+readonly CLAUDE_SCRIPT_ROOT="${0:A:h:h}"
 # shellcheck source=/dev/null
 . "${CLAUDE_SCRIPT_ROOT}/lib/notification-lib.sh"
 
@@ -23,8 +23,12 @@ main() {
   fi
   log "target='${target}'"
 
-  dismiss_notification "${NOTIFICATION_GROUP}-${target}"
+  # The dismissal (~80 ms app launch, occasionally a hang) overlaps the jump
+  # instead of delaying it; waited on so it is never orphaned.
+  dismiss_notification "${NOTIFICATION_GROUP}-${target}" &
+  local dismiss_pid=$!
   "${CLICK_SCRIPT}" "${target}"
+  wait "${dismiss_pid}"
 
   log "end"
 }

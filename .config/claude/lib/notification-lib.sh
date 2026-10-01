@@ -28,11 +28,16 @@ readonly LOG_DIR="/tmp/claude-notification"
 # shellcheck source=/dev/null
 . "${HOME}/.config/zsh/plugins/log_rotate.zsh"
 
+zmodload zsh/datetime
+
 #######################################
-# Appends a timestamped line to LOG_FILE.
+# Appends a timestamped line to LOG_FILE. strftime, not date: every spawn costs
+# ~15 ms behind the endpoint agent and the click path logs six lines.
 #######################################
 log() {
-  printf '%s | %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >>"${LOG_FILE}"
+  local ts
+  strftime -s ts '%Y-%m-%d %H:%M:%S' "${EPOCHSECONDS}"
+  printf '%s | %s\n' "${ts}" "$*" >>"${LOG_FILE}"
 }
 
 #######################################
@@ -55,18 +60,17 @@ dismiss_notification() {
 #######################################
 # Prints the tmux target of the most-recently-delivered active Claude
 # notification, or nothing if none. Group IDs use NOTIFICATION_GROUP-<target>
-# (per-pane stacking); -list ALL's "Delivered At" column is an ISO-ish
-# timestamp that string-sorts chronologically.
+# (per-pane stacking); -list ALL's "Delivered At" column ($5) is an ISO-ish
+# timestamp that string-compares chronologically. One awk, not a five-process
+# pipeline: each spawn costs ~15 ms behind the endpoint agent.
 # Outputs:
 #   target string to stdout, or empty
 #######################################
 most_recent_claude_target() {
   "${NOTIFIER}" -list ALL 2>>"${LOG_FILE}" \
-    | tail -n +2 \
-    | awk -F'\t' -v p="${NOTIFICATION_GROUP}-" 'index($1, p) == 1' \
-    | sort -t$'\t' -k5,5 -r \
-    | head -n 1 \
-    | awk -F'\t' -v p="${NOTIFICATION_GROUP}-" '{ sub("^" p, "", $1); print $1 }'
+    | awk -F'\t' -v p="${NOTIFICATION_GROUP}-" '
+        NR > 1 && index($1, p) == 1 && $5 > best { best = $5; target = substr($1, length(p) + 1) }
+        END { if (target != "") print target }'
 }
 
 #######################################

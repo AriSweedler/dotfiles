@@ -21,12 +21,14 @@ source "${HOME}/.config/zsh/plugins/log.zsh"
 
 readonly CLAUDE_CLICK_SIM="${HOME}/.config/claude/bin/notification-click-simulator.sh"
 
-# Profiling: log foreground_ms = when focus actually leaves the current app (the
-# real "tabbed over" moment), separate from the script's full elapsed_ms — the
-# stack re-collapse / NC-close tail runs after you're already in the app. Detects
-# an app switch (→ Slack/Calendar); a Claude catch is a tmux-pane jump inside
-# Terminal, so the frontmost app may not change and this stays silent.
-if [[ -x /usr/bin/lsappinfo ]]; then
+# Profiling (NOTIF_CLICK_PROFILE=1): log foreground_ms = when focus actually leaves
+# the current app (the real "tabbed over" moment), separate from the script's full
+# elapsed_ms — the stack re-collapse / NC-close tail runs after you're already in
+# the app. Detects an app switch (→ Slack/Calendar); a Claude catch is a tmux-pane
+# jump inside Terminal, so the frontmost app may not change and this stays silent.
+# Off by default: the poll is up to 400 lsappinfo spawns (~15 ms each behind the
+# endpoint agent) racing the click path for CPU.
+if [[ "${NOTIF_CLICK_PROFILE:-0}" == 1 && -x /usr/bin/lsappinfo ]]; then
   () {
     zmodload zsh/datetime
     typeset -F t0=$EPOCHREALTIME
