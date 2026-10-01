@@ -61,8 +61,8 @@ dismiss_notification() {
 
 #######################################
 # Prints the tmux target of the most-recently-delivered active Claude
-# notification, or nothing if none. Group IDs use NOTIFICATION_GROUP-<target>
-# (per-pane stacking); -list ALL's "Delivered At" column ($5) is an ISO-ish
+# notification, or nothing if none. The pane is the subtitle ($3) of the
+# NOTIFICATION_GROUP row; -list ALL's "Delivered At" column ($5) is an ISO-ish
 # timestamp that string-compares chronologically. One awk, not a five-process
 # pipeline: each spawn costs ~15 ms behind the endpoint agent.
 # Outputs:
@@ -70,8 +70,8 @@ dismiss_notification() {
 #######################################
 most_recent_claude_target() {
   "${NOTIFIER}" -list ALL 2>>"${LOG_FILE}" \
-    | awk -F'\t' -v p="${NOTIFICATION_GROUP}-" '
-        NR > 1 && index($1, p) == 1 && $5 > best { best = $5; target = substr($1, length(p) + 1) }
+    | awk -F'\t' -v g="${NOTIFICATION_GROUP}" '
+        NR > 1 && $1 == g && $3 != "" && $5 > best { best = $5; target = $3 }
         END { if (target != "") print target }'
 }
 
@@ -112,10 +112,12 @@ resolve_message() {
 }
 
 #######################################
-# Posts the notification via terminal-notifier with a per-pane group so
-# concurrent Claude waits stack in Notification Center instead of dismissing
-# each other. When target is non-empty, wires -execute to the click handler;
-# otherwise falls back to -activate.
+# Posts the notification via terminal-notifier. One group for every Claude
+# notification: terminal-notifier 3.x makes the group the Notification Center
+# stack, so per-pane groups would scatter them; the pane travels in the
+# subtitle instead, and a newer wait replaces the banner of an older one. When
+# target is non-empty, wires -execute to the click handler; otherwise falls
+# back to -activate.
 # Arguments:
 #   $1 - message
 #   $2 - tmux target-pane (optional)
@@ -123,7 +125,6 @@ resolve_message() {
 post_notification() {
   local msg="${1:?post_notification: message required}"
   local target="${2:-}"
-  local group="${NOTIFICATION_GROUP}${target:+-${target}}"
   local title="Claude Code"
   if [[ -n "${target}" ]]; then
     local target_window="${target%.*}"
@@ -140,11 +141,11 @@ post_notification() {
     -title "${title}"
     -message "${msg}"
     -sound Glass
-    -group "${group}"
+    -group "${NOTIFICATION_GROUP}"
     -contentImage "${CONTENT_IMAGE}"
   )
   if [[ -n "${target}" ]]; then
-    args+=(-execute "${CLICK_SCRIPT} '${target}'")
+    args+=(-subtitle "${target}" -execute "${CLICK_SCRIPT} '${target}'")
   else
     args+=(-activate com.apple.Terminal)
   fi

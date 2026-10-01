@@ -25,7 +25,7 @@ main() {
 
   # The dismissal (~80 ms app launch, occasionally a hang) overlaps the jump
   # instead of delaying it; waited on so it is never orphaned.
-  dismiss_notification "${NOTIFICATION_GROUP}-${target}" &
+  dismiss_notification &
   local dismiss_pid=$!
   "${CLICK_SCRIPT}" "${target}"
   wait "${dismiss_pid}"
