@@ -23,7 +23,7 @@ hud() {
     return 0
   fi
   if [[ -n "${ARI_DOTFILES_NOTIFIER}" ]] && command -v "${ARI_DOTFILES_NOTIFIER}" >/dev/null 2>&1; then
-    local -a args=(-group "${CLI_NAME}" -title "${CLI_NAME}" -message "${msg}")
+    local -a args=(-group "${CLI_NAME}" -title "${CLI_NAME}" -message "${msg}" -contentImage "${ARI_DOTFILES_NOTIFIER_IMAGE}")
     # A file:// click via -open lands in the .md default app (Xcode); route it through the
     # editor-in-tmux-window script instead. The click runs under /bin/sh, hence (q) quoting.
     if [[ "${open_url}" == file://* ]]; then
@@ -32,6 +32,7 @@ hud() {
     elif [[ -n "${open_url}" ]]; then
       args+=(-open "${open_url}")
     fi
+    log::notify_image_check "${args[@]}"
     "${ARI_DOTFILES_NOTIFIER}" "${args[@]}" >/dev/null || return 0
     if (( seconds > 0 )); then
       sleep "${seconds}"

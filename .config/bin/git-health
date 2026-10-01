@@ -26,6 +26,7 @@ source "${XDG_CONFIG_HOME:-${HOME}/.config}/zsh/plugins/log.zsh"
 readonly STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/git-health"
 readonly REGISTRY="${STATE_DIR}/repos"
 readonly LOG_FILE="${STATE_DIR}/git-health.log"
+readonly CONTENT_IMAGE="${0:A:h}/assets/git-health.png"
 readonly MAX_PACKS=50
 readonly MAX_LOOSE=50000
 
@@ -346,7 +347,9 @@ alert() {
     else
         click="/usr/bin/open -a Terminal ${(q)LOG_FILE}"
     fi
-    "${tn}" -group "git-health-alert-${title// /-}" -title "${title}" -message "${msg}" -execute "${click}" >/dev/null || true
+    local -a args=(-group "git-health-alert-${title// /-}" -title "${title}" -message "${msg}" -execute "${click}" -contentImage "${CONTENT_IMAGE}")
+    log::notify_image_check "${args[@]}"
+    "${tn}" "${args[@]}" >/dev/null || true
 }
 
 #######################################

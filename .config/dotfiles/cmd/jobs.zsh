@@ -459,6 +459,8 @@ jobs_notifier_bin() {
 jobs_notify() {
   local tn pid watchdog rc=0
   tn="$(jobs_notifier_bin)" || return 1
+  [[ "${1}" == -remove ]] || set -- "${@}" -contentImage "${ARI_DOTFILES_NOTIFIER_IMAGE}"
+  log::notify_image_check "${@}"
   "${tn}" "${@}" >/dev/null 2>&1 </dev/null &
   pid=$!
   { sleep "${JOBS_NOTIFIER_TIMEOUT_SECONDS}"; kill "${pid}" 2>/dev/null; } >/dev/null 2>&1 </dev/null &

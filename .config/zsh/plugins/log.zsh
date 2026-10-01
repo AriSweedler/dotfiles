@@ -18,6 +18,7 @@
 # Colours are real escape bytes ($'\e[..'), so a heredoc renders them; they are plain variables,
 # never readonly, so the lib can be sourced again and a caller can blank them.
 zmodload -F zsh/datetime b:strftime p:epochtime 2>/dev/null
+typeset -g OTTO_LOG_PLUGIN_DIR="${${(%):-%x}:A:h}"   # at source time, where %x is this file
 
 log::colors_on() {
   c_red=$'\e[31m' c_green=$'\e[32m' c_yellow=$'\e[33m' c_blue=$'\e[34m' c_magenta=$'\e[35m'
@@ -113,9 +114,27 @@ log::redirect_all_output_to_logfile() {
 }
 
 #######################################
+# Warn when a terminal-notifier post carries no -contentImage, or one that is not a file.
+# Every notification is meant to carry an image; -remove and -list post nothing and pass.
+# Arguments: the notifier's argv
+#######################################
+log::notify_image_check() {
+  local -a argv=("$@")
+  (( ${argv[(I)-remove]} || ${argv[(I)-list]} )) && return 0
+  local i="${argv[(I)-contentImage]}"
+  if (( i == 0 )); then
+    log::warn "notification without -contentImage | args='$*'"
+  elif [[ ! -f "${argv[i+1]}" ]]; then
+    log::warn "notification -contentImage is not a file | path='${argv[i+1]}'"
+  fi
+  return 0
+}
+
+#######################################
 # A terminal-notifier banner, removed after a delay by a nohup'd sleeper so the caller may exit.
 # Globals: OTTO_LOG_NOTIF_TITLE (default "notification"), OTTO_LOG_NOTIF_GROUP (default
-# "default"), OTTO_LOG_NOTIFY_SECS (default 5), notif_lvl (the tier that also logs it; debug).
+# "default"), OTTO_LOG_NOTIFY_SECS (default 5), OTTO_LOG_NOTIF_IMAGE (-contentImage path;
+# default the robot beside this file), notif_lvl (the tier that also logs it; debug).
 # Returns 1 when the message is missing or terminal-notifier is not on PATH.
 #######################################
 log::notify() {
@@ -124,6 +143,9 @@ log::notify() {
   local secs="${OTTO_LOG_NOTIFY_SECS:-5}" tier="${notif_lvl:-debug}"
   command -v terminal-notifier >/dev/null 2>&1 || { log::warn "terminal-notifier not on PATH"; return 1; }
   "log::${tier}" "notify | secs='${secs}' group='${group}' title='${title}' message='${message}'"
-  terminal-notifier -title "${title}" -message "${message}" -group "${group}" >/dev/null
+  local image="${OTTO_LOG_NOTIF_IMAGE:-${OTTO_LOG_PLUGIN_DIR}/assets/robot.png}"
+  local -a args=(-title "${title}" -message "${message}" -group "${group}" -contentImage "${image}")
+  log::notify_image_check "${args[@]}"
+  terminal-notifier "${args[@]}" >/dev/null
   nohup zsh -c "sleep ${secs} && terminal-notifier -remove '${group}' >/dev/null 2>&1" </dev/null >/dev/null 2>&1 &
 }

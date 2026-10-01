@@ -17,6 +17,8 @@ readonly CLICK_SCRIPT="${CLAUDE_BIN_DIR}/notification-click-handler.sh"
 readonly QUICKCHAT_SCRIPT="${CLAUDE_BIN_DIR}/quickchat.sh"
 readonly TMUX_PANE_LIB="${CLAUDE_LIB_DIR}/tmux-pane.sh"
 readonly NOTIFIER="/opt/homebrew/bin/terminal-notifier"
+# -contentImage; the left-hand icon is always the posting app's and cannot be changed.
+readonly CONTENT_IMAGE="${CLAUDE_SCRIPT_ROOT}/assets/claude-code-mascot.png"
 readonly TMUX_BIN="/opt/homebrew/bin/tmux"
 readonly NOTIFICATION_GROUP="claude-notification"
 readonly LOG_DIR="/tmp/claude-notification"
@@ -139,11 +141,13 @@ post_notification() {
     -message "${msg}"
     -sound Glass
     -group "${group}"
+    -contentImage "${CONTENT_IMAGE}"
   )
   if [[ -n "${target}" ]]; then
     args+=(-execute "${CLICK_SCRIPT} '${target}'")
   else
     args+=(-activate com.apple.Terminal)
   fi
+  [[ -f "${CONTENT_IMAGE}" ]] || log "WARN notification -contentImage is not a file | path='${CONTENT_IMAGE}'"
   "${NOTIFIER}" "${args[@]}"
 }

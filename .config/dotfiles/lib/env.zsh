@@ -10,6 +10,7 @@ typeset -gx ARI_DOTFILES_STEPS="${ARI_DOTFILES_ROOT}/steps"
 typeset -gx ARI_DOTFILES_CMD="${ARI_DOTFILES_ROOT}/cmd"
 typeset -gx ARI_DOTFILES_CONFIG="${ARI_DOTFILES_ROOT:h}"       # the .config of this checkout, not necessarily $HOME's
 typeset -gx ARI_DOTFILES_TESTS="${ARI_DOTFILES_ROOT}/tests"
+typeset -gx ARI_DOTFILES_NOTIFIER_IMAGE="${ARI_DOTFILES_ROOT}/assets/robot.png"
 # The name fix hints print the CLI under.
 typeset -gx CLI_NAME="${CLI_NAME:-dotfiles}"
 

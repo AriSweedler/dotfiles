@@ -1125,6 +1125,7 @@ function log::fail() {
 
 # Seam: tests record the argv instead of posting.
 function tmux_oneshot::_notify() {
+  log::notify_image_check "$@"
   terminal-notifier "$@" > /dev/null 2>&1
 }
 

@@ -36,7 +36,8 @@ source "${REPO_LIB}/notify.bash"
 # auto-removed). Success ones self-dismiss without touching failures.
 notify_err() {
   if [[ -x "${NOTIFIER}" ]]; then
-    "${NOTIFIER}" -title "Typing test" -message "${1}" -group "${NOTIFY_GROUP_ERR}"
+    notify_image_warn
+    "${NOTIFIER}" -title "Typing test" -message "${1}" -group "${NOTIFY_GROUP_ERR}" -contentImage "${NOTIFIER_IMAGE}"
   fi
 }
 
