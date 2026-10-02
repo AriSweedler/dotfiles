@@ -40,6 +40,6 @@
     },
     "cmd": "open raycast://extensions/raycast/clipboard-history/clipboard-history",
     "autodismiss": true,
-    "key": "ctrl-x"
+    "key": "alt-4"
   }
 ]
