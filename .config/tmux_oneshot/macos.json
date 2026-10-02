@@ -32,5 +32,14 @@
       "text": "clipboard rich text → plain text with links inlined as [text](url); shows before/after, esc closes; alias pbl"
     },
     "cmd": "pbpastelinks --preview"
+  },
+  {
+    "menu": {
+      "name": "clipboard history",
+      "text": "open Raycast's Clipboard History (same as ✦4)"
+    },
+    "cmd": "open raycast://extensions/raycast/clipboard-history/clipboard-history",
+    "autodismiss": true,
+    "key": "ctrl-h"
   }
 ]
