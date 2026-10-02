@@ -35,11 +35,11 @@
   },
   {
     "menu": {
-      "name": "clipboard history",
+      "name": "clip hist",
       "text": "open Raycast's Clipboard History (same as ✦4)"
     },
     "cmd": "open raycast://extensions/raycast/clipboard-history/clipboard-history",
     "autodismiss": true,
-    "key": "ctrl-h"
+    "key": "alt-4"
   }
 ]
