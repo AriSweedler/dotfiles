@@ -39,6 +39,7 @@
       "text": "open Raycast's Clipboard History (same as ✦4)"
     },
     "cmd": "open raycast://extensions/raycast/clipboard-history/clipboard-history",
-    "autodismiss": true
+    "autodismiss": true,
+    "key": "alt-4"
   }
 ]
