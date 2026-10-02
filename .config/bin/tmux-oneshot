@@ -1169,7 +1169,8 @@ function tmux_oneshot::_new_window() {
 # $4 = FZF_GROUP_BACK_RC): eval the entry, hand the rc back through the file, then hold
 # until esc so the output stays readable — and copyable, this being a real pane. An
 # autodismissed success and a cancel skip the hold. TMUX_ONESHOT_HOLD=0 skips the read (tests).
-TMUX_ONESHOT_PANE_RUNNER='eval "$1"; rc=$?; print -rn -- "${rc}" > "$2"; if (( rc == $4 )) || { (( rc == 0 )) && [[ "$3" == true ]] }; then exit ${rc}; fi; (( rc == 0 )) || print -u2 "\n── rc=${rc} ──"; print -u2 "── esc to close ──"; [[ "${TMUX_ONESHOT_HOLD:-1}" == 0 ]] || while read -k 1 -s key < /dev/tty; do (( #key == 27 )) && break; done; exit ${rc}'
+# A Meta chord arrives as ESC plus its key in one write, so only an ESC with nothing behind it closes.
+TMUX_ONESHOT_PANE_RUNNER='eval "$1"; rc=$?; print -rn -- "${rc}" > "$2"; if (( rc == $4 )) || { (( rc == 0 )) && [[ "$3" == true ]] }; then exit ${rc}; fi; (( rc == 0 )) || print -u2 "\n── rc=${rc} ──"; print -u2 "── esc to close ──"; [[ "${TMUX_ONESHOT_HOLD:-1}" == 0 ]] || while read -k 1 -s key < /dev/tty; do (( #key == 27 )) || continue; read -k 1 -s -t 0.05 key < /dev/tty || break; done; exit ${rc}'
 
 # Input: <name> <cmd> <autodismiss>. The popup stays a popup on screen, but under it a
 # client is attached to a throwaway session whose one pane runs the cmd: copy mode,
@@ -1225,7 +1226,9 @@ function tmux_oneshot::_hold_until_escape() {
   local key
   print -u2 "\n── esc to close ──"
   while read -k 1 -s key < /dev/tty; do
-    [[ "${key}" == $'\e' ]] && return 0
+    [[ "${key}" == $'\e' ]] || continue
+    # A Meta chord arrives as ESC plus its key in one write; only a bare Escape closes.
+    read -k 1 -s -t 0.05 key < /dev/tty || return 0
   done
   return 0
 }
