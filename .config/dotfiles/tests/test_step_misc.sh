@@ -9,7 +9,7 @@ world_new
 world_use_fixture satisfied
 
 check_step() { bump_now_secs 60; nm check --only "$1" --json; out_json > /dev/null; }
-dry_step() { bump_now_secs 60; nm setup --only "$1" --dry-run; }
+dry_step() { bump_now_secs 60; nm init --only "$1" --dry-run; }
 status_of() { step_get "$1" .status; }
 reason_of() { step_get "$1" .reason; }
 

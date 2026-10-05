@@ -1,7 +1,7 @@
 #!/bin/sh
 # Fresh Mac to the dotfiles baseline in one line (README "New machine"):
 #   sh -c "$(curl -fsSL https://raw.githubusercontent.com/AriSweedler/dotfiles/main/.config/new-machine/bin/bootstrap.sh)"
-# POSIX sh because nothing from the dotfiles exists yet. Does only what `dotfiles setup` cannot
+# POSIX sh because nothing from the dotfiles exists yet. Does only what `dotfiles init` cannot
 # do for itself: a working git and the checkout that contains it. Homebrew, packages, hooks and
 # launchd are its steps, so re-running this is safe.
 set -eu
@@ -25,5 +25,5 @@ fi
 # A no-op once HOME is populated (its branch chatter to stderr); refuses, listing them, to overwrite files it does not own.
 git --git-dir="$GIT_DIR" --work-tree="$HOME" checkout 1>&2
 
-# The checkout carries the program; setup does the rest, the dotfiles themselves (its repo group) first.
-exec "$HOME/.config/bin/dotfiles" setup "$@"
+# The checkout carries the program; init does the rest, the dotfiles themselves (its repo group) first.
+exec "$HOME/.config/bin/dotfiles" init "$@"

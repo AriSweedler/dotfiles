@@ -14,7 +14,7 @@ done
 
 nm --help
 assert_eq "--help exits 0" 0 "${RC}"
-for sub in setup check apply verify steps brew test; do
+for sub in init check apply verify steps brew test; do
   assert_contains "--help lists ${sub}" "${OUT}${ERR}" "${sub}"
 done
 
@@ -42,7 +42,7 @@ assert_json "steps|length matches the registry" "${f}" '.steps|length' "${EXPECT
 
 nm --help
 assert_eq "--help exits 0" 0 "${RC}"
-for verb in healthcheck setup apply steps verify brew push init jobs; do
+for verb in healthcheck apply steps verify brew push init jobs; do
   if grep -qE "^  ${verb}[[:space:]]+[a-z]" <<< "${OUT}"; then pass "--help lists ${verb} with a description"
   else fail "--help lists ${verb} with a description" "${OUT}"; fi
 done
@@ -51,6 +51,16 @@ assert_eq "a verb answers --help" 0 "${RC}"
 assert_contains "push --help is push's help" "${OUT}" "publish every tier"
 nm --verbose --help
 assert_contains "--verbose --help prints every verb's help" "${OUT}" "Pushes every submodule"
+nm
+assert_eq "bare dotfiles exits 0" 0 "${RC}"
+assert_contains "bare dotfiles lists the verbs" "${OUT}" "Verbs"
+nm help init
+assert_eq "help VERB exits 0" 0 "${RC}"
+assert_contains "help init is init's help" "${OUT}" "converge this machine"
+nm jobs list --help
+assert_contains "a sub-verb's --help is its verb's help" "${OUT}" "launchd job"
+nm setup
+assert_eq "setup is gone" 64 "${RC}"
 nm nosuch
 assert_eq "unknown verb exits 64" 64 "${RC}"
 

@@ -39,8 +39,8 @@ assert_eq "every brew call is on the check-mode allowlist" "" "${unexpected}"
 
 world_bundle_check tap
 bump_now_secs 60
-nm setup --only brew,brew_pkgs --dry-run
-assert_eq "setup --dry-run exits 0" 0 "${RC}"
+nm init --only brew,brew_pkgs --dry-run
+assert_eq "init --dry-run exits 0" 0 "${RC}"
 # §2.4: dry-run prints the apply plan and never enters an apply, so the plan line is asserted.
 assert_contains "dry-run logs the apply it would run" "${ERR}" "would run apply::brew_pkgs"
 assert_contains "dry-run plan names the install" "$(cat "$(newest_run_dir)/brew_pkgs.log")" "dry-run, would run | cmd='brew bundle install --no-upgrade --file="
@@ -49,7 +49,7 @@ assert_no_mutation "dry-run never mutates"
 
 export BREW_SHIM_ALLOW_MUTATION=1
 bump_now_secs 60
-nm setup --only brew,brew_pkgs --json
+nm init --only brew,brew_pkgs --json
 out_json > /dev/null
 assert_contains "setup ran the install" "$(shim_log brew)" "MUTATION bundle install --no-upgrade --file="
 assert_eq "fixture unchanged → apply_did_not_converge" apply_did_not_converge "$(step_get brew_pkgs .reason)"
@@ -58,7 +58,7 @@ assert_eq "applied recorded" true "$(step_get brew_pkgs .applied)"
 world_bundle_check unlinked
 shim_logs_reset
 bump_now_secs 60
-nm setup --only brew,brew_pkgs --json
+nm init --only brew,brew_pkgs --json
 out_json > /dev/null
 assert_not_contains "conflict never triggers bundle install" "$(shim_log brew)" "bundle install"
 assert_eq "conflict stays fail under setup" fail "$(step_get brew_pkgs .status)"

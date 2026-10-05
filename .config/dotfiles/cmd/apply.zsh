@@ -1,13 +1,13 @@
-# dotfiles/cmd/apply.zsh — `dotfiles apply STEP..`: setup for the named steps only.
+# dotfiles/cmd/apply.zsh — `dotfiles apply STEP..`: init for the named steps only.
 
 help_apply() {
   cat <<EOF
-setup for the named steps only
+init for the named steps only
 
 ${c_bold}Usage${c_rst}
   ${DF} apply STEP.. [--dry-run] [--json]
 
-  The same check → apply → re-check as setup, for exactly the steps named. A
+  The same check → apply → re-check as init, for exactly the steps named. A
   step's needs are a gate, not an auto-include: name them too when they are not
   in place yet. 'dotfiles steps' lists the names.
 

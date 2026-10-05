@@ -115,7 +115,7 @@ rm -rf "${HOME}/dotfiles"
 
 world_empty_home
 bump_now_secs 60
-nm setup --only dotfiles_repo --dry-run
+nm init --only dotfiles_repo --dry-run
 if (( RC == 0 || RC == 1 )); then pass "dry-run exits by verdict (rc=${RC})"; else fail "dry-run exits by verdict" "rc=${RC}"; fi
 assert_no_file "dry-run clones nothing" "${ARI_DOTFILES_DF_GIT_DIR}"
 assert_contains "dry-run says what it would do" "${ERR}" "would run apply::dotfiles_repo"

@@ -8,7 +8,7 @@ them up once per machine after bootstrapping the repo.
 
 ## Setup
 
-`dotfiles setup` bootstraps the repo, its
+`dotfiles init` bootstraps the repo, its
 `info/exclude` allowlist, and this hooks path. By hand:
 
 ```bash

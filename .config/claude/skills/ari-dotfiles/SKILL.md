@@ -167,7 +167,7 @@ rg -n 'plugins/airtable.zsh' ~/.config ~/.local/share   # edit every hit; re-run
 Every framework lives in the shared tier; the local tier only plugs into one. The
 framework knows the local root by convention (`$XDG_DATA_HOME/<framework>/…`, i.e.
 `~/.local/share/<framework>/…`), discovers what is there at run time, reports each
-plugin's tier, and installs whatever needs installing from a `dotfiles setup` step.
+plugin's tier, and installs whatever needs installing from a `dotfiles init` step.
 The local tier therefore never installs anything, never owns a launchd
 job and never ships a framework or a stand-alone script of its own. The Chrome
 Exoskeleton is the model.
@@ -277,7 +277,7 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
   `/ari-dotfile--submodule-chrome-exoskeleton` and `/ari-dotfile--submodule-plugged`
 - **Jobs framework**: `~/.config/dotfiles/lib/jobs.zsh`; shared plugins in `~/.config/dotfiles/jobs/`
   (README = the plugin contract) — see **Cutpoints**
-- **Harness**: `~/.config/bin/dotfiles` (init, pull, push, status, logs, git, jobs) — see **Pushing**
+- **Harness**: `~/.config/bin/dotfiles` (init, pull, push, status, logs, git, jobs; `dotfiles help`) — see **Pushing**
   and **Bootstrapping a machine**; the push is token-pinned to `ARI_DOTFILES_GITHUB_LOGIN`.
   The file in `bin` is only the entrypoint; the program is `~/.config/dotfiles/lib/*.zsh`,
   one module per concern, each independent at source time (its README has the rules and
@@ -312,14 +312,38 @@ with "Run `dotfiles push` when ready." if anything landed in the shared repo.
 
 ## Bootstrapping a machine
 
-`dotfiles setup` (idempotent, `--dry-run`; what `bootstrap.sh` ends in) does this:
-Homebrew + `~/.config/new-machine/Brewfile` (includes `bash`; the ldf hook needs bash 5),
-bare-clone the shared repo to `~/dotfiles.git`, `git init --bare ~/.local/local-dotfiles.git`
-with the allowlist from `~/.config/new-machine/local-dotfiles-exclude`, `core.hooksPath`
-for both repos, `submodule update --init` (the `dotfiles_repo` step), the `claude_skills`
-step, which symlinks every tier-held skill into `~/.claude/skills`
-(`/ari-dotfiles-skill-registry`'s `link --prune`), and the `chrome_exoskeleton` step
-(`exo deps ci`, `exo build`). It prints the one manual step, since the remote is per machine:
+`dotfiles init` (idempotent, `--dry-run`; what `bootstrap.sh` ends in and `dotfiles pull` runs
+after its fetch) converges the whole machine: every step checks, applies only where it finds
+drift, and re-checks, then `dotfiles status` prints. So a changed Brewfile installs its new
+items, Raycast syncs when it is behind, and a converged machine changes nothing. `dotfiles
+steps` lists the steps and their groups (`repo`, `brew`, `tools`); `init --group repo` or
+`init --only a,b` (= `dotfiles apply a b`) narrows it. Every verb answers `--help`, and so
+does `dotfiles help <verb>`; a bare `dotfiles` lists the verbs.
+
+The `repo` group is the dotfiles themselves:
+
+- `dotfiles_repo`: the shared bare repo cloned (a pre-harness repo still at `~/dotfiles` is
+  renamed to `~/dotfiles.git` first; both present is a manual conflict), tracking
+  `origin/main` with an ssh push url (`ARI_DOTFILES_PUSH_URL`), checked out into `$HOME`,
+  hooks wired, submodules initialized, `origin/main` fetched.
+- `local_dotfiles_repo`: the local bare repo with the allowlist from
+  `~/.config/new-machine/local-dotfiles-exclude` and its hooks. A remote is optional: without
+  one the step is `ok`, the local tier stays on this machine and `dotfiles push` skips it.
+- `claude_skills`: every tier-held skill linked into `~/.claude/skills`
+  (`/ari-dotfiles-skill-registry`'s `link --prune`).
+- `ssh_key`: the GitHub ssh key in the agent, its passphrase read from 1Password through an
+  askpass helper (`op`; the item, vault and key path come from the local tier's
+  `~/.local/share/zsh/plugins/dotfiles.zsh`, so a machine without them skips the step, and
+  the check itself never calls 1Password).
+- `dotfiles_jobs`: the one launchd job (`com.<user>.dotfiles-jobs`: screen unlock, login,
+  every 5 minutes) that runs the job plugins of both tiers, booting out the per-plugin jobs
+  it replaced. The plugin contract is `~/.config/dotfiles/jobs/README.md`; see **Cutpoints**.
+
+`brew` is Homebrew and `~/.config/new-machine/Brewfile` (includes `bash`; the ldf hook needs
+bash 5); `tools` is the rest (`raycast_sync`, `chrome_exoskeleton`: `exo deps ci`, `exo build`,
+`plugged`, `karabiner`, …).
+
+To back the local tier up, give it a remote:
 
 ```zsh
 git ldf remote add origin <this machine's private repo>
@@ -329,28 +353,12 @@ git ldf add -A && git ldf commit -m "local dotfiles: initial snapshot" && git ld
 Keep `local-dotfiles-exclude` in sync with `~/.local/local-dotfiles.git/info/exclude` when the
 allowlist changes.
 
-`dotfiles init` is `dotfiles setup --group repo` followed by `dotfiles status`: the repo group
-is the dotfiles themselves, each a step with a check and an idempotent apply, so `--dry-run`
-prints the plan.
-
-- `dotfiles_repo`: the shared bare repo cloned (a pre-harness repo still at `~/dotfiles` is
-  renamed to `~/dotfiles.git` first; both present is a manual conflict), tracking
-  `origin/main` with an ssh push url (`ARI_DOTFILES_PUSH_URL`), checked out into `$HOME`,
-  hooks wired, submodules initialized, `origin/main` fetched.
-- `local_dotfiles_repo`: the local bare repo with its allowlist and hooks; the remote is the
-  one manual step.
-- `claude_skills`: every tier-held skill linked into `~/.claude/skills`.
-- `ssh_key`: the GitHub ssh key in the agent, its passphrase read from 1Password through an
-  askpass helper (`op`; the item, vault and key path come from the local tier's
-  `~/.local/share/zsh/plugins/dotfiles.zsh`, so a machine without them skips the step, and
-  the check itself never calls 1Password).
-- `dotfiles_jobs`: the one launchd job (`com.<user>.dotfiles-jobs`: screen unlock, login,
-  every 5 minutes) that runs the job plugins of both tiers, booting out the per-plugin jobs
-  it replaced. The plugin contract is `~/.config/dotfiles/jobs/README.md`; see **Cutpoints**.
-
-`dotfiles pull` fast-forwards the shared tier and runs init; `dotfiles status` shows both
-tiers, the submodule pointers and each repo's last push; `dotfiles push` and `dotfiles logs`
-are under **Pushing**.
+`dotfiles pull` runs `git df pull --rebase --autostash`: a fast-forward when nothing is local,
+otherwise local commits are replayed onto origin. A replay that conflicts is aborted, the tier is
+left as it was, and the conflicting files are named; resolve by hand (`git df pull --rebase`,
+fix, `git df rebase --continue`), then `dotfiles pull` again. Then it runs init. `dotfiles
+status` shows both tiers, the submodule pointers and each repo's last push; `dotfiles push`
+and `dotfiles logs` are under **Pushing**.
 
 Hook setup for both tiers is documented in `~/.config/git/dotfiles-hooks/README.md`
 and `~/.config/git/local-dotfiles-hooks/README.md`; those are the versioned source.

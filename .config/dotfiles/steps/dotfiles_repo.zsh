@@ -1,7 +1,7 @@
 # step dotfiles_repo — the shared tier: bare repo at ~/dotfiles.git (renamed from the pre-harness
 # ~/dotfiles), tracking origin, HOME checked out, hooks wired, submodules initialized,
-# origin/main known, nothing dirty. Every fix is idempotent: `dotfiles init` (setup's repo
-# group) runs this after every pull.
+# origin/main known, nothing dirty. Every fix is idempotent: `dotfiles init` runs this after every
+# pull.
 step::declare dotfiles_repo --group repo \
   --desc "shared dotfiles bare repo cloned, tracking origin, checked out into HOME, hooks wired"
 

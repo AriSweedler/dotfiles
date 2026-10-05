@@ -51,7 +51,7 @@ ${c_green}dotfiles${c_rst} — the two-tier dotfiles, and the machine they descr
 
 ${c_bold}Usage${c_rst}
   ${DF} [--dry-run] [--verbose] [--timing] <verb> [args]
-  ${DF} <verb> --help
+  ${DF} <verb> --help                   that verb's help (also: ${DF} help <verb>)
   ${DF} --verbose --help                every verb's help, one after another
 
 EOF
@@ -101,10 +101,7 @@ main() {
 
   # === LOGIC ===
   if [[ "${PRINT_DIR}" == true ]]; then print -r -- "${TIER_GIT_DIR[${GIT_TIER}]}"; return 0; fi
-  if [[ -z "${verb}" ]]; then
-    (( want_help )) && { help; return 0; }
-    usage_error "Missing verb | valid='${(j:, :)${(f)$(verbs)}}'"
-  fi
+  if [[ -z "${verb}" ]]; then help; return 0; fi
   (( ${+functions[cmd_${verb}]} )) || usage_error "Unknown verb | verb='${verb}' valid='${(j:, :)${(f)$(verbs)}}'"
   # `dotfiles git …` passes its line to git untouched; every other verb answers --help itself.
   if (( want_help )) || { [[ "${verb}" != git ]] && (( ${@[(I)(-h|--help)]} )); }; then

@@ -74,7 +74,7 @@ jq '(.steps[] | select(.step == "brew_pkgs")) |= (.status = "warn" | .reason = "
   "${FX}/summary-fail.json" > "${FIX}/tapwarn.json"
 render "${FIX}/tapwarn.json" "${FX}/log.txt"
 assert_eq "tap warn: render exits 0" 0 "${RC}"
-assert_contains "tap warn: spec wording" "$(cat "${FIX}/render.out")" '- brew_pkgs: tap homebrew/autoupdate needs to be tapped (`dotfiles setup` taps it; or delete the line)'
+assert_contains "tap warn: spec wording" "$(cat "${FIX}/render.out")" '- brew_pkgs: tap homebrew/autoupdate needs to be tapped (`dotfiles init` taps it; or delete the line)'
 assert_not_contains "manual_font never reaches the weekly notes" "$(cat "${FIX}/render.out")" "terminal_nerdfont:"
 
 render "${FX}/summary-error.json" "${FX}/log.txt"

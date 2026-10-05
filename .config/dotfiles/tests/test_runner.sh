@@ -13,7 +13,7 @@ export BOB_SHIM_LS="Installed: v0.11.2 Used"
 
 export ARI_DOTFILES_REMOTE="${FIX}/remotes/no-such-remote.git"
 export BREW_SHIM_ALLOW_MUTATION=1
-nm setup --json
+nm init --json
 assert_eq "setup with a bad remote exits 1" 1 "${RC}"
 f="$(out_json)"
 assert_eq "dotfiles_repo fails" fail "$(step_get dotfiles_repo .status)"
@@ -28,7 +28,7 @@ export ARI_DOTFILES_REMOTE="${FIX}/remotes/dotfiles.git"
 shim_remove brew
 export ARI_DOTFILES_BREW_PREFIXES=""
 bump_now_secs 60
-nm setup --dry-run --json
+nm init --dry-run --json
 f="$(out_json)"
 assert_eq "brew would be installed" fail "$(step_get brew .status)"
 assert_eq "brew applied=would_apply" would_apply "$(step_get brew .applied)"

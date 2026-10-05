@@ -1,4 +1,4 @@
-# Packages every machine gets. Installed by `dotfiles setup` via `brew bundle`,
+# Packages every machine gets. Installed by `dotfiles init` via `brew bundle`,
 # merged with the local tier's ~/.local/share/new-machine/Brewfile. Work-specific
 # tools (bazelisk, awscli, spr, ...) are installed by company tooling, not here.
 # Commented-out entries were deliberately excluded; don't uncomment without asking.

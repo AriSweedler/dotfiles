@@ -1,5 +1,5 @@
 # dotfiles/cmd/healthcheck.zsh — `dotfiles healthcheck`: every step's check, reported, nothing applied.
-# `setup` and `apply` are the same run with autofix; the three share run::main below.
+# `init` and `apply` are the same run with autofix; the three share run::main below.
 
 help_healthcheck() {
   cat <<EOF

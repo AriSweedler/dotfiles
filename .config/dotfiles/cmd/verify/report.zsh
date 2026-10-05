@@ -156,7 +156,7 @@ report::_bullets_noted() {
           "- \(.step): \((if (.detail // "") == "" then .reason else .detail end) | oneline)\($st.fix | fixsfx)"
         else .items[]
           | if .kind == "tap" and .problem == "needs to be tapped" then
-              "- \($st.step): tap \(.name) needs to be tapped (`\($cli) setup` taps it; or delete the line)"
+              "- \($st.step): tap \(.name) needs to be tapped (`\($cli) init` taps it; or delete the line)"
             else "- \($st.step): \(.kind) \(.name) \(.problem // "")\($st.fix | fixsfx)" end
         end ]
     + [ (.brew.untrusted_taps // [])[] | "- brew_drift: declared tap \(nm) lacks `trusted: true`" ]

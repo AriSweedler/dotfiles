@@ -1,5 +1,5 @@
 # dotfiles/lib/lock.zsh — one run at a time for the verbs that write RUN_DIR and state
-# (healthcheck, setup, apply, verify, and init, which is setup's repo group). push never takes it.
+# (healthcheck, init, apply, verify). push never takes it.
 zmodload zsh/datetime
 zmodload -F zsh/stat b:zstat
 

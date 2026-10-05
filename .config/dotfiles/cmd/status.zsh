@@ -57,7 +57,7 @@ cmd_status() {
   local -a logfiles=("${LOG_DIR}"/*.log(N))
   print -r -- "${c_bold}tiers${c_rst}"
   print -r -- "  $(tier_line shared)"
-  if is_repo_present local; then print -r -- "  $(tier_line local)"; else print -r -- "  local: no repo (${CLI_NAME} setup)"; fi
+  if is_repo_present local; then print -r -- "  $(tier_line local)"; else print -r -- "  local: no repo (${CLI_NAME} init)"; fi
   print -r -- "${c_bold}submodules${c_rst} (space = at the pointer, + = elsewhere, - = not initialized)"
   submodule_lines
   print -r -- "${c_bold}last push${c_rst} (${LOG_DIR}; 'dotfiles logs' for the whole run)"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bootstrap.sh from an empty HOME with no Command Line Tools: waits out the CLT dialog, clones
 # over https with an ssh pushurl and main tracking, checks HOME out, and hands off to
-# `dotfiles setup`. A second run installs and applies nothing; a conflicting file stops it
+# `dotfiles init`. A second run installs and applies nothing; a conflicting file stops it
 # before new-machine runs; both one-liner forms (argv string, stdin pipe) behave the same.
 set -u
 # shellcheck source=lib.sh
