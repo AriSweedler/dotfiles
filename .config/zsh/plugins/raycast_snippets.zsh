@@ -14,9 +14,10 @@
 # Parity across machines without copying private text: for every local snippet the shared file
 # carries a PLACEHOLDER of the same name and keyword whose text is "OVERRIDE WITH A <local file>
 # file". Here the local entry overrides it; on a machine without the local file the placeholder
-# is what Raycast imports, so the keyword expands to the reminder. `fmt` keeps the files in
-# canonical order and the placeholders present and on the right keyword; `check` (folded into
-# `sync` as `warn` lines) names the active placeholders. Nothing ever writes local text into the
+# is what Raycast imports, so the keyword expands to the reminder, and `sync` creates the local
+# file holding those placeholders, for Ari to fill in. `fmt` keeps the files in canonical order
+# and the placeholders present and on the right keyword; `check` (folded into `sync` as `warn`
+# lines) names the active placeholders. Nothing ever writes local text into the
 # shared file.
 #
 # `sync` diffs the merged set against the manifest (what has been imported, name → the canonical
@@ -283,6 +284,33 @@ function raycast_snippets::import_url() {
   print -r -- "${url}"
 }
 
+# Input: dry_run. A machine without the local file just has nothing overridden; when the shared
+# files carry placeholders, the local file is created holding them, same name, keyword and
+# text, so it names what to fill in and where. Prints `would_add=N` (dry run) or `added=N`, and
+# nothing when there is nothing to create.
+function raycast_snippets::seed_local() {
+  local dry_run="${1:-0}" local_file file seed='[]' arr
+  local -i count
+  local_file="$(raycast_snippets::tier_file local)" || return 1
+  [[ -e "${local_file}" ]] && return 0
+  for file in "${(@f)$(raycast_snippets::tier_files)}"; do
+    [[ "${file}" == "${local_file}" ]] && continue
+    arr="$(raycast_snippets::read_tier "${file}")" || return 1
+    seed="$(jq -cn --argjson a "${seed}" --argjson b "${arr}" --arg prefix "${ARI_DOTFILES_RAYCAST_SNIPPETS_PLACEHOLDER_PREFIX}" \
+      '$a + [$b[] | select(.text | startswith($prefix))]')"
+  done
+  count="$(print -r -- "${seed}" | jq length)"
+  (( count )) || return 0
+  if (( dry_run )); then
+    log::info "snippets local file missing; sync would create it from the placeholders | file='${local_file}' placeholders='${count}'"
+    print -r -- "would_add=${count}"
+    return 0
+  fi
+  raycast_snippets::write_tier "${local_file}" "${seed}" >/dev/null || { log::err "Could not write the local snippets file | file='${local_file}'"; return 1; }
+  log::info "snippets local file created from the placeholders; edit it, then sync | file='${local_file}' placeholders='${count}'"
+  print -r -- "added=${count}"
+}
+
 # --- modes ---
 
 # --sync [dry_run]: diff the merged set, then one deeplink for everything pending, then the
@@ -290,12 +318,10 @@ function raycast_snippets::import_url() {
 function raycast_snippets::sync() {
   local dry_run="${1:-0}" merged src manifest plan
   local -a new_names changed_names removed pending warns
+  raycast_snippets::seed_local "${dry_run}" || return 1
   merged="$(raycast_snippets::source)" || return 1
   src="$(print -r -- "${merged}" | jq -c .entries)"
-  if [[ ! -e "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}" ]]; then
-    log::err "no manifest; run: dotfiles raycast snippets pull <raycast export> to adopt Raycast's current state, or dotfiles raycast snippets adopt to mark the current files as already imported | manifest='${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}'"
-    return 1
-  fi
+  # Missing manifest is OK: it means nothing has been imported yet. Treat it as empty.
   manifest="$(raycast_snippets::manifest)" || return 1
   warns=("${(@f)$(raycast_snippets::parity_lines "${merged}")}"); [[ -z "${warns[1]:-}" ]] && warns=()
   plan="$(raycast_snippets::diff_plan "${src}" "${manifest}")"

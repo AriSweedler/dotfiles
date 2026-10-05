@@ -375,6 +375,26 @@ _out="$(raycast_snippets --pull "${_dir}/export.json" 2>/dev/null)"; _rc=$?
 _t "pull with no files: seeds the local tier, rc 0" $'entries=2\ncollapsed=1\nshared: updated=0 added=0 removed=0 file=absent\nlocal: updated=0 added=2 removed=0 file=created' "${_out}"
 _t "pull with no files: shared not created" "absent" "$([[ -e "${_shared}" ]] && echo present || echo absent)"
 
+# --- a machine without the local file: sync creates it from the shared placeholders ---
+rm -rf "${_dir}/shared" "${_dir}/local" "${_dir}/state"; mkdir -p "${_dir}/shared"; : > "${_log}"
+cat > "${_shared}" <<EOF
+[
+  {"name":"sig","text":"Ari","keyword":";sig"},
+  {"name":"addr","text":"OVERRIDE WITH A ${_local} file","keyword":";addr"}
+]
+EOF
+raycast_snippets --adopt >/dev/null 2>&1
+_out="$(raycast_snippets --sync --dry-run 2>/dev/null)"; _rc=$?
+_t "seed dry run: rc 0, one placeholder to seed" "0 would_add=1" "${_rc} $(print -r -- "${_out}" | grep '^would_add=')"
+_t "seed dry run: local not created" "absent" "$([[ -e "${_local}" ]] && echo present || echo absent)"
+_out="$(raycast_snippets --sync 2>/dev/null)"; _rc=$?
+_t "seed: rc 0, one placeholder seeded, nothing imported" $'0\nadded=1\nsnippets: nothing to import | unchanged=2\npending=0' "${_rc}"$'\n'"${_out}"
+_t "seed: local holds the placeholder verbatim" "[{\"keyword\":\";addr\",\"name\":\"addr\",\"text\":\"OVERRIDE WITH A ${_local} file\"}]" "$(jq -c . "${_local}")"
+_t "seed: Raycast not opened" "" "$(_urls)"
+_t "seed: a second sync seeds nothing" $'snippets: nothing to import | unchanged=2\npending=0' "$(raycast_snippets --sync 2>/dev/null)"
+rm -rf "${_dir}/shared" "${_dir}/local" "${_dir}/state"
+_t "no placeholders, no local file: nothing seeded" "absent" "$(raycast_snippets --sync --dry-run >/dev/null 2>&1; [[ -e "${_local}" ]] && echo present || echo absent)"
+
 # --- flags ---
 raycast_snippets --bogus >/dev/null 2>&1; _rc=$?
 _t "unknown flag rc 1" "1" "${_rc}"
