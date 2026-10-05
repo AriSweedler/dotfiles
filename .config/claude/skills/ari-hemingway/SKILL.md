@@ -16,7 +16,7 @@ Pipeline stages:
 - `structure` — document shape (what sections, what order, what required)
 - `format` — destination syntax (gdoc, slack, md, pr-description, email)
 - `review` — quality gates (axis-based: brevity, clarity, factual, audience-fit; or destination-bundle: review-gdoc)
-- `share` — publish (`share-gdoc`; other destinations are manual copy-paste)
+- `share` — publish (`share-gdoc`, `share-explainer`; other destinations are manual copy-paste)
 
 Exceptions:
 - `ari-hemingway--lib` — shared workflow (not a stage; escape hatch)
@@ -26,6 +26,12 @@ Exceptions:
 
 - At least one `ari-hemingway--structure-*` skill is installed.
 - `/ari-hemingway--lib` installed.
+
+## Arguments
+
+`--autonomous` — run the pipeline to the end without stopping at any "present and wait" point. Also on when the user's words say so ("proceed without asking", "finish without me", "don't stop to confirm"); a one-step "go ahead" or "yes" answers the current prompt only. **Print `Autonomous mode: on (from: <flag or the quoted words>)` once, before step 1.** Forward the flag verbatim to every sibling invoked via the Skill tool (structure, review, share); what a sibling does with it is `## Autonomous mode` in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`.
+
+The dispatcher's own wait points and their defaults: shape confirm → the inferred shape; review prompt → the default of step 3; findings → `all`, with spec questions and blocker meta-findings deferred and listed; share → the destination's share action up to its publish gate, never past it. The dispatcher records its defaults under `Defaults taken` in the structure sibling's scratchpad, prefixed `dispatcher:`, and prints the consolidated list at the end of the run.
 
 ## Workflow
 
@@ -75,9 +81,22 @@ Draft complete ({word-count} words). Review before sharing?
 
 Default to (1) if the destination has a bundle installed; otherwise (2).
 
+Destination `explainer` has no bundle: the default is (2) with `destination=explainer`, which turns on audience-fit and tells every reviewer where the article form's rules live. The reviewers read the prose body, never the assembled page (`article/index.html` carries every figure spec as inline JSON and every poster as inline SVG). Which file that is depends on how the article was made:
+
+- **Toolchain article** (`<folder>/article/meta.json` exists; `<folder>` is the ciechanowski investigation folder from its `Output complete` line): the author's `article/body.html` already is the prose with figure placeholders and captions. Pass it as the draft. Apply findings to `body.html` (and `meta.json`), then re-run `assemble.py` and the four gates. **NEVER edit `article/index.html` by hand; `assemble.py` regenerates it.**
+- **Any other article**: extract the body once into `<folder>/review/body.html`, a new file (`[[ -e ]]` → stop):
+
+```zsh
+perl -0777 -ne 'print $1 if m{(<main.*</main>)}s' <article>/index.html \
+  | perl -0777 -pe 's{<figure(.*?)>.*?(<figcaption>.*?</figcaption>)?.*?</figure>}{<figure$1>$2</figure>}gs' \
+  > <folder>/review/body.html
+```
+
+`[[ -s <folder>/review/body.html ]]` or stop: no `<main>` means the wrong file. Apply findings to `index.html`, then re-run the four gates (`validate`, `states`, `build`, `budget`). Findings are anchored by quoted sentence and section id, never by line number: the file the reviewer read is not the file edited.
+
 ### 4. Invoke the reviewer
 
-Invoke the chosen review skill via the Skill tool — do not Read its SKILL.md first. Pass the draft path. Wait for its `Present` step.
+Invoke the chosen review skill via the Skill tool — do not Read its SKILL.md first. Pass the draft path (for `explainer`, the body file step 3 chose) and the destination. Wait for its `Present` step.
 
 Apply selected findings to the draft (the reviewer is READ-ONLY, so the dispatcher drives edits). Confirm each edit with the user or apply `all` if they picked it upfront.
 
@@ -88,7 +107,7 @@ As soon as the findings are applied, print the final draft path and take the des
 | Destination | Share action |
 |---|---|
 | gdoc | Invoke `/ari-hemingway--share-gdoc` — creates (or updates in place) the Doc from the markdown and styles its tables. Pass `--folder` when the user named a Drive folder; otherwise the script uses `ARI_HEMINGWAY_SCRATCH_DIR`, and only when that is unset too do you ask for a folder. |
-| explainer | "The article is in the explainers repo; commit it there. Hosting on explainers.sweedler.com is a later share sibling." |
+| explainer | Invoke `/ari-hemingway--share-explainer`: its dry-run shows the card diff and the commit; `--apply` publishes on the user's confirmation. Under `--autonomous` the run ends at that confirmation. |
 | slack | "Paste into the target channel / thread. Preserve the formatting — it's already mrkdwn." |
 | pr-description | "Run `gh pr edit {PR} --body-file {path}`." |
 | gist | "Run `gh gist create {path} --desc '{topic}'`." |
@@ -121,10 +140,21 @@ User invocation: `/ari-hemingway explain the multi-cluster rollout subsystem`
 5. Apply findings.
 6. Share: `/ari-hemingway--share-gdoc` into the folder the user named, else `ARI_HEMINGWAY_SCRATCH_DIR`.
 
+### Writing an interactive explainer, unattended
+
+User invocation: `/ari-hemingway --autonomous interactive explainer on the College Football Playoff`
+
+1. Print `Autonomous mode: on`. Infer shape: `ciechanowski`; print the evidence and take it without waiting.
+2. Run `/ari-hemingway--structure-ciechanowski --autonomous` — skeleton, insights and figures each print their prompt, take the default, and land in `Defaults taken`.
+3. Review prompt → printed, default taken: `common`, destination=explainer. The draft is the author's `article/body.html` (toolchain article).
+4. Run `/ari-hemingway--review-common --autonomous` with destination=explainer and the body path.
+5. Apply `all` findings to `article/body.html`; re-run `assemble.py` and the four gates.
+6. Share: `/ari-hemingway--share-explainer` dry-run; the run pauses at its publish gate and prints the `--apply` command.
+
 ## Rules
 
 - Invoke siblings via the Skill tool. Do NOT Read sibling SKILL.md files — the Skill tool loads them, and their descriptions are already in your available-skills index. Reading is wasteful and treats invocable skills as documentation.
 - Use Agent only for parallel reviewer dispatch inside bundles.
-- NEVER short-circuit the review prompt — always ask, even if (4) Skip is the obvious pick.
-- Do NOT edit the draft until the user selects review findings to apply.
+- NEVER short-circuit the review prompt — always print it, even under `--autonomous` and even if (4) Skip is the obvious pick.
+- Do NOT edit the draft until the user selects review findings to apply, or `--autonomous` has taken `all`.
 - If the user provides an existing draft and skips structure, go straight to the review prompt. A path is the draft as-is. A Google Doc URL is fetched with `zsh $HOME/.claude/skills/ari-gsw-doc-to-md/bin/doc-to-md.zsh "<url>" --publish --out <scratch>/draft.md`, whose output is already the `/ari-hemingway--share-gdoc` dialect — never the read dialect, which drops the Doc title, renders chips as markdown links, and loses an image's mermaid.live link.
