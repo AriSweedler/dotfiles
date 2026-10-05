@@ -16,6 +16,9 @@ that a universal row's definition names is promoted too, so a glossary row never
 hoisted row; --universal TERM seeds that closure with a row the articles' prose shares. With --min-rows N, a community left with fewer than N hoisted rows merges into
 its most-connected neighbour; by default no community merges on row count, since an article
 may define no new terms. Universal rows form the glossary; the rest hoist into articles.
+With --single-article (skeleton mode for a caller that writes one article) the partition is
+sections of one article, so the cross-article mention WARN and the universal-share WARN are
+not printed; the records still land in the JSON.
 """
 import argparse
 import json
@@ -462,7 +465,7 @@ def assign_and_merge_thin(state, rows, nodes, forced, ratio, floor, min_rows):
         state.merge(source, most_connected(state.adj, state.clusters, source), "min_rows")
 
 
-def cross_article_mentions(rows, assignments, names):
+def cross_article_mentions(rows, assignments, names, warn=True):
     """Hoisted rows whose definition names a row hoisted into another article; the review rules flag these."""
     patterns = [mention_re(row["term"]) for row in rows]
     found = []
@@ -476,7 +479,8 @@ def cross_article_mentions(rows, assignments, names):
                 continue
             record = {"term": row["term"], "article": names[assignment["cluster"]], "mentions": other["term"], "defined_in": names[other_assignment["cluster"]]}
             found.append(record)
-            log_warn(f"cross-article mention | term='{record['term']}' article='{record['article']}' mentions='{record['mentions']}' defined_in='{record['defined_in']}' hint='--merge the two communities or reword the row; review flags it otherwise'")
+            if warn:
+                log_warn(f"cross-article mention | term='{record['term']}' article='{record['article']}' mentions='{record['mentions']}' defined_in='{record['defined_in']}' hint='--merge the two communities or reword the row; review flags it otherwise'")
     return found
 
 
@@ -560,6 +564,7 @@ def parse_args():
     parser.add_argument("--min-rows", dest="min_rows", type=int, default=DEFAULT_MIN_ROWS, help="fold a community with fewer than N hoisted rows into its most-connected neighbour (default 0: never; an article may hoist no rows)")
     parser.add_argument("--universal-floor", dest="universal_floor", type=int, default=0, help="dependents a row needs to be universal (default: nodes/15, at least 3)")
     parser.add_argument("--universal-ratio", dest="universal_ratio", type=float, default=DEFAULT_UNIVERSAL_RATIO, help="share of dependents outside the row's community (default 0.5)")
+    parser.add_argument("--single-article", dest="single_article", action="store_true", help="skeleton mode for one article: communities are its sections, so the cross-article mention and universal-share WARN lines are dropped (records stay in the JSON)")
     parser.add_argument("--force", action="store_true", help="overwrite existing output files")
     return parser.parse_args()
 
@@ -591,11 +596,14 @@ def build_clusters_out(state, names, rows, assignments):
     return clusters_out
 
 
-def check_universal_share(universal_count, row_count):
+def check_universal_share(universal_count, row_count, single_article=False):
     if row_count == 0:
         return
     share = universal_count / row_count
     low, high = EXPECTED_UNIVERSAL_SHARE
+    if single_article:
+        log_info(f"universal share not judged: single article | share='{share:.2f}'")
+        return
     if share < low:
         log_warn(f"few universal rows: clusters may be too coarse | share='{share:.2f}' expected='{low}-{high}'")
         return
@@ -645,8 +653,8 @@ def main():
     counts = dependents_by_cluster(deps, cluster_of)
     universal_rows = [row for row, a in zip(rows, assignments) if a["universal"]]
     unmapped = [row["term"] for row, a in zip(rows, assignments) if a["reason"] == "unmapped"]
-    check_universal_share(len(universal_rows), len(rows))
-    cross = cross_article_mentions(rows, assignments, names)
+    check_universal_share(len(universal_rows), len(rows), args.single_article)
+    cross = cross_article_mentions(rows, assignments, names, warn=not args.single_article)
     for cluster in clusters_out:
         log_info(f"cluster | id='{cluster['id']}' name='{cluster['name']}' core='{' / '.join(cluster['core'])}' size='{cluster['size']}' rows='{len(cluster['rows'])}' sections='{len(cluster['sections'])}'")
     if rows:
@@ -658,7 +666,7 @@ def main():
         key=lambda pair: -sum(counts[pair[1]].values()),
     )
     result = {
-        "parameters": {"min_size": min_size, "min_rows": args.min_rows, "universal_floor": floor, "universal_ratio": args.universal_ratio},
+        "parameters": {"min_size": min_size, "min_rows": args.min_rows, "universal_floor": floor, "universal_ratio": args.universal_ratio, "single_article": args.single_article},
         "nodes": node_count,
         "modularity": round(q, 4),
         "clusters": clusters_out,

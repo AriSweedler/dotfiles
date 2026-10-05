@@ -2,20 +2,24 @@ export const meta = {
   name: 'scaffold-definitions-refine',
   description: 'Select the most important terms from a discover pass, rewrite them in dependency layers with Simplified Technical English, enforce linear ordering mechanically (axiomatic fallback), and re-verify facts',
   phases: [
-    { title: 'Select', detail: 'judge panel picks the core terms' },
+    { title: 'Select', detail: 'judge panel picks the core terms, or the caller\'s terms list is taken as is' },
     { title: 'Layer', detail: 'rewriters race per round; the table with the fewest violations is kept' },
     { title: 'Verify', detail: 'factual refuters on the final rows' },
   ],
 }
 
-// args: {topic, grounding?, input_json, terms?: [], judges?, min_votes?, target_rows?, must_terms?,
+// args: {topic, grounding?, folder?, input_json, terms?: [], judges?, min_votes?, target_rows?, must_terms?,
 //        max_sentences?, max_words?, ste100?, axiomatic?, fix_rounds?, rewriters?}
+// Caller-fixed inputs: `terms` skips the judge panel; a brief that already names the rows passes them.
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 if (!A.topic) throw new Error('args.topic is required')
 if (!A.input_json) throw new Error('args.input_json (path to the discover result) is required')
 const TOPIC = A.topic
-const GROUNDING = `${A.grounding || ''} Read only: never install, modify, or send anything. Return only the structured output.`
 const INPUT = A.input_json
+// Agents write only inside the investigation folder, which defaults to the directory of input_json.
+const FOLDER = A.folder || (INPUT.includes('/') ? INPUT.slice(0, INPUT.lastIndexOf('/')) : '')
+const WRITE_RULE = FOLDER ? `Write files only under ${FOLDER}, the investigation folder; never save files in the working directory.` : 'Write no files; never save anything in the working directory.'
+const GROUNDING = `${A.grounding || ''} Read only: never install, modify, or send anything. ${WRITE_RULE} Return only the structured output.`
 const JUDGES = A.judges || 3
 const MIN_VOTES = A.min_votes || JUDGES
 const TARGET = A.target_rows || '25 to 35'
@@ -75,7 +79,7 @@ if (!terms) {
     'a reviewer who removes anything a reader can look up in thirty seconds and keeps only what unlocks understanding of the rest',
   ]
   const picks = await parallel(Array.from({ length: JUDGES }, (_, i) => () => agent(
-    `Read the JSON file at ${INPUT}. Its "definitions" array holds candidate glossary terms for ${TOPIC} with first-pass definitions. Select the core shared-jargon set from the perspective of ${LENSES[i % LENSES.length]}. Target ${TARGET} terms.${MUST.length ? ` You MUST include: ${MUST.join(', ')}.` : ''} Return exact spellings as they appear in the file. Do not invent terms not in the file.`,
+    `Read the JSON file at ${INPUT}. Its "definitions" array holds candidate glossary terms for ${TOPIC} with first-pass definitions. ${GROUNDING} Select the core shared-jargon set from the perspective of ${LENSES[i % LENSES.length]}. Target ${TARGET} terms.${MUST.length ? ` You MUST include: ${MUST.join(', ')}.` : ''} Return exact spellings as they appear in the file. Do not invent terms not in the file.`,
     { label: `select:${i}`, phase: 'Select', schema: SELECT_SCHEMA })))
   const tally = new Map(), spelling = new Map()
   for (const p of picks.filter(Boolean)) for (const s of p.selected) { const k = norm(s.term); tally.set(k, (tally.get(k) || 0) + 1); if (!spelling.has(k)) spelling.set(k, s.term) }
@@ -83,6 +87,8 @@ if (!terms) {
   votes = [...tally].map(([k, n]) => ({ term: spelling.get(k), votes: n })).sort((a, b) => b.votes - a.votes || a.term.localeCompare(b.term))
   terms = votes.filter(v => v.votes >= MIN_VOTES).map(v => v.term)
   log(`Selected ${terms.length} terms with >= ${MIN_VOTES} of ${JUDGES} votes; dropped ${votes.length - terms.length}`)
+} else {
+  log(`Caller passed ${terms.length} terms; judge panel skipped`)
 }
 
 phase('Layer')

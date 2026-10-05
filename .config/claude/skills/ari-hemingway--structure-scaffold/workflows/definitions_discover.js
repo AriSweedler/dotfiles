@@ -1,8 +1,8 @@
 export const meta = {
   name: 'scaffold-definitions-discover',
-  description: 'Sweep a topic from several angles, draft a definition for every candidate term with a verified doc link, refute per batch, run a completeness critic, report the dependency graph',
+  description: 'Sweep a topic from several angles, draft a definition for every candidate term with a verified doc link, refute per batch, run a completeness critic, report the dependency graph; scale small caps the sweep at 4 angles, batches of 10, and defines only must_terms from the critic',
   phases: [
-    { title: 'Plan', detail: 'choose sweep angles when none were given; a grounding-only sweep runs alongside' },
+    { title: 'Plan', detail: 'choose sweep angles when none were given; a grounding-only sweep runs alongside; the agent and WebSearch budget is logged before the first sweep' },
     { title: 'Discover', detail: 'two sweep agents per angle, each over half of its sources' },
     { title: 'Define', detail: 'first-pass definitions with verified doc links' },
     { title: 'Verify', detail: 'accuracy and structure refuters per batch' },
@@ -10,13 +10,29 @@ export const meta = {
   ],
 }
 
-// args: {topic, grounding?, angles?: [{key, prompt, sources?}], must_terms?: [], subsystems_hint?, batch_size?}
+// args: {topic, grounding?, folder?, scale?: 'full' | 'small', angles?: [{key, prompt, sources?}], must_terms?: [], subsystems_hint?, batch_size?, allow_over_cap?: boolean}
+// Caller-fixed inputs: `angles` skips the planner; a brief that already names the concept list passes them.
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 if (!A.topic) throw new Error('args.topic is required')
 const TOPIC = A.topic
-const GROUNDING = `${A.grounding || ''} Read only: never install, modify, or send anything. Return only the structured output.`
+const SCALE = A.scale || 'full'
+if (SCALE !== 'full' && SCALE !== 'small') throw new Error(`args.scale must be "full" or "small", got ${JSON.stringify(A.scale)}`)
+const SMALL = SCALE === 'small'
+const SMALL_ANGLES = 4
+// Agents write only inside the investigation folder: one research agent once saved a fetched page
+// as house.html in the repo root. With no folder named, agents write nothing.
+const FOLDER = A.folder || ''
+const WRITE_RULE = FOLDER ? `Write files only under ${FOLDER}, the investigation folder; never save files in the working directory.` : 'Write no files; never save anything in the working directory.'
+const GROUNDING = `${A.grounding || ''} Read only: never install, modify, or send anything. ${WRITE_RULE} Return only the structured output.`
 const MUST = A.must_terms || []
-const BATCH = A.batch_size || 6
+const BATCH = A.batch_size || (SMALL ? 10 : 6)
+// Budget: a sweep yields about 20 distinct terms after merging, an agent spends about two WebSearch
+// calls, and the session allows 200. A full-scale pass (6 angles, batch 6) runs about 100 agents and
+// empties the cap; small (4 angles, batch 10, no critic round) stays under it.
+const TERMS_PER_SWEEP = 20
+const SEARCHES_PER_AGENT = 2
+const SESSION_SEARCH_CAP = 200
+const CRITIC_ADD_SHARE = 0.2
 const HINT = A.subsystems_hint || 'the standalone subsystem explanations a scaffold article of this topic would need'
 
 const ANGLES_SCHEMA = { type: 'object', properties: { angles: { type: 'array', items: { type: 'object', properties: {
@@ -59,14 +75,21 @@ phase('Plan')
 const groundingSweep = A.grounding
   ? agent(sweepPrompt('sweep ONLY the sources the grounding above names (its local files, doc URLs, and commands): read each one and enumerate every named concept it uses or defines.'), { label: 'sweep:_grounding', phase: 'Discover', schema: TERMS_SCHEMA })
   : Promise.resolve(null)
+const callerAngles = Array.isArray(A.angles) && A.angles.length > 0
 let angles = A.angles
 if (!angles || !angles.length) {
-  const plan = await agent(`You are planning a glossary sweep for ${TOPIC}. ${GROUNDING}\n\nPropose 5 to 8 independent research angles that together enumerate every named concept a newcomer must know: official terminology pages, the on-disk or on-wire layout, the CLI or API surface, the configuration or definition language, the build or distribution pipeline, the ecosystem around it, and so on. Each angle is a self-contained instruction for one researcher: name the concrete sources (URLs, commands, paths) it must sweep, and list them in sources — at least two per angle, since two researchers split them. Return {angles: [{key, prompt, sources}]}.`,
+  const plan = await agent(`You are planning a glossary sweep for ${TOPIC}. ${GROUNDING}\n\nPropose ${SMALL ? `exactly ${SMALL_ANGLES}` : '5 to 8'} independent research angles that together enumerate every named concept a newcomer must know: official terminology pages, the on-disk or on-wire layout, the CLI or API surface, the configuration or definition language, the build or distribution pipeline, the ecosystem around it, and so on. Each angle is a self-contained instruction for one researcher: name the concrete sources (URLs, commands, paths) it must sweep, and list them in sources — at least two per angle, since two researchers split them. Return {angles: [{key, prompt, sources}]}.`,
     { label: 'plan-angles', phase: 'Plan', schema: ANGLES_SCHEMA })
   angles = plan ? plan.angles : []
   log(`Planned ${angles.length} angles: ${angles.map(a => a.key).join(', ')}`)
 }
 if (!angles.length) throw new Error('no sweep angles')
+if (SMALL && angles.length > SMALL_ANGLES) {
+  // the planner is asked for exactly SMALL_ANGLES; a caller's list is its own decision and is never truncated
+  if (callerAngles) throw new Error(`scale small allows at most ${SMALL_ANGLES} caller angles, got ${angles.length}; pass scale "full" or fewer angles`)
+  log(`scale small: keeping the first ${SMALL_ANGLES} of ${angles.length} angles; dropped ${angles.slice(SMALL_ANGLES).map(a => a.key).join(', ')}`)
+  angles = angles.slice(0, SMALL_ANGLES)
+}
 
 phase('Discover')
 // Two agents per angle, each over half of its sources, so the sweep phase fills the agent cap.
@@ -82,6 +105,12 @@ const sweepJobs = angles.flatMap(a => {
 })
 const unsplit = angles.filter(a => ((a.sources || []).filter(s => typeof s === 'string' && s.trim())).length < 2).map(a => a.key)
 if (unsplit.length) log(`Angles without splittable sources run as one sweep each: ${unsplit.join(', ')}`)
+const sweepCount = sweepJobs.length + (A.grounding ? 1 : 0)
+const termGuess = TERMS_PER_SWEEP * sweepCount
+const agentGuess = sweepCount + 3 * Math.ceil(termGuess / BATCH) + 1 + (SMALL ? 0 : 3 * Math.ceil(termGuess * CRITIC_ADD_SHARE / BATCH))
+const searchGuess = agentGuess * SEARCHES_PER_AGENT
+log(`Budget estimate: about ${agentGuess} agents and ${searchGuess} WebSearch calls of the session's ${SESSION_SEARCH_CAP} | scale=${SCALE} sweeps=${sweepCount} batch=${BATCH}${searchGuess > SESSION_SEARCH_CAP ? ' | OVER THE CAP: later lookups in this session fall back to WebFetch' : ''}`)
+if (searchGuess > SESSION_SEARCH_CAP && !A.allow_over_cap) throw new Error(`budget estimate ${searchGuess} WebSearch calls exceeds the session cap of ${SESSION_SEARCH_CAP}; pass scale "small", a larger batch_size, or allow_over_cap: true`)
 const sweeps = [
   ...(await parallel(sweepJobs.map(j => () => agent(j.prompt, { label: j.label, phase: 'Discover', schema: TERMS_SCHEMA })))),
   await groundingSweep,
@@ -168,7 +197,7 @@ const defineAndVerify = async (batchList, master, tag) => pipeline(
     return applyVerdicts(defs, accuracy, structure)
   })
 
-log(`Defining ${merged.length} terms in ${Math.ceil(merged.length / BATCH)} batches`)
+log(`Defining ${merged.length} terms in ${Math.ceil(merged.length / BATCH)} batches (${3 * Math.ceil(merged.length / BATCH)} agents)`)
 let definitions = (await defineAndVerify(toBatches(merged), masterList(), 'b')).flat().filter(Boolean)
 log(`${definitions.length} definitions survived round 1`)
 
@@ -191,9 +220,13 @@ if (critic) {
   const have = new Set(definitions.map(d => norm(d.term)))
   const fresh = critic.missing.filter(m => !have.has(norm(m.term)))
   log(`Critic adds ${fresh.length} missing terms: ${fresh.map(m => m.term).join(', ')}`)
-  if (fresh.length) {
-    for (const m of fresh) merged.push({ term: m.term, aliases: [], drafts: [m.draft], doc_urls: m.doc_url ? [m.doc_url] : [], depends_on: m.depends_on, evidence: [`critic: ${m.why}`] })
-    round2 = (await defineAndVerify(toBatches(merged.slice(merged.length - fresh.length)), masterList(), 'c')).flat().filter(Boolean)
+  // Scale small skips the critic's define round except for must_terms; the rest are reported in
+  // critic_missing for the caller to add by hand or pass as must_terms on a rerun.
+  const toDefine = SMALL ? fresh.filter(m => MUST.some(x => norm(x) === norm(m.term))) : fresh
+  if (SMALL && toDefine.length < fresh.length) log(`scale small: ${fresh.length - toDefine.length} critic terms reported, not defined: ${fresh.filter(m => !toDefine.includes(m)).map(m => m.term).join(', ')}`)
+  if (toDefine.length) {
+    for (const m of toDefine) merged.push({ term: m.term, aliases: [], drafts: [m.draft], doc_urls: m.doc_url ? [m.doc_url] : [], depends_on: m.depends_on, evidence: [`critic: ${m.why}`] })
+    round2 = (await defineAndVerify(toBatches(merged.slice(merged.length - toDefine.length)), masterList(), 'c')).flat().filter(Boolean)
     definitions.push(...round2)
   }
 }
@@ -238,5 +271,9 @@ return {
   unresolved,
   critic_removed: critic ? critic.remove : [],
   critic_added: round2.map(d => d.term),
+  critic_missing: critic ? critic.missing.filter(m => !round2.some(d => norm(d.term) === norm(m.term))).map(m => m.term) : [],
   angles: angles.map(a => a.key),
+  scale: SCALE,
+  batch_size: BATCH,
+  agents_estimated: agentGuess,
 }

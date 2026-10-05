@@ -9,6 +9,10 @@ Produce a scaffold for a complex topic: a summary, a table of shared-jargon defi
 
 Formatting rules: see `/ari-hemingway--format-gdoc`. Workflow patterns (investigation folder, restore context, drafting, permalink resolution, fact-check, present/output): see `/ari-hemingway--lib`. Publishing: `/ari-hemingway--share-gdoc`. If any rule here appears to contradict `/ari-hemingway--format-gdoc`, the format skill wins.
 
+## Arguments
+
+`--autonomous` — per `## Autonomous mode` in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`. Wait points here: the definitions table and the cluster proposal (accepted once the check passes; every unresolved WARN and its resolving flag go under `Defaults taken`), the over-cap budget STOP (default `small`), a workflow failure (resume once, then pause); the Drive folder creation and the publish-all confirmation pause.
+
 ## Document structure
 
 Two layouts. **Single Doc**: no Drive folder was given, or the topic yields one article. **Folder**: a Drive folder was given and the topic yields two or more articles; one Glossary Doc plus one Doc per subsystem. Every Doc ends with `# Useful links` (`## Docs` lists every doc URL from its own table and body; no skill links) and the footer. Never mention a skill in a body; the footer credits the toolchain. Summaries are written last.
@@ -133,7 +137,7 @@ When definitions still cycle after the layered rewrite, one term in the cycle be
 
 Subsystems come from the discover graph, never from a hand-written list. `bin/cluster_definitions.zsh` builds a graph from every discover term's `depends_on` list, finds communities by greedy modularity (Clauset-Newman-Moore) at the modularity peak with no forced count, re-clusters each community once on its own subgraph to propose the headings inside its article, merges communities under 2% of the nodes into the neighbour they share the most edges with, and names each from the member its cluster-mates depend on most (top three shown). One community is one article; its second-level parts are that article's headings.
 
-A row of the accepted table is universal when at least half of its dependents lie outside its community and it has at least `nodes/15` dependents; the universal set is then closed under mentions, so a Glossary row never leans on a hoisted row. That ratio is the rule; when the articles' prose shares a term the rule left hoisted, `--universal "<term>"` is the escape hatch. The script warns when the universal share leaves 15% to 60%. An article may hoist no rows and run on Glossary vocabulary alone; `--min-rows N` folds communities with fewer than N hoisted rows into their most-connected neighbour. Flags address communities by the names the last run printed.
+A row of the accepted table is universal when at least half of its dependents lie outside its community and it has at least `nodes/15` dependents; the universal set is then closed under mentions, so a Glossary row never leans on a hoisted row. That ratio is the rule; when the articles' prose shares a term the rule left hoisted, `--universal "<term>"` is the escape hatch. The script warns when the universal share leaves 15% to 60%, and when a hoisted row names a row hoisted into another article; `--single-article` drops both WARN kinds for a skeleton that becomes one article, where the communities are sections and there is no second article to leak into. An article may hoist no rows and run on Glossary vocabulary alone; `--min-rows N` folds communities with fewer than N hoisted rows into their most-connected neighbour. Flags address communities by the names the last run printed.
 
 ### Subsystem articles
 
@@ -149,6 +153,10 @@ Diagrams are optional and unlimited; each names only terms from the Doc's tables
 ### Multi-agent workflows
 
 The definitions passes are `Workflow` scripts shipped in `workflows/`. Invoking this skill is the user's opt-in to run them. Each pass is one workflow invocation; read its result before deciding the next. The Workflow tool refuses a `scriptPath` outside the working directory, so read the script once and pass its full text in `script`; the tool then prints a session-local path that works as `scriptPath` for reruns and resumes. `input_json` is a literal absolute path — the tool does not expand `$HOME`.
+
+**Every agent prompt MUST end with:** "Write files only under `<investigation folder>`; never save a file in the working directory." The workflow scripts take `folder` and append that sentence themselves; any `Agent` call this skill makes appends it by hand.
+
+Budget before dispatch. The session allows 200 WebSearch calls and an agent spends about two. `scale: "small"` (4 planned angles, `batch_size` 10, the critic's additions reported but not defined except `must_terms`) is the default and fits a 25-to-35-row table in about 60 agents; `full` (planner picks 5 to 8 angles, batch 6, critic additions defined) runs about 100 agents, empties the cap, and is used only when the user asks for it. The script prints `Budget estimate:` before the first sweep; that line is authoritative. **Over the cap is a STOP:** `(1) scale small (2) larger batch_size (3) proceed over the cap`; the autonomous default is (1).
 
 The tool runs at most 16 agents at once, so a pass's wall-clock is agent count times agent duration. The passes fill idle slots with eager work that is cheap to throw away: a grounding-only sweep beside the planner, two sweep agents per angle over halves of its sources, and `rewriters` candidates per fix round of which only the table with the fewest mechanical violations survives. Verification is never grouped to save agents: every 6-term define batch gets its own accuracy and structure refuter, because a refuter that has read one batch's sources must not carry them into the next. Reviewer agents are told explicitly not to flag brevity or omitted detail — without that instruction they re-bloat every row and reintroduce forward references.
 
@@ -183,17 +191,17 @@ Scratchpad fields appended after `Last phase`:
 
 - `review-rules.md` — the constraints `/ari-hemingway--review-gdoc` enforces on a scaffold draft (loaded by its Sibling reviewer).
 - `bin/check_definitions_order.zsh` — the mechanical table check (jq program in `lib/check_definitions_order.jq`). Read-only, exits 1 on violations.
-- `bin/cluster_definitions.zsh` (+ `cluster_definitions.py`, per `/ari-skill-pythonscripts`) — clusters the discover graph into subsystems, maps the accepted table onto them, writes `clusters.json`, the cluster-level `graph.mmd`, and the per-Doc `rows/*.json`. Flags: `--alias`, `--merge`, `--rename`, `--universal`, `--min-rows`; `--force` overwrites outputs and removes stale `rows/*.json`.
+- `bin/cluster_definitions.zsh` (+ `cluster_definitions.py`, per `/ari-skill-pythonscripts`) — clusters the discover graph into subsystems, maps the accepted table onto them, writes `clusters.json`, the cluster-level `graph.mmd`, and the per-Doc `rows/*.json`. Flags: `--alias`, `--merge`, `--rename`, `--universal`, `--min-rows`, `--single-article` (skeleton mode for one article: no cross-article or universal-share WARN lines); `--force` overwrites outputs and removes stale `rows/*.json`.
 - `bin/drive_subfolder.zsh` — chooses the publish folder: the user's folder when empty, else a child named after the topic (reused or created). `--dry-run` validates with Drive and creates nothing. Drive helpers come from `/ari-hemingway--lib`'s `lib/drive.zsh`.
 - `tests/check_mention_matchers.zsh` + `tests/mention_matcher_cases.json` — feeds every case through the jq checker, the JS `mentionRe`, and the Python `mention_re`; exits 1 on any disagreement. Run it after touching any of the three.
-- `workflows/definitions_discover.js` — Workflow script: plan angles with their sources (or take `angles`) while a grounding-only sweep runs, two sweeps per angle, batched first-pass definitions with verified doc links, two refuters per batch, completeness critic, dependency graph. Args: `{topic, grounding, angles?: [{key, prompt, sources?}], must_terms?, subsystems_hint?, batch_size?}`.
-- `workflows/definitions_refine.js` — Workflow script: judge-panel selection, layered STE100 rewrite by racing rewriters, mechanical ordering check with fix rounds, axiomatic fallback, two factual refuters, recheck. Args: `{topic, grounding, input_json, terms?, judges?, min_votes?, target_rows?, must_terms?, max_sentences?, max_words?, ste100?, axiomatic?, fix_rounds?, rewriters?}`.
+- `workflows/definitions_discover.js` — Workflow script: plan angles with their sources (or take `angles`) while a grounding-only sweep runs, two sweeps per angle, batched first-pass definitions with verified doc links, two refuters per batch, completeness critic, dependency graph. Logs an agent and WebSearch estimate before the first sweep. Args: `{topic, grounding, folder, scale?: "small" | "full", angles?: [{key, prompt, sources?}], must_terms?, subsystems_hint?, batch_size?}`; `angles` skips the planner; `scale: "small"` caps the angles at 4, sets `batch_size` 10 and skips the critic's define round except for `must_terms`. The result carries `scale`, `batch_size`, `agents_estimated` and `critic_missing`.
+- `workflows/definitions_refine.js` — Workflow script: judge-panel selection, layered STE100 rewrite by racing rewriters, mechanical ordering check with fix rounds, axiomatic fallback, two factual refuters, recheck. Args: `{topic, grounding, folder?, input_json, terms?, judges?, min_votes?, target_rows?, must_terms?, max_sentences?, max_words?, ste100?, axiomatic?, fix_rounds?, rewriters?}`; `terms` skips the judge panel and keeps exactly those rows; `folder` defaults to the directory of `input_json`.
 
 ## Workflow
 
 ### Gather pointers
 
-Collect the topic, the terms the user already wants defined (`must_terms`), any sources (docs URLs, a local install, code paths), the audience, and the Drive folder (id or `drive.google.com/drive/folders` URL) when the user wants a folder of Docs. Collect the mode: `research` (default, produces Docs) or `skeleton` (the caller asked for the table and the subsystem graph only). Derive `{topic-slug}` and create the investigation folder per `/ari-hemingway--lib` with `--skill-name scaffold`. Write the initial scratchpad (Subject, Mode `research` or `skeleton`, Pointers, Grounding, Folder).
+Collect the topic, the terms the user already wants defined (`must_terms`), any sources (docs URLs, a local install, code paths), the audience, and the Drive folder (id or `drive.google.com/drive/folders` URL) when the user wants a folder of Docs. Collect the mode: `research` (default, produces Docs) or `skeleton` (the caller asked for the table and the subsystem graph only). Collect the scale, `small` unless the user asks for `full`, and, from a skeleton-mode caller, any fixed inputs: `angles` for discover (`[{key, prompt, sources}]`, at least two sources each; skips the planner) and `terms` for refine (skips the judge panel and keeps exactly those rows; `must_terms` still steers the critic). Record them in the scratchpad's `Passes` line as `angles: caller` and `terms: caller`. Derive `{topic-slug}` and create the investigation folder per `/ari-hemingway--lib` with `--skill-name scaffold`. Write the initial scratchpad (Subject, Mode `research` or `skeleton`, Pointers, Grounding, Folder).
 
 ### Restore context
 
@@ -205,16 +213,16 @@ Only when the topic is code in the current worktree: follow `Resolve permalink S
 
 ### Definitions — discover
 
-Run the discover workflow: read `workflows/definitions_discover.js` once and pass its text as `script`. Pass the topic, a one-paragraph grounding (what the agents may read and run), and the must-have terms; let it plan angles unless the user named them:
+Run the discover workflow: read `workflows/definitions_discover.js` once and pass its text as `script`. Pass the topic, a one-paragraph grounding (what the agents may read and run), the investigation folder, the scale, and the must-have terms; let it plan angles unless the user or the caller named them. The script logs `Budget estimate:` before the first sweep (its `agents_estimated` is in the result); a caller's `angles` skip the planner and are never truncated, so pass at most four under `small`.
 
 ```
 Workflow({script: <full text of workflows/definitions_discover.js>,
-          args: {topic: "...", grounding: "...", must_terms: ["..."]}})
+          args: {topic: "...", grounding: "...", folder: "<folder>", scale: "small", must_terms: ["..."]}})
 ```
 
 When it completes, save `.result` from the task output file to `definitions_pass1.json` (`jq '.result' <output-file>`). Expect every term to be cyclic on this pass; that is the raw material, not a failure. Record the pass in the scratchpad.
 
-Print: `Discover complete — {n} terms, {k} cyclic. Next: Refine.`
+Print: `Discover complete — {n} terms, {k} cyclic, {agents} agents ({scale}). Next: Refine.`
 
 ### Definitions — refine
 
@@ -227,13 +235,13 @@ Workflow({script: <full text of workflows/definitions_refine.js>,
 
 Save `.result` to `definitions_refined.json`. If `violations` is non-empty, re-run with the offending terms removed or pass an explicit `terms` list. If the table is still long for its audience, re-run with `terms` set to the unanimous votes plus the few terms those rely on (the result's `votes` field has the tallies).
 
-Copy the rows to `definitions_final.json`, apply hand edits (doc links the agents missed, trimmed duplication), and run the check script. Then render the table into `draft.md` and print it in chat for review — the table itself, in one message, no paraphrase — and wait. Apply the user's row cuts and rewordings, re-run the check, and re-present until accepted.
+Copy the rows to `definitions_final.json`, apply hand edits (doc links the agents missed, trimmed duplication), and run the check script. Table order is a hand edit too: rows that mention neither each other nor anything between them are independent, and their order sets the order of the sections the cluster step will cut (a caller orders sections by their first hoisted row, per `### Skeleton` in `/ari-hemingway--structure-ciechanowski`). Move independent rows until the sections come out in the order the reader needs, then run `check_definitions_order.zsh` again; the check, not your eye, decides what was independent. Never move a row to change which article it lands in; that is the cluster step's job. Then render the table into `draft.md` and print it in chat for review — the table itself, in one message, no paraphrase — and wait. Apply the user's row cuts and rewordings, re-run the check, and re-present until accepted.
 
 Print: `Refine complete — {n} rows, {k} axioms, 0 violations. Next: Cluster.`
 
 ### Subsystems — cluster
 
-Emit exactly this one Bash call (add `--alias "<row term>=<discover term>"` for each row the refine pass renamed; a row the script cannot map lands in the Glossary with a WARN):
+Emit exactly this one Bash call (add `--alias "<row term>=<discover term>"` for each row the refine pass renamed; a row the script cannot map lands in the Glossary with a WARN). In `skeleton` mode for a one-article caller, add `--single-article` to the same call: the communities are that article's sections, so the cross-article and universal-share WARNs are not printed (the records stay in `clusters.json`) and the proposal lists every remaining WARN as usual.
 
 ```zsh
 zsh $HOME/.claude/skills/ari-hemingway--structure-scaffold/bin/cluster_definitions.zsh --discover <folder>/definitions_pass1.json --refined <folder>/definitions_final.json --out <folder>/clusters.json --mermaid <folder>/graph.mmd --rows-dir <folder>/rows
@@ -256,9 +264,10 @@ Print: `Cluster complete — {n} subsystems, {k} universal rows of {m}, {w} warn
 
 In `skeleton` mode the workflow ends here. Set `Last phase` to `Cluster (skeleton)`, then print `Skeleton complete — {folder}: definitions_final.json, clusters.json, rows/. Next: caller.` and stop; the caller reads those files and never edits them. Every later step is `research` mode only.
 
+
 ### Subsystems — draft
 
-Draft each article standalone, in the vocabulary of the Glossary rows plus its own rows, with one `#` section per accepted heading. `clusters.json` names each article's terms; the refined pass JSON (`definitions_refined.json`, and `definitions_pass1.json` for detail the cut removed) is the primary grounding: every claim traces to a row there or to a source in `sources.md`. Review each article against three criteria: (a) jargon that is not in its tables, (b) any description of another subsystem's internals, (c) claims not grounded in the sources. Use one agent per article when the Agent tool is available; inside a fork, self-review each article against the same three criteria. Fix, then re-review changed articles. A term hoisted into one article MUST NOT be reworded away when two or more articles use it as jargon in prose: run the cluster step again with `--universal "<term>"` and regenerate both tables. Folder layout: one file per article in `subsystems/<slug>.md`, with its own table, `# Useful links`, and footer. Single Doc: one `##` per article under `# Subsystems`.
+Draft each article standalone, in the vocabulary of the Glossary rows plus its own rows, with one `#` section per accepted heading. `clusters.json` names each article's terms; the refined pass JSON (`definitions_refined.json`, and `definitions_pass1.json` for detail the cut removed) is the primary grounding: every claim traces to a row there or to a source in `sources.md`. Review each article against three criteria: (a) jargon that is not in its tables, (b) any description of another subsystem's internals, (c) claims not grounded in the sources. Use one agent per article when the Agent tool is available, each told: write only under `<investigation folder>`; never save files in the working directory. Inside a fork, self-review each article against the same three criteria. Fix, then re-review changed articles. A term hoisted into one article MUST NOT be reworded away when two or more articles use it as jargon in prose: run the cluster step again with `--universal "<term>"` and regenerate both tables. Folder layout: one file per article in `subsystems/<slug>.md`, with its own table, `# Useful links`, and footer. Single Doc: one `##` per article under `# Subsystems`.
 
 Print: `Subsystems complete — {n} articles, {words} words. Next: Summary.`
 
