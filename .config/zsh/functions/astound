@@ -1,0 +1,130 @@
+function astound::dir() {
+  echo "$HOME/Desktop/life/apartment/3 - 43Diamond/astound receipts"
+}
+
+function astound::browser() {
+  open -a "Google Chrome" "$@"
+}
+
+function astound::_file() {
+  # Make sure there's an invoice in the Downloads folder
+  local -r download_dir="$HOME/Downloads"
+  local invoice="$(bash -c "compgen -G '$download_dir/Wave Statement*'")"
+  if ! [ -f "$invoice" ]; then
+    log::err "No astound invoice found | download_dir='$download_dir'"
+    ls -1 "$download_dir"
+    return 1
+  fi
+
+  # Move it to the invoices folder
+  if ! [ -d "$(astound::dir)" ]; then
+    log::err "Could not find astound directory | SONIC_DIR='$(astound::dir)'"
+    return 1
+  fi
+  run_cmd mv "$invoice" "$(astound::dir)"
+  invoice="$(astound::dir)/$(basename "$invoice")"
+  echo "$invoice"
+}
+
+# Comma separated tuple: service_start,service_end,amount,autopay_credit
+# To be consumed with `IFS=',' read ...`
+#
+# IFS=',' read date_start_mdy date_end_mdy amount autopay_credit <<< "$(astound::_extract_from_pdf "$invoice")"
+function astound::_extract_from_pdf() {
+  local -r invoice="${1:?}"
+
+  if ! [ -f "$invoice" ]; then
+    log::err "Could not extract information from missing invoice | invoice='$invoice'"
+    return 1
+  fi
+
+  if ! [[ "$invoice" == *.pdf ]]; then
+    log::err "astound invoice is not a pdf - parsing will fail | invoice='$invoice'"
+    return 1
+  fi
+
+  if ! which pdftotext &>/dev/null; then
+    log::err "Dependency not installed | dependency='pdftotext'"
+    log::WARN "Install with
+
+    brew install poppler
+"
+    return 1
+  fi
+
+  local invoice_txt="${invoice%.pdf}.txt"
+  if ! pdftotext -layout "$invoice"; then
+    log::err "failed to convert pdf to txt | invoice='$invoice'"
+    return 1
+  fi
+  if ! [ -f "$invoice_txt" ]; then
+    log::err "Could not find invoice txt file | invoice_txt='$invoice_txt'"
+    return 1
+  fi
+
+  awk '
+$2 == "Internet" && $3 == "Service" { dates=$1; amount=$NF }
+/Autopay Credit/ { autopay_credit=$(NF-1) }
+END {
+  year=26
+  split(dates, ds, "-")
+  date_start=ds[1] "/" year
+  date_end=ds[2] "/" year
+  amount = amount + autopay_credit
+  print date_start "," date_end "," amount "," autopay_credit
+}
+' "$invoice_txt"
+
+  rm "$invoice_txt"
+}
+
+# Manage filesystem stuff
+local invoice
+if ! invoice="$(astound::_file)"; then
+  log::err "Failed to file away the astound invoice"
+  return 1
+fi
+
+# Open up splitwise then the astound folder. Return to this terminal window
+local -r splitwise_group_url="https://secure.splitwise.com/#/groups/89295682"
+run_cmd astound::browser "$splitwise_group_url"
+run_cmd open "$invoice"
+run_cmd open "$(astound::dir)"
+run_cmd open -a Terminal
+
+# Parse information from the pdf
+local extraction
+if ! extraction="$(astound::_extract_from_pdf "$invoice")"; then
+  log::err "Failed to extract from pdf"
+  return 1
+fi
+IFS=',' read date_start_mdy date_end_mdy amount creds <<< "$extraction"
+IFS='/' read ds_m ds_d ds_y <<< "$date_start_mdy"
+IFS='/' read de_m de_d de_y <<< "$date_end_mdy"
+ds_m=$((10#$ds_m)); ds_d=$((10#$ds_d)); de_m=$((10#$de_m)); de_d=$((10#$de_d))
+if [ "$creds" != "-10.00" ]; then
+  log::err "You did not get the autopay credits. Manual investigation required | extraction='$extraction' creds='$creds'"
+  return 1
+fi
+
+local -r new_invoice_name="${ds_y:?}_${ds_m:?}_${ds_d:?}-${de_y:?}_${de_m:?}_${de_d:?}"
+local -r splitwise_description="Astound internet $date_start_mdy - $date_end_mdy"
+
+# Place a suggestion for the new name on your clipboard
+wait_for_keypress
+
+# Do the 3 stages
+clipboard "$new_invoice_name" --description "New invoice name"
+wait_for_keypress "Open 'ASTOUND_DIR' to rename the invoice"
+open "$(astound::dir)"
+wait_for_keypress
+
+clipboard "$splitwise_description" --description "Splitwise description"
+wait_for_keypress "Open splitwise to enter the transaction name"
+astound::browser
+wait_for_keypress
+
+clipboard "$amount" --description "amount"
+wait_for_keypress "Open splitwise to enter the transaction amount"
+astound::browser
+wait_for_keypress
