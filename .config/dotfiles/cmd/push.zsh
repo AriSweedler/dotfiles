@@ -170,6 +170,9 @@ push_tier() {
     if [[ "${repo}" == shared ]]; then log::err "shared repo not cloned | git_dir='${TIER_GIT_DIR[shared]}' fix='dotfiles init'"; return 1; fi
     log::info "no local tier on this machine | hint='${CLI_NAME} apply local_dotfiles_repo'"; return 0
   fi
+  if [[ "${repo}" == local ]] && ! repo_git local remote get-url origin >/dev/null 2>&1; then
+    log::info "local tier has no remote; nothing to push | hint='git ldf remote add origin <url>'"; return 0
+  fi
   if ! is_push_needed "${repo}"; then log::info "${repo} tier up to date | sha='$(repo_git "${repo}" rev-parse --short HEAD 2>/dev/null || true)'"; return 0; fi
   push_begin "${repo}" || return 1
   [[ -n "${PIDS[${repo}]:-}" ]] || return 0   # dry-run: nothing running

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# local_dotfiles_repo: init + allowlist + hooksPath, the manual remote step, allowlist drift,
+# local_dotfiles_repo: init + allowlist + hooksPath, the optional remote, allowlist drift,
 # unpushed commits.
 set -u
 # shellcheck source=lib.sh
@@ -26,9 +26,9 @@ assert_eq "info/exclude rules == template rules" "$(rules "${TEMPLATE}")" "$(rul
 assert_eq "hooksPath set" "${ARI_DOTFILES_LDF_HOOKS}" "$(git --git-dir="${ARI_DOTFILES_LDF_GIT_DIR}" config --local --get core.hooksPath)"
 
 check_ldf
-assert_eq "no remote → warn" warn "$(step_get local_dotfiles_repo .status)"
+assert_eq "no remote → ok" ok "$(step_get local_dotfiles_repo .status)"
 assert_eq "reason no_remote" no_remote "$(step_get local_dotfiles_repo .reason)"
-assert_eq "no_remote is manual" true "$(step_get local_dotfiles_repo .manual)"
+assert_eq "no_remote is not manual" false "$(step_get local_dotfiles_repo .manual)"
 assert_contains "manual step: remote add" "$(step_json)" "git ldf remote add origin"
 assert_contains "manual step: first push" "$(step_json)" "git ldf push --set-upstream origin main"
 

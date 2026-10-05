@@ -1,7 +1,7 @@
 # step local_dotfiles_repo — the local tier: a bare repo with the allowlist as info/exclude,
-# hooks wired, a remote, nothing unpushed.
+# hooks wired, nothing unpushed to its remote (optional).
 step::declare local_dotfiles_repo --group repo \
-  --desc "local dotfiles bare repo exists with the allowlist, hooks, and a remote"
+  --desc "local dotfiles bare repo exists with the allowlist and hooks; nothing unpushed when it has a remote"
 
 check::local_dotfiles_repo() {
   local git_dir="${ARI_DOTFILES_LDF_GIT_DIR}" exclude="${ARI_DOTFILES_LDF_GIT_DIR}/info/exclude"
@@ -34,9 +34,9 @@ check::local_dotfiles_repo() {
   fi
   local origin
   origin="$(git --git-dir="${git_dir}" remote get-url origin 2>/dev/null || true)"
+  # A remote is optional: without one the local tier stays on this machine and push skips it.
   if [[ -z "${origin}" ]]; then
-    verdict warn no_remote -m -f "git ldf remote add origin <this machine's private repo>" \
-      -d $'the local-dotfiles remote is one private repo per machine:\n  git ldf remote add origin <this machine\'s private repo>\n  git ldf push --set-upstream origin main   # after the first commit'
+    verdict ok no_remote -d $'no remote; the local tier stays on this machine. To back it up:\n  git ldf remote add origin <this machine\'s private repo>\n  git ldf push --set-upstream origin main   # after the first commit'
     return 0
   fi
   # No fetch: origin/main is whatever the last push left behind; before the first push every commit is unpushed.
