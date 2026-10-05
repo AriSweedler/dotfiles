@@ -43,6 +43,12 @@ ${c_bold}Behavior:${c_rst}
   5. Otherwise generates a timestamped folder, stubs scratchpad.md + sources.md
      from templates in the heredoc, and emits the new path.
 
+${c_bold}Streams:${c_rst}
+  stdout  only key='value' lines, single-quoted for eval: base_path, topic_slug, parent_dir,
+          investigation_folder, timestamp, concurrent_sessions. Empty values print as ''.
+  stderr  every [INFO]/[WARN]/[ERROR] line and this help. Do not redirect it away: the WARN
+          about the fallback base is how the user learns the folder is not under ${DEFAULT_BASE}.
+
 ${c_bold}Exit codes:${c_rst}
   0  success (folder created OR concurrent sessions detected)
   1  usage error
@@ -62,7 +68,7 @@ dry_run="false"
 while (( $# > 0 )); do
     case "${1}" in
         -h|--help)
-            help
+            help >&2
             exit 0
             ;;
         --skill-name)
@@ -87,7 +93,7 @@ while (( $# > 0 )); do
             ;;
         *)
             log::err "Unknown flag | flag='${1}'"
-            help
+            help >&2
             exit 1
             ;;
     esac
@@ -244,12 +250,12 @@ if [[ -n "${concurrent_sessions}" ]]; then
     concurrent_count="$(echo "${concurrent_sessions}" | awk -F'|' '{print NF}')"
     log::info "Concurrent session(s) detected | parent='${parent_dir}' count='${concurrent_count}'"
     cat <<EOF
-base_path=${resolved_base}
-topic_slug=${topic_slug}
-parent_dir=${parent_dir}
-investigation_folder=
-timestamp=
-concurrent_sessions=${concurrent_sessions}
+base_path=${(qq)resolved_base}
+topic_slug=${(qq)topic_slug}
+parent_dir=${(qq)parent_dir}
+investigation_folder=''
+timestamp=''
+concurrent_sessions=${(qq)concurrent_sessions}
 EOF
     exit 0
 fi
@@ -260,12 +266,12 @@ investigation_folder="${parent_dir}/${timestamp}"
 if [[ "${dry_run}" == "true" ]]; then
     log::info "Dry run — no folder created | path='${investigation_folder}'"
     cat <<EOF
-base_path=${resolved_base}
-topic_slug=${topic_slug}
-parent_dir=${parent_dir}
-investigation_folder=${investigation_folder}
-timestamp=${timestamp}
-concurrent_sessions=
+base_path=${(qq)resolved_base}
+topic_slug=${(qq)topic_slug}
+parent_dir=${(qq)parent_dir}
+investigation_folder=${(qq)investigation_folder}
+timestamp=${(qq)timestamp}
+concurrent_sessions=''
 EOF
     exit 0
 fi
@@ -275,10 +281,10 @@ stub_files "${investigation_folder}"
 log::info "Created investigation folder | path='${investigation_folder}'"
 
 cat <<EOF
-base_path=${resolved_base}
-topic_slug=${topic_slug}
-parent_dir=${parent_dir}
-investigation_folder=${investigation_folder}
-timestamp=${timestamp}
-concurrent_sessions=
+base_path=${(qq)resolved_base}
+topic_slug=${(qq)topic_slug}
+parent_dir=${(qq)parent_dir}
+investigation_folder=${(qq)investigation_folder}
+timestamp=${(qq)timestamp}
+concurrent_sessions=''
 EOF

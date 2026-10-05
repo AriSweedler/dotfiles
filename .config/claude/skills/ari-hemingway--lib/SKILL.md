@@ -22,6 +22,25 @@ Siblings MAY:
 - Print a diff summary before the `Draft ready` line; siblings own the diff format.
 - Rename workflow step names (e.g., "Investigate" instead of "Research").
 
+## Autonomous mode
+
+`--autonomous` is a flag the dispatcher forwards verbatim to every sibling it invokes. A sibling that receives it:
+
+- **Prints every prompt it would have waited on**, then takes the default: the option the prompt names as default; for a "present X and wait" step with no options, X is accepted as presented once the step's mechanical check passes.
+- **Starts a new timestamp** at Restore context (option 2) and at the concurrent-session check (option 2, `--force-new`); it never resumes another session's folder.
+- **Stops at any confirmation before a visible or destructive action** (Scrap, the permalink Option 3 gate, the Overwrite gate, `gh gist`, a Drive folder creation, a publish `--apply`, any `git push`): it prints the prompt and the command that would run, sets `Last phase`, and ends with `Autonomous run paused at <gate>; rerun to continue`. A local `git commit` is not a pause point.
+- **Records each default** as one line under a `Defaults taken` field in its scratchpad, after `Last phase`:
+
+```
+- **Defaults taken**:
+  - Restore context: (2) new timestamp
+  - Skeleton: accepted as generated (6 sections, 28 concepts)
+  - Review prompt: (2) Common, destination=explainer
+  - Findings: all (spec questions and blocker meta-findings deferred)
+```
+
+The 20% fact-check gate takes option (1) once, then option (3). A failed sub-skill or workflow run retries once, then pauses. Nothing else about the sibling's workflow changes.
+
 ## Preconditions
 
 Before any workflow step runs, sibling skills MUST verify:
@@ -50,10 +69,14 @@ eval "$(zsh $HOME/.claude/skills/ari-hemingway--lib/bin/make-investigation-folde
 # exports: base_path, topic_slug, parent_dir, investigation_folder, timestamp, concurrent_sessions
 ```
 
+Stdout is the six `key='value'` lines; every `[INFO]`/`[WARN]` line goes to stderr (`--help` describes both streams).
+
+**Do NOT add `2>/dev/null`:** it hides the WARN that says the folder is not under the default base.
+
 - `<skill-name>` = the invoking sibling's short name, e.g., `subsystem-explainer`, `review`.
 - `<subject>` = the doc's subject. The script slugifies it (lowercase, non-alphanumeric → `-`, trim to 57 chars, append `-<sha1[0:6]>`). Worked example: `"Widget Cache Invalidation! (v2)"` → `widget-cache-invalidation-v2-ab3f9c`.
 
-**Concurrent-session check.** If `concurrent_sessions` is non-empty, the script did NOT create a new folder — sibling folders with mtime in the last 5 minutes were detected. STOP and ask: `Another session at <first path> is active. (1) Share session (resume it), (2) New timestamp, (3) Abort.` No default. On (2), re-run the script with `--force-new`.
+**Concurrent-session check.** If `concurrent_sessions` is non-empty, the script did NOT create a new folder — sibling folders with mtime in the last 5 minutes were detected. STOP and ask: `Another session at <first path> is active. (1) Share session (resume it), (2) New timestamp, (3) Abort.` No default; under `--autonomous` take (2). On (2), re-run the script with `--force-new`.
 
 ### scratchpad.md baseline schema
 
@@ -127,7 +150,7 @@ Run AFTER `{topic-slug}` is known (i.e., after the sibling's pointer-gathering s
 1. List `/tmp/hemingway/{skill-name}/{topic-slug}/` subfolders by timestamp, descending.
 2. If none: start a new `{timestamp}` folder. Done.
 3. If one or more exist: read the latest `scratchpad.md`. Print the header: `{timestamp}, mode={mode}, pointers=[...], last phase={last phase}`.
-4. Ask: `(1) Resume latest, (2) Start new timestamp, (3) Show full scratchpad contents first`. NEVER apply a default — always wait for an explicit choice. NEVER resume silently.
+4. Ask: `(1) Resume latest, (2) Start new timestamp, (3) Show full scratchpad contents first`. NEVER apply a default and NEVER resume silently; under `--autonomous` the default is (2), per `## Autonomous mode`.
 
 If the user picks (3), print the full scratchpad and re-ask (1) vs (2).
 
@@ -229,6 +252,10 @@ The service uses Memcached for the cache.
 
 Cadence rule from `## Investigation folder` applies here: each verification is a source operation; append to `sources.md` after every batch of ≤3.
 
+Two variants, chosen by what the claims point at. A **code topic** has claims that point at the codebase (paths, flags, config values, flows) — use `### Code topic`. An **external topic** has claims a URL backs (a number, a date, a name, an attribution, a sequence of events) — use `### External topic`; this is every explainer, and any draft where `## Preconditions` confirmed the subject is outside the codebase. A draft with both kinds of claim runs both. The lint, the 20% threshold and its four options at the end of this section apply to either.
+
+### Code topic
+
 Verify every concrete claim against the codebase:
 - File paths exist.
 - Commands have correct flags.
@@ -252,14 +279,55 @@ If a claim is wrong, fix the draft and record the correction in `sources.md`. If
 
 Record which ran in `sources.md` next to the TODO, formatted as `[TODO: verify | tried: grep,read,log]`.
 
-**Denominator for the 20% threshold:** count one claim per table row, per numbered flow step, per bullet. Sentences in prose paragraphs do not count.
+**Denominator for the 20% threshold (code topic):** count one claim per table row, per numbered flow step, per bullet. Sentences in prose paragraphs do not count.
 
-**Lint self-audit (required).** Before leaving Fact-check, grep `draft.md` for `[TODO: verify` and verify every hit has a matching `| tried: ...` annotation. Any bare `[TODO: verify]` → STOP, add attempts or remove the marker.
+### External topic
+
+A claim is a fact a URL backs. Verify it by fetching the source, primary first (the opinion, the filing, the governing body's release, the data file you counted from), secondary (press) when the primary is not reachable. One source often backs several values (a case's filing date, ruling date and award); log them as one row.
+
+**The log.** Append to `sources.md` under a `## Fact-check log` heading, one `### Fact-check ({date})` subsection per pass. It is not part of the stub; the first pass creates it. Each pass has a denominator line, the table, and a TODO-count line:
+
+```markdown
+## Fact-check log
+
+### Fact-check (2026-10-03)
+Denominator: 29 figures + 28 glossary rows + 6 further-reading links + 41 prose sentences with a number, date or attribution = 104 counted claims.
+
+| Claim | Status | How |
+|---|---|---|
+| Board of Regents 7-2, 27 June 1984 | verified | justia opinion fetched |
+| Cap $20.5M (2025-26) = 22% of average revenue; $21.3M (2026-27) | primary unreachable; 2 secondary sources agree | collegesportscommission.org renders client-side (empty fetch); legionreport and CBS Sports agree |
+| Notre Dame NBC deal about $50M a year | [TODO: verify \| tried: fetch(ndsmcobserver), search, notes grep] | prose says "reportedly"; value is a Front Office Sports snippet |
+
+TODO count: 1 of 104 counted claims (1.0%), under the 20% gate.
+```
+
+Statuses, and what `How` must name for each:
+- `verified` — the source fetched or the data file counted, and the note it was cross-checked against when there is one.
+- `primary unreachable; N secondary sources agree` — the primary is named with why it failed (client-side render returned empty, paywall, 404); N ≥ 2 independent secondary sources are named. Counts as verified for the threshold. With fewer than two, the row is a TODO.
+- `[TODO: verify \| tried: ...]` — the pipe is escaped inside the table. Before marking it, MUST have tried ALL of: (1) fetch the primary URL; (2) search for the exact value and fetch one secondary source; (3) grep the investigation folder's research notes and data files. Record each attempt; `search budget exhausted` is an attempt when it applies.
+
+If a claim is wrong, fix the draft and record the correction. When a reviewer or a later pass changes a claim, append a `### Corrections from the review pass ({date}, {reviewer})` table under the same `## Fact-check log` heading:
+
+```markdown
+| Was | Now | Source |
+|---|---|---|
+| semifinal pairs "repeat for nine seasons" | repeat through 2025; broken in 2026 | CFP release 3 Feb 2026 |
+| Notre Dame "$50 million" | removed | unverified |
+```
+
+**Denominator for the 20% threshold (external topic):** count one claim per figure (its constants and format strings), per glossary row, per further-reading link, per table row, per bullet, AND per prose sentence that carries a number, a date or an attribution. Prose counts here, unlike the code topic.
+
+**Published prose (explainer destination).** `[TODO: verify]` lives in `sources.md` only, never in `article/body.html`, `article/meta.json` or a `figures/*.json` label. Each TODO row either hedges the prose or drops the claim. The hedge word follows the status: `primary unreachable; N agree` on a number → `about` or `roughly`; still a TODO → `reportedly` plus the attribution, or the claim goes and a Corrections row records it.
+
+### Lint and threshold
+
+**Lint self-audit (required).** Before leaving Fact-check, run `grep -nF '[TODO: verify' <draft> sources.md | grep -vF 'tried:'` over the sibling's draft files (`draft.md`, or `article/body.html` and `figures/*.json` for an explainer). Any line printed is a bare marker → STOP, add attempts or remove the marker. A zero denominator is a STOP too: a draft with no counted claims has no facts.
 
 If `[TODO: verify]` count exceeds 20% of counted claims, STOP and present four options:
 1. Re-research the flagged claims.
 2. User answers the TODOs inline.
-3. Accept the high-TODO draft and replace the title's leading `[🤖 AI generated]` with `[🤖 AI generated — draft, needs SME review]`.
+3. Accept the high-TODO draft and mark it per the format skill's AI-marker rule (gdoc: the title's `[🤖 AI generated]` becomes `[🤖 AI generated — draft, needs SME review]`; explainer: the `<meta name="generator">` content).
 4. Abort.
 
 ## Present
