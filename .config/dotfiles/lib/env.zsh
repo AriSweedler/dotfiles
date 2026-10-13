@@ -61,6 +61,13 @@ for _seam in ARI_DOTFILES_CHECK_TIMEOUT_SECS ARI_DOTFILES_APPLY_TIMEOUT_SECS ARI
   fi
 done
 unset _seam
+# How fancy human output is (ui.zsh): auto decides from the streams; plain never draws; fancy
+# draws whenever gum resolves (tmux tests), though NO_COLOR still wins.
+typeset -g ARI_DOTFILES_UI="${ARI_DOTFILES_UI:-auto}"
+if [[ "${ARI_DOTFILES_UI}" != (auto|plain|fancy) ]]; then
+  print -u2 "[ERROR] seam must be auto, plain or fancy | var='ARI_DOTFILES_UI' value='${ARI_DOTFILES_UI}'"
+  return 3
+fi
 
 # launchd's PATH lacks Homebrew, so a tool is also probed by absolute path under the prefixes.
 # Prints the path, or nothing.
@@ -82,6 +89,8 @@ probe_tool() {
 typeset -gx ARI_DOTFILES_BREW="${ARI_DOTFILES_BREW:-$(probe_tool brew)}"
 typeset -gx ARI_DOTFILES_NOTIFIER="${ARI_DOTFILES_NOTIFIER:-$(probe_tool terminal-notifier)}"
 typeset -gx ARI_DOTFILES_CODE="${ARI_DOTFILES_CODE:-$(probe_tool code)}"
+# Not exported: each process probes for itself, and the test worlds never see the machine's gum.
+typeset -g ARI_DOTFILES_GUM="${ARI_DOTFILES_GUM:-$(probe_tool gum)}"
 # Through the seam, not ARI_DOTFILES_CONFIG: the tests point the seam into the fake HOME while the code
 # runs from the real checkout, and the click command must name the HOME the report is in.
 typeset -gx ARI_DOTFILES_EDIT_WINDOW="${ARI_DOTFILES_SHARED_DIR:h}/bin/tmux-edit-window"
@@ -181,6 +190,15 @@ env_probe() {
       shared_dir:$shared_dir, global_dir:$global_dir, local_dir:$local_dir, state_dir:$state_dir,
       desktop_dir:$desktop_dir, launch_agents_dir:$launch_agents_dir, now:$now, host:$host, run_id:$run_id}'
 }
+
+# --- Human output (ui.zsh): the palette, 256-colour indexes only (tmux here is screen-256color) ---
+typeset -gA UI_COLORS=(red 196 green 71 yellow 178 blue 33 magenta 170 cyan 37 white 252 grey 244)
+typeset -gA UI_STATUS_COLORS=(ok green warn yellow fail red error red skip grey)
+typeset -gA UI_GLYPHS=(ok ✓ warn ! fail ✗ error ‼ skip –)
+typeset -g UI_SPIN_COLOR=37 UI_BOX_COLOR=244
+typeset -g UI_ANSI_PAT=$'\e\\[[0-9;]#m'      # one SGR escape, as an extendedglob pattern; display width ignores it
+typeset -g UI_FANCY=""                       # ui::is_fancy's answer for this process: 1, 0, or "" until asked
+typeset -g UI_SPIN_PID="" UI_SPIN_SENTINEL=""   # the running spinner, if any
 
 # --- Flags, set by main (before the verb) ---
 # --dry-run is the exported ARI_DOTFILES_DRY_RUN=1, one truth for this process, every subprocess and every lib (run.zsh: is_dry_run).

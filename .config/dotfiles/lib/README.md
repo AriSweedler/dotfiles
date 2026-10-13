@@ -6,7 +6,7 @@ rules:
 
 | Directory | Holds | To add one |
 |---|---|---|
-| `lib/` | the kernel: `env.zsh` (constants, seams, flags), `logging.zsh`, `run.zsh` (is_dry_run, run_mut, timed, with_timeout, need_lib), `verdict.zsh`, `lock.zsh`, `notify.zsh`, `tiers.zsh` (repo_git, tier::commit), `steps.zsh` (the registry and the one runner), `dispatch.zsh` (main, help) | a module is one concern; a new global belongs in `env.zsh` |
+| `lib/` | the kernel: `env.zsh` (constants, seams, flags), `logging.zsh`, `run.zsh` (is_dry_run, run_mut, timed, with_timeout, need_lib), `verdict.zsh`, `lock.zsh`, `notify.zsh`, `tiers.zsh` (repo_git, tier::commit), `steps.zsh` (the registry and the one runner), `ui.zsh` (how fancy human output is: spinners, colour, boxes, tables), `dispatch.zsh` (main, help) | a module is one concern; a new global belongs in `env.zsh` |
 | `cmd/` | one verb per file: `cmd_<verb>` parses its own arguments (zparseopts; flags after the verb belong to the verb) and `help_<verb>` prints its help, first line the one-line synopsis `dotfiles --help` lists | add `cmd/<verb>.zsh` with those two functions; nothing else to register |
 | `steps/` | one step per file: `step::declare <name> [--group repo\|brew\|tools] [--needs a,b] [--tools t] [--desc D] [--abort]`, then `check::<name>` (pure, one verdict line on stdout) and optionally `apply::<name>` (mutates only through `run_mut`) | add `steps/<name>.zsh`; `steps::load` validates the registry and orders it by group, then --needs, then name |
 
@@ -25,6 +25,10 @@ Rules that keep the entrypoint trivial:
 - **A file sourced from inside a function declares its globals with `typeset -g`**: `need_lib`
   sources the domain libraries from a function, where a bare `readonly X=` would be local.
 - **Predicates are `is_*`**: `is_dry_run`, `is_repo_present`, `tier::is_no_push`, `step::is_fixable`.
+- **gum only through `ui.zsh`.** `ui::is_fancy` decides once per process (both streams ttys,
+  `NO_COLOR` empty, not launchd, gum found; the `ARI_DOTFILES_UI=auto|plain|fancy` seam), every
+  helper has a plain fallback, and nothing else calls gum: not a check, an apply, a job plugin,
+  or `log::*`.
 - **Never name a variable after one of zsh's own.** `path` is tied to `PATH` (a local by that
   name made `mkdir` vanish), `status` is `$?`; also `argv`, `options`, `fpath`, `cdpath`,
   `manpath`, `prompt`, `reply`, `watch`, `signals`, `histchars`.
