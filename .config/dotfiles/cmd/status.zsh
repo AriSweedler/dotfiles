@@ -223,7 +223,7 @@ status::cards() {
     box="$(ui::box --title "${title}" -- "${(@f)$(status::_align "${STATUS_ROWS[@]}")}")"
     boxes+=("${box}")
     top="${box%%$'\n'*}"; top="${top//${~UI_ANSI_PAT}/}"
-    (( total += ${(m)#top} + 1 ))
+    total=$(( total + ${(m)#top} + 1 ))  # not (( += )): a 0 result is status 1, and set -e ends status
   done
   if (( total <= $(ui::cols) )); then ui::join_h "${boxes[1]}" " " "${boxes[2]}" " " "${boxes[3]}"
   else print -r -- "${(F)boxes}"
