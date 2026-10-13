@@ -140,10 +140,13 @@ push_begin() {
   local repo="${1}" branch sha url logfile
   logfile="$(log_file "${repo}")"
   if is_dry_run; then
-    push_target "${repo}" || return 1
-    log::info "dry-run, would push | repo='${repo}' branch='${branch}' sha='${sha:0:7}' url='${url}' log='${logfile}'"; return 0
+    if ! push_target "${repo}"; then push::record "${repo}" failed; return 1; fi
+    log::info "dry-run, would push | repo='${repo}' branch='${branch}' sha='${sha:0:7}' url='${url}' log='${logfile}'"
+    push::record "${repo}" "would push" "${sha}"; return 0
   fi
-  if [[ "${repo}" != local && -z "${TOKEN}" ]]; then step token load_token || return 1; fi
+  if [[ "${repo}" != local && -z "${TOKEN}" ]]; then
+    step token load_token || { push::record "${repo}" "failed (token)"; return 1; }
+  fi
   log_rotate "${logfile}" "${KEEP_BACKUPS}"
   STARTS[${repo}]="${EPOCHREALTIME}"
   { push_repo "${repo}" 2>&1 | strip_ansi > "${logfile}"; } &   # pipefail: the group exits with push_repo's rc
@@ -152,11 +155,16 @@ push_begin() {
 
 # Wait for a repo's background push and report it in one line.
 push_wait() {
-  local repo="${1}" rc=0 took
+  local repo="${1}" rc=0 took sha
   wait "${PIDS[${repo}]}" || rc=$?
   took="$(elapsed "${STARTS[${repo}]}")"
-  if (( rc == 0 )); then log::info "pushed | repo='${repo}' took='${took}s' log='$(log_file "${repo}")'"; return 0; fi
-  log::err "push failed | repo='${repo}' rc='${rc}' took='${took}s' see='dotfiles logs --repo ${repo}'"; return 1
+  sha="$(repo_git "${repo}" rev-parse -q --verify HEAD 2>/dev/null || true)"
+  if (( rc == 0 )); then
+    log::info "pushed | repo='${repo}' took='${took}s' log='$(log_file "${repo}")'"
+    push::record "${repo}" pushed "${sha}" "${took}" "$(log_file "${repo}")"; return 0
+  fi
+  log::err "push failed | repo='${repo}' rc='${rc}' took='${took}s' see='dotfiles logs --repo ${repo}'"
+  push::record "${repo}" failed "${sha}" "${took}" "$(log_file "${repo}")"; return 1
 }
 
 #######################################
@@ -167,13 +175,21 @@ push_wait() {
 push_tier() {
   local repo="${1}"
   if ! is_repo_present "${repo}"; then
-    if [[ "${repo}" == shared ]]; then log::err "shared repo not cloned | git_dir='${TIER_GIT_DIR[shared]}' fix='dotfiles init'"; return 1; fi
-    log::info "no local tier on this machine | hint='${CLI_NAME} apply local_dotfiles_repo'"; return 0
+    if [[ "${repo}" == shared ]]; then
+      log::err "shared repo not cloned | git_dir='${TIER_GIT_DIR[shared]}' fix='dotfiles init'"
+      push::record shared "failed (not cloned)"; return 1
+    fi
+    log::info "no local tier on this machine | hint='${CLI_NAME} apply local_dotfiles_repo'"
+    push::record local "skipped (no tier)"; return 0
   fi
   if [[ "${repo}" == local ]] && ! repo_git local remote get-url origin >/dev/null 2>&1; then
-    log::info "local tier has no remote; nothing to push | hint='git ldf remote add origin <url>'"; return 0
+    log::info "local tier has no remote; nothing to push | hint='git ldf remote add origin <url>'"
+    push::record local "skipped (no remote)"; return 0
   fi
-  if ! is_push_needed "${repo}"; then log::info "${repo} tier up to date | sha='$(repo_git "${repo}" rev-parse --short HEAD 2>/dev/null || true)'"; return 0; fi
+  if ! is_push_needed "${repo}"; then
+    log::info "${repo} tier up to date | sha='$(repo_git "${repo}" rev-parse --short HEAD 2>/dev/null || true)'"
+    push::record "${repo}" "up to date" "$(repo_git "${repo}" rev-parse -q --verify HEAD 2>/dev/null || true)"; return 0
+  fi
   push_begin "${repo}" || return 1
   [[ -n "${PIDS[${repo}]:-}" ]] || return 0   # dry-run: nothing running
   if [[ "${repo}" == local ]]; then log::info "local tier pushing in the background | log='$(log_file local)' note='its pre-push hook may run exo check --e2e'"; return 0; fi
@@ -203,14 +219,17 @@ bump_pointer() {
   message="${repo:t}: bump to ${head:0:7} (${subject})"
   (( count <= 1 )) || message="${repo:t}: bump to ${head:0:7} (${count} commits, latest: ${subject})"
   if is_dry_run; then
-    log::info "dry-run, would bump | repo='${repo}' from='${pointer:0:7}' to='${head:0:7}' message='${message}'"; return 0
+    log::info "dry-run, would bump | repo='${repo}' from='${pointer:0:7}' to='${head:0:7}' message='${message}'"
+    push::record "${repo:t} pointer" "would bump" "${head}"; return 0
   fi
   # `commit -- <path>` records this path alone; anything else staged in the shared tier stays staged.
   if ! out="$(repo_git shared commit -q -m "${message}" -- "${repo}" 2>&1)"; then
     print -r -- "${out}" >&2
-    log::err "pointer bump refused | repo='${repo}' to='${head:0:7}' fix='see the hook output above'"; return 1
+    log::err "pointer bump refused | repo='${repo}' to='${head:0:7}' fix='see the hook output above'"
+    push::record "${repo:t} pointer" failed "${head}"; return 1
   fi
   log::info "bumped | repo='${repo}' to='${head:0:7}' commit='$(repo_git shared rev-parse --short HEAD)' message='${message}'"
+  push::record "${repo:t} pointer" bumped "${head}"
 }
 
 #######################################
@@ -224,9 +243,15 @@ push_submodules() {
   local -a running=() published=()
   is_dry_run && verb=would_push
   for repo in "${SUBMODULES[@]}"; do
-    if ! is_repo_present "${repo}"; then log::warn "submodule not checked out; skipping | path='${repo}' fix='dotfiles init'"; continue; fi
+    if ! is_repo_present "${repo}"; then
+      log::warn "submodule not checked out; skipping | path='${repo}' fix='dotfiles init'"
+      push::record "${repo}" "skipped (not checked out)"; continue
+    fi
     checked=$(( checked + 1 ))
-    if ! is_push_needed "${repo}"; then published+=("${repo}"); continue; fi
+    if ! is_push_needed "${repo}"; then
+      push::record "${repo}" "up to date" "$(repo_git "${repo}" rev-parse -q --verify HEAD 2>/dev/null || true)"
+      published+=("${repo}"); continue
+    fi
     if ! push_begin "${repo}"; then failed=$(( failed + 1 )); continue; fi
     if is_dry_run; then pushed=$(( pushed + 1 )); published+=("${repo}"); continue; fi   # the plan printed counts as would_push
     running+=("${repo}")
@@ -264,15 +289,73 @@ cmd_push() {
   PUSH_SCOPE=("${(@)PUSH_SCOPE:|skip}")
   (( ${#PUSH_SCOPE} )) || usage_error "Empty push scope: every part excluded | parts='${(j:, :)PUSH_PARTS}'"
   local start="${EPOCHREALTIME}" failed=false scope="${(j:, :)PUSH_SCOPE}"
+  local -a PUSH_ROWS=()   # push::record's rows, for the closing table (dynamic scope: the push_* functions append)
   check_prerequisites git gh || return 1
   if is_in_scope local; then push_tier local || failed=true; fi
   if is_in_scope submodules && ! push_submodules; then
     failed=true
-    if is_in_scope shared; then log::err "shared tier not pushed: a submodule push failed | fix='dotfiles logs, fix, dotfiles push'"; fi
+    if is_in_scope shared; then
+      log::err "shared tier not pushed: a submodule push failed | fix='dotfiles logs, fix, dotfiles push'"
+      push::record shared "skipped (a submodule failed)"
+    fi
   elif is_in_scope shared; then
     push_tier shared || failed=true
   fi
   if [[ -n "${PIDS[local]:-}" ]]; then push_wait local || failed=true; fi
-  if [[ "${failed}" == true ]]; then log::err "push failed | scope='${scope}' took='$(elapsed "${start}")s'"; return 1; fi
+  if [[ "${failed}" == true ]]; then
+    log::err "push failed | scope='${scope}' took='$(elapsed "${start}")s'"
+    push::show_summary; return 1
+  fi
   log::info "push done | scope='${scope}' took='$(elapsed "${start}")s'"
+  push::show_summary
+}
+
+# --- The closing table: one row per repo (and per pointer bump), terminal only ---
+
+# push::record <repo> <result> [sha] [secs] [log] — one row of what happened, appended to
+# cmd_push's PUSH_ROWS. result: pushed, up to date, would push, bumped, would bump, failed[ (why)],
+# skipped (why). sha is any length; secs as elapsed prints them. A tab or newline in a field
+# becomes a space, so a row is always one line of five fields.
+push::record() {
+  local -a f=("${1}" "${2}" "${3:-}" "${4:-}" "${5:-}")
+  f=("${(@)f//[$'\t\n']/ }")
+  PUSH_ROWS+=("${(pj:\t:)f}")
+}
+
+# push::summary_tsv <row>… — the rows push::record made, as TSV under a header: repo, result,
+# the 7-character sha, took (<secs>s) and the log with $HOME as ~. Pure.
+push::summary_tsv() {
+  local row
+  local -a f
+  print -r -- $'repo\tresult\tsha\ttook\tlog'
+  for row in "${@}"; do
+    f=("${(@ps:\t:)row}")
+    print -r -- "${f[1]:-}"$'\t'"${f[2]:-}"$'\t'"${${f[3]:-}:0:7}"$'\t'"${f[4]:+${f[4]}s}"$'\t'"${${f[5]:-}/#${HOME}/~}"
+  done
+}
+
+# The ui status colour a result is painted in: done green, a plan yellow, failed red, no-op grey.
+push::result_status() {
+  case "${1}" in
+    pushed|bumped)           print -r -- ok ;;
+    would\ *)                print -r -- warn ;;
+    failed*)                 print -r -- fail ;;
+    *)                       print -r -- skip ;;
+  esac
+}
+
+# The table of PUSH_ROWS on stderr, results painted, when fancy; nothing otherwise (plain output
+# is the log lines alone).
+push::show_summary() {
+  ui::is_fancy || return 0
+  (( ${#PUSH_ROWS} )) || return 0
+  local line first=1
+  local -a cells out=()
+  for line in "${(@f)$(push::summary_tsv "${PUSH_ROWS[@]}")}"; do
+    if (( first )); then out+=("${line}"); first=0; continue; fi
+    cells=("${(@ps:\t:)line}")
+    cells[2]="$(ui::paint "$(push::result_status "${cells[2]}")" "${cells[2]}")"
+    out+=("${(pj:\t:)cells}")
+  done
+  print -rl -- "${out[@]}" | ui::table - >&2
 }
