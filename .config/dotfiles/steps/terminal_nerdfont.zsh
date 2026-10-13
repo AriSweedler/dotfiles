@@ -3,7 +3,15 @@
 step::declare terminal_nerdfont --group brew --needs brew --tools brew \
   --desc "a Nerd Font cask is installed and at least one Terminal.app profile uses a Nerd Font"
 
+# Cached on the casks installed and the Terminal preferences: the two things it reads.
 check::terminal_nerdfont() {
+  local REPLY
+  if ! cache::brew_prefix; then step::terminal_nerdfont::check; return 0; fi
+  cache::check step::terminal_nerdfont::check "${ARI_DOTFILES_TERMINAL_PLIST}" "${ARI_DOTFILES_BREW}" \
+    "${REPLY}/Caskroom" "${REPLY}/Caskroom/"*(N/)
+}
+
+step::terminal_nerdfont::check() {
   local casks
   casks="$("${ARI_DOTFILES_BREW}" list --cask 2>/dev/null || true)"
   local -a fonts=(${(M)${(f)casks}:#*nerd-font*})

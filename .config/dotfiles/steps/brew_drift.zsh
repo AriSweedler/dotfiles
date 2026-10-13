@@ -6,5 +6,11 @@ step::watches brew_drift '.config/new-machine/Brewfile' '.config/new-machine/Bre
 
 check::brew_drift() {
   need_lib "${ARI_DOTFILES_BREW_LIB}"
-  brew::check_drift_verdict
+  # Cached on everything the brew model reads (cache.zsh). A busy brew that has changed nothing
+  # yet leaves the stored verdict true; once it touches a keg, the miss runs the busy check.
+  local -a reply inputs
+  if ! cache::brew_tier_inputs; then brew::check_drift_verdict; return 0; fi
+  inputs=("${reply[@]}")
+  if ! cache::brew_inputs; then brew::check_drift_verdict; return 0; fi
+  cache::check brew::check_drift_verdict "${inputs[@]}" "${reply[@]}"
 }

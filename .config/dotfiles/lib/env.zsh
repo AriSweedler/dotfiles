@@ -47,7 +47,7 @@ typeset -gx ARI_DOTFILES_DF_HOOKS="${ARI_DOTFILES_DF_HOOKS:-${HOME}/.config/git/
 typeset -gx ARI_DOTFILES_LDF_HOOKS="${ARI_DOTFILES_LDF_HOOKS:-${HOME}/.config/git/local-dotfiles-hooks}"
 typeset -gx ARI_DOTFILES_BREW_PREFIXES="${ARI_DOTFILES_BREW_PREFIXES-/opt/homebrew /usr/local}"
 typeset -gx ARI_DOTFILES_NOW="${ARI_DOTFILES_NOW:-${EPOCHSECONDS}}"
-typeset -gx ARI_DOTFILES_HOST="${ARI_DOTFILES_HOST:-$(hostname -s)}"
+typeset -gx ARI_DOTFILES_HOST="${ARI_DOTFILES_HOST:-${HOST%%.*}}"   # `hostname -s`, without the fork
 typeset -gx ARI_DOTFILES_CHECK_TIMEOUT_SECS="${ARI_DOTFILES_CHECK_TIMEOUT_SECS:-120}"
 typeset -gx ARI_DOTFILES_APPLY_TIMEOUT_SECS="${ARI_DOTFILES_APPLY_TIMEOUT_SECS:-1800}"
 typeset -gx ARI_DOTFILES_RETRY_SECS="${ARI_DOTFILES_RETRY_SECS:-60}"
@@ -70,27 +70,32 @@ if [[ "${ARI_DOTFILES_UI}" != (auto|plain|fancy) ]]; then
 fi
 
 # launchd's PATH lacks Homebrew, so a tool is also probed by absolute path under the prefixes.
-# Prints the path, or nothing.
-probe_tool() {
-  local tool="${1}" found prefix
-  found="$(command -v "${tool}" 2>/dev/null || true)"
-  if [[ -n "${found}" ]]; then
-    print -r -- "${found}"
-    return 0
-  fi
+# probe_tool prints the path, or nothing; probe_tool::reply sets REPLY instead, with no fork
+# (the command hash searches PATH as `command -v` does), so sourcing the kernel runs nothing.
+probe_tool::reply() {
+  local tool="${1}" prefix
+  REPLY="${commands[${tool}]:-}"
+  [[ -z "${REPLY}" ]] || return 0
   for prefix in ${=ARI_DOTFILES_BREW_PREFIXES}; do
     if [[ -x "${prefix}/bin/${tool}" ]]; then
-      print -r -- "${prefix}/bin/${tool}"
+      REPLY="${prefix}/bin/${tool}"
       return 0
     fi
   done
   return 0
 }
-typeset -gx ARI_DOTFILES_BREW="${ARI_DOTFILES_BREW:-$(probe_tool brew)}"
-typeset -gx ARI_DOTFILES_NOTIFIER="${ARI_DOTFILES_NOTIFIER:-$(probe_tool terminal-notifier)}"
-typeset -gx ARI_DOTFILES_CODE="${ARI_DOTFILES_CODE:-$(probe_tool code)}"
+probe_tool() {
+  local REPLY
+  probe_tool::reply "${1}"
+  [[ -z "${REPLY}" ]] || print -r -- "${REPLY}"
+  return 0
+}
+[[ -n "${ARI_DOTFILES_BREW:-}" ]] || { probe_tool::reply brew; typeset -gx ARI_DOTFILES_BREW="${REPLY}"; }
+[[ -n "${ARI_DOTFILES_NOTIFIER:-}" ]] || { probe_tool::reply terminal-notifier; typeset -gx ARI_DOTFILES_NOTIFIER="${REPLY}"; }
+[[ -n "${ARI_DOTFILES_CODE:-}" ]] || { probe_tool::reply code; typeset -gx ARI_DOTFILES_CODE="${REPLY}"; }
+typeset -gx ARI_DOTFILES_BREW ARI_DOTFILES_NOTIFIER ARI_DOTFILES_CODE
 # Not exported: each process probes for itself, and the test worlds never see the machine's gum.
-typeset -g ARI_DOTFILES_GUM="${ARI_DOTFILES_GUM:-$(probe_tool gum)}"
+[[ -n "${ARI_DOTFILES_GUM:-}" ]] || { probe_tool::reply gum; typeset -g ARI_DOTFILES_GUM="${REPLY}"; }
 # Through the seam, not ARI_DOTFILES_CONFIG: the tests point the seam into the fake HOME while the code
 # runs from the real checkout, and the click command must name the HOME the report is in.
 typeset -gx ARI_DOTFILES_EDIT_WINDOW="${ARI_DOTFILES_SHARED_DIR:h}/bin/tmux-edit-window"
@@ -111,7 +116,8 @@ run_id() {
   strftime -s id '%Y%m%dT%H%M%S' "${1:-${ARI_DOTFILES_NOW}}"
   print -r -- "${id}"
 }
-typeset -gx RUN_ID="${RUN_ID:-$(run_id)}"
+[[ -n "${RUN_ID:-}" ]] || strftime -s RUN_ID '%Y%m%dT%H%M%S' "${ARI_DOTFILES_NOW}"
+typeset -gx RUN_ID
 typeset -gx RUN_DIR="${RUN_DIR:-${ARI_DOTFILES_STATE_DIR}/runs/${RUN_ID}}"
 
 # --- Tier files the brew model edits or commits ---
@@ -147,15 +153,32 @@ typeset -g KEEP_BACKUPS=5
 typeset -g IDENTITY_CACHE="${STATE_DIR}/identity"   # '<sha256 of token> <login> <epoch>': whose token, verified when
 typeset -g IDENTITY_TTL_SECONDS=$(( 7 * 24 * 3600 ))
 typeset -ga PUSH_PARTS=(local submodules shared)   # in run order
-# Submodule paths declared in ~/.gitmodules, relative to $HOME; empty when none.
-SUBMODULES=("${(@f)$(git config -f "${GITMODULES}" --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}' || true)}")
-typeset -ga SUBMODULES=("${(@)SUBMODULES:#}")
+# Submodule paths declared in ~/.gitmodules, relative to $HOME; empty when none. Read in zsh, not
+# `git config -f`: every step subprocess sources this, and the file is git's simple ini form.
+typeset -ga SUBMODULES=()
+if [[ -r "${GITMODULES}" ]]; then
+  () {
+    local line in_sub=0 val
+    for line in "${(@f)$(<"${GITMODULES}")}"; do
+      while [[ "${line}" == [[:space:]]* ]]; do line="${line#?}"; done
+      while [[ "${line}" == *[[:space:]] ]]; do line="${line%?}"; done
+      if [[ "${line}" == '['* ]]; then
+        if [[ "${line}" == '[submodule '* ]]; then in_sub=1; else in_sub=0; fi
+      elif (( in_sub )) && [[ "${line}" == *=* && "${${${line%%=*}//[[:space:]]/}:l}" == path ]]; then
+        val="${line#*=}"
+        while [[ "${val}" == [[:space:]]* ]]; do val="${val#?}"; done
+        val="${${val#\"}%\"}"
+        if [[ -n "${val}" ]]; then SUBMODULES+=("${val}"); fi
+      fi
+    done
+  }
+fi
 # Every dotfiles submodule is a public personal repo, so its commits carry the personal identity.
 typeset -g SUBMODULE_GIT_NAME="Ari Sweedler"
 typeset -g SUBMODULE_GIT_EMAIL="ari@sweedler.com"
 
 # --- jobs: one launchd job runs every job plugin, from both tiers (jobs.zsh) ---
-typeset -g JOBS_LABEL="com.$(id -un).dotfiles-jobs"
+typeset -g JOBS_LABEL="com.${USERNAME}.dotfiles-jobs"
 typeset -g JOBS_PLIST="${HOME}/Library/LaunchAgents/${JOBS_LABEL}.plist"
 typeset -g JOBS_ROOT_DF="${HOME}/.config/dotfiles/jobs"                              # the shared tier's plugins
 typeset -g JOBS_ROOT_LDF="${XDG_DATA_HOME}/dotfiles/jobs"                             # the local tier's
@@ -169,7 +192,7 @@ typeset -g JOBS_NOTIFIER_TIMEOUT_SECONDS=10   # terminal-notifier occasionally n
 # launchd's PATH has no Homebrew; plugins shell out to jq, terminal-notifier, python3.
 typeset -g JOBS_LAUNCHD_PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 # The per-plugin jobs this framework replaced; install boots them out and removes their plists.
-typeset -ga JOBS_LEGACY_LABELS=("com.$(id -un).git-health" "com.$(id -un).aws-sso-autologin" "com.$(id -un).new-machine-verify")
+typeset -ga JOBS_LEGACY_LABELS=("com.${USERNAME}.git-health" "com.${USERNAME}.aws-sso-autologin" "com.${USERNAME}.new-machine-verify")
 typeset -gA JOB_PATH=() JOB_TIER=()         # name → executable, name → df | ldf; filled by jobs_discover
 # A plugin's `# deps:` names run as its setup first; the local root wins (how *this* machine provides X).
 typeset -g DEPS_ROOT_DF="${HOME}/.config/dotfiles/deps"

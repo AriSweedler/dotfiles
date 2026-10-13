@@ -6,7 +6,7 @@ rules:
 
 | Directory | Holds | To add one |
 |---|---|---|
-| `lib/` | the kernel: `env.zsh` (constants, seams, flags), `logging.zsh`, `run.zsh` (is_dry_run, run_mut, timed, with_timeout, need_lib), `verdict.zsh`, `lock.zsh`, `notify.zsh`, `tiers.zsh` (repo_git, tier::commit), `steps.zsh` (the registry and the one runner), `watch.zsh` (step::watches: which paths each step reads), `ui.zsh` (how fancy human output is: spinners, colour, boxes, tables), `dispatch.zsh` (main, help) | a module is one concern; a new global belongs in `env.zsh` |
+| `lib/` | the kernel: `env.zsh` (constants, seams, flags), `logging.zsh`, `run.zsh` (is_dry_run, run_mut, timed, with_timeout, need_lib), `verdict.zsh`, `lock.zsh`, `notify.zsh`, `tiers.zsh` (repo_git, tier::commit), `steps.zsh` (the registry and the one runner), `watch.zsh` (step::watches: which paths each step reads), `cache.zsh` (cache::check: a verdict reused while its inputs' fingerprint holds), `ui.zsh` (how fancy human output is: spinners, colour, boxes, tables), `dispatch.zsh` (main, help) | a module is one concern; a new global belongs in `env.zsh` |
 | `cmd/` | one verb per file: `cmd_<verb>` parses its own arguments (zparseopts; flags after the verb belong to the verb) and `help_<verb>` prints its help, first line the one-line synopsis `dotfiles --help` lists | add `cmd/<verb>.zsh` with those two functions; nothing else to register |
 | `steps/` | one step per file: `step::declare <name> [--group repo\|brew\|tools] [--needs a,b] [--tools t] [--desc D] [--abort]`, then `step::watches <name> <glob>..` (`watch.zsh`: the paths under `$HOME` whose change means the step may need to run; `dotfiles pull` names those steps; none for a step with no repo inputs), then `check::<name>` (pure, one verdict line on stdout) and optionally `apply::<name>` (mutates only through `run_mut`) | add `steps/<name>.zsh`; `steps::load` validates the registry and orders it by group, then --needs, then name |
 
@@ -29,6 +29,15 @@ Rules that keep the entrypoint trivial:
   `NO_COLOR` empty, not launchd, gum found; the `ARI_DOTFILES_UI=auto|plain|fancy` seam), every
   helper has a plain fallback, and nothing else calls gum: not a check, an apply, a job plugin,
   or `log::*`.
+- **Sourcing the kernel runs nothing.** Every check runs in a fresh zsh that sources `lib/`, so a
+  `$(…)` or a command at source time costs every step: use zsh's own parameters (`$HOST`,
+  `$USERNAME`, `$commands`, `strftime -s`, `$(<file)`). `tests/test_check_speed.sh` sources the
+  kernel under a PATH of tracing shims and fails on any command it runs.
+- **A slow check caches, a cache hit says so.** `cache::check <fn> <input>..` reuses the stored
+  verdict while every input's mtime, size, inode and mode hold; the hit's detail ends with
+  `cached: true | fp=… at=…`, its status never changes. Never in setup mode, never an error,
+  never when an input changed in the last two seconds; `ARI_DOTFILES_NO_CACHE=1` turns it off.
+  List every file the check reads: a directory input only changes when an entry comes or goes.
 - **Never name a variable after one of zsh's own.** `path` is tied to `PATH` (a local by that
   name made `mkdir` vanish), `status` is `$?`; also `argv`, `options`, `fpath`, `cdpath`,
   `manpath`, `prompt`, `reply`, `watch`, `signals`, `histchars`.
