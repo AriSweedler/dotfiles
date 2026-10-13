@@ -149,6 +149,29 @@ ui::cols() {
   print -r -- "${cols}"
 }
 
+# Paths as a human reads them: each live XDG base directory becomes $XDG_DATA_HOME etc. (longest
+# value first), then the home directory becomes $HOME, each only where the value ends at a path
+# boundary (/, a quote, whitespace, the end), so $HOME/.configure stays. Pure, no fork, same in both modes; for
+# human lines only: JSON, result files, run.log and log::* records keep the raw paths.
+ui::paths() { local REPLY; ui::_paths "${1:-}"; print -r -- "${REPLY}"; }
+
+# ui::paths into REPLY, for a caller that wants no $(…).
+ui::_paths() {
+  setopt localoptions extendedglob
+  local text="${1:-}" var val home="${HOME%/}"
+  local -a order=()
+  for var in XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME XDG_CONFIG_HOME; do
+    val="${(P)var:-}"; val="${val%/}"
+    [[ -z "${val}" || "${val}" == "${home}" ]] || order+=("${#val}:${var}")
+  done
+  for var in "${(@On)order}"; do
+    var="${var#*:}"; val="${(P)var}"; val="${val%/}"
+    text="${text//(#b)${val}([\/\"\'[:space:]]|(#e))/\$${var}${match[1]}}"
+  done
+  [[ -z "${home}" ]] || text="${text//(#b)${home}([\/\"\'[:space:]]|(#e))/\$HOME${match[1]}}"
+  REPLY="${text}"
+}
+
 # ui::box [--title T] [--color N] [--] <line>… — a rounded box, border in colour N, bold title.
 # [the title line, then each line indented two spaces]
 ui::box() {

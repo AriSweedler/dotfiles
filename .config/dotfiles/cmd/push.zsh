@@ -323,14 +323,15 @@ push::record() {
 }
 
 # push::summary_tsv <row>… — the rows push::record made, as TSV under a header: repo, result,
-# the 7-character sha, took (<secs>s) and the log with $HOME as ~. Pure.
+# the 7-character sha, took (<secs>s) and the log as ui::paths shows it. Pure.
 push::summary_tsv() {
-  local row
+  local row REPLY
   local -a f
   print -r -- $'repo\tresult\tsha\ttook\tlog'
   for row in "${@}"; do
     f=("${(@ps:\t:)row}")
-    print -r -- "${f[1]:-}"$'\t'"${f[2]:-}"$'\t'"${${f[3]:-}:0:7}"$'\t'"${f[4]:+${f[4]}s}"$'\t'"${${f[5]:-}/#${HOME}/~}"
+    ui::_paths "${f[5]:-}"
+    print -r -- "${f[1]:-}"$'\t'"${f[2]:-}"$'\t'"${${f[3]:-}:0:7}"$'\t'"${f[4]:+${f[4]}s}"$'\t'"${REPLY}"
   done
 }
 

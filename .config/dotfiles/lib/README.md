@@ -31,7 +31,8 @@ Rules that keep the entrypoint trivial:
 - **gum only through `ui.zsh`.** `ui::is_fancy` decides once per process (both streams ttys,
   `NO_COLOR` empty, not launchd, gum found; the `ARI_DOTFILES_UI=auto|plain|fancy` seam), every
   helper has a plain fallback, and nothing else calls gum: not a check, an apply, a job plugin,
-  or `log::*`.
+  or `log::*`. Human lines show paths through `ui::paths` (`$XDG_*`, then `$HOME`); `--json`,
+  `summary.json`, result files, `run.log`, push logs and `log::*` records keep them raw, for grep.
 - **Sourcing the kernel runs nothing.** Every check runs in a fresh zsh that sources `lib/`, so a
   `$(…)` or a command at source time costs every step: use zsh's own parameters (`$HOST`,
   `$USERNAME`, `$commands`, `strftime -s`, `$(<file)`). `tests/test_check_speed.sh` sources the

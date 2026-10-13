@@ -89,6 +89,28 @@ assert_eq "cols defaults to 100 without a tty" $'100\n' "${OUT}"
 ui_run COLUMNS=42 -- 'ui::cols'
 assert_eq "cols reads COLUMNS" $'42\n' "${OUT}"
 
+# ── paths: XDG bases as $XDG_*, then the home directory as $HOME, at path boundaries only ─
+H="${FIX}/home"
+ui_run -- "ui::paths '${H}/.config/karabiner/karabiner.json'; ui::paths '${H}/.local/share/new-machine'; ui::paths '${H}/.local/state/new-machine/runs/x.log'; ui::paths '${H}/.cache/dotfiles'"
+assert_eq "paths: each XDG base becomes its variable" \
+$'$XDG_CONFIG_HOME/karabiner/karabiner.json\n$XDG_DATA_HOME/new-machine\n$XDG_STATE_HOME/new-machine/runs/x.log\n$XDG_CACHE_HOME/dotfiles\n' "${OUT}"
+ui_run -- "ui::paths \"git_dir='${H}/dotfiles.git' hooks='${H}/.config/git/dotfiles-hooks' cfg=\\\"${H}/.config\\\" ${H}/.config\""
+assert_eq "paths: several in one line, ended by a quote, whitespace or the end" \
+"git_dir='\$HOME/dotfiles.git' hooks='\$XDG_CONFIG_HOME/git/dotfiles-hooks' cfg=\"\$XDG_CONFIG_HOME\" \$XDG_CONFIG_HOME"$'\n' "${OUT}"
+ui_run -- "ui::paths '${H}/.configure/x ${H}/.cache2'; ui::paths '${H}'; ui::paths '${H}/'; ui::paths '${H}x/y'; ui::paths 'no paths here'"
+assert_eq "paths: a shared prefix is not a match; the home directory alone is \$HOME" \
+$'$HOME/.configure/x $HOME/.cache2\n$HOME\n$HOME/\n'"${H}"$'x/y\nno paths here\n' "${OUT}"
+ui_run -- "ui::paths 'key=${H}/.ssh/id_github'"
+assert_eq "paths: under home but under no XDG base is \$HOME/…" $'key=$HOME/.ssh/id_github\n' "${OUT}"
+ui_run XDG_CONFIG_HOME="${FIX}/elsewhere/cfg/" -- "ui::paths '${FIX}/elsewhere/cfg/zsh ${H}/.config/zsh'"
+assert_eq "paths: a custom XDG_CONFIG_HOME outside \$HOME, trailing slash ignored" \
+$'$XDG_CONFIG_HOME/zsh $HOME/.config/zsh\n' "${OUT}"
+ui_run XDG_DATA_HOME="${H}/.config/data" -- "ui::paths '${H}/.config/data/a ${H}/.config/b'"
+assert_eq "paths: the longest value wins when one base holds another" \
+$'$XDG_DATA_HOME/a $XDG_CONFIG_HOME/b\n' "${OUT}"
+ui_run ARI_DOTFILES_UI=fancy ARI_DOTFILES_GUM="${FAKE_GUM}" -- "ui::paths '${H}/.config/x'; ui::_paths '${H}/.cache'; print -r -- \"\${REPLY}\""
+assert_eq "paths: the same when fancy; _paths sets REPLY" $'$XDG_CONFIG_HOME/x\n$XDG_CACHE_HOME\n' "${OUT}"
+
 # ── table ────────────────────────────────────────────────────────────────────
 printf 'step\tstatus\tdetail\nbrew\tok\tall formulae declared\nclaude_skills\twarn\t\n\nssh_key\tfail\tno key\n' > "${FIX}/t.tsv"
 ui_run -- "ui::table '${FIX}/t.tsv'"

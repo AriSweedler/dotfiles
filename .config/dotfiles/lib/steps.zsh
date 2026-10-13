@@ -507,7 +507,7 @@ run::_keep_show() {
 }
 
 # One line for a finished step: glyph, name, reason, the detail's first line clipped to the
-# terminal, the duration in grey; a fail or error adds the step log's path.
+# terminal, the duration in grey; a fail or error adds the step log's path. Paths as ui::paths shows them.
 run::_show() {
   run::is_fancy || return 0
   ui::spin_stop
@@ -529,11 +529,13 @@ run::_show() {
   suffix="  ${dur}"
   local -i room
   room=$(( $(ui::cols) - ${#prefix} - ${#suffix} ))
-  detail="$(ui::clip "${room}" "${detail}")"
+  local REPLY
+  ui::_paths "${detail}"
+  detail="$(ui::clip "${room}" "${REPLY}")"
   printf -v prefix '%s %-*s %s ' "$(ui::paint "${st}" "$(ui::glyph "${st}")")" "${RUN_NAME_W}" "${name}" \
     "$(ui::paint "${st}" "${rpad}")"
   print -r -- "${prefix}${detail}$(ui::paint grey "${suffix}")"
-  if [[ "${st}" == (fail|error) ]]; then ui::paint grey "  log: ${log_path}"; fi
+  if [[ "${st}" == (fail|error) ]]; then ui::_paths "${log_path}"; ui::paint grey "  log: ${REPLY}"; fi
 }
 
 # The end of a fancy run: the roll-up painted in its status's colour, then the total time, then
@@ -567,9 +569,10 @@ run::_attention() {
 
 # Plain: `fix    <step>  <fix>` per step that needs attention, after the status line.
 run::_fix_lines() {
-  local st step reason fix manual detail
+  local st step reason fix manual detail REPLY
   while IFS=$'\x1f' read -r st step reason fix manual detail; do
-    print -r -- "fix    ${step}  ${fix}"
+    ui::_paths "${fix}"
+    print -r -- "fix    ${step}  ${REPLY}"
   done < <(run::_attention)
 }
 
@@ -577,17 +580,19 @@ run::_fix_lines() {
 # and reason, the fix, and a manual step's detail (clipped); the run directory last. Nothing needs
 # attention: one green line instead.
 run::_attention_box() {
-  local rollup="${1}" st step reason fix manual detail line
+  local rollup="${1}" st step reason fix manual detail line REPLY
   local -a body=() lines
   local -i n=0 width
   width=$(( $(ui::cols) - 4 ))
   while IFS=$'\x1f' read -r st step reason fix manual detail; do
     (( ++n ))
     body+=("$(ui::paint "${st}" "$(ui::glyph "${st}")") ${step}  $(ui::paint "${st}" "${reason}")")
-    body+=("  fix: ${fix}")   # a command to copy, so never clipped
+    ui::_paths "${fix}"
+    body+=("  fix: ${REPLY}")   # a command to copy, so never clipped
     if [[ "${manual}" == true ]]; then
       lines=("${(@f)$(jq -rn --argjson d "${detail}" '$d')}")
       for line in "${lines[@]}"; do
+        ui::_paths "${line}"; line="${REPLY}"
         if [[ -n "${line}" ]]; then body+=("$(ui::paint grey "$(ui::clip "${width}" "    ${line}")")"); fi
       done
     fi
@@ -600,7 +605,8 @@ run::_attention_box() {
     fi
     return 0
   fi
-  body+=("$(ui::paint grey "run: ${RUN_DIR/#${HOME}/~}")")
+  ui::_paths "${RUN_DIR}"
+  body+=("$(ui::paint grey "run: ${REPLY}")")
   local verb_s=need
   (( n > 1 )) || verb_s=needs
   ui::box --title "${n} ${verb_s} attention" --color "${rollup}" -- "${body[@]}"
@@ -660,8 +666,9 @@ run::summarize() {
 run::print_human() {
   local summary="${RUN_DIR}/summary.json"
   if run::is_fancy; then run::_rollup; return 0; fi
-  local step_status step reason detail applied
+  local step_status step reason detail applied REPLY
   while IFS=$'\t' read -r step_status step reason applied detail; do
+    ui::_paths "${detail}"; detail="${REPLY}"
     if [[ "${applied}" == would_apply ]]; then
       printf '%-6s %-22s %-26s would run apply::%s  %s\n' "${step_status}" "${step}" "${reason}" "${step}" "${detail}"
     else

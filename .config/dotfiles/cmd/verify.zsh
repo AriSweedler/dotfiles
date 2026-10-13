@@ -102,7 +102,7 @@ verify::show() {
     zmodload -F zsh/stat b:zstat 2>/dev/null || true
     local when
     when="$(zstat -F '%Y-%m-%d %H:%M' +mtime -- "${newest}" 2>/dev/null || true)"
-    ui::paint grey "archived report from ${when:-an unknown date}, no current one on the Desktop: $(help::tilde "${newest}")" >&2
+    ui::paint grey "archived report from ${when:-an unknown date}, no current one on the Desktop: $(ui::paths "${newest}")" >&2
     ui::markdown "${newest}"
     return
   fi

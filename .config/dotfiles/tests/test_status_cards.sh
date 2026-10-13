@@ -63,7 +63,7 @@ assert_eq "plain: the three sections as main prints them" "tiers
   local: ## No commits yet on main  uncommitted=0
 submodules (space = at the pointer, + = elsewhere, - = not initialized)
   none declared
-last push (${PUSH_DIR}; 'dotfiles logs' for the whole run)
+last push (\$XDG_STATE_HOME/dotfiles/push; 'dotfiles logs' for the whole run)
   local                      2026-09-02T10:00:00Z  [2026-09-02T10:00:03Z] [push_repo] rejected | remote=origin
   shared                     2026-09-01T10:00:00Z  [2026-09-01T10:00:02Z] [push_repo] Pushed | main@abcdef0123 -> origin" "${OUT}"
 

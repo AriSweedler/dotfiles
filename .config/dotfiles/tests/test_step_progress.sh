@@ -18,10 +18,20 @@ ONLY="dotfiles_repo,local_dotfiles_repo,bob_neovim,claude,karabiner"
 # Timestamps, run ids and durations are the only bytes allowed to differ between two renderings.
 mask() { /usr/bin/sed -E 's/\[[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z\]/[TS]/g; s/[0-9]{8}T[0-9]{6}/RUNID/g'; }
 strip_ansi() { /usr/bin/sed -E $'s/\x1b\\[[0-9;?]*[a-zA-Z]//g'; }
-# main's run::print_human, verbatim: the table every plain run must still print.
+# Paths as human lines show them (ui::paths, in this world): each XDG base, then the home directory.
+show_paths() {
+  local s="$1" v d
+  for v in XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME XDG_CONFIG_HOME HOME; do
+    for d in / "'" '"' ' '; do s="${s//"${!v}${d}"/"\$${v}${d}"}"; done
+    [[ "${s}" != *"${!v}" ]] || s="${s%"${!v}"}\$${v}"
+  done
+  printf '%s' "${s}"
+}
+# main's run::print_human with each detail's paths as ui::paths shows them: the plain table.
 old_table() {
   local step_status step reason detail applied
   while IFS=$'\t' read -r step_status step reason applied detail; do
+    detail="$(show_paths "${detail}")"
     if [[ "${applied}" == would_apply ]]; then
       printf '%-6s %-22s %-26s would run apply::%s  %s\n' "${step_status}" "${step}" "${reason}" "${step}" "${detail}"
     else
@@ -36,6 +46,9 @@ nm healthcheck --only "${ONLY}"
 RUN="$(newest_run_dir)"
 assert_eq "plain healthcheck exits 0" 0 "${RC}"
 assert_eq "plain stdout is main's table, byte for byte" "$(old_table "${RUN}/summary.json")" "${OUT}"
+assert_contains "plain table: an XDG path as its variable" "${OUT}" "file='\$XDG_CONFIG_HOME/karabiner/karabiner.json'"
+assert_contains "plain table: a home path as \$HOME" "${OUT}" "git_dir='\$HOME/dotfiles.git'"
+assert_contains "summary.json keeps the raw path" "$(cat "${RUN}/summary.json")" "${HOME}/.config/karabiner/karabiner.json"
 assert_file "the run writes run.log" "${RUN}/run.log"
 assert_eq "plain stderr is exactly run.log, timestamps masked" "$(mask < "${RUN}/run.log")" "$(printf '%s' "${ERR}" | mask)"
 LOG="$(cat "${RUN}/run.log")"
@@ -45,6 +58,7 @@ for s in ${ONLY//,/ }; do
   assert_contains "run.log has check | step='${s}'" "${LOG}" "check | step='${s}' status="
 done
 assert_not_contains "run.log is plain text" "${LOG}" $'\e['
+assert_contains "run.log keeps raw paths" "${LOG}" "run_dir='${ARI_DOTFILES_STATE_DIR}/runs/"
 assert_not_contains "a plain run has no glyphs" "${OUT}" "✓"
 
 # ── Plain init --dry-run: the table first, then status; the dry-run warning still on stderr ──
@@ -72,6 +86,7 @@ assert_eq "fancy healthcheck exits as plain does" 0 "${RC}"
 assert_eq "fancy header: verb and step count" "healthcheck · 5 steps" "$(head -n 1 <<< "${PLAIN_OUT}")"
 assert_contains "fancy groups get a heading" "${PLAIN_OUT}" $'\nrepo\n'
 assert_contains "fancy line for a step" "${PLAIN_OUT}" "✓ dotfiles_repo"
+assert_contains "fancy step line: paths as ui::paths shows them, before the clip" "${PLAIN_OUT}" "git_dir='\$HOME/dotfiles.git' hooks='\$XDG_CON"
 assert_eq "one line per step" 5 "$(grep -v '^✓ all ' <<< "${PLAIN_OUT}" | grep -c -E '^(✓|!|✗|‼|–) ')"
 assert_contains "fancy ends with the roll-up" "$(tail -n 2 <<< "${PLAIN_OUT}" | head -n 1)" "status: ok (ok=5)"
 assert_eq "then the all-ok line (test_fix_rollup.sh)" "✓ all 5 steps ok" "$(tail -n 1 <<< "${PLAIN_OUT}")"
@@ -105,6 +120,8 @@ bump_now_secs 60
 nm healthcheck --only "${ONLY}" --json
 RUN="$(newest_run_dir)"
 assert_eq "--json is summary.json, byte for byte" "$(cat "${RUN}/summary.json")" "${OUT}"
+assert_contains "--json keeps raw paths" "${OUT}" "${HOME}/.config/karabiner/karabiner.json"
+assert_not_contains "--json has no \$XDG_" "${OUT}" '$XDG_'
 assert_contains "--json keeps the log lines on stderr" "${ERR}" "==> claude"
 assert_no_file "--json runs no gum" "${FIX}/gum.log"
 

@@ -212,7 +212,7 @@ cmd_status() {
   if is_repo_present local; then print -r -- "  $(tier_line local)"; else print -r -- "  local: no repo (${CLI_NAME} init)"; fi
   print -r -- "${c_bold}submodules${c_rst} (space = at the pointer, + = elsewhere, - = not initialized)"
   submodule_lines
-  print -r -- "${c_bold}last push${c_rst} (${LOG_DIR}; 'dotfiles logs' for the whole run)"
+  print -r -- "${c_bold}last push${c_rst} ($(ui::paths "${LOG_DIR}"); 'dotfiles logs' for the whole run)"
   for logfile in "${logfiles[@]}"; do
     # The run's timestamp (its header) and verdict (its last line, minus the [LEVEL] tag).
     IFS=$'\t' read -r when verdict <<< "$(awk 'NR == 1 { when = $2 } { last = $0 }

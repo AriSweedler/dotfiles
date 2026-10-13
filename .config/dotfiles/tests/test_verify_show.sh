@@ -55,7 +55,7 @@ assert_eq "archive: exits 0" 0 "${RC}"
 if cmp -s "${FIX}/nm.out" "${GOLDEN}"; then pass "archive: stdout is the newest archive byte for byte"
 else fail "archive: stdout is the newest archive byte for byte" "$(diff "${FIX}/nm.out" "${GOLDEN}" | head -n 5)"; fi
 assert_contains "archive: stderr says archived and when" "${ERR}" "archived report from 2026-09-17 00:26"
-assert_contains "archive: stderr names the file" "${ERR}" "2026-09-03-bbbbbbbb.md"
+assert_contains "archive: stderr names the file as ui::paths shows it" "${ERR}" "\$XDG_STATE_HOME/new-machine/reports/2026-09-03-bbbbbbbb.md"
 
 # Case 1: the Desktop report wins over every archive.
 cp "${GOLDEN}" "${REPORT}"

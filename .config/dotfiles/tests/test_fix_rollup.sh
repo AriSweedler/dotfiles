@@ -17,10 +17,20 @@ export BOB_SHIM_LS="Installed: v0.11.2 Used"
 ONLY="dotfiles_repo,local_dotfiles_repo,bob_neovim,claude"
 
 strip_ansi() { /usr/bin/sed -E $'s/\x1b\\[[0-9;?]*[a-zA-Z]//g'; }
-# main's run::print_human, verbatim: everything a plain run printed before this change.
+# Paths as human lines show them (ui::paths, in this world): each XDG base, then the home directory.
+show_paths() {
+  local s="$1" v d
+  for v in XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME XDG_CONFIG_HOME HOME; do
+    for d in / "'" '"' ' '; do s="${s//"${!v}${d}"/"\$${v}${d}"}"; done
+    [[ "${s}" != *"${!v}" ]] || s="${s%"${!v}"}\$${v}"
+  done
+  printf '%s' "${s}"
+}
+# main's run::print_human with each detail's paths as ui::paths shows them.
 old_table() {
   local step_status step reason detail applied
   while IFS=$'\t' read -r step_status step reason applied detail; do
+    detail="$(show_paths "${detail}")"
     if [[ "${applied}" == would_apply ]]; then
       printf '%-6s %-22s %-26s would run apply::%s  %s\n' "${step_status}" "${step}" "${reason}" "${step}" "${detail}"
     else
@@ -97,8 +107,8 @@ assert_contains "an entry: glyph, step, reason" "${BOX}" "✗ bob_neovim  nvim_m
 assert_contains "its fix" "${BOX}" "fix: dotfiles apply bob_neovim"
 assert_contains "the manual item is in the box" "${BOX}" "! terminal_nerdfont  manual_font"
 assert_contains "with its detail lines" "${BOX}" "no Terminal.app preferences yet"
-RUN_SHOWN="run: ~${RUN#"${HOME}"}"
-assert_contains "the run directory, unclipped, home as ~" "${BOX}" "${RUN_SHOWN}"
+RUN_SHOWN="run: \$XDG_STATE_HOME${RUN#"${XDG_STATE_HOME}"}"
+assert_contains "the run directory, unclipped, as ui::paths shows it" "${BOX}" "${RUN_SHOWN}"
 assert_eq "the run directory is the last line" "${RUN_SHOWN}" "${BOX: -${#RUN_SHOWN}}"
 assert_not_contains "fancy: no manual WARN block on stderr" "${ERR}" "Manual step"
 assert_not_contains "fancy: no plain fix lines" "${OUT}" "fix    "
