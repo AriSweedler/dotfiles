@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# `dotfiles status`: the pure helpers behind the cards (relative age, ahead/behind, push verdict),
-# the plain output byte for byte in a world, and the cards path through a fake gum (its call log).
+# `dotfiles status`: the pure helpers behind the two tables (relative age, ahead/behind, push verdict,
+# last push), the plain output byte for byte in a world, and the local and remote tables through a
+# fake gum that logs each call and each argument, every row state and the stale push log included.
 set -u
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -51,6 +52,24 @@ assert_eq "verdict: [ERROR] is a failure" "fail${T}" "$(one 'status::push_verdic
 assert_eq "verdict: a ref with a slash, sha cut to 7" "ok${T}feat/x@0123456" "$(one 'status::push_verdict "[INFO] Pushed | feat/x@0123456789abcdef"')"
 assert_eq "verdict: an email is not a ref" "ok${T}" "$(one 'status::push_verdict "[INFO] committed as a@example.invalid"')"
 
+# ── status::sync ─────────────────────────────────────────────────────────────
+assert_eq "sync: none either way" "ok${T}✓ in sync" "$(one 'status::sync 0 0')"
+assert_eq "sync: ahead says push" "warn${T}↑2 ahead · run dotfiles push" "$(one 'status::sync 2 0')"
+assert_eq "sync: behind says pull" "warn${T}↓4 behind · run dotfiles pull" "$(one 'status::sync 0 4')"
+assert_eq "sync: both is diverged" "warn${T}↑1 ↓1 diverged · run dotfiles pull" "$(one 'status::sync 1 1')"
+assert_eq "sync: - is no upstream" "warn${T}no upstream" "$(one 'status::sync -')"
+
+# ── status::last_push (plain mode: the glyph is its name, no colour) ─────────
+LP="${FIX}/lp.log"
+printf '# 2026-09-01T10:00:00Z dotfiles push -> shared\n[INFO] Pushed | main@abcdef0123 -> origin\n' > "${LP}"
+LPNOW=$(( 1788256800 + 4 * 60 ))
+assert_eq "last_push: no log is -" "-" "$(one "status::last_push '${FIX}/none.log' abcdef0")"
+assert_eq "last_push: origin at the logged sha" "ok 4m ago" "$(one "ARI_DOTFILES_NOW=${LPNOW} status::last_push '${LP}' abcdef0123456789")"
+assert_eq "last_push: no origin to compare" "ok 4m ago" "$(one "ARI_DOTFILES_NOW=${LPNOW} status::last_push '${LP}'")"
+assert_eq "last_push: origin moved since is not current" "ok 4m ago · was abcdef0" "$(one "ARI_DOTFILES_NOW=${LPNOW} status::last_push '${LP}' 1234567")"
+printf '# 2026-09-01T10:00:00Z dotfiles push -> shared\n[ERROR] rejected | remote=origin\n' > "${LP}"
+assert_eq "last_push: a failed push" "fail 4m ago" "$(one "ARI_DOTFILES_NOW=${LPNOW} status::last_push '${LP}' 1234567")"
+
 # ── The plain output in a world, byte for byte ───────────────────────────────
 PUSH_DIR="${XDG_STATE_HOME}/dotfiles/push"
 mkdir -p "${PUSH_DIR}"
@@ -87,46 +106,86 @@ git -C "${HOME}/.config/sub" -c user.name=t -c user.email=t@example.invalid comm
 nm status
 assert_contains "plain: past the pointer" "${OUT}" $'\n'"  +$(git -C "${HOME}/.config/sub" rev-parse HEAD) .config/sub (heads/main)"$'\n'
 
-# ── The cards, through a fake gum that logs its calls ────────────────────────
+# ── The two tables, through a fake gum that logs each call and its arguments ──
 FAKE_GUM="${FIX}/fakegum"
-printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s/gum.log"\nprintf "GUM\\n"\n' "${FIX}" > "${FAKE_GUM}"
+printf '#!/bin/sh\nprintf "CALL %%s\\n" "$1" >> "%s/gum.log"\nprintf "%%s\\n" "$@" >> "%s/gum.args"\nprintf "GUM\\n"\n' "${FIX}" "${FIX}" > "${FAKE_GUM}"
 chmod +x "${FAKE_GUM}"
+# cards_run [VAR=value…]: the fancy path; CALLS is the gum call log, ROWS every argument, colour
+# stripped and runs of spaces squeezed, so a row reads 'shared main 1234567 clean'.
+cards_run() {
+  rm -f "${FIX}/gum.log" "${FIX}/gum.args"
+  st_run ARI_DOTFILES_UI=fancy ARI_DOTFILES_GUM="${FAKE_GUM}" COLUMNS=200 "$@" -- 'cmd_status'
+  CALLS="$(cat "${FIX}/gum.log" 2>/dev/null)"
+  ROWS="$(bare_args | PATH="${ORIG_PATH}" tr -s ' ')"
+}
+bare_args() { PATH="${ORIG_PATH}" sed $'s/\e\\[[0-9;]*m//g' "${FIX}/gum.args" 2>/dev/null; }
+has_row() { assert_contains "$1" $'\n'"${ROWS}"$'\n' $'\n'"$2"$'\n'; }
+
+# A second submodule, declared and pointed at but never initialized: an empty directory, as a clone leaves it.
+mkdir -p "${HOME}/.config/sub2"
+printf '[submodule ".config/sub2"]\n\tpath = .config/sub2\n\turl = %s\n' "${SUB}" >> "${HOME}/.gitmodules"
+df_git add "${HOME}/.gitmodules"
+df_git update-index --add --cacheinfo "160000,${SUB_SHA},.config/sub2"
+df_git -c core.hooksPath=/dev/null commit -q -m "add sub2"
 git clone -q --bare "${ARI_DOTFILES_DF_GIT_DIR}" "${FIX}/remotes/df-origin.git"
 df_git remote add origin "${FIX}/remotes/df-origin.git"
 df_git fetch -q origin
 df_git branch -q --set-upstream-to=origin/main main
+ORIGIN_SHA="$(df_git rev-parse origin/main)"
 printf 'x\n' > "${HOME}/.config/card.txt"
 df_git add "${HOME}/.config/card.txt"
 df_git -c core.hooksPath=/dev/null commit -q -m "ahead by one"
 printf 'y\n' > "${HOME}/.config/card.txt"
+SHARED_HEAD="$(df_git rev-parse HEAD)"
+SUB_HEAD="$(git -C "${HOME}/.config/sub" rev-parse HEAD)"
+# The sub's last `dotfiles push` published what its origin still has; shared's logged abcdef0 is stale.
+printf '# 2026-09-01T10:00:00Z dotfiles push -> .config/sub\n[INFO] [2026-09-01T10:00:02Z] [push_repo] Pushed | main@%s -> origin\n' "${SUB_SHA}" > "${PUSH_DIR}/config-sub.log"
 export ARI_DOTFILES_NOW=$(( 1788256800 + 3 * 86400 ))   # three days after the shared push header
-rm -f "${FIX}/gum.log"
-st_run ARI_DOTFILES_UI=fancy ARI_DOTFILES_GUM="${FAKE_GUM}" -- 'cmd_status'
-GUM_LOG="$(cat "${FIX}/gum.log" 2>/dev/null)"
+
+cards_run
 assert_eq "cards: exits 0" 0 "${RC}"
 assert_eq "cards: what gum drew is the output" $'GUM\n' "${OUT}"
-assert_eq "cards: three boxes and one join" 4 "$(grep -c . "${FIX}/gum.log")"
-assert_eq "cards: the boxes are joined side by side" 1 "$(grep -c '^join --horizontal' "${FIX}/gum.log")"
-assert_contains "cards: tiers card" "${GUM_LOG}" "tiers"
-assert_contains "cards: shared is ahead and says push" "${GUM_LOG}" "↑1 ahead · run dotfiles push"
-# The edited file and the submodule past its pointer: what plain calls uncommitted=2.
-assert_contains "cards: the uncommitted count" "${GUM_LOG}" "2 uncommitted"
-assert_contains "cards: the submodule's short name and branch" "${GUM_LOG}" "sub  "
-assert_contains "cards: the submodule is past its pointer" "${GUM_LOG}" "+ ahead of pointer · bumped on push"
-SUB_HEAD="$(git -C "${HOME}/.config/sub" rev-parse HEAD)"
-assert_contains "cards: a 7-char sha, not 40" "${GUM_LOG}" "${SUB_HEAD:0:7}"
-assert_not_contains "cards: no 40-char sha" "${GUM_LOG}" "${SUB_HEAD}"
-assert_contains "cards: the push age" "${GUM_LOG}" "3d ago"
-assert_contains "cards: the pushed ref" "${GUM_LOG}" "main@abcdef0"
-assert_contains "cards: the failed push is ✗" "${GUM_LOG}" "✗"
-assert_not_contains "cards: no raw porcelain" "${GUM_LOG}" "## main"
+assert_eq "cards: two boxes, then one join" $'CALL style\nCALL style\nCALL join' "${CALLS}"
+has_row "local: its title" "local"
+has_row "local: the header row" "repo branch HEAD state"
+has_row "local: shared, with what plain calls uncommitted=2" "shared main ${SHARED_HEAD:0:7} 2 uncommitted"
+has_row "local: an unborn tier has no HEAD and is clean" "local main - clean"
+has_row "local: a submodule past its pointer" "sub main ${SUB_HEAD:0:7} + ahead of pointer · bumped on push"
+has_row "local: a submodule not initialized" "sub2 - - - not initialized · run dotfiles init"
+has_row "remote: its title" "remote"
+has_row "remote: the header row names dotfiles push" "repo origin sync last dotfiles push"
+has_row "remote: shared ahead, its log stale against origin" "shared ${ORIGIN_SHA:0:7} ↑1 ahead · run dotfiles push ✓ 3d ago · was abcdef0"
+has_row "remote: no upstream, a failed push" "local - no upstream ✗ 2d ago"
+has_row "remote: a submodule ahead of its origin, its log current" "sub ${SUB_SHA:0:7} ↑1 ahead · run dotfiles push ✓ 3d ago"
+has_row "remote: an uninitialized submodule" "sub2 - - -"
+assert_not_contains "cards: no 40-char sha" "${ROWS}" "${SUB_HEAD}"
+assert_not_contains "cards: no raw porcelain" "${ROWS}" "## main"
 
-# Too narrow for three side by side: stacked, no join.
-rm -f "${FIX}/gum.log"
-printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s/gum.log"\nprintf "%%060d\\n" 0\n' "${FIX}" > "${FAKE_GUM}"
-st_run ARI_DOTFILES_UI=fancy ARI_DOTFILES_GUM="${FAKE_GUM}" COLUMNS=150 -- 'cmd_status'
-assert_eq "narrow: three boxes, no join" 3 "$(grep -c . "${FIX}/gum.log")"
-assert_eq "narrow: the boxes stacked" 3 "$(grep -c '^0*$' "${FIX}/st.out")"
+# Back at the pointer, in sync with origin; then origin moves on, as a push from elsewhere would.
+git -C "${HOME}/.config/sub" reset -q --hard "${SUB_SHA}"
+cards_run
+has_row "local: a submodule at its pointer" "sub main ${SUB_SHA:0:7} ✓ at pointer"
+has_row "remote: a submodule in sync" "sub ${SUB_SHA:0:7} ✓ in sync ✓ 3d ago"
+git -C "${SUB}" -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m three
+git -C "${HOME}/.config/sub" fetch -q origin
+SUB_ORIGIN="$(git -C "${HOME}/.config/sub" rev-parse origin/main)"
+cards_run
+has_row "remote: behind says pull, the log no longer current" "sub ${SUB_ORIGIN:0:7} ↓1 behind · run dotfiles pull ✓ 3d ago · was ${SUB_SHA:0:7}"
+git -C "${HOME}/.config/sub" -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m four
+cards_run
+has_row "remote: diverged" "sub ${SUB_ORIGIN:0:7} ↑1 ↓1 diverged · run dotfiles pull ✓ 3d ago · was ${SUB_SHA:0:7}"
+git -C "${HOME}/.config/sub" checkout -q --detach "${SUB_SHA}"
+cards_run
+has_row "local: a detached submodule" "sub detached ${SUB_SHA:0:7} ✓ at pointer"
+has_row "remote: a detached submodule has no upstream" "sub - no upstream ✓ 3d ago"
+
+# Too narrow for both side by side: stacked, no join, the wider table clipped to the screen.
+cards_run COLUMNS=40
+assert_eq "narrow: two boxes, no join" $'CALL style\nCALL style' "${CALLS}"
+assert_eq "narrow: the boxes stacked" $'GUM\nGUM\n' "${OUT}"
+assert_contains "narrow: a clipped row ends in …" "${ROWS}" "…"
+assert_eq "narrow: no row wider than the screen less the box" "" \
+  "$(bare_args | PATH="${ORIG_PATH}" awk '!/^(--|style$|rounded$|0 1$)/ && length($0) > 36')"
 
 # NO_COLOR keeps the plain path even with gum and the fancy seam.
 rm -f "${FIX}/gum.log"
