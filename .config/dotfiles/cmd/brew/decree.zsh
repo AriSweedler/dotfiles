@@ -7,7 +7,7 @@
 # the line scanning here only locates text to report or edit.
 #
 # Entry points (each takes the CLI args after `dotfiles brew <sub>` and returns the exit code):
-#   decree::triage   [--json]
+#   decree::triage   [--json | --interactive [--dry-run] [--no-push]]
 #   decree::decree   ITEM... (--global|--local|--ignore-global|--ignore-local) [--reason TEXT] [--dry-run] [--no-push]
 #   decree::undecree ITEM... [--dry-run] [--no-push]
 # ITEM = [formula:|cask:|tap:|vscode:]name; the kind may be omitted when exactly one kind matches.
@@ -454,17 +454,23 @@ decree::block_tap_lines() {  # <tap>
 # ── help ─────────────────────────────────────────────────────────────────────────────────────
 
 decree::help_triage() {
-  print -r -- "${CLI_NAME} brew triage [--json]"
+  print -r -- "${CLI_NAME} brew triage [--json | --interactive [--dry-run] [--no-push]]"
   cat <<'EOF'
 
 Lists every installed brew item (formula, cask, tap, VS Code extension) that neither Brewfile
 declares, with the three commands that settle it, then orphaned kegs, duplicates, declared
 orphans, the ignore list and classifier notes. Describes; never recommends a tier.
 
-  --json   print drift.json instead
-  -h       this help
+  --json         print drift.json instead
+  --interactive  pick a tier per undeclared item, confirm the grouped plan once, then run one
+                 decree (one commit) per group; needs a terminal on stdin and stdout
+  --dry-run      with --interactive: every decree prints instead of writing
+  --no-push      with --interactive: skip the local tier's push
+  -h             this help
 
 Exit 0 when nothing is undeclared, orphaned or duplicated; 1 otherwise; 2 when brew is busy.
+--interactive: 0 when every decree ran, 1 when one refused or the plan was declined, 130 when
+cancelled; 64 without a terminal.
 EOF
 }
 
@@ -511,15 +517,32 @@ EOF
 # ── triage ───────────────────────────────────────────────────────────────────────────────────
 
 decree::triage() {
-  local json=0
+  local json=0 interactive=0
+  local -a pass=()
   while (( $# )); do
     case "${1}" in
       -h|--help) decree::help_triage; return 0 ;;
       --json) json=1 ;;
+      --interactive) interactive=1 ;;
+      --dry-run|--no-push) pass+=("${1}") ;;
       *) log::err "unknown argument | arg='${1}'"; decree::help_triage >&2; return 64 ;;
     esac
     shift
   done
+  if (( json && interactive )); then
+    log::err "--json and --interactive do not mix | json='${CLI_NAME} brew triage --json' interactive='${CLI_NAME} brew triage --interactive'"
+    decree::help_triage >&2
+    return 64
+  fi
+  if (( ${#pass} && ! interactive )); then
+    log::err "--dry-run and --no-push go with --interactive; plain triage writes nothing | flags='${pass[*]}'"
+    decree::help_triage >&2
+    return 64
+  fi
+  if (( interactive )); then
+    decree::triage_interactive "${pass[@]}"
+    return
+  fi
   decree::snapshot || return $?
   local problems
   problems="$(jq -r '(.undeclared | length) + (.orphan_keg | length) + (.duplicate | length) + (.declared_orphan | length)' "${DECREE_DRIFT}")"
@@ -546,6 +569,12 @@ decree::orphan_recipe() {  # <full name> <hint>
 }
 
 decree::triage_render() {  # <drift.json>
+  decree::triage_render_undeclared "${1}"
+  decree::triage_render_rest "${1}"
+}
+
+# The undeclared section: one row per item and the three decree commands that settle it.
+decree::triage_render_undeclared() {  # <drift.json>
   local drift="${1}" since="" kind name tap new tag count=0
   [[ -f "${LAST_RESULT_FILE}" ]] && since="$(jq -r '(.ts // "") | .[0:10]' "${LAST_RESULT_FILE}")"
 
@@ -566,8 +595,13 @@ decree::triage_render() {  # <drift.json>
                | [.name, (.tap // "-"), ((.new // false) | tostring)] | @tsv' "${drift}")
   done
   (( count == 0 )) && print -r -- "  (none)"
+  return 0
+}
 
-  local hint
+# Every section after undeclared: orphaned kegs with their recipes, duplicates, declared
+# orphans, the ignore list and classifier notes. Nothing here is prompted for.
+decree::triage_render_rest() {  # <drift.json>
+  local drift="${1}" kind name hint
   if jq -e '.orphan_keg | length > 0' "${drift}" >/dev/null; then
     print -r -- ""
     print -r -- "orphaned kegs (needs a human; the tool never uninstalls or reinstalls)"
@@ -611,6 +645,212 @@ decree::triage_render() {  # <drift.json>
     print -r -- "notes"
     print -r -- "${notes}"
   fi
+}
+
+# ── triage --interactive ─────────────────────────────────────────────────────────────────────
+
+(( ${+DECREE_TRIAGE_ACTIONS} )) || typeset -gra DECREE_TRIAGE_ACTIONS=(global local ignore-global ignore-local)
+(( ${+DECREE_TRIAGE_LABEL} )) || typeset -grA DECREE_TRIAGE_LABEL=(
+  [global]="shared Brewfile" [local]="local Brewfile"
+  [ignore-global]="ignore (shared)" [ignore-local]="ignore (local)" [skip]="skip"
+)
+
+# Local stand-ins for helpers lib/ui.zsh lacks; they go through ui::_gum, the one call site of gum.
+# One line of text with gum input; nonzero when cancelled.
+decree::ui_input() {  # <header> [placeholder]
+  ui::_gum input --header "${1}" --placeholder "${2:-}" --prompt "> " --prompt.foreground "${UI_SPIN_COLOR}" \
+    --header.foreground "${UI_BOX_COLOR}" --cursor.foreground "${UI_SPIN_COLOR}" --char-limit 200
+}
+# A yes/no question with gum confirm; 0 yes, 1 no, 130 cancelled.
+decree::ui_confirm() {  # <prompt>
+  ui::_gum confirm --prompt.foreground "${UI_SPIN_COLOR}" --selected.background "${UI_SPIN_COLOR}" \
+    --selected.foreground 255 --unselected.background 236 --unselected.foreground 252 -- "${1}"
+}
+
+# Choices in, decree argument lists out. A CHOICE is "<action>\t<kind:name>\t<reason>", action one
+# of global, local, ignore-global, ignore-local, skip. Prints one line per group, its words quoted
+# for ${(Q)${(z)line}}: the items in choice order, the tier flag, --reason for an ignore, then the
+# pass-through flags. Groups come in tier-flag order; ignores split by reason, since one decree
+# takes one --reason. Skips are dropped. Pure.
+decree::triage_plan() {  # [--dry-run] [--no-push] [--] CHOICE...
+  local -a pass=()
+  while (( $# )) && [[ "${1}" != -- ]]; do
+    case "${1}" in
+      --dry-run|--no-push) pass+=("${1}") ;;
+      *) break ;;
+    esac
+    shift
+  done
+  [[ "${1:-}" != -- ]] || shift
+  local -a keys=() fields words
+  local -A members=()
+  local choice action item reason key
+  for choice in "$@"; do
+    fields=("${(@ps:\t:)choice}")
+    action="${fields[1]:-}" item="${fields[2]:-}" reason="${fields[3]:-}"
+    case "${action}" in
+      skip) continue ;;
+      global|local) key="${action}" ;;
+      ignore-global|ignore-local)
+        if [[ -z "${reason}" ]]; then
+          print -u2 -r -- "decree::triage_plan: an ignore needs a reason | item='${item}'"
+          return 64
+        fi
+        key="${action}"$'\t'"${reason}" ;;
+      *) print -u2 -r -- "decree::triage_plan: bad action | choice='${choice}'"; return 64 ;;
+    esac
+    if [[ -z "${item}" ]]; then
+      print -u2 -r -- "decree::triage_plan: no item | choice='${choice}'"
+      return 64
+    fi
+    (( ${+members[${key}]} )) || keys+=("${key}")
+    members[${key}]+="${item}"$'\n'
+  done
+  local a
+  for a in "${DECREE_TRIAGE_ACTIONS[@]}"; do
+    for key in "${keys[@]}"; do
+      [[ "${key%%$'\t'*}" == "${a}" ]] || continue
+      words=(${(f)members[${key}]} "--${a}")
+      [[ "${key}" != *$'\t'* ]] || words+=(--reason "${key#*$'\t'}")
+      words+=("${pass[@]}")
+      print -r -- "${(j: :)${(@q-)words}}"
+    done
+  done
+  return 0
+}
+
+# The flag a plan line carries (global, local, ignore-global, ignore-local).
+decree::triage_plan_action() {  # <plan line>
+  local -a words=("${(@Q)${(z)1}}")
+  local a
+  for a in "${DECREE_TRIAGE_ACTIONS[@]}"; do
+    if (( ${words[(Ie)--${a}]} )); then print -r -- "${a}"; return 0; fi
+  done
+  return 1
+}
+
+# `triage --interactive`: the sections that need a human are listed as plain triage lists them,
+# then one chooser per undeclared item, the plan grouped by action, one confirmation, and one
+# decree::decree per group. Nothing is written before the confirmation.
+decree::triage_interactive() {  # [--dry-run] [--no-push]
+  local -a pass=("$@")
+  if ! [[ -t 0 && -t 1 ]]; then
+    log::err "--interactive needs a terminal on stdin and stdout; run '${CLI_NAME} brew triage' and paste the decree commands it prints"
+    decree::help_triage >&2
+    return 64
+  fi
+  if ! ui::is_fancy; then
+    log::err "--interactive needs gum, a terminal on stderr too, NO_COLOR unset and ARI_DOTFILES_UI not plain; run '${CLI_NAME} brew triage' instead | gum='${ARI_DOTFILES_GUM}'"
+    decree::help_triage >&2
+    return 64
+  fi
+  decree::snapshot || return $?
+  local drift="${DECREE_DRIFT}"
+  local rest
+  rest="$(decree::triage_render_rest "${drift}")"
+  if [[ -n "${rest}" ]]; then
+    print -r -- "${rest#$'\n'}"
+    print -r -- ""
+  fi
+
+  local -a rows=()
+  local kind
+  for kind in formula cask tap vscode; do
+    rows+=(${(f)"$(jq -r --arg k "${kind}" '.undeclared[] | select(.kind == $k)
+                     | [.kind, .name, (.tap // "-"), ((.new // false) | tostring)] | @tsv' "${drift}")"})
+  done
+  if (( ${#rows} == 0 )); then
+    print -r -- "undeclared: none; nothing to decree"
+    return 0
+  fi
+
+  print -r -- "$(ui::paint bold "undeclared: ${#rows} item(s)") — pick where each belongs"
+  local -a choices=() fields
+  local row name tap new header pick action reason key
+  local -i n=0
+  for row in "${rows[@]}"; do
+    n=$(( n + 1 ))
+    fields=("${(@ps:\t:)row}")
+    kind="${fields[1]}" name="${fields[2]}" tap="${fields[3]}" new="${fields[4]}"
+    header="(${n}/${#rows}) ${kind}:${name}  (${tap})"
+    [[ "${new}" != true ]] || header+="  new"
+    pick=""
+    if ! pick="$(ui::choose --header "${header}" "${DECREE_TRIAGE_LABEL[global]}" "${DECREE_TRIAGE_LABEL[local]}" \
+                   "${DECREE_TRIAGE_LABEL[ignore-global]}" "${DECREE_TRIAGE_LABEL[ignore-local]}" "${DECREE_TRIAGE_LABEL[skip]}")" \
+       || [[ -z "${pick}" ]]; then
+      log::warn "cancelled; nothing decreed"
+      return 130
+    fi
+    action=skip
+    for key in "${(@k)DECREE_TRIAGE_LABEL}"; do
+      [[ "${DECREE_TRIAGE_LABEL[${key}]}" != "${pick}" ]] || action="${key}"
+    done
+    reason=""
+    if [[ "${action}" == ignore-* ]]; then
+      while [[ -z "${reason}" ]]; do
+        if ! reason="$(decree::ui_input "why does ${kind}:${name} stay undeclared? (one line, kept as the ignore comment)" "reason")"; then
+          log::warn "cancelled; nothing decreed"
+          return 130
+        fi
+        reason="${${reason##[[:space:]]#}%%[[:space:]]#}"
+      done
+    fi
+    print -r -- "  ${kind}:${name} → ${pick}${reason:+ — ${reason}}"
+    choices+=("${action}"$'\t'"${kind}:${name}"$'\t'"${reason}")
+  done
+
+  local -a groups=()
+  groups=(${(f)"$(decree::triage_plan "${pass[@]}" -- "${choices[@]}")"})
+  print -r -- ""
+  if (( ${#groups} == 0 )); then
+    print -r -- "every item skipped; nothing to decree"
+    return 0
+  fi
+  # One heading per group, then its items; short lines, so the box never wraps.
+  local -a lines=() words
+  local g a w head
+  local -i width=$(( $(ui::cols) - 4 ))
+  for a in "${DECREE_TRIAGE_ACTIONS[@]}"; do
+    for g in "${groups[@]}"; do
+      [[ "$(decree::triage_plan_action "${g}")" == "${a}" ]] || continue
+      words=("${(@Q)${(z)g}}")
+      head="${DECREE_TRIAGE_LABEL[${a}]} (--${a}"
+      (( ${words[(Ie)--reason]} )) && head+=", reason: ${words[${words[(Ie)--reason]} + 1]}"
+      lines+=("$(ui::paint bold "$(ui::clip "${width}" "${head})")")")
+      for w in "${words[@]}"; do  # the items come before the first flag
+        [[ "${w}" != --* ]] || break
+        lines+=("$(ui::clip "${width}" "  ${w}")")
+      done
+    done
+  done
+  local title="plan: ${#groups} decree(s), one commit each"
+  (( ${pass[(Ie)--dry-run]} )) && title+=" (dry run)"
+  ui::box --title "${title}" -- "${lines[@]}"
+
+  local rc=0
+  decree::ui_confirm "Run ${#groups} decree(s)?" || rc=$?
+  if (( rc != 0 )); then
+    log::warn "declined; nothing decreed"
+    (( rc == 130 )) && return 130
+    return 1
+  fi
+
+  local -i i=0 failed=0
+  local -a words
+  for g in "${groups[@]}"; do
+    i=$(( i + 1 ))
+    words=("${(@Q)${(z)g}}")
+    print -r -- ""
+    print -r -- "$(ui::paint bold "[${i}/${#groups}] ${CLI_NAME} brew decree ${g}")"
+    rc=0
+    decree::decree "${words[@]}" || rc=$?
+    if (( rc != 0 )); then
+      failed=$(( failed + 1 ))
+      log::err "decree failed; the other groups still ran | rc=${rc} args='${g}'"
+    fi
+  done
+  (( failed == 0 )) || return 1
+  return 0
 }
 
 # ── decree ───────────────────────────────────────────────────────────────────────────────────

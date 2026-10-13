@@ -6,7 +6,7 @@ help_brew() {
 settle Homebrew drift in the two Brewfiles
 
 ${c_bold}Usage${c_rst}
-  ${DF} brew triage [--json]
+  ${DF} brew triage [--json | --interactive [--dry-run] [--no-push]]
   ${DF} brew decree ITEM.. (--global|--local|--ignore-global|--ignore-local)
                           [--reason TEXT] [--dry-run] [--no-push]
   ${DF} brew undecree ITEM.. [--dry-run] [--no-push]
@@ -31,6 +31,9 @@ ${c_bold}Subcommands${c_rst}
 
 ${c_bold}Flags${c_rst}
   --json      triage, inventory: JSON instead of text
+  --interactive
+              triage: pick a tier per undeclared item, confirm the plan once,
+              run one decree per group (takes --dry-run, --no-push)
   --dry-run   decree, undecree: print the lines, paths and git commands; touch
               nothing
   --no-push   decree, undecree: skip the local tier's push
