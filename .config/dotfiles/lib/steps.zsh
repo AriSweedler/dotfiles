@@ -431,7 +431,7 @@ steps::retry_errored() {
 
 # --- How a run is shown ---
 # Plain (no tty, NO_COLOR, launchd, --json): the runner's log lines on stderr and the table at the
-# end, as always. Fancy: a header, a dim heading per group, a spinner while a step works, then one
+# end, as always. Fancy: a header, a bold heading and rule per group, a spinner while a step works, then one
 # line per step on stdout and the painted roll-up. The log lines land in $RUN_DIR/run.log either way.
 
 typeset -g RUN_JSON=0 RUN_T0="" RUN_NAME_W=0
@@ -467,7 +467,8 @@ run::_header() {
   trap 'run::_interrupted' INT TERM HUP
 }
 
-run::_heading() { run::is_fancy || return 0; ui::spin_stop; ui::paint grey "${1}"; }
+# A group's heading: its name in bold, then a grey rule across the terminal (ui::rule).
+run::_heading() { run::is_fancy || return 0; ui::spin_stop; ui::rule "${1}"; }
 
 # Ctrl-C mid-step: the spinner goes, the cursor comes back, the lock is released, and the step's
 # processes go too. The $(…) around a check dies of the signal first, so the check and its

@@ -84,7 +84,13 @@ RUN="$(newest_run_dir)"
 PLAIN_OUT="$(printf '%s' "${OUT}" | strip_ansi)"
 assert_eq "fancy healthcheck exits as plain does" 0 "${RC}"
 assert_eq "fancy header: verb and step count" "healthcheck · 5 steps" "$(head -n 1 <<< "${PLAIN_OUT}")"
-assert_contains "fancy groups get a heading" "${PLAIN_OUT}" $'\nrepo\n'
+RULE95="$(printf '%95s' '' | /usr/bin/sed 's/ /─/g')"
+assert_contains "fancy groups get a heading: the name, then a rule" "${PLAIN_OUT}" $'\nrepo '"${RULE95}"$'\n'
+HEADING="$(grep -F $'\e[1mrepo\e[0m' <<< "${OUT}" | head -n 1)"
+assert_eq "the heading's name is bold, its rule grey" $'\e[1mrepo\e[0m \e[38;5;244m'"${RULE95}"$'\e[0m' "${HEADING}"
+assert_eq "the heading is ui::cols (100 without a tty) cells wide" 100 \
+  "$(printf '%s' "${HEADING}" | strip_ansi | LC_ALL=en_US.UTF-8 awk '{ print length($0) }')"
+assert_contains "every group gets one" "${PLAIN_OUT}" $'\ntools '
 assert_contains "fancy line for a step" "${PLAIN_OUT}" "✓ dotfiles_repo"
 assert_contains "fancy step line: paths as ui::paths shows them, before the clip" "${PLAIN_OUT}" "git_dir='\$HOME/dotfiles.git' hooks='\$XDG_CON"
 assert_eq "one line per step" 5 "$(grep -v '^✓ all ' <<< "${PLAIN_OUT}" | grep -c -E '^(✓|!|✗|‼|–) ')"

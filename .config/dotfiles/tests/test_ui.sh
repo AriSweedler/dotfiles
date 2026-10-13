@@ -111,6 +111,21 @@ $'$XDG_DATA_HOME/a $XDG_CONFIG_HOME/b\n' "${OUT}"
 ui_run ARI_DOTFILES_UI=fancy ARI_DOTFILES_GUM="${FAKE_GUM}" -- "ui::paths '${H}/.config/x'; ui::_paths '${H}/.cache'; print -r -- \"\${REPLY}\""
 assert_eq "paths: the same when fancy; _paths sets REPLY" $'$XDG_CONFIG_HOME/x\n$XDG_CACHE_HOME\n' "${OUT}"
 
+# ── rule: a bold label and a grey ─ out to ui::cols; plain is the label alone ─
+ui_run "${P[@]}" COLUMNS=80 -- 'ui::rule repo; ui::rule'
+assert_eq "rule plain: the label alone" $'repo\n\n' "${OUT}"
+rule_n() { local r=""; local -i i; for (( i = 0; i < $1; i++ )); do r+="─"; done; printf '%s' "${r}"; }
+for w in 80 120; do
+  ui_run ARI_DOTFILES_UI=fancy ARI_DOTFILES_GUM="${FAKE_GUM}" COLUMNS="${w}" -- 'ui::rule brew; ui::rule'
+  assert_eq "rule fancy at ${w}: bold label, space, grey rule, ${w} cells" \
+    $'\e[1mbrew\e[0m \e[38;5;244m'"$(rule_n $(( w - 5 )))"$'\e[0m\n\e[38;5;244m'"$(rule_n "${w}")"$'\e[0m\n' "${OUT}"
+done
+ui_run ARI_DOTFILES_UI=fancy ARI_DOTFILES_GUM="${FAKE_GUM}" COLUMNS=10 -- 'set -euo pipefail; ui::rule; ui::paths "${HOME}"'
+assert_eq "rule and paths hold under set -euo pipefail, as the runner sources them" \
+  $'\e[38;5;244m'"$(rule_n 10)"$'\e[0m\n$HOME\n' "${OUT}"
+ui_run ARI_DOTFILES_UI=fancy ARI_DOTFILES_GUM="${FAKE_GUM}" COLUMNS=3 -- 'ui::rule tools'
+assert_eq "rule: a label wider than the terminal gets no rule" $'\e[1mtools\e[0m \e[38;5;244m\e[0m\n' "${OUT}"
+
 # ── table ────────────────────────────────────────────────────────────────────
 printf 'step\tstatus\tdetail\nbrew\tok\tall formulae declared\nclaude_skills\twarn\t\n\nssh_key\tfail\tno key\n' > "${FIX}/t.tsv"
 ui_run -- "ui::table '${FIX}/t.tsv'"

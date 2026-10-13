@@ -172,6 +172,22 @@ ui::_paths() {
   REPLY="${text}"
 }
 
+# ui::rule [label] — a heading across the terminal: the label bold, a space, then a grey ─ rule
+# so the line is exactly ui::cols cells. [the label alone]
+ui::rule() {
+  local label="${1:-}"
+  if ! ui::is_fancy; then print -r -- "${label}"; return 0; fi
+  ui::_utf8 || local LC_ALL=en_US.UTF-8
+  local -i n
+  n=$(( $(ui::cols) - ${(m)#label} ))
+  [[ -z "${label}" ]] || (( n -= 1 ))
+  (( n > 0 )) || n=0
+  local head="" rule=""
+  rule="${(l:n::─:)rule}"
+  [[ -z "${label}" ]] || head=$'\e[1m'"${label}"$'\e[0m '
+  print -r -- "${head}"$'\e[38;5;'"$(ui::_index grey)m${rule}"$'\e[0m'
+}
+
 # ui::box [--title T] [--color N] [--] <line>… — a rounded box, border in colour N, bold title.
 # [the title line, then each line indented two spaces]
 ui::box() {
