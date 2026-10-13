@@ -20,7 +20,9 @@
 
 ## Dependencies
 
-<!-- Required. The shared dependency directory the orchestrator symlinks from the root into each worktree (`node_modules`, `.venv`, `vendor`), or `none`. State the install rule, e.g. "`node_modules` is a symlink to the root's; never `npm install`/`npm ci` in a worktree." -->
+<!-- Required. First line: the shared dependency directory the orchestrator symlinks from the root into each worktree (`node_modules`, `.venv`, `vendor`), or `none`. Then the install rule in prose, e.g. "`node_modules` is a symlink to the root's; never `npm install`/`npm ci` in a worktree." -->
+
+- Link:
 
 ## Shared paths
 

@@ -18,6 +18,7 @@ Run many small features at once with two roles: one orchestrator that owns the q
 - **A permission denial is the user's decision.** Record it in the Result and route around; never re-run the same action in another form (a wrapper, other flags, a subshell).
 - **Never `SendMessage` a Workflow subagent.** The harness resumes a second copy into the same worktree. Message plain Agent lanes only; change a Workflow by stopping and resuming its script.
 - **Chain a burst.** Two or more lanes in one group land as a chain in the working doc's row order: lane 1 branches from `origin/main`, lane k from lane k-1's branch, and each PR targets the branch it came from (lane 1's PR targets main). Every chain head carries `[skip ci]`, so no chain PR runs CI on its own. When the whole chain has handed off, the orchestrator finalizes it (see Watch and merge): the top PR is retargeted to main and gets one empty commit without `[skip ci]`, CI runs once, the watcher merges it with a merge commit, and the lower PRs are closed with a comment naming the top (their commits are in the merge). A red top is fixed forward on the top branch. Lanes outside any group go to main alone. Never squash sub-PRs into an integration branch yourself: that is a merge without review, and only the owner may run it.
+- **Every agent carries its role and lane in its name.** The Agent tool's `description` is the name the user sees: `orchestrator <repo>` for the orchestrator, `lane <id>` for a lane, `fixer <id>` for a fixer. Never spawn one described only by its type.
 - **Commits and PR bodies** follow `templates/fast-path.md` (the trailer, the `/dev/tty` hook fallback) and `/ari-pr`.
 
 ## Input
@@ -33,10 +34,10 @@ One markdown file per repo, owned by the caller (a path like `<repo>/.parallel-p
 | `## Tooling` | yes | how to run the toolchain without a global install (e.g. `node node_modules/<tool>/...` forms when `npx` is denied) and how to run a tool script |
 | `## Gate` | yes | the numbered local gate: typecheck, lint on touched files, tests on touched files; nothing the whole tree would run |
 | `## Code rules` | yes | the project's conventions in one paragraph |
-| `## Dependencies` | yes | the shared dependency directory to symlink from the root (`node_modules`, `.venv`, …) or `none`, plus the install rule |
+| `## Dependencies` | yes | a `- Link: <dir>` line naming the shared dependency directory to symlink from the root (`node_modules`, `.venv`, …) or `none`, then the install rule |
 | `## Shared paths` | no | path prefixes only one lane of a group may touch; default `docs/` |
 | `## CI` | yes | the workflow name and the gate job name the watcher merges on |
-| `## GitHub` | yes | the gh account for reads and the one for writes (the same account is fine), and any env var to unset first |
+| `## GitHub` | yes | `- Read account:`, `- Write account:` (the same account is fine) and `- Unset first:` lines: the gh accounts and any env var to unset so gh uses them |
 | `## Groups` | no | the areas whose lanes chain together, and how an ask maps to one; absent means every lane is solo |
 | `## Lane environment` | no | per-lane values the lane needs (a port offset formula, an env var); rendered into the prompt as given |
 | `## Live check` | no | the URL per group and the command that verifies a merge is live; absent means no live check |
@@ -47,6 +48,7 @@ One markdown file per repo, owned by the caller (a path like `<repo>/.parallel-p
 ```
 /tmp/parallel-play/{topic-slug}/{timestamp}/
 ├── profile.md          # the repo profile as given, so lanes and fixers read one copy
+├── prompt-<id>.md      # each lane's rendered prompt
 ├── lanes.json          # [{id, group, worktree, branch, base, chain, pr, env, status, files_owned}]
 └── watch-<branch>.log  # one watcher log per PR
 ```
@@ -64,6 +66,7 @@ The working doc stays where `/ari-hemingway--structure-working-doc` put it; this
 - `bin/lane-overlap.zsh` — read-only: each lane's owned files from its merge-base diff plus working tree and untracked files (or from `origin/<branch>` for a handed-off lane), the pairwise overlap matrix, and the ready set against the lanes marked `--running`. `--shared` takes the profile's prefixes. JSON on stdout.
 - `bin/watch-merge.zsh` — one PR's life: waits for the PR, follows CI per head with the read account, merges on the gate job's green with the write account (a merge commit by default; `--merge-method squash` for a lone lane), verifies `MERGED`, then deletes the remote branch and watches the base branch's run. `--url` adds the live curl; without it the live step is skipped. `--dry-run` logs the merge instead.
 - `bin/worktree.zsh` — `--action open` (worktree on `--branch` from `--base`; `--link DIR` symlinks the root's shared dependency directory; idempotent; errors when the directory holds another branch) and `--action handoff` (unlink, then remove; the branch stays).
+- `bin/render-lane-prompt.zsh` — read-only: the lane prompt on stdout from the profile, the ask file and the lane's coordinates; fills every fast-path slot (the gh write prefix from the GitHub section, `--link` from the Dependencies `- Link:` line) and fails on a missing section or an unrendered slot.
 - `templates/repo-profile.md` — the profile skeleton a caller fills in once per repo.
 - `templates/lane-prompt.md` — the lane agent's prompt: the ask file's Ask, Context and Brief verbatim, the lane's coordinates, then the rendered fast path.
 - `templates/fast-path.md` — the lane rules with `{{...}}` slots the profile fills: one feature per PR, the local gate, the commit form, the landing steps, the handoff, the 25-minute budget.
@@ -72,7 +75,7 @@ The working doc stays where `/ari-hemingway--structure-working-doc` put it; this
 
 ### Orchestrator
 
-Spawned once by the main thread as a long-lived general-purpose Agent (never a fork: a fork cannot spawn the lanes). It returns only when every row is `done`, `dropped` or `review`.
+Spawned once by the main thread as a long-lived general-purpose Agent described `orchestrator <repo>` (never a fork: a fork cannot spawn the lanes). It returns only when every row is `done`, `dropped` or `review`.
 
 #### Resume the doc
 
@@ -92,7 +95,13 @@ Before starting lanes concurrently, clear them (a handed-off lane is given as `<
 zsh $HOME/.claude/skills/ari-parallel-play/bin/lane-overlap.zsh --root <root> --base origin/main --lane <id>=<invest>/wt-<id> --running <id-of-a-running-lane> --shared <prefix>
 ```
 
-A lane in the ready set starts now; one that overlaps a running lane waits for that lane's PR. Render the prompt from `templates/lane-prompt.md`: fill the fast path's slots from `profile.md` (`{{tooling}}`, `{{gate}}`, `{{code_rules}}`, `{{deps_rule}}`, `{{gh_write}}` as the env prefix that selects the write account or nothing, `{{commit_extra}}`, `{{link_flag}}` as `--link <shared-dir>` or nothing), `{{lane_env}}` from the lane's environment or an empty line, `{{chain_lane}}` as `yes` for `bottom`, `middle` and `top` and `no` for `solo`. Spawn a general-purpose Agent, record the row and the lane:
+A lane in the ready set starts now; one that overlaps a running lane waits for that lane's PR. Render its prompt (`--chain yes` for `bottom`, `middle` and `top`, `no` for `solo`; `--lane-env` only when the profile's Lane environment needs per-lane values filled in):
+
+```zsh
+zsh $HOME/.claude/skills/ari-parallel-play/bin/render-lane-prompt.zsh --profile <invest>/profile.md --ask-file <doc>/asks/<id>.md --id <id> --repo-name <owner/name> --root <root> --worktree <invest>/wt-<id> --branch <id> --base <base> --pr-base <pr-base> --chain <yes|no> --other-lanes "<ids>" > <invest>/prompt-<id>.md
+```
+
+Spawn a general-purpose Agent described `lane <id>` with that file's text, record the row and the lane:
 
 ```zsh
 zsh $HOME/.claude/skills/ari-hemingway--structure-working-doc/bin/asks.zsh set --file <doc>/asks.json --id <id> --status running --owner agent:<id> --dispatch agent:<id>
@@ -112,7 +121,7 @@ A chain waits until every lane of it has handed off, then the orchestrator final
 
 #### Recover
 
-A lane whose PR is red and whose agent has been silent for 15 minutes gets a fixer: a fresh Agent in a fresh worktree on that branch (`--action open` with `--base <branch>`), the failed job's log (`gh run view <id> --log-failed` with the read account), the ask file's Brief and `profile.md`. A lane past 25 minutes reports what is left and stops. A chain lane with no PR at its budget is dropped: the lanes above it rebase onto its base, its row goes `review` with the reason.
+A lane whose PR is red and whose agent has been silent for 15 minutes gets a fixer: a fresh Agent described `fixer <id>` in a fresh worktree on that branch (`--action open` with `--base <branch>`), the failed job's log (`gh run view <id> --log-failed` with the read account), the ask file's Brief and `profile.md`. A lane past 25 minutes reports what is left and stops. A chain lane with no PR at its budget is dropped: the lanes above it rebase onto its base, its row goes `review` with the reason.
 
 #### Live check
 
@@ -124,7 +133,7 @@ On each lane Result or merge: `done` when merged and the live check (if any) pas
 
 ### Lane agent
 
-A plain general-purpose Agent with the rendered prompt. Its whole life is the rendered `templates/fast-path.md`:
+A plain general-purpose Agent described `lane <id>`, given the rendered prompt. Its whole life is the rendered `templates/fast-path.md`:
 
 1. **Open**: work only in the given worktree, with the profile's tooling forms.
 2. **Develop**: one feature, a working first pass.
