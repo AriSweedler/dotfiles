@@ -79,10 +79,12 @@ _t "normalize: exact duplicates collapse" "1" "$(print -r -- '[{"name":"a","text
 _t "canonical order: byte order of keywords, ~@ then ~^ then ~~@, keyword-less last by name" '["@@s","~@","~^","~~@","-","-"]' \
   "$(print -r -- '[{"name":"z","text":"t"},{"name":"c","text":"t","keyword":"~^"},{"name":"a","text":"t","keyword":"~~@"},{"name":"y","text":"t"},{"name":"d","text":"t","keyword":"@@s"},{"name":"b","text":"t","keyword":"~@"}]' | raycast_snippets::normalize | jq -c 'map(.keyword // "-")')"
 
-# --- first run: no manifest ---
-raycast_snippets --sync --dry-run > /dev/null 2>"${_dir}/nomanifest.err"; _rc=$?
-_t "no manifest: sync refuses, rc 1" "1" "${_rc}"
-_t "no manifest: says adopt or pull" "1" "$(grep -c 'no manifest; run: dotfiles raycast snippets pull <raycast export> to adopt Raycast.s current state, or dotfiles raycast snippets adopt to mark the current files as already imported' "${_dir}/nomanifest.err")"
+# --- first run: no manifest, read as empty (nothing imported yet) ---
+_out="$(raycast_snippets --sync --dry-run 2>"${_dir}/nomanifest.err")"; _rc=$?
+_t "no manifest: sync proceeds, rc 0" "0" "${_rc}"
+_t "no manifest: every entry is new" $'new addr\nnew sig\nnew shrug\npending=3\nnew=3\nunchanged=0' "$(print -r -- "${_out}" | grep -E '^(new |pending=|new=|unchanged=)')"
+_t "no manifest: no error" "0" "$(grep -c 'ERROR' "${_dir}/nomanifest.err")"
+_t "no manifest: dry run creates no manifest" "absent" "$([[ -e "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}" ]] && echo present || echo absent)"
 _t "no manifest: nothing opened" "" "$(_urls)"
 _out="$(raycast_snippets --adopt --dry-run 2>/dev/null)"
 _t "adopt --dry-run: counts, writes nothing" $'dry_run=1\nwould_adopt=3' "${_out}"
