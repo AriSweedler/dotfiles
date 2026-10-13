@@ -20,6 +20,7 @@ ${c_bold}Flags${c_rst}
   --force-report   write the report even when the set of problems is unchanged
   --no-notify      no banner (an interactive run never banners; the job does)
   --json           print summary.json instead of the table
+  --show           print the current report (Desktop, else newest archived); runs nothing
 
 ${c_bold}Env${c_rst}
   $(ENV ARI_DOTFILES_STATE_DIR)
@@ -39,9 +40,14 @@ EOF
 }
 
 cmd_verify() {
-  local -a force=() quiet=() json=()
-  zparseopts -D -F -K -- -force-report=force -no-notify=quiet -json=json || usage_error "verify: bad flags | args='$*'"
+  local -a force=() quiet=() json=() show=()
+  zparseopts -D -F -K -- -force-report=force -no-notify=quiet -json=json -show=show || usage_error "verify: bad flags | args='$*'"
   (( $# == 0 )) || usage_error "verify takes no positional arguments | args='$*'"
+  if (( ${#show} )); then
+    (( ${#force} + ${#json} == 0 )) || usage_error "verify: --show runs nothing, so --force-report and --json do not apply"
+    verify::show
+    return
+  fi
   (( ${#quiet} )) && export ARI_DOTFILES_NO_NOTIFY=1
   steps::load || exit 3
   need_lib "${ARI_DOTFILES_CMD}/verify/report.zsh"
@@ -80,4 +86,51 @@ verify::decide_and_notify() {
     hud "${message}" "${seconds}" "${open_url}"
   fi
   note "status='$(jq -r '.status' "${summary}")' fingerprint='$(jq -r '.fingerprint // ""' "${decision}")' report='$(jq -r '.report // "none"' "${applied}")' undeclared='$(jq -r '.undeclared_count // 0' "${decision}")'"
+}
+
+# --show: the report a human would open, read-only. No lock, run dir, log, banner or state write;
+# it must not reach the cmd_verify path above. The archived note goes to stderr so stdout stays
+# the report itself (`--show > x.md` is the file).
+verify::show() {
+  if [[ -f "${REPORT_PATH}" ]]; then
+    ui::markdown "${REPORT_PATH}"
+    return
+  fi
+  local newest
+  newest="$(verify::_newest_archive)"
+  if [[ -n "${newest}" ]]; then
+    zmodload -F zsh/stat b:zstat 2>/dev/null || true
+    local when
+    when="$(zstat -F '%Y-%m-%d %H:%M' +mtime -- "${newest}" 2>/dev/null || true)"
+    ui::paint grey "archived report from ${when:-an unknown date}, no current one on the Desktop: $(help::tilde "${newest}")" >&2
+    ui::markdown "${newest}"
+    return
+  fi
+  print -r -- "no verify report$(verify::_last_run)"
+}
+
+# The newest *.md under the reports archive by mtime, or nothing.
+verify::_newest_archive() {
+  local -a found=("${ARI_DOTFILES_STATE_DIR}"/reports/*.md(N.om))
+  (( ${#found} )) && print -r -- "${found[1]}"
+  return 0
+}
+
+# "; last verify <when>: <status>" from last_result.json, else the trail's last status line, else "".
+verify::_last_run() {
+  setopt localoptions extendedglob
+  local when="" st=""
+  if [[ -r "${LAST_RESULT_FILE}" ]]; then
+    when="$(jq -r '.ts // ""' "${LAST_RESULT_FILE}" 2>/dev/null || true)"
+    st="$(jq -r '.status // ""' "${LAST_RESULT_FILE}" 2>/dev/null || true)"
+  fi
+  if [[ -z "${when}" && -r "${VERIFY_TRAIL}" ]]; then
+    local line
+    line="$(grep -F "[verify] status='" "${VERIFY_TRAIL}" 2>/dev/null | tail -n 1 || true)"
+    if [[ "${line}" == (#b)([0-9-]##\ [0-9:]##)\ \[verify\]\ status=\'([^\']#)\'* ]]; then
+      when="${match[1]}" st="${match[2]}"
+    fi
+  fi
+  [[ -n "${when}" ]] || return 0
+  print -r -- "; last verify ${when}: ${st:-unknown}"
 }
