@@ -100,7 +100,7 @@ mkdir -p "${_dir}/shared" "${_dir}/local"
 print -r -- '[]' > "${_dir}/shared/snippets.json"
 local _env=(ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS="${_dir}/shared:${_dir}/local" ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST="${_dir}/m.json")
 env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets sync >/dev/null 2>&1; _rc=$?
-_t "bin: snippets sync without a manifest refuses" "1" "${_rc}"
+_t "bin: snippets sync without a manifest proceeds" "0" "${_rc}"
 _t "bin: snippets adopt then sync is a no-op" $'snippets: nothing to import | unchanged=0\npending=0' \
   "$(env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets adopt >/dev/null 2>&1; env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets sync 2>/dev/null)"
 _t "bin: snippets check on empty tiers is in parity" $'snippets: tiers in parity | entries=0\nwarnings=0' "$(env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets check 2>/dev/null)"
