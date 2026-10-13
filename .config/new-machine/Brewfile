@@ -18,6 +18,7 @@ brew "fd"
 # brew "ffmpeg"
 brew "fzf"
 brew "git-delta"
+brew "gum"          # shell UI: the dotfiles harness's spinners and boxes
 brew "jq"
 brew "ripgrep"
 brew "starship"     # shell prompt
