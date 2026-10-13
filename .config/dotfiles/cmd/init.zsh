@@ -1,6 +1,6 @@
 # dotfiles/cmd/init.zsh — `dotfiles init`: converge the machine. Every step checks, applies only
 # where it finds drift (a changed Brewfile, Raycast behind), re-checks; then status. What
-# bootstrap ends in and pull runs after its fetch.
+# bootstrap ends in.
 
 help_init() {
   cat <<EOF
@@ -16,9 +16,8 @@ ${c_bold}Usage${c_rst}
   rest is a check. When the brew step fails, the later groups are skipped:
   their tools come from it. Ends with 'dotfiles status'.
 
-  What the bootstrap one-liner ends in and 'dotfiles pull' runs after its
-  fetch. 'dotfiles apply STEP' is 'init --only STEP'; 'dotfiles steps' lists
-  the steps and their groups.
+  What the bootstrap one-liner ends in. 'dotfiles apply STEP' is
+  'init --only STEP'; 'dotfiles steps' lists the steps and their groups.
 
 ${c_bold}Flags${c_rst}
   --only STEP,..   exactly these steps; a step's needs are a gate, not an
