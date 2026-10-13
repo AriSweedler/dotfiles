@@ -96,8 +96,14 @@ pull::report() {
     printf '  %-*s  %s\n' "${width}" "${name}" "$(pull::paths "${(@f)${why[${name}]%$'\n'}}")"
   done
   print -r -- "run: $(ui::paint bold "${CLI_NAME} apply ${order[*]}")"
+  # On a terminal the block above is the warning; the record goes only where a log is kept.
+  pull::is_terminal && return 0
   log::warn "pulled changes affect steps | steps='${(j:,:)order}' fix='${CLI_NAME} apply ${order[*]}'"
 }
+
+# True (0) when the output is fancy and stderr is a terminal: no log is kept there, so the
+# stdout block is the one warning.
+pull::is_terminal() { ui::is_fancy && [[ -t 2 ]]; }
 
 # The registry, for its watches; sourcing the step files runs no check. A registry that does not
 # load still leaves the step-file mapping, which needs none.

@@ -142,4 +142,31 @@ took=""
 assert_eq "pull: the analysis was timed" 1 "$([[ -n "${took}" ]] && echo 1 || echo 0)"
 assert_eq "pull: the analysis within 0.5 s (took ${took:-?}s)" 1 "$(awk -v t="${took:-9}" 'BEGIN { print (t <= 0.5) ? 1 : 0 }')"
 
+# --- One warning: on a terminal the stdout block is it; a kept log still gets the record ---
+
+# Fancy output (seam + fake gum) with stderr in a file: that file is a log, so the record stays.
+FAKE_GUM="${FIX}/fakegum"
+printf '#!/bin/sh\nexit 0\n' > "${FAKE_GUM}"
+chmod +x "${FAKE_GUM}"
+remote_append .config/new-machine/Brewfile '# another pulled comment'
+git -C "${CLONE}" push -q origin main
+export ARI_DOTFILES_UI=fancy ARI_DOTFILES_GUM="${FAKE_GUM}"
+nm pull --dry-run
+unset ARI_DOTFILES_UI ARI_DOTFILES_GUM
+assert_eq "fancy, stderr a file: exit 0" 0 "${RC}"
+assert_contains "fancy, stderr a file: the block names the apply" "$(printf '%s' "${OUT}" | /usr/bin/sed -E $'s/\x1b\\[[0-9;]*m//g')" "run: dotfiles apply brew_drift brew_pkgs"
+assert_contains "fancy, stderr a file: the record is logged" "${ERR}" "pulled changes affect steps | steps='brew_drift,brew_pkgs'"
+
+# pull::is_terminal, the one switch: true only when fancy and stderr is a tty.
+is_terminal_rc() {
+  env -i "${HERMETIC_ENV[@]}" "$@" "${FIX}/tools/zsh" -f -c '
+    for f in "$1"/lib/*.zsh; do source "$f"; done
+    source "$1"/cmd/pull.zsh
+    pull::is_terminal' rc "${ORIG_CONFIG_DIR}/dotfiles" 2>/dev/null && echo 0 || echo 1
+}
+hermetic_env
+assert_eq "is_terminal: plain is not" 1 "$(is_terminal_rc ARI_DOTFILES_UI=plain)"
+assert_eq "is_terminal: fancy with stderr not a tty is not" 1 \
+  "$(is_terminal_rc ARI_DOTFILES_UI=fancy ARI_DOTFILES_GUM="${FAKE_GUM}")"
+
 report
