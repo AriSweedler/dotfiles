@@ -70,14 +70,16 @@ kill_tree() {
 
 # with_timeout <secs> <cmd…>: TERM to the child's whole tree after secs, KILL 5 s later; reaps its
 # own sleeper so runs and tests leave no stragglers. 0 = no timeout. Returns the command's rc
-# (143/137 when killed).
+# (143/137 when killed). The watchdog sleeps in zselect, a builtin, so it has no child of its
+# own and one kill ends it: no `sleep` to reap, no pkill fork per call.
 with_timeout() {
   local secs="${1}"; shift
   if (( secs == 0 )); then "$@"; return; fi
+  zmodload zsh/zselect
   "$@" & local pid=$!
-  ( sleep "${secs}"; kill_tree TERM "${pid}"; sleep 5; kill_tree KILL "${pid}" ) & local wd=$!
+  ( zselect -t $(( secs * 100 )) || true; kill_tree TERM "${pid}"; zselect -t 500 || true; kill_tree KILL "${pid}" ) & local wd=$!
   local rc=0; wait "${pid}" || rc=$?
-  pkill -P "${wd}" 2>/dev/null; kill "${wd}" 2>/dev/null; wait "${wd}" 2>/dev/null || true
+  kill "${wd}" 2>/dev/null; wait "${wd}" 2>/dev/null || true
   return "${rc}"
 }
 

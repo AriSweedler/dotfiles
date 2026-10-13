@@ -53,6 +53,15 @@ check::dotfiles_repo() {
     verdict fail missing_bare_repo -d "repo has no HEAD | git_dir='${git_dir}'" -f "${CLI_NAME} apply dotfiles_repo"
     return 0
   fi
+  # The two slow reads (submodule status about 180 ms, status about 40 ms) start now, side by side
+  # with the config checks below, and are read where the verdict needs them. Both only read;
+  # status may refresh the index under an optional lock, so submodule status runs with optional
+  # locks off and the two never contend for index.lock.
+  local -i sub_fd=-1 dirty_fd
+  if [[ -f "${HOME}/.gitmodules" ]]; then
+    exec {sub_fd}< <(GIT_OPTIONAL_LOCKS=0 git -C "${HOME}" --git-dir="${git_dir}" --work-tree="${HOME}" submodule status 2>/dev/null || true)
+  fi
+  exec {dirty_fd}< <(git --git-dir="${git_dir}" --work-tree="${HOME}" status --porcelain --untracked-files=no 2>/dev/null || true)
   local -a missing=("${(@f)$(dotfiles_repo::tracking_missing "${git_dir}")}")
   missing=("${(@)missing:#}")
   if (( ${#missing} )); then
@@ -70,9 +79,10 @@ check::dotfiles_repo() {
     verdict fail hooks_path -d "core.hooksPath='${hooks}' expected='${ARI_DOTFILES_DF_HOOKS}'" -f "${CLI_NAME} apply dotfiles_repo"
     return 0
   fi
-  if [[ -f "${HOME}/.gitmodules" ]]; then
+  if (( sub_fd >= 0 )); then
     local sub_status uninit drifted
-    sub_status="$(git -C "${HOME}" --git-dir="${git_dir}" --work-tree="${HOME}" submodule status 2>/dev/null || true)"
+    IFS= read -r -d '' -u "${sub_fd}" sub_status || true
+    while [[ "${sub_status}" == *$'\n' ]]; do sub_status="${sub_status%$'\n'}"; done
     uninit="$(print -r -- "${sub_status}" | awk '/^-/ {print $2}')"
     drifted="$(print -r -- "${sub_status}" | awk '/^\+/ {print $2}')"
     if [[ -n "${uninit}" ]]; then
@@ -89,7 +99,8 @@ check::dotfiles_repo() {
     return 0
   fi
   local dirty
-  dirty="$(git --git-dir="${git_dir}" --work-tree="${HOME}" status --porcelain --untracked-files=no 2>/dev/null || true)"
+  IFS= read -r -d '' -u "${dirty_fd}" dirty || true
+  while [[ "${dirty}" == *$'\n' ]]; do dirty="${dirty%$'\n'}"; done
   if [[ -n "${dirty}" ]]; then
     local -a lines=("${(f)dirty}")
     verdict warn uncommitted -d "$(plural "${#lines}" 'uncommitted file' 'uncommitted files')" -f "git df status"

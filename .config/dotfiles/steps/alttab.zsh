@@ -13,9 +13,23 @@ step::alttab::paths() {
   ALTTAB_IDENTITY="AltTab Free Local"
 }
 
+# `brew list --cask alt-tab` succeeds, read from the Caskroom: a cask is installed when its
+# .metadata holds an installed caskfile. A brew with no Caskroom beside it (a wrapper, a test
+# shim) is asked instead.
+step::alttab::has_cask() {
+  command -v brew >/dev/null 2>&1 || return 1
+  local REPLY
+  if cache::brew_prefix; then
+    local -a caskfiles=("${REPLY}/Caskroom/alt-tab/.metadata/"*/*/Casks/alt-tab.(rb|json)(N))
+    (( ${#caskfiles} ))
+    return
+  fi
+  brew list --cask alt-tab >/dev/null 2>&1
+}
+
 check::alttab() {
   step::alttab::paths
-  if [[ "$(uname)" != Darwin ]]; then
+  if [[ "${OSTYPE}" != darwin* ]]; then
     verdict skip not_macos -d "AltTab is macOS only"
     return 0
   fi
@@ -27,7 +41,7 @@ check::alttab() {
     verdict fail alttab_missing -d "AltTab is not installed at ${ALTTAB_APP}" -f "${CLI_NAME} apply alttab"
     return 0
   fi
-  if command -v brew >/dev/null 2>&1 && brew list --cask alt-tab >/dev/null 2>&1; then
+  if step::alttab::has_cask; then
     verdict fail alttab_cask -d "the official alt-tab Homebrew cask is installed; it starts the Pro trial" -f "${CLI_NAME} apply alttab"
     return 0
   fi

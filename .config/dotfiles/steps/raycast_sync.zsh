@@ -7,6 +7,27 @@ step::declare raycast_sync --group tools --needs dotfiles_repo \
   --desc "Raycast in parity with the dotfiles: every Karabiner-bound command on its deeplink allow-list, the versioned snippets imported (dotfiles raycast sync)"
 step::watches raycast_sync '.config/raycast-snippets/**' '.config/karabiner/**' '.config/zsh/plugins/raycast*.zsh'
 
+# Machine inputs: what `raycast sync --dry-run` reads. reply: the raycast plugins, karabiner.ts's
+# sources, package files, tsx and node (the bindings generator), karabiner.json, Raycast's
+# preferences plist (the allow-list `defaults` reads), the app, and both snippets trees with the
+# manifest. 1 when a seam replaces what is read (a bindings command, a `defaults` that is not
+# /usr/bin/defaults): its state is not on disk where the cache can see it, so uncached.
+step::raycast_sync::inputs() {
+  [[ -z "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD:-}" && "${commands[defaults]:-}" == /usr/bin/defaults ]] || return 1
+  local cfg="${XDG_CONFIG_HOME:-${HOME}/.config}" d
+  local ts="${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS:-${cfg}/karabiner/karabiner.ts}"
+  local -a dirs=(${(s.:.)${ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS:-${cfg}/raycast-snippets:${HOME}/.local/share/raycast-snippets}})
+  reply=("${ARI_DOTFILES_CONFIG}/zsh/plugins" "${ARI_DOTFILES_CONFIG}/zsh/plugins/"raycast*.zsh(N)
+         "${ts}" "${ts}/package.json" "${ts}/package-lock.json" "${ts}/node_modules" "${ts}/node_modules/.package-lock.json"
+         "${ts}/node_modules/.bin/tsx" "${commands[node]:-/nonexistent/node}"
+         "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON:-${cfg}/karabiner/karabiner.json}"
+         "${HOME}/Library/Preferences/${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN:-com.raycast.macos}.plist"
+         "${ARI_DOTFILES_RAYCAST_APP:-/Applications/Raycast.app}"
+         "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST:-${dirs[-1]}/manifest.json}")
+  cache::tree "${ts}/src" "${dirs[@]}"
+  CACHE_ENV=(XDG_CONFIG_HOME ARI_DOTFILES_CONFIG ${(ok)parameters[(I)ARI_DOTFILES_RAYCAST_*]})
+}
+
 step::raycast_sync::load() {
   need_lib "${ARI_DOTFILES_CONFIG}/zsh/plugins/raycast.zsh"
 }
@@ -16,6 +37,15 @@ check::raycast_sync() {
     verdict skip no_raycast -d "Raycast is not installed"
     return 0
   fi
+  local -a reply
+  if step::raycast_sync::inputs; then
+    cache::check step::raycast_sync::live "${reply[@]}"
+  else
+    step::raycast_sync::live
+  fi
+}
+
+step::raycast_sync::live() {
   step::raycast_sync::load
   local out rc=0
   out="$(ari_raycast sync --dry-run 2>/dev/null)" || rc=$?

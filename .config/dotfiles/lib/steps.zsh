@@ -13,6 +13,7 @@
 # fresh zsh that sources this kernel and the step's own file, under a watchdog, so a crash never
 # aborts the loop and only exported environment reaches a step.
 zmodload zsh/datetime
+zmodload zsh/mapfile
 
 typeset -ga STEPS=() STEPS_DECLARED=()
 typeset -gA STEP_GROUP=() STEP_NEEDS=() STEP_TOOLS=() STEP_DESC=() STEP_FILE=()
@@ -136,27 +137,53 @@ steps::list() {
 
 # --- Running one step ---
 
+# Prints a step's recorded status. A result the runner wrote from a verdict starts
+# {"step":"<name>","status":"<status>", (verdict and verdict::synth put those keys first), so the
+# status is read without a jq; any other shape goes through jq.
 step::result_status() {
-  local file="${RUN_DIR}/${1}.result.json"
-  if [[ -f "${file}" ]]; then
-    jq -r '.status' "${file}"
+  local file="${RUN_DIR}/${1}.result.json" json prefix
+  [[ -f "${file}" ]] || return 0
+  json="${mapfile[${file}]-}"
+  prefix="{\"step\":\"${1}\",\"status\":\""
+  if [[ "${json}" == "${prefix}"[a-z]*\"* ]]; then
+    json="${json#"${prefix}"}"
+    print -r -- "${json%%\"*}"
+    return 0
   fi
+  jq -r '.status' "${file}"
 }
 
 # Runs one check::/apply:: in a fresh zsh that sources the kernel and the step's file, under the
 # watchdog. The function name travels in $STEP so no shell quoting of the name is needed; colours
-# are off there so the step logs stay plain.
+# are off there so the step logs stay plain. zsh -f: the step sees only what the kernel and the
+# exported environment give it, not ~/.zshenv, which costs a source per step and is not an input.
 step::run_isolated() {
   local kind="${1}" name="${2}" timeout_secs="${3}"
   export STEP="${name}"
-  with_timeout "${timeout_secs}" env NO_COLOR=1 zsh -c '
+  local -x NO_COLOR=1
+  with_timeout "${timeout_secs}" zsh -f -c '
     set -euo pipefail
     for f in "${ARI_DOTFILES_LIB}"/*.zsh(N); do source "${f}"; done
     source "${ARI_DOTFILES_STEPS}/${STEP}.zsh"
     "'"${kind}"'::${STEP}"'
 }
 
-# Runs the check, normalizing crashes and timeouts into error verdicts in <check_file>.
+# One jq over a check file: when it holds one verdict object with a string status, prints its
+# status, actionable and reason joined by \x1f, then a newline and the result record the runner
+# stores when no apply follows (the verdict plus rc, duration_ms, log and applied=false, as
+# step::record_result writes it); else nothing.
+step::_digest() {
+  local file="${1}" rc="${2}" duration_ms="${3}" log_file="${4}"
+  jq -rs --argjson rc "${rc}" --argjson duration_ms "${duration_ms}" --arg log "${log_file}" '
+    if length == 1 and (.[0] | type == "object" and (.status | type) == "string") then .[0]
+      | ([.status, (.actionable | tostring), (.reason | tostring)] | join("\u001f")),
+        (. + {rc: $rc, duration_ms: $duration_ms, log: $log, applied: false} | tojson)
+    else empty end' "${file}" 2>/dev/null || true
+}
+
+# Runs the check, normalizing crashes and timeouts into error verdicts in <check_file>. Prints
+# `<rc> <ms>`, then step::_digest of the final check file: its status, actionable and reason,
+# and on the last line the record to store when no apply follows.
 step::run_check() {
   local name="${1}" check_file="${2}" log_file="${3}"
   local rc=0
@@ -164,10 +191,9 @@ step::run_check() {
   step::run_isolated check "${name}" "${ARI_DOTFILES_CHECK_TIMEOUT_SECS}" > "${check_file}" 2>> "${log_file}" || rc=$?
   local -i elapsed_ms
   (( elapsed_ms = (EPOCHREALTIME - start) * 1000 ))
-  local timed_out=0 verdict_status=""
-  if jq -e 'type=="object" and (.status|type)=="string"' "${check_file}" >/dev/null 2>&1; then
-    verdict_status="$(jq -r '.status' "${check_file}")"
-  fi
+  local timed_out=0 verdict_status="" digest
+  digest="$(step::_digest "${check_file}" "${rc}" "${elapsed_ms}" "${log_file}")"
+  [[ -z "${digest}" ]] || verdict_status="${digest%%$'\x1f'*}"
   if (( rc == 143 || rc == 137 )); then
     timed_out=1
   elif (( ARI_DOTFILES_CHECK_TIMEOUT_SECS > 0 && elapsed_ms >= ARI_DOTFILES_CHECK_TIMEOUT_SECS * 1000 )) \
@@ -184,7 +210,11 @@ step::run_check() {
     tail_text="$(tail_lines "${log_file}" 10)"
     verdict::synth "${name}" error check_crashed "check exited ${rc}${tail_text:+$'\n'}${tail_text}" > "${check_file}"
   fi
+  if (( timed_out )) || (( rc != 0 )) || [[ -z "${verdict_status}" ]]; then
+    digest="$(step::_digest "${check_file}" "${rc}" "${elapsed_ms}" "${log_file}")"
+  fi
   print -r -- "${rc} ${elapsed_ms}"
+  print -r -- "${digest}"
 }
 
 step::record_result() {
@@ -221,9 +251,10 @@ step::run() {
       return 0
     fi
   done
-  local tool
+  local tool REPLY
   for tool in ${(s:,:)STEP_TOOLS[${name}]}; do
-    if [[ -z "$(probe_tool "${tool}")" ]]; then
+    probe_tool::reply "${tool}"
+    if [[ -z "${REPLY}" ]]; then
       step::record_synth "${name}" error tool_missing "${tool} not found on PATH or under ${ARI_DOTFILES_BREW_PREFIXES:-<no prefixes>}"
       return 0
     fi
@@ -231,13 +262,15 @@ step::run() {
 
   run::_log info "==> ${name}"
   run::_spin "${name} · checking"
-  local rc_ms rc duration_ms
-  rc_ms="$(step::run_check "${name}" "${check_file}" "${log_file}")"
+  local out rc_ms rc duration_ms record fields
+  out="$(step::run_check "${name}" "${check_file}" "${log_file}")"
+  rc_ms="${out%%$'\n'*}"; out="${out#*$'\n'}"
   rc="${rc_ms%% *}"; duration_ms="${rc_ms##* }"
-  local step_status actionable applied=false
-  step_status="$(jq -r '.status' "${check_file}")"
-  actionable="$(jq -r '.actionable' "${check_file}")"
-  run::_log info "check | step='${name}' status='${step_status}' reason='$(jq -r '.reason' "${check_file}")'"
+  record="${out##*$'\n'}"; fields="${out%$'\n'*}"
+  local step_status actionable reason applied=false
+  step_status="${fields%%$'\x1f'*}"; fields="${fields#*$'\x1f'}"
+  actionable="${fields%%$'\x1f'*}"; reason="${fields#*$'\x1f'}"
+  run::_log info "check | step='${name}' status='${step_status}' reason='${reason}'"
 
   if [[ "${ARI_DOTFILES_MODE:-check}" == setup && "${actionable}" == true ]] && step::is_fixable "${name}"; then
     if is_dry_run; then
@@ -255,11 +288,13 @@ step::run() {
       run::_log info "apply done | step='${name}' rc='${apply_rc}'"
       local recheck_file="${RUN_DIR}/${name}.recheck.json"
       run::_spin "${name} · re-checking"
-      rc_ms="$(step::run_check "${name}" "${recheck_file}" "${log_file}")"
+      out="$(step::run_check "${name}" "${recheck_file}" "${log_file}")"
+      rc_ms="${out%%$'\n'*}"; fields="${${out#*$'\n'}%$'\n'*}"
       rc="${rc_ms%% *}"; duration_ms=$(( duration_ms + ${rc_ms##* } ))
-      step_status="$(jq -r '.status' "${recheck_file}")"
+      step_status="${fields%%$'\x1f'*}"; fields="${fields#*$'\x1f'}"
+      actionable="${fields%%$'\x1f'*}"
       # Still failing, or still asking to be applied (an actionable warn), means the apply did not take.
-      if [[ "${step_status}" == (fail|error) || "$(jq -r '.actionable' "${recheck_file}")" == true ]]; then
+      if [[ "${step_status}" == (fail|error) || "${actionable}" == true ]]; then
         jq -c --argjson apply_rc "${apply_rc}" --arg tail "${(F)apply_tail}" \
           '.reason = "apply_did_not_converge" | .apply_rc = $apply_rc
            | .detail = (.detail + "\napply rc=" + ($apply_rc|tostring) + ":\n" + $tail)' \
@@ -270,14 +305,20 @@ step::run() {
       applied=true
     fi
   fi
-  step::record_result "${name}" "${check_file}" "${rc}" "${duration_ms}" "${log_file}" "${applied}"
+  if [[ "${applied}" == false ]]; then
+    print -r -- "${record}" > "${RUN_DIR}/${name}.result.json"
+  else
+    step::record_result "${name}" "${check_file}" "${rc}" "${duration_ms}" "${log_file}" "${applied}"
+  fi
 }
 
 # --- Running a selection: the only loop over steps ---
 
 # steps::run_all: every step in `selected`, in order. In setup, once STEP_ABORT_ON has failed or
-# errored the rest are recorded as skip/aborted: their tools come from it.
+# errored the rest are recorded as skip/aborted: their tools come from it. A check-mode run
+# (steps::is_parallel) runs the checks of a group side by side instead (steps::run_all_parallel).
 steps::run_all() {
+  if steps::is_parallel; then steps::run_all_parallel; return; fi
   local aborted=0 name group=""
   for name in "${selected[@]}"; do
     if [[ "${STEP_GROUP[${name}]}" != "${group}" ]]; then
@@ -295,6 +336,70 @@ steps::run_all() {
       aborted=1
     fi
   done
+}
+
+# --- Checks side by side ---
+# In check mode a check only reads, so the checks of one group run at once: each step::run in a
+# background subshell whose runner log lines (run.log and stderr) are buffered, then replayed in
+# run order as each is waited for. The lines, the logs and the results are what a serial run
+# writes; only the wall time changes. A step starts once the steps it needs have finished, and
+# a step that uses brew (the brew group, or --tools brew) runs alone: brew holds a lock.
+# Setup mode (apply, init) and ARI_DOTFILES_SERIAL=1 run one step at a time.
+typeset -ga STEP_PENDING=()      # launched and not yet shown, in run order
+typeset -gA STEP_JOB=()          # step -> pid of its background step::run
+typeset -g RUN_BUFFER=""         # in a background step: the file its run.log lines go to
+
+steps::is_parallel() { [[ "${ARI_DOTFILES_MODE:-check}" != setup && "${ARI_DOTFILES_SERIAL:-0}" != 1 ]]; }
+step::is_serial() { [[ "${STEP_GROUP[${1}]}" == brew || ",${STEP_TOOLS[${1}]}," == *,brew,* ]]; }
+
+step::launch() {
+  local name="${1}"
+  ( RUN_BUFFER="${RUN_DIR}/.${name}.run.log"; : > "${RUN_BUFFER}"; step::run "${name}" ) 2> "${RUN_DIR}/.${name}.stderr" &
+  STEP_JOB[${name}]=$!
+  STEP_PENDING+=("${name}")
+}
+
+# Waits for the launched steps in run order, up to and including <name> (every one when no name
+# is given), replaying each one's buffered log lines and showing its line. The spinner names the
+# step being waited for, one per check as in a serial run.
+steps::drain() {
+  local upto="${1:-}" name pid buf
+  zmodload -F zsh/files b:zf_rm
+  while (( ${#STEP_PENDING} )); do
+    name="${STEP_PENDING[1]}"; shift STEP_PENDING
+    pid="${STEP_JOB[${name}]}"
+    run::_spin "${name} · checking"
+    wait "${pid}" 2>/dev/null || true
+    buf="${RUN_DIR}/.${name}.run.log"
+    if [[ -f "${buf}" ]]; then print -rn -- "${mapfile[${buf}]-}" >> "${RUN_DIR}/run.log"; zf_rm -f -- "${buf}"; fi
+    buf="${RUN_DIR}/.${name}.stderr"
+    if [[ -f "${buf}" ]]; then print -rnu2 -- "${mapfile[${buf}]-}"; zf_rm -f -- "${buf}"; fi
+    run::_show "${name}"
+    [[ "${name}" != "${upto}" ]] || break
+  done
+}
+
+steps::run_all_parallel() {
+  local name group="" need
+  STEP_PENDING=() STEP_JOB=()
+  for name in "${selected[@]}"; do
+    if [[ "${STEP_GROUP[${name}]}" != "${group}" ]]; then
+      steps::drain
+      group="${STEP_GROUP[${name}]}"
+      run::_heading "${group}"
+    fi
+    for need in ${(s:,:)STEP_NEEDS[${name}]}; do
+      if (( ${STEP_PENDING[(Ie)${need}]} )); then steps::drain "${need}"; fi
+    done
+    if step::is_serial "${name}"; then
+      steps::drain
+      step::run "${name}"
+      run::_show "${name}"
+    else
+      step::launch "${name}"
+    fi
+  done
+  steps::drain
 }
 
 # One retry, after a pause, of every step whose check errored: it absorbs the common transient,
@@ -329,7 +434,9 @@ run::is_fancy() { (( ! RUN_JSON )) && ui::is_fancy; }
 # A runner log line: appended to run.log (plain text, timestamped), and on stderr unless fancy.
 run::_log() {
   local tier="${1}"; shift
-  if [[ -n "${RUN_DIR:-}" && -d "${RUN_DIR}" ]]; then
+  if [[ -n "${RUN_BUFFER}" ]]; then
+    run::_log_file "${tier}" "$@" 2>> "${RUN_BUFFER}"
+  elif [[ -n "${RUN_DIR:-}" && -d "${RUN_DIR}" ]]; then
     run::_log_file "${tier}" "$@" 2>> "${RUN_DIR}/run.log"
   fi
   run::is_fancy || "log::${tier}" "$@"
@@ -339,7 +446,7 @@ run::_log_file() {
   LOG_PREAMBLE=1 "log::${1}" "${@:2}"
 }
 
-run::_spin() { run::is_fancy || return 0; ui::spin_start "${1}"; }
+run::_spin() { [[ -z "${RUN_BUFFER}" ]] && run::is_fancy || return 0; ui::spin_start "${1}"; }
 
 # The verb comes from the caller (RUN_VERB) or dispatch's `verb`; the mode when neither is set.
 run::_header() {

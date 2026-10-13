@@ -5,7 +5,8 @@
 #                                 (a path: file, dir, or absent) is what it was when stored
 #
 # The fingerprint is each input's mtime, size, inode and mode (zstat, no fork), plus the step's
-# own file, this file, HOME and PATH (stored under <state>/cache/<step>.*), plus any file the caller lists in CACHE_EXTRA. A hit
+# own file, this file, HOME and PATH (stored under <state>/cache/<step>.*), plus any file the caller lists in CACHE_EXTRA
+# and the value of every variable it names in CACHE_ENV (a seam that changes what the check reads). A hit
 # prints the stored verdict with `cached: true | fp='<sha>' at='<ts>'` as the detail's last
 # line; the status, reason and items are the stored run's. Files the check wrote into RUN_DIR
 # (drift.json, say) are stored beside it and restored on a hit, so a run's summary is whole.
@@ -19,7 +20,7 @@ zmodload -F zsh/stat b:zstat
 zmodload zsh/datetime
 zmodload zsh/mapfile
 
-typeset -ga CACHE_EXTRA=()
+typeset -ga CACHE_EXTRA=() CACHE_ENV=()
 
 # Sets REPLY to the fingerprint of the given paths: one 'path m s i p' line each, '-' when absent.
 # CACHE_RACY is set to 1 when any of them changed within the last two seconds.
@@ -43,9 +44,17 @@ cache::enabled() {
   [[ "${ARI_DOTFILES_NO_CACHE:-0}" != 1 && "${ARI_DOTFILES_MODE:-check}" != setup && -n "${STEP:-}" ]]
 }
 
-# The files of RUN_DIR the runner owns for this step; the rest a check wrote is its output.
+# The files of RUN_DIR the runner owns, for this step or another (checks of a group run side by
+# side, so another step's files can appear meanwhile); the rest a check wrote is its output.
 cache::_is_runner_file() {
-  [[ "${1}" == ("${STEP}".log|"${STEP}".check*.json|"${STEP}".recheck.json|"${STEP}".result.json|run.log|summary.json) ]]
+  [[ "${1}" == (*.log|*.check.json|*.check.<->.json|*.recheck.json|*.result.json|.*|summary.json) ]]
+}
+
+# reply+=: each dir and everything under it, for an input that is a tree (a file rewritten in
+# place changes only its own mtime, so every file is listed).
+cache::tree() {
+  local d
+  for d in "$@"; do reply+=("${d}" "${d}"/**/*(ND)); done
 }
 
 cache::check() {
@@ -54,6 +63,8 @@ cache::check() {
   local base="${ARI_DOTFILES_STATE_DIR}/cache/${STEP}"
   cache::fingerprint "$@" "${ARI_DOTFILES_STEPS}/${STEP}.zsh" "${ARI_DOTFILES_LIB}/cache.zsh" "${CACHE_EXTRA[@]}"
   fp="HOME=${HOME}"$'\n'"PATH=${PATH}"$'\n'"${REPLY}"
+  local v
+  for v in "${CACHE_ENV[@]}"; do fp+=$'\n'"env ${v}=${(P)v-<unset>}"; done
   if cache::enabled && [[ -r "${base}.fp" && -r "${base}.verdict" && "${mapfile[${base}.fp]}" == "${fp}" ]]; then
     local f
     for f in "${base}.files/"*(N.); do mapfile[${RUN_DIR}/${f:t}]="${mapfile[${f}]}"; done

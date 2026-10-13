@@ -8,6 +8,26 @@ step::watches claude_skills '.config/claude/skills/**'
 step::claude_skills::registry_bin() {
   print -r -- "${HOME}/.config/claude/skills/ari-dotfiles-skill-registry/bin"
 }
+# Machine inputs: what the registry's `status` classifies. reply: the registry's code and its
+# logging lib, ~/.claude/skills and every entry (a link is fingerprinted through to its target,
+# so a retarget or a dangling link changes it), each tier root and its entries, and each
+# submodule's skills/ root with the .gitmodules that names it.
+step::claude_skills::inputs() {
+  local bin="${1}" skills="${HOME}/.claude/skills" wt root line sub
+  reply=("${bin}/status" "${bin:h}/lib" "${bin:h}/lib/"*(N.) "${skills}/ari-skill-shellscripts/lib/logging.zsh"
+         "${bin:h:h}/ari-skill-shellscripts/lib/logging.zsh" "${skills}" "${skills}/"*(N) "${skills}/.gitignore")
+  for root in "${HOME}/.config/claude/skills" "${HOME}/.local/share/claude-skills"; do reply+=("${root}" "${root}/"*(N)); done
+  for wt in "${HOME}" "${HOME}/.local"; do
+    reply+=("${wt}/.gitmodules")
+    [[ -r "${wt}/.gitmodules" ]] || continue
+    for line in "${(@f)mapfile[${wt}/.gitmodules]}"; do
+      [[ "${line//[[:space:]]/}" == path=?* ]] || continue
+      sub="${line#*=}"
+      sub="${sub#"${sub%%[![:space:]]*}"}"; sub="${sub%"${sub##*[![:space:]]}"}"
+      reply+=("${wt}/${sub}" "${wt}/${sub}/skills" "${wt}/${sub}/skills/"*(N))
+    done
+  done
+}
 
 check::claude_skills() {
   local bin
@@ -16,7 +36,14 @@ check::claude_skills() {
     verdict skip no_registry -d "skill registry not checked out | path='${bin}/status'"
     return 0
   fi
-  local rows
+  local -a reply
+  step::claude_skills::inputs "${bin}"
+  cache::check step::claude_skills::live "${reply[@]}"
+}
+
+step::claude_skills::live() {
+  local bin rows
+  bin="$(step::claude_skills::registry_bin)"
   rows="$(zsh "${bin}/status" --all 2>/dev/null || true)"
   local -a missing dangling manual
   local line state name linked=0

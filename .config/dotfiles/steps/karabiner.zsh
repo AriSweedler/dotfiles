@@ -7,12 +7,14 @@ step::watches karabiner '.config/karabiner/**'
 
 check::karabiner() {
   local cfg="${HOME}/.config/karabiner/karabiner.json"
-  local problem=""
+  local problem="" sorted
+  # One jq: -e fails what `jq -e .` fails (invalid, empty, a false or null value); the sorted
+  # text is compared with the file byte for byte, as `jq -S . | cmp` did.
   if [[ ! -f "${cfg}" ]]; then
     problem="karabiner.json missing"
-  elif ! jq -e . "${cfg}" >/dev/null 2>&1; then
+  elif ! sorted="$(jq -e -S . "${cfg}" 2>/dev/null)"; then
     problem="karabiner.json is not valid JSON"
-  elif ! jq -S . "${cfg}" | cmp -s - "${cfg}"; then
+  elif [[ "${sorted}"$'\n' != "${mapfile[${cfg}]}" ]]; then
     problem="karabiner.json is not jq -S sorted"
   fi
   if [[ -n "${problem}" ]]; then

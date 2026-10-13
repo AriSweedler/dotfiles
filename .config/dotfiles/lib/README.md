@@ -11,9 +11,12 @@ rules:
 | `steps/` | one step per file: `step::declare <name> [--group repo\|brew\|tools] [--needs a,b] [--tools t] [--desc D] [--abort]`, then `step::watches <name> <glob>..` (`watch.zsh`: the paths under `$HOME` whose change means the step may need to run; `dotfiles pull` names those steps; none for a step with no repo inputs), then `check::<name>` (pure, one verdict line on stdout) and optionally `apply::<name>` (mutates only through `run_mut`) | add `steps/<name>.zsh`; `steps::load` validates the registry and orders it by group, then --needs, then name |
 
 Domain libraries load on demand with `need_lib`: `cmd/brew/{brew,decree}.zsh` (the Homebrew
-model), `cmd/verify/report.zsh` (the weekly report). Every check and apply runs in a fresh zsh
-that sources `lib/` and the step's file, so only exported environment reaches a step
-(`ARI_DOTFILES_DRY_RUN`, `ARI_DOTFILES_MODE`, `STEP`, `RUN_DIR`, the `ARI_DOTFILES_*` seams).
+model), `cmd/verify/report.zsh` (the weekly report). Every check and apply runs in a fresh
+`zsh -f` (no `~/.zshenv`) that sources `lib/` and the step's file, so only exported environment
+reaches a step (`ARI_DOTFILES_DRY_RUN`, `ARI_DOTFILES_MODE`, `STEP`, `RUN_DIR`, the
+`ARI_DOTFILES_*` seams). In check mode the checks of a group run side by side, their runner log
+lines buffered and replayed in run order, so a run reads as a serial one; a step that uses brew
+runs alone, needs are waited for, and setup mode or `ARI_DOTFILES_SERIAL=1` runs one at a time.
 
 Rules that keep the entrypoint trivial:
 
@@ -37,7 +40,10 @@ Rules that keep the entrypoint trivial:
   verdict while every input's mtime, size, inode and mode hold; the hit's detail ends with
   `cached: true | fp=… at=…`, its status never changes. Never in setup mode, never an error,
   never when an input changed in the last two seconds; `ARI_DOTFILES_NO_CACHE=1` turns it off.
-  List every file the check reads: a directory input only changes when an entry comes or goes.
+  List every file the check reads: a directory input only changes when an entry comes or goes
+  (`cache::tree` lists a whole tree). A seam that changes what is read goes in `CACHE_ENV`; a
+  seam whose state is off disk (a shim, a bindings command) runs uncached. A step's inputs
+  function sits under its `step::watches` line.
 - **Never name a variable after one of zsh's own.** `path` is tied to `PATH` (a local by that
   name made `mkdir` vanish), `status` is `$?`; also `argv`, `options`, `fpath`, `cdpath`,
   `manpath`, `prompt`, `reply`, `watch`, `signals`, `histchars`.
