@@ -405,13 +405,74 @@ run::_show() {
   if [[ "${st}" == (fail|error) ]]; then ui::paint grey "  log: ${log_path}"; fi
 }
 
-# The end of a fancy run: the roll-up painted in its status's colour, then the total time.
+# The end of a fancy run: the roll-up painted in its status's colour, then the total time, then
+# what needs attention (run::_attention_box).
 run::_rollup() {
   local summary="${RUN_DIR}/summary.json" st counts took=""
   st="$(jq -r '.status' "${summary}")"
   counts="$(jq -r '.counts | to_entries | map("\(.key)=\(.value)") | join(" ")' "${summary}")"
   [[ -z "${RUN_T0}" ]] || took="  $(elapsed "${RUN_T0}")s"
   print -r -- "$(ui::paint "${st}" "status: ${st} (${counts})")$(ui::paint grey "${took}")"
+  run::_attention_box "${st}"
+}
+
+# What needs attention, one record per step on stdout, fields joined by \x1f:
+# status, step, reason, fix, manual, detail (as a JSON string, since it spans lines).
+# A step needs attention when it failed or errored, warned with a fix, or is manual (warn or fail).
+# The fix is the verdict's; an actionable step without one gets `dotfiles apply <step>`; a manual
+# step without one is done by hand; anything else points at its log.
+run::_attention() {
+  jq -r --arg cli "${CLI_NAME}" '.steps[]
+    | select(.status == "fail" or .status == "error"
+             or (.status == "warn" and ((.fix // "") != "" or .manual)))
+    | [.status, .step, .reason,
+       (if (.fix // "") != "" then .fix
+        elif .actionable then "\($cli) apply \(.step)"
+        elif .manual then "by hand"
+        else "see \(.log // "the run log")" end),
+       (.manual|tostring), ((.detail // "") | tojson)]
+    | join("\u001f")' "${RUN_DIR}/summary.json"
+}
+
+# Plain: `fix    <step>  <fix>` per step that needs attention, after the status line.
+run::_fix_lines() {
+  local st step reason fix manual detail
+  while IFS=$'\x1f' read -r st step reason fix manual detail; do
+    print -r -- "fix    ${step}  ${fix}"
+  done < <(run::_attention)
+}
+
+# Fancy: a box titled with the count, bordered in the roll-up's colour: per step its glyph, name
+# and reason, the fix, and a manual step's detail (clipped); the run directory last. Nothing needs
+# attention: one green line instead.
+run::_attention_box() {
+  local rollup="${1}" st step reason fix manual detail line
+  local -a body=() lines
+  local -i n=0 width
+  width=$(( $(ui::cols) - 4 ))
+  while IFS=$'\x1f' read -r st step reason fix manual detail; do
+    (( ++n ))
+    body+=("$(ui::paint "${st}" "$(ui::glyph "${st}")") ${step}  $(ui::paint "${st}" "${reason}")")
+    body+=("  fix: ${fix}")   # a command to copy, so never clipped
+    if [[ "${manual}" == true ]]; then
+      lines=("${(@f)$(jq -rn --argjson d "${detail}" '$d')}")
+      for line in "${lines[@]}"; do
+        if [[ -n "${line}" ]]; then body+=("$(ui::paint grey "$(ui::clip "${width}" "    ${line}")")"); fi
+      done
+    fi
+  done < <(run::_attention)
+  if (( n == 0 )); then
+    local total
+    total="$(jq -r '.steps | length' "${RUN_DIR}/summary.json")"
+    if [[ "${rollup}" == ok ]]; then ui::paint ok "$(ui::glyph ok) all $(plural "${total}" step steps) ok"
+    else ui::paint ok "$(ui::glyph ok) nothing to fix"
+    fi
+    return 0
+  fi
+  body+=("$(ui::paint grey "run: ${RUN_DIR/#${HOME}/~}")")
+  local verb_s=need
+  (( n > 1 )) || verb_s=needs
+  ui::box --title "${n} ${verb_s} attention" --color "${rollup}" -- "${body[@]}"
 }
 
 # --- A run: begin, summarize, end ---
@@ -477,12 +538,14 @@ run::print_human() {
     fi
   done < <(jq -r '.steps[] | [.status, .step, .reason, (.applied|tostring), (.detail | split("\n")[0])] | @tsv' "${summary}")
   print -r -- "status: $(jq -r '.status' "${summary}") ($(jq -r '.counts | to_entries | map("\(.key)=\(.value)") | join(" ")' "${summary}"))"
+  run::_fix_lines
 }
 
 # Manual items are told to the human once, at the end, where they will be read. Details span
-# lines, so each record travels as one JSON string per line.
+# lines, so each record travels as one JSON string per line. A fancy run has them in its box.
 run::print_manual() {
   local summary="${RUN_DIR}/summary.json"
+  ! run::is_fancy || return 0
   local encoded
   while IFS= read -r encoded; do
     log::WARN "$(jq -rn --argjson block "${encoded}" '$block')"
