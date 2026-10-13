@@ -3,6 +3,7 @@
 # state, not baseline, so its exit 1 is a warn and never a fail.
 step::declare karabiner --group tools \
   --desc "karabiner.json exists, is valid JSON, and is jq -S sorted; healthcheck runs when present"
+step::watches karabiner '.config/karabiner/**'
 
 check::karabiner() {
   local cfg="${HOME}/.config/karabiner/karabiner.json"

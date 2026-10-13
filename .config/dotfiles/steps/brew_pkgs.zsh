@@ -2,6 +2,7 @@
 # verdict; `brew` in --tools means the runner reports a missing brew before this body runs.
 step::declare brew_pkgs --group brew --needs brew --tools brew \
   --desc "every item declared in the merged Brewfiles is installed (brew bundle check/install --no-upgrade)"
+step::watches brew_pkgs '.config/new-machine/Brewfile'
 
 check::brew_pkgs() {
   need_lib "${ARI_DOTFILES_BREW_LIB}"

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # `dotfiles pull`: local commits replay onto origin's when they touch different files; a replay
-# that conflicts is aborted with the tier as it was and the conflicting file named.
+# that conflicts is aborted with the tier as it was and the conflicting file named. No init runs
+# after it (test_pull_changes.sh covers what it reports instead).
 set -u
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -39,6 +40,11 @@ assert_eq "clean replay: the local commit is on top" "local change" "$(df_git lo
 assert_eq "clean replay: one commit ahead" 1 "$(df_git rev-list --count origin/main..HEAD)"
 assert_file "clean replay: origin's file checked out" "${HOME}/.config/pull-remote.txt"
 assert_not_contains "clean replay: no conflict reported" "${ERR}" "conflict"
+assert_eq "clean replay: exit 0" 0 "${RC}"
+assert_contains "clean replay: the pulled path counted" "${OUT}" "pulled 1 changed path"
+assert_contains "clean replay: no step watches it" "${OUT}" "no step watches these paths: nothing to apply"
+assert_no_file "clean replay: init did not run" "${ARI_DOTFILES_STATE_DIR}/runs"
+assert_no_file "clean replay: no init result" "${ARI_DOTFILES_STATE_DIR}/last_result.json"
 
 # Diverged on the same file: aborted, nothing changed.
 remote_commit .config/pull-both.txt theirs "remote edit"

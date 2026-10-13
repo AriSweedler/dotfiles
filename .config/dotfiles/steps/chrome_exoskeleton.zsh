@@ -4,6 +4,7 @@
 # machine needs it on PATH, hence a warn, not a fail.
 step::declare chrome_exoskeleton --group tools --needs dotfiles_repo \
   --desc "the Chrome Exoskeleton submodule has its dependencies (which wire its hooks) and a built dist/"
+step::watches chrome_exoskeleton '.config/chrome-exoskeleton'   # the submodule pointer
 
 step::chrome_exoskeleton::dir() {
   print -r -- "${HOME}/.config/chrome-exoskeleton"

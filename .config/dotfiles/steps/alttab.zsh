@@ -4,6 +4,7 @@
 # quits and replaces /Applications/AltTab.app. The local signing certificate is a human step: its
 # creation pops a system password dialog, so the apply refuses to run until it exists.
 step::declare alttab --group tools --desc "AltTab, the Free-tier build from source: patched app installed, updater manual, no Homebrew cask (~/.config/alttab)"
+step::watches alttab '.config/alttab/**'
 
 step::alttab::paths() {
   ALTTAB_DIR="${HOME}/.config/alttab"

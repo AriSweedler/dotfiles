@@ -4,6 +4,7 @@
 # pull.
 step::declare dotfiles_repo --group repo \
   --desc "shared dotfiles bare repo cloned, tracking origin, checked out into HOME, hooks wired"
+step::watches dotfiles_repo '.gitmodules' '.config/git/dotfiles-hooks/**'
 
 dotfiles_repo::origin_url() { git --git-dir="${1}" config remote.origin.url 2>/dev/null || true; }
 dotfiles_repo::has_origin() { [[ -n "$(dotfiles_repo::origin_url "${1}")" ]]; }

@@ -312,8 +312,7 @@ with "Run `dotfiles push` when ready." if anything landed in the shared repo.
 
 ## Bootstrapping a machine
 
-`dotfiles init` (idempotent, `--dry-run`; what `bootstrap.sh` ends in and `dotfiles pull` runs
-after its fetch) converges the whole machine: every step checks, applies only where it finds
+`dotfiles init` (idempotent, `--dry-run`; what `bootstrap.sh` ends in) converges the whole machine: every step checks, applies only where it finds
 drift, and re-checks, then `dotfiles status` prints. So a changed Brewfile installs its new
 items, Raycast syncs when it is behind, and a converged machine changes nothing. `dotfiles
 steps` lists the steps and their groups (`repo`, `brew`, `tools`); `init --group repo` or
@@ -356,7 +355,11 @@ allowlist changes.
 `dotfiles pull` runs `git df pull --rebase --autostash`: a fast-forward when nothing is local,
 otherwise local commits are replayed onto origin. A replay that conflicts is aborted, the tier is
 left as it was, and the conflicting files are named; resolve by hand (`git df pull --rebase`,
-fix, `git df rebase --continue`), then `dotfiles pull` again. Then it runs init. `dotfiles
+fix, `git df rebase --continue`), then `dotfiles pull` again. It runs no init and no check:
+it maps the pulled paths to the steps that watch them (`step::watches` in each step file),
+warns with each affected step and the paths behind it, and prints the one command to run,
+`dotfiles apply a b c`; a changed harness (`lib/`, `cmd/`) is live already. `pull --dry-run`
+fetches and reports the same for what the pull would bring. `dotfiles
 status` shows both tiers, the submodule pointers and each repo's last push; `dotfiles push`
 and `dotfiles logs` are under **Pushing**.
 

@@ -2,6 +2,7 @@
 # hooks wired, nothing unpushed to its remote (optional).
 step::declare local_dotfiles_repo --group repo \
   --desc "local dotfiles bare repo exists with the allowlist and hooks; nothing unpushed when it has a remote"
+step::watches local_dotfiles_repo '.config/new-machine/local-dotfiles-exclude' '.config/git/local-dotfiles-hooks/**'
 
 check::local_dotfiles_repo() {
   local git_dir="${ARI_DOTFILES_LDF_GIT_DIR}" exclude="${ARI_DOTFILES_LDF_GIT_DIR}/info/exclude"

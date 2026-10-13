@@ -2,6 +2,7 @@
 # every 5 minutes); it runs the job plugins of both tiers, git-health's hourly tick among them.
 step::declare dotfiles_jobs --group repo --needs dotfiles_repo \
   --desc "dotfiles jobs launchd job (runs the job plugins of both tiers) installed and loaded"
+step::watches dotfiles_jobs '.config/dotfiles/jobs/**'
 
 check::dotfiles_jobs() {
   local label="com.$(id -un).dotfiles-jobs" plist="${ARI_DOTFILES_LAUNCH_AGENTS_DIR}/com.$(id -un).dotfiles-jobs.plist"

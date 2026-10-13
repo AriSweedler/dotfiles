@@ -5,6 +5,7 @@
 # filled in) makes it a warn. Compile state of the bindings is the karabiner step's verdict.
 step::declare raycast_sync --group tools --needs dotfiles_repo \
   --desc "Raycast in parity with the dotfiles: every Karabiner-bound command on its deeplink allow-list, the versioned snippets imported (dotfiles raycast sync)"
+step::watches raycast_sync '.config/raycast-snippets/**' '.config/karabiner/**' '.config/zsh/plugins/raycast*.zsh'
 
 step::raycast_sync::load() {
   need_lib "${ARI_DOTFILES_CONFIG}/zsh/plugins/raycast.zsh"

@@ -2,6 +2,7 @@
 # notification-fire.sh and the PreToolUse headless-Chrome guard; terminal-notifier resolves.
 step::declare claude_notifications --group tools \
   --desc "Claude Code hooks wired: Notification → notification-fire.sh, PreToolUse guard → pretooluse-headless-chrome-guard.sh; terminal-notifier resolves"
+step::watches claude_notifications '.config/claude/bin/**'
 
 check::claude_notifications() {
   local init="${HOME}/.config/claude/bin/initialize.sh" expected="${HOME}/.config/claude/bin/notification-fire.sh"

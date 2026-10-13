@@ -6,9 +6,9 @@ rules:
 
 | Directory | Holds | To add one |
 |---|---|---|
-| `lib/` | the kernel: `env.zsh` (constants, seams, flags), `logging.zsh`, `run.zsh` (is_dry_run, run_mut, timed, with_timeout, need_lib), `verdict.zsh`, `lock.zsh`, `notify.zsh`, `tiers.zsh` (repo_git, tier::commit), `steps.zsh` (the registry and the one runner), `ui.zsh` (how fancy human output is: spinners, colour, boxes, tables), `dispatch.zsh` (main, help) | a module is one concern; a new global belongs in `env.zsh` |
+| `lib/` | the kernel: `env.zsh` (constants, seams, flags), `logging.zsh`, `run.zsh` (is_dry_run, run_mut, timed, with_timeout, need_lib), `verdict.zsh`, `lock.zsh`, `notify.zsh`, `tiers.zsh` (repo_git, tier::commit), `steps.zsh` (the registry and the one runner), `watch.zsh` (step::watches: which paths each step reads), `ui.zsh` (how fancy human output is: spinners, colour, boxes, tables), `dispatch.zsh` (main, help) | a module is one concern; a new global belongs in `env.zsh` |
 | `cmd/` | one verb per file: `cmd_<verb>` parses its own arguments (zparseopts; flags after the verb belong to the verb) and `help_<verb>` prints its help, first line the one-line synopsis `dotfiles --help` lists | add `cmd/<verb>.zsh` with those two functions; nothing else to register |
-| `steps/` | one step per file: `step::declare <name> [--group repo\|brew\|tools] [--needs a,b] [--tools t] [--desc D] [--abort]`, then `check::<name>` (pure, one verdict line on stdout) and optionally `apply::<name>` (mutates only through `run_mut`) | add `steps/<name>.zsh`; `steps::load` validates the registry and orders it by group, then --needs, then name |
+| `steps/` | one step per file: `step::declare <name> [--group repo\|brew\|tools] [--needs a,b] [--tools t] [--desc D] [--abort]`, then `step::watches <name> <glob>..` (`watch.zsh`: the paths under `$HOME` whose change means the step may need to run; `dotfiles pull` names those steps; none for a step with no repo inputs), then `check::<name>` (pure, one verdict line on stdout) and optionally `apply::<name>` (mutates only through `run_mut`) | add `steps/<name>.zsh`; `steps::load` validates the registry and orders it by group, then --needs, then name |
 
 Domain libraries load on demand with `need_lib`: `cmd/brew/{brew,decree}.zsh` (the Homebrew
 model), `cmd/verify/report.zsh` (the weekly report). Every check and apply runs in a fresh zsh

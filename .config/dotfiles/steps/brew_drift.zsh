@@ -2,6 +2,7 @@
 # No apply: a human settles drift with `brew triage` / `brew decree`.
 step::declare brew_drift --group brew --needs brew --tools brew \
   --desc "nothing installed on request is undeclared, orphaned, or declared twice (${CLI_NAME} brew triage)"
+step::watches brew_drift '.config/new-machine/Brewfile' '.config/new-machine/Brewfile.ignore'
 
 check::brew_drift() {
   need_lib "${ARI_DOTFILES_BREW_LIB}"

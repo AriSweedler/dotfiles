@@ -3,6 +3,7 @@
 # Xcode command line tools.
 step::declare plugged --group tools --needs dotfiles_repo \
   --desc "the plugged submodule has its hooks wired (core.hooksPath=.githooks) and a built release binary"
+step::watches plugged '.config/plugged'   # the submodule pointer
 
 step::plugged::dir() {
   print -r -- "${HOME}/.config/plugged"
