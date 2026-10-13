@@ -39,8 +39,8 @@ Subsystems: ${(j:, :)ARI_DOTFILES_RAYCAST_SUBSYSTEMS}. Bindings live in karabine
 through bake. Snippets live in two files, merged with local winning by name:
   shared  ~/.config/raycast-snippets/snippets.json (git df, public remote)
   local   ~/.local/share/raycast-snippets/snippets.json (git ldf, private remote), manifest beside it
-One rule: personal data stays in the local tier; shared is for snippets safe in a public repo,
-plus fmt's placeholders. Interactive shells have the same router as the function ari_raycast.
+One rule: personal data stays in the local tier; shared is for snippets safe in a public repo;
+a local-only snippet is fine. Interactive shells have the same router as the function ari_raycast.
 EOF
 }
 

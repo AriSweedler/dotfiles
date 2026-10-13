@@ -103,7 +103,7 @@ _t "bin: snippets sync without a manifest refuses" "1" "${_rc}"
 _t "bin: snippets adopt then sync is a no-op" $'snippets: nothing to import | unchanged=0\npending=0' \
   "$(env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets adopt >/dev/null 2>&1; env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets sync 2>/dev/null)"
 _t "bin: snippets check on empty tiers is in parity" $'snippets: tiers in parity | entries=0\nwarnings=0' "$(env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets check 2>/dev/null)"
-_t "bin: snippets fmt --dry-run on canonical files" $'dry_run=1\nshared=unchanged\nlocal=absent\nplaceholders_added=0\nkeywords_fixed=0\nrewritten=0' "$(env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets fmt --dry-run 2>/dev/null)"
+_t "bin: snippets fmt --dry-run on canonical files" $'dry_run=1\nshared=unchanged\nlocal=absent\nkeywords_fixed=0\nrewritten=0' "$(env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets fmt --dry-run 2>/dev/null)"
 _bin help >/dev/null 2>&1; _rc=$?; _t "bin: help rc 0" "0" "${_rc}"
 _t "bin: help lists the subsystems" "1" "$(_bin help 2>&1 | grep -c 'Subsystems:.*link, snippets')"
 _t "bin: help names both tier files" "2" "$(_bin help 2>&1 | grep -c -e 'shared  ~/.config/raycast-snippets/snippets.json' -e 'local   ~/.local/share/raycast-snippets/snippets.json')"

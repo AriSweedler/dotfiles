@@ -23,7 +23,7 @@ ${c_bold}Usage${c_rst}
     shared  ~/.config/raycast-snippets/snippets.json (git df, public)
     local   ~/.local/share/raycast-snippets/snippets.json (git ldf, private)
   One rule: personal data stays in the local tier; shared is for snippets
-  safe in a public repo, plus fmt's placeholders. 'sync' runs every
+  safe in a public repo. A local-only snippet is fine. 'sync' runs every
   subsystem's sync in order; the raycast_sync step is its --dry-run.
 
 ${c_bold}Subcommands${c_rst}
@@ -33,12 +33,12 @@ ${c_bold}Subcommands${c_rst}
   link allow         write the missing allow-list ids to Raycast's plist
   snippets sync      import what is new or changed, one Raycast dialog a batch
   snippets list      state and tier of every snippet
-  snippets check     placeholder parity between the tiers
+  snippets check     warn per shared placeholder nothing overrides
   snippets adopt     seed the manifest from Raycast's current state
   snippets pull      a Raycast export is the truth; update the tier files
   snippets diff      the merged set against a Raycast export, by name
   snippets move      relocate one snippet between the tiers
-  snippets fmt       canonical rewrite of both files, placeholders included
+  snippets fmt       canonical rewrite of both files, adds no placeholders
   snippets reset-manifest   forget names (all when none)
   sync               every subsystem's sync, in order
 

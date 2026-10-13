@@ -11,14 +11,15 @@
 # keyword. Canonical order in every file: by keyword in byte order (one prefix's expansions sit
 # together), entries without a keyword last by name; keys sorted by json-sort.
 #
-# Parity across machines without copying private text: for every local snippet the shared file
-# carries a PLACEHOLDER of the same name and keyword whose text is "OVERRIDE WITH A <local file>
-# file". Here the local entry overrides it; on a machine without the local file the placeholder
-# is what Raycast imports, so the keyword expands to the reminder, and `sync` creates the local
-# file holding those placeholders, for Ari to fill in. `fmt` keeps the files in canonical order
-# and the placeholders present and on the right keyword; `check` (folded into `sync` as `warn`
-# lines) names the active placeholders. Nothing ever writes local text into the
-# shared file.
+# A local-only snippet is a valid end state: it needs nothing in the shared file and raises no
+# warning. Optionally, for parity across machines without copying private text, the shared file
+# may carry a PLACEHOLDER of a local snippet: same name and keyword, text "OVERRIDE WITH A <local
+# file> file", added by hand (nothing creates one). Here the local entry overrides it; on a
+# machine without the local file the placeholder is what Raycast imports, so the keyword expands
+# to the reminder, and `sync` creates the local file holding those placeholders, for Ari to fill
+# in. `fmt` keeps the files in canonical order and an existing placeholder on its local entry's
+# keyword; `check` (folded into `sync` as `warn` lines) names the active placeholders, the ones
+# nothing overrides. Nothing ever writes local text into the shared file.
 #
 # `sync` diffs the merged set against the manifest (what has been imported, name → the canonical
 # entry; local state beside the local file) with a few jq calls and nothing else; when nothing
@@ -32,7 +33,7 @@
 #
 # `pull` updates a known name in place in the tier that wins it and puts an unknown name in the
 # LOCAL tier (nothing is guessed public; an unknown placeholder goes to shared); `move <name>
-# --to shared|local` relocates one, leaving a placeholder behind when it leaves shared.
+# --to shared|local` relocates one, leaving nothing behind.
 #
 # Seeding, once, and again after editing snippets inside Raycast:
 #   1. Raycast → search "Export Snippets" → save the JSON anywhere
@@ -234,17 +235,15 @@ function raycast_snippets::manifest_of() {
 # --- parity ---
 
 # Input: the merged object. Output: one line per finding, without the `warn` prefix: an active
-# placeholder (shared, nothing overrides it: Raycast gets the reminder, fill the local file) and
-# a local snippet without a shared placeholder (fmt not run since it was added).
+# placeholder (shared, nothing overrides it: Raycast gets the reminder, fill the local file). A
+# local snippet with no shared counterpart is fine and is not a finding.
 function raycast_snippets::parity_lines() {
   local local_file
   local_file="$(raycast_snippets::tier_file local)" || return 1
   print -r -- "${1}" | jq -r --arg prefix "${ARI_DOTFILES_RAYCAST_SNIPPETS_PLACEHOLDER_PREFIX}" --arg local_file "${local_file}" '
     . as $src
     | ($src.entries[] | select($src.tiers[.name] == "shared" and (.text | startswith($prefix)))
-        | "placeholder active: \(.name) (\(.keyword // "-")) fill in \($local_file)"),
-      ($src.entries[] | select($src.tiers[.name] == "local")
-        | "local snippet has no shared placeholder: \(.name) (\(.keyword // "-")); run dotfiles raycast snippets fmt")'
+        | "placeholder active: \(.name) (\(.keyword // "-")) fill in \($local_file)")'
 }
 
 # Input: parity lines. Prints each as `warn <line>` (ari-raycast sync forwards those); nothing
@@ -415,8 +414,7 @@ function raycast_snippets::list() {
 }
 
 # --check: parity of the tiers; writes nothing. Exit 1 when two names share a keyword (or a
-# file is invalid); otherwise exit 0, with one `warn` line per active placeholder and per local
-# snippet without one.
+# file is invalid); otherwise exit 0, with one `warn` line per active placeholder.
 function raycast_snippets::check() {
   local merged
   local -a warns
@@ -433,8 +431,7 @@ function raycast_snippets::check() {
 # tier that wins it (a shared placeholder under a local override is left alone: local text
 # never enters shared), an unknown name goes to the LOCAL tier (an unknown placeholder to
 # shared), a name absent from the export leaves every tier. The last entry of a name in the
-# export wins. Touched files are written canonical, the manifest is rewritten to match. Run fmt
-# afterwards for the placeholders of newly added local names.
+# export wins. Touched files are written canonical, the manifest is rewritten to match.
 function raycast_snippets::pull() {
   local export_file="${1}" dry_run="${2:-0}" export_arr merged file tier_arr next verdict is_first is_last
   local -i before after n_added n_removed n_updated i
@@ -485,7 +482,7 @@ function raycast_snippets::pull() {
     return 0
   fi
   raycast_snippets::write_manifest "$(raycast_snippets::manifest_of "${export_arr}")"
-  log::info "snippets pulled; run dotfiles raycast snippets fmt for the placeholders of new local names | export_entries='${after}' collapsed='$(( before - after ))' ${(j: :)report} manifest='${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}'"
+  log::info "snippets pulled | export_entries='${after}' collapsed='$(( before - after ))' ${(j: :)report} manifest='${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}'"
   printf '%s\n' "entries=${after}" "collapsed=$(( before - after ))" "${report[@]}"
 }
 
@@ -507,10 +504,10 @@ function raycast_snippets::diff() {
 
 # --move NAME --to TIER [dry_run]: relocate one snippet from the tier that wins it to another;
 # both files rewritten canonical, the manifest untouched (the merged set is unchanged). Into
-# shared, the entry replaces its placeholder; out of shared, a placeholder stays behind.
-# Refuses an unknown name or a name already won by the target tier.
+# shared, the entry replaces its placeholder; out of shared, nothing stays behind (local-only is
+# a valid end state). Refuses an unknown name or a name already won by the target tier.
 function raycast_snippets::move() {
-  local name="${1}" to="${2}" dry_run="${3:-0}" merged from_file to_file first_file entry from_arr to_arr from_verdict to_verdict placeholder=no
+  local name="${1}" to="${2}" dry_run="${3:-0}" merged from_file to_file entry from_arr to_arr from_verdict to_verdict
   merged="$(raycast_snippets::source)" || return 1
   from_file="$(print -r -- "${merged}" | jq -r --arg n "${name}" '.files[$n] // empty')"
   if [[ -z "${from_file}" ]]; then
@@ -522,64 +519,48 @@ function raycast_snippets::move() {
     log::err "Already in that tier | name='${name}' tier='${to}' file='${to_file}'"
     return 1
   fi
-  first_file="${${(@f)$(raycast_snippets::tier_files)}[1]}"
   entry="$(print -r -- "${merged}" | jq -c --arg n "${name}" '.entries[] | select(.name == $n)')"
   from_arr="$(raycast_snippets::read_tier "${from_file}")" || return 1
   from_arr="$(print -r -- "${from_arr}" | jq -c --arg n "${name}" 'map(select(.name != $n))')"
-  if [[ "${from_file}" == "${first_file}" && "${to_file}" != "${first_file}" ]]; then
-    placeholder=yes
-    from_arr="$(print -r -- "${from_arr}" | jq -c --argjson e "${entry}" --arg text "$(raycast_snippets::placeholder_text)" '. + [$e | .text = $text]')"
-  fi
   to_arr="$(raycast_snippets::read_tier "${to_file}")" || return 1
   to_arr="$(print -r -- "${to_arr}" | jq -c --argjson e "${entry}" 'map(select(.name != $e.name)) + [$e]')"
   if (( dry_run )); then
-    log::info "snippets move dry run | name='${name}' from='${from_file}' to='${to_file}' placeholder_left='${placeholder}'"
-    printf '%s\n' "dry_run=1" "name=${name}" "from=${from_file}" "to=${to_file}" "placeholder_left=${placeholder}"
+    log::info "snippets move dry run | name='${name}' from='${from_file}' to='${to_file}'"
+    printf '%s\n' "dry_run=1" "name=${name}" "from=${from_file}" "to=${to_file}"
     return 0
   fi
   from_verdict="$(raycast_snippets::write_tier "${from_file}" "${from_arr}")" || return 1
   to_verdict="$(raycast_snippets::write_tier "${to_file}" "${to_arr}")" || return 1
-  log::info "snippet moved | name='${name}' from='${from_file}' to='${to_file}' from_file='${from_verdict}' to_file='${to_verdict}' placeholder_left='${placeholder}'"
-  printf '%s\n' "name=${name}" "from=${from_file}" "to=${to_file}" "placeholder_left=${placeholder}"
+  log::info "snippet moved | name='${name}' from='${from_file}' to='${to_file}' from_file='${from_verdict}' to_file='${to_verdict}'"
+  printf '%s\n' "name=${name}" "from=${from_file}" "to=${to_file}"
 }
 
 # --fmt [dry_run]: every tier file that exists is rewritten in canonical form (canonical order,
-# json-sort keys); the shared file gains a placeholder for every local name it lacks and a
-# placeholder whose keyword drifted from the local entry gets the local keyword. Local text
+# json-sort keys), and a shared placeholder whose keyword drifted from its local entry gets the
+# local keyword. fmt never adds a placeholder (a local-only snippet needs none) and local text
 # never enters shared; the local file is only sorted. A file already canonical is left alone
 # (mtime too), so a second run is a no-op. Under dry_run the verdicts say what a write would do.
 function raycast_snippets::fmt() {
-  local dry_run="${1:-0}" file arr next verdict placeholder local_arr earlier='[]'
+  local dry_run="${1:-0}" file arr next verdict local_arr
   local -a files labels report
-  local -i rewritten=0 added=0 fixed=0 i
+  local -i rewritten=0 fixed=0 i
   raycast_snippets::source >/dev/null || return 1
   files=("${(@f)$(raycast_snippets::tier_files)}")
   labels=("${(@f)$(raycast_snippets::tiers | cut -f1)}")
-  placeholder="$(raycast_snippets::placeholder_text)" || return 1
   local_arr="$(raycast_snippets::read_tier "${files[-1]}")" || return 1
-  for (( i = 1; i < ${#files}; i++ )); do
-    arr="$(raycast_snippets::read_tier "${files[i]}")" || return 1
-    earlier="$(jq -cn --argjson e "${earlier}" --argjson a "${arr}" '$e + ($a | map(.name))')"
-  done
   for (( i = 1; i <= ${#files}; i++ )); do
     file="${files[i]}"
     arr="$(raycast_snippets::read_tier "${file}")" || return 1
     next="${arr}"
     if (( i < ${#files} )); then
-      # A placeholder follows its local entry's keyword; the first shared file takes a
-      # placeholder for every local name no shared file holds.
-      next="$(jq -cn --argjson a "${arr}" --argjson loc "${local_arr}" --argjson earlier "${earlier}" \
-          --arg prefix "${ARI_DOTFILES_RAYCAST_SNIPPETS_PLACEHOLDER_PREFIX}" --arg text "${placeholder}" --arg is_first "$(( i == 1 ))" '
+      # A placeholder follows its local entry's keyword.
+      next="$(jq -cn --argjson a "${arr}" --argjson loc "${local_arr}" --arg prefix "${ARI_DOTFILES_RAYCAST_SNIPPETS_PLACEHOLDER_PREFIX}" '
         ($loc | map({(.name): (.keyword // "")}) | add // {}) as $lk
         | ($a | map(if (.text | startswith($prefix)) and $lk[.name] != null and $lk[.name] != (.keyword // "")
                     then (if $lk[.name] == "" then del(.keyword) else .keyword = $lk[.name] end) | .fixed = true
                     else . end)) as $fixed_arr
-        | (if $is_first == "1"
-           then [$loc[] | select(.name | IN($earlier[]) | not) | {name, text: $text} + (if .keyword != null then {keyword} else {} end)]
-           else [] end) as $new
-        | {result: ($fixed_arr | map(del(.fixed))) + $new, fixed: ([$fixed_arr[] | select(.fixed == true)] | length), added: ($new | length)}')"
+        | {result: ($fixed_arr | map(del(.fixed))), fixed: ([$fixed_arr[] | select(.fixed == true)] | length)}')"
       fixed+="$(print -r -- "${next}" | jq '.fixed')"
-      added+="$(print -r -- "${next}" | jq '.added')"
       next="$(print -r -- "${next}" | jq -c '.result')"
     fi
     if [[ ! -e "${file}" ]] && [[ "${next}" == "[]" ]]; then
@@ -591,8 +572,8 @@ function raycast_snippets::fmt() {
     report+=("${labels[i]}=${verdict}")
   done
   if (( dry_run )); then
-    log::info "snippets fmt dry run | ${(j: :)report} would_rewrite='${rewritten}' placeholders_added='${added}' keywords_fixed='${fixed}'"
-    printf '%s\n' "dry_run=1" "${report[@]}" "placeholders_added=${added}" "keywords_fixed=${fixed}" "rewritten=${rewritten}"
+    log::info "snippets fmt dry run | ${(j: :)report} would_rewrite='${rewritten}' keywords_fixed='${fixed}'"
+    printf '%s\n' "dry_run=1" "${report[@]}" "keywords_fixed=${fixed}" "rewritten=${rewritten}"
     return 0
   fi
   if (( rewritten == 0 )); then
@@ -600,8 +581,8 @@ function raycast_snippets::fmt() {
   else
     print -r -- "snippets: formatted"
   fi
-  log::info "snippets fmt | ${(j: :)report} rewritten='${rewritten}' placeholders_added='${added}' keywords_fixed='${fixed}'"
-  printf '%s\n' "${report[@]}" "placeholders_added=${added}" "keywords_fixed=${fixed}" "rewritten=${rewritten}"
+  log::info "snippets fmt | ${(j: :)report} rewritten='${rewritten}' keywords_fixed='${fixed}'"
+  printf '%s\n' "${report[@]}" "keywords_fixed=${fixed}" "rewritten=${rewritten}"
 }
 
 # --reset-manifest [dry_run] [NAME...]: forget names (all when none) so the next sync re-imports
@@ -641,25 +622,26 @@ dotfiles raycast snippets — Raycast Snippets from the versioned files, shared 
                                                   "nothing to import", no other effect; parity findings follow as warn lines
   dotfiles raycast snippets list                       state (new|changed|synced), tier (shared|local|local>shared|placeholder),
                                                   name, keyword, first line
-  dotfiles raycast snippets check                      parity: warn per active placeholder (fill the local file) and per local
-                                                  snippet without one (run fmt); exit 1 when two names share a keyword
+  dotfiles raycast snippets check                      parity: warn per active placeholder (fill the local file); a local-only
+                                                  snippet is fine; exit 1 when two names share a keyword
   dotfiles raycast snippets adopt [--dry-run]          first run on a machine whose Raycast already holds the files' snippets:
                                                   the manifest is written from the merged set, nothing is imported
   dotfiles raycast snippets pull FILE [--dry-run]      a Raycast export is the truth: known names updated in the tier that wins
                                                   them, unknown names added to the LOCAL tier, absent names removed
   dotfiles raycast snippets diff FILE                  merged set versus a Raycast export, by name; writes nothing
-  dotfiles raycast snippets move NAME --to shared|local [--dry-run]   relocate one snippet; leaving shared leaves a placeholder
-  dotfiles raycast snippets fmt [--dry-run]            rewrite both files canonical (keyword order, json-sort keys); give shared
-                                                  a placeholder for every local name and fix drifted placeholder keywords
+  dotfiles raycast snippets move NAME --to shared|local [--dry-run]   relocate one snippet; nothing is left behind
+  dotfiles raycast snippets fmt [--dry-run]            rewrite both files canonical (keyword order, json-sort keys); fix drifted
+                                                  placeholder keywords; never adds a placeholder
   dotfiles raycast snippets reset-manifest [NAME...] [--dry-run]   forget names (all when none), e.g. after a cancelled review
 
   One rule: personal data stays in the local tier; the shared tier is for snippets safe in a public repo.
   Tiers: shared $(raycast_snippets::tier_file shared 2>/dev/null) (git df, public remote)
          local  $(raycast_snippets::tier_file local 2>/dev/null) (git ldf, private remote)
   Merge: files load in that order and a later entry replaces an earlier one of the same name, so local wins.
-  Placeholders: for every local snippet, shared holds {name, keyword, text: "$(raycast_snippets::placeholder_text 2>/dev/null)"};
-         here local overrides it, on a machine without the local file Raycast imports the reminder. Nothing copies text
-         between tiers.
+  Local-only: a local snippet needs nothing in shared and raises no warning.
+  Placeholders (optional, added by hand): shared holds {name, keyword, text: "$(raycast_snippets::placeholder_text 2>/dev/null)"};
+         here local overrides it, on a machine without the local file Raycast imports the reminder (check warns). Nothing
+         copies text between tiers.
   Order in every file: by keyword (byte order), entries without a keyword last by name; keys sorted by json-sort.
   Raycast cannot be told to delete a snippet: a changed one leaves its old version behind and a removed one stays,
   so both are printed for you to delete by hand. Without a manifest, sync refuses: adopt or pull first.

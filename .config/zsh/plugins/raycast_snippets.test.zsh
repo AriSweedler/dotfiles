@@ -5,8 +5,9 @@
 [[ "$OTTO_TEST__ZSH_PLUGINS_RAYCAST_SNIPPETS" == "true" ]] || return 0
 
 local _pass=0 _fail=0
-source "${HOME}/.config/zsh/plugins/log.zsh"
-source "${HOME}/.config/zsh/plugins/raycast_snippets.zsh"
+# The plugin beside this file, so a worktree's suite tests that worktree's code.
+source "${${(%):-%x}:A:h}/log.zsh"
+source "${${(%):-%x}:A:h}/raycast_snippets.zsh"
 
 function _t() {
   local name="$1" expected="$2" actual="$3"
@@ -198,20 +199,18 @@ _t "pull: shared emptied (its names were absent from the export)" "[]" "$(cat "$
 _t "pull: local is canonical json-sort output (keys sorted, 2-space, keyword first, last zeta wins)" \
   $'[\n  {\n    "keyword": "z",\n    "name": "zeta",\n    "text": "new"\n  },\n  {\n    "name": "alpha",\n    "text": "A"\n  }\n]' \
   "$(cat "${_local}")"
-_t "pull: manifest matches the merged set; unpaired local names warned" \
-  $'snippets: nothing to import | unchanged=2\npending=0\nwarn local snippet has no shared placeholder: zeta (z); run dotfiles raycast snippets fmt\nwarn local snippet has no shared placeholder: alpha (-); run dotfiles raycast snippets fmt' \
+_t "pull: manifest matches the merged set; local-only names raise no warn" \
+  $'snippets: nothing to import | unchanged=2\npending=0' \
   "$(raycast_snippets --sync 2>/dev/null)"
 raycast_snippets --pull "${_dir}/nope.json" >/dev/null 2>&1; _rc=$?
 _t "pull: missing export rc 1" "1" "${_rc}"
 
-# --- fmt pairs the local names with shared placeholders ---
+# --- local-only is a valid end state: fmt adds no placeholder, check raises no warn ---
 _out="$(raycast_snippets --fmt 2>/dev/null)"; _rc=$?
-_t "fmt: rc 0, two placeholders added, only shared rewritten" $'snippets: formatted\nshared=changed\nlocal=unchanged\nplaceholders_added=2\nkeywords_fixed=0\nrewritten=1' "${_out}"
-_t "fmt: shared holds name+keyword placeholders, no local text" \
-  "[{\"keyword\":\"z\",\"name\":\"zeta\",\"text\":\"OVERRIDE WITH A ${_local} file\"},{\"name\":\"alpha\",\"text\":\"OVERRIDE WITH A ${_local} file\"}]" \
-  "$(jq -c . "${_shared}")"
-_t "fmt: sync is a clean no-op afterwards (merged set unchanged)" $'snippets: nothing to import | unchanged=2\npending=0' "$(raycast_snippets --sync 2>/dev/null)"
-_t "list: overrides read local>shared" $'synced  local>shared  zeta  z  new\nsynced  local>shared  alpha  -  A' "$(raycast_snippets --list 2>/dev/null)"
+_t "fmt: rc 0, local-only names give shared nothing" $'snippets: already canonical, nothing to format\nshared=unchanged\nlocal=unchanged\nkeywords_fixed=0\nrewritten=0' "${_out}"
+_t "fmt: shared stays empty" "[]" "$(jq -c . "${_shared}")"
+_t "check: local-only names are in parity, no warn" $'snippets: tiers in parity | entries=2\nwarnings=0' "$(raycast_snippets --check 2>/dev/null)"
+_t "list: local-only names read local" $'synced  local  zeta  z  new\nsynced  local  alpha  -  A' "$(raycast_snippets --list 2>/dev/null)"
 
 # --- diff ---
 cat > "${_dir}/export2.json" <<'EOF'
@@ -268,37 +267,37 @@ _t "override: same name and keyword across tiers is not a collision" "0" "$(rayc
 # --- check ---
 _out="$(raycast_snippets --check 2>/dev/null)"; _rc=$?
 _t "check: rc 0 with warns" "0" "${_rc}"
-_t "check: active placeholder and unpaired local names" \
-  $'warn placeholder active: orphan (~o) fill in '"${_local}"$'\nwarn local snippet has no shared placeholder: Phone (~#); run dotfiles raycast snippets fmt\nwarn local snippet has no shared placeholder: nokw (-); run dotfiles raycast snippets fmt\nwarnings=3' \
+_t "check: only the active placeholder warns; local-only Phone and nokw do not" \
+  $'warn placeholder active: orphan (~o) fill in '"${_local}"$'\nwarnings=1' \
   "${_out}"
 
-# --- fmt: placeholders, keyword fix, idempotent ---
+# --- fmt: canonical, no new placeholders, keyword fix, idempotent ---
 _mtime_before="$(zstat +mtime "${_shared}")"
 _out="$(raycast_snippets --fmt --dry-run 2>/dev/null)"
-_t "fmt --dry-run: verdicts and counts, writes nothing" $'dry_run=1\nshared=changed\nlocal=changed\nplaceholders_added=2\nkeywords_fixed=0\nrewritten=2' "${_out}"
+_t "fmt --dry-run: verdicts and counts, writes nothing" $'dry_run=1\nshared=changed\nlocal=changed\nkeywords_fixed=0\nrewritten=2' "${_out}"
 _t "fmt --dry-run: shared untouched" "${_mtime_before}" "$(zstat +mtime "${_shared}")"
 _t "fmt --dry-run: local untouched (still unsorted)" '["nokw","Home","Phone"]' "$(jq -c 'map(.name)' "${_local}")"
 _out="$(raycast_snippets --fmt 2>/dev/null)"; _rc=$?
 _t "fmt: rc 0" "0" "${_rc}"
-_t "fmt: report" $'snippets: formatted\nshared=changed\nlocal=changed\nplaceholders_added=2\nkeywords_fixed=0\nrewritten=2' "${_out}"
+_t "fmt: report" $'snippets: formatted\nshared=changed\nlocal=changed\nkeywords_fixed=0\nrewritten=2' "${_out}"
 _t "fmt: local only sorted, text untouched" '[{"name":"Phone","keyword":"~#","text":"555"},{"name":"Home","keyword":"~^","text":"1 Main"},{"name":"nokw","keyword":null,"text":"plain"}]' "$(jq -c 'map({name, keyword, text})' "${_local}")"
-_t "fmt: shared gained placeholders for Phone and nokw, kept pub and the existing ones, canonical order" \
-  "[{\"name\":\"pub\",\"keyword\":\";pub\",\"text\":\"public text\"},{\"name\":\"Phone\",\"keyword\":\"~#\",\"text\":\"OVERRIDE WITH A ${_local} file\"},{\"name\":\"Home\",\"keyword\":\"~^\",\"text\":\"OVERRIDE WITH A ~/elsewhere/snippets.json file\"},{\"name\":\"orphan\",\"keyword\":\"~o\",\"text\":\"OVERRIDE WITH A ~/elsewhere/snippets.json file\"},{\"name\":\"nokw\",\"keyword\":null,\"text\":\"OVERRIDE WITH A ${_local} file\"}]" \
+_t "fmt: shared gained no placeholder for Phone or nokw, kept pub and the existing ones, canonical order" \
+  "[{\"name\":\"pub\",\"keyword\":\";pub\",\"text\":\"public text\"},{\"name\":\"Home\",\"keyword\":\"~^\",\"text\":\"OVERRIDE WITH A ~/elsewhere/snippets.json file\"},{\"name\":\"orphan\",\"keyword\":\"~o\",\"text\":\"OVERRIDE WITH A ~/elsewhere/snippets.json file\"}]" \
   "$(jq -c 'map({name, keyword, text})' "${_shared}")"
 _t "fmt: no local text in shared" "0" "$(grep -c -e '1 Main' -e '555' -e plain "${_shared}")"
 _t "fmt: shared keys sorted by json-sort" $'  {\n    "keyword": ";pub",\n    "name": "pub",\n    "text": "public text"\n  },' "$(sed -n '2,6p' "${_shared}")"
 _mtime_before="$(zstat +mtime "${_shared}")"
 _out="$(raycast_snippets --fmt 2>/dev/null)"
-_t "fmt: second run is a no-op and says so" $'snippets: already canonical, nothing to format\nshared=unchanged\nlocal=unchanged\nplaceholders_added=0\nkeywords_fixed=0\nrewritten=0' "${_out}"
+_t "fmt: second run is a no-op and says so" $'snippets: already canonical, nothing to format\nshared=unchanged\nlocal=unchanged\nkeywords_fixed=0\nrewritten=0' "${_out}"
 _t "fmt: second run leaves the mtime alone" "${_mtime_before}" "$(zstat +mtime "${_shared}")"
 _t "check after fmt: only the orphan placeholder remains" $'warn placeholder active: orphan (~o) fill in '"${_local}"$'\nwarnings=1' "$(raycast_snippets --check 2>/dev/null)"
-_t "list after fmt: paired local names read local>shared, the orphan stays placeholder" \
-  $'new  shared  pub  ;pub  public text\nnew  local>shared  Phone  ~#  555\nnew  local>shared  Home  ~^  1 Main\nnew  placeholder  orphan  ~o  OVERRIDE WITH A ~/elsewhere/snippets.json file\nnew  local>shared  nokw  -  plain' \
+_t "list after fmt: local-only names read local, Home local>shared, the orphan stays placeholder" \
+  $'new  shared  pub  ;pub  public text\nnew  local  Phone  ~#  555\nnew  local>shared  Home  ~^  1 Main\nnew  placeholder  orphan  ~o  OVERRIDE WITH A ~/elsewhere/snippets.json file\nnew  local  nokw  -  plain' \
   "$(raycast_snippets --list 2>/dev/null)"
 # keyword drift: the local Home moves to ~H; fmt follows in the shared placeholder
 jq '(.[] | select(.name == "Home")).keyword = "~H"' "${_local}" > "${_dir}/t.json" && mv "${_dir}/t.json" "${_local}"
 _out="$(raycast_snippets --fmt 2>/dev/null)"
-_t "fmt: keyword drift fixed in the placeholder" $'snippets: formatted\nshared=changed\nlocal=unchanged\nplaceholders_added=0\nkeywords_fixed=1\nrewritten=1' "${_out}"
+_t "fmt: keyword drift fixed in the placeholder" $'snippets: formatted\nshared=changed\nlocal=unchanged\nkeywords_fixed=1\nrewritten=1' "${_out}"
 _t "fmt: the placeholder now carries ~H" "~H" "$(jq -r '.[] | select(.name == "Home") | .keyword' "${_shared}")"
 _t "fmt: the placeholder text was not rewritten" "OVERRIDE WITH A ~/elsewhere/snippets.json file" "$(jq -r '.[] | select(.name == "Home") | .text' "${_shared}")"
 _t "fmt: idempotent after the fix" "rewritten=0" "$(raycast_snippets --fmt 2>/dev/null | tail -n 1)"
@@ -314,8 +313,10 @@ raycast_snippets --sync >/dev/null 2>&1
 _t "sync: an unoverridden placeholder is imported as the reminder" '[{"name":"orphan","text":"OVERRIDE WITH A ~/elsewhere/snippets.json file","keyword":"~o"}]' "$(_payloads | jq -sc .)"
 
 # --- move ---
+# A placeholder added by hand is still supported: moving the real entry into shared replaces it.
+jq --arg t "OVERRIDE WITH A ${_local} file" '. + [{"name":"Phone","keyword":"~#","text":$t}]' "${_shared}" > "${_dir}/t.json" && mv "${_dir}/t.json" "${_shared}"
 _out="$(raycast_snippets --move Phone --to shared --dry-run 2>/dev/null)"; _rc=$?
-_t "move --dry-run: plan, rc 0" $'dry_run=1\nname=Phone\nfrom='"${_local}"$'\nto='"${_shared}"$'\nplaceholder_left=no' "${_out}"
+_t "move --dry-run: plan, rc 0" $'dry_run=1\nname=Phone\nfrom='"${_local}"$'\nto='"${_shared}" "${_out}"
 _t "move --dry-run: local untouched" "555" "$(jq -r '.[] | select(.name == "Phone") | .text' "${_local}")"
 _out="$(raycast_snippets --move Phone --to shared 2>/dev/null)"; _rc=$?
 _t "move local→shared: rc 0" "0" "${_rc}"
@@ -324,9 +325,10 @@ _t "move local→shared: gone from local" '["Home","nokw"]' "$(jq -c 'map(.name)
 _t "move local→shared: exactly one Phone in shared" "1" "$(jq '[.[] | select(.name == "Phone")] | length' "${_shared}")"
 _mtime_before="$(zstat +mtime "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 _out="$(raycast_snippets --move Phone --to local 2>/dev/null)"; _rc=$?
-_t "move shared→local: rc 0, a placeholder stays behind" $'name=Phone\nfrom='"${_shared}"$'\nto='"${_local}"$'\nplaceholder_left=yes' "${_out}"
+_t "move shared→local: rc 0" $'name=Phone\nfrom='"${_shared}"$'\nto='"${_local}" "${_out}"
 _t "move shared→local: local has the text again" "555" "$(jq -r '.[] | select(.name == "Phone") | .text' "${_local}")"
-_t "move shared→local: shared keeps a placeholder with the keyword" "~# OVERRIDE WITH A ${_local} file" "$(jq -r '.[] | select(.name == "Phone") | "\(.keyword) \(.text)"' "${_shared}")"
+_t "move shared→local: nothing stays behind in shared (local-only is fine)" "0" "$(jq '[.[] | select(.name == "Phone")] | length' "${_shared}")"
+_t "move shared→local: check raises no warn for Phone" "0" "$(raycast_snippets --check 2>/dev/null | grep -c Phone)"
 _t "move: manifest untouched (content unchanged)" "${_mtime_before}" "$(zstat +mtime "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 _t "move: sync still a no-op after both moves" "pending=0" "$(raycast_snippets --sync 2>/dev/null | grep '^pending=')"
 raycast_snippets --move nope --to local >/dev/null 2>"${_dir}/move1.err"; _rc=$?
@@ -364,10 +366,10 @@ _t "pull: unknown real name went to local" "brand new" "$(jq -r '.[] | select(.n
 _t "pull: unknown placeholder went to shared" "~p" "$(jq -r '.[] | select(.name == "ph") | .keyword' "${_shared}")"
 _t "pull: absent name left shared (orphan)" "0" "$(jq '[.[] | select(.name == "orphan")] | length' "${_shared}")"
 _t "pull: no local text in shared" "0" "$(grep -c -e '2 Main' -e '555' -e 'brand new' -e '"plain"' "${_shared}")"
-_t "pull: manifest is the export, so sync is a no-op with parity warns" \
-  $'snippets: nothing to import | unchanged=6\npending=0\nwarn placeholder active: ph (~p) fill in '"${_local}"$'\nwarn local snippet has no shared placeholder: newone (~n); run dotfiles raycast snippets fmt' \
+_t "pull: manifest is the export, so sync is a no-op; only the active placeholder warns" \
+  $'snippets: nothing to import | unchanged=6\npending=0\nwarn placeholder active: ph (~p) fill in '"${_local}" \
   "$(raycast_snippets --sync 2>/dev/null)"
-_t "pull then fmt: newone gets its placeholder" "placeholders_added=1" "$(raycast_snippets --fmt 2>/dev/null | grep '^placeholders_added=')"
+_t "pull then fmt: newone stays local-only, no placeholder" "0" "$(raycast_snippets --fmt >/dev/null 2>&1; jq '[.[] | select(.name == "newone")] | length' "${_shared}")"
 
 # --- seeding a machine with no files at all ---
 rm -rf "${_dir}/shared" "${_dir}/local" "${_dir}/state"
