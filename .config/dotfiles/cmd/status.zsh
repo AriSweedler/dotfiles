@@ -124,38 +124,6 @@ status::push_verdict() {
   print -r -- "${verdict}"$'\t'"${ref}"
 }
 
-# Pad each tab-separated column of the rows to its widest cell (colour escapes cost nothing) and
-# join with two spaces; one line per row on stdout. A local stand-in for ui::table without its bold header.
-status::_align() {
-  setopt localoptions extendedglob
-  ui::_utf8 || local LC_ALL=en_US.UTF-8
-  local -a widths cells
-  local row cell bare line pad
-  local -i c w ncols=0
-  for row in "${@}"; do
-    cells=("${(@ps:\t:)row}")
-    (( ${#cells} > ncols )) && ncols=${#cells}
-    for (( c = 1; c <= ${#cells}; c++ )); do
-      bare="${cells[c]//${~UI_ANSI_PAT}/}"; w=${(m)#bare}
-      (( w > ${widths[c]:-0} )) && widths[c]=${w}
-    done
-  done
-  for row in "${@}"; do
-    cells=("${(@ps:\t:)row}")
-    line=""
-    for (( c = 1; c <= ${#cells}; c++ )); do
-      (( c == 1 )) || line+="  "
-      line+="${cells[c]}"
-      if (( c < ${#cells} )); then
-        bare="${cells[c]//${~UI_ANSI_PAT}/}"
-        printf -v pad '%*s' $(( ${widths[c]:-0} - ${(m)#bare} )) ''
-        line+="${pad}"
-      fi
-    done
-    print -r -- "${line}"
-  done
-}
-
 # The tiers card's rows: name, branch, drift, and the uncommitted count when nonzero.
 status::_tier_rows() {
   local repo header drift st branch text extra
@@ -220,7 +188,7 @@ status::cards() {
   for fn title in _tier_rows tiers _submodule_rows submodules _push_rows "last push"; do
     STATUS_ROWS=()
     "status::${fn}" "${@}"
-    box="$(ui::box --title "${title}" -- "${(@f)$(status::_align "${STATUS_ROWS[@]}")}")"
+    box="$(ui::box --title "${title}" -- "${(@f)$(print -rl -- "${STATUS_ROWS[@]}" | ui::table --no-header --no-clip -)}")"
     boxes+=("${box}")
     top="${box%%$'\n'*}"; top="${top//${~UI_ANSI_PAT}/}"
     total=$(( total + ${(m)#top} + 1 ))  # not (( += )): a 0 result is status 1, and set -e ends status

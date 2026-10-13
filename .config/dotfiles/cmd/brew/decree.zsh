@@ -655,18 +655,6 @@ decree::triage_render_rest() {  # <drift.json>
   [ignore-global]="ignore (shared)" [ignore-local]="ignore (local)" [skip]="skip"
 )
 
-# Local stand-ins for helpers lib/ui.zsh lacks; they go through ui::_gum, the one call site of gum.
-# One line of text with gum input; nonzero when cancelled.
-decree::ui_input() {  # <header> [placeholder]
-  ui::_gum input --header "${1}" --placeholder "${2:-}" --prompt "> " --prompt.foreground "${UI_SPIN_COLOR}" \
-    --header.foreground "${UI_BOX_COLOR}" --cursor.foreground "${UI_SPIN_COLOR}" --char-limit 200
-}
-# A yes/no question with gum confirm; 0 yes, 1 no, 130 cancelled.
-decree::ui_confirm() {  # <prompt>
-  ui::_gum confirm --prompt.foreground "${UI_SPIN_COLOR}" --selected.background "${UI_SPIN_COLOR}" \
-    --selected.foreground 255 --unselected.background 236 --unselected.foreground 252 -- "${1}"
-}
-
 # Choices in, decree argument lists out. A CHOICE is "<action>\t<kind:name>\t<reason>", action one
 # of global, local, ignore-global, ignore-local, skip. Prints one line per group, its words quoted
 # for ${(Q)${(z)line}}: the items in choice order, the tier flag, --reason for an ignore, then the
@@ -788,7 +776,7 @@ decree::triage_interactive() {  # [--dry-run] [--no-push]
     reason=""
     if [[ "${action}" == ignore-* ]]; then
       while [[ -z "${reason}" ]]; do
-        if ! reason="$(decree::ui_input "why does ${kind}:${name} stay undeclared? (one line, kept as the ignore comment)" "reason")"; then
+        if ! reason="$(ui::input --header "why does ${kind}:${name} stay undeclared? (one line, kept as the ignore comment)" --placeholder reason)"; then
           log::warn "cancelled; nothing decreed"
           return 130
         fi
@@ -828,7 +816,7 @@ decree::triage_interactive() {  # [--dry-run] [--no-push]
   ui::box --title "${title}" -- "${lines[@]}"
 
   local rc=0
-  decree::ui_confirm "Run ${#groups} decree(s)?" || rc=$?
+  ui::confirm "Run ${#groups} decree(s)?" || rc=$?
   if (( rc != 0 )); then
     log::warn "declined; nothing decreed"
     (( rc == 130 )) && return 130

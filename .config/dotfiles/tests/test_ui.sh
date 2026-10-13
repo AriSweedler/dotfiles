@@ -117,7 +117,30 @@ $'\e[1mstep    status  detail\e[0m
 brew    ok      all for…
 claud…  warn
 ssh_k…  fail    no key\n' "${OUT}"
+ui_run ARI_DOTFILES_UI=fancy ARI_DOTFILES_GUM="${FAKE_GUM}" -- "ui::table --no-header '${FIX}/t.tsv' --widths 6,0,8"
+assert_eq "fancy table --no-header: same layout, nothing bold" \
+$'step    status  detail
+brew    ok      all for…
+claud…  warn
+ssh_k…  fail    no key\n' "${OUT}"
+ui_run COLUMNS=20 -- "ui::table --no-clip - < '${FIX}/t.tsv'"
+assert_eq "table --no-clip keeps lines wider than cols whole" \
+$'step           status  detail
+brew           ok      all formulae declared
+claude_skills  warn
+ssh_key        fail    no key\n' "${OUT}"
+ui_run -- 'printf "a\tb\tc\nlonger\n" | ui::table --no-header --no-clip -'
+assert_eq "a short row is padded only up to its own last cell" $'a       b  c\nlonger\n' "${OUT}"
 assert_eq "table never calls gum" "" "$(gum_log)"
+
+# ── input and confirm: no tty on stdin is 1 with nothing drawn, gum or not, never a yes ─
+for seam in plain fancy; do
+  ui_run ARI_DOTFILES_UI="${seam}" ARI_DOTFILES_GUM="${FAKE_GUM}" -- \
+    'ui::input --header H --placeholder P < /dev/null; print -r -- "input=$?"; ui::confirm "go?" < /dev/null; print -r -- "confirm=$?"'
+  assert_eq "${seam}: input and confirm without a tty return 1" $'input=1\nconfirm=1\n' "${OUT}"
+  assert_eq "${seam}: input and confirm without a tty draw nothing" "" "${ERR}"
+done
+assert_eq "input and confirm without a tty never call gum" "" "$(gum_log)"
 
 # ── Fancy routes through the one gum wrapper ────────────────────────────────
 ui_run ARI_DOTFILES_UI=fancy ARI_DOTFILES_GUM="${FAKE_GUM}" -- 'ui::paint ok hi; ui::paint error E; ui::glyph fail; ui::box --title T --color green -- x'

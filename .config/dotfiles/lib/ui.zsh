@@ -172,20 +172,64 @@ ui::choose() {
   ui::_gum choose "${header[@]}" -- "${@}"
 }
 
+# ui::input [--header H] [--placeholder P] — one line of text on stdout; nonzero when cancelled.
+# [needs a tty on stdin: the header and "> " on stderr, one line read; returns 1 at EOF or without one]
+ui::input() {
+  local -a opts=()
+  local header="" placeholder=""
+  while (( $# )); do
+    case "${1}" in
+      --header) header="${2}"; opts+=(--header "${2}"); shift 2 ;;
+      --placeholder) placeholder="${2}"; opts+=(--placeholder "${2}"); shift 2 ;;
+      *) break ;;
+    esac
+  done
+  [[ -t 0 ]] || return 1
+  if ui::is_fancy; then
+    ui::_gum input "${opts[@]}" --prompt "> " --prompt.foreground "${UI_SPIN_COLOR}" \
+      --header.foreground "${UI_BOX_COLOR}" --cursor.foreground "${UI_SPIN_COLOR}" --char-limit 200
+    return
+  fi
+  [[ -z "${header}" ]] || print -ru2 -- "${header}"
+  local line=""
+  print -nu2 -- "> "
+  IFS= read -r line || return 1
+  print -r -- "${line}"
+}
+
+# ui::confirm <prompt> — a yes/no question: 0 yes, 1 no, 130 cancelled. Never assumes yes.
+# [needs a tty on stdin: "<prompt> [y/N] " on stderr, 0 only for y or yes; returns 1 without one]
+ui::confirm() {
+  [[ -t 0 ]] || return 1
+  if ui::is_fancy; then
+    ui::_gum confirm --prompt.foreground "${UI_SPIN_COLOR}" --selected.background "${UI_SPIN_COLOR}" \
+      --selected.foreground 255 --unselected.background 236 --unselected.foreground 252 -- "${1}"
+    return
+  fi
+  local reply=""
+  print -nu2 -- "${1} [y/N] "
+  IFS= read -r reply || return 1
+  [[ "${reply}" == ([Yy]|[Yy][Ee][Ss]) ]]
+}
+
 # A markdown file rendered for the terminal. [cat]
 ui::markdown() {
   if ui::is_fancy; then ui::_gum format < "${1}"; else cat -- "${1}"; fi
 }
 
-# ui::table <tsv-file|-> [--widths a,b,…] — aligned columns, two spaces apart, header row bold when
-# fancy; each cell clipped to its width (0 or missing = as wide as its widest cell), each line to
-# ui::cols. printf-built, not gum table: that strips colour and does not clip. Same layout both modes.
+# ui::table <tsv-file|-> [--widths a,b,…] [--no-header] [--no-clip] — aligned columns, two spaces
+# apart, header row bold when fancy (--no-header: no header row); each cell clipped to its width
+# (0 or missing = as wide as its widest cell), each line to ui::cols (--no-clip: lines kept whole).
+# printf-built, not gum table: that strips colour and does not clip. Same layout both modes.
 ui::table() {
   local src="-" widths_arg=""
+  local -i header=1 clip=1
   while (( $# )); do
     case "${1}" in
       --widths) widths_arg="${2}"; shift 2 ;;
       --widths=*) widths_arg="${1#--widths=}"; shift ;;
+      --no-header) header=0; shift ;;
+      --no-clip) clip=0; shift ;;
       *) src="${1}"; shift ;;
     esac
   done
@@ -228,8 +272,8 @@ ui::table() {
       fi
     done
     line="${line%%[ ]##}"
-    line="$(ui::clip "${cols}" "${line}")"
-    if (( first && fancy )); then line=$'\e[1m'"${line}"$'\e[0m'; fi
+    (( ! clip )) || line="$(ui::clip "${cols}" "${line}")"
+    if (( first && fancy && header )); then line=$'\e[1m'"${line}"$'\e[0m'; fi
     first=0
     print -r -- "${line}"
   done
