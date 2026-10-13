@@ -1,10 +1,5 @@
 [
   {
-    "keyword": "@@s",
-    "name": "Sweedler.com email",
-    "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
-  },
-  {
     "keyword": "~!",
     "name": "Name",
     "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
@@ -32,11 +27,6 @@
   {
     "keyword": "~^",
     "name": "Home",
-    "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
-  },
-  {
-    "keyword": "~~@",
-    "name": "Airtable email long",
     "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
   },
   {
