@@ -52,6 +52,7 @@ _t "route: link <slug> --plain → raycast_link slug --plain" "link clipboard-hi
 : > "${_calls}"; ari_raycast snippets check >/dev/null; _t "route: snippets check" "snippets --check" "$(cat "${_calls}")"
 : > "${_calls}"; ari_raycast snippets fmt --dry-run >/dev/null; _t "route: snippets fmt --dry-run" "snippets --fmt --dry-run" "$(cat "${_calls}")"
 : > "${_calls}"; ari_raycast snippets move Phone --to shared >/dev/null; _t "route: snippets move NAME --to TIER" "snippets --move Phone --to shared" "$(cat "${_calls}")"
+: > "${_calls}"; ari_raycast snippets edit --shared >/dev/null; _t "route: snippets edit --shared" "snippets --edit --shared" "$(cat "${_calls}")"
 ari_raycast bogus >/dev/null 2>&1; _rc=$?
 _t "route: unknown subsystem rc 1" "1" "${_rc}"
 _out="$(ari_raycast bogus 2>&1)"

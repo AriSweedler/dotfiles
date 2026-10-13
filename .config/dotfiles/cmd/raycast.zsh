@@ -13,6 +13,7 @@ ${c_bold}Usage${c_rst}
   ${DF} raycast snippets pull FILE | diff FILE | fmt
   ${DF} raycast snippets reset-manifest [NAME..]
   ${DF} raycast snippets move NAME --to shared|local
+  ${DF} raycast snippets edit [--local|--shared]
   ${DF} raycast sync [--dry-run]
   ${DF} raycast <subsystem> help
 
@@ -40,6 +41,7 @@ ${c_bold}Subcommands${c_rst}
   snippets move      relocate one snippet between the tiers
   snippets fmt       canonical rewrite of both files, adds no placeholders
   snippets reset-manifest   forget names (all when none)
+  snippets edit      a tier file in \$EDITOR, then validate, fmt, next step
   sync               every subsystem's sync, in order
 
 ${c_bold}Flags${c_rst}
@@ -47,6 +49,8 @@ ${c_bold}Flags${c_rst}
   --dry-run    allow, sync, adopt, pull, fmt, move, reset-manifest: print the
                plan, change nothing
   --to TIER    move: shared or local
+  --local      edit: open the local tier file (the default)
+  --shared     edit: open the shared tier file
 
 ${c_bold}Env${c_rst}
   $(ENV ARI_DOTFILES_RAYCAST_APP)

@@ -35,6 +35,10 @@
 # LOCAL tier (nothing is guessed public; an unknown placeholder goes to shared); `move <name>
 # --to shared|local` relocates one, leaving nothing behind.
 #
+# `edit [--local|--shared]` opens one tier file in $EDITOR (local by default: personal text
+# belongs there); on save it validates the file and every tier together, runs `fmt`, and names
+# the next command, `sync`. An invalid file is reported with the parse error and left as edited.
+#
 # Seeding, once, and again after editing snippets inside Raycast:
 #   1. Raycast → search "Export Snippets" → save the JSON anywhere
 #   2. dotfiles raycast snippets pull <that file>
@@ -42,6 +46,7 @@
 # Function flags: raycast_snippets --sync [--dry-run] | --list | --check | --adopt [--dry-run]
 #                 | --pull FILE [--dry-run] | --diff FILE | --move NAME --to TIER [--dry-run]
 #                 | --fmt [--dry-run] | --reset-manifest [NAME...] [--dry-run]
+#                 | --edit [--local|--shared]
 # Env: ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS (colon list; the LAST dir is the local tier, every other is shared,
 #      placeholders go to the first), ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST, ARI_DOTFILES_RAYCAST_SNIPPETS_URL_FORM
 #      (params: one `snippet=` per snippet, Raycast's documented form; array: one `snippet=[…]`).
@@ -108,13 +113,17 @@ function raycast_snippets::placeholder_text() {
 
 # --- files ---
 
-# stdin: any snippets array. stdout: the canonical array. Exit 1 with jq's message otherwise.
+# stdin: any snippets array. stdout: the canonical array. Exit 1 with jq's message otherwise;
+# only jq's stderr is logged, never what it printed before failing (that may be private text).
 function raycast_snippets::normalize() {
-  local out
-  if ! out="$(jq -e "${ARI_DOTFILES_RAYCAST_SNIPPETS_JQ_NORMALIZE}" 2>&1)"; then
-    log::err "Not a snippets array | error='${out}'"
+  local out errf
+  errf="$(mktemp "${TMPDIR:-/tmp}/raycast-snippets-jq.XXXXXX")" || return 1
+  if ! out="$(jq -e "${ARI_DOTFILES_RAYCAST_SNIPPETS_JQ_NORMALIZE}" 2>"${errf}")"; then
+    log::err "Not a snippets array | error='$(<"${errf}")'"
+    rm -f "${errf}"
     return 1
   fi
+  rm -f "${errf}"
   print -r -- "${out}"
 }
 
@@ -585,6 +594,41 @@ function raycast_snippets::fmt() {
   printf '%s\n' "${report[@]}" "keywords_fixed=${fixed}" "rewritten=${rewritten}"
 }
 
+# --edit TIER: open the tier's file in $EDITOR (vi when unset or not found); a missing file starts
+# as []. On save: no change says so and stops; otherwise the file must read as a snippets array
+# (read_tier: JSON, string name and text, no duplicate name) and the tiers must merge (no two
+# names on one keyword). Valid → fmt, then the next command. Invalid → the error, exit 1, and the
+# file left exactly as edited.
+function raycast_snippets::edit() {
+  local tier="${1:-local}" file editor before
+  file="$(raycast_snippets::tier_file "${tier}")" || return 1
+  if [[ ! -e "${file}" ]]; then
+    mkdir -p "${file:h}" && print -r -- "[]" > "${file}" || { log::err "Could not create the snippets file | file='${file}'"; return 1; }
+    log::info "snippets file created empty for editing | tier='${tier}' file='${file}'"
+  fi
+  editor="${EDITOR:-vi}"
+  command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi
+  before="$(mktemp "${TMPDIR:-/tmp}/raycast-snippets-edit.XXXXXX")" || return 1
+  cp "${file}" "${before}"
+  if ! ${=editor} "${file}"; then
+    rm -f "${before}"
+    log::err "Editor exited non-zero; not validated or formatted | editor='${editor}' file='${file}'"
+    return 1
+  fi
+  if cmp -s "${before}" "${file}"; then
+    rm -f "${before}"
+    print -r -- "snippets: no change | tier=${tier} file=${file}"
+    return 0
+  fi
+  rm -f "${before}"
+  if ! raycast_snippets::read_tier "${file}" >/dev/null || ! raycast_snippets::source >/dev/null; then
+    log::err "Snippets file left as edited, not formatted | tier='${tier}' file='${file}' fix='dotfiles raycast snippets edit --${tier}'"
+    return 1
+  fi
+  raycast_snippets::fmt 0 || return 1
+  print -r -- "next: dotfiles raycast snippets sync"
+}
+
 # --reset-manifest [dry_run] [NAME...]: forget names (all when none) so the next sync re-imports
 # them, e.g. after a cancelled review.
 function raycast_snippets::reset_manifest() {
@@ -633,6 +677,8 @@ dotfiles raycast snippets — Raycast Snippets from the versioned files, shared 
   dotfiles raycast snippets fmt [--dry-run]            rewrite both files canonical (keyword order, json-sort keys); fix drifted
                                                   placeholder keywords; never adds a placeholder
   dotfiles raycast snippets reset-manifest [NAME...] [--dry-run]   forget names (all when none), e.g. after a cancelled review
+  dotfiles raycast snippets edit [--local|--shared]    open a tier file in \$EDITOR (default local); on save validate it, run fmt,
+                                                  print the next command (sync); an invalid file is reported, left as edited
 
   One rule: personal data stays in the local tier; the shared tier is for snippets safe in a public repo.
   Tiers: shared $(raycast_snippets::tier_file shared 2>/dev/null) (git df, public remote)
@@ -651,7 +697,7 @@ EOF
 }
 
 function raycast_snippets() {
-  local mode="" dry_run=0 file="" name="" to=""
+  local mode="" dry_run=0 file="" name="" to="" tier=""
   local -a names
   while (( $# > 0 )); do case "${1}" in
     -h|--help)        raycast_snippets::help; return 0 ;;
@@ -665,6 +711,8 @@ function raycast_snippets() {
     --diff)           mode=diff; file="${2:?--diff needs a file}"; shift 2 ;;
     --move)           mode=move; name="${2:?--move needs a snippet name}"; shift 2 ;;
     --to)             to="${2:?--to needs shared or local}"; shift 2 ;;
+    --edit)           mode=edit; shift ;;
+    --local|--shared) tier="${1#--}"; shift ;;
     --reset-manifest) mode=reset; shift; while (( $# > 0 )) && [[ "${1}" != -* ]]; do names+=("${1}"); shift; done ;;
     -*)               log::err "Unknown flag | flag='${1}'"; raycast_snippets::help; return 1 ;;
     *)                log::err "Unexpected argument | argument='${1}'"; raycast_snippets::help; return 1 ;;
@@ -677,6 +725,14 @@ function raycast_snippets() {
     log::err "--to applies to --move only | mode='${mode}' to='${to}'"
     return 1
   fi
+  if [[ "${mode}" != edit && -n "${tier}" ]]; then
+    log::err "--${tier} applies to --edit only | mode='${mode}'"
+    return 1
+  fi
+  if [[ "${mode}" == edit ]] && (( dry_run )); then
+    log::err "--dry-run does not apply to --edit; fmt --dry-run previews a format"
+    return 1
+  fi
   case "${mode}" in
     sync)  raycast_snippets::sync "${dry_run}" ;;
     adopt) raycast_snippets::adopt "${dry_run}" ;;
@@ -687,6 +743,7 @@ function raycast_snippets() {
     diff)  raycast_snippets::diff "${file}" ;;
     move)  raycast_snippets::move "${name}" "${to}" "${dry_run}" ;;
     reset) raycast_snippets::reset_manifest "${dry_run}" "${names[@]}" ;;
+    edit)  raycast_snippets::edit "${tier:-local}" ;;
     *)     raycast_snippets::help; return 1 ;;
   esac
 }

@@ -3,6 +3,7 @@
 #   dotfiles raycast link list | check | allow [--dry-run]
 #   dotfiles raycast snippets sync [--dry-run] | list | check | adopt | pull FILE | diff FILE
 #                             | move NAME --to shared|local | fmt | reset-manifest [NAME...]
+#                             | edit [--local|--shared]
 #   dotfiles raycast sync [--dry-run]             every subsystem's sync, in order
 #   dotfiles raycast help | <subsystem> help
 # Each subsystem is its own plugin (raycast_link.zsh, raycast_snippets.zsh) with a function that is
@@ -32,6 +33,7 @@ Usage:
   dotfiles raycast link list | check | allow [--dry-run]
   dotfiles raycast snippets sync [--dry-run] | list | check | adopt | pull FILE | diff FILE
                           | move NAME --to shared|local | fmt | reset-manifest [NAME...]
+                          | edit [--local|--shared]
   dotfiles raycast sync [--dry-run]               every subsystem's sync, in order: ${(j:, :)ARI_DOTFILES_RAYCAST_SYNC_STEPS}
   dotfiles raycast <subsystem> help               that subsystem's usage
 
@@ -73,7 +75,8 @@ function ari_raycast::snippets() {
     diff)           raycast_snippets --diff "$@" ;;
     move)           raycast_snippets --move "$@" ;;
     reset-manifest) raycast_snippets --reset-manifest "$@" ;;
-    *)              log::err "Unknown snippets verb | verb='${verb}' valid='sync [--dry-run], list, check, adopt [--dry-run], pull FILE, diff FILE, move NAME --to shared|local, fmt [--dry-run], reset-manifest [NAME...], help'"; return 1 ;;
+    edit)           raycast_snippets --edit "$@" ;;
+    *)              log::err "Unknown snippets verb | verb='${verb}' valid='sync [--dry-run], list, check, adopt [--dry-run], pull FILE, diff FILE, move NAME --to shared|local, fmt [--dry-run], reset-manifest [NAME...], edit [--local|--shared], help'"; return 1 ;;
   esac
 }
 

@@ -397,6 +397,56 @@ _t "seed: a second sync seeds nothing" $'snippets: nothing to import | unchanged
 rm -rf "${_dir}/shared" "${_dir}/local" "${_dir}/state"
 _t "no placeholders, no local file: nothing seeded" "absent" "$(raycast_snippets --sync --dry-run >/dev/null 2>&1; [[ -e "${_local}" ]] && echo present || echo absent)"
 
+# --- edit: $EDITOR on a tier file, then validate, fmt, next step ---
+rm -rf "${_dir}/shared" "${_dir}/local" "${_dir}/state"; mkdir -p "${_dir}/shared" "${_dir}/local" "${_dir}/ed"
+print -r -- '[{"name":"pub","text":"public","keyword":";pub"}]' > "${_shared}"
+print -r -- '[{"name":"Home","text":"1 Main","keyword":"~^"}]' > "${_local}"
+# Editors are scripts that change the file they are given ($1) and exit.
+print -r -- $'#!/bin/sh\njq \'. + [{"text":"555","name":"Phone","keyword":"~#"}]\' "$1" > "$1.t" && mv "$1.t" "$1"' > "${_dir}/ed/valid"
+print -r -- $'#!/bin/sh\nprintf \'[{"name": "x",\\n\' > "$1"' > "${_dir}/ed/invalid"
+print -r -- $'#!/bin/sh\njq \'. + [{"name":"dup","text":"d","keyword":";pub"}]\' "$1" > "$1.t" && mv "$1.t" "$1"' > "${_dir}/ed/collide"
+print -r -- $'#!/bin/sh\nexit 0' > "${_dir}/ed/noop"
+print -r -- $'#!/bin/sh\nexit 3' > "${_dir}/ed/fail"
+chmod +x "${_dir}"/ed/*
+_out="$(EDITOR="${_dir}/ed/valid" raycast_snippets --edit 2>/dev/null)"; _rc=$?
+_t "edit: valid change rc 0" "0" "${_rc}"
+_t "edit: defaults to the local tier, which gained the entry" '["Phone","Home"]' "$(jq -c 'map(.name)' "${_local}")"
+_t "edit: shared content untouched by a local edit (fmt only sorts it)" '[{"keyword":";pub","name":"pub","text":"public"}]' "$(jq -c . "${_shared}")"
+_t "edit: fmt ran, the file is canonical json-sort output" $'  {\n    "keyword": "~#",\n    "name": "Phone",\n    "text": "555"\n  },' "$(sed -n '2,6p' "${_local}")"
+_t "edit: fmt report then the next command" $'snippets: formatted\nshared=changed\nlocal=changed\nkeywords_fixed=0\nrewritten=2\nnext: dotfiles raycast snippets sync' "${_out}"
+_out="$(EDITOR="${_dir}/ed/valid" raycast_snippets --edit --shared 2>/dev/null)"; _rc=$?
+_t "edit --shared: the shared file is the one opened" "0 Phone" "${_rc} $(jq -r 'map(.name) | map(select(. == "Phone")) | join(",")' "${_shared}")"
+_t "edit --shared: local untouched" '["Phone","Home"]' "$(jq -c 'map(.name)' "${_local}")"
+cp "${_local}" "${_dir}/local.before"
+_out="$(EDITOR="${_dir}/ed/noop" raycast_snippets --edit 2>/dev/null)"; _rc=$?
+_t "edit: no change says so, rc 0, no fmt" "0 snippets: no change | tier=local file=${_local}" "${_rc} ${_out}"
+EDITOR="${_dir}/ed/invalid" raycast_snippets --edit >"${_dir}/edit.out" 2>"${_dir}/edit.err"; _rc=$?
+_t "edit: invalid JSON rc 1" "1" "${_rc}"
+_t "edit: invalid JSON reported with jq's parse error" "1" "$(grep -c "Not a snippets array | error='jq: parse error: Unfinished JSON term at EOF at line 2, column 0'" "${_dir}/edit.err")"
+_t "edit: invalid file named, left as edited" "1" "$(grep -c "Snippets file left as edited, not formatted | tier='local' file='${_local}'" "${_dir}/edit.err")"
+_t "edit: invalid file bytes are exactly what the editor wrote" $'[{"name": "x",' "$(cat "${_local}")"
+_t "edit: invalid prints no next command" "" "$(cat "${_dir}/edit.out")"
+# Valid entries then garbage: jq prints the first value before failing; the error must not echo it.
+print -r -- $'#!/bin/sh\nprintf \'{"name": "y", "text": oops}\\n\' >> "$1"' > "${_dir}/ed/trailing"; chmod +x "${_dir}/ed/trailing"
+cp "${_dir}/local.before" "${_local}"
+EDITOR="${_dir}/ed/trailing" raycast_snippets --edit >/dev/null 2>"${_dir}/edit.err"; _rc=$?
+_t "edit: trailing garbage rc 1" "1" "${_rc}"
+_t "edit: the error carries jq's message, none of the file's text" "1 0" "$(grep -c 'Not a snippets array | error=.jq: parse error' "${_dir}/edit.err") $(grep -c -e '1 Main' -e 555 "${_dir}/edit.err")"
+cp "${_dir}/local.before" "${_local}"
+EDITOR="${_dir}/ed/collide" raycast_snippets --edit >/dev/null 2>"${_dir}/edit.err"; _rc=$?
+_t "edit: a keyword collision across tiers rc 1, left as edited" "1 dup" "${_rc} $(jq -r '.[-1].name' "${_local}")"
+_t "edit: the collision is named" "1" "$(grep -c "Two snippets share a keyword | collisions=';pub:" "${_dir}/edit.err")"
+cp "${_dir}/local.before" "${_local}"
+EDITOR="${_dir}/ed/fail" raycast_snippets --edit >/dev/null 2>"${_dir}/edit.err"; _rc=$?
+_t "edit: editor exit non-zero rc 1, file untouched" "1 $(cat "${_dir}/local.before")" "${_rc} $(cat "${_local}")"
+rm -f "${_local}"
+_out="$(EDITOR="${_dir}/ed/valid" raycast_snippets --edit 2>/dev/null)"; _rc=$?
+_t "edit: a missing local file starts as [] and gains the entry" "0 [\"Phone\"]" "${_rc} $(jq -c 'map(.name)' "${_local}")"
+raycast_snippets --edit --dry-run >/dev/null 2>&1; _rc=$?
+_t "edit: --dry-run refused rc 1" "1" "${_rc}"
+raycast_snippets --list --shared >/dev/null 2>&1; _rc=$?
+_t "--shared on another mode rc 1" "1" "${_rc}"
+
 # --- flags ---
 raycast_snippets --bogus >/dev/null 2>&1; _rc=$?
 _t "unknown flag rc 1" "1" "${_rc}"
