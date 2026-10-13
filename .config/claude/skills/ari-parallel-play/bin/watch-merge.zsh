@@ -1,6 +1,7 @@
 #!/usr/bin/env zsh
-# One PR's life: wait for it, follow CI per head with the read user, merge on the gate job's green
-# with the write user, verify MERGED, delete the remote branch, watch main's run, curl the live URL.
+# One PR's life: wait for it, follow CI per head with the read account, merge on the gate job's green
+# with the write account, verify MERGED, delete the remote branch, watch the base branch's run and,
+# when --url is given, curl the live page.
 # Run: zsh $HOME/.claude/skills/ari-parallel-play/bin/watch-merge.zsh --help
 
 set -euo pipefail
@@ -18,11 +19,11 @@ source "${LIB_LOGGING}"
 
 readonly DEFAULT_BASE="main"
 readonly DEFAULT_GATE="ci-ok"
+readonly DEFAULT_WORKFLOW="CI"
 readonly DEFAULT_INTERVAL=60
 readonly DEFAULT_PR_WAIT_MIN=120
 # A chain's top PR lands as a merge commit so each lane's commits survive; a lone lane passes --merge-method squash.
 readonly DEFAULT_MERGE_METHOD="merge"
-readonly DEFAULT_BUNDLE_REGEX='app-[A-Za-z0-9_-]*\.js'
 readonly VALID_MERGE_METHODS=(squash merge rebase)
 readonly HEAD_ATTEMPTS=12
 readonly RUN_LOOKUPS=12
@@ -31,18 +32,20 @@ readonly CURL_MAX_TIME=20
 
 help() {
   cat <<EOF
-${c_green}watch-merge${c_rst} — follow one branch's PR through CI, merge it on green, check main and the live site
+${c_green}watch-merge${c_rst} — follow one branch's PR through CI, merge it on green, watch the base branch and, optionally, the live site
 
 ${c_bold}Usage:${c_rst}
-  zsh $HOME/.claude/skills/ari-parallel-play/bin/watch-merge.zsh --branch BRANCH --url URL --read-user USER --write-user USER [--repo OWNER/NAME] [--base BRANCH] [--gate JOB] [--interval SEC] [--merge-method M] [--keep-branch] [--dry-run]
+  zsh $HOME/.claude/skills/ari-parallel-play/bin/watch-merge.zsh --branch BRANCH --read-user USER [--write-user USER] [--url URL] [--bundle-regex RE] [--repo OWNER/NAME] [--base BRANCH] [--workflow NAME] [--gate JOB] [--interval SEC] [--merge-method M] [--keep-branch] [--dry-run]
 
 ${c_bold}Options:${c_rst}
   --branch BRANCH     The PR's head branch
-  --url URL           The live page to curl after main deploys
-  --read-user USER    gh account for every read (the repo is public; spares the write account's rate limit)
-  --write-user USER   gh account for the merge, its verification and the branch delete
+  --read-user USER    gh account for every read
+  --write-user USER   gh account for the merge, its verification and the branch delete (default: the read account)
+  --url URL           The live page to curl after the base deploys; omit to skip the live check
+  --bundle-regex RE   A grep -o pattern whose match in the live page proves the new build is up (needs --url; default: none)
   --repo OWNER/NAME   The repository (default: the gh default of the current directory)
-  --base BRANCH       The PR's base (default: ${DEFAULT_BASE}); main's run and the live check run only for a main base
+  --base BRANCH       The PR's base (default: ${DEFAULT_BASE}); the base run and the live check run only for that default
+  --workflow NAME     The CI workflow name as gh run list sees it (default: ${DEFAULT_WORKFLOW})
   --gate JOB          The CI job whose success merges (default: ${DEFAULT_GATE})
   --interval SEC      CI polling interval (default: ${DEFAULT_INTERVAL}; never lower than 60 with many watchers)
   --merge-method M    ${(j:|:)VALID_MERGE_METHODS} (default: ${DEFAULT_MERGE_METHOD})
@@ -129,7 +132,7 @@ pr_state() {
 run_for_sha() {
   local branch="${1}" sha="${2}" rid=""
   for (( i = 1; i <= RUN_LOOKUPS; i++ )); do
-    rid="$(gh_as "${READ_TOKEN}" run list --repo "${REPO}" --workflow CI --branch "${branch}" --limit 8 --json databaseId,headSha --jq ".[] | select(.headSha==\"${sha}\") | .databaseId" 2>/dev/null | head -1 || true)"
+    rid="$(gh_as "${READ_TOKEN}" run list --repo "${REPO}" --workflow "${WORKFLOW}" --branch "${branch}" --limit 8 --json databaseId,headSha --jq ".[] | select(.headSha==\"${sha}\") | .databaseId" 2>/dev/null | head -1 || true)"
     [[ -n "${rid}" ]] && { echo "${rid}"; return 0; }
     sleep 30
   done
@@ -191,11 +194,27 @@ delete_branch() {
 }
 
 #######################################
-# Follow main's run for the merge and curl the live page.
-# Globals: READ_TOKEN REPO URL BUNDLE_REGEX
+# Curl the live page once the base has deployed; skipped when no --url was given.
+# Globals: URL BUNDLE_REGEX LIVE_STATUS LIVE_BUNDLE
+#######################################
+check_live() {
+  if [[ -z "${URL}" ]]; then
+    log::info "No live URL; skipping the live check"
+    return 0
+  fi
+  sleep 45
+  LIVE_STATUS="$(curl -s --max-time "${CURL_MAX_TIME}" -o /dev/null -w '%{http_code}' "${URL}?nocache=$(date +%s)" || echo "000")"
+  if [[ -n "${BUNDLE_REGEX}" ]]; then
+    LIVE_BUNDLE="$(curl -s --max-time "${CURL_MAX_TIME}" "${URL}?nocache=$(date +%s)" | grep -o "${BUNDLE_REGEX}" | head -1 || true)"
+  fi
+  log::info "Live | url='${URL}' status='${LIVE_STATUS}' bundle='${LIVE_BUNDLE}'"
+}
+
+#######################################
+# Follow the base branch's run for the merge, then the live check.
+# Globals: READ_TOKEN REPO INTERVAL MAIN_RUN MAIN_EXIT
 # Arguments:
 #   $1 - base branch
-# Outputs: main_run, main_exit, live_status, live_bundle on stdout via the caller's heredoc variables
 #######################################
 watch_main_and_live() {
   local base="${1}" sha="" mid="" exit_code=0
@@ -211,22 +230,21 @@ watch_main_and_live() {
     MAIN_RUN="${mid}"; MAIN_EXIT="${exit_code}"
     log::info "Base run finished | run='${mid}' exit='${exit_code}'"
   fi
-  sleep 45
-  LIVE_STATUS="$(curl -s --max-time "${CURL_MAX_TIME}" -o /dev/null -w '%{http_code}' "${URL}?nocache=$(date +%s)" || echo "000")"
-  LIVE_BUNDLE="$(curl -s --max-time "${CURL_MAX_TIME}" "${URL}?nocache=$(date +%s)" | grep -o "${BUNDLE_REGEX}" | head -1 || true)"
-  log::info "Live | url='${URL}' status='${LIVE_STATUS}' bundle='${LIVE_BUNDLE}'"
+  check_live
 }
 
 main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local branch="" url="" read_user="" write_user="" repo="" base="${DEFAULT_BASE}" gate="${DEFAULT_GATE}"
+  local branch="" url="" bundle_regex="" read_user="" write_user="" repo="" base="${DEFAULT_BASE}" gate="${DEFAULT_GATE}" workflow="${DEFAULT_WORKFLOW}"
   local interval="${DEFAULT_INTERVAL}" merge_method="${DEFAULT_MERGE_METHOD}" keep_branch=false dry_run=false
   while (( $# > 0 )); do case "${1}" in
     -h|--help)       help; return 0 ;;
     --branch)        branch="${2:?--branch requires a value}"; shift 2 ;;
     --url)           url="${2:?--url requires a value}"; shift 2 ;;
+    --bundle-regex)  bundle_regex="${2:?--bundle-regex requires a pattern}"; shift 2 ;;
+    --workflow)      workflow="${2:?--workflow requires a name}"; shift 2 ;;
     --read-user)     read_user="${2:?--read-user requires a value}"; shift 2 ;;
     --write-user)    write_user="${2:?--write-user requires a value}"; shift 2 ;;
     --repo)          repo="${2:?--repo requires OWNER/NAME}"; shift 2 ;;
@@ -242,21 +260,22 @@ main() {
 
   # === MASSAGE ===
   merge_method="${merge_method:l}"
+  [[ -n "${write_user}" ]] || write_user="${read_user}"
   unset GITHUB_TOKEN
   [[ -n "${repo}" ]] || repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)"
 
   # === VALIDATE ===
   [[ -n "${branch}" ]] || { log::err "Missing --branch"; help; return 1; }
-  [[ -n "${url}" ]] || { log::err "Missing --url"; help; return 1; }
-  [[ -n "${read_user}" && -n "${write_user}" ]] || { log::err "Missing --read-user or --write-user | read_user='${read_user}' write_user='${write_user}'"; help; return 1; }
+  [[ -n "${read_user}" ]] || { log::err "Missing --read-user"; help; return 1; }
+  [[ -z "${bundle_regex}" || -n "${url}" ]] || { log::err "--bundle-regex needs --url | bundle_regex='${bundle_regex}'"; help; return 1; }
   [[ -n "${repo}" ]] || { log::err "No repository | expected='--repo OWNER/NAME or a gh default in the current directory'"; return 1; }
   is_valid_option "${merge_method}" "${VALID_MERGE_METHODS[@]}" || { log::err "Invalid --merge-method | merge_method='${merge_method}' valid='${(j:, :)VALID_MERGE_METHODS}'"; return 1; }
   (( interval >= 60 )) || { log::err "Interval too low | interval='${interval}' minimum='60'"; return 1; }
 
-  typeset -g READ_TOKEN WRITE_TOKEN REPO URL BUNDLE_REGEX DRY_RUN MERGE_METHOD KEEP_BRANCH INTERVAL
+  typeset -g READ_TOKEN WRITE_TOKEN REPO URL BUNDLE_REGEX WORKFLOW DRY_RUN MERGE_METHOD KEEP_BRANCH INTERVAL
   READ_TOKEN="$(gh auth token --user "${read_user}")" || { log::err "No token for the read user | read_user='${read_user}'"; return 1; }
   WRITE_TOKEN="$(gh auth token --user "${write_user}")" || { log::err "No token for the write user | write_user='${write_user}'"; return 1; }
-  REPO="${repo}"; URL="${url}"; BUNDLE_REGEX="${DEFAULT_BUNDLE_REGEX}"; DRY_RUN="${dry_run}"; MERGE_METHOD="${merge_method}"; KEEP_BRANCH="${keep_branch}"; INTERVAL="${interval}"
+  REPO="${repo}"; URL="${url}"; BUNDLE_REGEX="${bundle_regex}"; WORKFLOW="${workflow}"; DRY_RUN="${dry_run}"; MERGE_METHOD="${merge_method}"; KEEP_BRANCH="${keep_branch}"; INTERVAL="${interval}"
 
   # === LOGIC ===
   log::info "Waiting for the PR | branch='${branch}' repo='${REPO}' minutes='${DEFAULT_PR_WAIT_MIN}'"
@@ -289,7 +308,7 @@ main() {
   delete_branch "${branch}"
 
   typeset -g MAIN_RUN="" MAIN_EXIT="skipped" LIVE_STATUS="" LIVE_BUNDLE=""
-  if [[ "${base}" == "main" && "${DRY_RUN}" != "true" ]]; then
+  if [[ "${base}" == "${DEFAULT_BASE}" && "${DRY_RUN}" != "true" ]]; then
     watch_main_and_live "${base}"
   else
     log::info "Skipping the base run and live check | base='${base}' dry_run='${DRY_RUN}'"

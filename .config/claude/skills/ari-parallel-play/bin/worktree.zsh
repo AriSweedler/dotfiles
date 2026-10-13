@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
-# A lane's worktree: --action open adds a worktree on its branch from a base and links the root's
-# node_modules into it; --action handoff unlinks the symlink, expunges the worktree's Bazel output base
-# (stopping its server), then removes the worktree, keeping the branch.
+# A lane's worktree: --action open adds a worktree on its branch from a base and, with --link, symlinks
+# the root's shared dependency directory into it; --action handoff unlinks that symlink, then removes
+# the worktree, keeping the branch.
 # Run: zsh $HOME/.claude/skills/ari-parallel-play/bin/worktree.zsh --help
 
 set -euo pipefail
@@ -22,22 +22,23 @@ readonly DEFAULT_BASE="origin/main"
 
 help() {
   cat <<EOF
-${c_green}worktree${c_rst} — open a lane's worktree with the shared node_modules, or hand it off keeping the branch
+${c_green}worktree${c_rst} — open a lane's worktree, optionally sharing the root's dependency directory, or hand it off keeping the branch
 
 ${c_bold}Usage:${c_rst}
-  zsh $HOME/.claude/skills/ari-parallel-play/bin/worktree.zsh --action open --root DIR --dir DIR --branch NAME [--base REF] [--dry-run]
-  zsh $HOME/.claude/skills/ari-parallel-play/bin/worktree.zsh --action handoff --root DIR --dir DIR [--dry-run]
+  zsh $HOME/.claude/skills/ari-parallel-play/bin/worktree.zsh --action open --root DIR --dir DIR --branch NAME [--base REF] [--link NAME] [--dry-run]
+  zsh $HOME/.claude/skills/ari-parallel-play/bin/worktree.zsh --action handoff --root DIR --dir DIR [--link NAME] [--dry-run]
 
 ${c_bold}Options:${c_rst}
   --action A     ${(j:|:)VALID_ACTIONS}
-  --root DIR     The main checkout (its node_modules is linked, never copied or installed)
+  --root DIR     The main checkout
   --dir DIR      The worktree directory
   --branch NAME  The lane's branch (open: created from --base when it does not exist)
-  --base REF     Where a new branch starts (default: ${DEFAULT_BASE}; a stack tip like origin/<game>-stack)
+  --base REF     Where a new branch starts (default: ${DEFAULT_BASE}; another lane's branch for a chain lane)
+  --link NAME    The root's shared dependency directory to symlink into the worktree (from the repo profile; omit for none)
   --dry-run      Log what would happen, change nothing
   -h, --help     Show this help
 
-Both actions are idempotent. Handoff never deletes the branch and never removes a node_modules that is not a symlink.
+Both actions are idempotent. Handoff never deletes the branch and never removes a linked directory that is not a symlink.
 EOF
 }
 
@@ -111,45 +112,47 @@ open_worktree() {
 }
 
 #######################################
-# Link the root's node_modules into the worktree unless a link is already there.
+# Symlink the root's shared dependency directory into the worktree unless a link is already there.
 # Globals: DRY_RUN
 # Arguments:
-#   $1 - root; $2 - dir
-# Returns: 1 when a real node_modules directory sits there
+#   $1 - root; $2 - dir; $3 - the directory name to link
+# Returns: 1 when a real directory of that name sits there
 #######################################
-link_modules() {
-  local root="${1}" dir="${2}" target="${dir}/node_modules"
+link_shared_dir() {
+  local root="${1}" dir="${2}" link_name="${3}" target="${dir}/${link_name}"
   if [[ -L "${target}" ]]; then
-    log::info "node_modules already linked | target='${target}'"
+    log::info "Shared directory already linked | target='${target}'"
     return 0
   fi
   if [[ -e "${target}" ]]; then
-    log::err "node_modules is a real path, refusing to replace it | target='${target}'"
+    log::err "Shared directory is a real path, refusing to replace it | target='${target}'"
     return 1
   fi
-  mutate ln -s "${root}/node_modules" "${target}"
+  mutate ln -s "${root}/${link_name}" "${target}"
 }
 
 #######################################
-# Unlink the node_modules symlink, expunge the Bazel output base (which stops the worktree's
-# server), then remove the worktree; the branch stays.
+# Unlink the shared dependency symlink (when --link names one), then remove the worktree; the branch stays.
 # Globals: DRY_RUN
 # Arguments:
-#   $1 - root; $2 - dir
-# Returns: 1 when node_modules is a real directory (never removed by this script)
+#   $1 - root; $2 - dir; $3 - the linked directory name, or empty
+# Returns: 1 when the linked name is a real directory (never removed by this script)
 #######################################
 handoff_worktree() {
-  local root="${1}" dir="${2}" target="${dir}/node_modules"
+  local root="${1}" dir="${2}" link_name="${3}" branch=""
   if [[ ! -d "${dir}" ]]; then
     log::info "Worktree already gone | dir='${dir}'"
     mutate git -C "${root}" worktree prune
     return 0
   fi
-  if [[ -L "${target}" ]]; then
-    mutate unlink "${target}"
-  elif [[ -e "${target}" ]]; then
-    log::err "node_modules is a real directory; a forced remove would delete it, refusing | target='${target}'"
-    return 1
+  if [[ -n "${link_name}" ]]; then
+    local target="${dir}/${link_name}"
+    if [[ -L "${target}" ]]; then
+      mutate unlink "${target}"
+    elif [[ -e "${target}" ]]; then
+      log::err "Linked name is a real directory; a forced remove would delete it, refusing | target='${target}'"
+      return 1
+    fi
   fi
   local dirty
   dirty="$(git -C "${dir}" status --porcelain | wc -l | tr -d ' ')"
@@ -157,18 +160,16 @@ handoff_worktree() {
     log::err "Worktree has uncommitted changes; commit or discard them first | dir='${dir}' changed_files='${dirty}'"
     return 1
   fi
-  if [[ -f "${dir}/MODULE.bazel" ]]; then
-    ( cd "${dir}" && mutate bazel clean --expunge_async )
-  fi
+  branch="$(git -C "${dir}" branch --show-current 2>/dev/null || true)"
   mutate git -C "${root}" worktree remove "${dir}"
-  log::info "Branch kept | branch='$(git -C "${root}" branch --list | grep -c . || true) local branches'"
+  log::info "Worktree removed, branch kept | dir='${dir}' branch='${branch}'"
 }
 
 main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local action="" root="" dir="" branch="" base="${DEFAULT_BASE}" dry_run=false
+  local action="" root="" dir="" branch="" base="${DEFAULT_BASE}" link_name="" dry_run=false
   while (( $# > 0 )); do case "${1}" in
     -h|--help)  help; return 0 ;;
     --action)   action="${2:?--action requires a value}"; shift 2 ;;
@@ -176,6 +177,7 @@ main() {
     --dir)      dir="${2:?--dir requires a value}"; shift 2 ;;
     --branch)   branch="${2:?--branch requires a value}"; shift 2 ;;
     --base)     base="${2:?--base requires a ref}"; shift 2 ;;
+    --link)     link_name="${2:?--link requires a directory name}"; shift 2 ;;
     --dry-run)  dry_run=true; shift ;;
     -*)         log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)          log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
@@ -189,7 +191,9 @@ main() {
   is_valid_option "${action}" "${VALID_ACTIONS[@]}" || { log::err "Invalid --action | action='${action}' valid='${(j:, :)VALID_ACTIONS}'"; help; return 1; }
   [[ -n "${root}" && -n "${dir}" ]] || { log::err "Missing --root or --dir | root='${root}' dir='${dir}'"; help; return 1; }
   git -C "${root}" rev-parse --show-toplevel >/dev/null 2>&1 || { log::err "Not a git checkout | root='${root}'"; return 1; }
-  [[ -d "${root}/node_modules" ]] || { log::err "The root has no node_modules to link | root='${root}'"; return 1; }
+  if [[ -n "${link_name}" && "${action}" == "open" ]]; then
+    [[ -d "${root}/${link_name}" ]] || { log::err "The root has no shared directory to link | root='${root}' link='${link_name}'"; return 1; }
+  fi
   if [[ "${action}" == "open" ]]; then
     [[ -n "${branch}" ]] || { log::err "Missing --branch for open"; help; return 1; }
   fi
@@ -197,9 +201,11 @@ main() {
   # === LOGIC ===
   if [[ "${action}" == "open" ]]; then
     open_worktree "${root}" "${dir}" "${branch}" "${base}"
-    link_modules "${root}" "${dir}"
+    if [[ -n "${link_name}" ]]; then
+      link_shared_dir "${root}" "${dir}" "${link_name}"
+    fi
   else
-    handoff_worktree "${root}" "${dir}"
+    handoff_worktree "${root}" "${dir}" "${link_name}"
   fi
 
   cat <<EOF
@@ -207,7 +213,7 @@ action=${action}
 dir=${dir}
 branch=${branch:-$(git -C "${dir}" branch --show-current 2>/dev/null || true)}
 base=${base}
-node_modules=${root}/node_modules
+link=${link_name:+${root}/${link_name}}
 dry_run=${dry_run}
 EOF
 }

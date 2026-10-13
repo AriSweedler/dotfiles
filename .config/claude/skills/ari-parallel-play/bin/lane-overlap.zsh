@@ -17,9 +17,10 @@ source "${LIB_LOGGING}"
 # --- Constants ---
 
 readonly DEFAULT_BASE="origin/main"
-# Paths every lane may touch but only one lane of a game at a time (see SKILL.md Rules).
-readonly DEFAULT_SHARED=('docs/' 'web/shared/styles/CONTRACT.md' 'e2e/fixtures/' 'e2e/__screenshots__/')
-readonly IGNORED_PREFIX='node_modules'
+# Paths every lane may touch but only one lane of a group at a time; the repo profile overrides via --shared.
+readonly DEFAULT_SHARED=('docs/')
+# Untracked entries never counted as owned (the shared dependency symlink); the repo profile overrides via --ignore.
+readonly DEFAULT_IGNORED_PREFIX='node_modules'
 
 help() {
   cat <<EOF
@@ -33,7 +34,8 @@ ${c_bold}Options:${c_rst}
   --lane ID=SOURCE   A lane: its id and its worktree path, or its branch name for a handed-off lane (measured from origin/BRANCH; repeat per lane)
   --running ID       A lane that is running now; the ready set excludes lanes overlapping any of these (repeat)
   --base REF         The ref lanes branch from (default: ${DEFAULT_BASE}); the merge-base with it bounds a lane's diff
-  --shared PREFIX    A path prefix that counts as shared (default: ${(j:, :)DEFAULT_SHARED})
+  --shared PREFIX    A path prefix that counts as shared, from the repo profile (default: ${(j:, :)DEFAULT_SHARED}; repeat)
+  --ignore PREFIX    An untracked prefix never counted as owned, e.g. the shared dependency symlink (default: ${DEFAULT_IGNORED_PREFIX})
   -h, --help         Show this help
 
 ${c_bold}Output:${c_rst} JSON on stdout between "=== start RESULT ===" and "=== end RESULT ===":
@@ -58,7 +60,7 @@ check_prerequisites() {
 
 #######################################
 # The files one lane owns: its commits since the merge-base with the base ref plus, for a live
-# worktree, its working-tree changes and untracked files; deduplicated and sorted, node_modules dropped.
+# worktree, its working-tree changes and untracked files; deduplicated and sorted, the ignored prefix dropped.
 # A handed-off lane (its worktree removed) is measured from origin/<branch> in the root.
 # Arguments:
 #   $1 - root checkout
@@ -101,7 +103,7 @@ main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local root="" base="${DEFAULT_BASE}"
+  local root="" base="${DEFAULT_BASE}" ignored="${DEFAULT_IGNORED_PREFIX}"
   local -a lane_specs running shared
   while (( $# > 0 )); do case "${1}" in
     -h|--help)  help; return 0 ;;
@@ -110,12 +112,14 @@ main() {
     --running)  running+=("${2:?--running requires an id}"); shift 2 ;;
     --base)     base="${2:?--base requires a ref}"; shift 2 ;;
     --shared)   shared+=("${2:?--shared requires a prefix}"); shift 2 ;;
+    --ignore)   ignored="${2:?--ignore requires a prefix}"; shift 2 ;;
     -*)         log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)          log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
   esac; done
 
   # === MASSAGE ===
   (( ${#shared} > 0 )) || shared=("${DEFAULT_SHARED[@]}")
+  typeset -g IGNORED_PREFIX="${ignored}"
   local -A lane_dir
   for spec in "${lane_specs[@]}"; do
     lane_dir["${spec%%=*}"]="${spec#*=}"
