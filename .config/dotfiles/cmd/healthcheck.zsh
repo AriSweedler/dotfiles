@@ -43,6 +43,7 @@ cmd_healthcheck() {
   (( $# == 0 )) || usage_error "healthcheck takes no positional arguments | args='$*'"
   # A read-only run is its own dry run: the flag changes nothing here.
   export ARI_DOTFILES_DRY_RUN=0
+  typeset -g RUN_VERB=healthcheck
   run::main check "${only[2]:-}" "${group[2]:-}" "${#json}"
 }
 
@@ -56,6 +57,7 @@ run::main() {
   steps::select "${select_args[@]}" || exit 64
   (( ${#selected} )) || usage_error "no step selected | only='${only}' group='${group}' steps='${(j:,:)STEPS}'"
   lock::acquire "${mode}"
+  RUN_JSON="${json}"
   run::begin "${mode}"
   steps::run_all
   run::summarize

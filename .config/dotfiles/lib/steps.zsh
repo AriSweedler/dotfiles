@@ -199,7 +199,7 @@ step::record_synth() {
   : >> "${log_file}"
   verdict::synth "${name}" "${verdict_status}" "${reason}" "${detail}" > "${RUN_DIR}/${name}.check.json"
   step::record_result "${name}" "${RUN_DIR}/${name}.check.json" 0 0 "${log_file}" false
-  log::info "${verdict_status} | step='${name}' reason='${reason}'"
+  run::_log info "${verdict_status} | step='${name}' reason='${reason}'"
 }
 step::record_skip() { step::record_synth "${1}" skip "${2}"; }
 
@@ -229,28 +229,32 @@ step::run() {
     fi
   done
 
-  log::info "==> ${name}"
+  run::_log info "==> ${name}"
+  run::_spin "${name} · checking"
   local rc_ms rc duration_ms
   rc_ms="$(step::run_check "${name}" "${check_file}" "${log_file}")"
   rc="${rc_ms%% *}"; duration_ms="${rc_ms##* }"
   local step_status actionable applied=false
   step_status="$(jq -r '.status' "${check_file}")"
   actionable="$(jq -r '.actionable' "${check_file}")"
-  log::info "check | step='${name}' status='${step_status}' reason='$(jq -r '.reason' "${check_file}")'"
+  run::_log info "check | step='${name}' status='${step_status}' reason='$(jq -r '.reason' "${check_file}")'"
 
   if [[ "${ARI_DOTFILES_MODE:-check}" == setup && "${actionable}" == true ]] && step::is_fixable "${name}"; then
     if is_dry_run; then
-      log::info "dry-run, would run apply::${name} | fix='$(jq -r '.fix // ""' "${check_file}")'"
+      run::_log info "dry-run, would run apply::${name} | fix='$(jq -r '.fix // ""' "${check_file}")'"
+      run::_spin "${name} · planning: $(jq -r '.fix // ""' "${check_file}")"
       # The apply body runs with every mutation logged instead of executed, so the plan it prints is the real one.
       step::run_isolated apply "${name}" 0 >> "${log_file}" 2>&1 || true
       applied='"would_apply"'
     else
-      log::info "apply::${name}"
+      run::_log info "apply::${name}"
+      run::_spin "${name} · applying: $(jq -r '.fix // ""' "${check_file}")"
       local apply_rc=0
       step::run_isolated apply "${name}" "${ARI_DOTFILES_APPLY_TIMEOUT_SECS}" >> "${log_file}" 2>&1 || apply_rc=$?
       local -a apply_tail=("${(f)$(tail_lines "${log_file}" 10)}")
-      log::info "apply done | step='${name}' rc='${apply_rc}'"
+      run::_log info "apply done | step='${name}' rc='${apply_rc}'"
       local recheck_file="${RUN_DIR}/${name}.recheck.json"
+      run::_spin "${name} · re-checking"
       rc_ms="$(step::run_check "${name}" "${recheck_file}" "${log_file}")"
       rc="${rc_ms%% *}"; duration_ms=$(( duration_ms + ${rc_ms##* } ))
       step_status="$(jq -r '.status' "${recheck_file}")"
@@ -274,13 +278,19 @@ step::run() {
 # steps::run_all: every step in `selected`, in order. In setup, once STEP_ABORT_ON has failed or
 # errored the rest are recorded as skip/aborted: their tools come from it.
 steps::run_all() {
-  local aborted=0 name
+  local aborted=0 name group=""
   for name in "${selected[@]}"; do
+    if [[ "${STEP_GROUP[${name}]}" != "${group}" ]]; then
+      group="${STEP_GROUP[${name}]}"
+      run::_heading "${group}"
+    fi
     if (( aborted )); then
       step::record_skip "${name}" aborted
+      run::_show "${name}"
       continue
     fi
     step::run "${name}"
+    run::_show "${name}"
     if [[ -n "${STEP_ABORT_ON}" && "${name}" == "${STEP_ABORT_ON}" && "${ARI_DOTFILES_MODE}" == setup && "$(step::result_status "${name}")" == (fail|error) ]]; then
       aborted=1
     fi
@@ -297,11 +307,111 @@ steps::retry_errored() {
     [[ "$(step::result_status "${name}")" == error ]] && errored+=("${name}")
   done
   (( ${#errored} > 0 )) || return 0
-  log::warn "retrying errored steps | steps='${(j:,:)errored}' secs='${secs}'"
+  run::_log warn "retrying errored steps | steps='${(j:,:)errored}' secs='${secs}'"
+  run::_heading retry
+  run::_spin "retrying ${(j:, :)errored} in ${secs}s"
   sleep "${secs}"
   for name in "${errored[@]}"; do
     step::run "${name}" 2
+    run::_show "${name}"
   done
+}
+
+# --- How a run is shown ---
+# Plain (no tty, NO_COLOR, launchd, --json): the runner's log lines on stderr and the table at the
+# end, as always. Fancy: a header, a dim heading per group, a spinner while a step works, then one
+# line per step on stdout and the painted roll-up. The log lines land in $RUN_DIR/run.log either way.
+
+typeset -g RUN_JSON=0 RUN_T0="" RUN_NAME_W=0
+
+run::is_fancy() { (( ! RUN_JSON )) && ui::is_fancy; }
+
+# A runner log line: appended to run.log (plain text, timestamped), and on stderr unless fancy.
+run::_log() {
+  local tier="${1}"; shift
+  if [[ -n "${RUN_DIR:-}" && -d "${RUN_DIR}" ]]; then
+    run::_log_file "${tier}" "$@" 2>> "${RUN_DIR}/run.log"
+  fi
+  run::is_fancy || "log::${tier}" "$@"
+}
+run::_log_file() {
+  local c_green="" c_yellow="" c_red="" c_grey="" c_cyan="" c_rst=""
+  LOG_PREAMBLE=1 "log::${1}" "${@:2}"
+}
+
+run::_spin() { run::is_fancy || return 0; ui::spin_start "${1}"; }
+
+# The verb comes from the caller (RUN_VERB) or dispatch's `verb`; the mode when neither is set.
+run::_header() {
+  run::is_fancy || return 0
+  local mode="${1}" name text
+  RUN_NAME_W=0
+  for name in "${selected[@]}"; do (( ${#name} > RUN_NAME_W )) && RUN_NAME_W=${#name}; done
+  text="${RUN_VERB:-${verb:-${mode}}} · $(plural "${#selected}" step steps)"
+  is_dry_run && text+=" · dry-run"
+  ui::paint bold "${text}"
+  trap 'run::_interrupted' INT TERM HUP
+}
+
+run::_heading() { run::is_fancy || return 0; ui::spin_stop; ui::paint grey "${1}"; }
+
+# Ctrl-C mid-step: the spinner goes, the cursor comes back, the lock is released, and the step's
+# processes go too. The $(…) around a check dies of the signal first, so the check and its
+# watchdog (& jobs, which ignore SIGINT) are orphans by now: when the run leads its process group,
+# as a terminal job does, the group is TERMed, else each child tree is.
+run::_interrupted() {
+  zmodload -F zsh/system p:sysparams 2>/dev/null || true
+  [[ "${sysparams[pid]:-$$}" == "$$" ]] || exit 130
+  trap '' INT TERM HUP
+  ui::spin_stop
+  print -nu2 -- $'\e[?25h'
+  local pgid
+  pgid="$(ps -o pgid= -p "$$" 2>/dev/null || true)"
+  if [[ "${pgid//[[:space:]]/}" == "$$" ]]; then
+    pkill -TERM -g "$$" 2>/dev/null || true
+  else
+    local child
+    for child in ${(f)"$(pgrep -P "$$" 2>/dev/null || true)"}; do kill_tree TERM "${child}"; done
+  fi
+  lock::release
+  print -u2 -- "interrupted"
+  exit 130
+}
+
+# One line for a finished step: glyph, name, reason, the detail's first line clipped to the
+# terminal, the duration in grey; a fail or error adds the step log's path.
+run::_show() {
+  run::is_fancy || return 0
+  ui::spin_stop
+  local name="${1}" file="${RUN_DIR}/${1}.result.json"
+  [[ -f "${file}" ]] || return 0
+  local st reason applied ms fix log_path detail
+  IFS=$'\x1f' read -r st reason applied ms fix log_path detail < <(jq -r '[.status, .reason,
+      (.applied|tostring), (.duration_ms|tostring), (.fix // ""), (.log // ""),
+      ((.detail // "") | split("\n")[0])] | join("\u001f")' "${file}")
+  if [[ "${applied}" == true && "${st}" == (ok|warn) ]]; then reason=applied; fi
+  if [[ "${applied}" == would_apply ]]; then detail="would apply: ${fix:-apply::${name}}"; fi
+  local dur prefix suffix rpad
+  printf -v dur '%.1fs' $(( ${ms:-0} / 1000.0 ))
+  printf -v rpad '%-24s' "${reason}"
+  printf -v prefix '%s %-*s %s ' "$(ui::glyph "${st}")" "${RUN_NAME_W}" "${name}" "${rpad}"
+  suffix="  ${dur}"
+  local -i room
+  room=$(( $(ui::cols) - ${#prefix} - ${#suffix} ))
+  detail="$(ui::clip "${room}" "${detail}")"
+  printf -v prefix '%s %-*s %s ' "$(ui::paint "${st}" "$(ui::glyph "${st}")")" "${RUN_NAME_W}" "${name}" \
+    "$(ui::paint "${st}" "${rpad}")"
+  print -r -- "${prefix}${detail}$(ui::paint grey "${suffix}")"
+  if [[ "${st}" == (fail|error) ]]; then ui::paint grey "  log: ${log_path}"; fi
+}
+
+# The end of a fancy run: the roll-up painted in its status's colour, then the total time.
+run::_rollup() {
+  local summary="${RUN_DIR}/summary.json" st counts took=""
+  st="$(jq -r '.status' "${summary}")"
+  counts="$(jq -r '.counts | to_entries | map("\(.key)=\(.value)") | join(" ")' "${summary}")"
+  [[ -z "${RUN_T0}" ]] || took="  $(elapsed "${RUN_T0}")s"
+  print -r -- "$(ui::paint "${st}" "status: ${st} (${counts})")$(ui::paint grey "${took}")"
 }
 
 # --- A run: begin, summarize, end ---
@@ -316,10 +426,13 @@ run::begin() {
     rm -rf -- "${RUN_DIR}"
   fi
   mkdir -p "${RUN_DIR}"
+  RUN_T0="${EPOCHREALTIME}"
+  ui::is_fancy || true   # decided here, before any $(…), so every capture inherits the answer
+  run::_header "${mode}"
   if is_dry_run; then
-    log::warn "dry-run: no changes will be made"
+    run::_log warn "dry-run: no changes will be made"
   fi
-  log::info "run | mode='${mode}' run_id='${RUN_ID}' run_dir='${RUN_DIR}' steps='${(j:,:)selected}'"
+  run::_log info "run | mode='${mode}' run_id='${RUN_ID}' run_dir='${RUN_DIR}' steps='${(j:,:)selected}'"
 }
 
 # summary.json (schema 1, roll-up error > fail > warn > ok) → last-<mode>.json; old runs pruned to 8.
@@ -354,6 +467,7 @@ run::summarize() {
 
 run::print_human() {
   local summary="${RUN_DIR}/summary.json"
+  if run::is_fancy; then run::_rollup; return 0; fi
   local step_status step reason detail applied
   while IFS=$'\t' read -r step_status step reason applied detail; do
     if [[ "${applied}" == would_apply ]]; then

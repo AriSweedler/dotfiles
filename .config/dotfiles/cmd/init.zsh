@@ -64,6 +64,7 @@ cmd_init() {
   zparseopts -D -F -K -- -only:=only -group:=group -json=json -dry-run=dry || usage_error "init: bad flags | args='$*'"
   (( $# == 0 )) || usage_error "init takes no positional arguments | args='$*'"
   (( ${#dry} )) && export ARI_DOTFILES_DRY_RUN=1
+  typeset -g RUN_VERB=init
   if (( ${#json} )); then run::main setup "${only[2]:-}" "${group[2]:-}" 1; fi
   # The human run: run::main's table, then status before the exit. The exit stays explicit
   # (run::exit): zsh skips the EXIT trap when ERR_EXIT ends the shell, which would leak the lock.
