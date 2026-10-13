@@ -14,6 +14,7 @@
 # aborts the loop and only exported environment reaches a step.
 zmodload zsh/datetime
 zmodload zsh/mapfile
+zmodload -F zsh/files b:zf_rm
 
 typeset -ga STEPS=() STEPS_DECLARED=()
 typeset -gA STEP_GROUP=() STEP_NEEDS=() STEP_TOOLS=() STEP_DESC=() STEP_FILE=()
@@ -169,15 +170,18 @@ step::run_isolated() {
 }
 
 # One jq over a check file: when it holds one verdict object with a string status, prints its
-# status, actionable and reason joined by \x1f, then a newline and the result record the runner
-# stores when no apply follows (the verdict plus rc, duration_ms, log and applied=false, as
-# step::record_result writes it); else nothing.
+# status, actionable and reason joined by \x1f; then that record's run::_show fields (empty when
+# they do not render); then the result record the runner stores when no apply follows (the
+# verdict plus rc, duration_ms, log and applied=false, as step::record_result writes it); each on
+# its own line. Else nothing.
 step::_digest() {
   local file="${1}" rc="${2}" duration_ms="${3}" log_file="${4}"
   jq -rs --argjson rc "${rc}" --argjson duration_ms "${duration_ms}" --arg log "${log_file}" '
     if length == 1 and (.[0] | type == "object" and (.status | type) == "string") then .[0]
+      | (. + {rc: $rc, duration_ms: $duration_ms, log: $log, applied: false}) as $record
       | ([.status, (.actionable | tostring), (.reason | tostring)] | join("\u001f")),
-        (. + {rc: $rc, duration_ms: $duration_ms, log: $log, applied: false} | tojson)
+        ($record | try ('"${RUN_SHOW_FIELDS}"' | split("\n")[0]) catch ""),
+        ($record | tojson)
     else empty end' "${file}" 2>/dev/null || true
 }
 
@@ -221,6 +225,7 @@ step::record_result() {
   local name="${1}" verdict_file="${2}" rc="${3}" duration_ms="${4}" log_file="${5}" applied_json="${6}"
   jq -c --argjson rc "${rc}" --argjson duration_ms "${duration_ms}" --arg log "${log_file}" --argjson applied "${applied_json}" \
     '. + {rc:$rc, duration_ms:$duration_ms, log:$log, applied:$applied}' "${verdict_file}" > "${RUN_DIR}/${name}.result.json"
+  run::_keep_show "${name}" ""
 }
 
 # A result the runner writes without running the check: a skip, or an error it can see coming.
@@ -262,11 +267,12 @@ step::run() {
 
   run::_log info "==> ${name}"
   run::_spin "${name} · checking"
-  local out rc_ms rc duration_ms record fields
+  local out rc_ms rc duration_ms record fields show
   out="$(step::run_check "${name}" "${check_file}" "${log_file}")"
   rc_ms="${out%%$'\n'*}"; out="${out#*$'\n'}"
   rc="${rc_ms%% *}"; duration_ms="${rc_ms##* }"
-  record="${out##*$'\n'}"; fields="${out%$'\n'*}"
+  fields="${out%%$'\n'*}"; out="${out#*$'\n'}"
+  show="${out%%$'\n'*}"; record="${out#*$'\n'}"
   local step_status actionable reason applied=false
   step_status="${fields%%$'\x1f'*}"; fields="${fields#*$'\x1f'}"
   actionable="${fields%%$'\x1f'*}"; reason="${fields#*$'\x1f'}"
@@ -289,7 +295,7 @@ step::run() {
       local recheck_file="${RUN_DIR}/${name}.recheck.json"
       run::_spin "${name} · re-checking"
       out="$(step::run_check "${name}" "${recheck_file}" "${log_file}")"
-      rc_ms="${out%%$'\n'*}"; fields="${${out#*$'\n'}%$'\n'*}"
+      rc_ms="${out%%$'\n'*}"; fields="${${out#*$'\n'}%%$'\n'*}"
       rc="${rc_ms%% *}"; duration_ms=$(( duration_ms + ${rc_ms##* } ))
       step_status="${fields%%$'\x1f'*}"; fields="${fields#*$'\x1f'}"
       actionable="${fields%%$'\x1f'*}"
@@ -307,6 +313,7 @@ step::run() {
   fi
   if [[ "${applied}" == false ]]; then
     print -r -- "${record}" > "${RUN_DIR}/${name}.result.json"
+    run::_keep_show "${name}" "${show}"
   else
     step::record_result "${name}" "${check_file}" "${rc}" "${duration_ms}" "${log_file}" "${applied}"
   fi
@@ -485,17 +492,34 @@ run::_interrupted() {
   exit 130
 }
 
+# The fields run::_show reads from a result record, joined by \x1f, as one jq expression: the
+# runner's digest computes them with the record, and run::_show falls back to it on the file.
+typeset -g RUN_SHOW_FIELDS='[.status, .reason, (.applied|tostring), (.duration_ms|tostring),
+  (.fix // ""), (.log // ""), ((.detail // "") | split("\n")[0])] | join("\u001f")'
+
+# Fancy: keeps the show fields the digest computed for <name>'s result next to it, so run::_show
+# needs no jq of its own; a step that ran in the background hands them over through the file.
+run::_keep_show() {
+  local file="${RUN_DIR}/.${1}.show"
+  if run::is_fancy && [[ -n "${2}" ]]; then print -r -- "${2}" > "${file}"
+  elif [[ -e "${file}" ]]; then zf_rm -f -- "${file}"
+  fi
+}
+
 # One line for a finished step: glyph, name, reason, the detail's first line clipped to the
 # terminal, the duration in grey; a fail or error adds the step log's path.
 run::_show() {
   run::is_fancy || return 0
   ui::spin_stop
-  local name="${1}" file="${RUN_DIR}/${1}.result.json"
+  local name="${1}" file="${RUN_DIR}/${1}.result.json" kept="${RUN_DIR}/.${1}.show" line
   [[ -f "${file}" ]] || return 0
+  if [[ -f "${kept}" ]]; then
+    line="${mapfile[${kept}]-}"; zf_rm -f -- "${kept}"
+  else
+    line="$(jq -r "${RUN_SHOW_FIELDS}" "${file}")"
+  fi
   local st reason applied ms fix log_path detail
-  IFS=$'\x1f' read -r st reason applied ms fix log_path detail < <(jq -r '[.status, .reason,
-      (.applied|tostring), (.duration_ms|tostring), (.fix // ""), (.log // ""),
-      ((.detail // "") | split("\n")[0])] | join("\u001f")' "${file}")
+  IFS=$'\x1f' read -r st reason applied ms fix log_path detail <<< "${line%%$'\n'*}"
   if [[ "${applied}" == true && "${st}" == (ok|warn) ]]; then reason=applied; fi
   if [[ "${applied}" == would_apply ]]; then detail="would apply: ${fix:-apply::${name}}"; fi
   local dur prefix suffix rpad

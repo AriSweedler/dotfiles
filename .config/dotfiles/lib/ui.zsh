@@ -24,8 +24,10 @@ ui::_decide() {
 }
 
 # The only call site of gum; refuses when not fancy. CLICOLOR_FORCE keeps colour inside a $(…).
+# --exec first: gum replaces this (sub)shell, so the $! of a `ui::_gum --exec … &` is gum's pid.
 ui::_gum() {
   ui::is_fancy || return 1
+  if [[ "${1:-}" == --exec ]]; then shift; CLICOLOR_FORCE=1 exec "${ARI_DOTFILES_GUM}" "${@}"; fi
   CLICOLOR_FORCE=1 "${ARI_DOTFILES_GUM}" "${@}"
 }
 
@@ -41,36 +43,54 @@ ui::_index() {
 }
 
 # Spinner on stderr while the caller works; one at a time, a second start retitles it. [no-op]
-# gum runs a watcher that exits when the sentinel goes or this shell dies, so nothing outlives us.
+# gum runs a watcher that exits when it is told to, the sentinel goes, or this shell dies, so
+# nothing outlives us. No fork here but gum's: the sentinel is named and made in zsh, and the
+# watcher writes its pid into it so a stop can end it at once instead of at its next poll.
 ui::spin_start() {
   local title="${1:-}"
   ui::is_fancy || return 0
   ui::spin_stop
   zmodload -F zsh/system p:sysparams 2>/dev/null || true
-  # Taken here: inside the & below, sysparams[pid] would name the subshell that parents gum.
-  local sentinel parent="${sysparams[pid]:-$$}"
-  sentinel="$(mktemp "${TMPDIR:-/tmp}/dotfiles-spin.XXXXXX" 2>/dev/null)" || return 0
+  zmodload -F zsh/datetime p:EPOCHREALTIME 2>/dev/null || true
+  # Taken here: inside the & below, sysparams[pid] would name the subshell that becomes gum.
+  local parent="${sysparams[pid]:-$$}"
+  local sentinel="${TMPDIR:-/tmp}"
+  sentinel="${sentinel%/}/dotfiles-spin.${parent}.${EPOCHREALTIME//[^0-9]/}"
+  # noclobber: created only if new (O_EXCL), as mktemp would.
+  { setopt localoptions noclobber; : > "${sentinel}"; } 2>/dev/null || return 0
   UI_SPIN_SENTINEL="${sentinel}"
-  ui::_gum spin --spinner dot --spinner.foreground "${UI_SPIN_COLOR}" --title "${title}" -- \
-    zsh -fc 'zmodload zsh/zselect
-      trap '"'"'rm -f -- "${1}"; exit 130'"'"' INT TERM HUP
+  # The watcher appends its pid only while the sentinel exists (>> without CLOBBER never creates).
+  ui::_gum --exec spin --spinner dot --spinner.foreground "${UI_SPIN_COLOR}" --title "${title}" -- \
+    zsh -fc 'zmodload zsh/zselect; zmodload -F zsh/files b:zf_rm
+      trap '"'"'zf_rm -f -- "${1}"; exit 130'"'"' INT TERM HUP
+      trap '"'"'zf_rm -f -- "${1}"; exit 0'"'"' USR1
+      { unsetopt clobber; print -r -- "$$" >> "${1}"; } 2>/dev/null || exit 0
       while [[ -e "${1}" ]] && kill -0 "${2}" 2>/dev/null; do zselect -t 10; done
-      rm -f -- "${1}"' ui-spin-watch "${sentinel}" "${parent}" < /dev/null > /dev/null &
+      zf_rm -f -- "${1}"' ui-spin-watch "${sentinel}" "${parent}" < /dev/null > /dev/null &
   UI_SPIN_PID="${!}"
   return 0
 }
 
 # Stops the spinner and clears its line; idempotent, and returns only once gum has exited. [no-op]
+# A watcher that has written its pid is told to exit (USR1), so gum ends with its command; a gum
+# still starting (no watcher yet) is TERMed itself, before it has drawn or spawned one.
 ui::spin_stop() {
   [[ -n "${UI_SPIN_PID}" ]] || return 0
-  local pid="${UI_SPIN_PID}"
-  if [[ -n "${UI_SPIN_SENTINEL}" ]]; then rm -f -- "${UI_SPIN_SENTINEL}"; fi
+  local pid="${UI_SPIN_PID}" sentinel="${UI_SPIN_SENTINEL}" watcher=""
   UI_SPIN_PID="" UI_SPIN_SENTINEL=""
-  # wait only works in the shell that started it; elsewhere poll until the watcher has noticed.
+  if [[ -n "${sentinel}" ]]; then
+    zmodload -F zsh/files b:zf_rm 2>/dev/null || true
+    if [[ -r "${sentinel}" ]]; then IFS= read -r watcher < "${sentinel}" 2>/dev/null || true; fi
+    zf_rm -f -- "${sentinel}" 2>/dev/null || true
+  fi
+  if [[ "${watcher}" == <1-> ]]; then kill -USR1 "${watcher}" 2>/dev/null || true
+  else kill -TERM "${pid}" 2>/dev/null || true
+  fi
+  # wait only works in the shell that started it; elsewhere poll until gum has gone.
   if ! wait "${pid}" 2>/dev/null; then
     zmodload zsh/zselect 2>/dev/null || true
     local -i tries=0
-    while kill -0 "${pid}" 2>/dev/null && (( tries++ < 50 )); do zselect -t 5; done
+    while kill -0 "${pid}" 2>/dev/null && (( tries++ < 50 )); do zselect -t 1; done
   fi
   print -nu2 -- $'\r\e[2K'
   return 0

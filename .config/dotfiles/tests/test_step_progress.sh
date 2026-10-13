@@ -79,11 +79,25 @@ assert_not_contains "fancy prints no table" "${PLAIN_OUT}" "ok     dotfiles_repo
 assert_not_contains "fancy stderr has no runner lines" "${ERR}" "==> "
 assert_contains "fancy run.log still has them" "$(cat "${RUN}/run.log")" "==> claude"
 GUMS="$(cat "${FIX}/gum.log" 2>/dev/null)"
-assert_contains "a spinner per check" "${GUMS}" "--title claude · checking"
 assert_eq "gum is only ever a spinner" "" "$(grep -E '^(style|join|choose|format|table|log|input|confirm) ' <<< "${GUMS}")"
-assert_eq "a spinner per check, no more" 5 "$(grep -c '^spin ' <<< "${GUMS}")"
+# Side by side, a check already done when its turn comes has its spinner stopped (gum TERMed)
+# before a fake gum can log, so here it is at most one per check; the serial run below counts.
+assert_eq "side by side: every spinner names a check" "" \
+  "$(grep '^spin ' <<< "${GUMS}" | grep -v -E -- '--title (dotfiles_repo|local_dotfiles_repo|bob_neovim|claude|karabiner) · checking ')"
+assert_eq "side by side: no more than a spinner per check" 1 "$(( $(grep -c '^spin ' <<< "${GUMS}") <= 5 ))"
 cp "${RUN}/summary.json" "${FIX}/fancy-summary.json"
 assert_json "summary.json unchanged in shape" "${FIX}/fancy-summary.json" '.steps|length' 5
+FANCY_OUT="$(printf '%s' "${OUT}" | strip_ansi | /usr/bin/sed -E 's/[0-9]+\.[0-9]+s$/Ns/')"
+
+# One at a time, each check outlasts the fake gum's start, so each spinner is logged.
+rm -f "${FIX}/gum.log"
+bump_now_secs 60
+ARI_DOTFILES_SERIAL=1 nm healthcheck --only "${ONLY}"
+GUMS="$(cat "${FIX}/gum.log" 2>/dev/null)"
+assert_contains "a spinner per check" "${GUMS}" "--title claude · checking"
+assert_eq "a spinner per check, no more" 5 "$(grep -c '^spin ' <<< "${GUMS}")"
+assert_eq "serial fancy lines are the side-by-side ones" "${FANCY_OUT}" \
+  "$(printf '%s' "${OUT}" | strip_ansi | /usr/bin/sed -E 's/[0-9]+\.[0-9]+s$/Ns/')"
 
 # --json under the fancy seam: stdout is summary.json and nothing else, no spinner.
 rm -f "${FIX}/gum.log"
