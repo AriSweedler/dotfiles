@@ -21,7 +21,7 @@ ldf_status="$(step_get local_dotfiles_repo .status)"
 if [[ "${ldf_status}" == ok || "${ldf_status}" == warn ]]; then pass "local_dotfiles_repo still ran and passed (${ldf_status})"
 else fail "local_dotfiles_repo still ran and passed" "status='${ldf_status}'"; fi
 assert_file "local repo was created despite the earlier failure" "${ARI_DOTFILES_LDF_GIT_DIR}/HEAD"
-assert_json "every step recorded" "${f}" '.steps|length' "${EXPECTED_STEPS}"
+assert_steps_are_registry "every step recorded" "${f}"
 unset BREW_SHIM_ALLOW_MUTATION
 export ARI_DOTFILES_REMOTE="${FIX}/remotes/dotfiles.git"
 
@@ -36,10 +36,12 @@ assert_contains "dry-run logs the brew install plan" "${ERR}" "would run apply::
 assert_contains "dry-run plan names the Homebrew installer" "$(cat "$(newest_run_dir)/brew.log")" "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
 assert_eq "curl never called" "" "$(shim_log curl)"
 # The repo group runs before brew (the dotfiles themselves come first); everything after brew is aborted.
-repo_steps='["dotfiles_repo","local_dotfiles_repo","claude_skills","ssh_key","dotfiles_jobs"]'
+registry_load
+repo_steps="$(registry_steps_in_group repo | names_json)"
+assert_eq "the registry has repo steps to run before brew" true "$(jq -n "${repo_steps} | length > 0")"
 assert_json "steps after brew skip aborted" "${f}" "[.steps[] | select(.step != \"brew\" and ((.step | IN(${repo_steps}[])) | not))] | all(.status == \"skip\" and .reason == \"aborted\")" true
 assert_json "repo steps ran before the abort" "${f}" "[.steps[] | select(.step | IN(${repo_steps}[])) | .reason] | all(. != \"aborted\")" true
-assert_json "every step recorded after the abort" "${f}" '.steps|length' "${EXPECTED_STEPS}"
+assert_steps_are_registry "every step recorded after the abort" "${f}"
 
 bump_now_secs 60
 nm check --json

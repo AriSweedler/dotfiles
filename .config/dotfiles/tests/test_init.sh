@@ -11,7 +11,6 @@ seed_fake_repos
 seed_ldf_remote
 seed_home_baseline
 export BOB_SHIM_LS="Installed: v0.11.2 Used"
-ALL_STEPS="bob_neovim,brew,brew_drift,brew_pkgs,chrome_exoskeleton,claude,claude_notifications,claude_skills,dotfiles_jobs,dotfiles_repo,karabiner,local_dotfiles_repo,plugged,raycast_sync,ssh_key,terminal_nerdfont"
 
 nm init
 assert_eq "init exits 0" 0 "${RC}"
@@ -23,7 +22,7 @@ assert_contains "status shows the shared tier" "${OUT}" "shared:"
 assert_contains "status shows the local tier" "${OUT}" "local:"
 assert_no_file "lock released" "${ARI_DOTFILES_STATE_DIR}/lock.d"
 assert_file "the run is a setup" "${ARI_DOTFILES_STATE_DIR}/last-setup.json"
-assert_json "the run is every step" "${ARI_DOTFILES_STATE_DIR}/last-setup.json" '[.steps[].step] | sort | join(",")' "${ALL_STEPS}"
+assert_steps_are_registry "the run is every step" "${ARI_DOTFILES_STATE_DIR}/last-setup.json"
 assert_json "no step failed or errored" "${ARI_DOTFILES_STATE_DIR}/last-setup.json" '[.steps[] | select(.status=="fail" or .status=="error") | .step + "=" + .reason] | join(",")' ""
 assert_json "converged machine applies nothing" "${ARI_DOTFILES_STATE_DIR}/last-setup.json" '[.steps[] | select(.applied == true)] | length' 0
 assert_no_mutation "converged init mutates nothing"

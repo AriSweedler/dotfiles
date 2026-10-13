@@ -18,8 +18,7 @@ OUT=""
 ERR=""
 RC=0
 HERMETIC_ENV=()
-# How many steps the registry declares; every `.steps|length` assertion reads this.
-EXPECTED_STEPS=16
+REGISTRY_TSV=""   # filled by registry_load: one "name<TAB>group" line per registered step, run order
 
 pass() { PASS=$((PASS + 1)); printf '  ok   %s\n' "$1"; }
 fail() { FAIL=$((FAIL + 1)); printf '  FAIL %s\n       %s\n' "$1" "$2" >&2; }
@@ -431,6 +430,53 @@ zfn() {
     "${ORIG_CONFIG_DIR}/dotfiles/lib" "${lib_path}" "${fn}" "$@" > "${FIX}/zfn.out" 2> "${FIX}/zfn.err" || RC=$?
   OUT="$(cat "${FIX}/zfn.out")"
   ERR="$(cat "${FIX}/zfn.err")"
+}
+
+# ── The step registry under test ─────────────────────────────────────────────
+
+# Every "each step" expectation follows the registry of the checkout under test, as its own
+# `steps` verb lists it (one line per step, in run order: name, group, needs, tools, apply,
+# desc), so adding a step file never breaks an assertion. Needs a world; read once per test
+# file. Call registry_load in the test's own shell before using the readers in $(...), or each
+# substitution asks the harness again.
+registry_load() {
+  [[ -z "${REGISTRY_TSV}" ]] || return 0
+  [[ -n "${FIX}" ]] || abort "registry_load needs a world (world_new first)"
+  hermetic_env
+  local rc=0
+  env -i "${HERMETIC_ENV[@]}" "${FIX}/tools/zsh" "${ORIG_CONFIG_DIR}/bin/dotfiles" steps > "${FIX}/registry.out" 2> "${FIX}/registry.err" || rc=$?
+  (( rc == 0 )) || abort "dotfiles steps exited ${rc}: $(cat "${FIX}/registry.err")"
+  REGISTRY_TSV="$(awk 'NF { print $1 "\t" $2 }' "${FIX}/registry.out")"
+  [[ -n "${REGISTRY_TSV}" ]] || abort "dotfiles steps listed no step"
+}
+
+# The registered step names, one per line, in run order.
+registry_steps() { registry_load; cut -f1 <<< "${REGISTRY_TSV}"; }
+registry_step_count() { registry_steps | wc -l | tr -d ' '; }
+# registry_steps_in_group GROUP: the steps the registry puts in GROUP (repo, brew, tools).
+registry_steps_in_group() { registry_load; awk -F'\t' -v g="$1" '$2 == g { print $1 }' <<< "${REGISTRY_TSV}"; }
+# A list of names (stdin, one per line) as a sorted, comma-joined set, the shape every
+# `[.steps[].step] | sort | join(",")` assertion compares against.
+names_csv() { jq -R . | jq -rs 'map(select(. != "")) | sort | join(",")'; }
+# The same list as a JSON array, for jq's IN(...).
+names_json() { jq -R . | jq -cs 'map(select(. != ""))'; }
+
+# assert_steps_are_registry NAME FILE: the summary FILE holds exactly one result per registered
+# step and none for anything else (a missing, extra or doubled step fails, with both lists shown).
+assert_steps_are_registry() {
+  local name="$1" file="$2"
+  registry_load
+  if [[ ! -f "${file}" ]]; then fail "${name}" "no such file: ${file}"; return; fi
+  assert_eq "${name}" "$(registry_steps | names_csv)" "$(jq -r '[.steps[].step] | sort | join(",")' "${file}" 2>&1)"
+}
+
+# harness_var NAME: a variable as the kernel of the checkout under test sets it (e.g. CLI_NAME),
+# for expectations that quote what the code prints instead of a copy that drifts.
+harness_var() {
+  [[ -n "${FIX}" ]] || abort "harness_var needs a world (world_new first)"
+  hermetic_env
+  env -i "${HERMETIC_ENV[@]}" "${FIX}/tools/zsh" -c 'for f in "$1"/*.zsh(N); do source "${f}"; done; print -r -- "${(P)2}"' _ \
+    "${ORIG_CONFIG_DIR}/dotfiles/lib" "$1" 2> /dev/null
 }
 
 # Save $OUT as JSON and print the path (for jq assertions on `--json` output).

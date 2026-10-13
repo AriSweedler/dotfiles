@@ -27,18 +27,19 @@ assert_eq "decree without a tier flag exits 64" 64 "${RC}"
 
 nm steps
 assert_eq "steps exits 0" 0 "${RC}"
-names=(brew brew_pkgs brew_drift dotfiles_repo local_dotfiles_repo ssh_key bob_neovim claude terminal_nerdfont karabiner raycast_sync claude_notifications claude_skills chrome_exoskeleton plugged dotfiles_jobs)
-listed=0
-for s in "${names[@]}"; do
-  if grep -qE "(^|[[:space:]])${s}([[:space:]]|$)" <<< "${OUT}"; then listed=$((listed + 1)); else fail "steps lists ${s}" "${OUT}"; fi
-done
-assert_eq "steps lists every name" "${EXPECTED_STEPS}" "${listed}"
+# Independent of the verb: one file per step under steps/, named for the step it declares
+# (steps::validate refuses anything else), so the files' names are the registry.
+declared="$(for s in "${ORIG_CONFIG_DIR}"/dotfiles/steps/*.zsh; do basename "${s}" .zsh; done | names_csv)"
+declared_in_files="$(awk '$1 == "step::declare" { print $2 }' "${ORIG_CONFIG_DIR}"/dotfiles/steps/*.zsh | names_csv)"
+assert_eq "each step file declares its own name" "${declared}" "${declared_in_files}"
+assert_eq "steps lists every name" "${declared}" "$(awk 'NF { print $1 }' <<< "${OUT}" | names_csv)"
+assert_eq "steps lists each step once" "$(awk 'NF { print $1 }' <<< "${OUT}" | wc -l | tr -d ' ')" "$(awk 'NF { print $1 }' <<< "${OUT}" | sort -u | wc -l | tr -d ' ')"
 
 nm check --json
 f="$(out_json)"
 assert_eq "check --json prints one JSON object" 1 "$(jq -s 'map(select(type=="object")) | length' "${f}" 2>&1)"
 assert_json "schema == 1" "${f}" '.schema' 1
-assert_json "steps|length matches the registry" "${f}" '.steps|length' "${EXPECTED_STEPS}"
+assert_steps_are_registry "steps|length matches the registry" "${f}"
 
 nm --help
 assert_eq "--help exits 0" 0 "${RC}"
