@@ -108,6 +108,19 @@ $'$XDG_CONFIG_HOME/zsh $HOME/.config/zsh\n' "${OUT}"
 ui_run XDG_DATA_HOME="${H}/.config/data" -- "ui::paths '${H}/.config/data/a ${H}/.config/b'"
 assert_eq "paths: the longest value wins when one base holds another" \
 $'$XDG_DATA_HOME/a $XDG_CONFIG_HOME/b\n' "${OUT}"
+# ── cmd_paths: a command to paste keeps working once its paths read $VAR ─
+CMD="print -rl -- '${H}/.config/a b' '${H}/q' ${H}/z '${H}/\$y' '${H}' 'k=${H}/x'"
+printf '%s\n' "${CMD}" > "${FIX}/cmd.txt"
+ui_run -- "ui::cmd_paths \"\$(<'${FIX}/cmd.txt')\""
+assert_eq "cmd_paths: a quoted path is double-quoted, one with a \$ quoted around it" \
+"print -rl -- \"\$XDG_CONFIG_HOME/a b\" \"\$HOME/q\" \$HOME/z \"\$HOME\"'/\$y' \"\$HOME\" 'k=\$HOME/x'"$'\n' "${OUT}"
+SHOWN="${OUT%$'\n'}"
+ui_run -- "eval \"\$(<'${FIX}/cmd.txt')\""
+WANT="${OUT}"
+printf '%s\n' "${SHOWN}" > "${FIX}/shown.txt"
+ui_run -- "eval \"\$(<'${FIX}/shown.txt')\""
+assert_eq "cmd_paths: pasted, each word expands to the original but the mid-word one, left as ui::paths shows it" \
+"${WANT/"k=${H}/x"/'k=$HOME/x'}" "${OUT}"
 ui_run ARI_DOTFILES_UI=fancy ARI_DOTFILES_GUM="${FAKE_GUM}" -- "ui::paths '${H}/.config/x'; ui::_paths '${H}/.cache'; print -r -- \"\${REPLY}\""
 assert_eq "paths: the same when fancy; _paths sets REPLY" $'$XDG_CONFIG_HOME/x\n$XDG_CACHE_HOME\n' "${OUT}"
 

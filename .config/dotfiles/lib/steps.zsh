@@ -572,7 +572,7 @@ run::_attention() {
 run::_fix_lines() {
   local st step reason fix manual detail REPLY
   while IFS=$'\x1f' read -r st step reason fix manual detail; do
-    ui::_paths "${fix}"
+    ui::_cmd_paths "${fix}"
     print -r -- "fix    ${step}  ${REPLY}"
   done < <(run::_attention)
 }
@@ -588,7 +588,7 @@ run::_attention_box() {
   while IFS=$'\x1f' read -r st step reason fix manual detail; do
     (( ++n ))
     body+=("$(ui::paint "${st}" "$(ui::glyph "${st}")") ${step}  $(ui::paint "${st}" "${reason}")")
-    ui::_paths "${fix}"
+    ui::_cmd_paths "${fix}"
     body+=("  fix: ${REPLY}")   # a command to copy, so never clipped
     if [[ "${manual}" == true ]]; then
       lines=("${(@f)$(jq -rn --argjson d "${detail}" '$d')}")

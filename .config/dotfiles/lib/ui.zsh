@@ -172,6 +172,19 @@ ui::_paths() {
   REPLY="${text}"
 }
 
+# ui::cmd_paths <command> — ui::paths for a command to paste: a single-quoted word it turned into
+# '$VAR/…' becomes "$VAR/…" so the shell expands it, or "$VAR"'/…' when the rest holds a character
+# double quotes would expand.
+ui::cmd_paths() { local REPLY; ui::_cmd_paths "${1:-}"; print -r -- "${REPLY}"; }
+
+# ui::cmd_paths into REPLY.
+ui::_cmd_paths() {
+  setopt localoptions extendedglob
+  ui::_paths "${1:-}"
+  REPLY="${REPLY//(#b)\'(\$(HOME|XDG_(CONFIG|DATA|STATE|CACHE)_HOME)[^\'\$\`\"\\]#)\'/\"${match[1]}\"}"
+  REPLY="${REPLY//(#b)\'(\$(HOME|XDG_(CONFIG|DATA|STATE|CACHE)_HOME))([^\']#)\'/\"${match[1]}\"'${match[4]}'}"
+}
+
 # ui::rule [label] — a heading across the terminal: the label bold, a space, then a grey ─ rule
 # so the line is exactly ui::cols cells. [the label alone]
 ui::rule() {
