@@ -187,6 +187,14 @@ assert_contains "narrow: a clipped row ends in …" "${ROWS}" "…"
 assert_eq "narrow: no row wider than the screen less the box" "" \
   "$(bare_args | PATH="${ORIG_PATH}" awk '!/^(--|style$|rounded$|0 1$)/ && length($0) > 36')"
 
+# Narrow enough to stack, wide enough once the ' · run …' hints go: hints dropped, nothing clipped.
+cards_run COLUMNS=60
+assert_eq "hintless: two boxes, no join" $'CALL style\nCALL style' "${CALLS}"
+has_row "hintless: the sync cell keeps its count" "shared ${ORIGIN_SHA:0:7} ↑1 ahead ✓ 3d ago · was abcdef0"
+has_row "hintless: the state cell keeps its verdict" "sub2 - - - not initialized"
+assert_not_contains "hintless: no hint left" "${ROWS}" " · run "
+assert_not_contains "hintless: nothing clipped" "${ROWS}" "…"
+
 # NO_COLOR keeps the plain path even with gum and the fancy seam.
 rm -f "${FIX}/gum.log"
 st_run ARI_DOTFILES_UI=fancy ARI_DOTFILES_GUM="${FAKE_GUM}" NO_COLOR=1 -- 'cmd_status'

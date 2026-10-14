@@ -232,8 +232,9 @@ status::_width() {
 
 # Two boxed tables, one row per repo (shared, local, each submodule): local (branch, HEAD, uncommitted
 # or pointer state) and remote (origin's sha from the tracking ref, ahead/behind, the last
-# `dotfiles push` from its log). Side by side when they fit the terminal; stacked otherwise, a table
-# wider than the terminal clipped to it. Measured before gum draws: three gum calls, two when stacked.
+# `dotfiles push` from its log). Side by side when they fit the terminal; stacked otherwise. A stacked
+# table wider than the terminal drops its ` · run …` hints first, and is clipped only if still too
+# wide, so a command is never cut mid-word. Measured before gum draws: three gum calls, two stacked.
 status::cards() {
   local -a STATUS_LOCAL STATUS_REMOTE tables rows
   local repo
@@ -252,10 +253,13 @@ status::cards() {
     return
   fi
   for (( i = 1; i <= 2; i++ )); do
-    if (( $(status::_width "${tables[i]}") + 4 > cols )); then
-      if (( i == 1 )); then rows=("${STATUS_LOCAL[@]}"); else rows=("${STATUS_REMOTE[@]}"); fi
-      tables[i]="$(print -rl -- "${rows[@]}" | COLUMNS=$(( cols - 4 )) ui::table -)"
-    fi
+    (( $(status::_width "${tables[i]}") + 4 > cols )) || continue
+    if (( i == 1 )); then rows=("${STATUS_LOCAL[@]}"); else rows=("${STATUS_REMOTE[@]}"); fi
+    # A hint runs from ' · run ' to its cell's closing colour escape (or the end of a bare cell).
+    rows=("${(@)rows// · run [^$'\e'$'\t']#/}")
+    tables[i]="$(print -rl -- "${rows[@]}" | ui::table --no-clip -)"
+    (( $(status::_width "${tables[i]}") + 4 > cols )) || continue
+    tables[i]="$(print -rl -- "${rows[@]}" | COLUMNS=$(( cols - 4 )) ui::table -)"
   done
   ui::box --title local -- "${(@f)tables[1]}"
   ui::box --title remote -- "${(@f)tables[2]}"
