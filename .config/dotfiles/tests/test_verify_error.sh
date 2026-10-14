@@ -61,12 +61,15 @@ assert_json "consecutive_errors 1" "${LR}" '.consecutive_errors' 1
 world_teardown
 
 # ── retry: the fixture flips to satisfied after the first bundle check ────────
+# The flip waits for the runner's retry line, written once the first check has finished. The shim
+# logs a call before it reads the fixture, so waiting on brew.log could flip it under that first
+# check on a loaded machine, which then passes and never retries.
 green_world
-export ARI_DOTFILES_RETRY_SECS=1
+export ARI_DOTFILES_RETRY_SECS=2
 world_bundle_check garbage
 (
-  for _ in $(printf '%s ' {1..200}); do
-    if [[ -f "${BREW_SHIM_LOG_DIR}/brew.log" ]] && grep -q 'bundle check' "${BREW_SHIM_LOG_DIR}/brew.log"; then break; fi
+  for _ in $(printf '%s ' {1..400}); do
+    if cat "${ARI_DOTFILES_STATE_DIR}"/runs/*/run.log 2>/dev/null | grep -q 'retrying errored steps'; then break; fi
     sleep 0.05
   done
   cp "${BREW_SHIM_FIXTURE}/bundle_check.satisfied.out" "${BREW_SHIM_FIXTURE}/bundle_check.out"
