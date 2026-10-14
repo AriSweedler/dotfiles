@@ -5,8 +5,11 @@
 [[ "$OTTO_TEST__ZSH_PLUGINS_RAYCAST" == "true" ]] || return 0
 
 local _pass=0 _fail=0
-source "${HOME}/.config/zsh/plugins/log.zsh"
-source "${HOME}/.config/zsh/plugins/raycast.zsh"
+# This file's own tree, so a worktree's copy tests that worktree and not the live checkout.
+local _plugins="${${(%):-%x}:A:h}"
+local _dotfiles="${_plugins:h:h}/bin/dotfiles"
+source "${_plugins}/log.zsh"
+source "${_plugins}/raycast.zsh"
 
 function _t() {
   local name="$1" expected="$2" actual="$3"
@@ -28,7 +31,7 @@ mkdir -p "${_dir}/Raycast.app"
 export ARI_DOTFILES_RAYCAST_APP="${_dir}/Raycast.app"
 
 # --- every plugin sources twice in one zsh (plugin loader plus dispatcher) without a peep ---
-local _plugins="${HOME}/.config/zsh/plugins" _p
+local _p
 for _p in json_sort raycast_link raycast_snippets raycast; do
   _out="$(zsh -c "source '${_plugins}/log.zsh'; source '${_plugins}/${_p}.zsh'; source '${_plugins}/${_p}.zsh'" 2>&1)"; _rc=$?
   _t "double source: ${_p}.zsh rc 0" "0" "${_rc}"
@@ -85,7 +88,7 @@ _t "sync: skips when Raycast is not installed" "skip raycast not installed | app
 _t "sync: skip is rc 0" "0" "${_rc}"
 
 # --- the verb, through the real subsystems with their seams ---
-function _bin() { "${HOME}/.config/bin/dotfiles" raycast "$@"; }
+function _bin() { "${_dotfiles}" raycast "$@"; }
 cat > "${_dir}/bindings.json" <<'EOF'
 {"$generated":"fixture","bindings":[{"path":"extensions/raycast/clipboard-history/clipboard-history","title":"Clipboard History","chords":["hyper+4"],"allowId":"builtin_command_clipboardHistory"}]}
 EOF
@@ -99,12 +102,12 @@ _t "bin: --plain" \
 mkdir -p "${_dir}/shared" "${_dir}/local"
 print -r -- '[]' > "${_dir}/shared/snippets.json"
 local _env=(ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS="${_dir}/shared:${_dir}/local" ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST="${_dir}/m.json")
-env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets sync >/dev/null 2>&1; _rc=$?
+env "${_env[@]}" "${_dotfiles}" raycast snippets sync >/dev/null 2>&1; _rc=$?
 _t "bin: snippets sync without a manifest proceeds" "0" "${_rc}"
 _t "bin: snippets adopt then sync is a no-op" $'snippets: nothing to import | unchanged=0\npending=0' \
-  "$(env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets adopt >/dev/null 2>&1; env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets sync 2>/dev/null)"
-_t "bin: snippets check on empty tiers is in parity" $'snippets: tiers in parity | entries=0\nwarnings=0' "$(env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets check 2>/dev/null)"
-_t "bin: snippets fmt --dry-run on canonical files" $'dry_run=1\nshared=unchanged\nlocal=absent\nkeywords_fixed=0\nrewritten=0' "$(env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets fmt --dry-run 2>/dev/null)"
+  "$(env "${_env[@]}" "${_dotfiles}" raycast snippets adopt >/dev/null 2>&1; env "${_env[@]}" "${_dotfiles}" raycast snippets sync 2>/dev/null)"
+_t "bin: snippets check on empty tiers is in parity" $'snippets: tiers in parity | entries=0\nwarnings=0' "$(env "${_env[@]}" "${_dotfiles}" raycast snippets check 2>/dev/null)"
+_t "bin: snippets fmt --dry-run on canonical files" $'dry_run=1\nshared=unchanged\nlocal=absent\nkeywords_fixed=0\nrewritten=0' "$(env "${_env[@]}" "${_dotfiles}" raycast snippets fmt --dry-run 2>/dev/null)"
 _bin help >/dev/null 2>&1; _rc=$?; _t "bin: help rc 0" "0" "${_rc}"
 _t "bin: help lists the subsystems" "1" "$(_bin help 2>&1 | grep -c 'Subsystems:.*link, snippets')"
 _t "bin: help names both tier files" "2" "$(_bin help 2>&1 | grep -c -e 'shared  ~/.config/raycast-snippets/snippets.json' -e 'local   ~/.local/share/raycast-snippets/snippets.json')"
@@ -123,7 +126,7 @@ _bin snippets move Phone --to attic >/dev/null 2>&1; _rc=$?; _t "bin: move to an
 _bin snippets move --to local >/dev/null 2>&1; _rc=$?; _t "bin: move without NAME rc 1" "1" "${_rc}"
 _bin snippets list --to local >/dev/null 2>&1; _rc=$?; _t "bin: --to on another verb rc 1" "1" "${_rc}"
 _t "bin: move --dry-run reaches the plugin with --to" "name=nobody" \
-  "$(print -r -- '[{"name":"nobody","text":"x"}]' > "${_dir}/local/snippets.json"; env "${_env[@]}" "${HOME}/.config/bin/dotfiles" raycast snippets move nobody --to shared --dry-run 2>/dev/null | grep '^name=')"
+  "$(print -r -- '[{"name":"nobody","text":"x"}]' > "${_dir}/local/snippets.json"; env "${_env[@]}" "${_dotfiles}" raycast snippets move nobody --to shared --dry-run 2>/dev/null | grep '^name=')"
 _t "bin: sync --dry-run skips without Raycast" "skip raycast not installed | app='${_dir}/nope.app'" "$(ARI_DOTFILES_RAYCAST_APP="${_dir}/nope.app" _bin sync --dry-run 2>/dev/null | grep '^skip')"
 
 unset ARI_DOTFILES_RAYCAST_APP
