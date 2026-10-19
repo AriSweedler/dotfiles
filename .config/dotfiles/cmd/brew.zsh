@@ -1,5 +1,6 @@
 # dotfiles/cmd/brew.zsh — `dotfiles brew`: the declared-state side of Homebrew. The brew model
-# (cmd/brew/brew.zsh) and the decree editor (cmd/brew/decree.zsh) are loaded on demand.
+# (cmd/brew/brew.zsh), the decree editor (cmd/brew/decree.zsh) and the hand editor
+# (cmd/brew/edit.zsh) are loaded on demand.
 
 help_brew() {
   cat <<EOF
@@ -10,6 +11,7 @@ ${c_bold}Usage${c_rst}
   ${DF} brew decree ITEM.. (--global|--local|--ignore-global|--ignore-local)
                           [--reason TEXT] [--dry-run] [--no-push]
   ${DF} brew undecree ITEM.. [--dry-run] [--no-push]
+  ${DF} brew edit [--global|--local] [--ignore] [--no-commit] [--no-push]
   ${DF} brew merged
   ${DF} brew inventory [--json]
   ${DF} brew <subcommand> --help
@@ -26,6 +28,8 @@ ${c_bold}Subcommands${c_rst}
               commands that settle each
   decree      declare an item in a tier's Brewfile, or ignore it, and commit
   undecree    remove the lines decree wrote for the item, and commit
+  edit        open a tier's Brewfile (or Brewfile.ignore) in \$EDITOR, check it
+              parses, and commit it
   merged      print the merged Brewfile (debugging)
   inventory   what is installed, from receipts
 
@@ -36,7 +40,7 @@ ${c_bold}Flags${c_rst}
               run one decree per group (takes --dry-run, --no-push)
   --dry-run   decree, undecree: print the lines, paths and git commands; touch
               nothing
-  --no-push   decree, undecree: skip the local tier's push
+  --no-push   decree, undecree, edit: skip the local tier's push
   each subcommand's --help has the rest
 
 ${c_bold}Env${c_rst}
@@ -57,14 +61,16 @@ EOF
 cmd_brew() {
   need_lib "${ARI_DOTFILES_CMD}/brew/brew.zsh"
   need_lib "${ARI_DOTFILES_CMD}/brew/decree.zsh"
+  need_lib "${ARI_DOTFILES_CMD}/brew/edit.zsh"
   local sub="${1:-}"
-  [[ -n "${sub}" ]] || usage_error "brew needs a subcommand | known='triage decree undecree merged inventory'"
+  [[ -n "${sub}" ]] || usage_error "brew needs a subcommand | known='triage decree undecree edit merged inventory'"
   shift
-  # triage/decree/undecree parse their own flags and print their own --help.
+  # triage/decree/undecree/edit parse their own flags and print their own --help.
   case "${sub}" in
     triage) decree::triage "$@"; return ;;
     decree) decree::decree "$@"; return ;;
     undecree) decree::undecree "$@"; return ;;
+    edit) edit::edit "$@"; return ;;
   esac
   local -a json=()
   zparseopts -D -F -K -- -json=json || usage_error "brew ${sub}: bad flags | args='$*'"

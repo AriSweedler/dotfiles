@@ -35,6 +35,20 @@ bundle_list() {
   done < "${src}"
 }
 
+# `brew bundle list --all --file=F`: every name, or, like brew's Ruby parser, an error and exit 1
+# for a line that is not a comment, blank, or a `brew|cask|tap|vscode "name"[, options]` call.
+bundle_list_all() {
+  local file="$1" line n=0
+  local re='^[[:space:]]*(brew|cask|tap|vscode)[[:space:]]+"([^"]+)"[[:space:]]*(,.*)?$'
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    n=$(( n + 1 ))
+    [[ "${line}" =~ ^[[:space:]]*(#.*)?$ || "${line}" =~ ${re} ]] && continue
+    printf 'Error: Invalid Brewfile: %s:%s: syntax error found\n' "${file}" "${n}" >&2
+    exit 1
+  done < "${file}"
+  for kind in tap brew cask vscode; do bundle_list "${kind}" "${file}"; done
+}
+
 case "${1:-}" in
   --version) printf 'Homebrew 6.0.22\n' ;;
   --prefix) printf '%s/prefix\n' "${fixture}" ;;
@@ -64,7 +78,7 @@ case "${1:-}" in
     sub="${2:-}"
     shift 2
     file="" kind="" no_upgrade=0 verbose=0 no_describe=0 other=0
-    has_formula=0 has_cask=0 has_tap=0 has_vscode=0
+    has_formula=0 has_cask=0 has_tap=0 has_vscode=0 has_all=0
     for a in "$@"; do
       case "${a}" in
         --file=*) file="${a#--file=}" ;;
@@ -72,6 +86,7 @@ case "${1:-}" in
         --cask) kind=cask; has_cask=1 ;;
         --tap) kind=tap; has_tap=1 ;;
         --vscode) kind=vscode; has_vscode=1 ;;
+        --all) has_all=1 ;;
         --no-upgrade) no_upgrade=1 ;;
         --verbose) verbose=1 ;;
         --no-describe) no_describe=1 ;;
@@ -80,7 +95,9 @@ case "${1:-}" in
     done
     case "${sub}" in
       list)
-        if [[ -n "${kind}" && -n "${file}" && ${other} -eq 0 ]] && (( has_formula + has_cask + has_tap + has_vscode == 1 )); then
+        if [[ -n "${file}" && ${other} -eq 0 && ${has_all} -eq 1 ]] && (( has_formula + has_cask + has_tap + has_vscode == 0 )); then
+          bundle_list_all "${file}"
+        elif [[ -n "${kind}" && -n "${file}" && ${other} -eq 0 && ${has_all} -eq 0 ]] && (( has_formula + has_cask + has_tap + has_vscode == 1 )); then
           bundle_list "${kind}" "${file}"
         else
           mutation bundle "${sub}" "$@"

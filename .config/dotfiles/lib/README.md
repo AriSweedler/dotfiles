@@ -10,7 +10,7 @@ rules:
 | `cmd/` | one verb per file: `cmd_<verb>` parses its own arguments (zparseopts; flags after the verb belong to the verb) and `help_<verb>` prints its help, first line the one-line synopsis `dotfiles --help` lists | add `cmd/<verb>.zsh` with those two functions; nothing else to register |
 | `steps/` | one step per file: `step::declare <name> [--group repo\|brew\|tools] [--needs a,b] [--tools t] [--desc D] [--abort]`, then `step::watches <name> <glob>..` (`watch.zsh`: the paths under `$HOME` whose change means the step may need to run; `dotfiles pull` names those steps; none for a step with no repo inputs), then `check::<name>` (pure, one verdict line on stdout) and optionally `apply::<name>` (mutates only through `run_mut`) | add `steps/<name>.zsh`; `steps::load` validates the registry and orders it by group, then --needs, then name |
 
-Domain libraries load on demand with `need_lib`: `cmd/brew/{brew,decree}.zsh` (the Homebrew
+Domain libraries load on demand with `need_lib`: `cmd/brew/{brew,decree,edit}.zsh` (the Homebrew
 model), `cmd/verify/report.zsh` (the weekly report). Every check and apply runs in a fresh
 `zsh -f` (no `~/.zshenv`) that sources `lib/` and the step's file, so only exported environment
 reaches a step (`ARI_DOTFILES_DRY_RUN`, `ARI_DOTFILES_MODE`, `STEP`, `RUN_DIR`, the
