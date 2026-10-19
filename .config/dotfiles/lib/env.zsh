@@ -41,6 +41,7 @@ typeset -gx ARI_DOTFILES_STATE_DIR="${ARI_DOTFILES_STATE_DIR:-${XDG_STATE_HOME}/
 typeset -gx ARI_DOTFILES_DESKTOP_DIR="${ARI_DOTFILES_DESKTOP_DIR:-${HOME}/Desktop}"
 typeset -gx ARI_DOTFILES_LAUNCH_AGENTS_DIR="${ARI_DOTFILES_LAUNCH_AGENTS_DIR:-${HOME}/Library/LaunchAgents}"
 typeset -gx ARI_DOTFILES_TERMINAL_PLIST="${ARI_DOTFILES_TERMINAL_PLIST:-${HOME}/Library/Preferences/com.apple.Terminal.plist}"
+typeset -gx ARI_DOTFILES_XCODE_APP="${ARI_DOTFILES_XCODE_APP:-/Applications/Xcode.app}"
 typeset -gx ARI_DOTFILES_DF_GIT_DIR="${ARI_DOTFILES_DF_GIT_DIR:-${HOME}/dotfiles.git}"
 typeset -gx ARI_DOTFILES_LDF_GIT_DIR="${ARI_DOTFILES_LDF_GIT_DIR:-${HOME}/.local/local-dotfiles.git}"
 typeset -gx ARI_DOTFILES_DF_HOOKS="${ARI_DOTFILES_DF_HOOKS:-${HOME}/.config/git/dotfiles-hooks}"
