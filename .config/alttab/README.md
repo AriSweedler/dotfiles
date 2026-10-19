@@ -41,6 +41,10 @@ and the Pro appearance options stay locked.
 alttab-free-build
 ```
 
+`dotfiles alttab install` runs the same script, then the dotfiles `alttab` check. `dotfiles init`
+rebuilds AltTab only once the certificate exists; until then, and while full Xcode is not
+selected, its healthcheck names the step to take.
+
 It takes a minute or two, most of it xcodebuild. The script:
 
 1. Makes sure the local code-signing certificate `AltTab Free Local` exists and is trusted
