@@ -1,8 +1,10 @@
 #!/usr/bin/env zsh
 #
 # Bake a Mermaid diagram: gate its line-1 directive and contrast, confirm it renders,
-# mint the embed URL, copy it to the clipboard, and write a sidecar so callers relay
-# the exact bytes.
+# mint the embed URL, and write a sidecar so callers relay the exact bytes. The clipboard
+# is written only on request (--clipboard or MERMAID_CLIPBOARD=1), through
+# /ari-clipboard-handoff so the displaced entry is named and the pbcopy guard's marker is
+# set there and nowhere else.
 #
 # Line 1 of the source pins the theme, sizes sequence text, and carries a themeCSS
 # block for text that has nothing of its own behind it (sequence messages, box titles,
@@ -24,6 +26,7 @@ source "${LIB_LOGGING}"
 source "${SKILLS_DIR}/ari-skill-shellscripts/lib/run_with_timeout.zsh"
 
 readonly LIB_CONTRAST="${SCRIPT_DIR:h}/lib/contrast.awk"
+readonly HANDOFF_SCRIPT="${SKILLS_DIR}/ari-clipboard-handoff/bin/handoff.zsh"
 readonly VALID_FORMATS=(markdown_link ink_url live_url)
 readonly REQUIRED_THEME="default"
 # The one line every diagram starts with. Whitespace-insensitive match on its
@@ -64,13 +67,15 @@ help() {
 ${c_green}bake${c_rst} — gate a Mermaid diagram's directive and contrast, confirm it renders, and mint its embed link
 
 ${c_bold}Usage:${c_rst}
-  zsh \$HOME/.claude/skills/ari-diagram-mermaid/bin/bake --file <diagram.mmd> [--format FORMAT] [--validate-only] [--dark-check]
+  zsh \$HOME/.claude/skills/ari-diagram-mermaid/bin/bake --file <diagram.mmd> [--format FORMAT] [--validate-only] [--dark-check] [--clipboard]
   zsh \$HOME/.claude/skills/ari-diagram-mermaid/bin/bake <diagram.mmd>          (compatibility form)
 
 ${c_bold}Options:${c_rst}
   --file PATH       The .mmd source (a bare positional path is accepted for older callers)
   --format FORMAT   ${(j:, :)VALID_FORMATS} (default: markdown_link; MERMAID_FORMAT env is the fallback)
   --validate-only   Run the gates and the render check; mint no URL (MERMAID_VALIDATE_ONLY=1 is the fallback)
+  --clipboard       Also copy the link to the clipboard, via /ari-clipboard-handoff (MERMAID_CLIPBOARD=1 is the
+                    fallback). Pass it only when the user asked for the link on the clipboard this turn.
   --dark-check      Also save <name>.dark.jpg (mermaid.ink on a #${DARK_CANVAS} canvas: site dark, OS light)
                     and, when Chrome is installed, <name>.dark-scheme.png (the view URL under a dark
                     color scheme: site dark, OS dark), for a legibility look
@@ -83,7 +88,7 @@ ${c_bold}Gates:${c_rst}
   Violations print as line|directive|name|fill|color|ratio|reason and the bake stops.
 
 ${c_bold}Output:${c_rst}
-  The link on stdout, copied to the clipboard when one exists, and written to <name>.<format>.url.
+  The link on stdout and in <name>.<format>.url. The clipboard is untouched unless --clipboard was passed.
   Relay it verbatim; never retype it.
 HELP
 }
@@ -273,39 +278,36 @@ mint_output() {
   echo "[![](${url})](${live_url})"
 }
 
-copy_to_clipboard() {
-  if command -v pbcopy >/dev/null 2>&1; then
-    pbcopy
-  elif command -v xclip >/dev/null 2>&1; then
-    xclip -selection clipboard 2>/dev/null
-  elif command -v xsel >/dev/null 2>&1; then
-    xsel --clipboard --input 2>/dev/null
-  else
-    return 1
-  fi
-}
-
 #######################################
-# Deliver the output: clipboard when available, sidecar file always.
-# Globals: none
-# Arguments: $1 = output, $2 = format, $3 = sidecar path
-# Returns: none
+# Deliver the output: the sidecar is already written; the clipboard is written only
+# when the caller opted in, through /ari-clipboard-handoff, which sets the pbcopy
+# guard's marker itself and names the displaced clipboard entry on stderr.
+# Globals: HANDOFF_SCRIPT
+# Arguments: $1 = format, $2 = sidecar path, $3 = clipboard ("true" to copy)
+# Returns: 1 when a copy was requested but could not run
 #######################################
 deliver_output() {
-  local output="${1}" format="${2}" url_file="${3}"
-  if printf '%s' "${output}" | copy_to_clipboard; then
-    log::info "Valid diagram — link copied to clipboard | format='${format}' url_file='${url_file}'"
-    return
+  local format="${1}" url_file="${2}" clipboard="${3}"
+  if [[ "${clipboard}" != "true" ]]; then
+    log::info "Valid diagram — link written to file; clipboard untouched | format='${format}' url_file='${url_file}'"
+    return 0
   fi
-  log::info "Valid diagram — clipboard unavailable; link written to file | format='${format}' url_file='${url_file}'"
+  if [[ ! -r "${HANDOFF_SCRIPT}" ]]; then
+    log::err "Clipboard requested but the handoff script is missing | handoff_script='${HANDOFF_SCRIPT}' url_file='${url_file}'"
+    return 1
+  fi
+  # Its stdout (copied_chars=, previous clipboard: …) goes to stderr so bake's stdout stays the bare link.
+  zsh "${HANDOFF_SCRIPT}" --copy --file "${url_file}" 1>&2
+  log::info "Valid diagram — link copied to clipboard on request | format='${format}' url_file='${url_file}'"
 }
 
 main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local file="" format="${MERMAID_FORMAT:-markdown_link}" validate_only="false" dark_check="false"
+  local file="" format="${MERMAID_FORMAT:-markdown_link}" validate_only="false" dark_check="false" clipboard="false"
   [[ "${MERMAID_VALIDATE_ONLY:-}" == "1" ]] && validate_only="true"
+  [[ "${MERMAID_CLIPBOARD:-}" == "1" ]] && clipboard="true"
 
   while (( $# > 0 )); do case "${1}" in
     -h|--help)        help; return 0 ;;
@@ -313,6 +315,7 @@ main() {
     --format)         format="${2:?--format requires a value}"; shift 2 ;;
     --validate-only)  validate_only="true"; shift ;;
     --dark-check)     dark_check="true"; shift ;;
+    --clipboard)      clipboard="true"; shift ;;
     -*)               log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)
       if [[ -n "${file}" ]]; then
@@ -359,7 +362,7 @@ main() {
 
   # Print verbatim so callers relay this exact value — never hand-reproduce the base64.
   echo "${output}"
-  deliver_output "${output}" "${format}" "${url_file}"
+  deliver_output "${format}" "${url_file}" "${clipboard}"
 }
 
 main "${@}"
