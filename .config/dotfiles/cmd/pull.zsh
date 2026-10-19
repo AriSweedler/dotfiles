@@ -89,7 +89,7 @@ pull::report() {
   (( ${#harness} )) && print -r -- "harness updated, live now: $(pull::paths "${harness[@]}")"
   (( ${#removed} )) && print -r -- "step removed, nothing to apply: ${(j:, :)removed}"
   if (( ! ${#order} )); then print -r -- "no step watches these paths: nothing to apply"; return 0; fi
-  ui::paint warn "$(ui::glyph warn) $(plural "${#order}" "step" "steps") may have drifted:"
+  ui::paint warn "$(ui::glyph warn) the pull changed files $(plural "${#order}" "step reads" "steps read"); check this machine still matches:"
   local width=0
   for name in "${order[@]}"; do (( ${#name} > width )) && width=${#name}; done
   for name in "${order[@]}"; do

@@ -133,6 +133,7 @@ assert_contains "pull: counts the paths" "${OUT}" "pulled 2 changed paths"
 assert_contains "pull: warns per step with its paths" "${OUT}" "  brew_pkgs     .config/new-machine/Brewfile"
 assert_contains "pull: raycast_sync for its snippets" "${OUT}" "  raycast_sync  .config/raycast-snippets/snippets.json"
 assert_contains "pull: the one command" "${OUT}" "run: dotfiles apply brew_drift brew_pkgs raycast_sync"
+assert_contains "pull: the warning says what changed, steps plural" "${OUT}" "the pull changed files 3 steps read; check this machine still matches:"
 assert_contains "pull: logged as a warning" "${ERR}" "pulled changes affect steps | steps='brew_drift,brew_pkgs,raycast_sync'"
 assert_no_file "pull: no init run" "${ARI_DOTFILES_STATE_DIR}/runs"
 assert_no_file "pull: no init result" "${ARI_DOTFILES_STATE_DIR}/last_result.json"
@@ -156,6 +157,14 @@ unset ARI_DOTFILES_UI ARI_DOTFILES_GUM
 assert_eq "fancy, stderr a file: exit 0" 0 "${RC}"
 assert_contains "fancy, stderr a file: the block names the apply" "$(printf '%s' "${OUT}" | /usr/bin/sed -E $'s/\x1b\\[[0-9;]*m//g')" "run: dotfiles apply brew_drift brew_pkgs"
 assert_contains "fancy, stderr a file: the record is logged" "${ERR}" "pulled changes affect steps | steps='brew_drift,brew_pkgs'"
+
+# One step: the warning in the singular (the dry run above left its pull to take first).
+nm pull
+remote_append .config/raycast-snippets/snippets.json ''
+git -C "${CLONE}" push -q origin main
+nm pull
+assert_contains "one step: the warning in the singular" "${OUT}" "the pull changed files 1 step reads; check this machine still matches:"
+assert_contains "one step: its apply" "${OUT}" "run: dotfiles apply raycast_sync"
 
 # pull::is_terminal, the one switch: true only when fancy and stderr is a tty.
 is_terminal_rc() {
