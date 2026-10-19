@@ -41,9 +41,10 @@ and the Pro appearance options stay locked.
 alttab-free-build
 ```
 
-`dotfiles alttab install` runs the same script, then the dotfiles `alttab` check. `dotfiles init`
-rebuilds AltTab only once the certificate exists; until then, and while full Xcode is not
-selected, its healthcheck names the step to take.
+`dotfiles alttab install` first gets Xcode ready (selects it, accepts its license, installs its
+first-launch packages, each a named sudo command), then runs this script, then the dotfiles
+`alttab` check. `dotfiles init` rebuilds AltTab only when none of that is needed; otherwise its
+healthcheck says what is missing and names `dotfiles alttab install`.
 
 It takes a minute or two, most of it xcodebuild. The script:
 

@@ -28,28 +28,51 @@ step::alttab::has_cask() {
   brew list --cask alt-tab >/dev/null 2>&1
 }
 
-# Full Xcode is selected: Command Line Tools alone cannot build a macOS app. One ~15 ms call.
-step::alttab::has_xcode() {
-  local dev
-  dev="$(xcode-select -p 2>/dev/null)" || return 1
-  [[ "${dev}" == *.app/Contents/Developer ]]
+# step::alttab::xcode_state: REPLY is what stands between this Mac and an AltTab build, the first
+# of: none (no Xcode app at ARI_DOTFILES_XCODE_APP; Command Line Tools alone cannot build a macOS
+# app), not_selected (xcode-select points elsewhere), license (not accepted), first_launch (its
+# first-launch packages, which a new or updated Xcode may need to build, are not installed); else
+# ok. The xcode step reports the first three on every run; this asks only when a build is needed
+# (about 0.3 s). XCODE_APP is the app's path.
+step::alttab::xcode_state() {
+  typeset -g XCODE_APP="${ARI_DOTFILES_XCODE_APP}"
+  REPLY=none
+  [[ -d "${XCODE_APP}" ]] || return 0
+  REPLY=not_selected
+  [[ "$(xcode-select -p 2>/dev/null)" == "${XCODE_APP}/Contents/Developer" ]] || return 0
+  REPLY=license
+  xcodebuild -license check >/dev/null 2>&1 || return 0
+  REPLY=first_launch
+  xcodebuild -checkFirstLaunchStatus >/dev/null 2>&1 || return 0
+  REPLY=ok
 }
 
 step::alttab::has_cert() { zsh "${ALTTAB_DIR}/bin/alttab-free-cert" --status >/dev/null 2>&1; }
 
 # step::alttab::needs_build <reason> <detail>: the verdict for a machine that needs the build. init
-# runs it only when nothing in it needs a human: full Xcode selected and the certificate made.
+# runs it only when nothing in it needs a human: Xcode ready and the certificate made. Anything
+# else is a manual fail; `dotfiles alttab install` does all of it but fetching Xcode itself.
 step::alttab::needs_build() {
-  local reason="${1}" detail="${2}"
-  if ! step::alttab::has_xcode; then
-    verdict fail "${reason}" -m -d "${detail}; building it needs full Xcode, and $(xcode-select -p 2>/dev/null || print -r -- 'no developer directory') is selected" \
-      -f "install Xcode from the App Store, then: sudo xcode-select -s /Applications/Xcode.app && sudo xcodebuild -license accept && ${CLI_NAME} alttab install"
-  elif ! step::alttab::has_cert; then
-    verdict fail "${reason}" -m -d "${detail}; the signing certificate '${ALTTAB_IDENTITY}' is not created yet (one macOS admin password dialog)" \
-      -f "${CLI_NAME} alttab install"
-  else
-    verdict fail "${reason}" -d "${detail}" -f "${CLI_NAME} apply alttab"
-  fi
+  local reason="${1}" detail="${2}" REPLY
+  step::alttab::xcode_state
+  case "${REPLY}" in
+    none)
+      verdict fail "${reason}" -m -d "${detail}; building it needs the Xcode app, not only Command Line Tools, and none is at ${XCODE_APP}" \
+        -f "install Xcode (open 'macappstores://apps.apple.com/app/id497799835', or: brew install mas && mas install 497799835), then ${CLI_NAME} alttab install" ;;
+    not_selected)
+      verdict fail "${reason}" -m -d "${detail}; ${XCODE_APP} is installed but $(xcode-select -p 2>/dev/null || print -r -- 'nothing') is selected" -f "${CLI_NAME} alttab install" ;;
+    license)
+      verdict fail "${reason}" -m -d "${detail}; the Xcode license is not accepted" -f "${CLI_NAME} alttab install" ;;
+    first_launch)
+      verdict fail "${reason}" -m -d "${detail}; Xcode's first-launch packages are not installed" -f "${CLI_NAME} alttab install" ;;
+    *)
+      if ! step::alttab::has_cert; then
+        verdict fail "${reason}" -m -d "${detail}; the signing certificate '${ALTTAB_IDENTITY}' is not created yet (one macOS admin password dialog)" \
+          -f "${CLI_NAME} alttab install"
+      else
+        verdict fail "${reason}" -d "${detail}" -f "${CLI_NAME} apply alttab"
+      fi ;;
+  esac
 }
 
 check::alttab() {

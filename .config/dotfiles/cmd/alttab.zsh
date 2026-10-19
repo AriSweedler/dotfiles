@@ -10,23 +10,26 @@ ${c_bold}Usage${c_rst}
   ${DF} alttab install [--dry-run] [--no-launch]
   ${DF} alttab status
 
-  The alttab step checks for the patched AltTab; init rebuilds it when the
-  certificate exists, but never creates the certificate, so a machine without
-  one is told to run 'alttab install'. Sources: $(help::tilde "${HOME}/.config/alttab")
-  (README.md has the whole story).
+  The alttab step checks for the patched AltTab; init rebuilds it when Xcode
+  is ready and the certificate exists, but runs no sudo and makes no
+  certificate, so a machine short of either is told to run 'alttab install'.
+  Sources: $(help::tilde "${HOME}/.config/alttab") (README.md has the whole story).
 
 ${c_bold}Subcommands${c_rst}
-  install   create the local signing certificate 'AltTab Free Local' if it is
-            missing (macOS asks for an admin password once to trust it), then
-            clone, patch, build, sign, replace /Applications/AltTab.app, pin
-            its updater to manual and open it; then run the alttab check
+  install   get Xcode ready (select it, accept its license, install its
+            first-launch packages; each a sudo command, named first), create
+            the local signing certificate 'AltTab Free Local' if it is missing
+            (macOS asks for an admin password once to trust it), then clone,
+            patch, build, sign, replace /Applications/AltTab.app, pin its
+            updater to manual and open it; then run the alttab check
   status    the alttab step's check
 
 ${c_bold}Flags${c_rst}
   --dry-run    install: print the build's plan, change nothing
   --no-launch  install: do not open AltTab afterwards
 
-  Needs full Xcode (not only Command Line Tools), selected with xcode-select.
+  Needs the Xcode app from the App Store; Command Line Tools alone cannot
+  build a macOS app.
 EOF
 }
 
@@ -46,12 +49,50 @@ cmd_alttab() {
   esac
 }
 
+# What a setup command is for, before it runs; a dry run says it would.
+alttab::_say() { if is_dry_run; then ui::paint grey "would: ${1}"; else ui::paint warn "${1}"; fi; }
+
+# alttab::ready_xcode: the Xcode app selected, its license accepted and its first-launch packages
+# installed, each with one sudo command named before it runs (one password prompt; sudo caches it).
+# The app itself is the App Store's to install. Dry run: the commands, none run.
+alttab::ready_xcode() {
+  local REPLY last=""
+  local -a cmd
+  while step::alttab::xcode_state; [[ "${REPLY}" != ok ]]; do
+    if [[ "${REPLY}" == "${last}" ]] && ! is_dry_run; then
+      log::err "Xcode is still not ready after the fix | state='${REPLY}' cmd='${cmd[*]}'"
+      return 1
+    fi
+    case "${REPLY}" in
+      none)
+        log::err "building AltTab needs the Xcode app, not only Command Line Tools, and none is installed | app='${XCODE_APP}'"
+        log::err "install it, then run this again | fix=\"open 'macappstores://apps.apple.com/app/id497799835' (or: brew install mas && mas install 497799835)\""
+        return 1 ;;
+      not_selected) cmd=(sudo xcode-select -s "${XCODE_APP}"); alttab::_say "Selecting ${XCODE_APP} for builds (xcode-select points at $(xcode-select -p 2>/dev/null || print -r -- nothing))" ;;
+      license) cmd=(sudo xcodebuild -license accept); alttab::_say "Accepting the Xcode license" ;;
+      first_launch) cmd=(sudo xcodebuild -runFirstLaunch); alttab::_say "Installing Xcode's first-launch packages (a new or updated Xcode needs them to build)" ;;
+    esac
+    print -r -- "  ${cmd[*]}"
+    if is_dry_run; then
+      # Nothing changes in a dry run, so the next state is unknown: the rest of the plan is shown unchecked.
+      case "${REPLY}" in
+        not_selected) print -r -- "  sudo xcodebuild -license accept   (if not accepted yet)"; print -r -- "  sudo xcodebuild -runFirstLaunch   (if needed)" ;;
+        license) print -r -- "  sudo xcodebuild -runFirstLaunch   (if needed)" ;;
+      esac
+      return 0
+    fi
+    "${cmd[@]}" || { log::err "Xcode setup command failed | cmd='${cmd[*]}'"; return 1; }
+    last="${REPLY}"
+  done
+  return 0
+}
+
 alttab::install() {
   local -a build_args=()
   local dry=0
   while (( $# )); do
     case "${1}" in
-      --dry-run) dry=1; build_args+=(--dry-run) ;;
+      --dry-run) dry=1; build_args+=(--dry-run); export ARI_DOTFILES_DRY_RUN=1 ;;
       --no-launch) build_args+=(--no-launch) ;;
       *) usage_error "alttab install: bad flag | flag='${1}'" ;;
     esac
@@ -65,11 +106,7 @@ alttab::install() {
     log::err "the AltTab sources are missing | dir='${ALTTAB_DIR}' fix='${CLI_NAME} pull'"
     return 1
   fi
-  if ! step::alttab::has_xcode; then
-    log::err "building AltTab needs full Xcode, not only Command Line Tools | selected='$(xcode-select -p 2>/dev/null || print -r -- none)'"
-    log::err "install Xcode from the App Store, then | fix='sudo xcode-select -s /Applications/Xcode.app && sudo xcodebuild -license accept'"
-    return 1
-  fi
+  alttab::ready_xcode || return 1
   if ! step::alttab::has_cert; then
     if (( dry )); then
       ui::paint grey "the build will create the signing certificate '${ALTTAB_IDENTITY}' first (one admin password dialog)"
