@@ -2,7 +2,8 @@
 # personal identity are plain local config a fresh checkout lacks; the release build needs the
 # Xcode command line tools.
 step::declare plugged --group tools --needs dotfiles_repo \
-  --desc "the plugged submodule has its hooks wired (core.hooksPath=.githooks) and a built release binary"
+  --desc "the plugged submodule has its hooks wired (core.hooksPath=.githooks) and a built release binary" \
+  --apply "sets the submodule's commit identity and core.hooksPath=.githooks, then builds the release binary (plugged-dev build)"
 step::watches plugged '.config/plugged'   # the submodule pointer
 
 step::plugged::dir() {

@@ -53,7 +53,9 @@ M	.config/dotfiles/steps/alttab.zsh
 A	.config/dotfiles/steps/zz_new_step.zsh
 D	.config/dotfiles/steps/old_step.zsh
 EOF
-assert_eq "step files: edited and new map to themselves, deleted is removed" "step alttab .config/dotfiles/steps/alttab.zsh
+assert_eq "step files: edited and new map to themselves and dotfiles_docs, deleted is removed" "step dotfiles_docs .config/dotfiles/steps/alttab.zsh
+step dotfiles_docs .config/dotfiles/steps/zz_new_step.zsh
+step alttab .config/dotfiles/steps/alttab.zsh
 step zz_new_step .config/dotfiles/steps/zz_new_step.zsh
 removed old_step .config/dotfiles/steps/old_step.zsh" "${OUT}"
 
@@ -63,9 +65,16 @@ A	.config/dotfiles/cmd/brew/new.zsh
 M	.config/bin/dotfiles
 M	README.md
 EOF
-assert_eq "harness only: no step" "harness .config/dotfiles/lib/ui.zsh
+assert_eq "harness: live, and only a step that watches it (dotfiles_docs reads cmd/)" "step dotfiles_docs .config/dotfiles/cmd/brew/new.zsh
+harness .config/dotfiles/lib/ui.zsh
 harness .config/dotfiles/cmd/brew/new.zsh
 harness .config/bin/dotfiles" "${OUT}"
+
+map_paths "${STEPS_DIR}" <<'EOF'
+M	.config/alttab/Makefile
+EOF
+assert_eq "alttab's sources: alttab and the xcode it builds with" "step alttab .config/alttab/Makefile
+step xcode .config/alttab/Makefile" "${OUT}"
 
 map_paths "${STEPS_DIR}" <<'EOF'
 M	.config/dotfiles/jobs/git-health/run
@@ -89,6 +98,23 @@ printf 'step::declare two\nstep::watches one x\ncheck::two() { :; }\n' > "${bad}
 map_paths "${bad}" < /dev/null
 assert_eq "watch from another file: exit 3" 3 "${RC}"
 assert_contains "watch from another file: named" "${ERR}" "watch declared in another file | step='one' file='two.zsh'"
+
+# --none: a step that reads no repo file says so; it maps nothing and is checked like a glob.
+rm -f "${bad}/one.zsh" "${bad}/two.zsh"
+printf 'step::declare one\nstep::watches one --none "reads the agent"\ncheck::one() { :; }\n' > "${bad}/one.zsh"
+map_paths "${bad}" <<'EOF'
+M	reads/the/agent
+EOF
+assert_eq "--none: loads" 0 "${RC}"
+assert_eq "--none: maps nothing" "" "${OUT}"
+printf 'step::declare two\nstep::watches one --none "elsewhere"\ncheck::two() { :; }\n' > "${bad}/two.zsh"
+map_paths "${bad}" < /dev/null
+assert_eq "--none from another file: exit 3" 3 "${RC}"
+assert_contains "--none from another file: named" "${ERR}" "watch declared in another file | step='one' file='two.zsh'"
+rm -f "${bad}/two.zsh"
+printf 'step::declare one\nstep::watches one --none a b\ncheck::one() { :; }\n' > "${bad}/one.zsh"
+map_paths "${bad}" < /dev/null
+assert_contains "--none takes one reason" "${ERR}" "step::watches --none takes one reason | step='one'"
 
 # --- A world's pull ---
 

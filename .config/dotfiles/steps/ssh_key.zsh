@@ -5,7 +5,9 @@
 # one ssh-add -l. The apply feeds the passphrase to ssh-add through an askpass helper that runs
 # op: never argv, never the clipboard.
 step::declare ssh_key --group repo \
-  --desc "the GitHub ssh key the local tier names is in the agent (passphrase from 1Password)"
+  --desc "the GitHub ssh key the local tier names is in the agent (passphrase from 1Password)" \
+  --apply "ssh-adds the key, its passphrase read from 1Password through an askpass helper"
+step::watches ssh_key --none "reads the ssh agent and the key the local tier's environment names, no shared-tier file"
 
 ssh_key::path() { print -r -- "${ARI_DOTFILES_SSH_KEY_PATH/#\~/${HOME}}"; }
 

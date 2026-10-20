@@ -2,7 +2,8 @@
 # pre-commit rule) is the verdict. The healthcheck's process/device/IPC findings are runtime
 # state, not baseline, so its exit 1 is a warn and never a fail.
 step::declare karabiner --group tools \
-  --desc "karabiner.json exists, is valid JSON, and is jq -S sorted; healthcheck runs when present"
+  --desc "karabiner.json exists, is valid JSON, and is jq -S sorted; healthcheck runs when present" \
+  --apply "rebuilds karabiner.json from karabiner.ts, sorted (karabiner/bin/bake)"
 step::watches karabiner '.config/karabiner/**'
 
 check::karabiner() {

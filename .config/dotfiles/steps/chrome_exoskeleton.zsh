@@ -3,7 +3,8 @@
 # Chrome to load. Node comes from the local tier's env.zsh on a work machine; a personal
 # machine needs it on PATH, hence a warn, not a fail.
 step::declare chrome_exoskeleton --group tools --needs dotfiles_repo \
-  --desc "the Chrome Exoskeleton submodule has its dependencies (which wire its hooks) and a built dist/"
+  --desc "the Chrome Exoskeleton submodule has its dependencies (which wire its hooks) and a built dist/" \
+  --apply "sets the submodule's commit identity, installs its node dependencies when missing (exo deps ci, which wires its hooks) and builds dist/ (exo build)"
 step::watches chrome_exoskeleton '.config/chrome-exoskeleton'   # the submodule pointer
 
 step::chrome_exoskeleton::dir() {

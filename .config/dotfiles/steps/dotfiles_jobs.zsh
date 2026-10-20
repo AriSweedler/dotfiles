@@ -3,7 +3,8 @@
 # Every plugin and dep must say in its header what it does (and a plugin when it runs): one that
 # does not fails the step, by hand only, naming `dotfiles jobs edit NAME`.
 step::declare dotfiles_jobs --group repo --needs dotfiles_repo \
-  --desc "dotfiles jobs launchd job (runs the job plugins of both tiers) installed and loaded; every plugin and dep documented"
+  --desc "dotfiles jobs launchd job (runs the job plugins of both tiers) installed and loaded; every plugin and dep documented" \
+  --apply "compiles the agent, writes the plist and bootstraps the launchd job, each only if changed (dotfiles jobs install)"
 step::watches dotfiles_jobs '.config/dotfiles/jobs/**' '.config/dotfiles/deps/**'
 
 check::dotfiles_jobs() {

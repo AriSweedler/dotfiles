@@ -2,7 +2,10 @@
 #
 # A step is one file, steps/<name>.zsh, that declares itself and defines its functions:
 #
-#   step::declare <name> [--group repo|brew|tools] [--needs a,b] [--tools t,u] [--desc D] [--abort]
+#   # step <name> — <summary>       line 1 of the file
+#   step::declare <name> [--group repo|brew|tools] [--needs a,b] [--tools t,u] --desc D
+#                 [--apply "<what the apply changes>"] [--abort]
+#   step::watches <name> <glob>.. | step::watches <name> --none "<why it reads no repo file>"
 #   check::<name>   pure: writes only under RUN_DIR, prints exactly one verdict line on stdout,
 #                   logs on stderr, returns 0
 #   apply::<name>   optional; mutates only through run_mut; returns the command's rc
@@ -17,7 +20,11 @@ zmodload zsh/mapfile
 zmodload -F zsh/files b:zf_rm
 
 typeset -ga STEPS=() STEPS_DECLARED=()
-typeset -gA STEP_GROUP=() STEP_NEEDS=() STEP_TOOLS=() STEP_DESC=() STEP_FILE=()
+typeset -gA STEP_GROUP=() STEP_NEEDS=() STEP_TOOLS=() STEP_DESC=() STEP_FILE=() STEP_PATH=() STEP_APPLY_DOC=()
+# The documentation rule's gaps, filled by steps::validate (steps::doc_gaps): step -> what it lacks
+# (phrases joined by ", "), and step -> the same as short keys (header,--desc,--apply,watches).
+# A gap is never a load error: the dotfiles_docs step flags it.
+typeset -gA STEP_UNDOCUMENTED=() STEP_DOC_KEYS=()
 typeset -ga STEP_GROUPS=(repo brew tools)   # run order of the groups
 typeset -g STEP_ABORT_ON=""                  # in setup, a fail or error here skips every later step
 
@@ -26,17 +33,20 @@ typeset -g STEP_ABORT_ON=""                  # in setup, a fail or error here sk
 step::declare() {
   local name="${1:?step::declare needs a name}"; shift
   local group=tools needs="" tools="" desc="" abort=0
+  unset "STEP_APPLY_DOC[${name}]"
   while (( $# )); do case "${1}" in
     --group) group="${2}"; shift 2 ;;
     --needs) needs="${2}"; shift 2 ;;
     --tools) tools="${2}"; shift 2 ;;
     --desc)  desc="${2}"; shift 2 ;;
+    --apply) STEP_APPLY_DOC[${name}]="${2}"; shift 2 ;;
     --abort) abort=1; shift ;;
     *) print -u2 "[ERROR] step::declare: bad flag | step='${name}' flag='${1}'"; return 64 ;;
   esac; done
   (( ${STEPS_DECLARED[(Ie)${name}]} )) || STEPS_DECLARED+=("${name}")
   STEP_GROUP[${name}]="${group}"; STEP_NEEDS[${name}]="${needs}"; STEP_TOOLS[${name}]="${tools}"; STEP_DESC[${name}]="${desc}"
-  STEP_FILE[${name}]="${${funcfiletrace[1]%:*}:t:r}"   # the file that declared it
+  STEP_PATH[${name}]="${funcfiletrace[1]%:*}"           # the file that declared it
+  STEP_FILE[${name}]="${STEP_PATH[${name}]:t:r}"
   (( abort )) && STEP_ABORT_ON="${name}"
   return 0
 }
@@ -50,7 +60,8 @@ steps::load() {
 }
 
 # Every declaration has a check and lives in the file of its name; every check has a declaration;
-# groups are known; needs are known and in the same or an earlier group.
+# groups are known; needs are known and in the same or an earlier group. Then the documentation
+# rule (steps::doc_gaps), which never fails the load.
 steps::validate() {
   local name need fn rc=0
   for name in "${STEPS_DECLARED[@]}"; do
@@ -68,7 +79,46 @@ steps::validate() {
     name="${fn#check::}"
     (( ${STEPS_DECLARED[(Ie)${name}]} )) || { print -u2 "[ERROR] check without a declaration | step='${name}' want='step::declare ${name}'"; rc=3; }
   done
+  steps::doc_gaps
   return "${rc}"
+}
+
+# The documentation rule, per declared step, into STEP_UNDOCUMENTED and STEP_DOC_KEYS; no fork
+# (one builtin read of each file's first line):
+#   header    line 1 is '# step <name> — <summary>'
+#   --desc    a non-empty --desc
+#   --apply   a non-empty --apply "<what the apply changes>" exactly when apply::<name> exists
+#   watches   step::watches <name> <glob>.., or step::watches <name> --none "<why>"
+steps::doc_gaps() {
+  local name line want doc
+  local -a gaps keys
+  STEP_UNDOCUMENTED=() STEP_DOC_KEYS=()
+  for name in "${STEPS_DECLARED[@]}"; do
+    gaps=() keys=() line=""
+    want="# step ${name} — "
+    { IFS= read -r line < "${STEP_PATH[${name}]}" } 2>/dev/null || true
+    if [[ "${line}" != "${want}"* || -z "${${line#"${want}"}//[[:space:]]/}" ]]; then
+      gaps+=("line 1 is not '# step ${name} — <summary>'"); keys+=(header)
+    fi
+    [[ -n "${STEP_DESC[${name}]//[[:space:]]/}" ]] || { gaps+=("no --desc"); keys+=(--desc); }
+    if (( ${+functions[apply::${name}]} )); then
+      doc="${STEP_APPLY_DOC[${name}]:-}"
+      [[ -n "${doc//[[:space:]]/}" ]] || { gaps+=("no --apply \"<what the apply changes>\""); keys+=(--apply); }
+    elif (( ${+STEP_APPLY_DOC[${name}]} )); then
+      gaps+=("--apply but no apply::${name}"); keys+=(--apply)
+    fi
+    if (( ${+STEP_WATCH_NONE[${name}]} )); then
+      if [[ -n "${STEP_WATCHES[${name}]:-}" ]]; then gaps+=("step::watches has both globs and --none"); keys+=(watches)
+      elif [[ -z "${STEP_WATCH_NONE[${name}]//[[:space:]]/}" ]]; then gaps+=("step::watches --none without a reason"); keys+=(watches)
+      fi
+    elif [[ -z "${STEP_WATCHES[${name}]:-}" ]]; then
+      gaps+=("no step::watches (globs or --none \"<why it reads no repo file>\")"); keys+=(watches)
+    fi
+    (( ${#gaps} )) || continue
+    STEP_UNDOCUMENTED[${name}]="${(j:, :)gaps}"
+    STEP_DOC_KEYS[${name}]="${(j:,:)keys}"
+  done
+  return 0
 }
 
 # True (0) when every need of a step is already in STEPS.
@@ -127,12 +177,13 @@ steps::select() {
   fi
 }
 
-# name · group · needs · tools · apply · description, one line per step.
+# name · group · needs · tools · apply · docs (ok, or the keys of what is missing) · description,
+# one line per step.
 steps::list() {
   local name has_apply
   for name in "${STEPS[@]}"; do
     has_apply=no; step::is_fixable "${name}" && has_apply=yes
-    printf '%-22s %-6s %-14s %-6s %-5s %s\n' "${name}" "${STEP_GROUP[${name}]}" "${STEP_NEEDS[${name}]:--}" "${STEP_TOOLS[${name}]:--}" "${has_apply}" "${STEP_DESC[${name}]}"
+    printf '%-22s %-6s %-14s %-6s %-5s %-8s %s\n' "${name}" "${STEP_GROUP[${name}]}" "${STEP_NEEDS[${name}]:--}" "${STEP_TOOLS[${name}]:--}" "${has_apply}" "${STEP_DOC_KEYS[${name}]:-ok}" "${STEP_DESC[${name}]}"
   done
 }
 

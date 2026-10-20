@@ -1,6 +1,8 @@
 # step brew — Homebrew itself. The one hard prerequisite: when it fails in setup, every later
 # group is skipped (`--abort`), because their tools come from it.
-step::declare brew --group brew --abort --desc "Homebrew is installed"
+step::declare brew --group brew --abort --desc "Homebrew is installed" \
+  --apply "runs the Homebrew installer, after a sudo prompt"
+step::watches brew --none "reads whether Homebrew is installed, no repo file"
 
 typeset -g BREW_INSTALLER="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
 

@@ -1,5 +1,7 @@
 # step claude — Claude Code installed.
-step::declare claude --group tools --desc "Claude Code installed"
+step::declare claude --group tools --desc "Claude Code installed" \
+  --apply "runs the Claude Code installer (curl https://claude.ai/install.sh | sh)"
+step::watches claude --none "reads whether Claude Code is installed, no repo file"
 
 typeset -g CLAUDE_INSTALLER="https://claude.ai/install.sh"
 

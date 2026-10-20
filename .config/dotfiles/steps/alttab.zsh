@@ -6,7 +6,8 @@
 # Xcode is not selected, a needed build is a manual fail naming `dotfiles alttab install`.
 # free.patch documents itself: its header's "What it changes" list names every file it touches,
 # or the step fails by hand, naming `dotfiles alttab edit --header`.
-step::declare alttab --group tools --desc "AltTab, the Free-tier build from source: patched app installed, updater manual, no Homebrew cask; free.patch's header names every file it changes (~/.config/alttab)"
+step::declare alttab --group tools --desc "AltTab, the Free-tier build from source: patched app installed, updater manual, no Homebrew cask; free.patch's header names every file it changes (~/.config/alttab)" \
+  --apply "builds the patched Free-tier AltTab from source and installs it (alttab-free-build)"
 step::watches alttab '.config/alttab/**'
 
 step::alttab::paths() {

@@ -3,6 +3,7 @@
 # the App Store, selected with xcode-select, license accepted. All three are hand steps (an Apple
 # account, then sudo), so the verdicts name the commands and init applies nothing.
 step::declare xcode --group tools --desc "full Xcode installed, selected with xcode-select and its license accepted (alttab builds with it)"
+step::watches xcode '.config/alttab/**'
 
 check::xcode() {
   if [[ "${OSTYPE}" != darwin* ]]; then

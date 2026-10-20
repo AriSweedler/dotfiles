@@ -1,5 +1,7 @@
 # step bob_neovim — neovim through bob.
-step::declare bob_neovim --group tools --desc "neovim installed through bob"
+step::declare bob_neovim --group tools --desc "neovim installed through bob" \
+  --apply "installs the latest neovim with bob and makes it the one in use"
+step::watches bob_neovim --none "reads bob's install of neovim, no repo file"
 # Machine inputs: what `bob ls` reads. reply: the Homebrew-installed bob binary and bob's config
 # and version dirs (macOS and XDG locations), two levels deep. 1 when bob is not a Homebrew keg
 # (a wrapper, a test shim) or its config moves the downloads elsewhere: then uncached.

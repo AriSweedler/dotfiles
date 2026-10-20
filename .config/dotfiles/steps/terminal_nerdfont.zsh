@@ -2,6 +2,7 @@
 # using one. Setting the font is a hand step; the verdicts say so.
 step::declare terminal_nerdfont --group brew --needs brew --tools brew \
   --desc "a Nerd Font cask is installed and at least one Terminal.app profile uses a Nerd Font"
+step::watches terminal_nerdfont --none "reads the installed casks and Terminal.app's preferences, no repo file"
 
 # Cached on the casks installed and the Terminal preferences: the two things it reads.
 check::terminal_nerdfont() {

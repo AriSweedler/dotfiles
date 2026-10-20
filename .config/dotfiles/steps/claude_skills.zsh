@@ -2,7 +2,8 @@
 # and no link dangles. The registry skill owns the classification; it is addressed by its
 # shared-tier path, because on a fresh machine the symlink is exactly what does not exist yet.
 step::declare claude_skills --group repo --needs dotfiles_repo \
-  --desc "every skill a dotfiles tier holds is symlinked into ~/.claude/skills and no link dangles"
+  --desc "every skill a dotfiles tier holds is symlinked into ~/.claude/skills and no link dangles" \
+  --apply "links every tier-held skill into ~/.claude/skills and prunes the dangling links (the skill registry's link --prune)"
 step::watches claude_skills '.config/claude/skills/**'
 
 step::claude_skills::registry_bin() {
