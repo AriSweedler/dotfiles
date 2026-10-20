@@ -1,6 +1,7 @@
 # dotfiles/cmd/alttab.zsh — `dotfiles alttab`: the Free-tier AltTab built from source. The build and
 # the certificate are ~/.config/alttab/bin's scripts; this verb runs them the one way init will not:
-# making the signing certificate, which asks for an admin password in a macOS dialog.
+# making the signing certificate, which asks for an admin password in a macOS dialog. `edit`
+# (cmd/alttab/edit.zsh) changes free.patch.
 
 help_alttab() {
   cat <<EOF
@@ -9,6 +10,7 @@ build, sign and install the Free-tier AltTab
 ${c_bold}Usage${c_rst}
   ${DF} alttab install [--dry-run] [--no-launch]
   ${DF} alttab status
+  ${DF} alttab edit [--header] [--no-commit]     (also: alttab --edit)
 
   The alttab step checks for the patched AltTab; init rebuilds it when Xcode
   is ready and the certificate exists, but runs no sudo and makes no
@@ -23,10 +25,21 @@ ${c_bold}Subcommands${c_rst}
             patch, build, sign, replace /Applications/AltTab.app, pin its
             updater to manual and open it; then run the alttab check
   status    the alttab step's check
+  edit      open the files free.patch changes in \$EDITOR, in the build's
+            clone ($(help::tilde "${XDG_CACHE_HOME:-${HOME}/.cache}/alttab-free/src")); on save free.patch becomes its
+            header plus the clone's 'git diff HEAD'. It must apply to a clean
+            checkout of free.patch.ref, and its "What it changes" list must
+            name every file it touches; then it is committed (shared tier).
+            Pro stays locked except shortcut slot 2 (AGENTS.md). Builds
+            nothing: run 'alttab install' next
 
 ${c_bold}Flags${c_rst}
   --dry-run    install: print the build's plan, change nothing
   --no-launch  install: do not open AltTab afterwards
+  --edit       the other spelling of edit
+  --header     edit: open free.patch itself (its header names each file it
+               changes); prints the change as a diff
+  --no-commit  edit: put free.patch in place, leave it uncommitted
 
   Needs the Xcode app from the App Store; Command Line Tools alone cannot
   build a macOS app.
@@ -35,17 +48,21 @@ EOF
 
 cmd_alttab() {
   local sub="${1:-}"
-  [[ -n "${sub}" ]] || usage_error "alttab needs a subcommand | known='install status'"
+  [[ -n "${sub}" ]] || usage_error "alttab needs a subcommand | known='install status edit'"
   shift
   source "${ARI_DOTFILES_STEPS}/alttab.zsh" || return 3
   step::alttab::paths
   case "${sub}" in
     install) alttab::install "$@" ;;
+    edit|--edit)
+      need_lib "${ARI_DOTFILES_CMD}/alttab/edit.zsh" || return 3
+      alttab::edit "$@"
+      ;;
     status)
       (( $# == 0 )) || usage_error "alttab status takes no arguments | args='$*'"
       cmd_healthcheck --only alttab
       ;;
-    *) usage_error "alttab: unknown subcommand | sub='${sub}' known='install status'" ;;
+    *) usage_error "alttab: unknown subcommand | sub='${sub}' known='install status edit'" ;;
   esac
 }
 

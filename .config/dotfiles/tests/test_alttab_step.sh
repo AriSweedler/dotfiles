@@ -34,6 +34,25 @@ field() { printf '%s' "${VERDICT}" | jq -r ".$1"; }
 check
 assert_eq "converged: ok" "ok in_sync" "$(field status) $(field reason)"
 
+# ── the doc rule: free.patch's "What it changes" list names every file it touches ──
+cp "${ORIG_CONFIG_DIR}/alttab/free.patch" "${HOME}/.config/alttab/free.patch"
+check
+assert_eq "the real free.patch: every file named" "ok in_sync" "$(field status) $(field reason)"
+{
+  printf 'Fixture patch\n\nWhat it changes\n  App   one line\n        App is also the first word here\n\n'
+  printf 'diff --git a/src/App.swift b/src/App.swift\n--- a/src/App.swift\n+++ b/src/App.swift\n@@ -1 +1 @@\n-a\n+b\n'
+  printf 'diff --git a/src/ui/Menubar.swift b/src/ui/Menubar.swift\n--- a/src/ui/Menubar.swift\n+++ b/src/ui/Menubar.swift\n@@ -1 +1 @@\n-a\n+b\n'
+} > "${HOME}/.config/alttab/free.patch"
+check
+assert_eq "a file the header does not name: a manual fail" "fail patch_undocumented true false" \
+  "$(field status) $(field reason) $(field manual) $(field actionable)"
+assert_contains "a file the header does not name: names it" "$(field detail)" "free.patch changes Menubar, which"
+assert_not_contains "a file the header does not name: not the named one" "$(field detail)" "App"
+assert_eq "a file the header does not name: the fix" "dotfiles alttab edit --header" "$(field fix)"
+check ALTTAB_APP="${FIX}/apps/Nope.app"
+assert_eq "a needed build comes first: init still builds it" "fail alttab_missing false" "$(field status) $(field reason) $(field manual)"
+rm -f "${HOME}/.config/alttab/free.patch"
+
 check ALTTAB_APP="${FIX}/apps/Nope.app"
 assert_eq "missing, Xcode and certificate in place: init builds it" "fail alttab_missing false true" \
   "$(field status) $(field reason) $(field manual) $(field actionable)"

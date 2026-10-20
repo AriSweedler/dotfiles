@@ -385,18 +385,79 @@ patch_header() {
 }
 
 #######################################
-# Rewrite the patch from a rebased worktree: header, then the diff from the new ref to HEAD;
-# record the new ref beside the patch.
-# Arguments: $1 worktree, $2 new ref, $3 patch file
+# Rewrite the patch: its header, then the diff git prints for the given revisions in the
+# worktree. Written to a temporary file and renamed over the patch (mode 600, mktemp's).
+# Arguments: $1 worktree, $2 ref (the header's Base line), $3 patch file, $4... git diff revisions
 #######################################
 write_patch() {
   local wt="${1}" new_ref="${2}" patch="${3}" tmp
+  shift 3
   tmp="$(mktemp)"
-  { patch_header "${patch}" "${new_ref}"; git -C "${wt}" diff "${new_ref}" HEAD; } > "${tmp}"
+  { patch_header "${patch}" "${new_ref}"; git -C "${wt}" diff --no-ext-diff --no-color "$@"; } > "${tmp}"
   mv -f "${tmp}" "${patch}"
-  print -r -- "${new_ref}" > "${patch}.ref"
   log::ok "Patch regenerated | patch='${patch}' ref='${new_ref}' hunks='$(grep -c '^@@' "${patch}")'"
+}
+
+#######################################
+# The patch moved to a new ref: record the ref beside it and say what proves it.
+# Arguments: $1 patch file, $2 new ref
+#######################################
+record_ref() {
+  print -r -- "${2}" > "${1}.ref"
   log::info "Next: alttab-free-build --build-only to prove it builds, then alttab-free-build to install"
+}
+
+#######################################
+# Rewrite the patch from the clone's working tree (the build leaves the patch applied there), so
+# hand edits to the patched files become the patch. The ref is unchanged.
+# Arguments: $1 src dir, $2 patch file, $3 ref
+# Returns: 1 if the clone is missing or not at ref
+#######################################
+regen_patch() {
+  local src="${1}" patch="${2}" ref="${3}" head want
+  if [[ ! -d "${src}/.git" ]]; then
+    log::err "No clone to regenerate the patch from | src='${src}' fix='alttab-free-build --build-only'"
+    return 1
+  fi
+  head="$(git -C "${src}" rev-parse HEAD 2>/dev/null || true)"
+  want="$(git -C "${src}" rev-parse --verify --quiet "${ref}^{commit}" 2>/dev/null || true)"
+  if [[ -z "${want}" || "${head}" != "${want}" ]]; then
+    log::err "The clone is not at the patch's ref | src='${src}' ref='${ref}' head='${head:0:8}' fix='alttab-free-build --build-only'"
+    return 1
+  fi
+  write_patch "${src}" "${ref}" "${patch}" HEAD
+}
+
+#######################################
+# Prove the patch applies to a clean checkout of ref: git apply --check in a throwaway worktree
+# of the clone, removed afterwards. Needs no network when the clone has ref.
+# Arguments: $1 src dir, $2 patch file, $3 ref
+# Returns: 1 if the clone lacks ref or the patch does not apply
+#######################################
+check_patch() {
+  local src="${1}" patch="${2}" ref="${3}" wt out rc=0
+  if [[ ! -d "${src}/.git" ]] || ! git -C "${src}" rev-parse --verify --quiet "${ref}^{commit}" >/dev/null; then
+    log::err "The clone does not have the patch's ref | src='${src}' ref='${ref}' fix='alttab-free-build --build-only'"
+    return 1
+  fi
+  wt="$(mktemp -d "${src:h}/check.XXXXXX")"
+  {
+    git -C "${src}" worktree add --quiet --detach "${wt}" "${ref}" >/dev/null 2>&1 || rc=$?
+    if (( rc == 0 )); then
+      out="$(git -C "${wt}" apply --check "${patch}" 2>&1)" || rc=$?
+    else
+      out="git worktree add failed"
+    fi
+  } always {
+    git -C "${src}" worktree remove --force "${wt}" >/dev/null 2>&1 || rm -rf "${wt}"
+    git -C "${src}" worktree prune >/dev/null 2>&1 || true
+  }
+  if (( rc != 0 )); then
+    log::err "Patch does not apply to a clean ${ref} | patch='${patch}'"
+    log::ERR "${out}"
+    return 1
+  fi
+  log::ok "Patch applies to a clean ${ref} | patch='${patch}' files='$(grep -c '^diff --git' "${patch}")' hunks='$(grep -c '^@@' "${patch}")'"
 }
 
 #######################################
@@ -438,7 +499,8 @@ rebase_patch() {
   print -r -- "${patch}" > "${wt}/.free-rebase-patch"
   log::info "Rebasing the patch | from='${old_ref}' onto='${new_ref}' worktree='${wt}'"
   if git -C "${wt}" "${REBASE_GIT_ID[@]}" -c core.hooksPath=/dev/null rebase --quiet "${new_ref}" >/dev/null 2>&1; then
-    write_patch "${wt}" "${new_ref}" "${patch}"
+    write_patch "${wt}" "${new_ref}" "${patch}" "${new_ref}" HEAD
+    record_ref "${patch}" "${new_ref}"
     drop_rebase_worktree "${src}"
     return 0
   fi
@@ -474,7 +536,8 @@ finish_patch() {
   local new_ref patch
   new_ref="$(<"${wt}/.free-rebase-target")"
   patch="$(<"${wt}/.free-rebase-patch")"
-  write_patch "${wt}" "${new_ref}" "${patch}"
+  write_patch "${wt}" "${new_ref}" "${patch}" "${new_ref}" HEAD
+  record_ref "${patch}" "${new_ref}"
   drop_rebase_worktree "${src}"
 }
 
@@ -487,6 +550,7 @@ ${c_green}alttab-free-build${c_rst} — build AltTab as the permanent Free tier 
 ${c_bold}Usage:${c_rst}
   alttab-free-build [OPTIONS]
   alttab-free-build --rebase-patch REF | --finish-patch
+  alttab-free-build --regen-patch | --check-patch
 
 ${c_bold}Options:${c_rst}
   --ref REF          Upstream tag or branch to build (default: ${DEFAULT_REF}, what free.patch targets)
@@ -502,6 +566,11 @@ ${c_bold}Options:${c_rst}
                      stays at ${DEFAULT_SRC:h}/rebase with instructions; nothing else changes
   --finish-patch     After resolving those conflicts and continuing the rebase: rewrite the patch
                      from the worktree and remove it
+  --regen-patch      Rewrite the patch as its prose header plus \`git diff HEAD\` of the clone,
+                     which must be at --ref: edits to the patched files there become the patch
+                     (\`dotfiles alttab edit\` does this and validates it)
+  --check-patch      git apply --check the patch in a clean worktree of the clone at --ref;
+                     offline once the clone has the ref
   --dry-run          Print the plan and exit without changing anything
   --verbose          Enable debug logging
   -h, --help         Show this help
@@ -522,8 +591,6 @@ EOF
 # --- Main ---
 
 main() {
-  check_prerequisites || exit 1
-
   # === PARSE ===
   local verbose=false build_only=false launch=true mode=build rebase_to=""
   local ref="${DEFAULT_REF}" src="${DEFAULT_SRC}" patch="${DEFAULT_PATCH}" identity="${DEFAULT_IDENTITY}"
@@ -536,6 +603,8 @@ main() {
     --no-launch)     launch=false; shift ;;
     --rebase-patch)  mode=rebase; rebase_to="${2:?--rebase-patch requires a ref}"; shift 2 ;;
     --finish-patch)  mode=finish; shift ;;
+    --regen-patch)   mode=regen; shift ;;
+    --check-patch)   mode=check; shift ;;
     --ref)           ref="${2:?--ref requires a value}"; shift 2 ;;
     --src)           src="${2:?--src requires a value}"; shift 2 ;;
     --patch)         patch="${2:?--patch requires a value}"; shift 2 ;;
@@ -545,6 +614,12 @@ main() {
   esac; done
 
   export VERBOSE="${verbose}"
+  # Rewriting or checking the patch needs only git; building needs the toolchain too.
+  if [[ "${mode}" == (regen|check) ]]; then
+    command -v git >/dev/null 2>&1 || { log::err "Missing required commands | missing='git'"; return 1; }
+  else
+    check_prerequisites || exit 1
+  fi
 
   # === MASSAGE ===
   src="${src:A}"
@@ -575,6 +650,18 @@ main() {
   fi
   if [[ "${mode}" == finish ]]; then
     finish_patch "${src}"
+    return
+  fi
+  if [[ "${mode}" == regen ]]; then
+    if [[ "${DRY_RUN}" == "true" ]]; then
+      log::INFO "Dry run. Would: rewrite ${patch} as its header plus git -C ${src} diff HEAD (the clone at ${ref})"
+      return 0
+    fi
+    regen_patch "${src}" "${patch}" "${ref}"
+    return
+  fi
+  if [[ "${mode}" == check ]]; then
+    check_patch "${src}" "${patch}" "${ref}"
     return
   fi
 

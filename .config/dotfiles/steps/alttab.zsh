@@ -4,11 +4,15 @@
 # quits and replaces /Applications/AltTab.app. The local signing certificate is a human step: its
 # creation pops a system password dialog, so init never makes it: until it exists, and while full
 # Xcode is not selected, a needed build is a manual fail naming `dotfiles alttab install`.
-step::declare alttab --group tools --desc "AltTab, the Free-tier build from source: patched app installed, updater manual, no Homebrew cask (~/.config/alttab)"
+# free.patch documents itself: its header's "What it changes" list names every file it touches,
+# or the step fails by hand, naming `dotfiles alttab edit --header`.
+step::declare alttab --group tools --desc "AltTab, the Free-tier build from source: patched app installed, updater manual, no Homebrew cask; free.patch's header names every file it changes (~/.config/alttab)"
 step::watches alttab '.config/alttab/**'
 
 step::alttab::paths() {
   ALTTAB_DIR="${HOME}/.config/alttab"
+  ALTTAB_PATCH="${ALTTAB_DIR}/free.patch"
+  ALTTAB_SRC="${XDG_CACHE_HOME:-${HOME}/.cache}/alttab-free/src"   # alttab-free-build's clone
   ALTTAB_APP="${ALTTAB_APP:-/Applications/AltTab.app}"
   ALTTAB_BUNDLE="com.lwouis.alt-tab-macos"
   ALTTAB_IDENTITY="AltTab Free Local"
@@ -45,6 +49,35 @@ step::alttab::xcode_state() {
   REPLY=first_launch
   xcodebuild -checkFirstLaunchStatus >/dev/null 2>&1 || return 0
   REPLY=ok
+}
+
+# step::alttab::undocumented <patch>: reply is each file the patch touches, as its basename
+# without .swift, that is not the first word of a line in the header's "What it changes" list
+# (the lines after that heading, up to a blank line or the first diff). Reads the file only.
+step::alttab::undocumented() {
+  local patch="${1}" line name
+  local -i in_list=0 items=0
+  local -A named=()
+  local -a touched=() words
+  typeset -gUa reply=()
+  [[ -r "${patch}" ]] || return 0
+  for line in "${(@f)$(<"${patch}")}"; do
+    if [[ "${line}" == 'diff --git '* ]]; then
+      in_list=0
+      name="${${line##* b/}:t}"
+      touched+=("${name%.swift}")
+      continue
+    fi
+    if [[ "${line}" == 'What it changes'* ]]; then in_list=1; continue; fi
+    (( in_list )) || continue
+    words=(${=line})
+    if (( ${#words} == 0 )); then (( items )) && in_list=0; continue; fi
+    named[${words[1]}]=1
+    (( ++items ))
+  done
+  for name in "${touched[@]}"; do
+    (( ${+named[${name}]} )) || reply+=("${name}")
+  done
 }
 
 step::alttab::has_cert() { zsh "${ALTTAB_DIR}/bin/alttab-free-cert" --status >/dev/null 2>&1; }
@@ -110,7 +143,15 @@ check::alttab() {
     step::alttab::needs_build updater_auto "AltTab's updater is not pinned to manual | updatePolicy='${policy}' SUEnableAutomaticChecks='${auto}'"
     return 0
   fi
-  verdict ok in_sync -d "patched AltTab installed; updater manual; no Homebrew cask"
+  local -a reply
+  step::alttab::undocumented "${ALTTAB_PATCH}"
+  if (( ${#reply} )); then
+    verdict fail patch_undocumented -m \
+      -d "free.patch changes ${(j:, :)reply}, which its header's 'What it changes' list does not name (each file's name without .swift, first on its line)" \
+      -f "${CLI_NAME} alttab edit --header"
+    return 0
+  fi
+  verdict ok in_sync -d "patched AltTab installed; updater manual; no Homebrew cask; free.patch documented"
 }
 
 apply::alttab() {

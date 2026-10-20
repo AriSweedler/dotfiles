@@ -12,9 +12,9 @@ and the Pro appearance options stay locked.
 
 | File | Purpose |
 |---|---|
-| `bin/alttab-free-build` | Clones upstream, applies the patch, builds, installs, fixes permissions. On `PATH` via `~/.config/bin`. Also moves the patch to a new upstream tag (`--rebase-patch`). |
+| `bin/alttab-free-build` | Clones upstream, applies the patch, builds, installs, fixes permissions. On `PATH` via `~/.config/bin`. Also moves the patch to a new upstream tag (`--rebase-patch`), rewrites it from the clone (`--regen-patch`) and proves it applies (`--check-patch`). |
 | `bin/alttab-free-cert` | Creates and trusts the local code-signing certificate the build is signed with, once per machine. Called by the build script; safe to run by hand. |
-| `free.patch` | The source change. Its header lists exactly what it alters and the upstream tag it targets (`Base:` line). |
+| `free.patch` | The source change. Its header lists exactly what it alters and the upstream tag it targets (`Base:` line). Its "What it changes" list names every file the patch touches, or the dotfiles `alttab` check fails. |
 | `free.patch.ref` | That tag on its own, one line; the script's default `--ref`. `--rebase-patch` rewrites both files together. |
 | `README.md` | This file. |
 | `AGENTS.md` | Instructions for an LLM agent doing this on a new machine with you. |
@@ -114,6 +114,24 @@ security delete-identity -c "AltTab Free Local"
 ```
 
 The next `alttab-free-build` creates a new certificate, and you grant once more.
+
+## Changing the patch
+
+```sh
+dotfiles alttab edit             # the patched files, in the clone at ~/.cache/alttab-free/src
+dotfiles alttab edit --header    # free.patch itself: the prose header (or the diff below it)
+dotfiles alttab install          # build and install what you saved
+```
+
+The clone a build leaves is at `free.patch.ref` with the patch applied, so `git diff HEAD` there
+is the patch's body. `alttab edit` opens the files that diff touches in `$EDITOR`; on save
+`free.patch` becomes its header plus that diff (`alttab-free-build --regen-patch`). The new patch
+must apply to a clean checkout of the tag (`alttab-free-build --check-patch`) and its "What it
+changes" list must name every file it touches: the file's name without `.swift`, as the first
+word of a line. One that passes replaces `free.patch` and is committed in the shared tier; one
+that does not is kept beside the clone, and the next `alttab edit` resumes it. It refuses while a
+`--rebase-patch` is unfinished, and when the clone is missing, at another tag, or carries changes
+`free.patch` does not; `alttab-free-build --build-only` resets the clone from `free.patch`.
 
 ## Updating to a newer AltTab
 

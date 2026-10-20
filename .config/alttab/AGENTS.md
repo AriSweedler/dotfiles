@@ -173,7 +173,9 @@ finish; the patch move is yours.
    `rebase --continue` with `GIT_EDITOR=true`, `alttab-free-build --finish-patch`).
 4. Prove it builds without installing: `alttab-free-build --build-only --identity -` (about 70 s).
    Read `free.patch`'s header and the hunk list (`grep -E '^\+\+\+|^@@' free.patch`) and check the
-   "What it changes" list still matches what the hunks do.
+   "What it changes" list still matches what the hunks do. Each file the patch touches must be
+   the first word of a line in that list (its name without `.swift`), or the dotfiles `alttab`
+   check fails; `dotfiles alttab edit --header` edits the header.
 5. The person installs: `alttab-free-build` (Procedure steps 2 to 6; permissions survive because
    the certificate is unchanged). Delete the build-only bundle first if it is still there.
 6. Commit `free.patch`, `free.patch.ref` and anything else that changed on the shared tier
@@ -181,10 +183,10 @@ finish; the patch move is yours.
 
 If the rebase applies cleanly but the build then fails, the conflict was semantic. Read the
 `error:` lines in the build log and fix the files in the clone at `~/.cache/alttab-free/src`,
-which the build left at the new tag with the patch applied. Then regenerate the patch from the
-clone, keeping the prose header: `{ sed -n '1,/^diff --git/p' free.patch | sed '$d';
-git -C ~/.cache/alttab-free/src diff; } > free.patch.new && mv free.patch.new free.patch`.
-`free.patch.ref` already names the new tag.
+which the build left at the new tag with the patch applied: `dotfiles alttab edit` opens them,
+then rewrites `free.patch` as its prose header plus the clone's `git diff HEAD`, proves it applies
+to a clean checkout of the tag, and checks the header names every file. `free.patch.ref` already
+names the new tag.
 
 ## Failure playbook
 
