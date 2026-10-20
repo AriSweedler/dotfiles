@@ -17,10 +17,10 @@ verb::sub alttab install "get Xcode ready (select it, accept its license, instal
 verb::sub alttab status "the alttab step's check"
 verb::edit alttab alttab::edit_cmd '[--header] [--no-commit]' \
   'open the files free.patch changes in \$EDITOR, in the clone the build keeps ($(help::tilde "${XDG_CACHE_HOME:-${HOME}/.cache}/alttab-free/src")); on save free.patch becomes its header plus "git diff HEAD" there. It must apply to a clean checkout of free.patch.ref, and its "What it changes" list must name every file it touches; then it is committed (shared tier). A save that fails is kept for the next edit. Refuses during an unfinished "alttab-free-build --rebase-patch", and when the clone is missing, at another ref or carries other changes. Pro stays locked except shortcut slot 2 (AGENTS.md). Builds nothing: run "alttab install" next'
-verb::flag alttab '--dry-run' "install: print the build's plan, change nothing"
-verb::flag alttab '--no-launch' 'install: do not open AltTab afterwards'
-verb::flag alttab '--header' 'edit: open free.patch itself (its header names each file it changes); prints the change as a diff'
-verb::flag alttab '--no-commit' 'edit: put free.patch in place, leave it uncommitted'
+verb::flag alttab '--dry-run' "install: print the build's plan, change nothing" --for install
+verb::flag alttab '--no-launch' 'install: do not open AltTab afterwards' --for install
+verb::flag alttab '--header' 'edit: open free.patch itself (its header names each file it changes); prints the change as a diff' --for edit
+verb::flag alttab '--no-commit' 'edit: put free.patch in place, leave it uncommitted' --for edit
 
 cmd_alttab() {
   local -A opts; local -a args
@@ -33,11 +33,9 @@ cmd_alttab() {
   case "${sub}" in
     install)
       (( ${#args} == 1 )) || usage_error "alttab install takes no arguments | args='${args[*]:1}'"
-      alttab::only_flags install --dry-run --no-launch
       alttab::install ;;
     status)
       (( ${#args} == 1 )) || usage_error "alttab status takes no arguments | args='${args[*]:1}'"
-      alttab::only_flags status
       cmd_healthcheck --only alttab ;;
     *) usage_error "alttab: unknown subcommand | sub='${sub}' known='install status edit'" ;;
   esac
@@ -49,15 +47,6 @@ alttab::edit_cmd() {
   step::alttab::paths
   need_lib "${ARI_DOTFILES_CMD}/alttab/edit.zsh" || return 3
   alttab::edit "$@"
-}
-
-# alttab::only_flags SUB FLAG..: a usage error for any flag in the caller's opts SUB does not take.
-alttab::only_flags() {
-  local sub="${1}" flag
-  shift
-  for flag in "${(@k)opts}"; do
-    (( ${@[(Ie)${flag}]} )) || usage_error "alttab ${sub}: bad flag | flag='${flag}'"
-  done
 }
 
 # What a setup command is for, before it runs; a dry run says it would.

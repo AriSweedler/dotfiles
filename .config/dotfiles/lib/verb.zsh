@@ -8,9 +8,12 @@
 #                                                 verb::parse accepts; ARG in [brackets] is optional;
 #                                                 --for: only after those subcommands
 #   verb::env    VERB VAR "description" ["default"]   an Env row
-#   verb::edit   VERB HANDLER "ARGS" "description"    `dotfiles VERB edit ARGS` and `--edit ARGS`
-#                                                 route to HANDLER; adds the Usage line, the edit
-#                                                 Subcommands row and the --edit flag
+#   verb::edit   VERB HANDLER "ARGS" "description" [--form "USAGE"] [--flag-only]
+#                                                 `dotfiles VERB edit ARGS` and `--edit ARGS` route
+#                                                 to HANDLER; adds the Usage line (--form: written
+#                                                 out instead), the edit Subcommands row and the
+#                                                 --edit flag. --flag-only: only `--edit` routes (a
+#                                                 verb that hands its words to another tool)
 #   verb::edit   VERB --none "why it has nothing to edit"
 #   verb::section VERB TITLE <<'EOF' … EOF        a free section after Env (exit codes, tiers)
 #
@@ -26,7 +29,7 @@
 #                           with '-' that VERB does not declare is a usage error; `--` ends flags.
 #   verb::help VERB         the help, in the one shape every verb has.
 
-typeset -gA VERB_DESC VERB_EDIT VERB_EDIT_ARGS VERB_EDIT_DESC VERB_EDIT_NONE VERB_ABOUT
+typeset -gA VERB_DESC VERB_EDIT VERB_EDIT_ARGS VERB_EDIT_DESC VERB_EDIT_NONE VERB_ABOUT VERB_EDIT_FORM VERB_EDIT_FLAG_ONLY
 typeset -gA VERB_USAGE VERB_SUBS VERB_FLAGS VERB_ENV VERB_SECTIONS VERB_FOR
 
 verb::define() { VERB_DESC[${1}]="${2}"; }
@@ -46,6 +49,14 @@ verb::edit() {
   local v="${1}"
   if [[ "${2}" == --none ]]; then VERB_EDIT_NONE[${v}]="${3}"; return 0; fi
   VERB_EDIT[${v}]="${2}" VERB_EDIT_ARGS[${v}]="${3}" VERB_EDIT_DESC[${v}]="${4}"
+  shift 4
+  while (( $# )); do
+    case "${1}" in
+      --form) VERB_EDIT_FORM[${v}]="${2}"; shift 2 ;;
+      --flag-only) VERB_EDIT_FLAG_ONLY[${v}]=1; shift ;;
+      *) print -u2 -r -- "verb::edit: bad argument '${1}'"; return 64 ;;
+    esac
+  done
 }
 
 # verb::_rows_of VERB usage|subs|flags: REPLY is that table of VERB as declared, then the edit's own
@@ -61,7 +72,7 @@ verb::_rows_of() {
   # A verb that declares its own --edit row (a subcommand's --edit FILE) keeps that one.
   [[ "${2}" != flags || "${REPLY}" != (|*$'\n')--edit[[:space:]$'\t']* ]] || return 0
   case "${2}" in
-    usage) REPLY+="${v} edit${VERB_EDIT_ARGS[${v}]:+ ${VERB_EDIT_ARGS[${v}]}}"$'\n' ;;
+    usage) REPLY+="${VERB_EDIT_FORM[${v}]:-${v} edit${VERB_EDIT_ARGS[${v}]:+ ${VERB_EDIT_ARGS[${v}]}}}"$'\n' ;;
     subs) REPLY+="edit"$'\t'"${VERB_EDIT_DESC[${v}]} (also: ${v} --edit)"$'\n' ;;
     flags) REPLY+="--edit"$'\t'"edit: the same as the edit subcommand"$'\n' ;;
   esac
@@ -176,7 +187,7 @@ verb::help() {
   for form in "${(@f)REPLY}"; do [[ -z "${form}" ]] || print -r -- "  ${DF} ${(e)form}"; done
   if [[ -n "${VERB_ABOUT[${v}]:-}" ]]; then
     print -r -- ""
-    for text in "${(@f)${(e)${VERB_ABOUT[${v}]:-}%$'\n'}}"; do print -r -- "  ${text}"; done
+    for text in "${(@f)${(e)${VERB_ABOUT[${v}]:-}%$'\n'}}"; do print -r -- "${text:+  ${text}}"; done
   fi
   local -a sections=(Subcommands subs 10 Flags flags 14)
   local i

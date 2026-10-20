@@ -66,7 +66,7 @@ edit::session() {
     cp -- "${file}" "${before}"
     if ! edit::open --line "${line}" -- "${file}" "${also[@]}"; then
       rm -f -- "${before}" "${first}"
-      log::err "editor exited non-zero; ${what} kept as it was saved | file='${file}'${resume:+ fix='${resume}'}"
+      log::err "editor exited non-zero; nothing used, the file kept as saved | what='${what}' file='${file}'${resume:+ fix='${resume}'}"
       return 1
     fi
     if (( ! changed )) && cmp -s -- "${before}" "${file}"; then

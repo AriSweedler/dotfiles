@@ -85,10 +85,9 @@ help_edit() {
     file="${ARI_DOTFILES_CMD}/${verb}.zsh" name="${verb}"
     msg="${CLI_NAME}: edit help for ${verb}" next="${CLI_NAME} ${verb} --help"
     [[ -f "${file}" ]] || { log::err "no verb file | verb='${verb}' want='${file}'"; return 1; }
-    # A declared verb opens at its declaration; one not yet declared gets a declaration stub.
-    if help::is_declared "${file}" "${verb}"; then at="verb::define ${verb} "
-    elif [[ "${mapfile[${file}]}" == (|*$'\n')"help_${verb}() {"* ]]; then at="help_${verb}() {"
-    else at="verb::define ${verb} "; stubbed=1; fi
+    # A verb opens at its declaration; one without one gets a declaration stub to fill in.
+    at="verb::define ${verb} "
+    help::is_declared "${file}" "${verb}" || stubbed=1
   else
     file="${ARI_DOTFILES_LIB}/dispatch.zsh" name=dotfiles at="help() {"
     msg="${CLI_NAME}: edit the top-level help" next="${CLI_NAME} --help"

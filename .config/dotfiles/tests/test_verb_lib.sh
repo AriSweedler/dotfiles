@@ -86,6 +86,13 @@ zrun -- "${SCOPED}; verb::help sc"
 assert_contains "a declared --edit row is the one shown" "${OUT}" "--edit [FILE]  triage: a plan file"
 assert_not_contains "and the generated one is not" "${OUT}" "edit: the same as the edit subcommand"
 
+# ── verb::edit --form writes the Usage line out; a blank prose line prints empty ──
+zrun -- 'verb::define fw "f"; verb::usage fw "fw ARGS"; verb::about fw <<< $'"'"'one\n\ntwo'"'"'; verb::edit fw fw_edit "" "edit" --form "--local fw --edit" --flag-only; verb::help fw; print -r -- "flag-only=${VERB_EDIT_FLAG_ONLY[fw]}"'
+assert_contains "--form: the Usage line as written" "${OUT}" "  dotfiles --local fw --edit"
+assert_not_contains "--form: no generated one" "${OUT}" "dotfiles fw edit"
+assert_contains "a blank prose line has no trailing spaces" "${OUT}" $'  one\n\n  two'
+assert_contains "--flag-only is recorded" "${OUT}" "flag-only=1"
+
 # ── the help rule for a declared verb (cmd/help.zsh's help::declared_gap) ──
 HELP_RULE="source '${ORIG_CONFIG_DIR}/dotfiles/cmd/help.zsh'"
 cat > "${FIX}/good.zsh" <<'X'

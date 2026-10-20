@@ -23,7 +23,8 @@ tier). It starts '/*' (nothing), and each '!' entry admits a path; every
 '!' lines it belongs to. An entry without one fails local_dotfiles_repo.
 EOF
 verb::edit git git::edit_cmd '[--no-commit]' \
-  "with --local only ('dotfiles --local git edit'): the allowlist template in \\\$EDITOR (vi when unset) as a draft. It refuses up front when this machine's info/exclude has rules the template does not (it shows the diff: make them agree first). On save the draft must start with '/*', keep every '*.secret.zsh' out of every admitted directory, and give each '!' entry its why; a draft that fails is kept (offered for another edit on a terminal, else exit 1; the same command resumes it). One that passes replaces the template and is installed as info/exclude; 'git ldf status --short -uall' then shows what it admits, and the template is committed in the shared tier"
+  "with --local only ('dotfiles --local git --edit'): the allowlist template in \\\$EDITOR (vi when unset) as a draft. It refuses up front when this machine's info/exclude has rules the template does not (it shows the diff: make them agree first). On save the draft must start with '/*', keep every '*.secret.zsh' out of every admitted directory, and give each '!' entry its why; a draft that fails is kept (offered for another edit on a terminal, else exit 1; the same command resumes it). One that passes replaces the template and is installed as info/exclude; 'git ldf status --short -uall' then shows what it admits, and the template is committed in the shared tier" \
+  --form '--local git --edit [--no-commit]' --flag-only
 verb::flag git '--local' 'act on the local tier, not the shared one (before the verb)'
 verb::flag git '--dir' "print the tier's bare repo path and exit (in place of a verb)"
 verb::flag git '--no-commit' 'edit: install it, leave the template uncommitted'

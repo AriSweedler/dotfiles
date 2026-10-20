@@ -131,9 +131,12 @@ plan::edit() {
 
 # The session's check: every line (plan::parse), then the whole plan (--plan-check FN, which reads
 # PLAN_LINES, the parsed lines, and prints a problem per line like plan::parse does).
+# Every problem shows at once: the whole-plan check runs over the lines that parsed, bad ones or not.
 plan::_check() {
   local -a reply
-  plan::parse "${PLAN_KIND}" "${1}" "${PLAN_CHECK}" || return 1
+  local -i bad=0
+  plan::parse "${PLAN_KIND}" "${1}" "${PLAN_CHECK}" || bad=1
   typeset -ga PLAN_LINES=("${reply[@]}")
-  [[ -z "${PLAN_WHOLE}" ]] || "${PLAN_WHOLE}"
+  [[ -z "${PLAN_WHOLE}" ]] || "${PLAN_WHOLE}" || bad=1
+  return ${bad}
 }

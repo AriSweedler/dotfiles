@@ -50,8 +50,8 @@ run noop --local git --edit --frob
 assert_eq "an unknown argument: usage" 64 "${RC}"
 run noop --local git --edit --help
 assert_eq "--edit --help: exit 0" 0 "${RC}"
-assert_contains "--edit --help: the git help" "${OUT}" "dotfiles git edit [--no-commit]"
-assert_contains "--edit --help: the edit needs --local" "${OUT}" "with --local only ('dotfiles --local git edit')"
+assert_contains "--edit --help: the git help" "${OUT}" "dotfiles --local git --edit [--no-commit]"
+assert_contains "--edit --help: the edit needs --local" "${OUT}" "with --local only ('dotfiles --local git --edit')"
 df_before="$(df_count)"
 run git_msg git commit --allow-empty -m "via git" --edit
 assert_eq "git commit --edit reaches git: exit 0" 0 "${RC}"
@@ -104,7 +104,7 @@ run trailing_space --local git --edit
 check_kept "trailing whitespace" "'!/share/kuber/  ' ends in whitespace"
 run broken --local git --edit
 assert_eq "a failing editor: exit 1" 1 "${RC}"
-assert_contains "a failing editor: says so" "${ERR}" "editor exited non-zero; the allowlist kept as it was saved"
+assert_contains "a failing editor: says so" "${ERR}" "editor exited non-zero; nothing used, the file kept as saved"
 assert_file "a failing editor: the draft is kept" "${DRAFT}"
 rm -f "${DRAFT}"
 

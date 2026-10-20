@@ -119,9 +119,6 @@ status::edit_item() {
   (( ${found[(Ie)${rel}]} )) || { print -r -- "not a file the ${tier} tier tracks"; return 1; }
 }
 
-# status::edit_check <plan>: edit::session's check, every line through plan::parse. (plan::edit
-# would be this, but it hands edit::session its --resume as one word.)
-status::edit_check() { local -a reply; plan::parse status "${1}" status::edit_item; }
 
 # status::edit_choices: the caller's `choices` from plan::parse's `reply`, one
 # `N\taction\ttier\tpath\tmessage` per commit or restore line (a restore has no message).
@@ -256,7 +253,7 @@ status::edit_run() {
 }
 
 # `status --edit [--dry-run] [FILE]`: the plan file (STATE_DIR/status-plan.dfstatus, kept across
-# runs, or FILE to resume one) in one edit::session, every line checked by plan::parse. A good plan is shown, confirmed on a terminal
+# runs, or FILE to resume one) in one plan::edit, every line checked by plan::parse. A good plan is shown, confirmed on a terminal
 # (restores separately, by name), and run; then the tables.
 status::edit() {
   local -A opts members=() restores=()
@@ -283,14 +280,12 @@ status::edit() {
     status::edit_file > "${file}" || return 1
   fi
   # A resumed FILE is read even when saved unchanged: the earlier edit is what is checked.
-  edit::session "${file}" --check status::edit_check --what "the plan" \
-    --resume "${CLI_NAME} status --edit ${file}" ${resume:+--changed} || rc=$?
+  plan::edit status "${file}" status::edit_item --resume "${CLI_NAME} status --edit ${file}" ${resume:+--changed} || rc=$?
   if (( rc == 2 )); then
     print -r -- "status: no change; nothing done | file=$(ui::paths "${file}")"
     return 0
   fi
   (( rc == 0 )) || return 1
-  plan::parse status "${file}" status::edit_item 2>/dev/null
   status::edit_choices
   status::edit_live
   if (( ${#choices} == 0 )); then

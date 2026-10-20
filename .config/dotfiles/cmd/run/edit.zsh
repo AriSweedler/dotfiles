@@ -4,8 +4,8 @@
 #
 # A plan is written from a basis (what each step's last result was): a check run's summary for
 # init and healthcheck (runplan::basis_summary), each step's newest result for apply
-# (runplan::basis_runs). runplan::edit opens it; on save runplan::check parses every line (an
-# apply line's step must be offered) and checks the needs across them, filling the caller's
+# (runplan::basis_runs). runplan::edit opens it (plan::edit); on save every line is parsed (an
+# apply line's step must be offered) and runplan::needs checks the needs across them, filling the caller's
 # `chosen` (the apply lines' steps) and `planned` (every step line's step). The editor never runs
 # under the lock, the INT trap or a spinner: runplan::release lets them go.
 
@@ -16,7 +16,6 @@ plan::define apply --actions 'apply|skip' --default skip --item step
 # The basis, per step: last status, reason, fix, the detail's first line, actionable, manual; and
 # the age of the result (apply's plan only).
 typeset -gA RUNPLAN_STATUS=() RUNPLAN_REASON=() RUNPLAN_FIX=() RUNPLAN_DETAIL=() RUNPLAN_ACTIONABLE=() RUNPLAN_MANUAL=() RUNPLAN_AGE=()
-typeset -gA RUNPLAN_LINE=()      # step -> its line number in the plan last parsed
 typeset -ga RUNPLAN_OFFER=()     # the steps an apply line may name (init, healthcheck)
 typeset -g RUNPLAN_ANY=0         # 1: an apply line may name any step (apply)
 typeset -g RUNPLAN_UNCHANGED=0   # 1: the plan was saved as written
@@ -195,46 +194,46 @@ runplan::_item() {
   return 1
 }
 
-# runplan::check <plan>: edit::session's check. plan::parse (kind RUNPLAN_KIND) fills the caller's
-# `chosen` and `planned`, and RUNPLAN_LINE; then the needs: an applied step's need that is not
+# runplan::needs: plan::edit's --plan-check over PLAN_LINES: an applied step's need that is not
 # applied too must not have last ended in anything but ok or warn (one never checked is the
 # runner's gate to keep). Each problem is a `line N: …` on stderr; 1 when there is any.
-runplan::check() {
-  local row action name need st
-  local -a reply
+runplan::needs() {
+  local row name need st
+  local -a applied=()
+  local -A at=()
   local -i bad=0
-  chosen=() planned=() RUNPLAN_LINE=()
-  plan::parse "${RUNPLAN_KIND}" "${1}" runplan::_item || bad=1
-  for row in "${reply[@]}"; do
-    action="${row%%$'\t'*}" name="${${row#*$'\t'}%%$'\t'*}"
-    planned+=("${name}")
-    RUNPLAN_LINE[${name}]="${row##*$'\t'}"
-    [[ "${action}" != apply ]] || chosen+=("${name}")
+  for row in "${PLAN_LINES[@]}"; do
+    name="${${row#*$'\t'}%%$'\t'*}" at[${name}]="${row##*$'\t'}"
+    [[ "${row%%$'\t'*}" != apply ]] || applied+=("${name}")
   done
-  for name in "${chosen[@]}"; do
+  for name in "${applied[@]}"; do
     for need in ${(s:,:)STEP_NEEDS[${name}]}; do
-      (( ${chosen[(Ie)${need}]} )) && continue
+      (( ${applied[(Ie)${need}]} )) && continue
       st="${RUNPLAN_STATUS[${need}]:-}"
       [[ -z "${st}" || "${st}" == (ok|warn) ]] && continue
-      print -u2 -r -- "line ${RUNPLAN_LINE[${name}]}: ${name} needs ${need}, which ended ${st} ${RUNPLAN_REASON[${need}]:-} and is not applied here; apply ${need} too, or skip ${name} | step='${name}' need='${need}'"
+      print -u2 -r -- "line ${at[${name}]}: ${name} needs ${need}, which ended ${st} ${RUNPLAN_REASON[${need}]:-} and is not applied here; apply ${need} too, or skip ${name} | step='${name}' need='${need}'"
       bad=1
     done
   done
   return ${bad}
 }
 
-# runplan::edit <kind> <plan> <resume command>: <plan> in $EDITOR (edit::session), checked by
-# runplan::check even when saved unchanged (a plan runs as written). Bad lines: on a terminal,
+# runplan::edit <kind> <plan> <resume command>: <plan> in $EDITOR (plan::edit), every line and then
+# the needs checked, even when saved unchanged (a plan runs as written). Bad lines: on a terminal,
 # offered for another edit; else the plan is kept and the error names '<resume command> <plan>';
-# returns 1, as for an editor that fails. RUNPLAN_UNCHANGED says whether it was saved as written.
+# returns 1, as for an editor that fails. Fills the caller's `chosen` and `planned`;
+# RUNPLAN_UNCHANGED says whether it was saved as written.
 runplan::edit() {
-  local before
-  typeset -g RUNPLAN_KIND="${1}"
-  before="${mapfile[${2}]-}"
-  RUNPLAN_UNCHANGED=0
-  edit::session "${2}" --check runplan::check --what "the plan" --changed --resume "${3} ${2}" || return 1
-  [[ "${mapfile[${2}]-}" != "${before}" ]] || RUNPLAN_UNCHANGED=1
-  return 0
+  local row name
+  local -a reply
+  plan::edit "${1}" "${2}" runplan::_item --plan-check runplan::needs --changed --resume "${3} ${2}" || return 1
+  RUNPLAN_UNCHANGED="${EDIT_UNCHANGED}"
+  chosen=() planned=()
+  for row in "${reply[@]}"; do
+    name="${${row#*$'\t'}%%$'\t'*}"
+    planned+=("${name}")
+    [[ "${row%%$'\t'*}" != apply ]] || chosen+=("${name}")
+  done
 }
 
 # On a terminal, one yes/no before the chosen steps run; off one, yes (the plan was the choice).

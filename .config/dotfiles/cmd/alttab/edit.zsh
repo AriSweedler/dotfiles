@@ -105,9 +105,8 @@ alttab::_edit_session() {
 
 alttab::edit() {
   local -A opts; local -a args
-  verb::parse alttab "$@"
+  verb::parse alttab --sub edit "$@"
   (( ${#args} == 0 )) || usage_error "alttab edit takes no arguments | args='${args[*]}'"
-  alttab::only_flags edit --header --no-commit
   local build="${ALTTAB_DIR}/bin/alttab-free-build" src="${ALTTAB_SRC}" patch="${ALTTAB_PATCH}"
   local rebuild="alttab-free-build --build-only"
   if [[ ! -r "${patch}" || ! -r "${patch}.ref" || ! -r "${build}" ]]; then

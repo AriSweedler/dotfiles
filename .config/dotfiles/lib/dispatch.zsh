@@ -123,7 +123,7 @@ main() {
   typeset -g VERB_CURRENT="${verb}"
   # A verb that declares an edit (verb::edit) is edited the same way everywhere: `VERB edit …`
   # and `VERB --edit …` both reach its handler.
-  if [[ -n "${VERB_EDIT[${verb}]:-}" && "${1:-}" == (edit|--edit) ]]; then
+  if [[ -n "${VERB_EDIT[${verb}]:-}" && ( "${1:-}" == --edit || ( "${1:-}" == edit && -z "${VERB_EDIT_FLAG_ONLY[${verb}]:-}" ) ) ]]; then
     shift
     "${VERB_EDIT[${verb}]}" "$@"
     return

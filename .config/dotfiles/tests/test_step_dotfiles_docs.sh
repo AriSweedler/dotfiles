@@ -94,7 +94,7 @@ assert_eq "fixed: ok" ok "$(docs_get .status)"
 assert_contains "documented: counts the helps" "$(docs_get .detail)" " helps"
 CMD="${CODE}/dotfiles/cmd"
 cat > "${CMD}/zz.zsh" <<'EOS'
-# dotfiles/cmd/zz.zsh — a verb the test owns, with no help.
+# dotfiles/cmd/zz.zsh — a verb the test owns, not declared.
 cmd_zz() {
   case "${1:-}" in
     --frob) ;;
@@ -102,20 +102,17 @@ cmd_zz() {
 }
 EOS
 docs_check
-assert_eq "a verb with no help: fail" fail "$(docs_get .status)"
-assert_eq "a verb with no help: manual" true "$(docs_get .manual)"
-assert_eq "a verb with no help: the fix" "dotfiles help --edit zz" "$(docs_get .fix)"
-assert_contains "a verb with no help: what it lacks" "$(docs_get .detail)" "dotfiles zz --help: no help_zz()"
+assert_eq "a verb not declared: fail" fail "$(docs_get .status)"
+assert_eq "a verb not declared: manual" true "$(docs_get .manual)"
+assert_eq "a verb not declared: the fix" "dotfiles help --edit zz" "$(docs_get .fix)"
+assert_contains "a verb not declared: what it lacks" "$(docs_get .detail)" "dotfiles zz --help: not declared: 'dotfiles help --edit zz' writes the declaration"
+# Declared, but still parsing a flag by hand.
 cat > "${CMD}/zz.zsh" <<'EOS'
-# dotfiles/cmd/zz.zsh — a verb the test owns, its help short of a flag.
-help_zz() {
-  cat <<EOF
-frob the zz
-
-${c_bold}Usage${c_rst}
-  ${DF} zz
-EOF
-}
+# dotfiles/cmd/zz.zsh — a verb the test owns, declared, parsing by hand.
+verb::define zz 'frob the zz'
+verb::usage zz 'zz [--frob]'
+verb::flag zz '--frob' 'frob it'
+verb::edit zz --none 'zz has nothing to edit'
 cmd_zz() {
   case "${1:-}" in
     --frob) ;;
@@ -123,27 +120,34 @@ cmd_zz() {
 }
 EOS
 docs_check
-assert_eq "a flag missing from the help: fail" fail "$(docs_get .status)"
-assert_contains "a flag missing from the help: named" "$(docs_get .detail)" "dotfiles zz --help: flags not in it: --frob"
-# A flag parsed in cmd/VERB/*.zsh counts too.
+assert_eq "a flag parsed by hand: fail" fail "$(docs_get .status)"
+assert_contains "a flag parsed by hand: named" "$(docs_get .detail)" "dotfiles zz --help: parses flags outside verb::parse: --frob"
+# Declared and parsed by verb::parse; a hand-parsed flag in cmd/VERB/*.zsh counts too.
+cat > "${CMD}/zz.zsh" <<'EOS'
+# dotfiles/cmd/zz.zsh — a verb the test owns, declared.
+verb::define zz 'frob the zz'
+verb::usage zz 'zz [--frob]'
+verb::flag zz '--frob' 'frob it'
+verb::edit zz --none 'zz has nothing to edit'
+cmd_zz() { local -A opts; local -a args; verb::parse zz "$@"; }
+EOS
 mkdir -p "${CMD}/zz"
 printf 'zz_sub() {\n  case "${1}" in\n    --sub-flag) ;;\n  esac\n}\n' > "${CMD}/zz/sub.zsh"
-awk '{ sub(/\$\{DF\} zz$/, "${DF} zz [--frob]") } { print }' "${CMD}/zz.zsh" > "${CMD}/zz.zsh.tmp" && mv "${CMD}/zz.zsh.tmp" "${CMD}/zz.zsh"
 docs_check
-assert_contains "a flag of cmd/VERB/*.zsh: named" "$(docs_get .detail)" "dotfiles zz --help: flags not in it: --sub-flag"
-assert_not_contains "the documented flag is not named" "$(docs_get .detail)" "--frob"
+assert_contains "a flag of cmd/VERB/*.zsh: named" "$(docs_get .detail)" "dotfiles zz --help: parses flags outside verb::parse: --sub-flag"
+assert_not_contains "the declared flag is not named" "$(docs_get .detail)" "--frob"
 rm -rf "${CMD}/zz"
 docs_check
-assert_eq "documented verb: ok" ok "$(docs_get .status)"
+assert_eq "a whole declaration: ok" ok "$(docs_get .status)"
 # The top-level help is held to main()'s flags; with a verb's gap too, its fix comes first.
 DISPATCH="${CODE}/dotfiles/lib/dispatch.zsh"
 cp "${DISPATCH}" "${FIX}/dispatch.orig"
 awk '/^help\(\) \{/ { h = 1 } h { gsub(/--timing/, "--timingx") } /^}/ { h = 0 } { print }' "${FIX}/dispatch.orig" > "${DISPATCH}"
-awk '!/\[--frob\]/' "${CMD}/zz.zsh" > "${CMD}/zz.zsh.tmp" && mv "${CMD}/zz.zsh.tmp" "${CMD}/zz.zsh"
+awk '{ sub(/\x27frob it\x27/, "\x27\x27") } { print }' "${CMD}/zz.zsh" > "${CMD}/zz.zsh.tmp" && mv "${CMD}/zz.zsh.tmp" "${CMD}/zz.zsh"
 docs_check
 assert_eq "top-level gap: the fix" "dotfiles help --edit" "$(docs_get .fix)"
 assert_contains "top-level gap: named" "$(docs_get .detail)" "dotfiles --help: flags not in it: --timing"
-assert_contains "and the verb's gap after it" "$(docs_get .detail)" "; dotfiles zz --help: flags not in it: --frob"
+assert_contains "and the verb's gap after it" "$(docs_get .detail)" "; dotfiles zz --help: '--frob' has no description"
 cp "${FIX}/dispatch.orig" "${DISPATCH}"
 rm -f "${CMD}/zz.zsh"
 # Cached while nothing it reads changes; a change to a verb file is seen.

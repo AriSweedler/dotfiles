@@ -173,7 +173,7 @@ assert_contains "--no-commit: in place" "$(cat "${STEPS}/zz_demo.zsh")" "# a lat
 printf '#!/bin/sh\nexit 3\n' > "${EDITORS}/broken"; chmod +x "${EDITORS}/broken"
 edit broken edit zz_demo
 assert_eq "a failing editor: exit 1" 1 "${RC}"
-assert_contains "a failing editor: says so" "${ERR}" "editor exited non-zero; zz_demo kept as it was saved"
+assert_contains "a failing editor: says so" "${ERR}" "editor exited non-zero; nothing used, the file kept as saved | what='zz_demo'"
 rm -f "$(draft zz_demo)"
 
 # The edited registry still loads for every verb.

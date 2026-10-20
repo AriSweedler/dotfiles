@@ -150,8 +150,8 @@ help::verb_files() {
 }
 
 # help::verb_gap VERB [FILE]: REPLY = what VERB's help lacks, FILE standing in for cmd/VERB.zsh.
-# A declared verb (verb::define in its file) is held to help::declared_gap; one still written as a
-# help_VERB heredoc to help::doc_gap.
+# Every verb is declared (verb::define in its file) and held to help::declared_gap; help::doc_gap
+# is left for the one heredoc help, the top-level `dotfiles --help` in lib/dispatch.zsh.
 help::verb_gap() {
   local verb="${1}" file="${2:-${ARI_DOTFILES_CMD}/${1}.zsh}"
   local -a reply
@@ -159,7 +159,7 @@ help::verb_gap() {
   if help::is_declared "${file}" "${verb}"; then
     help::declared_gap "${verb}" "${reply[@]}"
   else
-    help::doc_gap "${file}" "help_${verb}" "${reply[@]}"
+    REPLY="not declared: 'dotfiles help --edit ${verb}' writes the declaration (lib/verb.zsh)"
   fi
 }
 

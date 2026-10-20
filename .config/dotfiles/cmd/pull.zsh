@@ -189,19 +189,15 @@ pull::edit_file() {
 
 # pull::edit_step <step>: plan::parse's item check, a step the registry knows.
 pull::edit_step() { step::is_known "${1}" || { print -r -- "not a step here (${CLI_NAME} steps)"; return 1; }; }
-# pull::edit_check <plan>: edit::session's check, every line through plan::parse.
-pull::edit_check() { local -a reply; plan::parse pull "${1}" pull::edit_step; }
 
-# `pull --edit`: <plan> in one edit::session, checked on every save, an unchanged one included
+# `pull --edit`: <plan> in one plan::edit, checked on every save, an unchanged one included
 # (it runs as written). A plan with no step line aborts; one that skips every step applies
 # nothing; otherwise this process becomes a fresh `dotfiles apply` of the chosen steps (the pull
 # may have replaced lib/ under this one).
 pull::edit() {
   local plan="${1}" bin r
   local -a reply f chosen=() planned=()
-  edit::session "${plan}" --check pull::edit_check --what "the plan" --changed \
-    --resume "${CLI_NAME} pull --edit ${plan}" || return 1
-  plan::parse pull "${plan}" pull::edit_step 2>/dev/null
+  plan::edit pull "${plan}" pull::edit_step --changed --resume "${CLI_NAME} pull --edit ${plan}" || return 1
   rm -f -- "${plan}"
   for r in "${reply[@]}"; do
     f=("${(@ps:\t:)r}")
