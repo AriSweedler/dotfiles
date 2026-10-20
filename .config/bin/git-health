@@ -144,6 +144,15 @@ run_tick() {
 }
 
 #######################################
+# Print the tmp_pack_* files older than 2 days: an interrupted repack or fetch left them and
+# nothing else will clean them up.
+# Globals: repo
+#######################################
+stale_tmp_packs() {
+    find "${repo}/.git/objects/pack" -maxdepth 1 -name 'tmp_pack_*' -mtime +2
+}
+
+#######################################
 # Measure store health into globals.
 # Globals: repo, MAX_PACKS, MAX_LOOSE → pack_count, loose_count, problems
 #######################################
@@ -155,9 +164,8 @@ measure() {
     local loose_line
     loose_line=$(git -C "${repo}" count-objects)
     loose_count=${loose_line%% *}
-    # tmp_pack_* older than 2 days = an interrupted repack nothing will clean up.
     local stale_tmp
-    stale_tmp=$(find "${pack_dir}" -maxdepth 1 -name 'tmp_pack_*' -mtime +2 | wc -l)
+    stale_tmp=$(stale_tmp_packs | wc -l)
     stale_tmp=${stale_tmp// /}
 
     problems=()
@@ -200,6 +208,15 @@ report_health() {
 
     note "degraded, self-healing | ${(j:, :)problems}"
     git_step self-heal-repack repack --geometric=2 -d --write-midx || true
+    local stale
+    for stale in ${(f)"$(stale_tmp_packs)"}; do
+        if (( dry_run )); then
+            log::info "dry-run, would remove | path='${stale}'"
+            continue
+        fi
+        note "removing stale tmp_pack | path='${stale}'"
+        rm -f -- "${stale}"
+    done
 
     measure
     if (( ${#problems[@]} == 0 )); then
