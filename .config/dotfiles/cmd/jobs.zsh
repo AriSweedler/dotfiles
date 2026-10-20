@@ -13,7 +13,8 @@ ${JOBS_INTERVAL_SECONDS}s. A plugin is an executable in $(help::tilde "${JOBS_RO
 or $(help::tilde "${JOBS_ROOT_LDF}") (this machine) whose header has
 '# triggers: unlock load' and any '# cron: m h dom mon dow' lines; it gets
 the trigger as \$1; the engine posts a banner when it ends (an alert, click
-opens the log, on failure). A '# deps: name...' line names setup run before
+opens the log, on failure), except for an ending a '# notifies: ok fail' line
+says the plugin reports itself. A '# deps: name...' line names setup run before
 it: executables in $(help::tilde "${DEPS_ROOT_LDF}") (this machine, wins) or
 $(help::tilde "${DEPS_ROOT_DF}") (shared) whose stdout, NAME=VALUE lines, becomes the
 plugin's environment; a failing dep blocks the plugin. Logs and success
@@ -112,7 +113,7 @@ jobs_doc_problems() {
     body="${${line#\#}##[[:space:]]#}"
     case "${body}" in
       triggers:*|cron:*) schedule=1 ;;
-      timeout:*|deps:*|'') ;;
+      timeout:*|deps:*|notifies:*|'') ;;
       (#i)todo*) ;;
       *) prose=1 ;;
     esac
@@ -172,6 +173,16 @@ jobs_deps() {
   local line
   line="$(grep -m1 -E '^# deps:' "${1}" 2>/dev/null || true)"
   line="${line#\# deps:}"
+  print -r -- "${line##[[:space:]]##}"
+}
+
+# A plugin's `# notifies:` header line: the endings it reports itself, ok and/or fail, for
+# which the engine posts nothing.
+jobs_notifies() {
+  setopt local_options extended_glob
+  local line
+  line="$(grep -m1 -E '^# notifies:' "${1}" 2>/dev/null || true)"
+  line="${line#\# notifies:}"
   print -r -- "${line##[[:space:]]##}"
 }
 
@@ -532,20 +543,26 @@ jobs_click_command() {
 # group; macOS gives banners no duration control) carrying the plugin's last output line, so a
 # plugin's summary is what it prints last; any earlier failure alert for the job comes down.
 # Failure or timeout: a persistent alert, one per job (its group), whose click opens the log.
+# An ending the plugin's `# notifies:` line claims (ok, fail) gets no banner and no alert from
+# here: the plugin posted its own. A timeout or a blocked dep is always the engine's alert,
+# since the plugin never got to speak.
 # Arguments: name, rc, took, logfile
 #######################################
 jobs_notify_finish() {
   local name="${1}" rc="${2}" took="${3}" logfile="${4}" last verdict
   jobs_notifier_bin >/dev/null || return 0
+  local -a notifies=(${=$(jobs_notifies "${JOB_PATH[${name}]:-}")})
   # grep exits 1 when only header lines remain (a plugin that printed nothing, a blocked run).
   last="$(grep -v -E '^# |^[[:space:]]*$' "${logfile}" 2>/dev/null | tail -n 1 | cut -c1-140 || true)"
   if (( rc == 0 )); then
     jobs_notify -remove "dotfiles-jobs-${name}" || true
+    (( ${notifies[(I)ok]} )) && return 0
     jobs_notify -group dotfiles-jobs -title "dotfiles jobs" -message "${name} ok in ${took}s${last:+ · ${last}}" || return 0
     sleep "${JOBS_HUD_SECONDS}"
     jobs_notify -remove dotfiles-jobs || true
     return 0
   fi
+  if (( rc != 124 && rc != JOBS_DEP_FAILED_RC && ${notifies[(I)fail]} )); then return 0; fi
   verdict="failed (rc ${rc})"; (( rc == 124 )) && verdict="timed out"; (( rc == JOBS_DEP_FAILED_RC )) && verdict="blocked: a dep failed"
   jobs_notify -group "dotfiles-jobs-${name}" -title "dotfiles jobs: ${name} ${verdict}" \
     -message "${last:-no output} — click to open the log" -execute "$(jobs_click_command "${logfile}")" || true

@@ -47,6 +47,9 @@ jobs_edit_check() {
     for word in $(jobs_deps "${file}"); do
       [[ -n "${DEP_PATH[${word}]:-}" ]] || problems+=("'# deps:' names '${word}', which is no dep (dotfiles jobs list)")
     done
+    for word in $(jobs_notifies "${file}"); do
+      [[ "${word}" == (ok|fail) ]] || problems+=("'# notifies:' takes ok and fail, not '${word}'")
+    done
   fi
   jobs_doc_problems "${file}" "${kind}"
   problems+=("${reply[@]/#/undocumented: }")

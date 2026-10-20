@@ -28,7 +28,7 @@ editor describe_dep '/^# TODO/ { print "# Provides GREETING for the plugins that
 editor bad_cron '/^# cron:/ { print "# cron: 61 * * * *"; next } { print }'
 editor good_cron '/^# cron:/ { print "# cron: 30 * * * *"; next } { print }'
 editor undocument '/^# Hourly/ { next } { print }'
-editor bad_header '/^# cron:/ { print; print "# triggers: lunch"; print "# timeout: soon"; print "# deps: nothere"; next } { print }'
+editor bad_header '/^# cron:/ { print; print "# triggers: lunch"; print "# timeout: soon"; print "# deps: nothere"; print "# notifies: maybe"; next } { print }'
 editor bad_syntax 'END { print "print -r -- \x27unterminated" } { print }'
 editor comment 'END { print "# a later note" } { print }'
 
@@ -105,6 +105,7 @@ assert_eq "bad header: exit 1" 1 "${RC}"
 assert_contains "bad header: a trigger word" "${ERR}" "'# triggers:' takes unlock and load, not 'lunch'"
 assert_contains "bad header: the timeout" "${ERR}" "'# timeout:' takes seconds, not 'soon'"
 assert_contains "bad header: an unknown dep" "${ERR}" "'# deps:' names 'nothere', which is no dep"
+assert_contains "bad header: a notifies word" "${ERR}" "'# notifies:' takes ok and fail, not 'maybe'"
 rm -f "${TICKER_DRAFT}"
 edit undocument edit ticker
 assert_eq "undocumented: exit 1" 1 "${RC}"

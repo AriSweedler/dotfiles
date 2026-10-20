@@ -63,7 +63,18 @@ and tells the user how it ended: on success a two-second banner carrying the plu
 output line, on failure or timeout a persistent alert whose click opens the log. So a plugin
 prints a one-line summary last and posts no completion banner of its own; a notification a
 plugin does post is about its domain (aws-sso-autologin's click-to-login notice), never about
-having finished. Plugins are independent of one another, so the order they run in is irrelevant and
+having finished. When that domain notice *is* how an ending shows, the plugin claims the ending
+and the engine posts nothing for it:
+
+    # notifies: fail
+
+`ok` is exit 0, `fail` any other exit; a timeout or a blocked dep is always the engine's alert,
+since the plugin never got to speak. aws-sso-autologin's check exits 1 when a login is needed,
+having posted the click-to-login notice itself, so `# notifies: fail` keeps the engine's
+"failed (rc 1)" alert off it while its happy path keeps the engine's banner. Every notification
+either side posts goes through `~/.config/bin/terminal-notifier`, the logging shim, so
+`~/.local/state/terminal-notifier/terminal-notifier.log` says who posted what. Plugins are
+independent of one another, so the order they run in is irrelevant and
 no name carries a number. A job with a CLI of its own (git-health, aws-sso-autologin) keeps it
 in a `bin/` and leaves a shim here that execs it.
 
