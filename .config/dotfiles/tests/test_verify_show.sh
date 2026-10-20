@@ -24,7 +24,7 @@ show() {
   else fail "$1: nothing written" "$(diff <(printf '%s\n' "${before}") <(printf '%s\n' "${after}") | head -n 5)"
   fi
   assert_no_file "$1: no lock" "${STATE}/lock.d"
-  assert_eq "$1: no banner" "" "$(shim_log terminal-notifier)"
+  assert_eq "$1: no banner" "" "$(shim_log atn)"
   assert_no_mutation "$1: read-only"
 }
 

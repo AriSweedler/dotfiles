@@ -16,7 +16,7 @@ plugin() {
 }
 # run NAME: `dotfiles jobs run NAME` with an empty notifier log; `posted` is what the fake notifier saw.
 run() { shim_logs_reset; nm jobs run "$1"; }
-posted() { shim_log terminal-notifier; }
+posted() { shim_log atn; }
 
 plugin ok_engine '' 'print -r -- "all good"'
 run ok_engine

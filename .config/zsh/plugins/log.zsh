@@ -131,21 +131,24 @@ log::notify_image_check() {
 }
 
 #######################################
-# A terminal-notifier banner, removed after a delay by a nohup'd sleeper so the caller may exit.
+# A banner through atn (the terminal-notifier logging shim), removed after a delay by a nohup'd
+# sleeper so the caller may exit. atn is taken from PATH, else from the bin beside this plugin
+# dir, for callers on launchd's minimal PATH.
 # Globals: OTTO_LOG_NOTIF_TITLE (default "notification"), OTTO_LOG_NOTIF_GROUP (default
 # "default"), OTTO_LOG_NOTIFY_SECS (default 5), OTTO_LOG_NOTIF_IMAGE (-contentImage path;
 # default the robot beside this file), notif_lvl (the tier that also logs it; debug).
-# Returns 1 when the message is missing or terminal-notifier is not on PATH.
+# Returns 1 when the message is missing or atn cannot be found.
 #######################################
 log::notify() {
   local message="${1:?log::notify requires a message}"
   local title="${OTTO_LOG_NOTIF_TITLE:-notification}" group="${OTTO_LOG_NOTIF_GROUP:-default}"
   local secs="${OTTO_LOG_NOTIFY_SECS:-5}" tier="${notif_lvl:-debug}"
-  command -v terminal-notifier >/dev/null 2>&1 || { log::warn "terminal-notifier not on PATH"; return 1; }
+  local atn="${commands[atn]:-${OTTO_LOG_PLUGIN_DIR:h:h}/bin/atn}"
+  [[ -x "${atn}" ]] || { log::warn "atn not found | tried='${atn}'"; return 1; }
   "log::${tier}" "notify | secs='${secs}' group='${group}' title='${title}' message='${message}'"
   local image="${OTTO_LOG_NOTIF_IMAGE:-${OTTO_LOG_PLUGIN_DIR}/assets/robot.png}"
   local -a args=(-title "${title}" -message "${message}" -group "${group}" -contentImage "${image}")
   log::notify_image_check "${args[@]}"
-  terminal-notifier "${args[@]}" >/dev/null
-  nohup zsh -c "sleep ${secs} && terminal-notifier -remove '${group}' >/dev/null 2>&1" </dev/null >/dev/null 2>&1 &
+  "${atn}" "${args[@]}" >/dev/null
+  nohup zsh -c "sleep ${secs} && ${(q)atn} -remove '${group}' >/dev/null 2>&1" </dev/null >/dev/null 2>&1 &
 }

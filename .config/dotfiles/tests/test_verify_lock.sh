@@ -36,7 +36,7 @@ verify
 assert_eq "live holder: exit 4" 4 "${RC}"
 assert_file "live holder keeps the lock" "${LOCK}/pid"
 assert_eq "live holder's pid file untouched" "${live_pid}" "$(cat "${LOCK}/pid")"
-assert_contains "notifier says another run holds the lock" "$(shim_log terminal-notifier)" "holds the lock"
+assert_contains "notifier says another run holds the lock" "$(shim_log atn)" "holds the lock"
 assert_contains "trail notes busy" "$(cat "${STATE}/verify.log")" "busy"
 
 export ARI_DOTFILES_LOCK_MAX_AGE_SECS=1

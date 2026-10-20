@@ -34,8 +34,8 @@ assert_no_file "transient error files no report" "${REPORT}"
 assert_json "consecutive_errors 1" "${LR}" '.consecutive_errors' 1
 assert_json "fail fingerprint untouched" "${LR}" '.fingerprint' deadbeefdeadbeef
 assert_json "brew_undeclared untouched" "${LR}" '.brew_undeclared | join(",")' "formula/x"
-assert_contains "notifier says could not run" "$(shim_log terminal-notifier)" "could not run"
-assert_contains "notifier names the reason" "$(shim_log terminal-notifier)" "brew_busy"
+assert_contains "notifier says could not run" "$(shim_log atn)" "could not run"
+assert_contains "notifier names the reason" "$(shim_log atn)" "brew_busy"
 
 bump_now 7
 verify

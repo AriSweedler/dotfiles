@@ -56,8 +56,7 @@ source_zsh_dir --optional "${XDG_DATA_HOME}/zsh/plugins"
 
 # PATH policy for both dotfile tiers, after every plugin so nothing a plugin prepends (brew
 # shellenv's Homebrew dirs, a company bin) lands ahead: this machine's local bins, then the
-# shared bins, then everything else. ~/.config/bin ahead of Homebrew makes its terminal-notifier,
-# the logging shim, the one every banner goes through.
+# shared bins, then everything else.
 prepend_to_path "$HOME/.config/bin"
 prepend_to_path "$HOME/.local/bin"
 prepend_to_path "$XDG_DATA_HOME/bin"

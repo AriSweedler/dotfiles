@@ -28,7 +28,7 @@ check::claude_notifications() {
     return 0
   fi
   if [[ -z "${ARI_DOTFILES_NOTIFIER}" ]] || ! command -v "${ARI_DOTFILES_NOTIFIER}" >/dev/null 2>&1; then
-    verdict fail notifier_missing -d "terminal-notifier not found (initialize.sh installs it)" -f "${CLI_NAME} apply claude_notifications"
+    verdict fail notifier_missing -d "atn (the terminal-notifier shim, ~/.config/bin) not found" -f "${CLI_NAME} apply claude_notifications"
     return 0
   fi
   verdict ok configured -d "hook='${current}' guard='${guard}' notifier='${ARI_DOTFILES_NOTIFIER}'"

@@ -16,9 +16,9 @@ readonly CLAUDE_LIB_DIR="${CLAUDE_SCRIPT_ROOT}/lib"
 readonly CLICK_SCRIPT="${CLAUDE_BIN_DIR}/notification-click-handler.sh"
 readonly QUICKCHAT_SCRIPT="${CLAUDE_BIN_DIR}/quickchat.sh"
 readonly TMUX_PANE_LIB="${CLAUDE_LIB_DIR}/tmux-pane.sh"
-# The shared tier's logging shim, which execs Homebrew's binary; the hooks run with Claude's
-# PATH, which may lack it, hence the absolute path.
-readonly NOTIFIER="${HOME}/.config/bin/terminal-notifier"
+# atn, the shared tier's terminal-notifier logging shim; the hooks run with Claude's PATH, which
+# may lack it, hence the absolute path.
+readonly NOTIFIER="${HOME}/.config/bin/atn"
 readonly CONTENT_IMAGE="${CLAUDE_SCRIPT_ROOT}/assets/claude-code-mascot.png"
 readonly TMUX_BIN="/opt/homebrew/bin/tmux"
 readonly NOTIFICATION_GROUP="claude-notification"

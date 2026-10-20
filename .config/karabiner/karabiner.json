@@ -867,7 +867,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\"$HOME/.config/bin/terminal-notifier\" -title Keyboard -message \"Kinesis Freestyle Pro\" -group karabiner-which-keyboard"
+                    "shell_command": "\"$HOME/.config/bin/atn\" -title Keyboard -message \"Kinesis Freestyle Pro\" -group karabiner-which-keyboard"
                   },
                   {
                     "set_variable": {
@@ -918,7 +918,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\"$HOME/.config/bin/terminal-notifier\" -title Keyboard -message \"Kinesis Freestyle 2\" -group karabiner-which-keyboard"
+                    "shell_command": "\"$HOME/.config/bin/atn\" -title Keyboard -message \"Kinesis Freestyle 2\" -group karabiner-which-keyboard"
                   },
                   {
                     "set_variable": {
@@ -968,7 +968,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\"$HOME/.config/bin/terminal-notifier\" -title Keyboard -message \"Apple Internal Keyboard\" -group karabiner-which-keyboard"
+                    "shell_command": "\"$HOME/.config/bin/atn\" -title Keyboard -message \"Apple Internal Keyboard\" -group karabiner-which-keyboard"
                   },
                   {
                     "set_variable": {
@@ -1033,7 +1033,7 @@
                 },
                 "to": [
                   {
-                    "shell_command": "\"$HOME/.config/bin/terminal-notifier\" -title Keyboard -message \"Unknown keyboard\" -group karabiner-which-keyboard"
+                    "shell_command": "\"$HOME/.config/bin/atn\" -title Keyboard -message \"Unknown keyboard\" -group karabiner-which-keyboard"
                   },
                   {
                     "set_variable": {

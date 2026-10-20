@@ -24,7 +24,7 @@
      "manual": false, "actionable": false, "items": [], "rc": 0, "duration_ms": 35,
      "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/claude.log", "applied": false},
     {"step": "claude_notifications", "status": "ok", "reason": "configured",
-     "detail": "hook='/tmp/nmtest/home/.config/claude/bin/notification-fire.sh' notifier='/tmp/nmtest/shims/terminal-notifier'", "fix": null,
+     "detail": "hook='/tmp/nmtest/home/.config/claude/bin/notification-fire.sh' notifier='/tmp/nmtest/shims/atn'", "fix": null,
      "manual": false, "actionable": false, "items": [], "rc": 0, "duration_ms": 22,
      "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/claude_notifications.log", "applied": false},
     {"step": "dotfiles_repo", "status": "ok", "reason": "clean",

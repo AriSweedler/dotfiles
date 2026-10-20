@@ -811,8 +811,8 @@ _t "--log did not rotate" "── exit rc=1" "$(grep '── exit' "${_log}")"
 # Failures notify; the click opens the log in a tmux window. Cancels stay silent.
 local _ndir
 _ndir="$(mktemp -d /tmp/tmux-oneshot-test-notif.XXXXX)"
-print -rl -- '#!/usr/bin/env zsh' "print -r -- \"\$*\" >> '${_ndir}/calls'" > "${_ndir}/terminal-notifier"
-chmod +x "${_ndir}/terminal-notifier"
+print -rl -- '#!/usr/bin/env zsh' "print -r -- \"\$*\" >> '${_ndir}/calls'" > "${_ndir}/atn"
+chmod +x "${_ndir}/atn"
 : > "${_ndir}/calls"
 # Entry 4 of the first DB is `false`.
 TMUX_ONESHOT_NOTIFY=1 TMUX=/tmp/fake-sock,1,0 PATH="${_ndir}:${PATH}" TMUX_ONESHOT_DB="${_db}" \

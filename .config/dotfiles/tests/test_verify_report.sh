@@ -56,7 +56,7 @@ assert_json "brew_undeclared recorded" "${LR}" '.brew_undeclared | index("formul
 assert_json "brew_undeclared count" "${LR}" '.brew_undeclared | length' 12
 assert_json "status fail" "${LR}" '.status' fail
 
-notif="$(shim_log terminal-notifier)"
+notif="$(shim_log atn)"
 assert_contains "notifier announces problems" "${notif}" "problems"
 assert_contains "notifier click opens the report in a tmux editor window" "${notif}" "-execute ${HOME}/.config/bin/tmux-edit-window -n dotfiles ${REPORT}"
 assert_not_contains "notifier never hands the report to -open (Xcode)" "${notif}" "-open file://"

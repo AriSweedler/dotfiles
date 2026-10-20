@@ -494,12 +494,12 @@ jobs_list() {
 
 # --- notifications: the engine reports how every job ended, so no plugin can forget to ---
 
-# terminal-notifier, probed by absolute path (probe_tool) because launchd's PATH may lack
-# Homebrew. Without it there is no banner: an osascript banner cannot be removed and would sit
-# in Notification Center forever.
+# atn, the terminal-notifier logging shim, probed (probe_tool) on the self-healed PATH. Without
+# it there is no banner: an osascript banner cannot be removed and would sit in Notification
+# Center forever.
 jobs_notifier_bin() {
   local tn
-  tn="$(probe_tool terminal-notifier)"
+  tn="$(probe_tool atn)"
   [[ -n "${tn}" ]] || return 1
   print -r -- "${tn}"
 }

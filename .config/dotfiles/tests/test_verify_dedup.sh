@@ -34,7 +34,7 @@ assert_eq "same fingerprint a week later" "${fp1}" "$(lr .fingerprint)"
 assert_eq "report not rewritten" "${sha1}" "$(sha256 "${REPORT}")"
 assert_json "weeks_failing 2" "${LR}" '.weeks_failing' 2
 assert_eq "first_seen kept" "${first_seen1}" "$(lr .first_seen)"
-assert_contains "notifier says still failing" "$(shim_log terminal-notifier)" "still failing since ${first_seen1}"
+assert_contains "notifier says still failing" "$(shim_log atn)" "still failing since ${first_seen1}"
 
 rm -f "${REPORT}"
 verify
@@ -56,7 +56,7 @@ assert_contains "new report names the new item" "$(cat "${REPORT}")" "cowsay2"
 assert_contains "new report has the new-since line" "$(cat "${REPORT}")" "New since the last run"
 assert_json "weeks_failing reset to 1" "${LR}" '.weeks_failing' 1
 assert_json "first_seen is the new run's day" "${LR}" '.first_seen' "$(TZ=UTC date -r "${ARI_DOTFILES_NOW}" '+%Y-%m-%d')"
-assert_contains "notifier announces the new report" "$(shim_log terminal-notifier)" "problems"
+assert_contains "notifier announces the new report" "$(shim_log atn)" "problems"
 
 printf '\nmy notes\n' >> "${REPORT}"
 fixture_add_formula cowsay3
@@ -78,7 +78,7 @@ assert_eq "archives keep every report" 5 "$(count_reports)"
 assert_file "last-ok stamped" "${STATE}/last-ok"
 assert_json "fingerprint cleared" "${LR}" '.fingerprint' ""
 assert_json "status ok or warn" "${LR}" '.status == "ok" or .status == "warn"' true
-assert_contains "notifier says verified OK" "$(shim_log terminal-notifier)" "verified OK"
+assert_contains "notifier says verified OK" "$(shim_log atn)" "verified OK"
 
 world_use_fixture drift
 world_bundle_check mixed
