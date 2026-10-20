@@ -139,8 +139,9 @@ assert_eq "two NAMEs: 64" 64 "${RC}"
 
 assert_eq "nothing committed" "${df_before}" "$(git --git-dir="${ARI_DOTFILES_DF_GIT_DIR}" rev-list --count HEAD 2>/dev/null || echo none)"
 nm test --help
-assert_contains "help: --edit in Usage" "${OUT}" "test --edit [NAME]"
-assert_contains "help: --edit in Flags" "${OUT}" "  --edit   open NAME's suite and the code it tests"
+assert_contains "help: edit in Usage" "${OUT}" "dotfiles test edit [NAME]"
+assert_contains "help: the edit subcommand" "${OUT}" "  edit  open NAME's suite and the code it tests"
+assert_contains "help: --edit in Flags" "${OUT}" "  --edit  edit: the same as the edit subcommand"
 assert_no_mutation "nothing reaches brew"
 
 if (( FAIL > 0 )); then printf '%s\n' "${ERR}" | tail -n 30 >&2; fi

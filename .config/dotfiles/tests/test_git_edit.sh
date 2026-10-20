@@ -11,7 +11,9 @@ world_new
 seed_fake_repos
 TEMPLATE="${ARI_DOTFILES_SHARED_DIR}/local-dotfiles-exclude"
 EXCLUDE="${ARI_DOTFILES_LDF_GIT_DIR}/info/exclude"
-DRAFT="${ARI_DOTFILES_STATE_DIR}/drafts/git/local-dotfiles-exclude"
+# A draft is named for its live file (edit::draft): the path under $HOME, / as %.
+DRAFT_NAME="${TEMPLATE#"${HOME}/"}"
+DRAFT="${ARI_DOTFILES_STATE_DIR}/drafts/git/${DRAFT_NAME//\//%}"
 
 EDITORS="${FIX}/editors"
 mkdir -p "${EDITORS}"
@@ -48,7 +50,8 @@ run noop --local git --edit --frob
 assert_eq "an unknown argument: usage" 64 "${RC}"
 run noop --local git --edit --help
 assert_eq "--edit --help: exit 0" 0 "${RC}"
-assert_contains "--edit --help: the git help" "${OUT}" "--local git --edit [--no-commit]"
+assert_contains "--edit --help: the git help" "${OUT}" "dotfiles git edit [--no-commit]"
+assert_contains "--edit --help: the edit needs --local" "${OUT}" "with --local only ('dotfiles --local git edit')"
 df_before="$(df_count)"
 run git_msg git commit --allow-empty -m "via git" --edit
 assert_eq "git commit --edit reaches git: exit 0" 0 "${RC}"
@@ -101,7 +104,8 @@ run trailing_space --local git --edit
 check_kept "trailing whitespace" "'!/share/kuber/  ' ends in whitespace"
 run broken --local git --edit
 assert_eq "a failing editor: exit 1" 1 "${RC}"
-assert_contains "a failing editor: says so" "${ERR}" "editor exited non-zero; draft kept"
+assert_contains "a failing editor: says so" "${ERR}" "editor exited non-zero; the allowlist kept as it was saved"
+assert_file "a failing editor: the draft is kept" "${DRAFT}"
 rm -f "${DRAFT}"
 
 # A dry run checks the draft and keeps it; nothing is put in place.

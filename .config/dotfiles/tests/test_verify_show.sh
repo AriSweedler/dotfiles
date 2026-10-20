@@ -74,7 +74,7 @@ assert_eq "--show --json is a usage error" 64 "${RC}"
 nm verify --force-report --show
 assert_eq "--force-report --show is a usage error" 64 "${RC}"
 nm verify --help
-assert_contains "help lists --show" "${OUT}" "  --show           print the current report"
+assert_contains "help lists --show" "${OUT}" "  --show          print the current report"
 
 if (( FAIL > 0 )); then printf '%s\n' "${ERR}" | tail -n 30 >&2; fi
 report

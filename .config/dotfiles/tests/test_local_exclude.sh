@@ -45,14 +45,15 @@ first_rule="$(grep -vE '^[[:space:]]*(#|$)' "${REPO_DIR}/local-dotfiles-exclude"
 assert_eq "the first rule is /*" "/*" "${first_rule}"
 undocumented="$(awk '/^!/ && prev !~ /^!/ { doc = (prev ~ /^#[[:space:]]*[^[:space:]]/) } /^!/ && !doc { print } { prev = $0 }' "${REPO_DIR}/local-dotfiles-exclude")"
 assert_eq "every '!' entry of the template has its why" "" "${undocumented}"
+# cmd/git.zsh opens with its declaration, so lib/verb.zsh is loaded first, as bin/dotfiles does.
 hermetic_env
 RC=0
-OUT="$(env -i "${HERMETIC_ENV[@]}" "${FIX}/tools/zsh" -f -c 'source "$1"; git_allowlist_undocumented "$2"; print -rl -- "${reply[@]}"' _ \
+OUT="$(env -i "${HERMETIC_ENV[@]}" "${FIX}/tools/zsh" -f -c 'source "${1:h:h}/lib/verb.zsh"; source "$1"; git_allowlist_undocumented "$2"; print -rl -- "${reply[@]}"' _ \
   "${ORIG_CONFIG_DIR}/dotfiles/cmd/git.zsh" "${REPO_DIR}/local-dotfiles-exclude" 2>&1)" || RC=$?
 assert_eq "git_allowlist_undocumented agrees: nothing" "0:" "${RC}:${OUT}"
 # What the rule calls documented: a comment heads a run of '!' lines; any other line ends the run.
 printf '/*\n# why a and b\n!/a/\n!/b/\n/b/*\n!/b/c/\n#\n!/d/\n' > "${FIX}/sample-exclude"
-OUT="$(env -i "${HERMETIC_ENV[@]}" "${FIX}/tools/zsh" -f -c 'source "$1"; git_allowlist_undocumented "$2"; print -r -- "${reply[*]}"' _ \
+OUT="$(env -i "${HERMETIC_ENV[@]}" "${FIX}/tools/zsh" -f -c 'source "${1:h:h}/lib/verb.zsh"; source "$1"; git_allowlist_undocumented "$2"; print -r -- "${reply[*]}"' _ \
   "${ORIG_CONFIG_DIR}/dotfiles/cmd/git.zsh" "${FIX}/sample-exclude" 2>&1)"
 assert_eq "a run under a comment is documented; after a rule or an empty '#' it is not" "!/b/c/ !/d/" "${OUT}"
 

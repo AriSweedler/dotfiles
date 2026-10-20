@@ -1,10 +1,10 @@
-# cmd/git/edit.zsh — `dotfiles --local git --edit`: the local tier's allowlist template in $EDITOR
+# cmd/git/edit.zsh — `dotfiles --local git edit`: the local tier's allowlist template in $EDITOR
 # as a draft; checked, put in place, installed as info/exclude, committed in the shared tier.
 # Loaded by cmd/git.zsh; defines functions only.
 #
 # The template is what every machine's info/exclude starts from, and info/exclude is what makes
 # `git ldf add -A` safe: a draft that would admit a secret never reaches either. It lives in
-# <state>/drafts/git/local-dotfiles-exclude until it passes, so a failed edit resumes.
+# <state>/drafts/git (edit::draft) until it passes, so a failed edit resumes.
 
 # git_edit_check DRAFT: every problem with the draft on stderr, one per line, and 1 when any.
 git_edit_check() {
@@ -48,7 +48,7 @@ git_edit_check() {
 
 git_edit() {
   local commit="${1:-1}" template="${LDF_EXCLUDE_TEMPLATE}" git_dir="${ARI_DOTFILES_LDF_GIT_DIR}"
-  local exclude="${ARI_DOTFILES_LDF_GIT_DIR}/info/exclude" draft editor fix="${CLI_NAME} --local git --edit"
+  local exclude="${ARI_DOTFILES_LDF_GIT_DIR}/info/exclude" draft REPLY fix="${CLI_NAME} --local git --edit"
   [[ -r "${template}" ]] || { log::err "allowlist template missing | path='${template}'"; return 1; }
   [[ -d "${git_dir}" ]] || { log::err "no local tier yet | git_dir='${git_dir}' fix='${CLI_NAME} apply local_dotfiles_repo'"; return 1; }
   # This machine keeps an allowlist it changed by hand (local_dotfiles_repo warns): installing over
@@ -59,44 +59,24 @@ git_edit() {
     return 1
   fi
 
-  draft="${ARI_DOTFILES_STATE_DIR}/drafts/git/local-dotfiles-exclude"
-  mkdir -p -- "${draft:h}" || return 1
-  if [[ -f "${draft}" ]]; then
-    log::info "resuming the draft a failed edit left | draft='${draft}'"
-  else
-    cp -- "${template}" "${draft}" || return 1
+  edit::draft "${template}" "${ARI_DOTFILES_STATE_DIR}/drafts/git" || return 1
+  draft="${REPLY}"
+  local -i rc=0
+  edit::session "${draft}" --check git_edit_check --what "the allowlist" ${${EDIT_RESUMED:#0}:+--changed} \
+    --resume "${fix}" || rc=$?
+  if (( rc == 2 )) || { (( rc == 0 )) && edit::same "${draft}" "${template}"; }; then
+    rm -f -- "${draft}"
+    print -r -- "allowlist: no change | file=$(ui::paths "${template}")"
+    return 0
   fi
-  editor="${EDITOR:-vi}"
-  command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi
-  local -i tty=0
-  [[ -t 0 && -t 1 ]] && tty=1
-  while true; do
-    if ! ${=editor} "${draft}"; then
-      log::err "editor exited non-zero; draft kept, nothing changed | editor='${editor}' draft='${draft}'"
-      return 1
-    fi
-    if cmp -s -- "${draft}" "${template}"; then
-      rm -f -- "${draft}"
-      print -r -- "allowlist: no change | file=$(ui::paths "${template}")"
-      return 0
-    fi
-    git_edit_check "${draft}" && break
-    if (( tty )) && ui::confirm "Edit the allowlist again?"; then continue; fi
-    log::err "allowlist not saved; draft kept | draft='${draft}' fix='${fix}'"
-    return 1
-  done
+  (( rc == 0 )) || return 1
   if is_dry_run; then
     print -r -- "would put the draft in place, install it and commit it; draft kept | draft=$(ui::paths "${draft}") template=$(ui::paths "${template}") exclude=$(ui::paths "${exclude}")"
     return 0
   fi
 
   # In place, then installed: each written beside its file and renamed over it.
-  cp -- "${draft}" "${template}.edit.$$" && chmod 644 "${template}.edit.$$" && mv -f -- "${template}.edit.$$" "${template}" || {
-    rm -f -- "${template}.edit.$$"
-    log::err "could not put the template in place; draft kept | template='${template}' draft='${draft}'"
-    return 1
-  }
-  rm -f -- "${draft}"
+  edit::install "${draft}" "${template}" 644 || return 1
   mkdir -p -- "${exclude:h}" && cp -- "${template}" "${exclude}.edit.$$" && mv -f -- "${exclude}.edit.$$" "${exclude}" || {
     rm -f -- "${exclude}.edit.$$"
     log::err "template saved but not installed | exclude='${exclude}' fix='cp ${template} ${exclude}'"

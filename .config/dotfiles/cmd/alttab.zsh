@@ -3,67 +3,61 @@
 # making the signing certificate, which asks for an admin password in a macOS dialog. `edit`
 # (cmd/alttab/edit.zsh) changes free.patch.
 
-help_alttab() {
-  cat <<EOF
-build, sign and install the Free-tier AltTab
-
-${c_bold}Usage${c_rst}
-  ${DF} alttab install [--dry-run] [--no-launch]
-  ${DF} alttab status
-  ${DF} alttab edit [--header] [--no-commit]     (also: alttab --edit)
-
-  The alttab step checks for the patched AltTab; init rebuilds it when Xcode
-  is ready and the certificate exists, but runs no sudo and makes no
-  certificate, so a machine short of either is told to run 'alttab install'.
-  Sources: $(help::tilde "${HOME}/.config/alttab") (README.md has the whole story).
-
-${c_bold}Subcommands${c_rst}
-  install   get Xcode ready (select it, accept its license, install its
-            first-launch packages; each a sudo command, named first), create
-            the local signing certificate 'AltTab Free Local' if it is missing
-            (macOS asks for an admin password once to trust it), then clone,
-            patch, build, sign, replace /Applications/AltTab.app, pin its
-            updater to manual and open it; then run the alttab check
-  status    the alttab step's check
-  edit      open the files free.patch changes in \$EDITOR, in the build's
-            clone ($(help::tilde "${XDG_CACHE_HOME:-${HOME}/.cache}/alttab-free/src")); on save free.patch becomes its
-            header plus the clone's 'git diff HEAD'. It must apply to a clean
-            checkout of free.patch.ref, and its "What it changes" list must
-            name every file it touches; then it is committed (shared tier).
-            Pro stays locked except shortcut slot 2 (AGENTS.md). Builds
-            nothing: run 'alttab install' next
-
-${c_bold}Flags${c_rst}
-  --dry-run    install: print the build's plan, change nothing
-  --no-launch  install: do not open AltTab afterwards
-  --edit       the other spelling of edit
-  --header     edit: open free.patch itself (its header names each file it
-               changes); prints the change as a diff
-  --no-commit  edit: put free.patch in place, leave it uncommitted
-
-  Needs the Xcode app from the App Store; Command Line Tools alone cannot
-  build a macOS app.
+verb::define alttab 'build, sign and install the Free-tier AltTab'
+verb::usage alttab 'alttab install [--dry-run] [--no-launch]' 'alttab status'
+verb::about alttab <<'EOF'
+The alttab step checks for the patched AltTab; init rebuilds it when Xcode
+is ready and the certificate exists, but runs no sudo and makes no
+certificate, so a machine short of either is told to run 'alttab install'.
+Sources: $(help::tilde "${HOME}/.config/alttab") (README.md has the whole story).
+Needs the Xcode app from the App Store; Command Line Tools alone cannot
+build a macOS app.
 EOF
-}
+verb::sub alttab install "get Xcode ready (select it, accept its license, install its first-launch packages; each a sudo command, named first), create the local signing certificate 'AltTab Free Local' if it is missing (macOS asks for an admin password once to trust it), then clone, patch, build, sign, replace /Applications/AltTab.app, pin its updater to manual and open it; then run the alttab check"
+verb::sub alttab status "the alttab step's check"
+verb::edit alttab alttab::edit_cmd '[--header] [--no-commit]' \
+  'open the files free.patch changes in \$EDITOR, in the clone the build keeps ($(help::tilde "${XDG_CACHE_HOME:-${HOME}/.cache}/alttab-free/src")); on save free.patch becomes its header plus "git diff HEAD" there. It must apply to a clean checkout of free.patch.ref, and its "What it changes" list must name every file it touches; then it is committed (shared tier). A save that fails is kept for the next edit. Refuses during an unfinished "alttab-free-build --rebase-patch", and when the clone is missing, at another ref or carries other changes. Pro stays locked except shortcut slot 2 (AGENTS.md). Builds nothing: run "alttab install" next'
+verb::flag alttab '--dry-run' "install: print the build's plan, change nothing"
+verb::flag alttab '--no-launch' 'install: do not open AltTab afterwards'
+verb::flag alttab '--header' 'edit: open free.patch itself (its header names each file it changes); prints the change as a diff'
+verb::flag alttab '--no-commit' 'edit: put free.patch in place, leave it uncommitted'
 
 cmd_alttab() {
-  local sub="${1:-}"
+  local -A opts; local -a args
+  verb::parse alttab "$@"
+  (( ${+opts[--edit]} )) && { alttab::edit_cmd "${@:#--edit}"; return; }
+  local sub="${args[1]:-}"
   [[ -n "${sub}" ]] || usage_error "alttab needs a subcommand | known='install status edit'"
-  shift
   source "${ARI_DOTFILES_STEPS}/alttab.zsh" || return 3
   step::alttab::paths
   case "${sub}" in
-    install) alttab::install "$@" ;;
-    edit|--edit)
-      need_lib "${ARI_DOTFILES_CMD}/alttab/edit.zsh" || return 3
-      alttab::edit "$@"
-      ;;
+    install)
+      (( ${#args} == 1 )) || usage_error "alttab install takes no arguments | args='${args[*]:1}'"
+      alttab::only_flags install --dry-run --no-launch
+      alttab::install ;;
     status)
-      (( $# == 0 )) || usage_error "alttab status takes no arguments | args='$*'"
-      cmd_healthcheck --only alttab
-      ;;
+      (( ${#args} == 1 )) || usage_error "alttab status takes no arguments | args='${args[*]:1}'"
+      alttab::only_flags status
+      cmd_healthcheck --only alttab ;;
     *) usage_error "alttab: unknown subcommand | sub='${sub}' known='install status edit'" ;;
   esac
+}
+
+# alttab::edit_cmd ARGS: `alttab edit`, with the step's paths it needs.
+alttab::edit_cmd() {
+  source "${ARI_DOTFILES_STEPS}/alttab.zsh" || return 3
+  step::alttab::paths
+  need_lib "${ARI_DOTFILES_CMD}/alttab/edit.zsh" || return 3
+  alttab::edit "$@"
+}
+
+# alttab::only_flags SUB FLAG..: a usage error for any flag in the caller's opts SUB does not take.
+alttab::only_flags() {
+  local sub="${1}" flag
+  shift
+  for flag in "${(@k)opts}"; do
+    (( ${@[(Ie)${flag}]} )) || usage_error "alttab ${sub}: bad flag | flag='${flag}'"
+  done
 }
 
 # What a setup command is for, before it runs; a dry run says it would.
@@ -104,17 +98,12 @@ alttab::ready_xcode() {
   return 0
 }
 
+# alttab::install: the caller's opts (--dry-run, --no-launch) passed to the build.
 alttab::install() {
   local -a build_args=()
-  local dry=0
-  while (( $# )); do
-    case "${1}" in
-      --dry-run) dry=1; build_args+=(--dry-run); export ARI_DOTFILES_DRY_RUN=1 ;;
-      --no-launch) build_args+=(--no-launch) ;;
-      *) usage_error "alttab install: bad flag | flag='${1}'" ;;
-    esac
-    shift
-  done
+  local dry=${+opts[--dry-run]}
+  (( dry )) && { build_args+=(--dry-run); export ARI_DOTFILES_DRY_RUN=1; }
+  (( ${+opts[--no-launch]} )) && build_args+=(--no-launch)
   if [[ "${OSTYPE}" != darwin* ]]; then
     log::err "AltTab is macOS only"
     return 1

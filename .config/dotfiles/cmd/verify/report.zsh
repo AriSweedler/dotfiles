@@ -11,7 +11,7 @@
 #       Pure; markdown on stdout. Defaults: kind from .status, first_seen = today, weeks = 1,
 #       no previous run, REPORT_PATH = <desktop>/new-machine-FAILED.md. The log argument is only
 #       tailed; every path printed in the report is the canonical state-dir location.
-#   report::decide <summary.json> [--force-report]
+#   report::decide <summary.json> [FORCE]   (FORCE 1: write even when unchanged; verify --force-report)
 #       Pure; reads last_result.json and the Desktop file, prints one JSON decision:
 #       {kind: pass|fail|error, action: write|unchanged|suppress|clear, fingerprint, first_seen,
 #        weeks_failing, consecutive_errors, report_path, report_sha256, previous_date,
@@ -395,15 +395,8 @@ report::_old_report_action() {
 }
 
 report::decide() {
-  local summary="${1}"
-  shift
-  local force=false
-  while (( $# )); do
-    case "${1}" in
-      --force-report) force=true; shift ;;
-      *) print -u2 -r -- "report::decide: bad flag ${1}"; return 64 ;;
-    esac
-  done
+  local summary="${1}" force=false
+  [[ "${2:-0}" == 0 ]] || force=true
   local state_dir="${ARI_DOTFILES_STATE_DIR}" desktop_dir="${ARI_DOTFILES_DESKTOP_DIR}" report today
   report="${desktop_dir}/${REPORT_BASENAME}"
   today="$(report::_today)"

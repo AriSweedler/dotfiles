@@ -134,9 +134,10 @@ edit noop --show
 assert_eq "--edit --show is a usage error" 64 "${RC}"
 assert_eq "usage errors open nothing" "" "$(opened)"
 nm verify --help
-assert_contains "help: --edit in Usage" "${OUT}" "verify --edit"
+assert_contains "help: edit in Usage" "${OUT}" "dotfiles verify edit"
 assert_contains "help: --show in Usage" "${OUT}" "verify --show"
-assert_contains "help: --edit in Flags" "${OUT}" "  --edit           open the Desktop report"
+assert_contains "help: the edit subcommand" "${OUT}" "  edit  open the Desktop report"
+assert_contains "help: --edit in Flags" "${OUT}" "  --edit          edit: the same as the edit subcommand"
 assert_no_mutation "read-only throughout"
 
 if (( FAIL > 0 )); then printf '%s\n' "${ERR}" | tail -n 30 >&2; fi

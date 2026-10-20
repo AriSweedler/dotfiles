@@ -147,9 +147,9 @@ _bin --edit </dev/null >/dev/null 2>&1; _rc=$?; _t "bin: --edit is the same" "64
 _t "bin: undocumented names the fixture binding with its fix" \
   $'binding clipboard-history | fix=\'dotfiles raycast link edit clipboard-history\'\nundocumented=1' \
   "$(env "${_env[@]}" ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="cat ${_dir}/bindings.json" "${_dotfiles}" raycast undocumented 2>/dev/null)"
-_t "bin: help_raycast lists edit, --edit, link edit and undocumented" "4" \
-  "$("${_dotfiles}" help raycast 2>&1 | grep -c -e '^  dotfiles raycast edit \[link' -e '^  dotfiles raycast --edit ' -e '^  dotfiles raycast link edit \[<slug>\]' -e '^  dotfiles raycast undocumented')"
-_t "bin: help_raycast lists the --edit flag" "1" "$("${_dotfiles}" help raycast 2>&1 | grep -c '^  --edit ')"
+_t "bin: the raycast help lists edit, --edit, link edit and undocumented" "4" \
+  "$("${_dotfiles}" help raycast 2>&1 | grep -c -e '^  dotfiles raycast edit \[link' -e '(also: raycast --edit)' -e '^  dotfiles raycast link edit \[<slug>\]' -e '^  dotfiles raycast undocumented')"
+_t "bin: the raycast help lists the --edit flag" "1" "$("${_dotfiles}" help raycast 2>&1 | grep -c '^  --edit ')"
 _bin help >/dev/null 2>&1; _rc=$?; _t "bin: help rc 0" "0" "${_rc}"
 _t "bin: help lists the subsystems" "1" "$(_bin help 2>&1 | grep -c 'Subsystems:.*link, snippets')"
 _t "bin: help names both tier files" "2" "$(_bin help 2>&1 | grep -c -e 'shared  ~/.config/raycast-snippets/snippets.json' -e 'local   ~/.local/share/raycast-snippets/snippets.json')"

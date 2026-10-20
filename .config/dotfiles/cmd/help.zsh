@@ -1,67 +1,59 @@
-# dotfiles/cmd/help.zsh — `dotfiles help [VERB]`: the top-level help, or one verb's; `help --edit`
+# dotfiles/cmd/help.zsh — `dotfiles help [VERB]`: the top-level help, or one verb's; `help edit`
 # opens one in $EDITOR. Also the help documentation rule (help::doc_gap), which the dotfiles_docs
 # step runs over every verb and `help --edit` runs over its draft.
 
-help_help() {
-  cat <<EOF
-the verbs, or one verb's help
-
-${c_bold}Usage${c_rst}
-  ${DF} help
-  ${DF} help VERB
-  ${DF} help --edit [VERB] [--no-commit]
-
-  Without VERB, the same as 'dotfiles --help' (and a bare 'dotfiles'): every
-  verb with its one-line description. With VERB, the same as
-  'dotfiles VERB --help'. Any sub-verb answers --help with its verb's help,
-  e.g. 'dotfiles jobs list --help'.
-
-  A verb's help is help_VERB() in cmd/VERB.zsh, one heredoc: line 1 its
-  one-line synopsis, then a Usage section, and every flag the verb's parsers
-  accept (cmd/VERB.zsh and cmd/VERB/*.zsh: zparseopts specs and case arms,
-  -h/--help aside) named somewhere in it. The top-level help is help() in
-  lib/dispatch.zsh, held to the same rule for the flags main() takes. A help
-  that breaks the rule fails the dotfiles_docs step.
-
-  --edit opens that file in \$EDITOR (vi when unset) at the help function, as
-  a draft (a verb without one gets a stub). On save the draft must pass
-  zsh -n, the rule above, and render under 'set -euo pipefail' in a fresh
-  zsh -f with the draft in place; then it replaces the file and is committed
-  in the shared tier. A draft that does not pass is kept: offered for another
-  edit on a terminal, else exit 1; the same command resumes it.
-
-${c_bold}Flags${c_rst}
-  --edit        edit VERB's help (no VERB: the top-level help)
-  --no-commit   edit: put the file in place, leave it uncommitted
+verb::define help "the verbs, or one verb's help"
+verb::usage help 'help' 'help VERB'
+verb::about help <<'EOF'
+Without VERB, the same as 'dotfiles --help' (and a bare 'dotfiles'): every
+verb with its one-line description. With VERB, the same as
+'dotfiles VERB --help'. Any sub-verb answers --help with its verb's help,
+e.g. 'dotfiles jobs list --help'.
 EOF
-}
+verb::section help 'The help rule' <<'EOF'
+A verb's help is its declaration at the top of cmd/VERB.zsh (lib/verb.zsh:
+verb::define, verb::usage, verb::flag, verb::edit, …); its help and its
+flag parser (verb::parse) both come from it. The declaration is whole: a
+description, a Usage form, a description on every flag and subcommand, an
+edit or a reason for none; and nothing in cmd/VERB.zsh or cmd/VERB/*.zsh
+parses a flag outside verb::parse. A verb still written as a help_VERB
+heredoc names every flag its parsers accept, under a one-line synopsis and
+a Usage section. The top-level help is help() in lib/dispatch.zsh, held to
+the same rule for the flags main() takes. A help that breaks the rule fails
+the dotfiles_docs step.
+EOF
+verb::edit help help::edit_cmd '[VERB] [--no-commit]' \
+  'open that file in \$EDITOR (vi when unset) at the declaration (no VERB: the top-level help), as a draft; a verb without one gets a stub. On save the draft must pass zsh -n, the rule below, and render under "set -euo pipefail" in a fresh zsh -f with the draft in place; then it replaces the file and is committed in the shared tier. A draft that does not pass is kept: offered for another edit on a terminal, else exit 1; the same command resumes it'
+verb::flag help '--no-commit' 'edit: put the file in place, leave it uncommitted'
 
 cmd_help() {
-  local edit=0 commit=1
-  local -a args=()
-  while (( $# )); do
-    case "${1}" in
-      --edit) edit=1 ;;
-      --no-commit) commit=0 ;;
-      -*) usage_error "help: unknown flag | flag='${1}'" ;;
-      *) args+=("${1}") ;;
-    esac
-    shift
-  done
+  local -A opts; local -a args
+  verb::parse help "$@"
+  (( ${+opts[--edit]} )) && { help::edit_cmd "${@:#--edit}"; return; }
+  (( ${+opts[--no-commit]} )) && usage_error "help: --no-commit goes with --edit"
+  help::verb_arg || return
+  if [[ -z "${REPLY}" ]]; then help; return 0; fi
+  help_verb "${REPLY}"
+}
+
+# help::verb_arg: REPLY is the caller's one VERB in args, lower-cased ('' for none); a usage error
+# for more than one or an unknown verb.
+help::verb_arg() {
   (( ${#args} <= 1 )) || usage_error "help takes at most one verb | args='${args[*]}'"
-  (( edit || commit )) || usage_error "help: --no-commit goes with --edit"
-  local verb="${args[1]:-}"
-  verb="${verb:l}"
-  if [[ -n "${verb}" ]] && (( ! ${+functions[cmd_${verb}]} )); then
-    usage_error "Unknown verb | verb='${verb}' valid='${(j:, :)${(f)$(verbs)}}'"
+  REPLY="${args[1]:-}"
+  REPLY="${REPLY:l}"
+  if [[ -n "${REPLY}" ]] && (( ! ${+functions[cmd_${REPLY}]} )); then
+    usage_error "Unknown verb | verb='${REPLY}' valid='${(j:, :)${(f)$(verbs)}}'"
   fi
-  if (( edit )); then
-    need_lib "${ARI_DOTFILES_CMD}/help/edit.zsh" || return 3
-    help_edit "${verb}" "${commit}"
-    return
-  fi
-  if [[ -z "${verb}" ]]; then help; return 0; fi
-  help_verb "${verb}"
+}
+
+# help::edit_cmd [VERB] [--no-commit]: `help --edit`, in cmd/help/edit.zsh.
+help::edit_cmd() {
+  local -A opts; local -a args
+  verb::parse help "$@"
+  help::verb_arg || return
+  need_lib "${ARI_DOTFILES_CMD}/help/edit.zsh" || return 3
+  help_edit "${REPLY}" "$(( ! ${+opts[--no-commit]} ))"
 }
 
 # --- The help documentation rule ---

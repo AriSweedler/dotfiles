@@ -2,59 +2,35 @@
 # opened with the code it tests (--edit). The suite lookup and the "what does this suite test"
 # rule live here; steps/test_suites.zsh checks every suite against the same rule.
 
-help_test() {
-  cat <<EOF
-the hermetic suite, or one suite by name; --edit opens a suite with its code
-
-${c_bold}Usage${c_rst}
-  ${DF} test [NAME]
-  ${DF} test --edit [NAME]
-
-  Without NAME: every tests/test_*.sh under $(help::tilde "${ARI_DOTFILES_TESTS}"),
-  each in a fake HOME with brew/launchctl/curl shims; nothing reaches this
-  machine. With NAME: the zsh plugin suite NAME.test.zsh under
-  $(help::tilde "${ARI_DOTFILES_ZSH_PLUGINS}") (raycast, json_sort, …) under its
-  OTTO_TEST__ZSH_PLUGINS_<NAME> gate (NAME upper-cased, anything not a letter
-  or digit as _), else the hermetic tests/test_NAME.sh (verify_show, …).
-
-  Every suite says what it tests: a tests/test_*.sh on line 2 ('# what it
-  checks'), a plugin suite on line 1 ('# Tests for <file>', a file that
-  exists). The test_suites step fails on one that does not.
-
-${c_bold}Flags${c_rst}
-  --edit   open NAME's suite and the code it tests in \$EDITOR (vi when unset),
-           in one editor call, then run that suite and exit with its status.
-           The code: a plugin suite's '# Tests for <file>'; steps/X.zsh for
-           test_step_X and test_X_step; cmd/V.zsh and cmd/V/* for test_V_*.
-           Without NAME: open tests/run.sh, run nothing. Commits nothing;
-           exit 1 when the editor fails (nothing runs), 64 for an unknown NAME
-
-${c_bold}Env${c_rst}
-  $(ENV ARI_DOTFILES_TESTS)
-      the hermetic suite's directory
-      (default $(help::tilde "${ARI_DOTFILES_TESTS}"))
-  $(ENV ARI_DOTFILES_ZSH_PLUGINS)
-      where the plugin suites (*.test.zsh) live
-      (default $(help::tilde "${ARI_DOTFILES_ZSH_PLUGINS}"))
-  $(ENV ARI_DOTFILES_BLESS_GOLDEN)
-      1 rewrites the report goldens from the renderer:
-      ARI_DOTFILES_BLESS_GOLDEN=1 bash tests/test_report_render.sh
+verb::define test 'the hermetic suite, or one suite by name; --edit opens a suite with its code'
+verb::usage test 'test [NAME]'
+verb::about test <<'EOF'
+Without NAME: every tests/test_*.sh under $(help::tilde "${ARI_DOTFILES_TESTS}"),
+each in a fake HOME with brew/launchctl/curl shims; nothing reaches this
+machine. With NAME: the zsh plugin suite NAME.test.zsh under
+$(help::tilde "${ARI_DOTFILES_ZSH_PLUGINS}") (raycast, json_sort, …) under its
+OTTO_TEST__ZSH_PLUGINS_<NAME> gate (NAME upper-cased, anything not a letter
+or digit as _), else the hermetic tests/test_NAME.sh (verify_show, …).
 EOF
-}
+verb::section test 'Documentation rule' <<'EOF'
+Every suite says what it tests: a tests/test_*.sh on line 2 ('# what it
+checks'), a plugin suite on line 1 ('# Tests for <file>', a file that
+exists). The test_suites step fails on one that does not.
+EOF
+verb::edit test test::edit '[NAME]' \
+  "open NAME's suite and the code it tests in \\\$EDITOR (vi when unset), in one editor call, then run that suite and exit with its status. The code: a plugin suite's '# Tests for <file>'; steps/X.zsh for test_step_X and test_X_step; cmd/V.zsh and cmd/V/* for test_V_*. Without NAME: open tests/run.sh, run nothing. Commits nothing; exit 1 when the editor fails (nothing runs), 64 for an unknown NAME"
+verb::env test ARI_DOTFILES_TESTS "the hermetic suite's directory" '$(help::tilde "${ARI_DOTFILES_TESTS}")'
+verb::env test ARI_DOTFILES_ZSH_PLUGINS 'where the plugin suites (*.test.zsh) live' '$(help::tilde "${ARI_DOTFILES_ZSH_PLUGINS}")'
+verb::env test ARI_DOTFILES_BLESS_GOLDEN '1 rewrites the report goldens from the renderer: ARI_DOTFILES_BLESS_GOLDEN=1 bash tests/test_report_render.sh'
 
 cmd_test() {
-  local -a edit=()
-  zparseopts -D -E -F -K -- -edit=edit || usage_error "test: bad flags | args='$*'"
-  (( $# <= 1 )) || usage_error "test takes at most one name | args='$*'"
-  if (( ${#edit} )); then
-    test::edit "$@"
-    return
-  fi
-  if (( $# == 0 )); then
-    test::_exec_suite "${ARI_DOTFILES_TESTS}/run.sh"
-  fi
+  local -A opts; local -a args
+  verb::parse test "$@"
+  (( ${#args} <= 1 )) || usage_error "test takes at most one name | args='${args[*]}'"
+  (( ${+opts[--edit]} )) && { test::edit "${args[@]}"; return; }
+  (( ${#args} )) || test::_exec_suite "${ARI_DOTFILES_TESTS}/run.sh"
   local REPLY
-  test::resolve "${1}" || usage_error "no such suite | name='${1}' plugins='${ARI_DOTFILES_ZSH_PLUGINS}' tests='${ARI_DOTFILES_TESTS}'"
+  test::resolve "${args[1]}" || usage_error "no such suite | name='${args[1]}' plugins='${ARI_DOTFILES_ZSH_PLUGINS}' tests='${ARI_DOTFILES_TESTS}'"
   test::_exec_suite "${REPLY}"
 }
 
@@ -125,7 +101,7 @@ test::plugin_target() {
   REPLY="${${line#\# Tests for }%%[[:space:]]*}"
 }
 
-# test::code_under SUITE: reply = the files SUITE tests that exist (see help_test's --edit).
+# test::code_under SUITE: reply = the files SUITE tests that exist (see the edit's help).
 test::code_under() {
   setopt localoptions extendedglob
   local suite="${1}" base line REPLY verb
@@ -153,23 +129,24 @@ test::code_under() {
 
 # --edit [NAME]: the suite and its code in one editor call, then the suite's own exit status.
 test::edit() {
-  local editor="${EDITOR:-vi}" REPLY suite
-  command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi
-  if (( $# == 0 )); then
-    if ! ${=editor} "${ARI_DOTFILES_TESTS}/run.sh"; then
-      log::err "editor exited non-zero | editor='${editor}' file='${ARI_DOTFILES_TESTS}/run.sh'"
+  local -A opts; local -a args
+  verb::parse test "$@"
+  (( ${#args} <= 1 )) || usage_error "test takes at most one name | args='${args[*]}'"
+  local REPLY suite
+  if (( ${#args} == 0 )); then
+    if ! edit::open -- "${ARI_DOTFILES_TESTS}/run.sh"; then
+      log::err "editor exited non-zero | file='${ARI_DOTFILES_TESTS}/run.sh'"
       return 1
     fi
     print -r -- "next: ${CLI_NAME} test"
     return 0
   fi
-  test::resolve "${1}" || usage_error "no such suite | name='${1}' plugins='${ARI_DOTFILES_ZSH_PLUGINS}' tests='${ARI_DOTFILES_TESTS}'"
+  test::resolve "${args[1]}" || usage_error "no such suite | name='${args[1]}' plugins='${ARI_DOTFILES_ZSH_PLUGINS}' tests='${ARI_DOTFILES_TESTS}'"
   suite="${REPLY}"
   local -a reply
   test::code_under "${suite}"
-  local -a files=("${suite}" "${reply[@]}")
-  if ! ${=editor} "${files[@]}"; then
-    log::err "editor exited non-zero; nothing run | editor='${editor}' suite='${suite}'"
+  if ! edit::open -- "${suite}" "${reply[@]}"; then
+    log::err "editor exited non-zero; nothing run | suite='${suite}'"
     return 1
   fi
   test::_argv "${suite}"
@@ -178,7 +155,7 @@ test::edit() {
   "${reply[@]}" || rc=$?
   if (( rc )); then
     print -r -- "test: failed (exit ${rc}); nothing committed | suite=$(ui::paths "${suite}")"
-    print -r -- "next: ${CLI_NAME} test --edit ${1}"
+    print -r -- "next: ${CLI_NAME} test --edit ${args[1]}"
   else
     print -r -- "test: passed; nothing committed | suite=$(ui::paths "${suite}")"
     print -r -- "next: ${CLI_NAME} test"

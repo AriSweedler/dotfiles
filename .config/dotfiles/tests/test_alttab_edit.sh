@@ -82,7 +82,7 @@ unchanged() {
 # ── help and usage ──
 nm help alttab
 assert_contains "help lists edit" "${OUT}" "alttab edit [--header] [--no-commit]"
-assert_contains "help lists --edit" "${OUT}" "--edit       the other spelling of edit"
+assert_contains "help lists --edit" "${OUT}" "--edit       edit: the same as the edit subcommand"
 assert_contains "help lists --header" "${OUT}" "--header     edit: open free.patch itself"
 assert_contains "help lists --no-commit" "${OUT}" "--no-commit  edit: put free.patch in place"
 edit noop edit --bogus

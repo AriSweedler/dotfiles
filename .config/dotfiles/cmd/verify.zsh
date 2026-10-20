@@ -2,63 +2,39 @@
 # one retry of the errors, then the report on the Desktop (rewritten only when the set of
 # problems changes) and a banner. The report logic is cmd/verify/report.zsh, loaded on demand.
 
-help_verify() {
-  cat <<EOF
-the weekly check: healthcheck, retry, Desktop report, banner
-
-${c_bold}Usage${c_rst}
-  ${DF} verify [--force-report] [--no-notify] [--json]
-  ${DF} verify --show
-  ${DF} verify --edit
-
-  What the dotfiles-verify job plugin runs on Monday. Every step is checked;
-  steps that errored are retried once after ${ARI_DOTFILES_RETRY_SECS}s; the result is compared
-  with the last one and at most one report is written to $(help::tilde "${ARI_DOTFILES_DESKTOP_DIR}")
-  (deleting it = acknowledged; a passing run archives it).
-  Trail: $(help::tilde "${VERIFY_TRAIL}")
-  Log:   $(help::tilde "${ARI_DOTFILES_STATE_DIR}")/verify/log.txt
-
-${c_bold}Flags${c_rst}
-  --force-report   write the report even when the set of problems is unchanged
-  --no-notify      no banner (an interactive run never banners; the job does)
-  --json           print summary.json instead of the table
-  --show           print the current report (Desktop, else newest archived); runs nothing
-  --edit           open the Desktop report (else the newest *.edited*.md) in \$EDITOR for
-                   notes; runs nothing, commits nothing. Keep line 1: without that marker
-                   verify treats the file as foreign. Then prints the next step
-
-${c_bold}Env${c_rst}
-  $(ENV ARI_DOTFILES_STATE_DIR)
-      where runs, the trail and the report archive live
-      (default $(help::tilde "${ARI_DOTFILES_STATE_DIR}"))
-  $(ENV ARI_DOTFILES_DESKTOP_DIR)
-      where the report is written (default $(help::tilde "${ARI_DOTFILES_DESKTOP_DIR}"))
-  $(ENV ARI_DOTFILES_RETRY_SECS)
-      pause before the one retry of errored steps; 0 disables it
-      (default ${ARI_DOTFILES_RETRY_SECS})
-  $(ENV ARI_DOTFILES_INVOKED_BY)
-      set by the job plugin; with it, banners go through terminal-notifier
-      instead of the log
-  $(ENV ARI_DOTFILES_NO_NOTIFY)
-      1 = never banner, whatever set ARI_DOTFILES_INVOKED_BY
+verb::define verify 'the weekly check: healthcheck, retry, Desktop report, banner'
+verb::usage verify 'verify [--force-report] [--no-notify] [--json]' 'verify --show'
+verb::about verify <<'EOF'
+What the dotfiles-verify job plugin runs on Monday. Every step is checked;
+steps that errored are retried once after ${ARI_DOTFILES_RETRY_SECS}s; the result is compared
+with the last one and at most one report is written to $(help::tilde "${ARI_DOTFILES_DESKTOP_DIR}")
+(deleting it = acknowledged; a passing run archives it).
+Trail: $(help::tilde "${VERIFY_TRAIL}")
+Log:   $(help::tilde "${ARI_DOTFILES_STATE_DIR}")/verify/log.txt
 EOF
-}
+verb::edit verify verify::edit_cmd '' \
+  'open the Desktop report (else the newest *.edited*.md) in \$EDITOR for notes; runs nothing, commits nothing. Keep line 1: without that marker verify treats the file as foreign. Then prints the next step'
+verb::flag verify '--force-report' 'write the report even when the set of problems is unchanged'
+verb::flag verify '--no-notify' 'no banner (an interactive run never banners; the job does)'
+verb::flag verify '--json' 'print summary.json instead of the table'
+verb::flag verify '--show' 'print the current report (Desktop, else newest archived); runs nothing'
+verb::env verify ARI_DOTFILES_STATE_DIR 'where runs, the trail and the report archive live' '$(help::tilde "${ARI_DOTFILES_STATE_DIR}")'
+verb::env verify ARI_DOTFILES_DESKTOP_DIR 'where the report is written' '$(help::tilde "${ARI_DOTFILES_DESKTOP_DIR}")'
+verb::env verify ARI_DOTFILES_RETRY_SECS 'pause before the one retry of errored steps; 0 disables it' '${ARI_DOTFILES_RETRY_SECS}'
+verb::env verify ARI_DOTFILES_INVOKED_BY 'set by the job plugin; with it, banners go through terminal-notifier instead of the log'
+verb::env verify ARI_DOTFILES_NO_NOTIFY '1 = never banner, whatever set ARI_DOTFILES_INVOKED_BY'
 
 cmd_verify() {
-  local -a force=() quiet=() json=() show=() edit=()
-  zparseopts -D -F -K -- -force-report=force -no-notify=quiet -json=json -show=show -edit=edit || usage_error "verify: bad flags | args='$*'"
-  (( $# == 0 )) || usage_error "verify takes no positional arguments | args='$*'"
-  if (( ${#edit} )); then
-    (( ${#force} + ${#json} + ${#show} == 0 )) || usage_error "verify: --edit runs nothing, so --force-report, --json and --show do not apply"
-    verify::edit
-    return
-  fi
-  if (( ${#show} )); then
-    (( ${#force} + ${#json} == 0 )) || usage_error "verify: --show runs nothing, so --force-report and --json do not apply"
+  local -A opts; local -a args
+  verb::parse verify "$@"
+  (( ${#args} == 0 )) || usage_error "verify takes no positional arguments | args='${args[*]}'"
+  (( ${+opts[--edit]} )) && { verify::edit_cmd "${@:#--edit}"; return; }
+  if (( ${+opts[--show]} )); then
+    (( ${+opts[--force-report]} + ${+opts[--json]} == 0 )) || usage_error "verify: --show runs nothing, so --force-report and --json do not apply"
     verify::show
     return
   fi
-  (( ${#quiet} )) && export ARI_DOTFILES_NO_NOTIFY=1
+  (( ${+opts[--no-notify]} )) && export ARI_DOTFILES_NO_NOTIFY=1
   steps::load || exit 3
   need_lib "${ARI_DOTFILES_CMD}/verify/report.zsh"
   lock::acquire verify
@@ -73,8 +49,8 @@ cmd_verify() {
   steps::run_all
   steps::retry_errored "${ARI_DOTFILES_RETRY_SECS}"
   run::summarize
-  verify::decide_and_notify "${#force}"
-  run::end "${#json}"
+  verify::decide_and_notify "${+opts[--force-report]}"
+  run::end "${+opts[--json]}"
 }
 
 # report::decide is pure and returns the whole plan, hud text included; report::write applies it
@@ -82,11 +58,7 @@ cmd_verify() {
 verify::decide_and_notify() {
   local force_report="${1}"
   local summary="${RUN_DIR}/summary.json" decision="${RUN_DIR}/decision.json" applied="${RUN_DIR}/decision.applied.json"
-  local -a decide_args=()
-  if (( force_report )); then
-    decide_args+=(--force-report)
-  fi
-  report::decide "${summary}" "${decide_args[@]}" > "${decision}"
+  report::decide "${summary}" "${force_report}" > "${decision}"
   report::write "${summary}" "${LOG_FILE}" "${decision}" > "${applied}"
   local message seconds open_url
   message="$(jq -r '.hud.message // ""' "${decision}")"
@@ -123,7 +95,11 @@ verify::show() {
 # no state; the only write is the editor's. An edited report is one verify never overwrites or
 # archives (its sha no longer matches), but only while line 1 is still our marker: without it the
 # file is foreign and left on the Desktop for good, so a lost marker is caught here.
-verify::edit() {
+verify::edit_cmd() {
+  local -A opts; local -a args
+  verb::parse verify "$@"
+  (( ${#args} == 0 )) || usage_error "verify takes no positional arguments | args='${args[*]}'"
+  (( ${+opts[--force-report]} + ${+opts[--json]} + ${+opts[--show]} == 0 )) || usage_error "verify: --edit runs nothing, so --force-report, --json and --show do not apply"
   need_lib "${ARI_DOTFILES_CMD}/verify/report.zsh"
   local file
   file="$(verify::_editable_report)"
@@ -131,35 +107,17 @@ verify::edit() {
     print -r -- "no verify report to edit$(verify::_last_run)"
     return 0
   fi
-  local marker="" first="" editor
+  local first="" rc=0
   first="$(head -n 1 -- "${file}")"
-  report::is_marker "${first}" && marker="${first}"
-  editor="${EDITOR:-vi}"
-  command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi
-  local before
-  before="$(<"${file}")"
-  if ! ${=editor} "${file}"; then
-    log::err "editor exited non-zero | editor='${editor}' file='${file}'"
-    return 1
-  fi
-  if [[ "$(<"${file}")" == "${before}" ]]; then
-    print -r -- "verify: no change | file=$(ui::paths "${file}")"
-  else
-    print -r -- "verify: notes saved | file=$(ui::paths "${file}")"
-    first="$(head -n 1 -- "${file}")"
-    if [[ -n "${marker}" ]] && ! report::is_marker "${first}"; then
-      log::warn "line 1 is no longer the report marker: verify now treats this file as foreign and never moves it | file='${file}'"
-      if [[ -t 0 && -t 1 ]] && ui::confirm "Restore the marker as line 1?"; then
-        verify::_restore_marker "${file}" "${marker}" || return 1
-        print -r -- "verify: marker restored | file=$(ui::paths "${file}")"
-      elif [[ -t 0 && -t 1 ]]; then
-        print -r -- "verify: left without its marker; it is yours now | file=$(ui::paths "${file}")"
-      else
-        log::err "marker lost; put it back as line 1 | marker='${marker}' fix='${CLI_NAME} verify --edit'"
-        return 1
-      fi
-    fi
-  fi
+  typeset -g VERIFY_EDIT_MARKER=""
+  report::is_marker "${first}" && VERIFY_EDIT_MARKER="${first}"
+  edit::session "${file}" --check verify::_marker_check --what "the report" --resume "${CLI_NAME} verify --edit" || rc=$?
+  case "${rc}" in
+    2) print -r -- "verify: no change | file=$(ui::paths "${file}")" ;;
+    0) print -r -- "verify: notes saved | file=$(ui::paths "${file}")"
+       [[ -z "${VERIFY_EDIT_SAID:-}" ]] || print -r -- "${VERIFY_EDIT_SAID}" ;;
+    *) return 1 ;;
+  esac
   local feed
   feed="$(grep -m 1 -E '^[[:space:]]*claude "' -- "${file}" 2>/dev/null || true)"
   if [[ -n "${feed}" ]]; then
@@ -168,6 +126,27 @@ verify::edit() {
   else
     print -r -- "next: ${CLI_NAME} verify --force-report"
   fi
+}
+
+# verify::_marker_check FILE: edit::session's check. A report that had the marker keeps it; on a
+# terminal a lost one is put back or given up (VERIFY_EDIT_SAID says which), else it fails.
+verify::_marker_check() {
+  local file="${1}" marker="${VERIFY_EDIT_MARKER}" first=""
+  typeset -g VERIFY_EDIT_SAID=""
+  first="$(head -n 1 -- "${file}")"
+  [[ -z "${marker}" ]] || report::is_marker "${first}" && return 0
+  log::warn "line 1 is no longer the report marker: verify now treats this file as foreign and never moves it | file='${file}'"
+  if [[ -t 0 && -t 1 ]]; then
+    if ui::confirm "Restore the marker as line 1?"; then
+      verify::_restore_marker "${file}" "${marker}" || return 1
+      VERIFY_EDIT_SAID="verify: marker restored | file=$(ui::paths "${file}")"
+    else
+      VERIFY_EDIT_SAID="verify: left without its marker; it is yours now | file=$(ui::paths "${file}")"
+    fi
+    return 0
+  fi
+  log::err "marker lost; put it back as line 1 | marker='${marker}'"
+  return 1
 }
 
 # The report --edit opens: of the canonical Desktop report and the one the last run wrote (a

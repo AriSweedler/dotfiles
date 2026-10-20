@@ -45,12 +45,13 @@ editor() {
   chmod +x "${EDITORS}/$1"
 }
 editor noop '{ print }'
-editor no_usage 'index($0, "{c_bold}Usage{") == 0 && index($0, "{c_bold}Usage$") == 0 { print }'
-editor no_show '{ gsub(/--show/, "--shown") } { print }'
+# verify is a declared verb (lib/verb.zsh): each editor breaks one part of the declaration rule.
+editor no_description '/^verb::define verify / { print "verb::define verify \047\047"; next } { print }'
+editor no_flag_desc '/^verb::flag verify .--show. / { print "verb::flag verify \047--show\047 \047\047"; next } { print }'
 editor bad_syntax 'END { print "help_verify() {" } { print }'
-editor unset_var '/^the weekly check/ { print; getline; print; print "  ${NO_SUCH_VAR_IN_HELP}"; next } { print }'
-editor two_line_synopsis '/^the weekly check/ { print; print "and a second line"; next } { print }'
-editor reword '{ sub(/^the weekly check: /, "the weekly check, edited: ") } { print }'
+editor unset_var '/^verb::about verify / { print; print "${NO_SUCH_VAR_IN_HELP}"; next } { print }'
+editor hand_parsed '/^cmd_verify\(\) \{/ { print; print "  case \"${1:-}\" in"; print "    --shown) ;;"; print "  esac"; next } { print }'
+editor reword '{ sub(/the weekly check: /, "the weekly check, edited: ") } { print }'
 editor top_reword '{ sub(/the two-tier dotfiles, and/, "the two-tier dotfiles (edited), and") } { print }'
 editor top_drop_dir '/^help\(\) \{/ { h = 1 } h { gsub(/--dir/, "--dirx") } /^}/ { h = 0 } { print }'
 editor stub_para '{ sub(/in a paragraph\./, "frobs.") } { print }'
@@ -101,7 +102,7 @@ df_before="$(df_count)"
 edit noop --edit verify
 assert_eq "unchanged: exit 0" 0 "${RC}"
 assert_contains "unchanged: says so" "${OUT}" "help verify: no change"
-assert_eq "the editor opens at help_verify()" "+$(line_of help_verify "${CMD}/verify.zsh")" "$(opened_at)"
+assert_eq "the editor opens at verify's declaration" "+$(line_starting 'verb::define verify ' "${CMD}/verify.zsh")" "$(opened_at)"
 assert_no_file "unchanged: no draft" "${VERIFY_DRAFT}"
 edit noop --edit VERIFY
 assert_eq "the verb is case-insensitive" 0 "${RC}"
@@ -116,19 +117,19 @@ check_kept() {  # NAME EXPECTED-ERR
   assert_eq "$1: nothing committed" "${df_before}" "$(df_count)"
   rm -f "${VERIFY_DRAFT}"
 }
-edit no_usage --edit verify
-check_kept "no Usage heading" "undocumented: no Usage section"
-edit no_show --edit verify
-check_kept "a parsed flag missing from the help" "undocumented: flags not in it: --show"
-edit two_line_synopsis --edit verify
-check_kept "a synopsis of two lines" "undocumented: line 1 is not a one-line synopsis"
+edit no_description --edit verify
+check_kept "no description" "undocumented: no description (verb::define verify"
+edit no_flag_desc --edit verify
+check_kept "a flag without a description" "undocumented: '--show' has no description"
+edit hand_parsed --edit verify
+check_kept "a flag parsed outside verb::parse" "undocumented: parses flags outside verb::parse: --shown"
 edit bad_syntax --edit verify
 check_kept "a syntax error" "syntax: "
 edit unset_var --edit verify
 check_kept "a help that does not render under set -u" "NO_SUCH_VAR_IN_HELP"
 
 # A failure, then a good edit resumes the draft: in place, committed, never pushed.
-edit no_usage --edit verify
+edit no_description --edit verify
 edit noop --edit verify
 assert_eq "an unchanged resumed draft is still checked" 1 "${RC}"
 assert_contains "resuming: says so" "${ERR}" "resuming the draft a failed edit left"

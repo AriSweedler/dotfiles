@@ -9,33 +9,6 @@
 # that fails is kept, with the hash of the free.patch it was made against, so the next edit
 # resumes it; against a free.patch that has since changed it is set aside as .stale.
 
-alttab_edit_help() {
-  cat <<EOF
-${CLI_NAME} alttab edit [--header] [--no-commit]
-
-Opens the files free.patch changes, in alttab-free-build's clone ($(ui::paths "${ALTTAB_SRC}")),
-in \$EDITOR (vi when unset). On save free.patch becomes its prose header plus the clone's
-'git diff HEAD'. With --header it opens free.patch itself, and prints the change as a diff.
-Either way the new patch must apply to a clean ${ALTTAB_REF:-free.patch.ref} checkout
-(alttab-free-build --check-patch), and its header's "What it changes" list must name every file
-it touches (the file's name without .swift, first on its line). A patch that passes replaces
-free.patch and is committed in the shared tier; one that does not is kept for the next
-'alttab edit' (on a terminal, offered for another edit). Nothing is built or installed.
-
-The patch keeps Pro locked except shortcut slot 2 (AGENTS.md): do not edit it to unlock more.
-
-  --header     edit free.patch itself (its header, or the diff below it)
-  --no-commit  put the patch in place, leave it uncommitted
-
-Refuses while 'alttab-free-build --rebase-patch' is unfinished, and when the clone is missing,
-at another ref, or carries changes free.patch does not (alttab-free-build --build-only resets it
-from free.patch).
-
-Exit 0 saved (or no change); 1 refused, the patch did not pass, the editor failed or the commit
-was refused; 64 usage.
-EOF
-}
-
 # alttab::_edit_rule: AGENTS.md's ground rule, said whenever the patched source opens.
 alttab::_edit_rule() {
   ui::paint warn "AGENTS.md: the patch keeps Pro locked except shortcut slot 2 (⌥\`, the active app's windows). Do not edit it, or anything else, to unlock more."
@@ -83,16 +56,58 @@ alttab::_edit_check() {
   [[ "${REPLY}" == ok ]]
 }
 
+# alttab::_edit_source_check <file>: edit::session's check after the patched files were saved: the
+# pending patch regenerated from the clone, then checked. A header-only failure passes, with
+# ALTTAB_EDIT_FAILED=header, so the caller can offer the header instead of the same files again.
+alttab::_edit_source_check() {
+  local pending="${ALTTAB_EDIT_PENDING}" src="${ALTTAB_SRC}"
+  local -a untracked=("${(@f)$(git -C "${src}" ls-files --others --exclude-standard)}")
+  untracked=("${(@)untracked:#}")
+  (( ${#untracked} )) && log::warn "new files are not in the patch until git knows them | files='${(j:, :)untracked}' fix='git -C ${src} add -N FILE'"
+  [[ -f "${pending}" ]] || cp -p -- "${ALTTAB_PATCH}" "${pending}"
+  if ! zsh "${ALTTAB_DIR}/bin/alttab-free-build" --regen-patch --src "${src}" --patch "${pending}" --ref "${ALTTAB_REF}" >/dev/null 2>&1; then
+    log::err "could not regenerate the patch from the clone | pending='${pending}' fix='zsh ${ALTTAB_DIR}/bin/alttab-free-build --regen-patch --patch ${pending}'"
+    return 1
+  fi
+  edit::same "${pending}" "${ALTTAB_PATCH}" && return 0
+  alttab::_edit_check "${pending}" && return 0
+  [[ "${REPLY}" == header ]] && ALTTAB_EDIT_FAILED=header && return 0
+  return 1
+}
+
+# alttab::_edit_header_check <pending>: edit::session's check after free.patch itself was saved:
+# the change as a diff, then the checks.
+alttab::_edit_header_check() {
+  diff -u -L "free.patch (before)" -L "free.patch (after)" -- "${ALTTAB_PATCH}" "${1}" || true
+  alttab::_edit_check "${1}"
+}
+
+# alttab::_edit_session source|header: one edit::session on the patched files or on the pending
+# patch; its rc (0 passed, 2 unchanged, 1 kept).
+alttab::_edit_session() {
+  local src="${ALTTAB_SRC}" pending="${ALTTAB_EDIT_PENDING}" changed=""
+  alttab::_edit_rule
+  if [[ "${1}" == header ]]; then
+    [[ -f "${pending}" ]] || cp -p -- "${ALTTAB_PATCH}" "${pending}"
+    edit::same "${pending}" "${ALTTAB_PATCH}" || changed=--changed
+    edit::session "${pending}" --check alttab::_edit_header_check --what free.patch ${changed} \
+      --resume "${CLI_NAME} alttab edit --header"
+    return
+  fi
+  local -a files=("${(@f)$(git -C "${src}" diff --name-only HEAD)}")
+  files=("${(@)files:#}")
+  if (( ! ${#files} )); then log::err "free.patch changes no file; edit it with --header | fix='${CLI_NAME} alttab edit --header'"; return 1; fi
+  print -r -- "opening ${#files} patched file(s) in $(ui::paths "${src}")"
+  # --changed: the session compares only the first file; the check finds a real no-change.
+  edit::session "${src}/${files[1]}" --check alttab::_edit_source_check --what "the patched source" --changed \
+    --resume "${CLI_NAME} alttab edit" --also "${(@)files[2,-1]/#/${src}/}"
+}
+
 alttab::edit() {
-  local header=0 commit=1 arg
-  for arg in "$@"; do
-    case "${arg}" in
-      -h|--help) alttab_edit_help; return 0 ;;
-      --header) header=1 ;;
-      --no-commit) commit=0 ;;
-      *) usage_error "alttab edit: bad argument | arg='${arg}'" ;;
-    esac
-  done
+  local -A opts; local -a args
+  verb::parse alttab "$@"
+  (( ${#args} == 0 )) || usage_error "alttab edit takes no arguments | args='${args[*]}'"
+  alttab::only_flags edit --header --no-commit
   local build="${ALTTAB_DIR}/bin/alttab-free-build" src="${ALTTAB_SRC}" patch="${ALTTAB_PATCH}"
   local rebuild="alttab-free-build --build-only"
   if [[ ! -r "${patch}" || ! -r "${patch}.ref" || ! -r "${build}" ]]; then
@@ -139,63 +154,36 @@ alttab::edit() {
     return 1
   fi
 
-  local editor="${EDITOR:-vi}"
-  command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi
-  local -i tty=0
-  [[ -t 0 && -t 1 ]] && tty=1
-  local -a files untracked
-  local mode=source what
-  (( header )) && mode=header
-  while true; do
-    if [[ "${mode}" == source ]]; then
-      files=("${(@f)$(git -C "${src}" diff --name-only HEAD)}")
-      files=("${(@)files:#}")
-      alttab::_edit_rule
-      print -r -- "opening ${#files} patched file(s) in $(ui::paths "${src}")"
-      if ! ${=editor} "${files[@]/#/${src}/}"; then
-        alttab::_edit_clone_diff
-        [[ "${REPLY}" == "${body}" ]] || alttab::_edit_keep "${pending}" "${sum}"
-        log::err "editor exited non-zero; free.patch unchanged, the clone keeps what was saved | editor='${editor}' fix='${CLI_NAME} alttab edit'"
-        return 1
-      fi
-      untracked=("${(@f)$(git -C "${src}" ls-files --others --exclude-standard)}")
-      untracked=("${(@)untracked:#}")
-      (( ${#untracked} )) && log::warn "new files are not in the patch until git knows them | files='${(j:, :)untracked}' fix='git -C ${src} add -N FILE'"
-      [[ -f "${pending}" ]] || cp -p -- "${patch}" "${pending}"
-      zsh "${build}" --regen-patch --src "${src}" --patch "${pending}" --ref "${ALTTAB_REF}" >/dev/null 2>&1 || {
-        alttab::_edit_keep "${pending}" "${sum}"
-        log::err "could not regenerate the patch from the clone | pending='${pending}' fix='zsh ${build} --regen-patch --patch ${pending}'"
-        return 1
-      }
-    else
-      [[ -f "${pending}" ]] || cp -p -- "${patch}" "${pending}"
-      alttab::_edit_rule
-      if ! ${=editor} "${pending}"; then
-        cmp -s -- "${pending}" "${patch}" || alttab::_edit_keep "${pending}" "${sum}"
-        log::err "editor exited non-zero; free.patch unchanged | editor='${editor}' pending='${pending}' fix='${CLI_NAME} alttab edit --header'"
-        return 1
-      fi
-    fi
-    if cmp -s -- "${pending}" "${patch}"; then
-      rm -f -- "${pending}" "${pending}.base"
-      print -r -- "alttab: no change | patch=$(ui::paths "${patch}")"
-      return 0
-    fi
-    if [[ "${mode}" == header ]]; then
-      diff -u -L "free.patch (before)" -L "free.patch (after)" -- "${patch}" "${pending}" || true
-    fi
-    alttab::_edit_check "${pending}" && break
+  typeset -g ALTTAB_EDIT_PENDING="${pending}" ALTTAB_EDIT_FAILED=""
+  local mode=source
+  (( ${+opts[--header]} )) && mode=header
+  local -i rc=0
+  alttab::_edit_session "${mode}" || rc=$?
+  # A source edit whose only fault is the header: the header is the place to fix it.
+  if (( rc == 0 )) && [[ "${ALTTAB_EDIT_FAILED}" == header ]]; then
     alttab::_edit_keep "${pending}" "${sum}"
-    if [[ "${REPLY}" == header ]]; then
-      if (( tty )) && ui::confirm "Name them in free.patch's header now?"; then mode=header; continue; fi
+    if ! [[ -t 0 && -t 1 ]] || ! ui::confirm "Name them in free.patch's header now?"; then
       log::err "free.patch not saved; the edit is kept | pending='${pending}' fix='${CLI_NAME} alttab edit --header'"
       return 1
     fi
-    what="the patched files"; [[ "${mode}" == header ]] && what=free.patch
-    if (( tty )) && ui::confirm "Edit ${what} again?"; then continue; fi
-    log::err "free.patch not saved; the edit is kept | pending='${pending}' fix='${CLI_NAME} alttab edit${${mode:#source}:+ --header}'"
+    mode=header rc=0
+    alttab::_edit_session header || rc=$?
+  fi
+  # Not passed (or the editor failed): whatever was saved is kept for the next edit.
+  if (( rc == 1 )); then
+    if [[ "${mode}" == header ]]; then
+      if edit::same "${pending}" "${patch}"; then rm -f -- "${pending}" "${pending}.base"; else alttab::_edit_keep "${pending}" "${sum}"; fi
+    else
+      alttab::_edit_clone_diff
+      [[ ! -f "${pending}" && "${REPLY}" == "${body}" ]] || alttab::_edit_keep "${pending}" "${sum}"
+    fi
     return 1
-  done
+  fi
+  if (( rc == 2 )) || edit::same "${pending}" "${patch}"; then
+    rm -f -- "${pending}" "${pending}.base"
+    print -r -- "alttab: no change | patch=$(ui::paths "${patch}")"
+    return 0
+  fi
 
   # A --header edit may change the diff itself: the clone takes it, and the patch is rewritten
   # from the clone so its index lines are git's and the next edit finds the two in step.
@@ -210,30 +198,21 @@ alttab::edit() {
       log::err "the edited patch did not apply to the clone; free.patch unchanged, the edit is kept | pending='${pending}' fix='${CLI_NAME} alttab edit --header'"
       return 1
     fi
-    if cmp -s -- "${pending}" "${patch}"; then
+    if edit::same "${pending}" "${patch}"; then
       rm -f -- "${pending}" "${pending}.base"
       print -r -- "alttab: no change | patch=$(ui::paths "${patch}")"
       return 0
     fi
   fi
 
-  # In place, keeping free.patch's mode (600): written beside it and renamed over it.
-  zmodload -F zsh/stat b:zstat
-  local -a st
-  local perm=600
-  zstat -A st +mode -- "${patch}" 2>/dev/null && perm="$(( [##8] st[1] & 8#777 ))"
-  cp -- "${pending}" "${patch}.edit.$$" && chmod "${perm}" "${patch}.edit.$$" && mv -f -- "${patch}.edit.$$" "${patch}" || {
-    rm -f -- "${patch}.edit.$$"
-    log::err "could not put free.patch in place; the edit is kept | patch='${patch}' pending='${pending}'"
-    return 1
-  }
-  rm -f -- "${pending}" "${pending}.base"
+  edit::install "${pending}" "${patch}" || return 1
+  rm -f -- "${pending}.base"
   local -a diffs=("${(@M)${(@f)$(<"${patch}")}:#diff --git *}") hunks=("${(@M)${(@f)$(<"${patch}")}:#@@*}")
   print -r -- "alttab: free.patch saved | files=${#diffs} hunks=${#hunks} patch=$(ui::paths "${patch}")"
-  if (( commit )); then
-    tier::commit shared "${CLI_NAME}: edit alttab free.patch" "${patch}" || return 1
-  else
+  if (( ${+opts[--no-commit]} )); then
     print -r -- "not committed | file=$(ui::paths "${patch}")"
+  else
+    tier::commit shared "${CLI_NAME}: edit alttab free.patch" "${patch}" || return 1
   fi
   print -r -- "next: ${CLI_NAME} alttab install"
 }
