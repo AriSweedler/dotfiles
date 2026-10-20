@@ -485,7 +485,7 @@ steps::retry_errored() {
 # end, as always. Fancy: a header, a bold heading and rule per group, a spinner while a step works, then one
 # line per step on stdout and the painted roll-up. The log lines land in $RUN_DIR/run.log either way.
 
-typeset -g RUN_JSON=0 RUN_T0="" RUN_NAME_W=0
+typeset -g RUN_JSON=0 RUN_T0="" RUN_NAME_W=0 RUN_BEGAN_SECS=0
 
 run::is_fancy() { (( ! RUN_JSON )) && ui::is_fancy; }
 
@@ -676,13 +676,27 @@ run::begin() {
     rm -rf -- "${RUN_DIR}"
   fi
   mkdir -p "${RUN_DIR}"
-  RUN_T0="${EPOCHREALTIME}"
+  RUN_T0="${EPOCHREALTIME}" RUN_BEGAN_SECS="${EPOCHSECONDS}"
   ui::is_fancy || true   # decided here, before any $(…), so every capture inherits the answer
   run::_header "${mode}"
   if is_dry_run; then
     run::_log warn "dry-run: no changes will be made"
   fi
   run::_log info "run | mode='${mode}' run_id='${RUN_ID}' run_dir='${RUN_DIR}' steps='${(j:,:)selected}'"
+}
+
+# A second run in the same process (init --edit's setup after its checks) needs a run id of its
+# own: RUN_ID comes from ARI_DOTFILES_NOW, and run::begin wipes RUN_DIR. The clock moves on by the
+# time since the first run began (at least a second), past any run directory already there, and
+# RUN_ID, RUN_DIR and ARI_DOTFILES_NOW follow it.
+run::next_id() {
+  local -i now
+  now=$(( ARI_DOTFILES_NOW + (RUN_BEGAN_SECS > 0 && EPOCHSECONDS > RUN_BEGAN_SECS ? EPOCHSECONDS - RUN_BEGAN_SECS : 0) ))
+  (( now > ARI_DOTFILES_NOW )) || now=$(( ARI_DOTFILES_NOW + 1 ))
+  while [[ -e "${ARI_DOTFILES_STATE_DIR}/runs/$(run_id "${now}")" ]]; do now=$(( now + 1 )); done
+  export ARI_DOTFILES_NOW="${now}"
+  RUN_ID="$(run_id "${now}")"
+  RUN_DIR="${ARI_DOTFILES_STATE_DIR}/runs/${RUN_ID}"
 }
 
 # summary.json (schema 1, roll-up error > fail > warn > ok) → last-<mode>.json; old runs pruned to 8.
@@ -742,23 +756,33 @@ run::print_manual() {
   done < <(jq -r '.steps[] | select(.manual and (.status=="warn" or .status=="fail")) | "Manual step (\(.step) \(.reason)):\n\(.detail)" | @json' "${summary}")
 }
 
-# Prints the run (JSON or the human table) and ends the process.
-run::end() {
-  local json="${1:-0}"
-  if (( json )); then
+# Prints the run: summary.json, or the human table and the manual items.
+run::print_end() {
+  if (( ${1:-0} )); then
     cat "${RUN_DIR}/summary.json"
   else
     run::print_human
     run::print_manual
   fi
+}
+
+# Prints the run and ends the process.
+run::end() {
+  run::print_end "${1:-0}"
   run::exit
+}
+
+# Returns the run's exit code (verdict::exit_code of the roll-up), for a caller that goes on.
+run::exit_code() {
+  local run_status
+  run_status="$(jq -r '.status' "${RUN_DIR}/summary.json")"
+  verdict::exit_code "${run_status}"
 }
 
 # Ends the process with the run's exit code. Explicit, because zsh skips the EXIT trap when
 # ERR_EXIT ends the shell (a nonzero return out of main included), which would leak the lock.
 run::exit() {
-  local run_status rc=0
-  run_status="$(jq -r '.status' "${RUN_DIR}/summary.json")"
-  verdict::exit_code "${run_status}" || rc=$?
+  local rc=0
+  run::exit_code || rc=$?
   exit "${rc}"
 }

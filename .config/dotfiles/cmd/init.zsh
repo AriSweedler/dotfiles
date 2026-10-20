@@ -8,6 +8,7 @@ converge this machine: check every step, apply where one drifted, then status
 
 ${c_bold}Usage${c_rst}
   ${DF} init [--only STEP,..] [--group GROUP] [--dry-run] [--json]
+  ${DF} init --edit [FILE] [--only STEP,..] [--group GROUP] [--dry-run]
 
   The healthcheck, then for every step that failed and has an apply, the apply
   and a second check; a step still failing afterwards is reported as
@@ -15,6 +16,16 @@ ${c_bold}Usage${c_rst}
   Brewfile installs its new items, Raycast syncs when it is behind, and the
   rest is a check. When the brew step fails, the later groups are skipped:
   their tools come from it. Ends with 'dotfiles status'.
+
+  With --edit, the checks run first, side by side as the healthcheck runs them,
+  and print; then a plan opens in \$EDITOR,
+  $(help::tilde "${ARI_DOTFILES_STATE_DIR}")/init-plan.dfinit: one
+  'apply STEP  # reason: what the apply does' line per step with something to
+  apply, the steps to fix by hand as comments, the rest for reference. On save
+  every line is checked; then exactly the 'apply' steps run as init runs them,
+  and status. An unchanged plan runs as written; nothing to apply opens no
+  editor. A plan with bad lines is kept: edit it again, or resume it with
+  --edit FILE, read against last-check.json.
 
   What the bootstrap one-liner ends in. 'dotfiles apply STEP' is
   'init --only STEP'; 'dotfiles steps' lists the steps and their groups.
@@ -26,8 +37,10 @@ ${c_bold}Flags${c_rst}
   --dry-run        run every apply with each mutation logged instead of
                    executed, so the plan printed is the real one (also accepted
                    before the verb)
+  --edit [FILE]    check, then choose the steps to apply in \$EDITOR; FILE
+                   resumes a plan without checking again
   --json           print summary.json instead of the table and status (stdout
-                   is data, stderr is logs)
+                   is data, stderr is logs); not with --edit
 
 ${c_bold}Env${c_rst}
   $(ENV ARI_DOTFILES_STATE_DIR)
@@ -59,26 +72,26 @@ EOF
 }
 
 cmd_init() {
-  local -a only=() group=() json=() dry=()
-  zparseopts -D -F -K -- -only:=only -group:=group -json=json -dry-run=dry || usage_error "init: bad flags | args='$*'"
-  (( $# == 0 )) || usage_error "init takes no positional arguments | args='$*'"
+  local -a only=() group=() json=() dry=() edit=()
+  zparseopts -D -E -F -K -- -only:=only -group:=group -json=json -dry-run=dry -edit=edit || usage_error "init: bad flags | args='$*'"
+  if (( ${#edit} )); then
+    (( $# <= 1 )) || usage_error "init --edit takes at most one FILE | args='$*'"
+    (( ! ${#json} )) || usage_error "init: --edit opens a plan in \$EDITOR, so --json does not apply"
+    (( ! $# || ${#only} + ${#group} == 0 )) || usage_error "init --edit FILE resumes a plan, so --only and --group do not apply"
+  else
+    (( $# == 0 )) || usage_error "init takes no positional arguments | args='$*'"
+  fi
   (( ${#dry} )) && export ARI_DOTFILES_DRY_RUN=1
   typeset -g RUN_VERB=init
+  if (( ${#edit} )); then
+    need_lib "${ARI_DOTFILES_CMD}/run/edit.zsh" || return 3
+    runplan::init "${only[2]:-}" "${group[2]:-}" "${1:-}"
+  fi
   if (( ${#json} )); then run::main setup "${only[2]:-}" "${group[2]:-}" 1; fi
-  # The human run: run::main's table, then status before the exit. The exit stays explicit
+  # The human run: run::run's table, then status before the exit. The exit stays explicit
   # (run::exit): zsh skips the EXIT trap when ERR_EXIT ends the shell, which would leak the lock.
-  steps::load || exit 3
-  local -a selected select_args=()
-  [[ -z "${only[2]:-}" ]] || select_args+=(--only "${only[2]}")
-  [[ -z "${group[2]:-}" ]] || select_args+=(--group "${group[2]}")
-  steps::select "${select_args[@]}" || exit 64
-  (( ${#selected} )) || usage_error "no step selected | only='${only[2]:-}' group='${group[2]:-}' steps='${(j:,:)STEPS}'"
-  lock::acquire setup
-  run::begin setup
-  steps::run_all
-  run::summarize
-  run::print_human
-  run::print_manual
+  run::run setup "${only[2]:-}" "${group[2]:-}" 0
+  run::print_end 0
   print
   cmd_status
   run::exit
