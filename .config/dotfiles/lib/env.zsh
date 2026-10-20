@@ -9,7 +9,6 @@ typeset -gx ARI_DOTFILES_ROOT="${ARI_DOTFILES_LIB:h}"          # …/dotfiles: l
 typeset -gx ARI_DOTFILES_STEPS="${ARI_DOTFILES_ROOT}/steps"
 typeset -gx ARI_DOTFILES_CMD="${ARI_DOTFILES_ROOT}/cmd"
 typeset -gx ARI_DOTFILES_CONFIG="${ARI_DOTFILES_ROOT:h}"       # the .config of this checkout, not necessarily $HOME's
-typeset -gx ARI_DOTFILES_TESTS="${ARI_DOTFILES_ROOT}/tests"
 typeset -gx ARI_DOTFILES_NOTIFIER_IMAGE="${ARI_DOTFILES_ROOT}/assets/robot.png"
 # The name fix hints print the CLI under.
 typeset -gx CLI_NAME="${CLI_NAME:-dotfiles}"
@@ -36,6 +35,8 @@ export HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_COLOR=0 HOMEBREW_NO_EMOJI=1
 
 # --- Seams: every default is the real machine; tests override and nothing else ---
 typeset -gx ARI_DOTFILES_SHARED_DIR="${ARI_DOTFILES_SHARED_DIR:-${ARI_DOTFILES_CONFIG}/new-machine}"
+typeset -gx ARI_DOTFILES_TESTS="${ARI_DOTFILES_TESTS:-${ARI_DOTFILES_ROOT}/tests}"            # the hermetic suite
+typeset -gx ARI_DOTFILES_ZSH_PLUGINS="${ARI_DOTFILES_ZSH_PLUGINS:-${ARI_DOTFILES_CONFIG}/zsh/plugins}"   # the plugin suites
 typeset -gx ARI_DOTFILES_LOCAL_DIR="${ARI_DOTFILES_LOCAL_DIR:-${XDG_DATA_HOME}/new-machine}"
 typeset -gx ARI_DOTFILES_STATE_DIR="${ARI_DOTFILES_STATE_DIR:-${XDG_STATE_HOME}/new-machine}"
 typeset -gx ARI_DOTFILES_DESKTOP_DIR="${ARI_DOTFILES_DESKTOP_DIR:-${HOME}/Desktop}"

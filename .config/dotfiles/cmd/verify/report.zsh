@@ -328,6 +328,12 @@ file to ${state_dir}/reports/ and posts "verified OK".
 EOF
 }
 
+# Whether LINE is our report's first line; match[1..4] are its fingerprint, run_id, first_seen and
+# kind. first_seen and run_id become path components, so it admits only their exact shapes.
+report::is_marker() {
+  [[ "${1}" =~ '^<!-- new-machine-report v1 fingerprint=([0-9a-f]*) run_id=([0-9]{8}T[0-9]{6}) first_seen=([0-9]{4}-[0-9]{2}-[0-9]{2}) kind=([a-z]+) -->$' ]]
+}
+
 # Describe a file at a would-be report path: our marker (first line) and whether its sha256 is the
 # one recorded at write time. Prints JSON, `null` when the file is absent.
 report::_inspect() {
@@ -338,8 +344,7 @@ report::_inspect() {
   fi
   local first sha marker=false fp="" run_id="" first_seen="" kind="" sha_matches=false
   first="$(head -n 1 "${file}")"
-  # first_seen and run_id become path components, so the marker admits only their exact shapes.
-  if [[ "${first}" =~ '^<!-- new-machine-report v1 fingerprint=([0-9a-f]*) run_id=([0-9]{8}T[0-9]{6}) first_seen=([0-9]{4}-[0-9]{2}-[0-9]{2}) kind=([a-z]+) -->$' ]]; then
+  if report::is_marker "${first}"; then
     marker=true
     fp="${match[1]}"; run_id="${match[2]}"; first_seen="${match[3]}"; kind="${match[4]}"
   fi

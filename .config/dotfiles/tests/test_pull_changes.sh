@@ -72,7 +72,8 @@ M	.config/dotfiles/jobs/git-health/run
 M	.config/raycast-snippets/snippets.json
 M	.config/dotfiles/tests/test_pull.sh
 EOF
-assert_eq "jobs and snippets; tests map to nothing" "step dotfiles_jobs .config/dotfiles/jobs/git-health/run
+assert_eq "jobs, snippets, and a test to the suites' doc rule" "step dotfiles_jobs .config/dotfiles/jobs/git-health/run
+step test_suites .config/dotfiles/tests/test_pull.sh
 step raycast_sync .config/raycast-snippets/snippets.json" "${OUT}"
 
 # A watch must name a declared step, from that step's own file.

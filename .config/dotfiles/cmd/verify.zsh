@@ -8,6 +8,8 @@ the weekly check: healthcheck, retry, Desktop report, banner
 
 ${c_bold}Usage${c_rst}
   ${DF} verify [--force-report] [--no-notify] [--json]
+  ${DF} verify --show
+  ${DF} verify --edit
 
   What the dotfiles-verify job plugin runs on Monday. Every step is checked;
   steps that errored are retried once after ${ARI_DOTFILES_RETRY_SECS}s; the result is compared
@@ -21,6 +23,9 @@ ${c_bold}Flags${c_rst}
   --no-notify      no banner (an interactive run never banners; the job does)
   --json           print summary.json instead of the table
   --show           print the current report (Desktop, else newest archived); runs nothing
+  --edit           open the Desktop report (else the newest *.edited*.md) in \$EDITOR for
+                   notes; runs nothing, commits nothing. Keep line 1: without that marker
+                   verify treats the file as foreign. Then prints the next step
 
 ${c_bold}Env${c_rst}
   $(ENV ARI_DOTFILES_STATE_DIR)
@@ -40,9 +45,14 @@ EOF
 }
 
 cmd_verify() {
-  local -a force=() quiet=() json=() show=()
-  zparseopts -D -F -K -- -force-report=force -no-notify=quiet -json=json -show=show || usage_error "verify: bad flags | args='$*'"
+  local -a force=() quiet=() json=() show=() edit=()
+  zparseopts -D -F -K -- -force-report=force -no-notify=quiet -json=json -show=show -edit=edit || usage_error "verify: bad flags | args='$*'"
   (( $# == 0 )) || usage_error "verify takes no positional arguments | args='$*'"
+  if (( ${#edit} )); then
+    (( ${#force} + ${#json} + ${#show} == 0 )) || usage_error "verify: --edit runs nothing, so --force-report, --json and --show do not apply"
+    verify::edit
+    return
+  fi
   if (( ${#show} )); then
     (( ${#force} + ${#json} == 0 )) || usage_error "verify: --show runs nothing, so --force-report and --json do not apply"
     verify::show
@@ -107,6 +117,86 @@ verify::show() {
     return
   fi
   print -r -- "no verify report$(verify::_last_run)"
+}
+
+# --edit: the report a human annotates, opened in $EDITOR. Like --show it takes no lock and writes
+# no state; the only write is the editor's. An edited report is one verify never overwrites or
+# archives (its sha no longer matches), but only while line 1 is still our marker: without it the
+# file is foreign and left on the Desktop for good, so a lost marker is caught here.
+verify::edit() {
+  need_lib "${ARI_DOTFILES_CMD}/verify/report.zsh"
+  local file
+  file="$(verify::_editable_report)"
+  if [[ -z "${file}" ]]; then
+    print -r -- "no verify report to edit$(verify::_last_run)"
+    return 0
+  fi
+  local marker="" first="" editor
+  first="$(head -n 1 -- "${file}")"
+  report::is_marker "${first}" && marker="${first}"
+  editor="${EDITOR:-vi}"
+  command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi
+  local before
+  before="$(<"${file}")"
+  if ! ${=editor} "${file}"; then
+    log::err "editor exited non-zero | editor='${editor}' file='${file}'"
+    return 1
+  fi
+  if [[ "$(<"${file}")" == "${before}" ]]; then
+    print -r -- "verify: no change | file=$(ui::paths "${file}")"
+  else
+    print -r -- "verify: notes saved | file=$(ui::paths "${file}")"
+    first="$(head -n 1 -- "${file}")"
+    if [[ -n "${marker}" ]] && ! report::is_marker "${first}"; then
+      log::warn "line 1 is no longer the report marker: verify now treats this file as foreign and never moves it | file='${file}'"
+      if [[ -t 0 && -t 1 ]] && ui::confirm "Restore the marker as line 1?"; then
+        verify::_restore_marker "${file}" "${marker}" || return 1
+        print -r -- "verify: marker restored | file=$(ui::paths "${file}")"
+      elif [[ -t 0 && -t 1 ]]; then
+        print -r -- "verify: left without its marker; it is yours now | file=$(ui::paths "${file}")"
+      else
+        log::err "marker lost; put it back as line 1 | marker='${marker}' fix='${CLI_NAME} verify --edit'"
+        return 1
+      fi
+    fi
+  fi
+  local feed
+  feed="$(grep -m 1 -E '^[[:space:]]*claude "' -- "${file}" 2>/dev/null || true)"
+  if [[ -n "${feed}" ]]; then
+    print -r -- "next: in a terminal, cd ~ and paste:"
+    print -r -- "  ${feed##[[:space:]]#}"
+  else
+    print -r -- "next: ${CLI_NAME} verify --force-report"
+  fi
+}
+
+# The report --edit opens: of the canonical Desktop report and the one the last run wrote (a
+# collision name, when a foreign file holds the canonical one), the first that is ours, else the
+# first that exists; else the newest report a run moved aside as edited.
+verify::_editable_report() {
+  local -a candidates=("${REPORT_PATH}"(N.))
+  local last="" f first
+  if [[ -r "${LAST_RESULT_FILE}" ]]; then
+    last="$(jq -r '.report_path // ""' "${LAST_RESULT_FILE}" 2>/dev/null || true)"
+    if [[ -n "${last}" && "${last}" != "${REPORT_PATH}" && -f "${last}" && "${last:h}" == "${ARI_DOTFILES_DESKTOP_DIR}" ]]; then candidates+=("${last}"); fi
+  fi
+  for f in "${candidates[@]}"; do
+    first=""; IFS= read -r first < "${f}" || true
+    if report::is_marker "${first}"; then print -r -- "${f}"; return 0; fi
+  done
+  if (( ${#candidates} )); then print -r -- "${candidates[1]}"; return 0; fi
+  local -a edited=("${ARI_DOTFILES_DESKTOP_DIR}"/*.edited*.md(N.om))
+  (( ${#edited} )) && print -r -- "${edited[1]}"
+  return 0
+}
+
+# Puts MARKER back as line 1: in place of a line 1 that was the marker mangled, else above it.
+verify::_restore_marker() {
+  local file="${1}" marker="${2}" tmp
+  local -a lines=("${(@f)$(<"${file}")}")
+  if [[ "${lines[1]}" == '<!-- new-machine-report'* ]]; then lines[1]="${marker}"; else lines=("${marker}" "${lines[@]}"); fi
+  tmp="${file}.edit.$$"
+  print -rl -- "${lines[@]}" > "${tmp}" && mv -f -- "${tmp}" "${file}" || { rm -f -- "${tmp}"; log::err "could not restore the marker | file='${file}'"; return 1; }
 }
 
 # The newest *.md under the reports archive by mtime, or nothing.
