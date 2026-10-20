@@ -2,30 +2,8 @@
 # put it in place and commit it in the shared tier. Loaded by cmd/steps.zsh; defines functions only.
 #
 # The live file is never edited: every run sources the steps directory, and a file that does not
-# load stops the healthcheck (exit 3). The draft lives in <state>/drafts/steps/NAME.zsh until it
-# passes, so a failed edit resumes where it left off.
-
-steps_edit_help() {
-  cat <<EOF
-${CLI_NAME} steps edit NAME [--new] [--no-commit]
-
-Opens steps/NAME.zsh in \$EDITOR, vi when unset, as a draft. On save the draft is checked: zsh -n;
-then, in a fresh zsh -f with the kernel and every other step file, the registry loads with the
-draft in place of the file (steps::load, watch::validate), the draft declares NAME, prints nothing
-when sourced, and meets the documentation rule: line 1 '# step NAME — <summary>', a non-empty
---desc, --apply "<what the apply changes>" exactly when apply::NAME exists, and step::watches NAME
-<glob>.. or step::watches NAME --none "<why>". A draft that passes replaces the file and is
-committed in the shared tier; one that does not is reported and kept for the next 'steps edit
-NAME' (on a terminal, offered for another edit).
-
-  --new        create steps/NAME.zsh from a template (a check and an apply; a check-only step
-               deletes the apply and its --apply)
-  --no-commit  put it in place, leave it uncommitted
-
-Exit 0 saved (or no change); 1 the draft did not pass, the editor failed or the commit was
-refused; 64 usage.
-EOF
-}
+# load stops the healthcheck (exit 3). The draft (edit::draft, under <state>/drafts) is kept until
+# it passes, so a failed edit resumes where it left off.
 
 # What --new starts from. Its empty summary, --desc, --apply and --none reason are not
 # documentation, so a template edited elsewhere but not there does not pass.
@@ -89,17 +67,11 @@ steps_edit_check() {
 
 steps_edit() {
   setopt localoptions extendedglob
-  local name="" new=0 commit=1 file draft editor verb has_apply=""
-  while (( $# )); do
-    case "${1}" in
-      -h|--help) steps_edit_help; return 0 ;;
-      --new) new=1 ;;
-      --no-commit) commit=0 ;;
-      -*) usage_error "steps edit: unknown flag | flag='${1}'" ;;
-      *) [[ -z "${name}" ]] || usage_error "steps edit takes one NAME | args='${name} ${1}'"; name="${1}" ;;
-    esac
-    shift
-  done
+  local -A opts; local -a args
+  verb::parse steps "$@"
+  local name="${args[1]:-}" file draft verb
+  local -i new=${+opts[--new]} rc=0
+  (( ${#args} <= 1 )) || usage_error "steps edit takes one NAME | args='${args[*]}'"
   [[ -n "${name}" ]] || usage_error "steps edit needs a NAME | see='${CLI_NAME} steps'"
   [[ "${name}" == [a-z][a-z0-9_]# ]] || usage_error "steps edit: a step name is lowercase letters, digits and _ | name='${name}'"
   file="${ARI_DOTFILES_STEPS}/${name}.zsh"
@@ -110,54 +82,35 @@ steps_edit() {
     return 1
   fi
 
-  draft="${ARI_DOTFILES_STATE_DIR}/drafts/steps/${name}.zsh"
-  mkdir -p -- "${draft:h}" || return 1
-  if [[ -f "${draft}" ]]; then
-    log::info "resuming the draft a failed edit left | draft='${draft}'"
-  elif (( new )); then
-    steps_edit_template "${name}" > "${draft}"
-  else
-    cp -- "${file}" "${draft}"
+  STEPS_EDIT_NAME="${name}" STEPS_EDIT_APPLY=""
+  edit::draft "${file}" "${ARI_DOTFILES_STATE_DIR}/drafts" steps::_edit_template || return 1
+  draft="${REPLY}"
+  edit::session "${draft}" --check steps::_edit_check --what "${name}" ${${EDIT_RESUMED:#0}:+--changed} \
+    --resume "${CLI_NAME} steps edit ${name}${${new:#0}:+ --new}" || rc=$?
+  # A resumed draft edited back to the live file is no change either.
+  if (( rc == 2 )) || { (( rc == 0 && ! new )) && edit::same "${draft}" "${file}"; }; then
+    rm -f -- "${draft}"
+    if (( new )); then print -r -- "steps: no change; nothing created | step=${name}"
+    else print -r -- "steps: no change | step=${name} file=$(ui::paths "${file}")"; fi
+    return 0
   fi
-  editor="${EDITOR:-vi}"
-  command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi
-  local -i tty=0
-  [[ -t 0 && -t 1 ]] && tty=1
-  while true; do
-    if ! ${=editor} "${draft}"; then
-      log::err "editor exited non-zero; draft kept, nothing changed | editor='${editor}' draft='${draft}'"
-      return 1
-    fi
-    if (( new )) && cmp -s -- "${draft}" <(steps_edit_template "${name}"); then
-      rm -f -- "${draft}"
-      print -r -- "steps: no change; nothing created | step=${name}"
-      return 0
-    fi
-    if (( ! new )) && cmp -s -- "${draft}" "${file}"; then
-      rm -f -- "${draft}"
-      print -r -- "steps: no change | step=${name} file=$(ui::paths "${file}")"
-      return 0
-    fi
-    has_apply="$(steps_edit_check "${draft}" "${name}")" && break
-    if (( tty )) && ui::confirm "Edit ${name} again?"; then continue; fi
-    log::err "step not saved; draft kept | draft='${draft}' fix='${CLI_NAME} steps edit ${name}${${new:#0}:+ --new}'"
-    return 1
-  done
-
-  # In place: written beside the live file and renamed over it, so a run never sources half a file.
-  cp -- "${draft}" "${file}.edit.$$" && chmod 644 "${file}.edit.$$" && mv -f -- "${file}.edit.$$" "${file}" || {
-    rm -f -- "${file}.edit.$$"
-    log::err "could not put the step in place; draft kept | file='${file}' draft='${draft}'"
-    return 1
-  }
-  rm -f -- "${draft}"
+  (( rc == 0 )) || return 1
+  edit::install "${draft}" "${file}" 644 || return 1
   verb=edit; (( new )) && verb=add
   print -r -- "step ${name}: saved | file=$(ui::paths "${file}")"
-  if (( commit )); then
-    tier::commit shared "${CLI_NAME}: ${verb} step ${name} (shared)" "${file}" || return 1
-  else
+  if (( ${+opts[--no-commit]} )); then
     print -r -- "not committed | file=$(ui::paths "${file}")"
+  else
+    tier::commit shared "${CLI_NAME}: ${verb} step ${name} (shared)" "${file}" || return 1
   fi
   print -r -- "next: ${CLI_NAME} healthcheck --only ${name}"
-  [[ "${has_apply}" != apply ]] || print -r -- "next: ${CLI_NAME} apply ${name}"
+  [[ "${STEPS_EDIT_APPLY}" != apply ]] || print -r -- "next: ${CLI_NAME} apply ${name}"
+}
+
+steps::_edit_template() { steps_edit_template "${STEPS_EDIT_NAME}"; }
+# The check edit::session runs; on a pass, STEPS_EDIT_APPLY says whether the step has an apply.
+steps::_edit_check() {
+  local out
+  out="$(steps_edit_check "${1}" "${STEPS_EDIT_NAME}")" || return 1
+  STEPS_EDIT_APPLY="${out}"
 }

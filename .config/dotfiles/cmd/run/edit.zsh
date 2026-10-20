@@ -1,20 +1,25 @@
 # dotfiles/cmd/run/edit.zsh — the plan file `init --edit`, `apply --edit` and `healthcheck --edit`
-# open in $EDITOR: one `apply|skip <step>  # …` line per step that may be chosen. Loaded by
-# need_lib; defines functions only.
+# open in $EDITOR: one `apply|skip <step>  # …` line per step that may be chosen (lib/plan.zsh, one
+# kind per verb). Loaded by need_lib; defines functions only.
 #
 # A plan is written from a basis (what each step's last result was): a check run's summary for
 # init and healthcheck (runplan::basis_summary), each step's newest result for apply
-# (runplan::basis_runs). runplan::edit opens it, parses every line on save (runplan::parse) and
-# fills the caller's `chosen` (the apply lines' steps) and `planned` (every step line's step).
-# The editor never runs under the lock, the INT trap or a spinner: runplan::release lets them go.
+# (runplan::basis_runs). runplan::edit opens it; on save runplan::check parses every line (an
+# apply line's step must be offered) and checks the needs across them, filling the caller's
+# `chosen` (the apply lines' steps) and `planned` (every step line's step). The editor never runs
+# under the lock, the INT trap or a spinner: runplan::release lets them go.
+
+plan::define init --actions 'apply|skip' --default apply --item step
+plan::define healthcheck --actions 'apply|skip' --default skip --item step
+plan::define apply --actions 'apply|skip' --default skip --item step
 
 # The basis, per step: last status, reason, fix, the detail's first line, actionable, manual; and
 # the age of the result (apply's plan only).
-typeset -gA PLAN_STATUS=() PLAN_REASON=() PLAN_FIX=() PLAN_DETAIL=() PLAN_ACTIONABLE=() PLAN_MANUAL=() PLAN_AGE=()
-typeset -gA PLAN_LINE=()      # step -> its line number in the plan last parsed
-typeset -ga PLAN_OFFER=()     # the steps an apply line may name (init, healthcheck)
-typeset -g PLAN_ANY=0         # 1: an apply line may name any step (apply)
-typeset -g PLAN_UNCHANGED=0   # 1: the plan was saved as written
+typeset -gA RUNPLAN_STATUS=() RUNPLAN_REASON=() RUNPLAN_FIX=() RUNPLAN_DETAIL=() RUNPLAN_ACTIONABLE=() RUNPLAN_MANUAL=() RUNPLAN_AGE=()
+typeset -gA RUNPLAN_LINE=()      # step -> its line number in the plan last parsed
+typeset -ga RUNPLAN_OFFER=()     # the steps an apply line may name (init, healthcheck)
+typeset -g RUNPLAN_ANY=0         # 1: an apply line may name any step (apply)
+typeset -g RUNPLAN_UNCHANGED=0   # 1: the plan was saved as written
 
 # Before an editor opens: the spinner stops, Ctrl-C is the editor's again, and the lock goes so
 # launchd's verify is not held off for as long as the edit takes.
@@ -27,10 +32,10 @@ runplan::release() {
 # runplan::basis_summary <summary.json>: the basis from one check run's summary.
 runplan::basis_summary() {
   local file="${1}" name st reason fix detail actionable manual
-  PLAN_STATUS=() PLAN_REASON=() PLAN_FIX=() PLAN_DETAIL=() PLAN_ACTIONABLE=() PLAN_MANUAL=() PLAN_AGE=()
+  RUNPLAN_STATUS=() RUNPLAN_REASON=() RUNPLAN_FIX=() RUNPLAN_DETAIL=() RUNPLAN_ACTIONABLE=() RUNPLAN_MANUAL=() RUNPLAN_AGE=()
   while IFS=$'\x1f' read -r name st reason actionable manual fix detail; do
-    PLAN_STATUS[${name}]="${st}" PLAN_REASON[${name}]="${reason}" PLAN_FIX[${name}]="${fix}" PLAN_DETAIL[${name}]="${detail}"
-    PLAN_ACTIONABLE[${name}]="${actionable}" PLAN_MANUAL[${name}]="${manual}"
+    RUNPLAN_STATUS[${name}]="${st}" RUNPLAN_REASON[${name}]="${reason}" RUNPLAN_FIX[${name}]="${fix}" RUNPLAN_DETAIL[${name}]="${detail}"
+    RUNPLAN_ACTIONABLE[${name}]="${actionable}" RUNPLAN_MANUAL[${name}]="${manual}"
   done < <(jq -r '.steps[] | [.step, .status, .reason, (.actionable|tostring), (.manual|tostring),
       (.fix // ""), ((.detail // "") | split("\n")[0])] | join("\u001f")' "${file}")
 }
@@ -42,7 +47,7 @@ runplan::basis_runs() {
   local name json prefix st reason
   local -a found
   local -i secs
-  PLAN_STATUS=() PLAN_REASON=() PLAN_FIX=() PLAN_DETAIL=() PLAN_ACTIONABLE=() PLAN_MANUAL=() PLAN_AGE=()
+  RUNPLAN_STATUS=() RUNPLAN_REASON=() RUNPLAN_FIX=() RUNPLAN_DETAIL=() RUNPLAN_ACTIONABLE=() RUNPLAN_MANUAL=() RUNPLAN_AGE=()
   for name in "${STEPS[@]}"; do
     found=("${ARI_DOTFILES_STATE_DIR}"/runs/*/"${name}".result.json(N.On[1]))
     (( ${#found} )) || continue
@@ -55,10 +60,10 @@ runplan::basis_runs() {
       IFS=$'\t' read -r st reason < <(jq -r '[.status, .reason] | @tsv' "${found[1]}" 2>/dev/null) || continue
     fi
     [[ -n "${st}" ]] || continue
-    PLAN_STATUS[${name}]="${st}" PLAN_REASON[${name}]="${reason}"
+    RUNPLAN_STATUS[${name}]="${st}" RUNPLAN_REASON[${name}]="${reason}"
     secs=0
     strftime -r -s secs '%Y%m%dT%H%M%S' "${found[1]:h:t}" 2>/dev/null || secs=0
-    if (( secs )); then PLAN_AGE[${name}]="$(status::age "${secs}")"; fi
+    if (( secs )); then RUNPLAN_AGE[${name}]="$(status::age "${secs}")"; fi
   done
 }
 
@@ -66,81 +71,77 @@ runplan::basis_runs() {
 # a setup run aborted before it), and that has an apply: init would get to it once the need is
 # fixed, so the plan offers it too.
 runplan::_unchecked() {
-  [[ "${PLAN_STATUS[${1}]:-}" == skip && "${PLAN_REASON[${1}]:-}" == (prerequisite_*|aborted) ]] && step::is_fixable "${1}"
+  [[ "${RUNPLAN_STATUS[${1}]:-}" == skip && "${RUNPLAN_REASON[${1}]:-}" == (prerequisite_*|aborted) ]] && step::is_fixable "${1}"
 }
 
-# Fills PLAN_OFFER from the basis: every actionable step, and every unchecked fixable one.
+# Fills RUNPLAN_OFFER from the basis: every actionable step, and every unchecked fixable one.
 runplan::offer() {
   local name
-  PLAN_OFFER=() PLAN_ANY=0
+  RUNPLAN_OFFER=() RUNPLAN_ANY=0
   for name in "${STEPS[@]}"; do
-    (( ${+PLAN_STATUS[${name}]} )) || continue
-    if [[ "${PLAN_ACTIONABLE[${name}]}" == true ]] || runplan::_unchecked "${name}"; then PLAN_OFFER+=("${name}"); fi
+    (( ${+RUNPLAN_STATUS[${name}]} )) || continue
+    if [[ "${RUNPLAN_ACTIONABLE[${name}]}" == true ]] || runplan::_unchecked "${name}"; then RUNPLAN_OFFER+=("${name}"); fi
   done
 }
 
 # What an offered step's line says after its '#': the reason, then what the apply will do (the
 # verdict's fix when it says more than 'dotfiles apply <step>', else the step's --apply).
 runplan::_why() {
-  local name="${1}" fix="${PLAN_FIX[${1}]:-}"
+  local name="${1}" fix="${RUNPLAN_FIX[${1}]:-}"
   if runplan::_unchecked "${name}"; then
-    print -r -- "not checked (${PLAN_REASON[${name}]}): ${STEP_APPLY_DOC[${name}]:-apply::${name}}"
+    print -r -- "not checked (${RUNPLAN_REASON[${name}]}): ${STEP_APPLY_DOC[${name}]:-apply::${name}}"
     return 0
   fi
   [[ -n "${fix}" && "${fix}" != "${CLI_NAME} apply ${name}" ]] || fix="${STEP_APPLY_DOC[${name}]:-apply::${name}}"
-  print -r -- "${PLAN_REASON[${name}]}: ${fix}"
+  print -r -- "${RUNPLAN_REASON[${name}]}: ${fix}"
 }
 
-# runplan::write_check <verb> <apply|skip>: the plan for init or healthcheck, from PLAN_OFFER and
-# the basis: the offered steps as lines with <default> as their action; then, as comments, the
+# runplan::write_check <verb> <apply|skip>: the plan for init or healthcheck, from RUNPLAN_OFFER
+# and the basis: the offered steps as lines with <default> as their action; then, as comments, the
 # steps that need a hand (failed, errored, or warned with a fix, with nothing to apply here) and
 # their fix; then every other step checked, for reference.
 runplan::write_check() {
-  local verb="${1}" default="${2}" name st width=0 runs
-  local -a by_hand=() rest=()
+  local verb="${1}" default="${2}" name st width=0 text
+  local -a by_hand=() rest=() runs
   for name in "${STEPS[@]}"; do
-    (( ${+PLAN_STATUS[${name}]} )) || continue
+    (( ${+RUNPLAN_STATUS[${name}]} )) || continue
     (( ${#name} > width )) && width=${#name}
-    (( ${PLAN_OFFER[(Ie)${name}]} )) && continue
-    st="${PLAN_STATUS[${name}]}"
-    if [[ "${st}" == (fail|error) || ( "${st}" == warn && ( -n "${PLAN_FIX[${name}]}" || "${PLAN_MANUAL[${name}]}" == true ) ) ]]; then
+    (( ${RUNPLAN_OFFER[(Ie)${name}]} )) && continue
+    st="${RUNPLAN_STATUS[${name}]}"
+    if [[ "${st}" == (fail|error) || ( "${st}" == warn && ( -n "${RUNPLAN_FIX[${name}]}" || "${RUNPLAN_MANUAL[${name}]}" == true ) ) ]]; then
       by_hand+=("${name}")
     else
       rest+=("${name}")
     fi
   done
   if [[ "${verb}" == init ]]; then
-    runs="Save and quit to run the 'apply' lines: each step's check, then its apply, then a
-# second check, as init does; then status. An unchanged plan runs as written."
+    runs=("Save and quit to run the 'apply' lines: each step's check, then its apply, then a"
+      "second check, as init does; then status. An unchanged plan runs as written.")
   else
-    runs="Save and quit, confirm, and the 'apply' lines run in one '${CLI_NAME} apply'. The
-# healthcheck applies nothing on its own: every line starts as skip."
+    runs=("Save and quit, confirm, and the 'apply' lines run in one '${CLI_NAME} apply'. The"
+      "healthcheck applies nothing on its own: every line starts as skip.")
   fi
-  cat <<EOF
-# ${CLI_NAME} ${verb} --edit: the steps this check found something to apply for, one per line:
-#   <action> <step>  # <reason>: <what the apply does>
-#   apply   run the step's apply, then check it again
-#   skip    leave it as it is
-# ${runs}
-# Lines starting with # are comments. A step whose need failed can run only if the need is
-# applied too.
-
-EOF
-  for name in "${PLAN_OFFER[@]}"; do
-    printf '%-5s  %-*s  # %s\n' "${default}" "${width}" "${name}" "$(runplan::_why "${name}")"
+  plan::header "${verb}" "${CLI_NAME} ${verb} --edit: the steps this check found something to apply for." \
+    "The note after each step: <reason>: <what the apply does>." \
+    "  apply   run the step's apply, then check it again" "  skip    leave it as it is" "${runs[@]}" \
+    "A step whose need failed can run only if the need is applied too."
+  for name in "${RUNPLAN_OFFER[@]}"; do
+    plan::line "${default}" "${(r:width:)name}" "$(runplan::_why "${name}")"
   done
   if (( ${#by_hand} )); then
     print -r -- ""
-    print -r -- "# By hand: nothing here applies these; the fix says what to do."
+    plan::comment "By hand: nothing here applies these; the fix says what to do."
     for name in "${by_hand[@]}"; do
-      printf '#   %-5s  %-*s  %s: %s\n' "${PLAN_STATUS[${name}]}" "${width}" "${name}" "${PLAN_REASON[${name}]}" "${PLAN_FIX[${name}]:-${PLAN_DETAIL[${name}]:-by hand}}"
+      printf -v text '  %-5s  %-*s  %s: %s' "${RUNPLAN_STATUS[${name}]}" "${width}" "${name}" "${RUNPLAN_REASON[${name}]}" "${RUNPLAN_FIX[${name}]:-${RUNPLAN_DETAIL[${name}]:-by hand}}"
+      plan::comment "${text}"
     done
   fi
   if (( ${#rest} )); then
     print -r -- ""
-    print -r -- "# Nothing to apply:"
+    plan::comment "Nothing to apply:"
     for name in "${rest[@]}"; do
-      printf '#   %-5s  %-*s  %s\n' "${PLAN_STATUS[${name}]}" "${width}" "${name}" "${PLAN_REASON[${name}]}"
+      printf -v text '  %-5s  %-*s  %s' "${RUNPLAN_STATUS[${name}]}" "${width}" "${name}" "${RUNPLAN_REASON[${name}]}"
+      plan::comment "${text}"
     done
   fi
 }
@@ -151,23 +152,18 @@ EOF
 runplan::write_all() {
   local -a prefill=("$@") meta
   local name width=0 last action
-  cat <<EOF
-# ${CLI_NAME} apply --edit: every step, in run order, one per line:
-#   <action> <step>  # description · group · needs · last result (age) · check-only
-#   apply   run the step: its check, then its apply when the check asks for it
-#   skip    leave it
-# Save and quit, confirm, and the 'apply' lines run as one '${CLI_NAME} apply'. A check-only step
-# runs its check alone. A need whose last result is not ok or warn must be applied too. Lines
-# starting with # are comments.
-
-EOF
+  plan::header apply "${CLI_NAME} apply --edit: every step, in run order. The note after each step:" \
+    "  description · group · needs · last result (age) · check-only" \
+    "  apply   run the step: its check, then its apply when the check asks for it" "  skip    leave it" \
+    "Save and quit, confirm, and the 'apply' lines run as one '${CLI_NAME} apply'. A check-only step" \
+    "runs its check alone. A need whose last result is not ok or warn must be applied too."
   for name in "${STEPS[@]}"; do (( ${#name} > width )) && width=${#name}; done
   for name in "${STEPS[@]}"; do
     meta=("${STEP_DESC[${name}]}" "${STEP_GROUP[${name}]}")
     [[ -z "${STEP_NEEDS[${name}]}" ]] || meta+=("needs ${STEP_NEEDS[${name}]}")
-    if (( ${+PLAN_STATUS[${name}]} )); then
-      last="last ${PLAN_STATUS[${name}]} ${PLAN_REASON[${name}]}"
-      [[ -z "${PLAN_AGE[${name}]:-}" ]] || last+=" (${PLAN_AGE[${name}]})"
+    if (( ${+RUNPLAN_STATUS[${name}]} )); then
+      last="last ${RUNPLAN_STATUS[${name}]} ${RUNPLAN_REASON[${name}]}"
+      [[ -z "${RUNPLAN_AGE[${name}]:-}" ]] || last+=" (${RUNPLAN_AGE[${name}]})"
       meta+=("${last}")
     else
       meta+=("never run")
@@ -175,7 +171,7 @@ EOF
     step::is_fixable "${name}" || meta+=("check-only")
     action=skip
     (( ! ${prefill[(Ie)${name}]} )) || action=apply
-    printf '%-5s  %-*s  # %s\n' "${action}" "${width}" "${name}" "${(pj: · :)meta}"
+    plan::line "${action}" "${(r:width:)name}" "${(pj: · :)meta}"
   done
 }
 
@@ -185,83 +181,59 @@ runplan::prefill_failing() {
   local name
   reply=()
   for name in "${STEPS[@]}"; do
-    [[ "${PLAN_STATUS[${name}]:-}" == (fail|warn) ]] && step::is_fixable "${name}" && reply+=("${name}")
+    [[ "${RUNPLAN_STATUS[${name}]:-}" == (fail|warn) ]] && step::is_fixable "${name}" && reply+=("${name}")
   done
   return 0
 }
 
-# Parses a plan into the caller's `chosen` and `planned`, and PLAN_LINE; prints one
-# `line N: problem | …` per bad line on stderr and returns 1 when any is bad. A line: apply or
-# skip, one step the registry knows, at most once; an apply line names a step PLAN_OFFER holds
-# (unless PLAN_ANY). Then the needs: an applied step's need that is not applied too must not have
-# last ended in anything but ok or warn (one never checked is the runner's gate to keep).
-runplan::parse() {
-  setopt localoptions extendedglob
-  local file="${1}" line body action name need st
-  local -a words
-  local -i n=0 bad=0
-  PLAN_LINE=()
-  while IFS= read -r line || [[ -n "${line}" ]]; do
-    n=$(( n + 1 ))
-    body="${${line%%\#*}##[[:space:]]#}"
-    body="${body%%[[:space:]]#}"
-    [[ -n "${body}" ]] || continue
-    words=(${=body})
-    action="${words[1]}" name="${words[2]:-}"
-    if [[ "${action}" != (apply|skip) ]]; then
-      print -u2 -r -- "line ${n}: unknown action; use apply or skip | line='${line}'"; bad=1; continue
-    fi
-    if (( ${#words} != 2 )); then
-      print -u2 -r -- "line ${n}: expected one step after the action | line='${line}'"; bad=1; continue
-    fi
-    if ! step::is_known "${name}"; then
-      print -u2 -r -- "line ${n}: not a step here (${CLI_NAME} steps) | step='${name}' line='${line}'"; bad=1; continue
-    fi
-    if (( ${planned[(Ie)${name}]} )); then
-      print -u2 -r -- "line ${n}: listed twice | step='${name}'"; bad=1; continue
-    fi
-    if [[ "${action}" == apply ]] && (( ! PLAN_ANY )) && (( ! ${PLAN_OFFER[(Ie)${name}]} )); then
-      print -u2 -r -- "line ${n}: nothing to apply for ${name} in this check (${PLAN_STATUS[${name}]:-not checked} ${PLAN_REASON[${name}]:-}) | step='${name}'"
-      bad=1; continue
-    fi
+# runplan::_item STEP ACTION: plan::parse's check of one line: a step the registry knows, and an
+# apply line's step one RUNPLAN_OFFER holds (unless RUNPLAN_ANY).
+runplan::_item() {
+  step::is_known "${1}" || { print -r -- "not a step here (${CLI_NAME} steps)"; return 1; }
+  [[ "${2}" == apply ]] && (( ! RUNPLAN_ANY && ! ${RUNPLAN_OFFER[(Ie)${1}]} )) || return 0
+  print -r -- "nothing to apply for ${1} in this check (${RUNPLAN_STATUS[${1}]:-not checked} ${RUNPLAN_REASON[${1}]:-})"
+  return 1
+}
+
+# runplan::check <plan>: edit::session's check. plan::parse (kind RUNPLAN_KIND) fills the caller's
+# `chosen` and `planned`, and RUNPLAN_LINE; then the needs: an applied step's need that is not
+# applied too must not have last ended in anything but ok or warn (one never checked is the
+# runner's gate to keep). Each problem is a `line N: …` on stderr; 1 when there is any.
+runplan::check() {
+  local row action name need st
+  local -a reply
+  local -i bad=0
+  chosen=() planned=() RUNPLAN_LINE=()
+  plan::parse "${RUNPLAN_KIND}" "${1}" runplan::_item || bad=1
+  for row in "${reply[@]}"; do
+    action="${row%%$'\t'*}" name="${${row#*$'\t'}%%$'\t'*}"
     planned+=("${name}")
-    PLAN_LINE[${name}]="${n}"
+    RUNPLAN_LINE[${name}]="${row##*$'\t'}"
     [[ "${action}" != apply ]] || chosen+=("${name}")
-  done < "${file}"
+  done
   for name in "${chosen[@]}"; do
     for need in ${(s:,:)STEP_NEEDS[${name}]}; do
       (( ${chosen[(Ie)${need}]} )) && continue
-      st="${PLAN_STATUS[${need}]:-}"
+      st="${RUNPLAN_STATUS[${need}]:-}"
       [[ -z "${st}" || "${st}" == (ok|warn) ]] && continue
-      print -u2 -r -- "line ${PLAN_LINE[${name}]}: ${name} needs ${need}, which ended ${st} ${PLAN_REASON[${need}]:-} and is not applied here; apply ${need} too, or skip ${name} | step='${name}' need='${need}'"
+      print -u2 -r -- "line ${RUNPLAN_LINE[${name}]}: ${name} needs ${need}, which ended ${st} ${RUNPLAN_REASON[${need}]:-} and is not applied here; apply ${need} too, or skip ${name} | step='${name}' need='${need}'"
       bad=1
     done
   done
   return ${bad}
 }
 
-# runplan::edit <plan> <resume command>: <plan> in $EDITOR (vi when unset or missing), then
-# runplan::parse. Bad lines: on a terminal, offered for another edit; else (or declined) the plan
-# is kept and the error names '<resume command> <plan>'; returns 1. An editor that fails returns
-# 1 too. PLAN_UNCHANGED says whether the plan was saved as written.
+# runplan::edit <kind> <plan> <resume command>: <plan> in $EDITOR (edit::session), checked by
+# runplan::check even when saved unchanged (a plan runs as written). Bad lines: on a terminal,
+# offered for another edit; else the plan is kept and the error names '<resume command> <plan>';
+# returns 1, as for an editor that fails. RUNPLAN_UNCHANGED says whether it was saved as written.
 runplan::edit() {
-  local plan="${1}" resume="${2}" editor before
-  editor="${EDITOR:-vi}"
-  command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi
-  before="${mapfile[${plan}]-}"
-  PLAN_UNCHANGED=0
-  while true; do
-    if ! ${=editor} "${plan}"; then
-      log::err "editor exited non-zero; nothing applied | editor='${editor}' plan='${plan}'"
-      return 1
-    fi
-    chosen=() planned=()
-    runplan::parse "${plan}" && break
-    if [[ -t 0 && -t 1 ]] && ui::confirm "Edit the plan again?"; then continue; fi
-    log::err "plan not run; fix the lines above, then | fix='${resume} ${plan}'"
-    return 1
-  done
-  [[ "${mapfile[${plan}]-}" != "${before}" ]] || PLAN_UNCHANGED=1
+  local before
+  typeset -g RUNPLAN_KIND="${1}"
+  before="${mapfile[${2}]-}"
+  RUNPLAN_UNCHANGED=0
+  edit::session "${2}" --check runplan::check --what "the plan" --changed --resume "${3} ${2}" || return 1
+  [[ "${mapfile[${2}]-}" != "${before}" ]] || RUNPLAN_UNCHANGED=1
   return 0
 }
 
@@ -304,14 +276,14 @@ runplan::init() {
     runplan::basis_summary "${RUN_DIR}/summary.json"
     runplan::offer
     print -r -- ""
-    if (( ! ${#PLAN_OFFER} )); then
+    if (( ! ${#RUNPLAN_OFFER} )); then
       print -r -- "init: nothing to apply"
       exit "${rc}"
     fi
     mkdir -p -- "${plan:h}"
     runplan::write_check init apply > "${plan}"
   fi
-  runplan::edit "${plan}" "${CLI_NAME} init --edit" || exit 1
+  runplan::edit init "${plan}" "${CLI_NAME} init --edit" || exit 1
   runplan::_nothing init || { rm -f -- "${plan}"; exit "${rc}"; }
   lock::acquire setup
   rm -f -- "${plan}"
@@ -329,7 +301,7 @@ runplan::_nothing() {
   if (( ! ${#planned} )); then
     print -r -- "${verb}: the plan has no step line; nothing applied"
   elif (( ! ${#chosen} )); then
-    if [[ "${verb}" == healthcheck ]] && (( PLAN_UNCHANGED )); then print -r -- "${verb}: no change; nothing applied"
+    if [[ "${verb}" == healthcheck ]] && (( RUNPLAN_UNCHANGED )); then print -r -- "${verb}: no change; nothing applied"
     else print -r -- "${verb}: every step skipped; nothing applied"
     fi
     print -r -- "next: ${CLI_NAME} apply ${planned[*]}"
@@ -352,7 +324,7 @@ runplan::apply() {
     step::is_known "${name}" || usage_error "unknown step | step='${name}' known='${(j:,:)STEPS}'"
   done
   runplan::basis_runs
-  PLAN_OFFER=() PLAN_ANY=1
+  RUNPLAN_OFFER=() RUNPLAN_ANY=1
   if [[ -n "${resume}" ]]; then
     [[ -f "${resume}" ]] || usage_error "apply --edit: no such plan file | file='${resume}'"
     plan="${resume}"
@@ -361,8 +333,8 @@ runplan::apply() {
     mkdir -p -- "${plan:h}"
     runplan::write_all "${names[@]}" > "${plan}"
   fi
-  runplan::edit "${plan}" "${CLI_NAME} apply --edit" || exit 1
-  if [[ -z "${resume}" ]] && (( PLAN_UNCHANGED && ! $# )); then
+  runplan::edit apply "${plan}" "${CLI_NAME} apply --edit" || exit 1
+  if [[ -z "${resume}" ]] && (( RUNPLAN_UNCHANGED && ! $# )); then
     rm -f -- "${plan}"
     print -r -- "apply: no change; nothing applied"
     return 0
@@ -405,14 +377,14 @@ runplan::healthcheck() {
     runplan::basis_summary "${RUN_DIR}/summary.json"
     runplan::offer
     print -r -- ""
-    if (( ! ${#PLAN_OFFER} )); then
+    if (( ! ${#RUNPLAN_OFFER} )); then
       print -r -- "healthcheck: nothing to apply"
       exit "${rc}"
     fi
     mkdir -p -- "${plan:h}"
     runplan::write_check healthcheck skip > "${plan}"
   fi
-  runplan::edit "${plan}" "${CLI_NAME} healthcheck --edit" || exit 1
+  runplan::edit healthcheck "${plan}" "${CLI_NAME} healthcheck --edit" || exit 1
   runplan::_nothing healthcheck || { rm -f -- "${plan}"; exit "${rc}"; }
   local -a apply_args=()
   (( dry )) && apply_args+=(--dry-run)

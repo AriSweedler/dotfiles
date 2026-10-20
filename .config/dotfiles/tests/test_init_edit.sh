@@ -31,7 +31,7 @@ editor() {
 }
 editor noop '{ print }'
 editor skip_all '{ sub(/^apply/, "skip ") } { print }'
-editor skip_brew '{ sub(/^apply  brew /, "skip   brew ") } { print }'
+editor skip_brew '{ sub(/^apply +brew /, "skip  brew ") } { print }'
 editor bad 'END { print "frobnicate bob_neovim"; print "apply nosuch"; print "apply bob_neovim extra"; print "skip bob_neovim"; print "apply brew" } { print }'
 
 # ed ED ARGS...: `dotfiles ARGS` with EDITOR=ED, no terminal; OUT, ERR, RC.
@@ -59,6 +59,8 @@ tty() {
     < /dev/null > "${FIX}/tty.out" 2>&1 || RC=$?
   OUT="$(tr -d '\r' < "${FIX}/tty.out")"
 }
+# pl ACTION: how lib/plan.zsh's plan::line starts a line: the action, padded, then two spaces.
+pl() { printf '%-14s  ' "$1"; }
 last_setup_steps() { jq -r '[.steps[].step] | join(",")' "${ARI_DOTFILES_STATE_DIR}/last-setup.json" 2>/dev/null; }
 clear_last_setup() { rm -f "${ARI_DOTFILES_STATE_DIR}/last-setup.json"; }
 run_count() { local n=0 d; for d in "${ARI_DOTFILES_STATE_DIR}"/runs/*/; do [[ -d "${d}" ]] && n=$((n + 1)); done; printf '%s' "${n}"; }
@@ -77,8 +79,9 @@ assert_eq "no --edit: a positional is still a usage error" 64 "${RC}"
 ed noop init --edit
 assert_eq "unchanged: exit 1 (bob's apply does not converge under the shim)" 1 "${RC}"
 plan="$(cat "${SEEN}")"
+assert_eq "the plan: line 1 names its kind and actions (the dotfilesplan filetype reads it)" "# dotfiles-plan: init · actions: apply | skip" "$(head -n 1 "${SEEN}")"
 assert_contains "the plan: the actionable step, apply, with its reason and what the apply does" "${plan}" \
-  "apply  bob_neovim            # nvim_missing: installs the latest neovim with bob and makes it the one in use"
+  "$(pl apply)bob_neovim            # nvim_missing: installs the latest neovim with bob and makes it the one in use"
 assert_contains "the plan: names the actions" "${plan}" "#   skip    leave it as it is"
 assert_contains "the plan: a manual step is a comment with its fix" "${plan}" "#   warn   terminal_nerdfont     manual_font:"
 assert_contains "the plan: the ok steps for reference" "${plan}" "#   ok     brew                  present"
@@ -122,10 +125,10 @@ assert_no_file "all skipped: the plan is not kept" "${PLAN}"
 ed bad init --edit
 assert_eq "bad plan: exit 1" 1 "${RC}"
 n="$(grep -c '' "${SEEN}")"
-assert_contains "bad plan: an unknown action" "${ERR}" "line $(( n + 1 )): unknown action; use apply or skip | line='frobnicate bob_neovim'"
-assert_contains "bad plan: an unknown step" "${ERR}" "line $(( n + 2 )): not a step here (dotfiles steps) | step='nosuch'"
-assert_contains "bad plan: two words after the action" "${ERR}" "line $(( n + 3 )): expected one step after the action"
-assert_contains "bad plan: a step twice" "${ERR}" "line $(( n + 4 )): listed twice | step='bob_neovim'"
+assert_contains "bad plan: an unknown action" "${ERR}" "line $(( n + 1 )): unknown action; use apply, skip | line='frobnicate bob_neovim'"
+assert_contains "bad plan: an unknown step" "${ERR}" "line $(( n + 2 )): not a step here (dotfiles steps) | item='nosuch'"
+assert_contains "bad plan: two words after the action" "${ERR}" "line $(( n + 3 )): expected one step after 'apply'"
+assert_contains "bad plan: a step twice" "${ERR}" "line $(( n + 4 )): listed twice | item='bob_neovim'"
 assert_contains "bad plan: a step with nothing to apply" "${ERR}" "line $(( n + 5 )): nothing to apply for brew in this check (ok present)"
 assert_contains "bad plan: the resume" "${ERR}" "fix='dotfiles init --edit ${PLAN}'"
 assert_file "bad plan: kept" "${PLAN}"
@@ -150,8 +153,8 @@ assert_file "terminal: the plan kept" "${PLAN}"
 shim_remove brew
 ed skip_brew init --edit
 assert_eq "need skipped: exit 1" 1 "${RC}"
-assert_contains "need skipped: the plan offers the unchecked step" "$(cat "${SEEN}")" "apply  brew_pkgs             # not checked (prerequisite_fail):"
-line="$(grep -n '^apply  brew_pkgs' "${SEEN}" | cut -d: -f1)"
+assert_contains "need skipped: the plan offers the unchecked step" "$(cat "${SEEN}")" "$(pl apply)brew_pkgs             # not checked (prerequisite_fail):"
+line="$(grep -nE '^apply +brew_pkgs ' "${SEEN}" | cut -d: -f1)"
 assert_contains "need skipped: an error naming the need" "${ERR}" "line ${line}: brew_pkgs needs brew, which ended fail brew_missing and is not applied here; apply brew too, or skip brew_pkgs"
 shim_add brew
 

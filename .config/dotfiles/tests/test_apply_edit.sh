@@ -25,7 +25,7 @@ editor() {
   chmod +x "${EDITORS}/$1"
 }
 editor noop '{ print }'
-editor add_claude '{ sub(/^skip   claude /, "apply  claude ") } { print }'
+editor add_claude '{ sub(/^skip +claude /, "apply  claude ") } { print }'
 editor skip_all '{ sub(/^apply/, "skip ") } { print }'
 editor bad 'END { print "apply"; print "apply claude" } { print }'
 
@@ -51,6 +51,8 @@ tty() {
     < /dev/null > "${FIX}/tty.out" 2>&1 || RC=$?
   OUT="$(tr -d '\r' < "${FIX}/tty.out")"
 }
+# pl ACTION: how lib/plan.zsh's plan::line starts a line: the action, padded, then two spaces.
+pl() { printf '%-14s  ' "$1"; }
 last_setup_steps() { jq -r '[.steps[].step] | join(",")' "${ARI_DOTFILES_STATE_DIR}/last-setup.json" 2>/dev/null; }
 clear_last_setup() { rm -f "${ARI_DOTFILES_STATE_DIR}/last-setup.json"; }
 plan_line() { grep -E "^(apply|skip) +$1 " "${SEEN}"; }
@@ -74,11 +76,12 @@ assert_eq "unchanged, none named: exit 0" 0 "${RC}"
 assert_contains "unchanged, none named: says so" "${OUT}" "apply: no change; nothing applied"
 assert_eq "unchanged, none named: nothing applied" "" "$(last_setup_steps)"
 registry_load
+assert_eq "the plan: line 1 names its kind and actions (the dotfilesplan filetype reads it)" "# dotfiles-plan: apply · actions: apply | skip" "$(head -n 1 "${SEEN}")"
 assert_eq "the plan: every step, in run order" "$(registry_steps | tr '\n' ',')" "$(grep -E '^(apply|skip) ' "${SEEN}" | awk '{ printf "%s,", $2 }')"
 assert_contains "the plan: a failing step with an apply starts as apply, with its newest result" "$(plan_line bob_neovim)" \
-  "apply  bob_neovim            # neovim installed through bob · tools · last fail nvim_missing (2m ago)"
+  "$(pl apply)bob_neovim            # neovim installed through bob · tools · last fail nvim_missing (2m ago)"
 assert_contains "the plan: the newest result is each step's own, not last-check.json's" "$(plan_line claude)" "last ok present (1m ago)"
-assert_contains "the plan: a manual warn without an apply stays skip, check-only" "$(plan_line terminal_nerdfont)" "skip   terminal_nerdfont"
+assert_contains "the plan: a manual warn without an apply stays skip, check-only" "$(plan_line terminal_nerdfont)" "$(pl skip)terminal_nerdfont"
 assert_contains "the plan: check-only" "$(plan_line terminal_nerdfont)" " · check-only"
 assert_contains "the plan: needs" "$(plan_line brew_pkgs)" " · brew · needs brew · last ok satisfied"
 assert_eq "the editor ran without the lock" "" "$(cat "${LOCKSEEN}" 2>/dev/null)"
@@ -94,8 +97,8 @@ assert_no_file "edited: the plan is gone" "${PLAN}"
 clear_last_setup
 ed noop apply --edit claude
 assert_eq "named: exit 0" 0 "${RC}"
-assert_contains "named: apply" "$(plan_line claude)" "apply  claude"
-assert_contains "named: the failing ones are not prefilled" "$(plan_line bob_neovim)" "skip   bob_neovim"
+assert_contains "named: apply" "$(plan_line claude)" "$(pl apply)claude"
+assert_contains "named: the failing ones are not prefilled" "$(plan_line bob_neovim)" "$(pl skip)bob_neovim"
 assert_eq "named, unchanged: runs" claude "$(last_setup_steps)"
 
 clear_last_setup
@@ -117,9 +120,9 @@ nm check --only brew
 ed bad apply --edit brew_pkgs
 assert_eq "bad plan: exit 1" 1 "${RC}"
 n="$(grep -c '' "${SEEN}")"
-assert_contains "bad plan: an action alone" "${ERR}" "line $(( n + 1 )): expected one step after the action"
-assert_contains "bad plan: a step twice" "${ERR}" "line $(( n + 2 )): listed twice | step='claude'"
-line="$(grep -n '^apply  brew_pkgs' "${SEEN}" | cut -d: -f1)"
+assert_contains "bad plan: an action alone" "${ERR}" "line $(( n + 1 )): expected one step after 'apply'"
+assert_contains "bad plan: a step twice" "${ERR}" "line $(( n + 2 )): listed twice | item='claude'"
+line="$(grep -nE '^apply +brew_pkgs ' "${SEEN}" | cut -d: -f1)"
 assert_contains "bad plan: an applied step whose need failed" "${ERR}" "line ${line}: brew_pkgs needs brew, which ended fail brew_missing and is not applied here; apply brew too, or skip brew_pkgs"
 assert_contains "bad plan: the resume" "${ERR}" "fix='dotfiles apply --edit ${PLAN}'"
 assert_file "bad plan: kept" "${PLAN}"

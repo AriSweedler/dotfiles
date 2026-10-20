@@ -26,7 +26,7 @@ editor() {
   chmod +x "${EDITORS}/$1"
 }
 editor noop '{ print }'
-editor apply_bob '{ sub(/^skip   bob_neovim/, "apply  bob_neovim") } { print }'
+editor apply_bob '{ sub(/^skip +bob_neovim /, "apply  bob_neovim ") } { print }'
 editor skip_bob '/^skip/ { print "# dropped: " $0; next } { print }'
 editor manual 'END { print "apply terminal_nerdfont" } { print }'
 
@@ -64,6 +64,8 @@ answer_when_asked() {
   printf '%s\n' "$1"
   for (( i = 0; i < 300; i++ )); do grep -q -e 'running:' -e 'not confirmed' "${FIX}/tty.out" 2>/dev/null && break; sleep 0.1; done
 }
+# pl ACTION: how lib/plan.zsh's plan::line starts a line: the action, padded, then two spaces.
+pl() { printf '%-14s  ' "$1"; }
 last_setup_steps() { jq -r '[.steps[].step] | join(",")' "${ARI_DOTFILES_STATE_DIR}/last-setup.json" 2>/dev/null; }
 clear_last_setup() { rm -f "${ARI_DOTFILES_STATE_DIR}/last-setup.json"; }
 run_count() { local n=0 d; for d in "${ARI_DOTFILES_STATE_DIR}"/runs/*/; do [[ -d "${d}" ]] && n=$((n + 1)); done; printf '%s' "${n}"; }
@@ -91,8 +93,9 @@ assert_eq "unchanged: the healthcheck's exit code" 1 "${RC}"
 assert_contains "the table as healthcheck prints it" "${OUT}" "fail   bob_neovim             nvim_missing"
 assert_contains "the roll-up" "${OUT}" "status: fail (fail=1"
 plan="$(cat "${SEEN}")"
+assert_eq "the plan: line 1 names its kind and actions (the dotfilesplan filetype reads it)" "# dotfiles-plan: healthcheck · actions: apply | skip" "$(head -n 1 "${SEEN}")"
 assert_contains "the plan: the actionable step starts as skip" "${plan}" \
-  "skip   bob_neovim            # nvim_missing: installs the latest neovim with bob and makes it the one in use"
+  "$(pl skip)bob_neovim            # nvim_missing: installs the latest neovim with bob and makes it the one in use"
 assert_contains "the plan: a manual fix is a comment" "${plan}" "#   warn   terminal_nerdfont     manual_font:"
 assert_contains "the plan: says the healthcheck applies nothing by itself" "${plan}" "every line starts as skip"
 assert_contains "unchanged: says so" "${OUT}" "healthcheck: no change; nothing applied"

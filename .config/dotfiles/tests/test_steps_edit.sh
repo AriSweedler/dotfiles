@@ -14,7 +14,9 @@ rm -f "${CODE}/dotfiles/lib" "${CODE}/dotfiles/cmd" "${CODE}/dotfiles/steps" "${
 cp -R "${ORIG_CONFIG_DIR}/dotfiles/lib" "${ORIG_CONFIG_DIR}/dotfiles/cmd" "${ORIG_CONFIG_DIR}/dotfiles/steps" "${CODE}/dotfiles/"
 cp "${ORIG_CONFIG_DIR}/bin/dotfiles" "${CODE}/bin/dotfiles"
 STEPS="${CODE}/dotfiles/steps"
-DRAFTS="${ARI_DOTFILES_STATE_DIR}/drafts/steps"
+DRAFTS="${ARI_DOTFILES_STATE_DIR}/drafts"
+# draft NAME: where edit::draft keeps NAME's draft: the live file's path under HOME, / as %.
+draft() { printf '%s/.config%%dotfiles%%steps%%%s.zsh' "${DRAFTS}" "$1"; }
 cat > "${STEPS}/zz_demo.zsh" <<'EOF'
 # step zz_demo — a step the test owns.
 step::declare zz_demo --group tools --desc "the demo file exists" \
@@ -86,7 +88,7 @@ edit noop edit hello --new
 assert_eq "unchanged template: exit 0" 0 "${RC}"
 assert_contains "unchanged template: says so" "${OUT}" "steps: no change; nothing created | step=hello"
 assert_no_file "unchanged template: no step" "${STEPS}/hello.zsh"
-assert_no_file "unchanged template: no draft" "${DRAFTS}/hello.zsh"
+assert_no_file "unchanged template: no draft" "$(draft hello)"
 
 # ── --new, only the header documented: reported, kept, nothing created ──
 df_before="$(df_count)"
@@ -96,7 +98,7 @@ assert_contains "half documented: each gap" "${ERR}" \
   'undocumented: no --desc, no --apply "<what the apply changes>", step::watches --none without a reason'
 assert_contains "half documented: the resume" "${ERR}" "fix='dotfiles steps edit hello --new'"
 assert_no_file "half documented: no step" "${STEPS}/hello.zsh"
-assert_file "half documented: the draft is kept" "${DRAFTS}/hello.zsh"
+assert_file "half documented: the draft is kept" "$(draft hello)"
 assert_eq "half documented: nothing committed" "${df_before}" "$(df_count)"
 
 # Resumed from the draft and documented: in place, committed in the shared tier, never pushed.
@@ -109,7 +111,7 @@ assert_eq "new step: the subject" "dotfiles: add step hello (shared)" "$(df_git 
 assert_contains "new step: the shared tier waits for dotfiles push" "${OUT}" 'Run `dotfiles push` when ready.'
 assert_contains "new step: next, its check" "${OUT}" "next: dotfiles healthcheck --only hello"
 assert_contains "new step: next, its apply" "${OUT}" "next: dotfiles apply hello"
-assert_no_file "new step: no draft left" "${DRAFTS}/hello.zsh"
+assert_no_file "new step: no draft left" "$(draft hello)"
 edit noop list
 assert_eq "new step: listed" tools "$(awk '$1 == "hello" { print $2 }' <<< "${OUT}")"
 assert_eq "new step: documented" ok "$(docs_of hello)"
@@ -128,9 +130,9 @@ check_kept() {  # NAME EXPECTED-ERR
   assert_contains "$1: named" "${ERR}" "$2"
   assert_contains "$1: the resume" "${ERR}" "fix='dotfiles steps edit zz_demo'"
   assert_eq "$1: the live file is untouched" "${live_before}" "$(cat "${STEPS}/zz_demo.zsh")"
-  assert_file "$1: the draft is kept" "${DRAFTS}/zz_demo.zsh"
+  assert_file "$1: the draft is kept" "$(draft zz_demo)"
   assert_eq "$1: nothing committed" "${df_before}" "$(df_count)"
-  rm -f "${DRAFTS}/zz_demo.zsh"
+  rm -f "$(draft zz_demo)"
 }
 edit drop_apply_doc edit zz_demo
 check_kept "an apply without --apply" 'undocumented: no --apply "<what the apply changes>"'
@@ -151,8 +153,8 @@ check_kept "globs and --none" "undocumented: step::watches has both globs and --
 edit drop_apply_doc edit zz_demo
 edit noop edit zz_demo
 assert_eq "an unchanged resumed draft is still checked" 1 "${RC}"
-cp "${STEPS}/zz_demo.zsh" "${DRAFTS}/zz_demo.zsh"
-printf '# a resumed note\n' >> "${DRAFTS}/zz_demo.zsh"
+cp "${STEPS}/zz_demo.zsh" "$(draft zz_demo)"
+printf '# a resumed note\n' >> "$(draft zz_demo)"
 edit noop edit zz_demo
 assert_eq "resumed and good: exit 0" 0 "${RC}"
 assert_contains "resumed and good: in place" "$(cat "${STEPS}/zz_demo.zsh")" "# a resumed note"
@@ -171,8 +173,8 @@ assert_contains "--no-commit: in place" "$(cat "${STEPS}/zz_demo.zsh")" "# a lat
 printf '#!/bin/sh\nexit 3\n' > "${EDITORS}/broken"; chmod +x "${EDITORS}/broken"
 edit broken edit zz_demo
 assert_eq "a failing editor: exit 1" 1 "${RC}"
-assert_contains "a failing editor: says so" "${ERR}" "editor exited non-zero; draft kept"
-rm -f "${DRAFTS}/zz_demo.zsh"
+assert_contains "a failing editor: says so" "${ERR}" "editor exited non-zero; zz_demo kept as it was saved"
+rm -f "$(draft zz_demo)"
 
 # The edited registry still loads for every verb.
 edit noop list
