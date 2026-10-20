@@ -41,8 +41,8 @@ ${c_bold}Flags${c_rst}
   --edit [FILE]
               triage: the same, as a plan file in \$EDITOR: one 'skip  kind:name'
               line per item, changed to global add, local add, global ignore
-              or local ignore (with '# reason'); FILE resumes one (takes
-              --dry-run, --no-push)
+              or local ignore (with '# reason'), or delete to uninstall it
+              here; FILE resumes one (takes --dry-run, --no-push)
   --dry-run   decree, undecree: print the lines, paths and git commands; touch
               nothing
   --no-push   decree, undecree, edit: skip the local tier's push

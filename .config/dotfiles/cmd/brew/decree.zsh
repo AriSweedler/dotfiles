@@ -465,9 +465,9 @@ orphans, the ignore list and classifier notes. Describes; never recommends a tie
   --interactive  pick a tier per undeclared item, confirm the grouped plan once, then run one
                  decree (one commit) per group; needs a terminal on stdin and stdout
   --edit [FILE]  write the undeclared items to a plan file, one 'skip  kind:name' line each, and
-                 open it in $EDITOR; change each skip to global add, local add, global ignore or
-                 local ignore (an ignore ends in '# reason'); on save the plan runs as
-                 --interactive's does. A bad line is reported by number and the file kept; FILE
+                 open it in $EDITOR; change each skip to global add, local add, global ignore,
+                 local ignore (an ignore ends in '# reason') or delete (uninstall it here); on
+                 save the plan runs as --interactive's does, then the uninstalls. A bad line is reported by number and the file kept; FILE
                  resumes that plan file
   --dry-run      with --interactive or --edit: every decree prints instead of writing
   --no-push      with --interactive or --edit: skip the local tier's push
@@ -816,11 +816,15 @@ decree::triage_apply() {  # [--dry-run] [--no-push] -- CHOICE...
   local -a pass=()
   while (( $# )) && [[ "${1}" != -- ]]; do pass+=("${1}"); shift; done
   [[ "${1:-}" != -- ]] || shift
-  local -a choices=("$@")
-  local -a groups=()
+  local -a choices=() deletes=() groups=()
+  local c
+  # A delete is no decree: it uninstalls, after the decrees, so it is kept apart from the plan.
+  for c in "$@"; do
+    if [[ "${c%%$'\t'*}" == delete ]]; then deletes+=("${${c#*$'\t'}%%$'\t'*}"); else choices+=("${c}"); fi
+  done
   groups=(${(f)"$(decree::triage_plan "${pass[@]}" -- "${choices[@]}")"})
   print -r -- ""
-  if (( ${#groups} == 0 )); then
+  if (( ${#groups} == 0 && ${#deletes} == 0 )); then
     print -r -- "every item skipped; nothing to decree"
     return 0
   fi
@@ -841,12 +845,20 @@ decree::triage_apply() {  # [--dry-run] [--no-push] -- CHOICE...
       done
     done
   done
-  local title="plan: ${#groups} decree(s), one commit each"
+  if (( ${#deletes} )); then
+    lines+=("$(ui::paint bold "uninstall from this machine (delete)")")
+    for w in "${deletes[@]}"; do lines+=("$(ui::clip "${width}" "  ${w}")"); done
+  fi
+  local title="plan: ${#groups} decree(s), one commit each" ask="Run ${#groups} decree(s)?"
+  if (( ${#deletes} )); then
+    title+=", then ${#deletes} uninstall(s)"
+    ask="Run ${#groups} decree(s) and uninstall ${#deletes} item(s)?"
+  fi
   (( ${pass[(Ie)--dry-run]} )) && title+=" (dry run)"
   ui::box --title "${title}" -- "${lines[@]}"
 
   local rc=0
-  (( ${DECREE_CONFIRM:-1} == 0 )) || ui::confirm "Run ${#groups} decree(s)?" || rc=$?
+  (( ${DECREE_CONFIRM:-1} == 0 )) || ui::confirm "${ask}" || rc=$?
   if (( rc != 0 )); then
     log::warn "declined; nothing decreed"
     (( rc == 130 )) && return 130
@@ -867,6 +879,50 @@ decree::triage_apply() {  # [--dry-run] [--no-push] -- CHOICE...
       log::err "decree failed; the other groups still ran | rc=${rc} args='${g}'"
     fi
   done
+  if (( ${#deletes} )); then
+    decree::triage_delete "${pass[@]}" -- "${deletes[@]}" || failed=$(( failed + 1 ))
+  fi
+  (( failed == 0 )) || return 1
+  return 0
+}
+
+# Uninstalls each kind:name from this machine, extensions, casks and formulae before taps (a tap
+# goes last: untapping one whose items are still installed fails). One command per item, named
+# before it runs; a failure is reported and the rest still run. --dry-run prints the commands.
+decree::triage_delete() {  # [--dry-run] [--no-push] -- KIND:NAME...
+  local -a pass=() items=() cmd
+  while (( $# )) && [[ "${1}" != -- ]]; do pass+=("${1}"); shift; done
+  [[ "${1:-}" != -- ]] || shift
+  local kind item brew
+  for kind in vscode cask formula tap; do
+    for item in "$@"; do [[ "${item%%:*}" == "${kind}" ]] && items+=("${item}"); done
+  done
+  local -i i=0 failed=0
+  for item in "${items[@]}"; do
+    i=$(( i + 1 ))
+    case "${item%%:*}" in
+      formula) brew="$(brew::bin)" || return 1; cmd=("${brew}" uninstall --formula "${item#*:}") ;;
+      cask)    brew="$(brew::bin)" || return 1; cmd=("${brew}" uninstall --cask "${item#*:}") ;;
+      tap)     brew="$(brew::bin)" || return 1; cmd=("${brew}" untap "${item#*:}") ;;
+      vscode)
+        if [[ -z "${ARI_DOTFILES_CODE:-}" ]]; then
+          log::err "code not found; extension not uninstalled | item='${item}'"
+          failed=$(( failed + 1 )); continue
+        fi
+        cmd=("${ARI_DOTFILES_CODE}" --uninstall-extension "${item#*:}") ;;
+      *) log::err "cannot delete this kind | item='${item}'"; failed=$(( failed + 1 )); continue ;;
+    esac
+    print -r -- ""
+    if (( ${pass[(Ie)--dry-run]} )); then
+      print -r -- "would run: ${cmd[*]}"
+      continue
+    fi
+    print -r -- "$(ui::paint bold "[delete ${i}/${#items}] ${cmd[1]:t} ${cmd[2,-1]}")"
+    if ! "${cmd[@]}"; then
+      failed=$(( failed + 1 ))
+      log::err "uninstall failed; the other items still ran | item='${item}'"
+    fi
+  done
   (( failed == 0 )) || return 1
   return 0
 }
@@ -875,7 +931,8 @@ decree::triage_apply() {  # [--dry-run] [--no-push] -- CHOICE...
 
 # The action words a plan file takes, and the decree action each means.
 (( ${+DECREE_EDIT_ACTION} )) || typeset -grA DECREE_EDIT_ACTION=(
-  ["global add"]=global ["local add"]=local ["global ignore"]=ignore-global ["local ignore"]=ignore-local [skip]=skip
+  ["global add"]=global ["local add"]=local ["global ignore"]=ignore-global ["local ignore"]=ignore-local
+  [skip]=skip [delete]=delete
 )
 
 # The plan file for <drift.json>: a header naming the actions, one `skip  kind:name` line per
@@ -891,8 +948,11 @@ decree::triage_edit_file() {  # <drift.json>
 #   local add       declare it in the local Brewfile (this machine; git ldf, pushed)
 #   global ignore   record it in the shared Brewfile.ignore; needs a '# reason'
 #   local ignore    record it in the local Brewfile.ignore; needs a '# reason'
+#   delete          uninstall it from this machine (brew uninstall, brew untap, or
+#                   code --uninstall-extension); declares nothing
 #   skip            leave it undeclared
-# Save and quit to see the plan: one decree, one commit, per action (and per ignore reason).
+# Save and quit to see the plan: one decree, one commit, per action (and per ignore reason),
+# then the uninstalls.
 # Lines starting with # are comments. Leaving every line 'skip' decrees nothing.
 
 EOF
@@ -940,10 +1000,10 @@ decree::triage_edit_parse() {  # <plan file> <drift.json>
     action="" item=""
     if (( ${#words} >= 2 )) && (( ${+DECREE_EDIT_ACTION[${words[1]} ${words[2]}]} )); then
       action="${DECREE_EDIT_ACTION[${words[1]} ${words[2]}]}"; words=("${(@)words[3,-1]}")
-    elif (( ${#words} >= 1 )) && [[ "${words[1]}" == skip ]]; then
-      action=skip; words=("${(@)words[2,-1]}")
+    elif (( ${#words} >= 1 )) && [[ "${words[1]}" == (skip|delete) ]]; then
+      action="${words[1]}"; words=("${(@)words[2,-1]}")
     else
-      print -u2 -r -- "line ${n}: unknown action; use global add, local add, global ignore, local ignore or skip | line='${line}'"
+      print -u2 -r -- "line ${n}: unknown action; use global add, local add, global ignore, local ignore, delete or skip | line='${line}'"
       bad=1; continue
     fi
     if (( ${#words} != 1 )); then
@@ -992,7 +1052,8 @@ decree::triage_edit() {  # [--dry-run] [--no-push] [--] [FILE]
       print -r -- "undeclared: none; nothing to decree"
       return 0
     fi
-    file="${RUN_DIR}/triage-plan.txt"
+    # The extension is the plan's filetype: Neovim highlights it (nvim/syntax/brewtriage.vim).
+    file="${RUN_DIR}/triage-plan.brewtriage"
     decree::triage_edit_file "${drift}" > "${file}" || return 1
   fi
   editor="${EDITOR:-vi}"

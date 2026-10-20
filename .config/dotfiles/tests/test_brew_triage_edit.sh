@@ -34,6 +34,16 @@ editor bad '
   $0 == "skip  cask:google-chrome" { print "local add  cask:google-chrome  extra"; next }
   { print }
   END { print "skip  formula:nothere"; print "skip  tap:hashicorp/tap" }'
+editor deletes '
+  $0 == "skip  formula:libtiff"          { print "delete  formula:libtiff"; next }
+  $0 == "skip  tap:hashicorp/tap"        { print "delete  tap:hashicorp/tap"; next }
+  $0 == "skip  vscode:ms-python.python"  { print "delete vscode:ms-python.python  # never used"; next }
+  $0 == "skip  formula:gh"               { print "local add  formula:gh"; next }
+  { print }'
+editor deletes_only '
+  $0 == "skip  tap:hashicorp/tap"        { print "delete  tap:hashicorp/tap"; next }
+  $0 == "skip  vscode:ms-python.python"  { print "delete  vscode:ms-python.python"; next }
+  { print }'
 editor fix_bad '
   $0 == "local nope  formula:gh"           { print "skip  formula:gh"; next }
   $0 == "local ignore  formula:libtiff"     { print "skip  formula:libtiff"; next }
@@ -63,6 +73,7 @@ assert_contains "unchanged: nothing to decree" "${OUT}" "no change; nothing to d
 GIVEN="$(cat "${FIX}/plan.given")"
 assert_contains "the header names each action" "${GIVEN}" "#   global add      declare it in the shared Brewfile"
 assert_contains "the header names local ignore and its reason" "${GIVEN}" "#   local ignore    record it in the local Brewfile.ignore; needs a '# reason'"
+assert_contains "the header names delete" "${GIVEN}" "#   delete          uninstall it from this machine"
 assert_contains "one skip line per undeclared item" "${GIVEN}" $'\n'"skip  formula:gh"$'\n'
 assert_contains "each kind is listed" "${GIVEN}" $'\n'"skip  vscode:ms-python.python"
 assert_contains "the item's tap on a comment line above it" "${GIVEN}" "# formula gh (homebrew/core, new)"$'\n'"skip  formula:gh"
@@ -83,7 +94,8 @@ assert_eq "bad lines: exit 1" 1 "${RC}"
 line_of() { grep -n -F -x -- "$1" "${PLAN}" | cut -d: -f1; }
 PLAN="$(printf '%s' "${ERR}" | awk -F"--edit " '/fix=/ { sub(/\x27.*/, "", $2); print $2 }')"
 assert_file "the plan file is kept" "${PLAN}"
-assert_contains "an unknown action, by line" "${ERR}" "line $(line_of 'local nope  formula:gh'): unknown action; use global add, local add, global ignore, local ignore or skip"
+assert_eq "the plan file's extension is its filetype" brewtriage "${PLAN##*.}"
+assert_contains "an unknown action, by line" "${ERR}" "line $(line_of 'local nope  formula:gh'): unknown action; use global add, local add, global ignore, local ignore, delete or skip"
 assert_contains "an ignore without a reason, by line" "${ERR}" "line $(line_of 'local ignore  formula:libtiff'): an ignore needs a reason"
 assert_contains "a stray word, by line" "${ERR}" "line $(line_of 'local add  cask:google-chrome  extra'): expected one kind:name"
 assert_contains "an item that is not undeclared" "${ERR}" "not an undeclared item here | item='formula:nothere'"
@@ -109,6 +121,19 @@ assert_contains "dry run: local ignore, one group for one reason" "${OUT}" "form
 assert_eq "dry run: no df commit" "${df_before}" "$(df_count)"
 assert_eq "dry run: no ldf commit" "${ldf_before}" "$(ldf_count)"
 
+# ── delete, dry run: listed after the decrees, uninstalls ordered extensions, formulae, then taps ──
+triage_edit deletes --dry-run --no-push
+assert_eq "delete dry run: exit 0" 0 "${RC}"
+assert_contains "delete dry run: the title counts both" "${OUT}" "plan: 1 decree(s), one commit each, then 3 uninstall(s) (dry run)"
+assert_contains "delete dry run: its own section" "${OUT}" "uninstall from this machine (delete)"
+assert_contains "delete dry run: the decree still runs" "${OUT}" "dotfiles brew decree formula:gh --local --dry-run --no-push"
+WOULD="$(printf '%s\n' "${OUT}" | grep '^would run: ' | grep -v ' git ')"
+assert_eq "delete dry run: one command per item, extension, formula, tap" \
+  "code --uninstall-extension ms-python.python|brew uninstall --formula libtiff|brew untap hashicorp/tap" \
+  "$(printf '%s\n' "${WOULD}" | awk '{ sub(/^would run: /, ""); n = split($1, p, "/"); $1 = p[n]; printf "%s%s", (NR > 1 ? "|" : ""), $0 }')"
+assert_eq "delete dry run: no df commit" "${df_before}" "$(df_count)"
+assert_eq "delete dry run: no ldf commit" "${ldf_before}" "$(ldf_count)"
+
 # ── a real run: one commit per group ──
 triage_edit choose
 assert_eq "real run: exit 0" 0 "${RC}"
@@ -129,5 +154,18 @@ assert_eq "--edit with --interactive is a usage error" 64 "${RC}"
 triage_edit noop "${FIX}/no-such-plan.txt"
 assert_eq "a missing FILE is a usage error" 64 "${RC}"
 
-assert_no_mutation "triage --edit never calls a mutating brew command"
+assert_no_mutation "triage --edit never calls a mutating brew command, without a delete"
+
+# ── delete, for real: brew untap and code --uninstall-extension, nothing committed ──
+shim_logs_reset
+export BREW_SHIM_ALLOW_MUTATION=1
+df_before="$(df_count)" ldf_before="$(ldf_count)"
+triage_edit deletes_only
+unset BREW_SHIM_ALLOW_MUTATION
+assert_eq "delete: exit 0" 0 "${RC}"
+assert_contains "delete: brew untap ran" "$(shim_log brew)" "MUTATION untap hashicorp/tap"
+assert_contains "delete: the extension was uninstalled" "$(shim_log code)" "--uninstall-extension ms-python.python"
+assert_contains "delete: each command named before it runs" "${OUT}" "[delete 2/2] brew untap hashicorp/tap"
+assert_eq "delete: no df commit" "${df_before}" "$(df_count)"
+assert_eq "delete: no ldf commit" "${ldf_before}" "$(ldf_count)"
 report
