@@ -23,7 +23,19 @@
 # names its key, and --allow writes the missing ones so the prompt never shows. bake and the
 # raycast_sync step run --allow.
 #
+# Documentation rule: every binding's deeplink(…) carries a one-line `description` option (what
+# the action does; the title is a name, not documentation), which the generator emits.
+# --undocumented lists the bindings without one; the raycast_sync step fails on any.
+#
+# --edit [<slug>] opens the table that holds the slug's deeplink in $EDITOR at its line (no slug:
+# raycast_shortcuts.ts, where a new direct-chord binding goes). On save the generator runs again
+# and every chord goes through parse_chord; a table that does not build, a bad chord or an
+# undocumented binding is reported and the file left as edited (on a terminal, offered for
+# another edit). Nothing is committed: bake compiles the tables into karabiner.json, so the
+# next command is bake.
+#
 # Usage: raycast_link <slug|path> [--plain] | --list | --check | --allow [--dry-run]
+#        | --undocumented | --edit [<slug>]
 # Env: ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS (the karabiner.ts checkout), ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON,
 # ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN (a domain name or a plist path), ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD (test
 # seam: a command whose stdout is the bindings JSON, e.g. `cat fixture.json`).
@@ -90,10 +102,16 @@ function raycast_link::load_bindings() {
       log::err "karabiner.ts not built | fix='run bake' tsx='${tsx}'"
       return 1
     fi
-    if ! out="$(cd "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS}" && "${tsx}" src/generate_bindings.ts --stdout 2>/dev/null)"; then
-      log::err "Bindings generator failed | fix='run bake' dir='${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS}'"
+    local errf
+    errf="$(mktemp "${TMPDIR:-/tmp}/raycast-link-gen.XXXXXX")" || return 1
+    if ! out="$(cd "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS}" && "${tsx}" src/generate_bindings.ts --stdout 2>"${errf}")"; then
+      # The thrown error, not the stack: the first line naming an Error and the two after it.
+      local why="$(grep -m1 -A2 'Error' "${errf}" | sed 's/^[[:space:]]*//' | paste -sd'|' - | sed 's/|/ \/ /g')"
+      rm -f "${errf}"
+      log::err "Bindings generator failed | fix='run bake' dir='${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS}' error='${why[1,300]}'"
       return 1
     fi
+    rm -f "${errf}"
     # Modules the generator imports log their setup on stdout (karabiner_script prints the repo
     # and npm paths); the document is the one line that is a JSON object.
     out="$(print -r -- "${out}" | awk '/^\{/ { line = $0 } END { print line }')"
@@ -315,6 +333,132 @@ no_allow_id_aliases=${(j:,:)no_id}
 EOF
 }
 
+# --- documentation ---
+
+# Output: one line per binding whose description is missing or blank, in generator order:
+#   binding <slug> | fix='dotfiles raycast link edit <slug>'
+function raycast_link::undocumented_lines() {
+  print -r -- "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE}" | jq -r '
+    .bindings[] | select((.description // "") | test("\\S") | not)
+    | (.path | split("/") | last) as $s
+    | "binding \($s) | fix='"'"'dotfiles raycast link edit \($s)'"'"'"'
+}
+
+# --undocumented: those lines, then undocumented=N. Exit 0 with findings (they are data: the
+# raycast_sync step fails on them).
+function raycast_link::undocumented() {
+  local -a lines
+  lines=("${(@f)$(raycast_link::undocumented_lines)}"); [[ -z "${lines[1]:-}" ]] && lines=()
+  (( ${#lines} )) && print -rl -- "${lines[@]}"
+  print -r -- "undocumented=${#lines}"
+}
+
+# --- edit ---
+
+# Input: a prompt. 0 yes. The dotfiles ui::confirm when loaded, else a plain y/N on the terminal.
+function raycast_link::confirm() {
+  if (( ${+functions[ui::confirm]} )); then ui::confirm "${1}"; return; fi
+  local reply=""
+  print -nu2 -- "${1} [y/N] "
+  IFS= read -r reply || return 1
+  [[ "${reply}" == ([Yy]|[Yy][Ee][Ss]) ]]
+}
+
+# Input: a path, its slug. Output: "file<TAB>line" of the table line that names the deeplink: the
+# full path as a string literal (raycast_shortcuts.ts, a mode's dict), else the slug as one (a
+# table that builds the path, like window.ts, where the description map comes first). Exit 1
+# when no table names it.
+function raycast_link::locate() {
+  local path_="${1}" slug="${2}" src="${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS}/src" needle hit
+  local -a files=("${src}"/modes/*.ts(N) "${src}"/raycast_shortcuts.ts(N))
+  (( ${#files} )) || return 1
+  for needle in "\"${path_}\"" "\"${slug}\""; do
+    hit="$(grep -H -n -m1 -F -- "${needle}" "${files[@]}" 2>/dev/null | head -n 1)"
+    if [[ -n "${hit}" ]]; then
+      print -r -- "${hit%%:*}"$'\t'"${${hit#*:}%%:*}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Every problem with the tables as they now are, on stderr; 1 when there is any. The generator
+# must build (a fresh run, not the cached document), every chord step must parse, every binding
+# must be documented.
+function raycast_link::edit_check() {
+  local entry chord step slug line rc=0
+  ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE=""
+  raycast_link::load_bindings || return 1
+  for entry in "${(@f)$(raycast_link::entries)}"; do
+    slug="$(raycast_link::slug "${entry}")"
+    for chord in "${(@f)$(print -r -- "${entry}" | jq -r '.chords[]')}"; do
+      for step in "${(@s: :)chord}"; do
+        raycast_link::parse_chord "${step}" >/dev/null || { log::err "Bad chord | slug='${slug}' chord='${chord}'"; rc=1; }
+      done
+    done
+  done
+  for line in "${(@f)$(raycast_link::undocumented_lines)}"; do
+    [[ -n "${line}" ]] || continue
+    log::err "Undocumented: add a one-line description to its deeplink options | ${line%% | *}"
+    rc=1
+  done
+  return "${rc}"
+}
+
+# --edit [selector]: the table in $EDITOR (vi when unset or not found) at the deeplink's line.
+function raycast_link::edit() {
+  local selector="${1:-}" src="${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS}/src" file line=1 editor orig entry path_ slug hit resume
+  local -i tty=0
+  resume="dotfiles raycast link edit${selector:+ ${selector}}"
+  if [[ -n "${selector}" ]]; then
+    # The generator resolves the selector; with a table broken mid-edit, the slug is searched as is.
+    if raycast_link::load_bindings 2>/dev/null; then
+      entry="$(raycast_link::entry "${selector}")" || return 64
+      path_="$(print -r -- "${entry}" | jq -r .path)"
+    else
+      log::warn "Bindings generator failed; searching the tables for the slug as written | selector='${selector}'"
+      path_="${selector}"
+    fi
+    slug="${path_##*/}"
+    if ! hit="$(raycast_link::locate "${path_}" "${slug}")"; then
+      log::err "No table names this deeplink | slug='${slug}' path='${path_}' searched='${src}/modes/*.ts, ${src}/raycast_shortcuts.ts'"
+      return 1
+    fi
+    file="${hit%%$'\t'*}"; line="${hit#*$'\t'}"
+  else
+    file="${src}/raycast_shortcuts.ts"
+    [[ -f "${file}" ]] || { log::err "Bindings table missing | file='${file}'"; return 1; }
+    hit="$(grep -n -m1 -F -- 'export const raycastShortcuts' "${file}" 2>/dev/null)"
+    [[ -n "${hit}" ]] && line="${hit%%:*}"
+  fi
+  editor="${EDITOR:-vi}"
+  command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi
+  [[ -t 0 && -t 1 ]] && tty=1
+  orig="$(mktemp "${TMPDIR:-/tmp}/raycast-link-edit.XXXXXX")" || return 1
+  cp "${file}" "${orig}"
+  while true; do
+    if ! ${=editor} "+${line}" "${file}"; then
+      rm -f "${orig}"
+      log::err "Editor exited non-zero; not validated | editor='${editor}' file='${file}'"
+      return 1
+    fi
+    if cmp -s "${orig}" "${file}"; then
+      rm -f "${orig}"
+      print -r -- "link: no change | file=${file}"
+      return 0
+    fi
+    raycast_link::edit_check && break
+    if (( tty )) && raycast_link::confirm "Edit ${file:t} again?"; then continue; fi
+    rm -f "${orig}"
+    log::err "Bindings table left as edited; it does not pass | file='${file}' fix='${resume}'"
+    return 1
+  done
+  rm -f "${orig}"
+  print -r -- "link: ${file:t} builds | bindings=$(print -r -- "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE}" | jq '.bindings | length') file=${file}"
+  print -r -- "not committed: bake compiles the tables into karabiner.json and stages them"
+  print -r -- "next: bake"
+}
+
 # --- modes ---
 
 # Input: slug or path, plain flag (0/1). Output: the widget line; the key shown is the first chord.
@@ -369,15 +513,20 @@ dotfiles raycast link — a Raycast action as a link with its Karabiner binding
   dotfiles raycast link check            OK/MISSING per binding (direct chords, against the compiled karabiner.json;
                                   layer chords show as 'layer' and are not verified), plus allowed/NOT-ALLOWED/no-allow-id
   dotfiles raycast link allow [--dry-run]   write the missing allowIds to Raycast's plist so no deeplink asks "Always allow"
+  dotfiles raycast link edit [<slug>]    the table holding the slug's deeplink in \$EDITOR at its line (no slug:
+                                  raycast_shortcuts.ts); on save the generator and every chord are checked; no
+                                  commit, next: bake; --edit is the same
+  dotfiles raycast link undocumented     every binding without a description, with the edit that fixes it
 
 Bindings come from karabiner.ts's tables: ${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS}/src/modes/*.ts and
 src/raycast_shortcuts.ts, read through its generator. To change one, edit the table and run bake
 (which also regenerates src/raycast_bindings.json, an artifact for reading, and runs --allow).
+Every deeplink(…) takes a one-line description option, what the action does; the title is not one.
 EOF
 }
 
 function raycast_link() {
-  local mode="" selector="" plain=0 dry_run=0
+  local mode="" selector="" plain=0 dry_run=0 edit_selector=""
   while (( $# > 0 )); do case "${1}" in
     -h|--help)  raycast_link::help; return 0 ;;
     --plain)    plain=1; shift ;;
@@ -385,15 +534,23 @@ function raycast_link() {
     --list)     mode=list; shift ;;
     --check)    mode=check; shift ;;
     --allow)    mode=allow; shift ;;
+    --undocumented) mode=undocumented; shift ;;
+    --edit)     mode=edit; shift; if (( $# )) && [[ "${1}" != -* ]]; then edit_selector="${1}"; shift; fi ;;
     -*)         log::err "Unknown flag | flag='${1}' hint='to change a binding, edit karabiner.ts/src/modes/*.ts or raycast_shortcuts.ts and run bake'"; raycast_link::help; return 1 ;;
     *)          [[ -z "${mode}" ]] && mode=widget; selector="${1}"; shift ;;
   esac; done
   [[ -n "${mode}" ]] || { raycast_link::help; return 1; }
+  if [[ "${mode}" == edit ]]; then
+    (( plain || dry_run )) && { log::err "--edit takes only a slug | hint='--dry-run does not apply; link check reads without editing'"; return 64; }
+    raycast_link::edit "${edit_selector}"
+    return
+  fi
   raycast_link::load_bindings || return 1
   case "${mode}" in
     widget) raycast_link::widget "${selector}" "${plain}" ;;
     list)   raycast_link::list ;;
     check)  raycast_link::check ;;
     allow)  raycast_link::allow "${dry_run}" ;;
+    undocumented) raycast_link::undocumented ;;
   esac
 }

@@ -19,10 +19,52 @@ const camel = (slug: string) => slug.split("-").map((w) => w[0].toUpperCase() + 
 export const windowManagementAllowId = (slug: string) =>
   `builtin_command_windowManagement${WM_ALLOW_ID_IRREGULARS[slug] ?? camel(slug)}`
 
+// What each command does to the front window, one line: the binding's documentation (the
+// title is a name, not documentation). Every slug in the dict below needs a line here; the
+// raycast_sync healthcheck step fails on one without, and `dotfiles raycast link edit <slug>`
+// opens this map at the slug's line.
+const WM_DESCRIPTIONS: Record<string, string> = {
+  "restore": "Put the front window back where it was before the last window command",
+  "almost-maximize": "Grow the front window to nearly fill the screen, leaving a margin",
+
+  "left-half": "Move the front window to the left half of the screen",
+  "right-half": "Move the front window to the right half of the screen",
+
+  "first-third": "Move the front window to the left third of the screen",
+  "center-third": "Move the front window to the middle third of the screen",
+  "last-third": "Move the front window to the right third of the screen",
+
+  "top-left-quarter": "Move the front window to the top-left quarter of the screen",
+  "top-right-quarter": "Move the front window to the top-right quarter of the screen",
+  "bottom-left-quarter": "Move the front window to the bottom-left quarter of the screen",
+  "bottom-right-quarter": "Move the front window to the bottom-right quarter of the screen",
+
+  "center": "Center the front window on the screen, keeping its size",
+  "reasonable-size": "Resize the front window to Raycast's medium default size",
+  "toggle-fullscreen": "Toggle the front window in and out of macOS full screen",
+
+  "top-left-sixth": "Move the front window to the top-left sixth of the screen",
+  "top-center-sixth": "Move the front window to the top-center sixth of the screen",
+  "top-right-sixth": "Move the front window to the top-right sixth of the screen",
+  "bottom-left-sixth": "Move the front window to the bottom-left sixth of the screen",
+  "bottom-center-sixth": "Move the front window to the bottom-center sixth of the screen",
+  "bottom-right-sixth": "Move the front window to the bottom-right sixth of the screen",
+
+  "make-smaller": "Shrink the front window one step, around its center",
+  "make-larger": "Grow the front window one step, around its center",
+
+  "previous-display": "Move the front window to the previous display",
+  "next-display": "Move the front window to the next display",
+
+  "previous-desktop": "Move the front window to the previous desktop (Space)",
+  "next-desktop": "Move the front window to the next desktop (Space)",
+}
+
 const wm = (slug: string) =>
   deeplink(`extensions/raycast/window-management/${slug}`, {
     keepFocus: true,
     title: titleCase(slug),
+    description: WM_DESCRIPTIONS[slug],
     allowId: windowManagementAllowId(slug),
   })
 

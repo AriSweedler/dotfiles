@@ -53,6 +53,7 @@ const dict = {
   "x": typingBuilder,
   "r": deeplink("extensions/raycast/typing-practice/start-typing-practice", {
     title: "Typing Practice",
+    description: "Start a Raycast typing practice round",
     allowId: "builtin_command_typingPractice_start",
   }),
 }

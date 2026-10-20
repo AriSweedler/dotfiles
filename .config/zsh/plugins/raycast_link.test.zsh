@@ -1,13 +1,15 @@
 # Tests for raycast_link.zsh. A fixture bindings document (through the ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD
 # seam), a fixture karabiner.json, and a temp plist stand in for the real files; a stub `open`
 # fails the suite if anything is opened; the real com.raycast.macos is never touched. The last
-# section runs the real karabiner.ts generator (read-only) and checks the generated contract.
+# section runs this tree's karabiner.ts generator (read-only) and checks the generated contract.
 # Only runs when OTTO_TEST__ZSH_PLUGINS_RAYCAST_LINK=true
 [[ "$OTTO_TEST__ZSH_PLUGINS_RAYCAST_LINK" == "true" ]] || return 0
 
 local _pass=0 _fail=0
-source "${HOME}/.config/zsh/plugins/log.zsh"
-source "${HOME}/.config/zsh/plugins/raycast_link.zsh"
+# This file's own tree, so a worktree's copy tests that worktree and not the live checkout.
+local _plugins="${${(%):-%x}:A:h}"
+source "${_plugins}/log.zsh"
+source "${_plugins}/raycast_link.zsh"
 
 function _t() {
   local name="$1" expected="$2" actual="$3"
@@ -165,11 +167,104 @@ _t "check: allow column after --allow" \
   $'OK clipboard-history ✦4 allowed\nlayer confetti ✦K D allowed\nOK left-half ⌃⌥H no-allow-id' \
   "$(raycast_link --check 2>/dev/null)"
 
-# --- generated contract: the real karabiner.ts generator, read-only ---
-local _kts="${XDG_CONFIG_HOME:-${HOME}/.config}/karabiner/karabiner.ts"
+# --- documentation: a description per binding, listed with its fix ---
+_t "undocumented: every fixture binding lacks one, in generator order, rc 0" \
+  $'binding clipboard-history | fix=\'dotfiles raycast link edit clipboard-history\'\nbinding confetti | fix=\'dotfiles raycast link edit confetti\'\nbinding left-half | fix=\'dotfiles raycast link edit left-half\'\nundocumented=3\n0' \
+  "$(raycast_link --undocumented 2>/dev/null; print $?)"
+jq -c '.bindings |= map(.description = "does \(.title)" | if .title == "Confetti" then .description = "  " else . end)' "${_dir}/bindings.json" > "${_dir}/bindings.doc.json"
+_t "undocumented: a blank description is none, the title never counts" $'binding confetti | fix=\'dotfiles raycast link edit confetti\'\nundocumented=1' \
+  "$(ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="cat ${_dir}/bindings.doc.json" raycast_link --undocumented 2>/dev/null)"
+
+# --- edit: the table in $EDITOR at the deeplink's line, checked on save, never committed ---
+local _ts="${_dir}/kts" _bak="${_dir}/bindings.orig.json"
+mkdir -p "${_ts}/src/modes" "${_dir}/ed"
+cp "${_dir}/bindings.json" "${_bak}"
+cat > "${_ts}/src/raycast_shortcuts.ts" <<'EOF'
+import { deeplink } from "./utils/actions.ts"
+
+export const raycastShortcuts = [
+  {
+    chord: "hyper+4",
+    action: deeplink("extensions/raycast/clipboard-history/clipboard-history", {
+      title: "Clipboard History",
+    }),
+  },
+]
+EOF
+cat > "${_ts}/src/modes/karabiner.ts" <<'EOF'
+const dict = {
+  d: deeplink("extensions/raycast/raycast/confetti", { title: "Confetti" }),
+}
+EOF
+cat > "${_ts}/src/modes/window.ts" <<'EOF'
+const WM_DESCRIPTIONS: Record<string, string> = {
+
+  "left-half": "",
+}
+const dict = {
+  "h": "left-half",
+}
+EOF
+export ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS="${_ts}"
+# Editors record their arguments; the "edits" swap the bindings document the seam serves, the
+# way a table edit changes what the generator prints, and touch the file so it differs.
+print -r -- $'#!/bin/sh\nprintf \'%s\\n\' "$@" > '"${_dir}"$'/ed.args' > "${_dir}/ed/noop"
+print -r -- $'#!/bin/sh\nprintf \'%s\\n\' "$@" > '"${_dir}"$'/ed.args\necho "// edited" >> "$2"\ncp '"${_dir}"$'/next.json '"${_dir}"$'/bindings.json' > "${_dir}/ed/swap"
+print -r -- $'#!/bin/sh\nexit 4' > "${_dir}/ed/fail"
+chmod +x "${_dir}"/ed/*
+_reset_edit() { cp "${_bak}" "${_dir}/bindings.json"; sed -i '' '/^\/\/ edited$/d' "${_ts}"/src/*.ts "${_ts}"/src/modes/*.ts; }
+
+_out="$(EDITOR="${_dir}/ed/noop" raycast_link --edit clipboard-history 2>/dev/null)"; _rc=$?
+_t "edit: no change says so, rc 0" "0 link: no change | file=${_ts}/src/raycast_shortcuts.ts" "${_rc} ${_out}"
+_t "edit: the editor opens the shortcuts table at the deeplink's line" $'+6\n'"${_ts}/src/raycast_shortcuts.ts" "$(cat "${_dir}/ed.args")"
+EDITOR="${_dir}/ed/noop" raycast_link --edit extensions/raycast/raycast/confetti >/dev/null 2>&1
+_t "edit: a full path works too; a mode table at its line" $'+2\n'"${_ts}/src/modes/karabiner.ts" "$(cat "${_dir}/ed.args")"
+EDITOR="${_dir}/ed/noop" raycast_link --edit left-half >/dev/null 2>&1
+_t "edit: a table that builds the path is found by the slug, at its first line (the description map)" $'+3\n'"${_ts}/src/modes/window.ts" "$(cat "${_dir}/ed.args")"
+EDITOR="${_dir}/ed/noop" raycast_link --edit >/dev/null 2>&1; _rc=$?
+_t "edit: no slug opens the shortcuts table at its array" $'0\n+3\n'"${_ts}/src/raycast_shortcuts.ts" "${_rc}"$'\n'"$(cat "${_dir}/ed.args")"
+raycast_link --edit nope >/dev/null 2>"${_dir}/edit.err"; _rc=$?
+_t "edit: an unknown slug rc 64, naming the known ones" "64 1" "${_rc} $(grep -c "Unknown command | selector='nope' known='clipboard-history, confetti, left-half'" "${_dir}/edit.err")"
+raycast_link --edit left-half --plain >/dev/null 2>&1; _rc=$?
+_t "edit: --plain does not combine with --edit, rc 64" "64" "${_rc}"
+EDITOR="${_dir}/ed/fail" raycast_link --edit left-half >/dev/null 2>&1; _rc=$?
+_t "edit: the editor failing rc 1" "1" "${_rc}"
+
+jq -c '.bindings |= map(.description = "does \(.title)")' "${_dir}/bindings.json" > "${_dir}/next.json"
+_out="$(EDITOR="${_dir}/ed/swap" raycast_link --edit confetti 2>/dev/null)"; _rc=$?
+_t "edit: a table that builds, parses and is documented rc 0, no commit, next: bake" \
+  $'0\nlink: karabiner.ts builds | bindings=3 file='"${_ts}/src/modes/karabiner.ts"$'\nnot committed: bake compiles the tables into karabiner.json and stages them\nnext: bake' "${_rc}"$'\n'"${_out}"
+_reset_edit
+jq -c '.bindings |= map(.description = "does \(.title)") | .bindings[0].chords = ["bogus+4"]' "${_dir}/bindings.json" > "${_dir}/next.json"
+EDITOR="${_dir}/ed/swap" raycast_link --edit clipboard-history >"${_dir}/edit.out" 2>"${_dir}/edit.err" </dev/null; _rc=$?
+_t "edit: a bad chord rc 1, nothing next" "1 " "${_rc} $(cat "${_dir}/edit.out")"
+_t "edit: the chord named, and the resume command" "1 1" \
+  "$(grep -c "Bad chord | slug='clipboard-history' chord='bogus+4'" "${_dir}/edit.err") $(grep -c "fix='dotfiles raycast link edit clipboard-history'" "${_dir}/edit.err")"
+_t "edit: the table left as edited" "// edited" "$(tail -n 1 "${_ts}/src/raycast_shortcuts.ts")"
+_reset_edit
+jq -c '.bindings |= map(.description = "does \(.title)") | .bindings[2].chords = ["hyper+k ctrl+zz!"]' "${_dir}/bindings.json" > "${_dir}/next.json"
+EDITOR="${_dir}/ed/swap" raycast_link --edit left-half >/dev/null 2>"${_dir}/edit.err" </dev/null; _rc=$?
+_t "edit: each step of a layer chord is parsed" "1 1" "${_rc} $(grep -c "Bad chord | slug='left-half'" "${_dir}/edit.err")"
+_reset_edit
+cp "${_dir}/bindings.doc.json" "${_dir}/next.json"
+EDITOR="${_dir}/ed/swap" raycast_link --edit confetti >/dev/null 2>"${_dir}/edit.err" </dev/null; _rc=$?
+_t "edit: an undocumented binding rc 1, named" "1 1" "${_rc} $(grep -c 'Undocumented: add a one-line description to its deeplink options | binding confetti' "${_dir}/edit.err")"
+_reset_edit
+print -r -- '{"oops"' > "${_dir}/next.json"
+EDITOR="${_dir}/ed/swap" raycast_link --edit confetti >/dev/null 2>"${_dir}/edit.err" </dev/null; _rc=$?
+_t "edit: a generator that no longer prints the document rc 1" "1 1" "${_rc} $(grep -c 'Bindings output is not the expected JSON' "${_dir}/edit.err")"
+_reset_edit
+EDITOR="${_dir}/ed/noop" raycast_link --edit left-half >/dev/null 2>"${_dir}/edit.err"; _rc=$?
+_t "edit: with the generator broken, the slug is still found as written" $'0\n+3\n'"${_ts}/src/modes/window.ts" "${_rc}"$'\n'"$(cat "${_dir}/ed.args")"
+unset ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS
+cp "${_bak}" "${_dir}/bindings.json"
+ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE=""
+
+# --- generated contract: this tree's karabiner.ts generator, read-only ---
+local _kts="${_plugins:h:h}/karabiner/karabiner.ts"
 if [[ -x "${_kts}/node_modules/.bin/tsx" ]]; then
   local _gen
-  _gen="$(ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="" ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS="${_kts}" zsh -c 'source "${HOME}/.config/zsh/plugins/raycast_link.zsh"; raycast_link::load_bindings && print -r -- "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE}"')"
+  _gen="$(ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="" ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS="${_kts}" zsh -c 'source "${1}/raycast_link.zsh"; raycast_link::load_bindings && print -r -- "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE}"' _ "${_plugins}")"
   _t "generated: parses, has a bindings array, no alias field" "true" "$(print -r -- "${_gen}" | jq '(.bindings | type == "array") and ([.bindings[] | has("alias")] | any | not)')"
   _t "generated: 34 entries (26 window management + 6 shortcuts + confetti + typing practice)" "34" "$(print -r -- "${_gen}" | jq '.bindings | length')"
   _t "generated: paths unique and sorted, slugs unique" "true" "$(print -r -- "${_gen}" | jq '([.bindings[].path] | (length == (unique | length)) and (. == sort)) and ([.bindings[].path | split("/") | last] | length == (unique | length))')"
@@ -178,6 +273,7 @@ if [[ -x "${_kts}/node_modules/.bin/tsx" ]]; then
   _t "generated: sixths on a s d / z x v, c stays Center" $'bottom-center-sixth ctrl+opt+x\nbottom-left-sixth ctrl+opt+z\nbottom-right-sixth ctrl+opt+v\ncenter ctrl+opt+c\ntop-center-sixth ctrl+opt+s\ntop-left-sixth ctrl+opt+a\ntop-right-sixth ctrl+opt+d' "$(print -r -- "${_gen}" | jq -r '.bindings[] | (.path | split("/") | last) as $s | select(($s | endswith("-sixth")) or $s == "center") | "\($s) \(.chords[0])"')"
   _t "generated: shortcut chords canonical (snippets uses the key name)" "hyper+grave_accent_and_tilde" "$(print -r -- "${_gen}" | jq -r '.bindings[] | select(.path | endswith("/search-snippets")) | .chords[0]')"
   _t "generated: layer-only deeplinks carry their layer chord" $'hyper+k d\nhyper+t r' "$(print -r -- "${_gen}" | jq -r '.bindings[] | select((.path | endswith("/confetti")) or (.path | endswith("/start-typing-practice"))) | .chords[0]')"
+  _t "generated: every binding is documented (a non-blank description)" "0" "$(print -r -- "${_gen}" | jq '[.bindings[] | select((.description // "") | test("\\S") | not)] | length')"
   _t "generated: the committed artifact matches the generator" "same" "$(diff <(print -r -- "${_gen}" | jq -S .) <(jq -S . "${_kts}/src/raycast_bindings.json") >/dev/null && echo same || echo differs)"
 else
   log::warn "raycast_link: karabiner.ts not built, skipping the generated-contract checks | tsx='${_kts}/node_modules/.bin/tsx'"

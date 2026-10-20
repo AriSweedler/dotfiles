@@ -75,6 +75,10 @@ print -r -- '[{"name":"a","text":1}]' | raycast_snippets::normalize >/dev/null 2
 _t "normalize: text must be a string, rc 1" "1" "${_rc}"
 print -r -- '{"name":"a","text":"b"}' | raycast_snippets::normalize >/dev/null 2>&1; _rc=$?
 _t "normalize: an object is not an array, rc 1" "1" "${_rc}"
+_t "normalize: description kept, an empty one dropped" '[{"description":"d","name":"a","text":"t"},{"name":"b","text":"t"}]' \
+  "$(print -r -- '[{"name":"a","text":"t","description":"d"},{"name":"b","text":"t","description":""}]' | raycast_snippets::normalize | jq -cS .)"
+print -r -- '[{"name":"a","text":"t","description":3}]' | raycast_snippets::normalize >/dev/null 2>&1; _rc=$?
+_t "normalize: a non-string description rc 1" "1" "${_rc}"
 _t "normalize: exact duplicates collapse" "1" "$(print -r -- '[{"name":"a","text":"b"},{"name":"a","text":"b","keyword":""}]' | raycast_snippets::normalize | jq length)"
 _t "canonical order: byte order of keywords, ~@ then ~^ then ~~@, keyword-less last by name" '["@@s","~@","~^","~~@","-","-"]' \
   "$(print -r -- '[{"name":"z","text":"t"},{"name":"c","text":"t","keyword":"~^"},{"name":"a","text":"t","keyword":"~~@"},{"name":"y","text":"t"},{"name":"d","text":"t","keyword":"@@s"},{"name":"b","text":"t","keyword":"~@"}]' | raycast_snippets::normalize | jq -c 'map(.keyword // "-")')"
@@ -399,12 +403,58 @@ _t "seed: a second sync seeds nothing" $'snippets: nothing to import | unchanged
 rm -rf "${_dir}/shared" "${_dir}/local" "${_dir}/state"
 _t "no placeholders, no local file: nothing seeded" "absent" "$(raycast_snippets --sync --dry-run >/dev/null 2>&1; [[ -e "${_local}" ]] && echo present || echo absent)"
 
+# --- documentation: a description on the winning entry, kept through every write, never sent ---
+rm -rf "${_dir}/shared" "${_dir}/local" "${_dir}/state"; mkdir -p "${_dir}/shared" "${_dir}/local"; : > "${_log}"
+cat > "${_shared}" <<'EOF'
+[
+  {"name":"pub","text":"public","keyword":";pub","description":"a public line"},
+  {"name":"bare","text":"no docs","keyword":";bare"},
+  {"name":"Home","text":"OVERRIDE WITH A ~/x file","keyword":"~^"},
+  {"name":"Phone","text":"OVERRIDE WITH A ~/x file","keyword":"~#","description":"phone placeholder"},
+  {"name":"orphan","text":"OVERRIDE WITH A ~/x file","keyword":"~o"}
+]
+EOF
+cat > "${_local}" <<'EOF'
+[
+  {"name":"Home","text":"1 Main","keyword":"~^","description":"home address"},
+  {"name":"Phone","text":"555","keyword":"~#"}
+]
+EOF
+_out="$(raycast_snippets --undocumented 2>/dev/null)"; _rc=$?
+_t "undocumented: the winner decides; a local override documents its placeholder's name, a placeholder's own description does not cover its override" \
+  $'snippet bare (shared) | fix=\'dotfiles raycast snippets edit --shared\'\nsnippet Phone (local) | fix=\'dotfiles raycast snippets edit --local\'\nsnippet orphan (shared) | fix=\'dotfiles raycast snippets edit --shared\'\nundocumented=3' "${_out}"
+_t "undocumented: rc 0 with findings" "0" "${_rc}"
+_t "undocumented_lines: limited to one tier" "snippet Phone (local) | fix='dotfiles raycast snippets edit --local'" \
+  "$(raycast_snippets::undocumented_lines "$(raycast_snippets::source)" local)"
+raycast_snippets --fmt >/dev/null 2>&1
+_t "fmt keeps every description" "3" "$(cat "${_shared}" "${_local}" | jq -s '[.[][] | select(.description)] | length')"
+_t "fmt: json-sort puts description first" '"description": "a public line",' "$(grep -m1 -o '"description": "a public line",' "${_shared}")"
+raycast_snippets --adopt >/dev/null 2>&1
+_t "manifest: records text and keyword, no description" "0" "$(jq '[.[] | select(has("description"))] | length' "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
+jq 'map(if .name == "bare" then .description = "now documented" else . end)' "${_shared}" > "${_shared}.t" && mv "${_shared}.t" "${_shared}"
+_t "sync: a description-only change is nothing to import" $'snippets: nothing to import | unchanged=5\npending=0' "$(raycast_snippets --sync 2>/dev/null | grep -v '^warn')"
+jq 'map(if .name == "bare" then .text = "docs and text" else . end)' "${_shared}" > "${_shared}.t" && mv "${_shared}.t" "${_shared}"
+raycast_snippets --sync >/dev/null 2>&1
+_t "sync: the import payload carries no description" '[{"keyword":";bare","name":"bare","text":"docs and text"}]' "$(_payloads | jq -sc 'map(to_entries | sort_by(.key) | from_entries)')"
+_t "sync: the description stays in the file" "now documented" "$(jq -r '.[] | select(.name == "bare") | .description' "${_shared}")"
+_t "import_url array form strips it too" '[{"name":"a","text":"t"}]' \
+  "$(ARI_DOTFILES_RAYCAST_SNIPPETS_URL_FORM=array raycast_snippets::import_url '{"name":"a","text":"t","description":"d"}' | sed 's/^.*snippet=//' | { read -r enc; printf '%b\n' "${enc//\%/\\x}"; } | jq -c .)"
+# A Raycast export has no descriptions: pull keeps each tier's by name and counts text changes only.
+jq '[.[] | del(.description)] | map(if .name == "pub" then .text = "public v2" else . end)' <(raycast_snippets::source | jq .entries) > "${_dir}/export-docs.json"
+_out="$(raycast_snippets --pull "${_dir}/export-docs.json" 2>/dev/null)"; _rc=$?
+_t "pull: only the text change is an update" $'entries=5\ncollapsed=0\nshared: updated=1 added=0 removed=0 file=changed\nlocal: updated=0 added=0 removed=0 file=unchanged' "${_out}"
+_t "pull: descriptions kept by name in both tiers" "a public line|now documented|home address" \
+  "$(jq -r '.[] | select(.name == "pub") | .description' "${_shared}")|$(jq -r '.[] | select(.name == "bare") | .description' "${_shared}")|$(jq -r '.[] | select(.name == "Home") | .description' "${_local}")"
+_t "pull: the updated text landed" "public v2" "$(jq -r '.[] | select(.name == "pub") | .text' "${_shared}")"
+_t "diff: descriptions are not a difference" "in sync" "$(raycast_snippets --diff "${_dir}/export-docs.json" 2>/dev/null)"
+
 # --- edit: $EDITOR on a tier file, then validate, fmt, next step ---
 rm -rf "${_dir}/shared" "${_dir}/local" "${_dir}/state"; mkdir -p "${_dir}/shared" "${_dir}/local" "${_dir}/ed"
-print -r -- '[{"name":"pub","text":"public","keyword":";pub"}]' > "${_shared}"
-print -r -- '[{"name":"Home","text":"1 Main","keyword":"~^"}]' > "${_local}"
+print -r -- '[{"name":"pub","text":"public","keyword":";pub","description":"p"}]' > "${_shared}"
+print -r -- '[{"name":"Home","text":"1 Main","keyword":"~^","description":"h"}]' > "${_local}"
 # Editors are scripts that change the file they are given ($1) and exit.
-print -r -- $'#!/bin/sh\njq \'. + [{"text":"555","name":"Phone","keyword":"~#"}]\' "$1" > "$1.t" && mv "$1.t" "$1"' > "${_dir}/ed/valid"
+print -r -- $'#!/bin/sh\njq \'. + [{"text":"555","name":"Phone","keyword":"~#","description":"ph"}]\' "$1" > "$1.t" && mv "$1.t" "$1"' > "${_dir}/ed/valid"
+print -r -- $'#!/bin/sh\njq \'. + [{"text":"9","name":"Undoc","keyword":"~u"}]\' "$1" > "$1.t" && mv "$1.t" "$1"' > "${_dir}/ed/undoc"
 print -r -- $'#!/bin/sh\nprintf \'[{"name": "x",\\n\' > "$1"' > "${_dir}/ed/invalid"
 print -r -- $'#!/bin/sh\njq \'. + [{"name":"dup","text":"d","keyword":";pub"}]\' "$1" > "$1.t" && mv "$1.t" "$1"' > "${_dir}/ed/collide"
 print -r -- $'#!/bin/sh\nexit 0' > "${_dir}/ed/noop"
@@ -413,8 +463,8 @@ chmod +x "${_dir}"/ed/*
 _out="$(EDITOR="${_dir}/ed/valid" raycast_snippets --edit 2>/dev/null)"; _rc=$?
 _t "edit: valid change rc 0" "0" "${_rc}"
 _t "edit: defaults to the local tier, which gained the entry" '["Phone","Home"]' "$(jq -c 'map(.name)' "${_local}")"
-_t "edit: shared content untouched by a local edit (fmt only sorts it)" '[{"keyword":";pub","name":"pub","text":"public"}]' "$(jq -c . "${_shared}")"
-_t "edit: fmt ran, the file is canonical json-sort output" $'  {\n    "keyword": "~#",\n    "name": "Phone",\n    "text": "555"\n  },' "$(sed -n '2,6p' "${_local}")"
+_t "edit: shared content untouched by a local edit (fmt only sorts it)" '[{"description":"p","keyword":";pub","name":"pub","text":"public"}]' "$(jq -c . "${_shared}")"
+_t "edit: fmt ran, the file is canonical json-sort output" $'  {\n    "description": "ph",\n    "keyword": "~#",\n    "name": "Phone",\n    "text": "555"\n  },' "$(sed -n '2,7p' "${_local}")"
 _t "edit: fmt report then the next command" $'snippets: formatted\nshared=changed\nlocal=changed\nkeywords_fixed=0\nrewritten=2\nnext: dotfiles raycast snippets sync' "${_out}"
 _out="$(EDITOR="${_dir}/ed/valid" raycast_snippets --edit --shared 2>/dev/null)"; _rc=$?
 _t "edit --shared: the shared file is the one opened" "0 Phone" "${_rc} $(jq -r 'map(.name) | map(select(. == "Phone")) | join(",")' "${_shared}")"
@@ -438,6 +488,17 @@ cp "${_dir}/local.before" "${_local}"
 EDITOR="${_dir}/ed/collide" raycast_snippets --edit >/dev/null 2>"${_dir}/edit.err"; _rc=$?
 _t "edit: a keyword collision across tiers rc 1, left as edited" "1 dup" "${_rc} $(jq -r '.[-1].name' "${_local}")"
 _t "edit: the collision is named" "1" "$(grep -c "Two snippets share a keyword | collisions=';pub:" "${_dir}/edit.err")"
+cp "${_dir}/local.before" "${_local}"
+EDITOR="${_dir}/ed/undoc" raycast_snippets --edit >"${_dir}/edit.out" 2>"${_dir}/edit.err" </dev/null; _rc=$?
+_t "edit: an undocumented entry in the edited tier rc 1, left as edited" "1 Undoc" "${_rc} $(jq -r '.[-1].name' "${_local}")"
+_t "edit: the undocumented name is reported with the resume command" "1 1" \
+  "$(grep -c 'Undocumented: add a one-line "description" | snippet Undoc (local)' "${_dir}/edit.err") $(grep -c "fix='dotfiles raycast snippets edit --local'" "${_dir}/edit.err")"
+_t "edit: no next command after an undocumented save" "" "$(cat "${_dir}/edit.out")"
+cp "${_dir}/local.before" "${_local}"
+print -r -- '[{"name":"pub","text":"public","keyword":";pub"}]' > "${_shared}"
+_out="$(EDITOR="${_dir}/ed/valid" raycast_snippets --edit 2>/dev/null)"; _rc=$?
+_t "edit: another tier's undocumented name does not block a local edit" "0 next: dotfiles raycast snippets sync" "${_rc} $(print -r -- "${_out}" | tail -n 1)"
+print -r -- '[{"name":"pub","text":"public","keyword":";pub","description":"p"}]' > "${_shared}"
 cp "${_dir}/local.before" "${_local}"
 EDITOR="${_dir}/ed/fail" raycast_snippets --edit >/dev/null 2>"${_dir}/edit.err"; _rc=$?
 _t "edit: editor exit non-zero rc 1, file untouched" "1 $(cat "${_dir}/local.before")" "${_rc} $(cat "${_local}")"

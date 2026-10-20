@@ -5,7 +5,8 @@
 #   shared  ~/.config/raycast-snippets/snippets.json       git df, public remote
 #   local   ~/.local/share/raycast-snippets/snippets.json  git ldf, private remote: addresses, phone
 #                                                          numbers, emails
-# Every tier's snippets.json (Raycast's import format, an array of {name, text, keyword?}) is
+# Every tier's snippets.json (Raycast's import format, an array of {name, text, keyword?}, plus
+# the files' own `description`, which never reaches Raycast) is
 # loaded in ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS order and merged by name: a later file's entry replaces an
 # earlier one, so local always wins over shared. After the merge two names may not share a
 # keyword. Canonical order in every file: by keyword in byte order (one prefix's expansions sit
@@ -39,6 +40,13 @@
 # belongs there); on save it validates the file and every tier together, runs `fmt`, and names
 # the next command, `sync`. An invalid file is reported with the parse error and left as edited.
 #
+# Documentation rule: every snippet says what it is for in a one-line `description`, on the entry
+# that wins its name (a local override documents its placeholder's name). `undocumented` lists
+# the names that lack one with the edit that fixes each; the raycast_sync step fails on any, and
+# `edit` refuses to finish while the edited tier wins an undocumented name. Raycast has no such
+# field: the import deeplink strips it, `pull` keeps each tier's by name, and the manifest and
+# `diff` compare text and keyword only.
+#
 # Seeding, once, and again after editing snippets inside Raycast:
 #   1. Raycast → search "Export Snippets" → save the JSON anywhere
 #   2. dotfiles raycast snippets pull <that file>
@@ -46,7 +54,7 @@
 # Function flags: raycast_snippets --sync [--dry-run] | --list | --check | --adopt [--dry-run]
 #                 | --pull FILE [--dry-run] | --diff FILE | --move NAME --to TIER [--dry-run]
 #                 | --fmt [--dry-run] | --reset-manifest [NAME...] [--dry-run]
-#                 | --edit [--local|--shared]
+#                 | --edit [--local|--shared] | --undocumented
 # Env: ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS (colon list; the LAST dir is the local tier, every other is shared,
 #      placeholders go to the first), ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST, ARI_DOTFILES_RAYCAST_SNIPPETS_URL_FORM
 #      (params: one `snippet=` per snippet, Raycast's documented form; array: one `snippet=[…]`).
@@ -67,14 +75,18 @@
 # keyword last by name. jq compares strings by codepoint, which is byte order for UTF-8.
 (( ${+ARI_DOTFILES_RAYCAST_SNIPPETS_JQ_ORDER} )) || typeset -gr ARI_DOTFILES_RAYCAST_SNIPPETS_JQ_ORDER='sort_by([(if (.keyword // "") == "" then 1 else 0 end), (.keyword // ""), .name])'
 
-# jq: an array of snippets → the canonical array. Only name/text/keyword (keyword dropped when
-# empty), exact duplicates removed, in canonical order. Errors on anything that is not an array
-# of entries with string name and text.
+# jq: an array of snippets → the canonical array. Only name/text/keyword/description (keyword and
+# description dropped when empty), exact duplicates removed, in canonical order. Errors on
+# anything that is not an array of entries with string name and text (and, when present, a
+# string description). The error names the entry by name only: its text may be private.
 (( ${+ARI_DOTFILES_RAYCAST_SNIPPETS_JQ_NORMALIZE} )) || typeset -gr ARI_DOTFILES_RAYCAST_SNIPPETS_JQ_NORMALIZE='
   if type != "array" then error("not a JSON array") else . end
   | map(if (.name | type) != "string" or (.text | type) != "string" then error("entry without string name and text: \(tojson)") else . end)
-  | map({name, text} + (if ((.keyword // "") | tostring) != "" then {keyword: (.keyword | tostring)} else {} end))
-  | unique_by(.name, .keyword // "", .text)
+  | map(if (.description | type) != "null" and (.description | type) != "string" then error("description is not a string: \(.name)") else . end)
+  | map({name, text}
+        + (if ((.keyword // "") | tostring) != "" then {keyword: (.keyword | tostring)} else {} end)
+        + (if (.description // "") != "" then {description} else {} end))
+  | unique_by(.name, .keyword // "", .text, .description // "")
   | '"${ARI_DOTFILES_RAYCAST_SNIPPETS_JQ_ORDER}"
 
 # --- tiers ---
@@ -255,6 +267,22 @@ function raycast_snippets::parity_lines() {
         | "placeholder active: \(.name) (\(.keyword // "-")) fill in \($local_file)")'
 }
 
+# The documentation rule: the entry that wins a name's merge carries a non-empty `description`
+# (what the snippet is for, one line; the files' own field, never sent to Raycast). A local
+# entry that overrides a placeholder documents the name; an active placeholder documents itself.
+# Input: the merged object, optionally a tier label to limit the findings to names that tier
+# wins. Output: one line per finding, in the merged order:
+#   snippet <name> (<tier>) | fix='dotfiles raycast snippets edit --<tier>'
+function raycast_snippets::undocumented_lines() {
+  print -r -- "${1}" | jq -r --arg only "${2:-}" '
+    . as $src
+    | $src.entries[]
+    | select((.description // "") | test("\\S") | not)
+    | ($src.tiers[.name] | split(">")[0]) as $tier
+    | select($only == "" or $tier == $only)
+    | "snippet \(.name) (\($tier)) | fix='\''dotfiles raycast snippets edit --\($tier)'\''"'
+}
+
 # Input: parity lines. Prints each as `warn <line>` (ari-raycast sync forwards those); nothing
 # when none, so the do-nothing pass keeps its two lines.
 function raycast_snippets::print_warns() {
@@ -278,15 +306,16 @@ function raycast_snippets::diff_plan() {
 }
 
 # Input: entries (JSON lines). Output: one import deeplink. `params` repeats snippet=<obj> per
-# snippet; `array` sends one snippet=[…]. Both percent-encode the JSON.
+# snippet; `array` sends one snippet=[…]. Both percent-encode the JSON. A description is the
+# files' documentation, not a Raycast field, so it never reaches Raycast.
 function raycast_snippets::import_url() {
   local entry url="${ARI_DOTFILES_RAYCAST_SNIPPETS_IMPORT_URL}" sep="?"
   if [[ "${ARI_DOTFILES_RAYCAST_SNIPPETS_URL_FORM}" == array ]]; then
-    print -r -- "${url}?snippet=$(printf '%s\n' "$@" | jq -sc . | jq -r '@uri')"
+    print -r -- "${url}?snippet=$(printf '%s\n' "$@" | jq -sc 'map(del(.description))' | jq -r '@uri')"
     return
   fi
   for entry in "$@"; do
-    url+="${sep}snippet=$(print -r -- "${entry}" | jq -r '@uri')"
+    url+="${sep}snippet=$(print -r -- "${entry}" | jq -c 'del(.description)' | jq -r '@uri')"
     sep="&"
   done
   print -r -- "${url}"
@@ -436,6 +465,18 @@ function raycast_snippets::check() {
   print -r -- "warnings=${#warns}"
 }
 
+# --undocumented: one line per name whose winning entry has no description (undocumented_lines),
+# then undocumented=N; writes nothing. Exit 0 with findings (they are data: the raycast_sync step
+# fails on them); 1 only when the tiers cannot be read.
+function raycast_snippets::undocumented() {
+  local merged
+  local -a lines
+  merged="$(raycast_snippets::source)" || return 1
+  lines=("${(@f)$(raycast_snippets::undocumented_lines "${merged}")}"); [[ -z "${lines[1]:-}" ]] && lines=()
+  (( ${#lines} )) && print -rl -- "${lines[@]}"
+  print -r -- "undocumented=${#lines}"
+}
+
 # --pull FILE [dry_run]: a Raycast export is the truth. A known name is updated in place in the
 # tier that wins it (a shared placeholder under a local override is left alone: local text
 # never enters shared), an unknown name goes to the LOCAL tier (an unknown placeholder to
@@ -463,17 +504,21 @@ function raycast_snippets::pull() {
     # kept: this tier's names present in the export, with the export's content when this tier
     # wins the name, untouched otherwise; added: export names no tier holds (real text to the
     # last tier, placeholders to the first); removed: this tier's names absent from the export.
+    # Raycast keeps no description, so a kept entry keeps the tier's, and only the text and
+    # keyword count as an update.
     next="$(jq -cn --argjson tier "${tier_arr}" --argjson ex "${export_arr}" --argjson m "${merged}" \
         --arg file "${file}" --arg is_first "${is_first}" --arg is_last "${is_last}" --arg prefix "${ARI_DOTFILES_RAYCAST_SNIPPETS_PLACEHOLDER_PREFIX}" '
       ($ex | map({(.name): .}) | add // {}) as $e
       | def wins: $m.files[.name] == $file;
         def placeholder: .text | startswith($prefix);
+        def content: {name, text, keyword};
         {
-          kept:    [$tier[] | select($e[.name] != null) | if wins then $e[.name] else . end],
+          kept:    [$tier[] | select($e[.name] != null)
+                    | if wins then $e[.name] + (if .description then {description} else {} end) else . end],
           added:   [$ex[] | select($m.tiers[.name] == null)
                     | select((placeholder and $is_first == "1") or ((placeholder | not) and $is_last == "1"))],
           removed: [$tier[] | select($e[.name] == null) | .name],
-          updated: [$tier[] | select($e[.name] != null and wins and $e[.name] != .) | .name]
+          updated: [$tier[] | select($e[.name] != null and wins and ($e[.name] | content) != content) | .name]
         }
       | .result = ((.kept + .added) | '"${ARI_DOTFILES_RAYCAST_SNIPPETS_JQ_ORDER}"')')"
     n_added="$(print -r -- "${next}" | jq '.added | length')"
@@ -594,13 +639,39 @@ function raycast_snippets::fmt() {
   printf '%s\n' "${report[@]}" "keywords_fixed=${fixed}" "rewritten=${rewritten}"
 }
 
+# Input: a prompt. 0 yes. The dotfiles ui::confirm when loaded, else a plain y/N on the terminal.
+function raycast_snippets::confirm() {
+  if (( ${+functions[ui::confirm]} )); then ui::confirm "${1}"; return; fi
+  local reply=""
+  print -nu2 -- "${1} [y/N] "
+  IFS= read -r reply || return 1
+  [[ "${reply}" == ([Yy]|[Yy][Ee][Ss]) ]]
+}
+
+# Input: the tier just edited. Every problem on stderr; 1 when there is any: the file must read
+# as a snippets array (read_tier: JSON, string name and text, no duplicate name), the tiers must
+# merge (no two names on one keyword), and every name this tier wins must be documented.
+function raycast_snippets::edit_check() {
+  local tier="${1}" file merged line
+  local -a undoc
+  file="$(raycast_snippets::tier_file "${tier}")" || return 1
+  raycast_snippets::read_tier "${file}" >/dev/null || return 1
+  merged="$(raycast_snippets::source)" || return 1
+  undoc=("${(@f)$(raycast_snippets::undocumented_lines "${merged}" "${tier}")}"); [[ -z "${undoc[1]:-}" ]] && undoc=()
+  (( ${#undoc} == 0 )) && return 0
+  for line in "${undoc[@]}"; do
+    log::err "Undocumented: add a one-line \"description\" | ${line%% | *}"
+  done
+  return 1
+}
+
 # --edit TIER: open the tier's file in $EDITOR (vi when unset or not found); a missing file starts
-# as []. On save: no change says so and stops; otherwise the file must read as a snippets array
-# (read_tier: JSON, string name and text, no duplicate name) and the tiers must merge (no two
-# names on one keyword). Valid → fmt, then the next command. Invalid → the error, exit 1, and the
-# file left exactly as edited.
+# as []. On save: back to how it was says "no change" and stops; otherwise edit_check. Valid →
+# fmt, then the next command. Invalid → the problems, and the file left exactly as edited: on a
+# terminal, an offer to edit it again; otherwise exit 1 naming the command that resumes.
 function raycast_snippets::edit() {
-  local tier="${1:-local}" file editor before
+  local tier="${1:-local}" file editor orig
+  local -i tty=0
   file="$(raycast_snippets::tier_file "${tier}")" || return 1
   if [[ ! -e "${file}" ]]; then
     mkdir -p "${file:h}" && print -r -- "[]" > "${file}" || { log::err "Could not create the snippets file | file='${file}'"; return 1; }
@@ -608,23 +679,27 @@ function raycast_snippets::edit() {
   fi
   editor="${EDITOR:-vi}"
   command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi
-  before="$(mktemp "${TMPDIR:-/tmp}/raycast-snippets-edit.XXXXXX")" || return 1
-  cp "${file}" "${before}"
-  if ! ${=editor} "${file}"; then
-    rm -f "${before}"
-    log::err "Editor exited non-zero; not validated or formatted | editor='${editor}' file='${file}'"
-    return 1
-  fi
-  if cmp -s "${before}" "${file}"; then
-    rm -f "${before}"
-    print -r -- "snippets: no change | tier=${tier} file=${file}"
-    return 0
-  fi
-  rm -f "${before}"
-  if ! raycast_snippets::read_tier "${file}" >/dev/null || ! raycast_snippets::source >/dev/null; then
+  [[ -t 0 && -t 1 ]] && tty=1
+  orig="$(mktemp "${TMPDIR:-/tmp}/raycast-snippets-edit.XXXXXX")" || return 1
+  cp "${file}" "${orig}"
+  while true; do
+    if ! ${=editor} "${file}"; then
+      rm -f "${orig}"
+      log::err "Editor exited non-zero; not validated or formatted | editor='${editor}' file='${file}'"
+      return 1
+    fi
+    if cmp -s "${orig}" "${file}"; then
+      rm -f "${orig}"
+      print -r -- "snippets: no change | tier=${tier} file=${file}"
+      return 0
+    fi
+    raycast_snippets::edit_check "${tier}" && break
+    if (( tty )) && raycast_snippets::confirm "Edit ${file:t} (${tier}) again?"; then continue; fi
+    rm -f "${orig}"
     log::err "Snippets file left as edited, not formatted | tier='${tier}' file='${file}' fix='dotfiles raycast snippets edit --${tier}'"
     return 1
-  fi
+  done
+  rm -f "${orig}"
   raycast_snippets::fmt 0 || return 1
   print -r -- "next: dotfiles raycast snippets sync"
 }
@@ -679,6 +754,9 @@ dotfiles raycast snippets — Raycast Snippets from the versioned files, shared 
   dotfiles raycast snippets reset-manifest [NAME...] [--dry-run]   forget names (all when none), e.g. after a cancelled review
   dotfiles raycast snippets edit [--local|--shared]    open a tier file in \$EDITOR (default local); on save validate it, run fmt,
                                                   print the next command (sync); an invalid file is reported, left as edited
+                                                  (on a terminal, offered for another edit); --edit is the same
+  dotfiles raycast snippets undocumented               every name whose winning entry has no "description", with the edit
+                                                  that fixes it; then undocumented=N
 
   One rule: personal data stays in the local tier; the shared tier is for snippets safe in a public repo.
   Tiers: shared $(raycast_snippets::tier_file shared 2>/dev/null) (git df, public remote)
@@ -688,6 +766,7 @@ dotfiles raycast snippets — Raycast Snippets from the versioned files, shared 
   Placeholders (optional, added by hand): shared holds {name, keyword, text: "$(raycast_snippets::placeholder_text 2>/dev/null)"};
          here local overrides it, on a machine without the local file Raycast imports the reminder (check warns). Nothing
          copies text between tiers.
+  Docs: every entry that wins its name has a one-line "description" (what it is for); Raycast never sees it.
   Order in every file: by keyword (byte order), entries without a keyword last by name; keys sorted by json-sort.
   Raycast cannot be told to delete a snippet: a changed one leaves its old version behind and a removed one stays,
   so both are printed for you to delete by hand. Without a manifest, sync refuses: adopt or pull first.
@@ -712,6 +791,7 @@ function raycast_snippets() {
     --move)           mode=move; name="${2:?--move needs a snippet name}"; shift 2 ;;
     --to)             to="${2:?--to needs shared or local}"; shift 2 ;;
     --edit)           mode=edit; shift ;;
+    --undocumented)   mode=undocumented; shift ;;
     --local|--shared) tier="${1#--}"; shift ;;
     --reset-manifest) mode=reset; shift; while (( $# > 0 )) && [[ "${1}" != -* ]]; do names+=("${1}"); shift; done ;;
     -*)               log::err "Unknown flag | flag='${1}'"; raycast_snippets::help; return 1 ;;
@@ -744,6 +824,7 @@ function raycast_snippets() {
     move)  raycast_snippets::move "${name}" "${to}" "${dry_run}" ;;
     reset) raycast_snippets::reset_manifest "${dry_run}" "${names[@]}" ;;
     edit)  raycast_snippets::edit "${tier:-local}" ;;
+    undocumented) raycast_snippets::undocumented ;;
     *)     raycast_snippets::help; return 1 ;;
   esac
 }

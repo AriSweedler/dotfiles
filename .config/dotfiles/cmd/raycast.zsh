@@ -8,13 +8,17 @@ Raycast in parity with the dotfiles: allow-list, snippets
 
 ${c_bold}Usage${c_rst}
   ${DF} raycast link <slug|path> [--plain]
-  ${DF} raycast link list | check | allow [--dry-run]
+  ${DF} raycast link list | check | allow [--dry-run] | undocumented
+  ${DF} raycast link edit [<slug>]
   ${DF} raycast snippets sync [--dry-run] | list | check | adopt
   ${DF} raycast snippets pull FILE | diff FILE | fmt
   ${DF} raycast snippets reset-manifest [NAME..]
   ${DF} raycast snippets move NAME --to shared|local
-  ${DF} raycast snippets edit [--local|--shared]
+  ${DF} raycast snippets edit [--local|--shared] | undocumented
+  ${DF} raycast edit [link [<slug>] | snippets [--local|--shared]]
+  ${DF} raycast --edit [link [<slug>] | snippets [--local|--shared]]
   ${DF} raycast sync [--dry-run]
+  ${DF} raycast undocumented
   ${DF} raycast <subsystem> help
 
   Bindings live in karabiner.ts's tables and compile through bake; 'link'
@@ -27,11 +31,24 @@ ${c_bold}Usage${c_rst}
   safe in a public repo. A local-only snippet is fine. 'sync' runs every
   subsystem's sync in order; the raycast_sync step is its --dry-run.
 
+  Documentation rule: every binding and snippet says what it does in one
+  line. A binding's deeplink(…) takes a description option (its title does
+  not count); a snippet's winning entry has a "description" field (a local
+  override documents its placeholder's name), which Raycast never sees. The
+  raycast_sync step fails, manual, on one without, naming the edit that
+  fixes each.
+
 ${c_bold}Subcommands${c_rst}
   link <slug|path>   the widget <[Raycast: Title | key: '✦4'](raycast://…)>
   link list          every binding: slug, chords, title, deeplink
   link check         OK/MISSING per binding against the compiled karabiner.json
   link allow         write the missing allow-list ids to Raycast's plist
+  link edit          the table holding the slug's deeplink in \$EDITOR at its
+                     line (no slug: raycast_shortcuts.ts); on save the
+                     generator and every chord are checked; no commit, bake
+                     compiles it; an invalid table is reported, left as
+                     edited (on a terminal, offered for another edit)
+  link undocumented  every binding without a description, with its fix
   snippets sync      import what is new or changed, one Raycast dialog a batch
   snippets list      state and tier of every snippet
   snippets check     warn per shared placeholder nothing overrides
@@ -41,14 +58,21 @@ ${c_bold}Subcommands${c_rst}
   snippets move      relocate one snippet between the tiers
   snippets fmt       canonical rewrite of both files, adds no placeholders
   snippets reset-manifest   forget names (all when none)
-  snippets edit      a tier file in \$EDITOR, then validate, fmt, next step
+  snippets edit      a tier file in \$EDITOR, then validate (and the doc rule
+                     for the names it wins), fmt, next step
+  snippets undocumented   every snippet without a description, with its fix
+  edit               a subsystem's edit; no target: pick one on a terminal
+                     (snippets local, snippets shared, bindings), otherwise
+                     the targets are listed, exit 64
   sync               every subsystem's sync, in order
+  undocumented       every subsystem's undocumented units
 
 ${c_bold}Flags${c_rst}
   --plain      link: the bare form, <Raycast: Title | key: '✦4'> url
   --dry-run    allow, sync, adopt, pull, fmt, move, reset-manifest: print the
                plan, change nothing
   --to TIER    move: shared or local
+  --edit       the other spelling of edit, for raycast, link and snippets
   --local      edit: open the local tier file (the default)
   --shared     edit: open the shared tier file
 

@@ -13,7 +13,9 @@ import { raycastShortcuts } from "./raycast_shortcuts.ts"
 // every deeplink in an AriMode dict (reached by the layer chord "hyper+<entrypoint> <key>" when
 // the mode has a layer, and by the direct chord when it has directModifiers) and every
 // raycast_shortcuts.ts entry. The path is the identity; the widget addresses an entry by the
-// path's last segment (the command slug), so slugs must be unique. Two outputs of one document:
+// path's last segment (the command slug), so slugs must be unique. Each entry carries the
+// deeplink's description, the documentation `dotfiles raycast link undocumented` checks. Two
+// outputs of one document:
 //   - `npm run build` (index.ts) writes src/raycast_bindings.json, a generated artifact that is
 //     committed for reading and diffing; nothing consumes it at runtime.
 //   - `npm run bindings` (this file with --stdout) prints it; the `dotfiles raycast link` widget (zsh)
@@ -34,6 +36,7 @@ const MODIFIER_SHORT: Record<string, string> = {
 export type BindingEntry = {
   path: string
   title: string
+  description?: string
   chords: string[]
   keepFocus?: boolean
   allowId?: string
@@ -60,6 +63,7 @@ export const collectBindings = (): BindingEntry[] => {
     byPath.set(d.path, {
       path: d.path,
       title: d.title,
+      ...(d.description ? { description: d.description } : {}),
       chords: [chord],
       ...(d.keepFocus ? { keepFocus: true } : {}),
       ...(d.allowId ? { allowId: d.allowId } : {}),

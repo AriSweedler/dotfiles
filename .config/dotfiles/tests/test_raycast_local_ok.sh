@@ -20,8 +20,8 @@ export ARI_DOTFILES_RAYCAST_APP="${FIX}/Raycast.app"
 export ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="cat ${FIX}/bindings.json"
 export ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS="${FIX}/shared:${FIX}/local"
 export ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST="${FIX}/local/manifest.json"
-printf '[\n  {\n    "keyword": ";pub",\n    "name": "pub",\n    "text": "public"\n  }\n]\n' > "${FIX}/shared/snippets.json"
-printf '[\n  {\n    "keyword": "@@s",\n    "name": "Sweedler.com email",\n    "text": "a@example.invalid"\n  }\n]\n' > "${FIX}/local/snippets.json"
+printf '[\n  {\n    "description": "a public line",\n    "keyword": ";pub",\n    "name": "pub",\n    "text": "public"\n  }\n]\n' > "${FIX}/shared/snippets.json"
+printf '[\n  {\n    "description": "an email address",\n    "keyword": "@@s",\n    "name": "Sweedler.com email",\n    "text": "a@example.invalid"\n  }\n]\n' > "${FIX}/local/snippets.json"
 nm raycast snippets adopt
 assert_eq "adopt rc 0" 0 "${RC}"
 
@@ -43,7 +43,7 @@ nm raycast snippets check
 assert_eq "check: in parity, no warnings" $'snippets: tiers in parity | entries=2\nwarnings=0' "${OUT}"
 
 # A shared placeholder nothing overrides still warns: Raycast would expand to the reminder.
-jq '. + [{"name":"orphan","keyword":"~o","text":"OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"}]' \
+jq '. + [{"name":"orphan","keyword":"~o","description":"a placeholder","text":"OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"}]' \
   "${FIX}/shared/snippets.json" > "${FIX}/s.json" && mv "${FIX}/s.json" "${FIX}/shared/snippets.json"
 nm raycast snippets adopt
 check_step

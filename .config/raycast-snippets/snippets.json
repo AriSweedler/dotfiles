@@ -1,39 +1,47 @@
 [
   {
+    "description": "Full name (a placeholder: the local tier holds the value)",
     "keyword": "~!",
     "name": "Name",
     "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
   },
   {
+    "description": "Phone number (a placeholder: the local tier holds the value)",
     "keyword": "~#",
     "name": "Phone number",
     "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
   },
   {
+    "description": "Home city (a placeholder: the local tier holds the value)",
     "keyword": "~&",
     "name": "City",
     "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
   },
   {
+    "description": "Home ZIP code (a placeholder: the local tier holds the value)",
     "keyword": "~*",
     "name": "Zip code",
     "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
   },
   {
+    "description": "Email address (a placeholder: the local tier holds the value)",
     "keyword": "~@",
     "name": "email",
     "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
   },
   {
+    "description": "Home street address (a placeholder: the local tier holds the value)",
     "keyword": "~^",
     "name": "Home",
     "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
   },
   {
+    "description": "Reply asking a recruiter to take a work email off their recruiting lists and confirm",
     "name": "recruiterEmail",
     "text": "Please remove this email address from your company’s recruiting and outreach mailing lists, and confirm once this has been completed. This is my work email address, and I do not consider it appropriate for recruiting solicitations.\n\nThanks,\nAri"
   },
   {
+    "description": "Reply asking a company to take an email off its marketing lists and confirm",
     "name": "removeEmail",
     "text": "Please remove my email address from all marketing and promotional mailing lists associated with your company, and confirm once the removal has been completed.\n\nThanks,\nAri"
   }

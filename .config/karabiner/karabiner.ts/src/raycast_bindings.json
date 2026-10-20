@@ -6,6 +6,7 @@
       "chords": [
         "hyper+s"
       ],
+      "description": "Jump to an AWS console page through the raycast-go-aws extension",
       "path": "extensions/arisweedler/raycast-go-aws/command-go-aws",
       "title": "Go AWS"
     },
@@ -14,6 +15,7 @@
       "chords": [
         "hyper+g"
       ],
+      "description": "Search Airtable go links and open the match in the browser",
       "path": "extensions/benmusch/raycast-airtable-go-links/command-go-links",
       "title": "Search Go Links (Auto-Open)"
     },
@@ -22,6 +24,7 @@
       "chords": [
         "opt+s"
       ],
+      "description": "Show today's and upcoming calendar events, with links to join meetings",
       "path": "extensions/raycast/calendar/my-schedule",
       "title": "My Schedule"
     },
@@ -30,6 +33,7 @@
       "chords": [
         "hyper+4"
       ],
+      "description": "Search Raycast's clipboard history and paste an earlier copy",
       "path": "extensions/raycast/clipboard-history/clipboard-history",
       "title": "Clipboard History"
     },
@@ -38,6 +42,7 @@
       "chords": [
         "ctrl+cmd+spacebar"
       ],
+      "description": "Search emoji and symbols by name and insert the one picked",
       "path": "extensions/raycast/emoji-symbols/search-emoji-symbols",
       "title": "Search Emoji & Symbols"
     },
@@ -46,6 +51,7 @@
       "chords": [
         "hyper+k d"
       ],
+      "description": "Throw Raycast's confetti: a quick check that a layer key reaches Raycast",
       "path": "extensions/raycast/raycast/confetti",
       "title": "Confetti"
     },
@@ -54,6 +60,7 @@
       "chords": [
         "hyper+grave_accent_and_tilde"
       ],
+      "description": "Search the Raycast snippets (the dotfiles' raycast-snippets tiers) and paste one",
       "path": "extensions/raycast/snippets/search-snippets",
       "title": "Search Snippets"
     },
@@ -62,6 +69,7 @@
       "chords": [
         "hyper+t r"
       ],
+      "description": "Start a Raycast typing practice round",
       "path": "extensions/raycast/typing-practice/start-typing-practice",
       "title": "Typing Practice"
     },
@@ -70,6 +78,7 @@
       "chords": [
         "ctrl+opt+return_or_enter"
       ],
+      "description": "Grow the front window to nearly fill the screen, leaving a margin",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/almost-maximize",
       "title": "Almost Maximize"
@@ -79,6 +88,7 @@
       "chords": [
         "ctrl+opt+x"
       ],
+      "description": "Move the front window to the bottom-center sixth of the screen",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/bottom-center-sixth",
       "title": "Bottom Center Sixth"
@@ -88,6 +98,7 @@
       "chords": [
         "ctrl+opt+j"
       ],
+      "description": "Move the front window to the bottom-left quarter of the screen",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/bottom-left-quarter",
       "title": "Bottom Left Quarter"
@@ -97,6 +108,7 @@
       "chords": [
         "ctrl+opt+z"
       ],
+      "description": "Move the front window to the bottom-left sixth of the screen",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/bottom-left-sixth",
       "title": "Bottom Left Sixth"
@@ -106,6 +118,7 @@
       "chords": [
         "ctrl+opt+k"
       ],
+      "description": "Move the front window to the bottom-right quarter of the screen",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/bottom-right-quarter",
       "title": "Bottom Right Quarter"
@@ -115,6 +128,7 @@
       "chords": [
         "ctrl+opt+v"
       ],
+      "description": "Move the front window to the bottom-right sixth of the screen",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/bottom-right-sixth",
       "title": "Bottom Right Sixth"
@@ -124,6 +138,7 @@
       "chords": [
         "ctrl+opt+c"
       ],
+      "description": "Center the front window on the screen, keeping its size",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/center",
       "title": "Center"
@@ -133,6 +148,7 @@
       "chords": [
         "ctrl+opt+w"
       ],
+      "description": "Move the front window to the middle third of the screen",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/center-third",
       "title": "Center Third"
@@ -142,6 +158,7 @@
       "chords": [
         "ctrl+opt+q"
       ],
+      "description": "Move the front window to the left third of the screen",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/first-third",
       "title": "First Third"
@@ -151,6 +168,7 @@
       "chords": [
         "ctrl+opt+e"
       ],
+      "description": "Move the front window to the right third of the screen",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/last-third",
       "title": "Last Third"
@@ -160,6 +178,7 @@
       "chords": [
         "ctrl+opt+h"
       ],
+      "description": "Move the front window to the left half of the screen",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/left-half",
       "title": "Left Half"
@@ -169,6 +188,7 @@
       "chords": [
         "ctrl+opt+equal_sign"
       ],
+      "description": "Grow the front window one step, around its center",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/make-larger",
       "title": "Make Larger"
@@ -178,6 +198,7 @@
       "chords": [
         "ctrl+opt+hyphen"
       ],
+      "description": "Shrink the front window one step, around its center",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/make-smaller",
       "title": "Make Smaller"
@@ -187,6 +208,7 @@
       "chords": [
         "ctrl+opt+close_bracket"
       ],
+      "description": "Move the front window to the next desktop (Space)",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/next-desktop",
       "title": "Next Desktop"
@@ -196,6 +218,7 @@
       "chords": [
         "ctrl+opt+period"
       ],
+      "description": "Move the front window to the next display",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/next-display",
       "title": "Next Display"
@@ -205,6 +228,7 @@
       "chords": [
         "ctrl+opt+open_bracket"
       ],
+      "description": "Move the front window to the previous desktop (Space)",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/previous-desktop",
       "title": "Previous Desktop"
@@ -214,6 +238,7 @@
       "chords": [
         "ctrl+opt+comma"
       ],
+      "description": "Move the front window to the previous display",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/previous-display",
       "title": "Previous Display"
@@ -223,6 +248,7 @@
       "chords": [
         "ctrl+opt+r"
       ],
+      "description": "Resize the front window to Raycast's medium default size",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/reasonable-size",
       "title": "Reasonable Size"
@@ -232,6 +258,7 @@
       "chords": [
         "ctrl+opt+delete_or_backspace"
       ],
+      "description": "Put the front window back where it was before the last window command",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/restore",
       "title": "Restore"
@@ -241,6 +268,7 @@
       "chords": [
         "ctrl+opt+l"
       ],
+      "description": "Move the front window to the right half of the screen",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/right-half",
       "title": "Right Half"
@@ -250,6 +278,7 @@
       "chords": [
         "ctrl+opt+f"
       ],
+      "description": "Toggle the front window in and out of macOS full screen",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/toggle-fullscreen",
       "title": "Toggle Fullscreen"
@@ -259,6 +288,7 @@
       "chords": [
         "ctrl+opt+s"
       ],
+      "description": "Move the front window to the top-center sixth of the screen",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/top-center-sixth",
       "title": "Top Center Sixth"
@@ -268,6 +298,7 @@
       "chords": [
         "ctrl+opt+u"
       ],
+      "description": "Move the front window to the top-left quarter of the screen",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/top-left-quarter",
       "title": "Top Left Quarter"
@@ -277,6 +308,7 @@
       "chords": [
         "ctrl+opt+a"
       ],
+      "description": "Move the front window to the top-left sixth of the screen",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/top-left-sixth",
       "title": "Top Left Sixth"
@@ -286,6 +318,7 @@
       "chords": [
         "ctrl+opt+i"
       ],
+      "description": "Move the front window to the top-right quarter of the screen",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/top-right-quarter",
       "title": "Top Right Quarter"
@@ -295,6 +328,7 @@
       "chords": [
         "ctrl+opt+d"
       ],
+      "description": "Move the front window to the top-right sixth of the screen",
       "keepFocus": true,
       "path": "extensions/raycast/window-management/top-right-sixth",
       "title": "Top Right Sixth"
