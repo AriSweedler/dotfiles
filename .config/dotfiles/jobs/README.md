@@ -27,6 +27,15 @@ A plugin is one executable file named for the job. Its header says when it runs:
   is due at once. Resolution is the tick, five minutes. `dotfiles jobs list` shows each
   plugin's last run and rc.
 
+Every plugin documents itself in that same header: at least one comment line saying what it
+does, beside the `# triggers:` or `# cron:` line that says when (a plugin with neither only runs
+by hand). A dep needs the line saying what it provides. Directives, blank `#` lines and TODOs do
+not count. One that lacks it fails the `dotfiles_jobs` step, by hand only, naming the fix:
+`dotfiles jobs edit NAME` (`--dep` for a dep), which edits a draft, checks it (syntax, these
+header lines, this rule) and only then puts it in place and commits it in its tier; `--new`
+starts one from a template. To turn a plugin off, `chmod -x` it: non-executables are not
+plugins, and an edit keeps it off.
+
 An optional `# timeout: <seconds>` line caps a run (default 900); the framework kills a
 plugin that overruns, children first, and logs it as timed out. One hung plugin must not
 hold the job, because launchd runs one instance at a time.

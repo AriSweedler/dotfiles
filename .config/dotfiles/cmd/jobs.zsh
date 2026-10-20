@@ -9,6 +9,7 @@ the job plugins and the one launchd job that runs them
 ${c_bold}Usage${c_rst}
   ${DF} jobs [list]
   ${DF} jobs run NAME [--trigger T]
+  ${DF} jobs edit NAME [--new] [--local|--global] [--dep] [--no-commit] [--no-push]
   ${DF} jobs tick --trigger T
   ${DF} jobs unlock
   ${DF} jobs install [--dry-run] | uninstall
@@ -24,13 +25,18 @@ ${c_bold}Usage${c_rst}
   it: executables in $(help::tilde "${DEPS_ROOT_LDF}") (this machine, wins) or
   $(help::tilde "${DEPS_ROOT_DF}") (shared) whose stdout, NAME=VALUE lines, becomes the
   plugin's environment; a failing dep blocks the plugin. Logs and success
-  stamps: $(help::tilde "${JOBS_STATE_DIR}"). The README beside the shared plugins
-  has the contract.
+  stamps: $(help::tilde "${JOBS_STATE_DIR}"). Every plugin and dep says in its
+  header what it does (a plugin also when it runs); one that does not fails
+  the dotfiles_jobs step. The README beside the shared plugins has the
+  contract.
 
 ${c_bold}Subcommands${c_rst}
   list        every plugin, its triggers, last run and rc, then the deps they
               name (the default)
   run NAME    run one plugin now; output to its log and stdout
+  edit NAME   a plugin (or --dep) in \$EDITOR as a draft: checked on save (syntax,
+              header lines, docs), then put in place and committed in its
+              tier; --new starts one from a template (also: jobs --edit NAME)
   tick        what the agent runs: every plugin due for --trigger T (load,
               tick, screenIsUnlocked)
   unlock      simulate a screen unlock (SIGUSR1 to the resident agent)
@@ -41,6 +47,8 @@ ${c_bold}Subcommands${c_rst}
 ${c_bold}Flags${c_rst}
   --trigger T   run, tick: the trigger the plugin sees as \$1 (run: manual)
   --dry-run     install: print what would change and change nothing
+  --new, --local, --global, --dep, --no-commit, --no-push
+                edit: see 'dotfiles jobs edit --help'
 
 ${c_bold}Env${c_rst}
   $(ENV ARI_DOTFILES_INVOKED_BY)
@@ -94,6 +102,53 @@ deps_discover() {
       name="${file:t}"
       [[ -n "${DEP_PATH[${name}]:-}" ]] && continue
       DEP_PATH[${name}]="${file}"; DEP_TIER[${name}]="${tier}"
+    done
+  done
+}
+
+# --- documentation ---
+
+# jobs_doc_problems <file> <plugin|dep>: `reply` is what the file's header lacks to count as
+# documented, one phrase each; empty when it is. The header is the leading comment block: the shebang, then
+# `#` lines up to the first other line. It needs a line saying what the file does (any comment
+# but a directive, a blank or a TODO), and a plugin also a `# triggers:` or `# cron:` line, or it
+# only ever runs by hand. Reads the file in zsh; no command or subshell runs, so a check can
+# afford it on every run.
+jobs_doc_problems() {
+  setopt localoptions extendedglob
+  local file="${1}" kind="${2:-plugin}" line body
+  local -i n=0 prose=0 schedule=0
+  reply=()
+  if [[ ! -r "${file}" ]]; then reply=(unreadable); return 0; fi
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    n=$(( n + 1 ))
+    (( n == 1 )) && [[ "${line}" == '#!'* ]] && continue
+    [[ "${line}" == '#'* ]] || break
+    body="${${line#\#}##[[:space:]]#}"
+    case "${body}" in
+      triggers:*|cron:*) schedule=1 ;;
+      timeout:*|deps:*|'') ;;
+      (#i)todo*) ;;
+      *) prose=1 ;;
+    esac
+  done < "${file}"
+  (( prose )) || reply+=("no line saying what it does")
+  [[ "${kind}" == dep ]] || (( schedule )) || reply+=("no '# triggers:' or '# cron:' line")
+  return 0
+}
+
+# jobs_undocumented: one `<plugin|dep> <name>: <problem>, <problem>` line per plugin and dep (both
+# tiers, as discovered) whose header lacks what jobs_doc_problems asks for.
+jobs_undocumented() {
+  local name kind
+  local -a reply
+  local -A paths
+  jobs_discover
+  for kind in plugin dep; do
+    if [[ "${kind}" == plugin ]]; then paths=("${(@kv)JOB_PATH}"); else paths=("${(@kv)DEP_PATH}"); fi
+    for name in "${(@ok)paths}"; do
+      jobs_doc_problems "${paths[${name}]}" "${kind}"
+      (( ${#reply} == 0 )) || print -r -- "${kind} ${name}: ${(j:, :)reply}"
     done
   done
 }
@@ -691,6 +746,12 @@ jobs_simulate_unlock() {
 cmd_jobs() {
   local sub="${1:-list}" trigger=manual name=""
   (( $# > 0 )) && shift
+  # edit parses its own flags; --edit is its other spelling.
+  if [[ "${sub}" == (edit|--edit) ]]; then
+    need_lib "${ARI_DOTFILES_CMD}/jobs/edit.zsh" || return 3
+    jobs_edit "$@"
+    return
+  fi
   while (( $# > 0 )); do case "${1}" in
     --trigger) trigger="${2:?--trigger requires a value}"; shift 2 ;;
     --dry-run) export ARI_DOTFILES_DRY_RUN=1; shift ;;
@@ -708,6 +769,6 @@ cmd_jobs() {
     unlock) jobs_simulate_unlock ;;
     install) jobs_install ;;
     uninstall) jobs_uninstall ;;
-    *) log::err "Unknown jobs subcommand | sub='${sub}' valid='list, run <name>, tick, unlock, install, uninstall'"; return 1 ;;
+    *) log::err "Unknown jobs subcommand | sub='${sub}' valid='list, run <name>, edit <name>, tick, unlock, install, uninstall'"; return 1 ;;
   esac
 }
