@@ -32,6 +32,20 @@ assert_eq "no_remote is not manual" false "$(step_get local_dotfiles_repo .manua
 assert_contains "manual step: remote add" "$(step_json)" "git ldf remote add origin"
 assert_contains "manual step: first push" "$(step_json)" "git ldf push --set-upstream origin main"
 
+# A template entry without its why: fail, by hand, naming the edit; before the drift warning.
+cp "${TEMPLATE}" "${FIX}/template.orig"
+printf '!/share/extra/\n' >> "${TEMPLATE}"
+check_ldf
+assert_eq "undocumented allowlist entry → fail" fail "$(step_get local_dotfiles_repo .status)"
+assert_eq "reason allowlist_undocumented" allowlist_undocumented "$(step_get local_dotfiles_repo .reason)"
+assert_eq "allowlist_undocumented is manual" true "$(step_get local_dotfiles_repo .manual)"
+assert_eq "the fix is the allowlist edit" "dotfiles --local git --edit" "$(step_get local_dotfiles_repo .fix)"
+assert_contains "the detail names the entry" "$(step_get local_dotfiles_repo .detail)" "!/share/extra/"
+{ cat "${FIX}/template.orig"; printf '# Extra: a directory the test admits.\n!/share/extra/\n'; } > "${TEMPLATE}"
+check_ldf
+assert_eq "documented, but the machine's copy lacks it → warn" allowlist_differs "$(step_get local_dotfiles_repo .reason)"
+cp "${FIX}/template.orig" "${TEMPLATE}"
+
 printf '!/share/extra/\n' >> "${EXCLUDE}"
 check_ldf
 assert_eq "edited exclude → warn" warn "$(step_get local_dotfiles_repo .status)"

@@ -1,9 +1,10 @@
 # step local_dotfiles_repo — the local tier: a bare repo with the allowlist as info/exclude,
-# hooks wired, nothing unpushed to its remote (optional).
+# hooks wired, nothing unpushed to its remote (optional); every '!' entry of the allowlist
+# template says why (git_allowlist_undocumented, cmd/git.zsh).
 step::declare local_dotfiles_repo --group repo \
-  --desc "local dotfiles bare repo exists with the allowlist and hooks; nothing unpushed when it has a remote" \
+  --desc "local dotfiles bare repo exists with the allowlist and hooks; every allowlist entry says why; nothing unpushed when it has a remote" \
   --apply "creates the bare repo, installs the allowlist as info/exclude and wires the hooks"
-step::watches local_dotfiles_repo '.config/new-machine/local-dotfiles-exclude' '.config/git/local-dotfiles-hooks/**'
+step::watches local_dotfiles_repo '.config/new-machine/local-dotfiles-exclude' '.config/dotfiles/cmd/git.zsh' '.config/git/local-dotfiles-hooks/**'
 
 check::local_dotfiles_repo() {
   local git_dir="${ARI_DOTFILES_LDF_GIT_DIR}" exclude="${ARI_DOTFILES_LDF_GIT_DIR}/info/exclude"
@@ -27,6 +28,13 @@ check::local_dotfiles_repo() {
   hooks="$(tier::hooks_path "${git_dir}")"
   if [[ "${hooks}" != "${ARI_DOTFILES_LDF_HOOKS}" ]]; then
     verdict fail hooks_path -d "core.hooksPath='${hooks}' expected='${ARI_DOTFILES_LDF_HOOKS}'" -f "${CLI_NAME} apply local_dotfiles_repo"
+    return 0
+  fi
+  need_lib "${ARI_DOTFILES_CMD}/git.zsh" || return 3
+  local -a reply
+  git_allowlist_undocumented "${LDF_EXCLUDE_TEMPLATE}"
+  if (( ${#reply} )); then
+    verdict fail allowlist_undocumented -m -d "allowlist entries with no '# why' comment above them: ${(j:, :)reply} | template='${LDF_EXCLUDE_TEMPLATE}'" -f "${CLI_NAME} --local git --edit"
     return 0
   fi
   # The machine keeps its own allowlist; the tool only points at the difference.

@@ -90,6 +90,74 @@ EOF
 docs_check
 assert_eq "fixed: ok" ok "$(docs_get .status)"
 
+# ── the help rule: every verb's help, and the top-level one ──
+assert_contains "documented: counts the helps" "$(docs_get .detail)" " helps"
+CMD="${CODE}/dotfiles/cmd"
+cat > "${CMD}/zz.zsh" <<'EOS'
+# dotfiles/cmd/zz.zsh — a verb the test owns, with no help.
+cmd_zz() {
+  case "${1:-}" in
+    --frob) ;;
+  esac
+}
+EOS
+docs_check
+assert_eq "a verb with no help: fail" fail "$(docs_get .status)"
+assert_eq "a verb with no help: manual" true "$(docs_get .manual)"
+assert_eq "a verb with no help: the fix" "dotfiles help --edit zz" "$(docs_get .fix)"
+assert_contains "a verb with no help: what it lacks" "$(docs_get .detail)" "dotfiles zz --help: no help_zz()"
+cat > "${CMD}/zz.zsh" <<'EOS'
+# dotfiles/cmd/zz.zsh — a verb the test owns, its help short of a flag.
+help_zz() {
+  cat <<EOF
+frob the zz
+
+${c_bold}Usage${c_rst}
+  ${DF} zz
+EOF
+}
+cmd_zz() {
+  case "${1:-}" in
+    --frob) ;;
+  esac
+}
+EOS
+docs_check
+assert_eq "a flag missing from the help: fail" fail "$(docs_get .status)"
+assert_contains "a flag missing from the help: named" "$(docs_get .detail)" "dotfiles zz --help: flags not in it: --frob"
+# A flag parsed in cmd/VERB/*.zsh counts too.
+mkdir -p "${CMD}/zz"
+printf 'zz_sub() {\n  case "${1}" in\n    --sub-flag) ;;\n  esac\n}\n' > "${CMD}/zz/sub.zsh"
+awk '{ sub(/\$\{DF\} zz$/, "${DF} zz [--frob]") } { print }' "${CMD}/zz.zsh" > "${CMD}/zz.zsh.tmp" && mv "${CMD}/zz.zsh.tmp" "${CMD}/zz.zsh"
+docs_check
+assert_contains "a flag of cmd/VERB/*.zsh: named" "$(docs_get .detail)" "dotfiles zz --help: flags not in it: --sub-flag"
+assert_not_contains "the documented flag is not named" "$(docs_get .detail)" "--frob"
+rm -rf "${CMD}/zz"
+docs_check
+assert_eq "documented verb: ok" ok "$(docs_get .status)"
+# The top-level help is held to main()'s flags; with a verb's gap too, its fix comes first.
+DISPATCH="${CODE}/dotfiles/lib/dispatch.zsh"
+cp "${DISPATCH}" "${FIX}/dispatch.orig"
+awk '/^help\(\) \{/ { h = 1 } h { gsub(/--timing/, "--timingx") } /^}/ { h = 0 } { print }' "${FIX}/dispatch.orig" > "${DISPATCH}"
+awk '!/\[--frob\]/' "${CMD}/zz.zsh" > "${CMD}/zz.zsh.tmp" && mv "${CMD}/zz.zsh.tmp" "${CMD}/zz.zsh"
+docs_check
+assert_eq "top-level gap: the fix" "dotfiles help --edit" "$(docs_get .fix)"
+assert_contains "top-level gap: named" "$(docs_get .detail)" "dotfiles --help: flags not in it: --timing"
+assert_contains "and the verb's gap after it" "$(docs_get .detail)" "; dotfiles zz --help: flags not in it: --frob"
+cp "${FIX}/dispatch.orig" "${DISPATCH}"
+rm -f "${CMD}/zz.zsh"
+# Cached while nothing it reads changes; a change to a verb file is seen.
+sleep 2
+docs_check
+assert_eq "fixed again: ok" ok "$(docs_get .status)"
+docs_check
+assert_contains "unchanged: the verdict is the cached one" "$(docs_get .detail)" "cached: true"
+printf 'cmd_zz() { :; }\n' > "${CMD}/zz.zsh"
+docs_check
+assert_eq "a new verb file after a cached verdict: seen" fail "$(docs_get .status)"
+assert_not_contains "a new verb file: not the cached verdict" "$(docs_get .detail)" "cached: true"
+rm -f "${CMD}/zz.zsh"
+
 # A registry that does not load is the preflight's (exit 3), not this step's.
 printf 'step::declare zz_broken\n' > "${STEPS}/zz_broken.zsh"
 copy check --only dotfiles_docs --json

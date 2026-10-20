@@ -51,8 +51,17 @@ ${c_green}dotfiles${c_rst} — the two-tier dotfiles, and the machine they descr
 
 ${c_bold}Usage${c_rst}
   ${DF} [--dry-run] [--verbose] [--timing] <verb> [args]
+  ${DF} [--local] git <args…>           git in a tier's bare repo
+  ${DF} [--local] --dir                 print that tier's bare repo path
   ${DF} <verb> --help                   that verb's help (also: ${DF} help <verb>)
   ${DF} --verbose --help                every verb's help, one after another
+
+${c_bold}Flags${c_rst} (before the verb)
+  --dry-run       print what would change; change nothing
+  --verbose, -v   debug logging (with --help: every verb's whole help)
+  --timing        log how long each timed step took
+  --local         git and --dir act on the local tier, not the shared one
+  --dir           print the tier's bare repo path and exit (in place of a verb)
 
 EOF
   if log::is_debug_on; then

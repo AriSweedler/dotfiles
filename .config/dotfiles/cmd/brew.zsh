@@ -47,12 +47,20 @@ ${c_bold}Flags${c_rst}
               line per item, changed to global add, local add, global ignore
               or local ignore (each with '# reason'), or delete to uninstall
               it here; FILE resumes one (takes --dry-run, --no-push)
+  --global, --local
+              decree: declare the item in that tier's Brewfile; edit: open
+              that tier's file (default --local)
+  --ignore-global, --ignore-local
+              decree: ignore the item in that tier's Brewfile.ignore
   --reason TEXT
               decree: required; why the item is declared or ignored, written
               as the line's trailing '# TEXT' comment
+  --ignore    edit: the tier's Brewfile.ignore instead of its Brewfile
+  --no-commit
+              edit: check the file, leave it uncommitted
   --dry-run   decree, undecree: print the lines, paths and git commands; touch
               nothing
-  --no-push   decree, undecree, edit: skip the local tier's push
+  --no-push   triage, decree, undecree, edit: skip the local tier's push
   each subcommand's --help has the rest
 
 ${c_bold}Env${c_rst}
