@@ -454,7 +454,7 @@ decree::block_tap_lines() {  # <tap>
 # ── help ─────────────────────────────────────────────────────────────────────────────────────
 
 decree::help_triage() {
-  print -r -- "${CLI_NAME} brew triage [--json | --interactive [--dry-run] [--no-push]]"
+  print -r -- "${CLI_NAME} brew triage [--json | --interactive | --edit [FILE]] [--dry-run] [--no-push]"
   cat <<'EOF'
 
 Lists every installed brew item (formula, cask, tap, VS Code extension) that neither Brewfile
@@ -464,13 +464,19 @@ orphans, the ignore list and classifier notes. Describes; never recommends a tie
   --json         print drift.json instead
   --interactive  pick a tier per undeclared item, confirm the grouped plan once, then run one
                  decree (one commit) per group; needs a terminal on stdin and stdout
-  --dry-run      with --interactive: every decree prints instead of writing
-  --no-push      with --interactive: skip the local tier's push
+  --edit [FILE]  write the undeclared items to a plan file, one 'skip  kind:name' line each, and
+                 open it in $EDITOR; change each skip to global add, local add, global ignore or
+                 local ignore (an ignore ends in '# reason'); on save the plan runs as
+                 --interactive's does. A bad line is reported by number and the file kept; FILE
+                 resumes that plan file
+  --dry-run      with --interactive or --edit: every decree prints instead of writing
+  --no-push      with --interactive or --edit: skip the local tier's push
   -h             this help
 
 Exit 0 when nothing is undeclared, orphaned or duplicated; 1 otherwise; 2 when brew is busy.
 --interactive: 0 when every decree ran, 1 when one refused or the plan was declined, 130 when
-cancelled; 64 without a terminal.
+cancelled; 64 without a terminal. --edit: 0 when every decree ran or nothing was chosen, 1 when
+a line was bad, a decree refused or the plan was declined.
 EOF
 }
 
@@ -517,13 +523,17 @@ EOF
 # ── triage ───────────────────────────────────────────────────────────────────────────────────
 
 decree::triage() {
-  local json=0 interactive=0
+  local json=0 interactive=0 edit=0 edit_file=""
   local -a pass=()
   while (( $# )); do
     case "${1}" in
       -h|--help) decree::help_triage; return 0 ;;
       --json) json=1 ;;
       --interactive) interactive=1 ;;
+      --edit)
+        edit=1
+        if [[ -n "${2:-}" && "${2}" != -* ]]; then edit_file="${2}"; shift; fi ;;
+      --edit=*) edit=1; edit_file="${1#--edit=}" ;;
       --dry-run|--no-push) pass+=("${1}") ;;
       *) log::err "unknown argument | arg='${1}'"; decree::help_triage >&2; return 64 ;;
     esac
@@ -534,10 +544,19 @@ decree::triage() {
     decree::help_triage >&2
     return 64
   fi
-  if (( ${#pass} && ! interactive )); then
-    log::err "--dry-run and --no-push go with --interactive; plain triage writes nothing | flags='${pass[*]}'"
+  if (( edit && (json || interactive) )); then
+    log::err "--edit does not mix with --json or --interactive | edit='${CLI_NAME} brew triage --edit'"
     decree::help_triage >&2
     return 64
+  fi
+  if (( ${#pass} && ! interactive && ! edit )); then
+    log::err "--dry-run and --no-push go with --interactive or --edit; plain triage writes nothing | flags='${pass[*]}'"
+    decree::help_triage >&2
+    return 64
+  fi
+  if (( edit )); then
+    decree::triage_edit "${pass[@]}" -- ${edit_file:+"${edit_file}"}
+    return
   fi
   if (( interactive )); then
     decree::triage_interactive "${pass[@]}"
@@ -787,6 +806,17 @@ decree::triage_interactive() {  # [--dry-run] [--no-push]
     choices+=("${action}"$'\t'"${kind}:${name}"$'\t'"${reason}")
   done
 
+  decree::triage_apply "${pass[@]}" -- "${choices[@]}"
+}
+
+# The grouped plan for CHOICEs (as decree::triage_plan takes them), one confirmation, then one
+# decree::decree per group. Shared by --interactive and --edit. DECREE_CONFIRM=0 skips the confirmation
+# (--edit off a terminal: the saved file is the go-ahead).
+decree::triage_apply() {  # [--dry-run] [--no-push] -- CHOICE...
+  local -a pass=()
+  while (( $# )) && [[ "${1}" != -- ]]; do pass+=("${1}"); shift; done
+  [[ "${1:-}" != -- ]] || shift
+  local -a choices=("$@")
   local -a groups=()
   groups=(${(f)"$(decree::triage_plan "${pass[@]}" -- "${choices[@]}")"})
   print -r -- ""
@@ -816,7 +846,7 @@ decree::triage_interactive() {  # [--dry-run] [--no-push]
   ui::box --title "${title}" -- "${lines[@]}"
 
   local rc=0
-  ui::confirm "Run ${#groups} decree(s)?" || rc=$?
+  (( ${DECREE_CONFIRM:-1} == 0 )) || ui::confirm "Run ${#groups} decree(s)?" || rc=$?
   if (( rc != 0 )); then
     log::warn "declined; nothing decreed"
     (( rc == 130 )) && return 130
@@ -839,6 +869,159 @@ decree::triage_interactive() {  # [--dry-run] [--no-push]
   done
   (( failed == 0 )) || return 1
   return 0
+}
+
+# ── triage --edit ────────────────────────────────────────────────────────────────────────────
+
+# The action words a plan file takes, and the decree action each means.
+(( ${+DECREE_EDIT_ACTION} )) || typeset -grA DECREE_EDIT_ACTION=(
+  ["global add"]=global ["local add"]=local ["global ignore"]=ignore-global ["local ignore"]=ignore-local [skip]=skip
+)
+
+# The plan file for <drift.json>: a header naming the actions, one `skip  kind:name` line per
+# undeclared item (its tap and newness on a comment line above it), then every other section of
+# plain triage as comments, for reference.
+decree::triage_edit_file() {  # <drift.json>
+  local drift="${1}" since="" kind name tap new info rest
+  [[ -f "${LAST_RESULT_FILE}" ]] && since="$(jq -r '(.ts // "") | .[0:10]' "${LAST_RESULT_FILE}")"
+  cat <<EOF
+# ${CLI_NAME} brew triage --edit: one line per undeclared item, <action>  <kind:name>  [# reason]
+# Change each 'skip' to one of:
+#   global add      declare it in the shared Brewfile (every machine; git df, never pushed)
+#   local add       declare it in the local Brewfile (this machine; git ldf, pushed)
+#   global ignore   record it in the shared Brewfile.ignore; needs a '# reason'
+#   local ignore    record it in the local Brewfile.ignore; needs a '# reason'
+#   skip            leave it undeclared
+# Save and quit to see the plan: one decree, one commit, per action (and per ignore reason).
+# Lines starting with # are comments. Leaving every line 'skip' decrees nothing.
+
+EOF
+  for kind in formula cask tap vscode; do
+    while IFS=$'\t' read -r name tap new; do
+      info=""
+      [[ "${tap}" == - ]] || info="${tap}"
+      [[ "${new}" != true ]] || info+="${info:+, }new${since:+ since ${since}}"
+      print -r -- "# ${kind} ${name}${info:+ (${info})}"
+      print -r -- "skip  ${kind}:${name}"
+    done < <(jq -r --arg k "${kind}" '.undeclared[] | select(.kind == $k)
+               | [.name, (.tap // "-"), ((.new // false) | tostring)] | @tsv' "${drift}")
+  done
+  rest="$(decree::triage_render_rest "${drift}")"
+  if [[ -n "${rest}" ]]; then
+    print -r -- ""
+    print -r -- "# ── for reference; not actionable here ──"
+    local -a refs=("${(@f)${rest#$'\n'}}")
+    local ref
+    for ref in "${refs[@]}"; do print -r -- "#${ref:+ ${ref}}"; done
+  fi
+}
+
+# Parses a plan file against <drift.json>: fills the caller's `choices` (decree::triage_plan's
+# CHOICE lines, skips included) and prints one `line N: problem | line='…'` per bad line on
+# stderr. Returns 1 when any line is bad. A line: an action from DECREE_EDIT_ACTION, a kind:name
+# that is undeclared here, at most once per file, then an optional '# reason' (required for an
+# ignore, dropped for an add).
+decree::triage_edit_parse() {  # <plan file> <drift.json>
+  setopt localoptions extendedglob
+  local file="${1}" drift="${2}" line body reason word action item
+  local -a known=() seen=() words
+  local -i n=0 bad=0
+  known=(${(f)"$(jq -r '.undeclared[] | "\(.kind):\(.name)"' "${drift}")"})
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    n=$(( n + 1 ))
+    body="${${line##[[:space:]]#}%%[[:space:]]#}"
+    [[ -z "${body}" || "${body}" == '#'* ]] && continue
+    reason=""
+    if [[ "${body}" == *'#'* ]]; then
+      reason="${${body#*\#}##[[:space:]]#}"; reason="${reason%%[[:space:]]#}"
+      body="${${body%%\#*}%%[[:space:]]#}"
+    fi
+    words=(${=body})
+    action="" item=""
+    if (( ${#words} >= 2 )) && (( ${+DECREE_EDIT_ACTION[${words[1]} ${words[2]}]} )); then
+      action="${DECREE_EDIT_ACTION[${words[1]} ${words[2]}]}"; words=("${(@)words[3,-1]}")
+    elif (( ${#words} >= 1 )) && [[ "${words[1]}" == skip ]]; then
+      action=skip; words=("${(@)words[2,-1]}")
+    else
+      print -u2 -r -- "line ${n}: unknown action; use global add, local add, global ignore, local ignore or skip | line='${line}'"
+      bad=1; continue
+    fi
+    if (( ${#words} != 1 )); then
+      print -u2 -r -- "line ${n}: expected one kind:name after the action | line='${line}'"
+      bad=1; continue
+    fi
+    item="${words[1]}"
+    if (( ! ${known[(Ie)${item}]} )); then
+      print -u2 -r -- "line ${n}: not an undeclared item here | item='${item}' line='${line}'"
+      bad=1; continue
+    fi
+    if (( ${seen[(Ie)${item}]} )); then
+      print -u2 -r -- "line ${n}: listed twice | item='${item}'"
+      bad=1; continue
+    fi
+    seen+=("${item}")
+    if [[ "${action}" == ignore-* && -z "${reason}" ]]; then
+      print -u2 -r -- "line ${n}: an ignore needs a reason: end the line with '# why' | item='${item}'"
+      bad=1; continue
+    fi
+    [[ "${action}" == ignore-* ]] || reason=""
+    choices+=("${action}"$'\t'"${item}"$'\t'"${reason}")
+  done < "${file}"
+  return ${bad}
+}
+
+# `triage --edit [FILE]`: the plan file (written under RUN_DIR, or FILE to resume one) opened in
+# $EDITOR, then parsed. Bad lines: each reported with its number; on a terminal, offered for
+# another edit, else exit 1 naming the --edit FILE that resumes. A good plan runs as
+# --interactive's does, confirmed once on a terminal.
+decree::triage_edit() {  # [--dry-run] [--no-push] [--] [FILE]
+  local -a pass=()
+  while (( $# )) && [[ "${1}" != -- ]]; do pass+=("${1}"); shift; done
+  [[ "${1:-}" != -- ]] || shift
+  local resume="${1:-}" file editor before
+  local -a choices=()
+  local -i tty=0
+  [[ -t 0 && -t 1 ]] && tty=1
+  decree::snapshot || return $?
+  local drift="${DECREE_DRIFT}"
+  if [[ -n "${resume}" ]]; then
+    [[ -f "${resume}" ]] || { log::err "no such plan file | file='${resume}'"; return 64; }
+    file="${resume}"
+  else
+    if jq -e '.undeclared | length == 0' "${drift}" >/dev/null; then
+      print -r -- "undeclared: none; nothing to decree"
+      return 0
+    fi
+    file="${RUN_DIR}/triage-plan.txt"
+    decree::triage_edit_file "${drift}" > "${file}" || return 1
+  fi
+  editor="${EDITOR:-vi}"
+  command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi
+  before="$(mktemp "${TMPDIR:-/tmp}/brew-triage-edit.XXXXXX")" || return 1
+  while true; do
+    cp -- "${file}" "${before}"
+    if ! ${=editor} "${file}"; then
+      rm -f -- "${before}"
+      log::err "editor exited non-zero; nothing decreed | editor='${editor}' file='${file}'"
+      return 1
+    fi
+    if [[ -z "${resume}" ]] && cmp -s -- "${before}" "${file}"; then
+      rm -f -- "${before}"
+      print -r -- "no change; nothing to decree"
+      return 0
+    fi
+    choices=()
+    decree::triage_edit_parse "${file}" "${drift}" && break
+    if (( tty )) && ui::confirm "Edit the plan again?"; then
+      resume="${file}"   # an unchanged reopen is still a plan to read, not a "no change"
+      continue
+    fi
+    rm -f -- "${before}"
+    log::err "plan not run; fix the lines above, then | fix='${CLI_NAME} brew triage --edit ${file}'"
+    return 1
+  done
+  rm -f -- "${before}"
+  DECREE_CONFIRM=${tty} decree::triage_apply "${pass[@]}" -- "${choices[@]}"
 }
 
 # ── decree ───────────────────────────────────────────────────────────────────────────────────

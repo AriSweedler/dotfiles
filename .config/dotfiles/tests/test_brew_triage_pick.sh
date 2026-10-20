@@ -87,10 +87,10 @@ assert_no_mutation "the usage errors are read-only"
 # ── Help and the plain path ───────────────────────────────────────────────────
 # decree::help_triage is what a triage usage error prints; `--help` goes to the verb's help.
 nm brew triage --bogus < /dev/null
-assert_contains "triage usage synopsis names --interactive" "${ERR}" "brew triage [--json | --interactive [--dry-run] [--no-push]]"
+assert_contains "triage usage synopsis names --interactive" "${ERR}" "brew triage [--json | --interactive | --edit [FILE]] [--dry-run] [--no-push]"
 assert_contains "triage usage has the flag line" "${ERR}" "  --interactive  pick a tier per undeclared item"
 nm help brew
-assert_contains "brew help usage names --interactive" "${OUT}${ERR}" "brew triage [--json | --interactive [--dry-run] [--no-push]]"
+assert_contains "brew help usage names --interactive" "${OUT}${ERR}" "brew triage [--json | --interactive | --edit [FILE]] [--dry-run] [--no-push]"
 
 bump_now_secs 60
 nm brew triage < /dev/null
