@@ -8,6 +8,7 @@ publish every tier: submodules, pointer bumps, shared, local
 ${c_bold}Usage${c_rst}
   ${DF} push [--submodules] [--shared] [--local] [--dry-run]
   ${DF} push [--no-submodules] [--no-shared] [--no-local] [--dry-run]
+  ${DF} push --edit [FILE] [--<part>…] [--no-<part>…] [--dry-run]
 
   Pushes every submodule with something to push, in parallel (one log each),
   commits the shared tier's pointer bumps, then pushes the shared tier, all as
@@ -18,15 +19,26 @@ ${c_bold}Usage${c_rst}
   machine: env -u GITHUB_TOKEN gh auth login. Human-only: Claude Code is denied
   'dotfiles push'.
 
+  --edit writes one 'skip  <repo>  <sha>' line per repo in scope with something
+  to push, under the commits it would push and the pointer bumps, to
+  $(help::tilde "${STATE_DIR}")/push-plan.dfpush and opens it in \$EDITOR. Change
+  'skip' to 'push' for each repo to publish. On save every line is checked
+  first: a repo whose HEAD moved since its sha was recorded is refused, and so
+  is 'push shared' while a submodule whose pointer it would bump is skipped.
+  Then one confirmation, and the push runs for exactly those repos.
+
 ${c_bold}Flags${c_rst}
-  --submodules      only the submodules (a selecting flag names the scope
+  --edit [FILE]     choose the repos in a plan file (needs a terminal); FILE
+                    resumes a saved plan, and off a terminal runs it as saved
+  --submodules     only the submodules (a selecting flag names the scope
                     exactly; none = all three parts)
   --shared          only the shared tier
   --local           only the local tier
   --no-submodules   leave the submodules out
   --no-shared       leave the shared tier out
   --no-local        leave the local tier out
-  --dry-run         the would-push lines, no network
+  --dry-run         the would-push lines, no network (with --edit: for the
+                    repos the plan chose)
 
 ${c_bold}Env${c_rst}
   $(ENV ARI_DOTFILES_GITHUB_LOGIN)
@@ -250,8 +262,11 @@ push_submodules() {
     checked=$(( checked + 1 ))
     if ! is_push_needed "${repo}"; then
       push::record "${repo}" "up to date" "$(repo_git "${repo}" rev-parse -q --verify HEAD 2>/dev/null || true)"
-      published+=("${repo}"); continue
+      # Its bump belongs to the shared push: a plan that skips shared commits none.
+      is_allowed shared && published+=("${repo}")
+      continue
     fi
+    if ! is_allowed "${repo}"; then push::record "${repo}" "skipped (plan)"; continue; fi   # unpublished: no bump
     if ! push_begin "${repo}"; then failed=$(( failed + 1 )); continue; fi
     if is_dry_run; then pushed=$(( pushed + 1 )); published+=("${repo}"); continue; fi   # the plan printed counts as would_push
     running+=("${repo}")
@@ -273,14 +288,23 @@ push_submodules() {
 # True (0) when a push part (local | submodules | shared) is in PUSH_SCOPE.
 is_in_scope() { (( ${PUSH_SCOPE[(Ie)${1}]} )); }
 
+# True (0) when a repo may push this run: always, unless push --edit's plan named the repos
+# (PUSH_ALLOW, set in cmd_push's scope only under --edit).
+is_allowed() { (( ! ${+PUSH_ALLOW} )) || (( ${PUSH_ALLOW[(Ie)${1}]} )); }
+
 # The local tier runs in the background while the submodules push (and their pointer
 # bumps are committed), then the shared tier (only if every submodule made it), then
-# the local result.
+# the local result. Under --edit the plan file chooses the repos first.
 cmd_push() {
   # Selecting flags name the scope exactly (none = every part); excluding flags then remove from it.
   local -a only=() skip=()
+  local edit=false edit_file=""
   while (( $# > 0 )); do case "${1}" in
     --dry-run) export ARI_DOTFILES_DRY_RUN=1; shift ;;
+    --edit)
+      edit=true; shift
+      if [[ -n "${1:-}" && "${1}" != -* ]]; then edit_file="${1}"; shift; fi ;;
+    --edit=*) edit=true; edit_file="${1#--edit=}"; shift ;;
     --submodules|--shared|--local)          only+=("${1#--}"); shift ;;
     --no-submodules|--no-shared|--no-local) skip+=("${1#--no-}"); shift ;;
     *) usage_error "push: unknown argument | argument='${1}'" ;;
@@ -288,26 +312,251 @@ cmd_push() {
   (( ${#only} == 0 )) || PUSH_SCOPE=("${(@)PUSH_PARTS:*only}")
   PUSH_SCOPE=("${(@)PUSH_SCOPE:|skip}")
   (( ${#PUSH_SCOPE} )) || usage_error "Empty push scope: every part excluded | parts='${(j:, :)PUSH_PARTS}'"
-  local start="${EPOCHREALTIME}" failed=false scope="${(j:, :)PUSH_SCOPE}"
+  if [[ "${edit}" == true && -z "${edit_file}" ]] && ! [[ -t 0 && -t 1 ]]; then
+    usage_error "push --edit opens \$EDITOR and needs a terminal; off one, pass a saved plan | fix='${CLI_NAME} push --edit FILE'"
+  fi
+  local start failed=false scope="${(j:, :)PUSH_SCOPE}"
   local -a PUSH_ROWS=()   # push::record's rows, for the closing table (dynamic scope: the push_* functions append)
   check_prerequisites git gh || return 1
-  if is_in_scope local; then push_tier local || failed=true; fi
+  if [[ "${edit}" == true ]]; then
+    local -a PUSH_ALLOW=()   # filled by push::edit; is_allowed reads it (dynamic scope)
+    local PUSH_PLAN_PATH="${STATE_DIR}/push-plan.dfpush"   # push::edit points it at a resumed FILE
+    push::edit "${edit_file}" || return
+    (( ${#PUSH_ALLOW} )) || return 0
+  fi
+  start="${EPOCHREALTIME}"
+  if is_in_scope local && is_allowed local; then push_tier local || failed=true; fi
   if is_in_scope submodules && ! push_submodules; then
     failed=true
-    if is_in_scope shared; then
+    if is_in_scope shared && is_allowed shared; then
       log::err "shared tier not pushed: a submodule push failed | fix='dotfiles logs, fix, dotfiles push'"
       push::record shared "skipped (a submodule failed)"
     fi
-  elif is_in_scope shared; then
+  elif is_in_scope shared && is_allowed shared; then
     push_tier shared || failed=true
   fi
   if [[ -n "${PIDS[local]:-}" ]]; then push_wait local || failed=true; fi
   if [[ "${failed}" == true ]]; then
     log::err "push failed | scope='${scope}' took='$(elapsed "${start}")s'"
-    push::show_summary; return 1
+    push::show_summary
+    [[ "${edit}" == false ]] || print -r -- "next: ${CLI_NAME} logs"
+    return 1
   fi
   log::info "push done | scope='${scope}' took='$(elapsed "${start}")s'"
   push::show_summary
+  if [[ "${edit}" == true ]]; then
+    if is_dry_run; then print -r -- "next: ${CLI_NAME} push --edit ${PUSH_PLAN_PATH}"; else print -r -- "next: ${CLI_NAME} status"; fi
+  fi
+}
+
+# --- push --edit: the plan file, one 'push|skip  <repo>  <sha>' line per repo with something to push ---
+
+# push::bump_pending <submodule>: 0 when bump_pointer would commit a new pointer for it now (its
+# HEAD differs from the shared tier's pointer and is ahead of it), printing '<pointer|-> <head>'.
+push::bump_pending() {
+  local repo="${1}" pointer head
+  is_repo_present shared && is_repo_present "${repo}" || return 1
+  pointer="$(repo_git shared ls-tree HEAD -- "${repo}" 2>/dev/null | awk '{print $3}')"
+  head="$(repo_git "${repo}" rev-parse HEAD 2>/dev/null || true)"
+  [[ -n "${head}" && "${head}" != "${pointer}" ]] || return 1
+  [[ -z "${pointer}" ]] || repo_git "${repo}" merge-base --is-ancestor "${pointer}" "${head}" 2>/dev/null || return 1
+  print -r -- "${pointer:--} ${head}"
+}
+
+# push::edit_candidates: the repos a plan lists, in run order, one per line: each in-scope repo
+# that is_push_needed (the local tier only with a remote), and the shared tier also when an
+# in-scope submodule's pointer bump would give it something to push.
+push::edit_candidates() {
+  local repo
+  local -i bumps=0
+  if is_in_scope local && is_repo_present local && repo_git local remote get-url origin >/dev/null 2>&1 && is_push_needed local; then
+    print -r -- local
+  fi
+  if is_in_scope submodules; then
+    for repo in "${SUBMODULES[@]}"; do
+      is_repo_present "${repo}" || continue
+      is_push_needed "${repo}" && print -r -- "${repo}"
+      push::bump_pending "${repo}" >/dev/null && bumps+=1
+    done
+  fi
+  if is_in_scope shared && is_repo_present shared && { (( bumps )) || is_push_needed shared; }; then
+    print -r -- shared
+  fi
+  return 0
+}
+
+# push::unpushed <repo>: the commits a push would publish, as '#   <sha> <subject>' comment lines
+# (twenty at most), after a '# <repo>  <branch>  <count>' line. The comparison is is_push_needed's.
+push::unpushed() {
+  local repo="${1}" branch local_ref=HEAD remote_ref=refs/remotes/origin/main count where
+  local -i max=20
+  branch="$(repo_git "${repo}" branch --show-current 2>/dev/null || true)"
+  if [[ -n "${branch}" ]]; then local_ref="refs/heads/${branch}"; remote_ref="refs/remotes/origin/${branch}"; fi
+  where="${branch:-detached}"
+  if ! repo_git "${repo}" rev-parse -q --verify "${remote_ref}" >/dev/null 2>&1; then
+    print -r -- "# ${repo}  ${where}  no ${remote_ref#refs/remotes/} yet: the push creates it"
+    repo_git "${repo}" log --format='#   %h %s' -n "${max}" "${local_ref}" 2>/dev/null
+    return 0
+  fi
+  count="$(repo_git "${repo}" rev-list --count "${remote_ref}..${local_ref}" 2>/dev/null || print 0)"
+  print -r -- "# ${repo}  ${where}  $(plural "${count}" "commit ${remote_ref#refs/remotes/} lacks" "commits ${remote_ref#refs/remotes/} lacks")"
+  repo_git "${repo}" log --format='#   %h %s' -n "${max}" "${remote_ref}..${local_ref}" 2>/dev/null
+  (( count <= max )) || print -r -- "#   … $(( count - max )) more"
+}
+
+# push::edit_plan <candidate>…: the plan file's text. Every line starts as skip; the sha is the
+# repo's HEAD now, which the parse holds the line to.
+push::edit_plan() {
+  local repo sub pending
+  cat <<EOF
+# ${CLI_NAME} push --edit: one line per repo with something to push, <push|skip>  <repo>  <sha>
+# Change 'skip' to 'push' for each repo to publish:
+#   push   push it; a submodule's pointer bump is then committed in the shared tier
+#   skip   leave it unpushed (deleting the line is the same)
+# The sha is the repo's HEAD as this plan was written: a push line for a repo that has
+# moved since is refused. 'push shared' is refused while a submodule whose pointer it
+# would bump is skipped. Lines starting with # are comments.
+# Scope: ${(j:, :)PUSH_SCOPE}. Without --edit, '${CLI_NAME} push' pushes every repo listed.
+EOF
+  for repo in "$@"; do
+    print -r -- ""
+    push::unpushed "${repo}"
+    if [[ "${repo}" == shared ]] && is_in_scope submodules; then
+      for sub in "${SUBMODULES[@]}"; do
+        pending="$(push::bump_pending "${sub}")" || continue
+        print -r -- "#   pointer bump: ${sub:t} ${${pending%% *}:0:7} -> ${${pending#* }:0:7}${${(M)@:#${sub}}:+ (once ${sub} is pushed)}"
+      done
+    fi
+    print -r -- "skip  ${repo}  $(repo_git "${repo}" rev-parse --short=12 HEAD 2>/dev/null)"
+  done
+}
+
+# push::edit_parse <plan file>: checks every line against the repos as they are now and fills
+# the caller's PUSH_ALLOW with the push lines' repos. Prints one `line N: problem | …` per bad
+# line on stderr; returns 1 when any is bad. A line: push or skip, a repo push::edit_candidates
+# lists, at most once, then (required for push) the sha the plan recorded, which HEAD must still
+# start with; '# …' after it is a comment.
+push::edit_parse() {
+  setopt localoptions extendedglob
+  local file="${1}" line body action repo sha head sub pending shared_line=""
+  local -a known=("${(@f)$(push::edit_candidates)}") seen=() words
+  known=("${(@)known:#}")
+  local -i n=0 bad=0
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    n=$(( n + 1 ))
+    body="${${${line%%\#*}##[[:space:]]#}%%[[:space:]]#}"
+    [[ -n "${body}" ]] || continue
+    words=(${=body})
+    action="${words[1]}" repo="${words[2]:-}" sha="${words[3]:-}"
+    if [[ "${action}" != (push|skip) ]]; then
+      print -u2 -r -- "line ${n}: unknown action; use push or skip | line='${line}'"; bad=1; continue
+    fi
+    if (( ${#words} < 2 || ${#words} > 3 )); then
+      print -u2 -r -- "line ${n}: expected <push|skip>  <repo>  <sha> | line='${line}'"; bad=1; continue
+    fi
+    if (( ! ${known[(Ie)${repo}]} )); then
+      print -u2 -r -- "line ${n}: not a repo with something to push in this scope | repo='${repo}' repos='${(j:, :)known}'"; bad=1; continue
+    fi
+    if (( ${seen[(Ie)${repo}]} )); then
+      print -u2 -r -- "line ${n}: listed twice | repo='${repo}'"; bad=1; continue
+    fi
+    seen+=("${repo}")
+    [[ "${action}" == push ]] || continue
+    head="$(repo_git "${repo}" rev-parse HEAD 2>/dev/null || true)"
+    if [[ "${sha}" != [0-9a-f](#c7,40) ]]; then
+      print -u2 -r -- "line ${n}: a push line needs the sha the plan recorded | repo='${repo}' line='${line}'"; bad=1; continue
+    fi
+    if [[ "${head}" != "${sha}"* ]]; then
+      print -u2 -r -- "line ${n}: ${repo} moved since the plan was written | planned='${sha}' now='${head:0:12}' fix='${CLI_NAME} push --edit (a new plan)'"; bad=1; continue
+    fi
+    PUSH_ALLOW+=("${repo}")
+    [[ "${repo}" != shared ]] || shared_line="${n}"
+  done < "${file}"
+  # A skipped submodule publishes nothing, so its pointer must not ride the shared push.
+  if [[ -n "${shared_line}" ]] && is_in_scope submodules; then
+    for sub in "${SUBMODULES[@]}"; do
+      (( ${known[(Ie)${sub}]} && ! ${PUSH_ALLOW[(Ie)${sub}]} )) || continue
+      pending="$(push::bump_pending "${sub}")" || continue
+      print -u2 -r -- "line ${shared_line}: push shared while ${sub} is skipped; the shared tier would carry its unpublished pointer | pointer='${${pending%% *}:0:7}' head='${${pending#* }:0:7}' fix='push ${sub} too, or skip shared'"
+      bad=1
+    done
+  fi
+  return ${bad}
+}
+
+# push::edit [FILE]: the plan (written to cmd_push's PUSH_PLAN_PATH, or FILE to resume one),
+# opened in $EDITOR on a terminal, then parsed; off a terminal FILE is parsed as saved. Bad lines:
+# each reported with its number; on a terminal, offered for another edit, else 1 naming the
+# --edit FILE that resumes. A good plan is confirmed once on a terminal (not under --dry-run) and
+# leaves the chosen repos in cmd_push's PUSH_ALLOW; 0 with it empty is nothing to push.
+push::edit() {
+  local resume="${1:-}" file editor before
+  local -i tty=0
+  [[ -t 0 && -t 1 ]] && tty=1
+  if [[ -n "${resume}" ]]; then
+    [[ -f "${resume}" ]] || usage_error "push --edit: no such plan file | file='${resume}'"
+    file="${resume:a}"; PUSH_PLAN_PATH="${file}"
+  else
+    local -a candidates=("${(@f)$(push::edit_candidates)}")
+    candidates=("${(@)candidates:#}")
+    if (( ${#candidates} == 0 )); then
+      print -r -- "nothing to push: every repo in scope is at origin | scope='${(j:, :)PUSH_SCOPE}'"
+      return 0
+    fi
+    file="${PUSH_PLAN_PATH}"
+    mkdir -p "${file:h}" || return 1
+    push::edit_plan "${candidates[@]}" > "${file}" || return 1
+  fi
+  if (( tty )); then
+    editor="${EDITOR:-vi}"
+    command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi
+    before="$(mktemp "${TMPDIR:-/tmp}/push-edit.XXXXXX")" || return 1
+    while true; do
+      cp -- "${file}" "${before}"
+      if ! ${=editor} "${file}"; then
+        rm -f -- "${before}"
+        log::err "editor exited non-zero; nothing pushed | editor='${editor}' file='${file}'"
+        return 1
+      fi
+      if [[ -z "${resume}" ]] && cmp -s -- "${before}" "${file}"; then
+        rm -f -- "${before}"
+        print -r -- "no change; nothing pushed"
+        return 0
+      fi
+      PUSH_ALLOW=()
+      push::edit_parse "${file}" && break
+      if ui::confirm "Edit the plan again?"; then
+        resume="${file}"   # an unchanged reopen is still a plan to read, not a "no change"
+        continue
+      fi
+      rm -f -- "${before}"
+      log::err "plan not run; fix the lines above, then | fix='${CLI_NAME} push --edit ${file}'"
+      return 1
+    done
+    rm -f -- "${before}"
+  else
+    PUSH_ALLOW=()
+    if ! push::edit_parse "${file}"; then
+      log::err "plan not run; fix the lines above, then | fix='${CLI_NAME} push --edit ${file}'"
+      return 1
+    fi
+  fi
+  if (( ${#PUSH_ALLOW} == 0 )); then
+    print -r -- "every line is skip; nothing pushed"
+    return 0
+  fi
+  print -r -- "plan: push ${(j:, :)PUSH_ALLOW}"
+  if (( tty )) && ! is_dry_run; then
+    local rc=0
+    ui::confirm "Push $(plural "${#PUSH_ALLOW}" repo repos)?" || rc=$?
+    if (( rc != 0 )); then
+      log::warn "declined; nothing pushed | plan='${file}'"
+      PUSH_ALLOW=()
+      (( rc == 130 )) && return 130
+      return 1
+    fi
+  fi
+  return 0
 }
 
 # --- The closing table: one row per repo (and per pointer bump), terminal only ---

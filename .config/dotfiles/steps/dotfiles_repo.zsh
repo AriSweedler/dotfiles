@@ -1,7 +1,8 @@
 # step dotfiles_repo — the shared tier: bare repo at ~/dotfiles.git (renamed from the pre-harness
 # ~/dotfiles), tracking origin, HOME checked out, hooks wired, submodules initialized,
-# origin/main known, nothing dirty. Every fix is idempotent: `dotfiles init` runs this after every
-# pull.
+# origin/main known, every checked-out submodule documented (README.md and its linked skill),
+# nothing dirty. Every fix but the docs (a human writes them) is idempotent: `dotfiles init`
+# runs this after every pull.
 step::declare dotfiles_repo --group repo \
   --desc "shared dotfiles bare repo cloned, tracking origin, checked out into HOME, hooks wired"
 step::watches dotfiles_repo '.gitmodules' '.config/git/dotfiles-hooks/**'
@@ -33,6 +34,28 @@ dotfiles_repo::is_origin_main_known() { git --git-dir="${1}" rev-parse -q --veri
 # Submodule paths from ~/.gitmodules, read now: env.zsh's SUBMODULES predates a checkout this apply makes.
 dotfiles_repo::submodules() {
   git config -f "${HOME}/.gitmodules" --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}' || true
+}
+
+# A checked-out submodule is documented when it has README.md and its skill,
+# skills/ari-dotfile--submodule-<name>/SKILL.md, linked into ~/.claude/skills. Walks env.zsh's
+# SUBMODULES (one not checked out is submodule_uninitialized's); prints '<fix>\t<what lacks
+# what>' per gap, first gap first. Stat checks only: nothing is exec'd.
+dotfiles_repo::undocumented() {
+  local sub name dir skill link recipe='/ari-dotfile--submodule § Creating one'
+  for sub in "${SUBMODULES[@]}"; do
+    dir="${HOME}/${sub}" name="${sub:t}"
+    [[ -e "${dir}/.git" ]] || continue
+    skill="${dir}/skills/ari-dotfile--submodule-${name}/SKILL.md"
+    link="${HOME}/.claude/skills/ari-dotfile--submodule-${name}"
+    [[ -f "${dir}/README.md" ]] \
+      || print -r -- "write ~/${sub}/README.md (${recipe}, step 1)"$'\t'"${sub} lacks README.md"
+    if [[ ! -f "${skill}" ]]; then
+      print -r -- "write ~/${sub}/skills/ari-dotfile--submodule-${name}/SKILL.md (${recipe}, step 5)"$'\t'"${sub} lacks skills/ari-dotfile--submodule-${name}/SKILL.md"
+    elif [[ ! -e "${link}" || "${link:A}" != "${skill:h:A}" ]]; then
+      print -r -- "zsh \$HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link (/ari-dotfile--submodule § Layout contract)"$'\t'"~/.claude/skills lacks ari-dotfile--submodule-${name} linked to ~/${sub}/skills/ari-dotfile--submodule-${name}"
+    fi
+  done
+  return 0
 }
 
 check::dotfiles_repo() {
@@ -87,6 +110,12 @@ check::dotfiles_repo() {
     drifted="$(print -r -- "${sub_status}" | awk '/^\+/ {print $2}')"
     if [[ -n "${uninit}" ]]; then
       verdict fail submodule_uninitialized -d "submodule not checked out | paths='${uninit//$'\n'/, }'" -f "${CLI_NAME} apply dotfiles_repo"
+      return 0
+    fi
+    local -a undocumented=("${(@f)$(dotfiles_repo::undocumented)}")
+    undocumented=("${(@)undocumented:#}")
+    if (( ${#undocumented} )); then
+      verdict fail submodule_undocumented -m -d "${(j:; :)${(@)undocumented#*$'\t'}}" -f "${undocumented[1]%%$'\t'*}"
       return 0
     fi
     if [[ -n "${drifted}" ]]; then

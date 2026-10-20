@@ -125,7 +125,8 @@ submodule any other way (`git push`, `git -C … push`, `gh auth switch`,
 `gh repo create --push`). After committing, when the user asked to ship, end
 with "Run `dotfiles push` when ready." and wait; otherwise stop and say the
 commit is local. `dotfiles push --submodules` is the submodules and their bumps
-only. Bump by hand only when the repo was pushed some other way
+only; `dotfiles push --edit` lets the user pick repos from a plan file, and
+refuses `push shared` while a submodule whose pointer it would bump is skipped. Bump by hand only when the repo was pushed some other way
 (`/ari-dotfiles` § Submodules step 4).
 
 ## Verify
@@ -164,6 +165,7 @@ Never `--no-verify`, in any repo. Never edit `denylist.txt` to make a check pass
 | `submodule status` prefix `-` | not initialized | `cd ~ && git df submodule update --init -- .config/<name>` (`dotfiles init` does it) |
 | registry `status`: the repo's skill `dangling` or `missing` | skill dir renamed or new | `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link --prune` |
 | `dotfiles healthcheck`: `submodule_uninitialized` / `submodule_drift` | pointer vs checkout | the two rows above |
+| `dotfiles healthcheck`: `submodule_undocumented` | the checkout lacks `README.md` or `skills/ari-dotfile--submodule-<name>/SKILL.md`, or the skill is not linked into `~/.claude/skills` | write what the detail names (**Creating one**, steps 1 and 5), commit it in the repo; an unlinked skill: `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link` |
 
 ## Known submodules
 

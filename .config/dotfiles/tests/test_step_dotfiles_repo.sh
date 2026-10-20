@@ -92,6 +92,36 @@ popd > /dev/null || abort "popd failed"
 assert_eq "check from a work-tree subdirectory → ok" ok "$(step_get dotfiles_repo .status)"
 assert_eq "check from a work-tree subdirectory keeps reason clean" clean "$(step_get dotfiles_repo .reason)"
 
+# A checked-out submodule needs README.md and skills/ari-dotfile--submodule-<name>/SKILL.md,
+# linked into ~/.claude/skills; each gap is a manual fail naming what lacks what.
+SUB="${HOME}/.config/sub"
+git init -q --initial-branch=main "${SUB}"
+printf 'x\n' > "${SUB}/f"
+git -C "${SUB}" add f && git -C "${SUB}" commit -q -m one
+printf '[submodule ".config/sub"]\n\tpath = .config/sub\n\turl = https://github.com/example/sub.git\n' > "${HOME}/.gitmodules"
+df_git update-index --add --cacheinfo "160000,$(git -C "${SUB}" rev-parse HEAD),.config/sub"
+df_git add "${HOME}/.gitmodules"
+df_git -c core.hooksPath=/dev/null commit -q -m "sub"
+check_repo
+assert_eq "undocumented submodule → fail" fail "$(step_get dotfiles_repo .status)"
+assert_eq "reason submodule_undocumented" submodule_undocumented "$(step_get dotfiles_repo .reason)"
+assert_eq "submodule_undocumented is manual" true "$(step_get dotfiles_repo .manual)"
+assert_contains "detail: README.md missing" "$(step_get dotfiles_repo .detail)" ".config/sub lacks README.md"
+assert_contains "detail: the skill missing" "$(step_get dotfiles_repo .detail)" ".config/sub lacks skills/ari-dotfile--submodule-sub/SKILL.md"
+assert_contains "fix: the first gap, by the recipe" "$(step_get dotfiles_repo .fix)" "write ~/.config/sub/README.md (/ari-dotfile--submodule"
+printf '# sub\n' > "${SUB}/README.md"
+mkdir -p "${SUB}/skills/ari-dotfile--submodule-sub"
+printf -- '---\nname: ari-dotfile--submodule-sub\n---\n' > "${SUB}/skills/ari-dotfile--submodule-sub/SKILL.md"
+check_repo
+assert_eq "skill not linked → still undocumented" submodule_undocumented "$(step_get dotfiles_repo .reason)"
+assert_contains "detail: the link missing" "$(step_get dotfiles_repo .detail)" "~/.claude/skills lacks ari-dotfile--submodule-sub linked to ~/.config/sub/skills/ari-dotfile--submodule-sub"
+assert_contains "fix: the registry's link" "$(step_get dotfiles_repo .fix)" "ari-dotfiles-skill-registry/bin/link"
+mkdir -p "${HOME}/.claude/skills"
+ln -s "${SUB}/skills/ari-dotfile--submodule-sub" "${HOME}/.claude/skills/ari-dotfile--submodule-sub"
+check_repo
+assert_eq "documented submodule → ok" ok "$(step_get dotfiles_repo .status)"
+rm -rf "${SUB}" "${HOME}/.claude/skills/ari-dotfile--submodule-sub"
+
 # The pre-harness layout: the bare repo at ~/dotfiles. The check names it, the apply renames it
 # and gives it tracking, hooks and a checkout like any clone; both paths present is for a human.
 world_empty_home
