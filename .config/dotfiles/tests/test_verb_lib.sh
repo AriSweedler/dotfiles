@@ -50,6 +50,9 @@ assert_contains "help: --edit comes with verb::edit" "${OUT}" "  --edit         
 assert_contains "help: Env, default expanded" "${OUT}" $'  ARI_X\n      a variable (default ~/x)'
 assert_eq "help: no line wider than 80" "" "$(printf '%s\n' "${OUT}" | awk 'length($0) > 80')"
 
+zrun -- 'verb::define bare "a bare verb"; verb::usage bare "bare"; verb::define other "o"; verb::section other T <<< "x"; verb::help bare; typeset -A opts; typeset -a args; verb::parse bare x; print -r -- "args=${args}"'
+assert_eq "a verb with only a description and usage: help and parse under set -u" $'a bare verb\n\nUsage\n  dotfiles bare\nargs=x' "${OUT}"
+
 # ── verb: the parser accepts exactly the declared flags ──
 zrun -- "${DEMO}; verb::parse demo run a --trigger=unlock -n --file b c -- --raw; for k in \${(ok)opts}; do print -rn -- \"\${k} \${opts[\${k}]} \"; done; print -r -- \"|\${args}\""
 assert_eq "parse: values, aliases under the first spelling, positionals in order, -- ends flags" \
@@ -65,6 +68,37 @@ zrun -- "${DEMO}; verb::parse demo --file; print -r -- \"\${opts[--file]}\""
 assert_eq "parse: an optional value left out is 1" "1" "${OUT}"
 zrun -- "${DEMO}; verb::parse demo --help; print -r -- \"\${opts[--help]}\""
 assert_eq "parse: --help is declared for every verb" "1" "${OUT}"
+
+# ── the help rule for a declared verb (cmd/help.zsh's help::declared_gap) ──
+HELP_RULE="source '${ORIG_CONFIG_DIR}/dotfiles/cmd/help.zsh'"
+cat > "${FIX}/good.zsh" <<'X'
+verb::define good 'a whole declaration'
+verb::usage good 'good [--x]'
+verb::flag good '--x' 'what x does'
+verb::edit good --none 'good has nothing to edit'
+cmd_good() { local -A opts; local -a args; verb::parse good "$@"; }
+X
+cat > "${FIX}/bad.zsh" <<'X'
+verb::define bad ''
+verb::flag bad '--y' ''
+verb::sub bad run ''
+cmd_bad() {
+  case "$1" in
+    --hand) : ;;
+  esac
+}
+X
+zrun -- "${HELP_RULE}; source '${FIX}/good.zsh'; help::declared_gap good '${FIX}/good.zsh'; print -r -- \"[\${REPLY}]\""
+assert_eq "declared rule: a whole declaration passes" "[]" "${OUT}"
+zrun -- "${HELP_RULE}; source '${FIX}/bad.zsh'; help::declared_gap bad '${FIX}/bad.zsh'; print -r -- \"\${REPLY}\""
+assert_contains "declared rule: no description" "${OUT}" "no description (verb::define bad"
+assert_contains "declared rule: no Usage form" "${OUT}" "no Usage form"
+assert_contains "declared rule: a flag without a description" "${OUT}" "'--y' has no description"
+assert_contains "declared rule: a subcommand without one" "${OUT}" "'run' has no description"
+assert_contains "declared rule: no edit and no reason for none" "${OUT}" "no edit (verb::edit bad HANDLER"
+assert_contains "declared rule: a flag parsed by hand" "${OUT}" "parses flags outside verb::parse: --hand"
+zrun -- "${HELP_RULE}; help::is_declared '${FIX}/good.zsh' good && print yes; help::is_declared '${FIX}/good.zsh' other || print no"
+assert_eq "is_declared: by its verb::define line" $'yes\nno' "${OUT}"
 
 # ── edit: one session ──
 EDITORS="${FIX}/editors"

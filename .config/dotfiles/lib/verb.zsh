@@ -28,19 +28,33 @@ typeset -gA VERB_USAGE VERB_SUBS VERB_FLAGS VERB_ENV VERB_SECTIONS
 
 verb::define() { VERB_DESC[${1}]="${2}"; }
 verb::usage() { local v="${1}"; shift; local form; for form in "$@"; do VERB_USAGE[${v}]+="${form}"$'\n'; done; }
-verb::about() { local text; IFS= read -rd '' text; VERB_ABOUT[${1}]+="${text%$'\n'}"$'\n'; }
+verb::about() { local text; IFS= read -rd '' text || true; VERB_ABOUT[${1}]+="${text%$'\n'}"$'\n'; }
 verb::sub() { VERB_SUBS[${1}]+="${2}"$'\t'"${3}"$'\n'; }
 verb::flag() { VERB_FLAGS[${1}]+="${2}"$'\t'"${3}"$'\n'; }
 verb::env() { VERB_ENV[${1}]+="${2}"$'\t'"${3}"$'\t'"${4:-}"$'\n'; }
-verb::section() { local text; IFS= read -rd '' text; VERB_SECTIONS[${1}]+="${2}"$'\t'"${text%$'\n'}"$'\x1f'; }
+verb::section() { local text; IFS= read -rd '' text || true; VERB_SECTIONS[${1}]+="${2}"$'\t'"${text%$'\n'}"$'\x1f'; }
 
 verb::edit() {
   local v="${1}"
   if [[ "${2}" == --none ]]; then VERB_EDIT_NONE[${v}]="${3}"; return 0; fi
   VERB_EDIT[${v}]="${2}" VERB_EDIT_ARGS[${v}]="${3}" VERB_EDIT_DESC[${v}]="${4}"
-  verb::usage "${v}" "${v} edit${3:+ ${3}}"
-  verb::sub "${v}" edit "${4} (also: ${v} --edit)"
-  verb::flag "${v}" "--edit" "edit: the same as the edit subcommand"
+}
+
+# verb::_rows_of VERB usage|subs|flags: REPLY is that table of VERB as declared, then the edit's own
+# row last (wherever verb::edit was declared), so every verb's edit reads the same.
+verb::_rows_of() {
+  local v="${1}"
+  case "${2}" in
+    usage) REPLY="${VERB_USAGE[${v}]:-}" ;;
+    subs) REPLY="${VERB_SUBS[${v}]:-}" ;;
+    flags) REPLY="${VERB_FLAGS[${v}]:-}" ;;
+  esac
+  [[ -n "${VERB_EDIT[${v}]:-}" ]] || return 0
+  case "${2}" in
+    usage) REPLY+="${v} edit${VERB_EDIT_ARGS[${v}]:+ ${VERB_EDIT_ARGS[${v}]}}"$'\n' ;;
+    subs) REPLY+="edit"$'\t'"${VERB_EDIT_DESC[${v}]} (also: ${v} --edit)"$'\n' ;;
+    flags) REPLY+="--edit"$'\t'"edit: the same as the edit subcommand"$'\n' ;;
+  esac
 }
 
 # verb::_flag_names VERB: `reply` is every spelling VERB accepts, `--edit` and -h/--help included;
@@ -49,7 +63,9 @@ verb::_flag_names() {
   local row spec name arg
   typeset -gA VERB_ARG=() VERB_CANON=()
   reply=(-h --help)
-  for row in "${(@f)VERB_FLAGS[${1}]}"; do
+  local REPLY
+  verb::_rows_of "${1}" flags
+  for row in "${(@f)REPLY}"; do
     [[ -n "${row}" ]] || continue
     spec="${row%%$'\t'*}"
     arg=""; [[ "${spec}" == *' '* ]] && arg="${spec#* }"
@@ -114,7 +130,7 @@ verb::_rows() {
 verb::_wrap() {
   local text="${1}" prefix="${3:-}" word line
   local -i indent="${2}" col empty=1
-  local pad="${(l:indent:: :)}"
+  local pad; printf -v pad "%*s" "${indent}" ""
   line="${prefix:-${pad}}" col=${indent}
   for word in ${=text}; do
     if (( ! empty && col + 1 + ${#word} > 80 )); then
@@ -134,15 +150,18 @@ verb::help() {
   print -r -- "${(e)VERB_DESC[${v}]}"
   print -r -- ""
   print -r -- "${c_bold}Usage${c_rst}"
-  for form in "${(@f)VERB_USAGE[${v}]}"; do [[ -z "${form}" ]] || print -r -- "  ${DF} ${(e)form}"; done
-  if [[ -n "${VERB_ABOUT[${v}]}" ]]; then
+  local REPLY
+  verb::_rows_of "${v}" usage
+  for form in "${(@f)REPLY}"; do [[ -z "${form}" ]] || print -r -- "  ${DF} ${(e)form}"; done
+  if [[ -n "${VERB_ABOUT[${v}]:-}" ]]; then
     print -r -- ""
-    for text in "${(@f)${(e)VERB_ABOUT[${v}]%$'\n'}}"; do print -r -- "  ${text}"; done
+    for text in "${(@f)${(e)${VERB_ABOUT[${v}]:-}%$'\n'}}"; do print -r -- "  ${text}"; done
   fi
-  local -a sections=(Subcommands VERB_SUBS 10 Flags VERB_FLAGS 14)
+  local -a sections=(Subcommands subs 10 Flags flags 14)
   local i
   for (( i = 1; i <= ${#sections}; i += 3 )); do
-    text="${${(P)sections[i+1]}[${v}]}"
+    verb::_rows_of "${v}" "${sections[i+1]}"
+    text="${REPLY}"
     [[ -n "${text}" ]] || continue
     print -r -- ""
     print -r -- "${c_bold}${sections[i]}${c_rst}"
@@ -150,7 +169,7 @@ verb::help() {
     for row in "${(@f)text}"; do (( ${#row%%$'\t'*} > w && ${#row%%$'\t'*} <= sections[i+2] )) && w=${#row%%$'\t'*}; done
     print -r -- "${text}" | verb::_rows "${w}"
   done
-  if [[ -n "${VERB_ENV[${v}]}" ]]; then
+  if [[ -n "${VERB_ENV[${v}]:-}" ]]; then
     print -r -- ""
     print -r -- "${c_bold}Env${c_rst}"
     local var desc def
@@ -158,9 +177,9 @@ verb::help() {
       [[ -n "${var}" ]] || continue
       print -r -- "  ${c_grey}${var}${c_rst}"
       verb::_wrap "${(e)desc}${def:+ (default ${(e)def})}" 6
-    done <<< "${VERB_ENV[${v}]}"
+    done <<< "${VERB_ENV[${v}]:-}"
   fi
-  for row in "${(@ps:\x1f:)VERB_SECTIONS[${v}]}"; do
+  for row in "${(@ps:\x1f:)VERB_SECTIONS[${v}]:-}"; do
     [[ -n "${row}" ]] || continue
     print -r -- ""
     print -r -- "${c_bold}${row%%$'\t'*}${c_rst}"

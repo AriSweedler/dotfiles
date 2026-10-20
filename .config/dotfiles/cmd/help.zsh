@@ -157,12 +157,43 @@ help::verb_files() {
   [[ "${verb}" == raycast ]] || reply+=("${ARI_DOTFILES_CMD}/${verb}/"*.zsh(N))
 }
 
-# help::verb_gap VERB [FILE]: REPLY = what help_VERB lacks, FILE standing in for cmd/VERB.zsh.
+# help::verb_gap VERB [FILE]: REPLY = what VERB's help lacks, FILE standing in for cmd/VERB.zsh.
+# A declared verb (verb::define in its file) is held to help::declared_gap; one still written as a
+# help_VERB heredoc to help::doc_gap.
 help::verb_gap() {
   local verb="${1}" file="${2:-${ARI_DOTFILES_CMD}/${1}.zsh}"
   local -a reply
   help::verb_files "${verb}" "${file}"
-  help::doc_gap "${file}" "help_${verb}" "${reply[@]}"
+  if help::is_declared "${file}" "${verb}"; then
+    help::declared_gap "${verb}" "${reply[@]}"
+  else
+    help::doc_gap "${file}" "help_${verb}" "${reply[@]}"
+  fi
+}
+
+# help::is_declared FILE VERB: 0 when FILE declares VERB with verb::define (lib/verb.zsh).
+help::is_declared() {
+  zmodload zsh/mapfile
+  [[ "${mapfile[${1}]-}" == (|*$'\n')"verb::define ${2} "* ]]
+}
+
+# help::declared_gap VERB <parser file>..: REPLY = what a declared verb lacks, '' when nothing: its
+# help comes from the declaration, so the rule is that the declaration is whole (a description,
+# a Usage form, a description on every flag and subcommand, an edit or a reason for none) and that
+# nothing parses a flag outside verb::parse (help::parser_flags finds none in its files).
+help::declared_gap() {
+  local verb="${1}" row
+  shift
+  local -a lacks=() reply
+  [[ -n "${VERB_DESC[${verb}]:-}" ]] || lacks+=("no description (verb::define ${verb} '…')")
+  [[ -n "${VERB_USAGE[${verb}]:-}${VERB_EDIT[${verb}]:-}" ]] || lacks+=("no Usage form (verb::usage)")
+  for row in "${(@f)VERB_FLAGS[${verb}]:-}" "${(@f)VERB_SUBS[${verb}]:-}"; do
+    [[ -z "${row}" || -n "${row#*$'\t'}" ]] || lacks+=("'${row%%$'\t'*}' has no description")
+  done
+  [[ -n "${VERB_EDIT[${verb}]:-}${VERB_EDIT_NONE[${verb}]:-}" ]] || lacks+=("no edit (verb::edit ${verb} HANDLER … or verb::edit ${verb} --none '<why>')")
+  help::parser_flags "$@"
+  (( ${#reply} == 0 )) || lacks+=("parses flags outside verb::parse: ${reply[*]}")
+  REPLY="${(j:, :)lacks}"
 }
 
 # help::top_gap [FILE]: REPLY = what help() in lib/dispatch.zsh (or FILE) lacks for main()'s flags.

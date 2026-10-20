@@ -8,9 +8,10 @@
 # Every verb, sorted.
 verbs() { print -rl -- ${(o)${(k)functions[(I)cmd_*]#cmd_}}; }
 
+# A usage error: the message, then the help of the verb being run (the top-level help before one).
 usage_error() {
   log::err "$*"
-  help >&2
+  if [[ -n "${VERB_CURRENT:-}" ]]; then help_verb "${VERB_CURRENT}" >&2; else help >&2; fi
   exit 64
 }
 
@@ -38,7 +39,9 @@ help::colors() {
 help_verb() {
   local verb="${1}"
   help::colors
-  if (( ${+functions[help_${verb}]} )); then "help_${verb}"; else print -r -- "dotfiles ${verb}"; fi
+  if [[ -n "${VERB_DESC[${verb}]:-}" ]]; then verb::help "${verb}"
+  elif (( ${+functions[help_${verb}]} )); then "help_${verb}"
+  else print -r -- "dotfiles ${verb}"; fi
 }
 
 # dotfiles --help: the verbs, grey, with their descriptions. --verbose --help: every verb's whole help.
@@ -116,6 +119,14 @@ main() {
   if (( want_help )) || { [[ "${verb}" != git ]] && (( ${@[(I)(-h|--help)]} )); }; then
     help_verb "${verb}"
     return 0
+  fi
+  typeset -g VERB_CURRENT="${verb}"
+  # A verb that declares an edit (verb::edit) is edited the same way everywhere: `VERB edit …`
+  # and `VERB --edit …` both reach its handler.
+  if [[ -n "${VERB_EDIT[${verb}]:-}" && "${1:-}" == (edit|--edit) ]]; then
+    shift
+    "${VERB_EDIT[${verb}]}" "$@"
+    return
   fi
   "cmd_${verb}" "$@"
 }

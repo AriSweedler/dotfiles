@@ -5,31 +5,6 @@
 # on every tick, and a new plugin with a `# cron:` line is due at once. The draft lives in
 # JOBS_STATE_DIR/drafts until it passes, so a failed edit resumes where it left off.
 
-jobs_edit_help() {
-  cat <<EOF
-${CLI_NAME} jobs edit NAME [--new] [--local|--global] [--dep] [--no-commit] [--no-push]
-
-Opens the job plugin NAME (or, with --dep, the dep NAME) in \$EDITOR, vi when unset, as a draft.
-On save the draft is checked: its interpreter's syntax check (-n) for zsh, bash and sh; the
-'# triggers:' words (unlock, load); each '# cron:' line's five fields; '# timeout:' a number;
-each '# deps:' name a dep that exists; and the documentation rule, a line saying what it does
-and, for a plugin, a '# triggers:' or '# cron:' line. A draft that passes replaces the file,
-executable, and is committed in its tier; one that does not is reported and kept for the next
-'jobs edit NAME' (on a terminal, offered for another edit). The agent is never reloaded: it
-reads plugins on its next tick.
-
-  --new        create NAME from a template (in the local tier unless --global)
-  --local      with --new: ~/.local/share/dotfiles/{jobs,deps} (git ldf; committed and pushed)
-  --global     with --new: ~/.config/dotfiles/{jobs,deps} (git df; committed, never pushed)
-  --dep        a dep, not a plugin
-  --no-commit  put it in place, leave it uncommitted
-  --no-push    skip the local tier's push
-
-Exit 0 saved (or no change); 1 the draft did not pass, the editor failed or the commit was
-refused; 64 usage.
-EOF
-}
-
 # jobs_edit_template <plugin|dep> <name>: what --new starts from. Its TODO line is not
 # documentation, so an unedited template does not pass.
 jobs_edit_template() {
@@ -81,21 +56,15 @@ jobs_edit_check() {
 }
 
 jobs_edit() {
-  local name="" kind=plugin tier="" new=0 commit=1 file="" root editor draft rel verb
-  while (( $# )); do
-    case "${1}" in
-      -h|--help) jobs_edit_help; return 0 ;;
-      --new) new=1 ;;
-      --local) tier=ldf ;;
-      --global) tier=df ;;
-      --dep) kind=dep ;;
-      --no-commit) commit=0 ;;
-      --no-push) export ARI_DOTFILES_NO_PUSH=1 ;;
-      -*) usage_error "jobs edit: unknown flag | flag='${1}'" ;;
-      *) [[ -z "${name}" ]] || usage_error "jobs edit takes one NAME | args='${name} ${1}'"; name="${1}" ;;
-    esac
-    shift
-  done
+  local -A opts; local -a args
+  verb::parse jobs "$@"
+  local name="${args[1]:-}" kind=plugin tier="" file="" root draft verb
+  (( ${#args} <= 1 )) || usage_error "jobs edit takes one NAME | args='${args[*]}'"
+  (( ${+opts[--dep]} )) && kind=dep
+  (( ${+opts[--local]} )) && tier=ldf
+  (( ${+opts[--global]} )) && tier=df
+  (( ${+opts[--no-push]} )) && export ARI_DOTFILES_NO_PUSH=1
+  local -i new=${+opts[--new]}
   [[ -n "${name}" ]] || usage_error "jobs edit needs a NAME | see='${CLI_NAME} jobs list'"
   [[ "${name}" != */* && "${name}" != .* && "${name}" != README.md ]] || usage_error "jobs edit: not a plugin name | name='${name}'"
   local -a roots
@@ -121,68 +90,34 @@ jobs_edit() {
     tier=df; [[ "${file}" == "${roots[2]}/"* ]] && tier=ldf
   fi
 
-  draft="${JOBS_STATE_DIR}/drafts/${kind}-${name}"
-  mkdir -p -- "${draft:h}" || return 1
-  if [[ -f "${draft}" ]]; then
-    log::info "resuming the draft a failed edit left | draft='${draft}'"
-  elif (( new )); then
-    jobs_edit_template "${kind}" "${name}" > "${draft}"
-  else
-    cp -- "${file}" "${draft}"
+  JOBS_EDIT_KIND="${kind}" JOBS_EDIT_NAME="${name}"
+  edit::draft "${file}" "${JOBS_STATE_DIR}/drafts" jobs::_edit_template
+  draft="${REPLY}"
+  local -i rc=0
+  edit::session "${draft}" --check jobs::_edit_check --what "${name}" ${${EDIT_RESUMED:#0}:+--changed} \
+    --resume "${CLI_NAME} jobs edit ${name}${${kind:#plugin}:+ --dep}" || rc=$?
+  if (( rc == 2 )); then
+    rm -f -- "${draft}"
+    if (( new )); then print -r -- "jobs: no change; nothing created | ${kind}=${name}"
+    else print -r -- "jobs: no change | ${kind}=${name} file=$(ui::paths "${file}")"; fi
+    return 0
   fi
-  local before; before="$(mktemp "${TMPDIR:-/tmp}/jobs-edit.XXXXXX")" || return 1
-  editor="${EDITOR:-vi}"
-  command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi
-  local -i tty=0
-  [[ -t 0 && -t 1 ]] && tty=1
-  while true; do
-    cp -- "${draft}" "${before}"
-    if ! ${=editor} "${draft}"; then
-      rm -f -- "${before}"
-      log::err "editor exited non-zero; draft kept, nothing changed | editor='${editor}' draft='${draft}'"
-      return 1
-    fi
-    if (( new )) && cmp -s -- "${draft}" <(jobs_edit_template "${kind}" "${name}"); then
-      rm -f -- "${before}" "${draft}"
-      print -r -- "jobs: no change; nothing created | ${kind}=${name}"
-      return 0
-    fi
-    if (( ! new )) && cmp -s -- "${draft}" "${file}"; then
-      rm -f -- "${before}" "${draft}"
-      print -r -- "jobs: no change | ${kind}=${name} file=$(ui::paths "${file}")"
-      return 0
-    fi
-    jobs_edit_check "${draft}" "${kind}" && break
-    if (( tty )) && ui::confirm "Edit ${name} again?"; then continue; fi
-    rm -f -- "${before}"
-    log::err "${kind} not saved; draft kept | draft='${draft}' fix='${CLI_NAME} jobs edit ${name}${${kind:#plugin}:+ --dep}'"
-    return 1
-  done
-  rm -f -- "${before}"
-
-  # In place: written beside the live file and renamed over it, so the agent never reads half a
-  # file. Executable, unless it was a plugin turned off with chmod -x: an edit does not turn it on.
-  local mode=755
-  [[ -f "${file}" && ! -x "${file}" ]] && mode=644
-  mkdir -p -- "${file:h}" || return 1
-  cp -- "${draft}" "${file}.edit.$$" && chmod "${mode}" "${file}.edit.$$" && mv -f -- "${file}.edit.$$" "${file}" || {
-    rm -f -- "${file}.edit.$$"
-    log::err "could not put the ${kind} in place; draft kept | file='${file}' draft='${draft}'"
-    return 1
-  }
-  rm -f -- "${draft}"
+  (( rc == 0 )) || return 1
+  # A plugin turned off with chmod -x stays off; a new one is executable.
+  local mode=""; (( new )) && mode=755
+  edit::install "${draft}" "${file}" ${mode} || return 1
   verb=edit; (( new )) && verb=add
   print -r -- "${kind} ${name}: saved | tier=${tier} file=$(ui::paths "${file}")"
-  if (( commit )); then
+  if (( ${+opts[--no-commit]} )); then
+    print -r -- "not committed | file=$(ui::paths "${file}")"
+  else
     local t=shared; [[ "${tier}" == ldf ]] && t=local
     local what="job ${name}"; [[ "${kind}" == dep ]] && what="job dep ${name}"
     tier::commit "${t}" "${CLI_NAME}: ${verb} ${what} (${t})" "${file}" || return 1
-  else
-    print -r -- "not committed | file=$(ui::paths "${file}")"
   fi
-  if [[ "${kind}" == plugin ]]; then
-    print -r -- "next: ${CLI_NAME} jobs run ${name}"
-  else
-    print -r -- "next: ${CLI_NAME} jobs list"
-  fi
+  if [[ "${kind}" == plugin ]]; then print -r -- "next: ${CLI_NAME} jobs run ${name}"
+  else print -r -- "next: ${CLI_NAME} jobs list"; fi
 }
+
+jobs::_edit_template() { jobs_edit_template "${JOBS_EDIT_KIND}" "${JOBS_EDIT_NAME}"; }
+jobs::_edit_check() { jobs_edit_check "${1}" "${JOBS_EDIT_KIND}"; }

@@ -17,6 +17,9 @@ cp "${ORIG_CONFIG_DIR}/bin/dotfiles" "${CODE}/bin/dotfiles"
 CMD="${CODE}/dotfiles/cmd"
 DISPATCH="${CODE}/dotfiles/lib/dispatch.zsh"
 DRAFTS="${ARI_DOTFILES_STATE_DIR}/drafts/help"
+# A draft is named for its live file (edit::draft): the path under $HOME, / as %.
+draft_of() { printf '%s/%s' "${DRAFTS}" "${1//\//%}"; }
+VERIFY_DRAFT="$(draft_of .config/dotfiles/cmd/verify.zsh)"
 # A verb with no help: the stub's case.
 cat > "${CMD}/zz.zsh" <<'EOF'
 # dotfiles/cmd/zz.zsh — a verb the test owns.
@@ -32,10 +35,13 @@ seed_fake_repos
 
 EDITORS="${FIX}/editors"
 mkdir -p "${EDITORS}"
-# editor NAME AWK: records the line argument (+N), then rewrites the file with AWK.
+# editor NAME AWK: records the line argument (+N), then rewrites the file with AWK. It is named
+# nvim (in a directory of its own) so it is given +N, as a real one is.
 editor() {
+  mkdir -p "${EDITORS}/$1"
   printf '#!/bin/sh\nprintf "%%s\\n" "$1" > "%s/opened-at"\nawk %s "$2" > "$2.tmp" && mv "$2.tmp" "$2"\n' \
-    "${EDITORS}" "'$2'" > "${EDITORS}/$1"
+    "${EDITORS}" "'$2'" > "${EDITORS}/$1/nvim"
+  chmod +x "${EDITORS}/$1/nvim"
   chmod +x "${EDITORS}/$1"
 }
 editor noop '{ print }'
@@ -48,7 +54,15 @@ editor reword '{ sub(/^the weekly check: /, "the weekly check, edited: ") } { pr
 editor top_reword '{ sub(/the two-tier dotfiles, and/, "the two-tier dotfiles (edited), and") } { print }'
 editor top_drop_dir '/^help\(\) \{/ { h = 1 } h { gsub(/--dir/, "--dirx") } /^}/ { h = 0 } { print }'
 editor stub_para '{ sub(/in a paragraph\./, "frobs.") } { print }'
-editor stub_fill '/^  cat <<EOF$/ { print; getline; print "frob the zz"; next } { print }'
+# Fills the declaration and moves cmd_zz onto verb::parse, as converting a verb does.
+editor stub_fill '
+  /^verb::define zz / { print "verb::define zz \047frob the zz\047"; next }
+  /^verb::flag zz / { print "verb::flag zz \047--frob\047 \047print frobbed\047"; next }
+  /^verb::edit zz --none/ { print "verb::edit zz --none \047zz has nothing to edit\047"; next }
+  /^cmd_zz\(\) \{/ { print; print "  local -A opts; local -a args"; print "  verb::parse zz \"$@\""
+                     print "  if (( ${+opts[--frob]} )); then print -r -- frobbed; else print -r -- zz; fi"; skip = 1; next }
+  skip && /^}/ { skip = 0 }
+  !skip { print }'
 printf '#!/bin/sh\nexit 3\n' > "${EDITORS}/broken"; chmod +x "${EDITORS}/broken"
 
 # edit EDITOR ARGS...: `dotfiles help ARGS` from the world's copy of the program, no terminal.
@@ -56,7 +70,7 @@ edit() {
   local ed="$1"; shift
   bump_now_secs 60
   hermetic_env
-  HERMETIC_ENV+=("EDITOR=${EDITORS}/${ed}")
+  HERMETIC_ENV+=("EDITOR=${EDITORS}/${ed}/nvim")
   RC=0
   env -i "${HERMETIC_ENV[@]}" "${FIX}/tools/zsh" "${CODE}/bin/dotfiles" help "$@" \
     < /dev/null > "${FIX}/nm.out" 2> "${FIX}/nm.err" || RC=$?
@@ -67,6 +81,7 @@ copy() { bump_now_secs 60; nm_run "${CODE}/bin/dotfiles" "$@"; }
 df_count() { df_git rev-list --count HEAD; }
 opened_at() { cat "${EDITORS}/opened-at"; }
 line_of() { grep -n -m1 "^$1() {" "$2" | cut -d: -f1; }
+line_starting() { grep -n -m1 -F -- "$1" "$2" | cut -d: -f1; }
 
 # ── usage ──
 edit noop --edit nosuchverb
@@ -87,7 +102,7 @@ edit noop --edit verify
 assert_eq "unchanged: exit 0" 0 "${RC}"
 assert_contains "unchanged: says so" "${OUT}" "help verify: no change"
 assert_eq "the editor opens at help_verify()" "+$(line_of help_verify "${CMD}/verify.zsh")" "$(opened_at)"
-assert_no_file "unchanged: no draft" "${DRAFTS}/verify.zsh"
+assert_no_file "unchanged: no draft" "${VERIFY_DRAFT}"
 edit noop --edit VERIFY
 assert_eq "the verb is case-insensitive" 0 "${RC}"
 
@@ -97,9 +112,9 @@ check_kept() {  # NAME EXPECTED-ERR
   assert_contains "$1: named" "${ERR}" "$2"
   assert_contains "$1: the resume" "${ERR}" "fix='dotfiles help --edit verify'"
   assert_eq "$1: the live file is untouched" "${live_before}" "$(cat "${CMD}/verify.zsh")"
-  assert_file "$1: the draft is kept" "${DRAFTS}/verify.zsh"
+  assert_file "$1: the draft is kept" "${VERIFY_DRAFT}"
   assert_eq "$1: nothing committed" "${df_before}" "$(df_count)"
-  rm -f "${DRAFTS}/verify.zsh"
+  rm -f "${VERIFY_DRAFT}"
 }
 edit no_usage --edit verify
 check_kept "no Usage heading" "undocumented: no Usage section"
@@ -117,7 +132,7 @@ edit no_usage --edit verify
 edit noop --edit verify
 assert_eq "an unchanged resumed draft is still checked" 1 "${RC}"
 assert_contains "resuming: says so" "${ERR}" "resuming the draft a failed edit left"
-rm -f "${DRAFTS}/verify.zsh"
+rm -f "${VERIFY_DRAFT}"
 edit reword --edit verify
 assert_eq "a good edit: exit 0" 0 "${RC}"
 assert_contains "a good edit: in place" "$(cat "${CMD}/verify.zsh")" "the weekly check, edited: "
@@ -125,7 +140,7 @@ assert_eq "a good edit: one df commit" "$(( df_before + 1 ))" "$(df_count)"
 assert_eq "a good edit: the subject" "dotfiles: edit help for verify" "$(df_git log -1 --format=%s)"
 assert_contains "a good edit: the shared tier waits for dotfiles push" "${OUT}" 'Run `dotfiles push` when ready.'
 assert_contains "a good edit: next" "${OUT}" "next: dotfiles verify --help"
-assert_no_file "a good edit: no draft left" "${DRAFTS}/verify.zsh"
+assert_no_file "a good edit: no draft left" "${VERIFY_DRAFT}"
 copy verify --help
 assert_contains "the edited help is live" "${OUT}" "the weekly check, edited: "
 
@@ -139,8 +154,8 @@ assert_eq "--no-commit: nothing committed" "${df_before}" "$(df_count)"
 assert_contains "--no-commit: in place" "$(cat "${CMD}/push.zsh")" "publish each tier: "
 edit broken --edit push
 assert_eq "a failing editor: exit 1" 1 "${RC}"
-assert_contains "a failing editor: says so" "${ERR}" "editor exited non-zero; draft kept"
-rm -f "${DRAFTS}/push.zsh"
+assert_contains "a failing editor: says so" "${ERR}" "editor exited non-zero"
+rm -f "$(draft_of .config/dotfiles/cmd/push.zsh)"
 
 # ── no VERB: lib/dispatch.zsh at help() ──
 edit noop --edit
@@ -153,7 +168,7 @@ assert_eq "top-level without --dir: exit 1" 1 "${RC}"
 assert_contains "top-level without --dir: named" "${ERR}" "undocumented: flags not in it: --dir"
 assert_contains "top-level: the resume" "${ERR}" "fix='dotfiles help --edit'"
 assert_eq "top-level: the live file is untouched" "${dispatch_before}" "$(cat "${DISPATCH}")"
-rm -f "${DRAFTS}/dotfiles.zsh"
+rm -f "$(draft_of .config/dotfiles/lib/dispatch.zsh)"
 edit top_reword --edit
 assert_eq "top-level, a good edit: exit 0" 0 "${RC}"
 assert_eq "top-level: the subject" "dotfiles: edit the top-level help" "$(df_git log -1 --format=%s)"
@@ -169,13 +184,13 @@ assert_contains "stub unchanged: says so" "${OUT}" "help zz: no change; no help 
 assert_eq "stub unchanged: the file is untouched" "${zz_before}" "$(cat "${CMD}/zz.zsh")"
 edit stub_para --edit zz
 assert_eq "a stub saved without a synopsis: exit 1" 1 "${RC}"
-assert_contains "a stub saved without a synopsis: named" "${ERR}" "undocumented: line 1 is not a one-line synopsis"
-assert_contains "the stub lists the verb's flags" "$(cat "${DRAFTS}/zz.zsh")" "  --frob"
-rm -f "${DRAFTS}/zz.zsh"
+assert_contains "a stub saved without a description: named" "${ERR}" "undocumented: no description (verb::define zz"
+assert_contains "the stub lists the verb's flags" "$(cat "$(draft_of .config/dotfiles/cmd/zz.zsh)")" "verb::flag zz '--frob' ''"
+rm -f "$(draft_of .config/dotfiles/cmd/zz.zsh)"
 edit stub_fill --edit zz
 assert_eq "a stub with a synopsis: exit 0" 0 "${RC}"
-assert_eq "the editor opened at the stub" "+$(line_of help_zz "${CMD}/zz.zsh")" "$(opened_at)"
-assert_eq "the stub sits above cmd_zz" 1 "$(( $(line_of help_zz "${CMD}/zz.zsh") < $(line_of cmd_zz "${CMD}/zz.zsh") ))"
+assert_eq "the editor opened at the stub" "+$(line_starting 'verb::define zz' "${CMD}/zz.zsh")" "$(opened_at)"
+assert_eq "the stub sits above cmd_zz" 1 "$(( $(line_starting 'verb::define zz' "${CMD}/zz.zsh") < $(line_of cmd_zz "${CMD}/zz.zsh") ))"
 copy zz --help
 assert_eq "the new help: line 1" "frob the zz" "$(head -n 1 <<< "${OUT}")"
 copy help

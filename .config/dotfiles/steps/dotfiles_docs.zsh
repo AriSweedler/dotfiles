@@ -30,6 +30,9 @@ docs::rule::help() {
   local verb REPLY
   local -a reply verbs
   need_lib "${ARI_DOTFILES_CMD}/help.zsh" || return 3
+  # The declarations (verb::define …) live at the top of each cmd file; sourcing one only declares.
+  local f
+  for f in "${ARI_DOTFILES_CMD}"/*.zsh(N); do source "${f}" || return 3; done
   help::top_gap
   if [[ -n "${REPLY}" ]]; then gaps+=("${CLI_NAME} --help: ${REPLY}"); fixes+=("${CLI_NAME} help --edit"); fi
   help::verb_names

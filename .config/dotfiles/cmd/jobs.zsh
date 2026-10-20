@@ -2,60 +2,45 @@
 zmodload zsh/datetime
 zmodload zsh/stat
 
-help_jobs() {
-  cat <<EOF
-the job plugins and the one launchd job that runs them
-
-${c_bold}Usage${c_rst}
-  ${DF} jobs [list]
-  ${DF} jobs run NAME [--trigger T]
-  ${DF} jobs edit NAME [--new] [--local|--global] [--dep] [--no-commit] [--no-push]
-  ${DF} jobs tick --trigger T
-  ${DF} jobs unlock
-  ${DF} jobs install [--dry-run] | uninstall
-
-  One launchd job, ${JOBS_LABEL}: a resident agent that runs
-  the plugins whose triggers match on screen unlock (a distributed
-  notification only a resident observer can hear), at login and every
-  ${JOBS_INTERVAL_SECONDS}s. A plugin is an executable in $(help::tilde "${JOBS_ROOT_DF}") (shared)
-  or $(help::tilde "${JOBS_ROOT_LDF}") (this machine) whose header has
-  '# triggers: unlock load' and any '# cron: m h dom mon dow' lines; it gets
-  the trigger as \$1; the engine posts a banner when it ends (an alert, click
-  opens the log, on failure). A '# deps: name...' line names setup run before
-  it: executables in $(help::tilde "${DEPS_ROOT_LDF}") (this machine, wins) or
-  $(help::tilde "${DEPS_ROOT_DF}") (shared) whose stdout, NAME=VALUE lines, becomes the
-  plugin's environment; a failing dep blocks the plugin. Logs and success
-  stamps: $(help::tilde "${JOBS_STATE_DIR}"). Every plugin and dep says in its
-  header what it does (a plugin also when it runs); one that does not fails
-  the dotfiles_jobs step. The README beside the shared plugins has the
-  contract.
-
-${c_bold}Subcommands${c_rst}
-  list        every plugin, its triggers, last run and rc, then the deps they
-              name (the default)
-  run NAME    run one plugin now; output to its log and stdout
-  edit NAME   a plugin (or --dep) in \$EDITOR as a draft: checked on save (syntax,
-              header lines, docs), then put in place and committed in its
-              tier; --new starts one from a template (also: jobs --edit NAME)
-  tick        what the agent runs: every plugin due for --trigger T (load,
-              tick, screenIsUnlocked)
-  unlock      simulate a screen unlock (SIGUSR1 to the resident agent)
-  install     compile the agent, write the plist and bootstrap the job, each
-              only if changed (the dotfiles_jobs step runs this)
-  uninstall   boot the job out and remove its plist
-
-${c_bold}Flags${c_rst}
-  --trigger T   run, tick: the trigger the plugin sees as \$1 (run: manual)
-  --dry-run     install: print what would change and change nothing
-  --new, --local, --global, --dep, --no-commit, --no-push
-                edit: see 'dotfiles jobs edit --help'
-
-${c_bold}Env${c_rst}
-  $(ENV ARI_DOTFILES_INVOKED_BY)
-      set by the job plugins (dotfiles-jobs); a verb that sees it posts
-      banners instead of logging them
+verb::define jobs 'the job plugins and the one launchd job that runs them'
+verb::usage jobs 'jobs [list]' 'jobs run NAME [--trigger T]' 'jobs tick --trigger T' 'jobs unlock' \
+  'jobs install [--dry-run] | uninstall'
+verb::about jobs <<'EOF'
+One launchd job, ${JOBS_LABEL}: a resident agent that runs
+the plugins whose triggers match on screen unlock (a distributed
+notification only a resident observer can hear), at login and every
+${JOBS_INTERVAL_SECONDS}s. A plugin is an executable in $(help::tilde "${JOBS_ROOT_DF}") (shared)
+or $(help::tilde "${JOBS_ROOT_LDF}") (this machine) whose header has
+'# triggers: unlock load' and any '# cron: m h dom mon dow' lines; it gets
+the trigger as \$1; the engine posts a banner when it ends (an alert, click
+opens the log, on failure). A '# deps: name...' line names setup run before
+it: executables in $(help::tilde "${DEPS_ROOT_LDF}") (this machine, wins) or
+$(help::tilde "${DEPS_ROOT_DF}") (shared) whose stdout, NAME=VALUE lines, becomes the
+plugin's environment; a failing dep blocks the plugin. Logs and success
+stamps: $(help::tilde "${JOBS_STATE_DIR}"). Every plugin and dep says in its
+header what it does (a plugin also when it runs); one that does not fails
+the dotfiles_jobs step. The README beside the shared plugins has the
+contract.
 EOF
-}
+verb::sub jobs list 'every plugin, its triggers, last run and rc, then the deps they name (the default)'
+verb::sub jobs run 'run one plugin now; output to its log and stdout'
+verb::sub jobs tick 'what the agent runs: every plugin due for --trigger T (load, tick, screenIsUnlocked)'
+verb::sub jobs unlock 'simulate a screen unlock (SIGUSR1 to the resident agent)'
+verb::sub jobs install 'compile the agent, write the plist and bootstrap the job, each only if changed (the dotfiles_jobs step runs this)'
+verb::sub jobs uninstall 'boot the job out and remove its plist'
+verb::edit jobs jobs::edit 'NAME [--new] [--local|--global] [--dep] [--no-commit] [--no-push]' \
+  'a plugin (or --dep) in \$EDITOR as a draft: checked on save (syntax, header lines, docs), then put in place and committed in its tier'
+verb::flag jobs '--trigger T' 'run, tick: the trigger the plugin sees as \$1 (run: manual)'
+verb::flag jobs '--dry-run' 'install: print what would change and change nothing'
+verb::flag jobs '--new' 'edit: start NAME from a template (in the local tier unless --global)'
+verb::flag jobs '--local' 'edit --new: in ~/.local/share/dotfiles (git ldf; committed and pushed)'
+verb::flag jobs '--global' 'edit --new: in ~/.config/dotfiles (git df; committed, never pushed)'
+verb::flag jobs '--dep' 'edit: a dep, not a plugin'
+verb::flag jobs '--no-commit' 'edit: put it in place, leave it uncommitted'
+verb::flag jobs '--no-push' "edit: skip the local tier's push"
+verb::env jobs ARI_DOTFILES_INVOKED_BY 'set by the job plugins (dotfiles-jobs); a verb that sees it posts banners instead of logging them'
+
+jobs::edit() { need_lib "${ARI_DOTFILES_CMD}/jobs/edit.zsh" || return 3; jobs_edit "$@"; }
 
 # --- plugins ---
 
@@ -744,20 +729,10 @@ jobs_simulate_unlock() {
 # --- command ---
 
 cmd_jobs() {
-  local sub="${1:-list}" trigger=manual name=""
-  (( $# > 0 )) && shift
-  # edit parses its own flags; --edit is its other spelling.
-  if [[ "${sub}" == (edit|--edit) ]]; then
-    need_lib "${ARI_DOTFILES_CMD}/jobs/edit.zsh" || return 3
-    jobs_edit "$@"
-    return
-  fi
-  while (( $# > 0 )); do case "${1}" in
-    --trigger) trigger="${2:?--trigger requires a value}"; shift 2 ;;
-    --dry-run) export ARI_DOTFILES_DRY_RUN=1; shift ;;
-    -*) usage_error "Unknown jobs flag | flag='${1}'" ;;
-    *) name="${1}"; shift ;;
-  esac; done
+  local -A opts; local -a args
+  verb::parse jobs "$@"
+  local sub="${args[1]:-list}" name="${args[2]:-}" trigger="${opts[--trigger]:-manual}"
+  (( ${+opts[--dry-run]} )) && export ARI_DOTFILES_DRY_RUN=1
   case "${sub}" in
     list) jobs_list ;;
     run)
@@ -769,6 +744,6 @@ cmd_jobs() {
     unlock) jobs_simulate_unlock ;;
     install) jobs_install ;;
     uninstall) jobs_uninstall ;;
-    *) log::err "Unknown jobs subcommand | sub='${sub}' valid='list, run <name>, edit <name>, tick, unlock, install, uninstall'"; return 1 ;;
+    *) usage_error "jobs: unknown subcommand | sub='${sub}' known='list run edit tick unlock install uninstall'" ;;
   esac
 }

@@ -6,32 +6,25 @@
 # does not parse stops every verb, this one included. The draft lives in
 # <state>/drafts/help/NAME.zsh until it passes, so a failed edit resumes where it left off.
 
-# help_edit_stub VERB: a help function in the house shape, for a verb without one. Its empty
-# line 1 is no synopsis, so a stub saved as is does not pass; its Flags list what the verb parses.
+# help_edit_stub VERB: a declaration in the house shape (lib/verb.zsh), for a verb without help.
+# Its descriptions are empty, so a stub saved as is does not pass; a verb::flag per flag the verb
+# parses by hand today, so moving it onto verb::parse is the next edit.
 help_edit_stub() {
   local verb="${1}" flag
   local -a reply
   help::verb_files "${verb}"
   help::parser_flags "${reply[@]}"
-  print -r -- "help_${verb}() {"
-  print -r -- "  cat <<EOF"
-  print -r -- ""
-  print -r -- ""
-  print -r -- '${c_bold}Usage${c_rst}'
-  print -r -- "  \${DF} ${verb}"
-  print -r -- ""
-  print -r -- "  What 'dotfiles ${verb}' does, in a paragraph."
-  if (( ${#reply} )); then
-    print -r -- ""
-    print -r -- '${c_bold}Flags${c_rst}'
-    for flag in "${reply[@]}"; do print -r -- "  ${flag}"; done
-  fi
+  print -r -- "verb::define ${verb} ''"
+  print -r -- "verb::usage ${verb} '${verb}'"
+  print -r -- "verb::about ${verb} <<'EOF'"
+  print -r -- "What 'dotfiles ${verb}' does, in a paragraph."
   print -r -- "EOF"
-  print -r -- "}"
+  for flag in "${reply[@]}"; do print -r -- "verb::flag ${verb} '${flag}' ''"; done
+  print -r -- "verb::edit ${verb} --none ''"
   print -r -- ""
 }
 
-# help_edit_with_stub FILE VERB: FILE's text with a stub help_VERB above cmd_VERB (else at the end).
+# help_edit_with_stub FILE VERB: FILE's text with the stub above cmd_VERB (else at the end).
 help_edit_with_stub() {
   local file="${1}" verb="${2}" line stub
   local -i placed=0
@@ -85,66 +78,41 @@ help_edit_check() {
 }
 
 help_edit() {
-  setopt localoptions extendedglob
   zmodload zsh/mapfile
-  local verb="${1}" commit="${2:-1}" file fn name base draft editor msg next line
-  local -i stubbed=0 n tty=0
+  local verb="${1}" commit="${2:-1}" file name draft msg next at line
+  local -i stubbed=0 n=0 rc=0
   if [[ -n "${verb}" ]]; then
-    file="${ARI_DOTFILES_CMD}/${verb}.zsh"; fn="help_${verb}"; name="${verb}"
-    msg="${CLI_NAME}: edit help for ${verb}"; next="${CLI_NAME} ${verb} --help"
+    file="${ARI_DOTFILES_CMD}/${verb}.zsh" name="${verb}"
+    msg="${CLI_NAME}: edit help for ${verb}" next="${CLI_NAME} ${verb} --help"
     [[ -f "${file}" ]] || { log::err "no verb file | verb='${verb}' want='${file}'"; return 1; }
+    # A declared verb opens at its declaration; one not yet declared gets a declaration stub.
+    if help::is_declared "${file}" "${verb}"; then at="verb::define ${verb} "
+    elif [[ "${mapfile[${file}]}" == (|*$'\n')"help_${verb}() {"* ]]; then at="help_${verb}() {"
+    else at="verb::define ${verb} "; stubbed=1; fi
   else
-    file="${ARI_DOTFILES_LIB}/dispatch.zsh"; fn=help; name=dotfiles
-    msg="${CLI_NAME}: edit the top-level help"; next="${CLI_NAME} --help"
+    file="${ARI_DOTFILES_LIB}/dispatch.zsh" name=dotfiles at="help() {"
+    msg="${CLI_NAME}: edit the top-level help" next="${CLI_NAME} --help"
   fi
-  base="${mapfile[${file}]}"
-  if [[ -n "${verb}" && "${base}" != (|*$'\n')"${fn}() {"* ]]; then
-    base="$(help_edit_with_stub "${file}" "${verb}")"$'\n'
-    stubbed=1
+  edit::draft "${file}" "${ARI_DOTFILES_STATE_DIR}/drafts/help"
+  draft="${REPLY}"
+  (( stubbed && ! EDIT_RESUMED )) && help_edit_with_stub "${file}" "${verb}" > "${draft}"
+  for line in "${(@f)mapfile[${draft}]}"; do (( ++n )); [[ "${line}" == "${at}"* ]] && break; done
+  (( n <= ${#${(@f)mapfile[${draft}]}} )) || n=1
+  HELP_EDIT_VERB="${verb}"
+  edit::session "${draft}" --check help::_edit_check --line "${n}" --what "the ${name} help" \
+    ${${EDIT_RESUMED:#0}:+--changed} --resume "${CLI_NAME} help --edit${verb:+ ${verb}}" || rc=$?
+  if (( rc == 2 || ! stubbed && rc == 0 )) && edit::same "${draft}" "${file}"; then
+    rm -f -- "${draft}"
+    print -r -- "help ${name}: no change | file=$(ui::paths "${file}")"
+    return 0
   fi
-
-  draft="${ARI_DOTFILES_STATE_DIR}/drafts/help/${name}.zsh"
-  mkdir -p -- "${draft:h}" || return 1
-  if [[ -f "${draft}" ]]; then
-    log::info "resuming the draft a failed edit left | draft='${draft}'"
-  else
-    print -rn -- "${base}" > "${draft}" || return 1
+  if (( rc == 2 )); then
+    rm -f -- "${draft}"
+    print -r -- "help ${name}: no change; no help written | file=$(ui::paths "${file}")"
+    return 0
   fi
-  editor="${EDITOR:-vi}"
-  command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi
-  [[ -t 0 && -t 1 ]] && tty=1
-  while true; do
-    # The editor opens at the help function: its line in the draft as it is now.
-    n=1
-    for line in "${(@f)mapfile[${draft}]}"; do
-      [[ "${line}" == "${fn}() {"* ]] && break
-      (( n++ ))
-    done
-    (( n <= ${#${(@f)mapfile[${draft}]}} )) || n=1
-    if ! ${=editor} "+${n}" "${draft}"; then
-      log::err "editor exited non-zero; draft kept, nothing changed | editor='${editor}' draft='${draft}'"
-      return 1
-    fi
-    if [[ "${mapfile[${draft}]}" == "${base}" ]]; then
-      rm -f -- "${draft}"
-      if (( stubbed )); then print -r -- "help ${name}: no change; no help written | file=$(ui::paths "${file}")"
-      else print -r -- "help ${name}: no change | file=$(ui::paths "${file}")"
-      fi
-      return 0
-    fi
-    help_edit_check "${draft}" "${verb}" && break
-    if (( tty )) && ui::confirm "Edit the ${name} help again?"; then continue; fi
-    log::err "help not saved; draft kept | draft='${draft}' fix='${CLI_NAME} help --edit${verb:+ ${verb}}'"
-    return 1
-  done
-
-  # In place: written beside the live file and renamed over it, so no run sources half a file.
-  cp -- "${draft}" "${file}.edit.$$" && chmod 644 "${file}.edit.$$" && mv -f -- "${file}.edit.$$" "${file}" || {
-    rm -f -- "${file}.edit.$$"
-    log::err "could not put the file in place; draft kept | file='${file}' draft='${draft}'"
-    return 1
-  }
-  rm -f -- "${draft}"
+  (( rc == 0 )) || return 1
+  edit::install "${draft}" "${file}" 644 || return 1
   print -r -- "help ${name}: saved | file=$(ui::paths "${file}")"
   if (( commit )); then
     tier::commit shared "${msg}" "${file}" || return 1
@@ -153,3 +121,5 @@ help_edit() {
   fi
   print -r -- "next: ${next}"
 }
+
+help::_edit_check() { help_edit_check "${1}" "${HELP_EDIT_VERB}"; }

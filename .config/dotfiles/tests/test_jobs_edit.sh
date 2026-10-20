@@ -11,6 +11,7 @@ JOBS_DF="${HOME}/.config/dotfiles/jobs"
 JOBS_LDF="${XDG_DATA_HOME}/dotfiles/jobs"
 DEPS_LDF="${XDG_DATA_HOME}/dotfiles/deps"
 DRAFTS="${XDG_STATE_HOME}/dotfiles/jobs/drafts"
+TICKER_DRAFT="${DRAFTS}/.config%dotfiles%jobs%ticker"   # a draft is named for its live file
 mkdir -p "${JOBS_DF}" "${JOBS_LDF}" "${DEPS_LDF}"
 printf '#!/usr/bin/env zsh\n# cron: 0 * * * *\n# Hourly: says it ticked.\nprint -r -- tick\n' > "${JOBS_DF}/ticker"
 chmod +x "${JOBS_DF}/ticker"
@@ -73,7 +74,7 @@ assert_eq "new plugin: one ldf commit" "$(( ldf_before + 1 ))" "$(ldf_count)"
 assert_eq "new plugin: the subject" "dotfiles: add job hello (local)" "$(ldf_git log -1 --format=%s)"
 assert_eq "new plugin: pushed" "$(ldf_git rev-parse HEAD)" "$(git --git-dir="${FIX}/remotes/local-dotfiles.git" rev-parse main)"
 assert_contains "new plugin: the next step" "${OUT}" "next: dotfiles jobs run hello"
-assert_no_file "new plugin: no draft left" "${DRAFTS}/plugin-hello"
+assert_no_file "new plugin: no draft left" "${DRAFTS}/.local%share%dotfiles%jobs%hello"
 edit noop edit hello --new
 assert_eq "--new on an existing plugin: exit 1" 1 "${RC}"
 
@@ -85,7 +86,7 @@ assert_eq "bad cron: exit 1" 1 "${RC}"
 assert_contains "bad cron: named" "${ERR}" "'# cron: 61 * * * *' is not five valid fields"
 assert_contains "bad cron: the resume" "${ERR}" "fix='dotfiles jobs edit ticker'"
 assert_eq "bad cron: the live file is untouched" "${live_before}" "$(cat "${JOBS_DF}/ticker")"
-assert_file "bad cron: the draft is kept" "${DRAFTS}/plugin-ticker"
+assert_file "bad cron: the draft is kept" "${TICKER_DRAFT}"
 assert_eq "bad cron: nothing committed" "${df_before}" "$(df_count)"
 
 # Resumed from the draft and fixed: in place, committed in the shared tier, never pushed.
@@ -96,7 +97,7 @@ assert_contains "fixed: the new cron line is live" "$(cat "${JOBS_DF}/ticker")" 
 assert_eq "fixed: one df commit" "$(( df_before + 1 ))" "$(df_count)"
 assert_eq "fixed: the subject" "dotfiles: edit job ticker (shared)" "$(df_git log -1 --format=%s)"
 assert_contains "fixed: the shared tier waits for dotfiles push" "${OUT}" 'Run `dotfiles push` when ready.'
-rm -f "${DRAFTS}/plugin-ticker"
+rm -f "${TICKER_DRAFT}"
 
 # ── each header problem, and the doc rule ──
 edit bad_header edit ticker
@@ -104,15 +105,15 @@ assert_eq "bad header: exit 1" 1 "${RC}"
 assert_contains "bad header: a trigger word" "${ERR}" "'# triggers:' takes unlock and load, not 'lunch'"
 assert_contains "bad header: the timeout" "${ERR}" "'# timeout:' takes seconds, not 'soon'"
 assert_contains "bad header: an unknown dep" "${ERR}" "'# deps:' names 'nothere', which is no dep"
-rm -f "${DRAFTS}/plugin-ticker"
+rm -f "${TICKER_DRAFT}"
 edit undocument edit ticker
 assert_eq "undocumented: exit 1" 1 "${RC}"
 assert_contains "undocumented: the doc rule" "${ERR}" "undocumented: no line saying what it does"
-rm -f "${DRAFTS}/plugin-ticker"
+rm -f "${TICKER_DRAFT}"
 edit bad_syntax edit ticker
 assert_eq "syntax error: exit 1" 1 "${RC}"
 assert_contains "syntax error: zsh -n's complaint" "${ERR}" "syntax: "
-rm -f "${DRAFTS}/plugin-ticker"
+rm -f "${TICKER_DRAFT}"
 
 # ── unchanged; --no-commit; a plugin turned off stays off; the --edit spelling ──
 edit noop edit ticker
