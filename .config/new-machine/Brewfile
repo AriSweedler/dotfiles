@@ -20,6 +20,7 @@ brew "fzf"
 brew "git-delta"
 brew "gum"          # shell UI: the dotfiles harness's spinners and boxes
 brew "jq"
+brew "mas"          # Mac App Store from the terminal: mas install 497799835 is Xcode (alttab builds with it)
 brew "ripgrep"
 brew "starship"     # shell prompt
 brew "tmux"
