@@ -146,7 +146,7 @@ assert_contains "the edited help is live" "${OUT}" "the weekly check, edited: "
 
 # --no-commit, and an editor that fails.
 df_before="$(df_count)"
-editor push_reword '{ sub(/^publish every tier: /, "publish each tier: ") } { print }'
+editor push_reword '/^verb::define push / { sub(/publish every tier: /, "publish each tier: ") } { print }'
 edit push_reword --edit push --no-commit
 assert_eq "--no-commit: exit 0" 0 "${RC}"
 assert_contains "--no-commit: says so" "${OUT}" "not committed | file="

@@ -91,8 +91,9 @@ LOCAL_REMOTE0="$(git --git-dir="${FIX}/remotes/local-dotfiles.git" rev-parse -q 
 
 pz 'push::edit_plan "${(@f)$(push::edit_candidates)}"'
 assert_eq "plan: rc 0" 0 "${RC}"
+assert_eq "plan: line 1 names the plan type for the editor" "# dotfiles-plan: push · actions: push | skip" "${OUT%%$'\n'*}"
 assert_eq "plan: one skip line per repo with something to push, in run order" \
-  "skip  local  ${LOCAL}|skip  .config/ahead  ${AHEAD}|skip  shared  ${SHARED}|" \
+  "skip            local  # ${LOCAL}|skip            .config/ahead  # ${AHEAD}|skip            shared  # ${SHARED}|" \
   "$(printf '%s\n' "${OUT}" | grep -v '^#' | grep . | tr "\n" "|")"
 assert_contains "plan: a repo's header counts what origin lacks" "${OUT}" "# .config/ahead  main  1 commit origin/main lacks"
 assert_contains "plan: the unpushed commit, as a comment" "${OUT}" "#   ${AHEAD:0:7} ahead work"
@@ -100,7 +101,7 @@ assert_contains "plan: the local tier's commit" "${OUT}" "local change"
 assert_contains "plan: shared names the bump that waits on a submodule" "${OUT}" "#   pointer bump: ahead "
 assert_contains "plan: ... and that it waits" "${OUT}" "-> ${AHEAD:0:7} (once .config/ahead is pushed)"
 assert_contains "plan: shared names the bump of a published submodule" "${OUT}" "-> ${EVEN7}"$'\n'
-assert_not_contains "plan: an up-to-date submodule has no line" "${OUT}" "skip  .config/even"
+assert_not_contains "plan: an up-to-date submodule has no line" "${OUT}" "skip            .config/even"
 assert_not_contains "plan: a missing checkout has no line" "${OUT}" ".config/gone"
 pz 'PUSH_SCOPE=(submodules); push::edit_candidates'
 assert_eq "candidates: --submodules lists the submodules alone" ".config/ahead" "${OUT}"
@@ -126,36 +127,36 @@ plan() { local f="$1"; shift; printf '%s\n' "$@" > "${f}"; }
 
 BAD="${FIX}/bad.dfpush"
 plan "${BAD}" "# a comment" \
-  "pusj  local  ${LOCAL}" \
-  "push  .config/nope  ${AHEAD}" \
+  "pusj  local  # ${LOCAL}" \
+  "push  .config/nope  # ${AHEAD}" \
   "push  .config/ahead" \
-  "push  shared  0000000000ab" \
+  "push  shared  # 0000000000ab" \
   "skip  local  # later" \
   "skip  local" \
   "push  local  ${LOCAL}  extra" \
   ""
 nm push --edit "${BAD}"
 assert_eq "bad plan: exit 1" 1 "${RC}"
-assert_contains "bad plan: an unknown action" "${ERR}" "line 2: unknown action; use push or skip"
-assert_contains "bad plan: a repo with nothing to push here" "${ERR}" "line 3: not a repo with something to push in this scope | repo='.config/nope'"
+assert_contains "bad plan: an unknown action" "${ERR}" "line 2: unknown action; use push, skip"
+assert_contains "bad plan: a repo with nothing to push here" "${ERR}" "line 3: not a repo with something to push in this scope (repos: local, .config/ahead, shared) | item='.config/nope'"
 assert_contains "bad plan: a push line without its sha" "${ERR}" "line 4: a push line needs the sha the plan recorded"
 assert_contains "bad plan: a sha that is not HEAD" "${ERR}" "line 5: shared moved since the plan was written | planned='0000000000ab'"
-assert_contains "bad plan: a repo listed twice" "${ERR}" "line 7: listed twice | repo='local'"
-assert_contains "bad plan: too many words" "${ERR}" "line 8: expected <push|skip>  <repo>  <sha>"
+assert_contains "bad plan: a repo listed twice" "${ERR}" "line 7: listed twice | item='local'"
+assert_contains "bad plan: too many words" "${ERR}" "line 8: expected one repo after 'push' | line='push  local  ${LOCAL}  extra'"
 assert_not_contains "bad plan: a trailing comment is fine" "${ERR}" "line 6:"
 assert_contains "bad plan: the fix resumes the file" "${ERR}" "fix='dotfiles push --edit ${BAD}'"
 assert_eq "bad plan: gh never called" "" "$(shim_log gh)"
 assert_eq "bad plan: shared remote untouched" "${SHARED_REMOTE0}" "$(remote_head shared)"
 assert_eq "bad plan: no bump committed" "${SHARED}" "$(df_git rev-parse --short=12 HEAD)"
-assert_eq "bad plan: the file is kept as written" "pusj  local  ${LOCAL}" "$(awk "NR == 2" "${BAD}")"
+assert_eq "bad plan: the file is kept as written" "pusj  local  # ${LOCAL}" "$(awk "NR == 2" "${BAD}")"
 
 # push shared over a skipped submodule whose pointer it would bump.
 SH="${FIX}/shared-only.dfpush"
-plan "${SH}" "skip  local  ${LOCAL}" "skip  .config/ahead  ${AHEAD}" "push  shared  ${SHARED}"
+plan "${SH}" "skip  local  # ${LOCAL}" "skip  .config/ahead  # ${AHEAD}" "push  shared  # ${SHARED}"
 nm push --edit "${SH}"
 assert_eq "push shared, ahead skipped: exit 1" 1 "${RC}"
 assert_contains "push shared, ahead skipped: refused on the shared line" "${ERR}" "line 3: push shared while .config/ahead is skipped; the shared tier would carry its unpublished pointer"
-plan "${SH}" "skip  local  ${LOCAL}" "push  shared  ${SHARED}"
+plan "${SH}" "skip  local  # ${LOCAL}" "push  shared  # ${SHARED}"
 nm push --edit "${SH}"
 assert_eq "push shared, ahead's line deleted: refused the same" 1 "${RC}"
 assert_contains "push shared, ahead's line deleted: names it" "${ERR}" "while .config/ahead is skipped"
@@ -163,7 +164,7 @@ nm push --edit "${SH}" --no-submodules --dry-run
 assert_eq "push shared with the submodules out of scope: no bump to protect" 0 "${RC}"
 
 # All skip: nothing to do.
-plan "${SH}" "skip  local  ${LOCAL}" "skip  .config/ahead  ${AHEAD}" "skip  shared  ${SHARED}"
+plan "${SH}" "skip  local  # ${LOCAL}" "skip  .config/ahead  # ${AHEAD}" "skip  shared  # ${SHARED}"
 nm push --edit "${SH}"
 assert_eq "all skip: exit 0" 0 "${RC}"
 assert_contains "all skip: says so" "${OUT}" "every line is skip; nothing pushed"
@@ -172,7 +173,7 @@ assert_eq "all skip: gh never called" "" "$(shim_log gh)"
 # ── --dry-run combines: would-push lines for the chosen repos only ───────────
 
 DRY="${FIX}/dry.dfpush"
-plan "${DRY}" "push  local  ${LOCAL}" "skip  .config/ahead  ${AHEAD}" "skip  shared  ${SHARED}"
+plan "${DRY}" "push  local  # ${LOCAL}" "skip  .config/ahead  # ${AHEAD}" "skip  shared  # ${SHARED}"
 nm push --edit "${DRY}" --dry-run
 assert_eq "dry-run, local only: exit 0" 0 "${RC}"
 assert_contains "dry-run, local only: would push local" "${ERR}" "dry-run, would push | repo='local'"
@@ -181,7 +182,7 @@ assert_not_contains "dry-run, local only: not shared" "${ERR}" "would push | rep
 assert_not_contains "dry-run, local only: shared skipped, so no bump of even" "${ERR}" "would bump"
 assert_contains "dry-run: the plan line" "${OUT}" "plan: push local"
 assert_contains "dry-run: next runs the plan for real" "${OUT}" "next: dotfiles push --edit ${DRY}"
-plan "${DRY}" "push  .config/ahead  ${AHEAD}" "push  shared  ${SHARED}"
+plan "${DRY}" "push  .config/ahead  # ${AHEAD}" "push  shared  # ${SHARED}"
 nm push --edit "${DRY}" --dry-run
 assert_eq "dry-run, ahead and shared: exit 0" 0 "${RC}"
 assert_contains "dry-run, ahead and shared: would push ahead" "${ERR}" "would push | repo='.config/ahead'"
@@ -194,7 +195,7 @@ assert_eq "dry-run: shared remote untouched" "${SHARED_REMOTE0}" "$(remote_head 
 # ── A repo that moved since the plan ─────────────────────────────────────────
 
 MOVED="${FIX}/moved.dfpush"
-plan "${MOVED}" "push  .config/ahead  ${AHEAD}"
+plan "${MOVED}" "push  .config/ahead  # ${AHEAD}"
 sub_commit .config/ahead "ahead more"
 nm push --edit "${MOVED}" --submodules
 assert_eq "moved: exit 1" 1 "${RC}"
@@ -206,7 +207,7 @@ AHEAD="$(head12 .config/ahead)"
 
 shim_logs_reset
 REAL="${FIX}/real.dfpush"
-plan "${REAL}" "skip  local  ${LOCAL}" "push  .config/ahead  ${AHEAD}" "skip  shared  ${SHARED}"
+plan "${REAL}" "skip  local  # ${LOCAL}" "push  .config/ahead  # ${AHEAD}" "skip  shared  # ${SHARED}"
 nm push --edit "${REAL}"
 assert_eq "ahead only: exit 0" 0 "${RC}"
 assert_eq "ahead only: its remote has HEAD" "$(git -C "${HOME}/.config/ahead" rev-parse HEAD)" "$(git --git-dir="${FIX}/remotes/.config-ahead.git" rev-parse main)"
@@ -220,7 +221,7 @@ assert_contains "ahead only: next" "${OUT}" "next: dotfiles status"
 SHARED="$(df_git rev-parse --short=12 HEAD)"
 pz 'push::edit_candidates'
 assert_eq "after ahead: local and shared remain" "local shared" "$(printf '%s' "${OUT}" | tr '\n' ' ')"
-plan "${REAL}" "skip  local  ${LOCAL}" "push  shared  ${SHARED}"
+plan "${REAL}" "skip  local  # ${LOCAL}" "push  shared  # ${SHARED}"
 nm push --edit "${REAL}"
 assert_eq "shared: exit 0" 0 "${RC}"
 assert_eq "shared: even's bump committed before the push" "even: bump to ${EVEN7} (even work)" "$(df_git log -1 --format=%s)"
@@ -234,7 +235,7 @@ if [[ -x "${SCRIPT_BIN}" ]]; then
   EDITORS="${FIX}/editors"
   mkdir -p "${EDITORS}"
   printf '%s\n' '#!/bin/sh' "cp \"\$1\" \"${FIX}/plan.given\"" \
-    "awk '{ sub(/^skip  local /, \"push  local \"); print }' \"\$1\" > \"\$1.tmp\" && mv \"\$1.tmp\" \"\$1\"" > "${EDITORS}/choose"
+    "awk '{ sub(/^skip +local /, \"push  local \"); print }' \"\$1\" > \"\$1.tmp\" && mv \"\$1.tmp\" \"\$1\"" > "${EDITORS}/choose"
   printf '#!/bin/sh\nexit 0\n' > "${EDITORS}/keep"
   chmod +x "${EDITORS}"/*
   # tty_push EDITOR ANSWER ARGS…: `dotfiles push ARGS` on a pty. Input typed before the prompt is
@@ -260,7 +261,7 @@ if [[ -x "${SCRIPT_BIN}" ]]; then
   assert_file "tty: the plan is written to the state dir" "${PLAN}"
   tty_push choose n --edit
   assert_eq "tty, declined: exit 1" 1 "${RC}"
-  assert_contains "tty: the editor got the plan" "$(cat "${FIX}/plan.given")" "skip  local  ${LOCAL}"
+  assert_contains "tty: the editor got the plan" "$(cat "${FIX}/plan.given")" "skip            local  # ${LOCAL}"
   assert_contains "tty: one confirmation" "${OUT}" "Push 1 repo? [y/N]"
   assert_contains "tty, declined: says so" "${OUT}" "declined; nothing pushed"
   assert_eq "tty, declined: local remote untouched" "${LOCAL_REMOTE0}" "$(git --git-dir="${FIX}/remotes/local-dotfiles.git" rev-parse -q --verify main || true)"

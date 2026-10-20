@@ -3,12 +3,14 @@
 # one tier::commit per tier and message, one git restore per tier. Loaded by cmd/status.zsh;
 # defines functions only.
 #
-# Entry point: status::edit [FILE]
+# Entry point: status::edit [--dry-run] [FILE]
 # Reads: EDITOR, ARI_DOTFILES_DRY_RUN. Exports ARI_DOTFILES_NO_PUSH=1: this never pushes.
 #
-# A plan line: `<commit|restore|skip>  <shared|local>:<path>  [# message]`, the path relative to
-# the tier's work tree (~ for shared, ~/.local for local). Submodule changes are comments only:
-# they are committed in their own repos, and `dotfiles push` bumps their pointers.
+# A plan line (lib/plan.zsh): `<commit|restore|skip>  <shared|local>:<path>  [# message]`, the path
+# relative to the tier's work tree (~ for shared, ~/.local for local). Submodule changes are
+# comments only: they are committed in their own repos, and `dotfiles push` bumps their pointers.
+
+plan::define status --actions 'commit|restore|skip' --note commit --danger restore --item tier:path
 
 # status::edit_dirty <tier>: one `XY\tpath` line per uncommitted tracked path (staged or not,
 # submodules left out), in git's order. Nothing for a tier that is not here.
@@ -47,27 +49,28 @@ status::edit_git_text() {
   print -r -- "git --git-dir=${TIER_GIT_DIR[${1}]} --work-tree=${TIER_WORK_TREE[${1}]}"
 }
 
-# status::edit_file: the plan for STATUS_DIRTY: a header naming the actions, then per tier a
-# heading, its `git diff --stat` as comments and one `skip  <tier>:<path>` line per path; then
+# status::edit_file: the plan for STATUS_DIRTY: plan::header, then per tier a heading, its
+# `git diff --stat` as comments and one `skip  <tier>:<path>` line per path; then
 # each submodule with uncommitted changes or a moved pointer, as comments.
 status::edit_file() {
   local tier key line rec
   local -a stat f subdirty
-  cat <<EOF
-# ${CLI_NAME} status --edit: one line per uncommitted tracked path, <action>  <tier>:<path>  [# message]
-# Change each 'skip' to one of:
-#   commit    commit it in its tier; needs a '# message'. The lines of one tier with the
-#             same message become one commit.
-#   restore   discard the change (git restore --source=HEAD --staged --worktree): the path
-#             goes back to its committed content. Confirmed by name on a terminal; a plan
-#             with a restore is refused without one.
-#   skip      leave it uncommitted
-# Save and quit to see the plan. Nothing is pushed: run '${CLI_NAME} push' after.
-# Lines starting with # are comments. Leaving every line 'skip' does nothing.
-EOF
+  plan::header status \
+    "${CLI_NAME} status --edit: every uncommitted tracked path, relative to its tier's work tree." \
+    "Change each 'skip' to one of:" \
+    "  commit    commit it in its tier; the note is the message. The lines of one tier with" \
+    "            the same message become one commit." \
+    "  restore   discard the change (git restore --source=HEAD --staged --worktree): the path" \
+    "            goes back to its committed content. A plan with a restore is refused off a" \
+    "            terminal." \
+    "  skip      leave it uncommitted" \
+    "Save and quit to see the plan. Nothing is pushed: run '${CLI_NAME} push' after." \
+    "Leaving every line 'skip' does nothing."
+  local -i first=1
   for tier in shared local; do
     (( ${STATUS_DIRTY_ORDER[(I)${tier}:*]} )) || continue
-    print -r -- ""
+    (( first )) || print -r -- ""
+    first=0
     print -r -- "# ── ${tier} (git ${TIER_ALIAS[${tier}]}, work tree $(ui::paths "${TIER_WORK_TREE[${tier}]}")) ──"
     if repo_git "${tier}" rev-parse -q --verify HEAD >/dev/null 2>&1; then
       stat=("${(@f)$(repo_git "${tier}" diff --stat HEAD --ignore-submodules=all 2>/dev/null)}")
@@ -80,7 +83,7 @@ EOF
       print -r -- "# staged changes: a commit here is refused until they are unstaged (git ${TIER_ALIAS[${tier}]} restore --staged …)"
     fi
     for key in "${STATUS_DIRTY_ORDER[@]}"; do
-      [[ "${key}" == "${tier}:"* ]] && print -r -- "skip  ${key}"
+      [[ "${key}" == "${tier}:"* ]] && plan::line skip "${key}"
     done
   done
   (( ${#SUBMODULES} )) || return 0
@@ -103,79 +106,35 @@ EOF
   print -rl -- "${lines[@]}"
 }
 
-# status::edit_parse <plan file>: fills the caller's `choices`, one `N\taction\ttier\tpath\tmessage`
-# per non-skip line, and prints `line N: problem | line='…'` on stderr for each bad line. Returns 1
-# when any line is bad. A line names an action, then <tier>:<path> for a file that tier tracks
-# (uncommitted or not: one that went clean since is dropped later, not refused), at most once per
-# file, then '# message' (required for a commit, ignored otherwise).
-status::edit_parse() {
-  setopt localoptions extendedglob
-  local file="${1}" line body item action message tier rel key
-  local -a seen=() pending=()
-  local -A tracked=()
-  local -i n=0 bad=0
-  while IFS= read -r line || [[ -n "${line}" ]]; do
-    n=$(( n + 1 ))
-    body="${${line##[[:space:]]#}%%[[:space:]]#}"
-    [[ -z "${body}" || "${body}" == '#'* ]] && continue
-    action="${body%%[[:space:]]*}"
-    if [[ "${action}" != (commit|restore|skip) ]]; then
-      print -u2 -r -- "line ${n}: unknown action; use commit, restore or skip | line='${line}'"
-      bad=1; continue
-    fi
-    item="${body#${action}}"; item="${item##[[:space:]]#}"
-    message=""
-    # The message starts at the first '#' after whitespace, so a path may hold a '#' of its own.
-    if [[ "${item}" == '#'* ]]; then
-      message="${item#\#}" item=""
-    elif [[ "${item}" == *[[:space:]]'#'* ]]; then
-      message="${item#*[[:space:]]\#}"
-      item="${${item%%[[:space:]]\#*}%%[[:space:]]#}"
-    fi
-    message="${${message##[[:space:]]#}%%[[:space:]]#}"
-    if [[ "${item}" != (shared|local):?* ]]; then
-      print -u2 -r -- "line ${n}: expected <shared|local>:<path> after the action | line='${line}'"
-      bad=1; continue
-    fi
-    tier="${item%%:*}" rel="${item#*:}"
-    if [[ "${tier}" == local ]] && ! is_repo_present local; then
-      print -u2 -r -- "line ${n}: the local tier is not here | line='${line}'"
-      bad=1; continue
-    fi
-    if (( ${seen[(Ie)${item}]} )); then
-      print -u2 -r -- "line ${n}: listed twice | item='${item}'"
-      bad=1; continue
-    fi
-    seen+=("${item}")
-    if [[ "${action}" == commit && -z "${message}" ]]; then
-      print -u2 -r -- "line ${n}: a commit needs a message: end the line with '# message' | item='${item}'"
-      bad=1; continue
-    fi
-    [[ "${action}" == commit ]] || message=""
-    [[ "${action}" != skip ]] || continue
-    pending+=("${n}"$'\t'"${action}"$'\t'"${tier}"$'\t'"${rel}"$'\t'"${message}")
-  done < "${file}"
-  # Tracked or not: one ls-files per tier for every path its lines name.
-  local -a rels f
-  local p
-  for tier in shared local; do
-    rels=()
-    for p in "${pending[@]}"; do f=("${(@ps:\t:)p}"); [[ "${f[3]}" == "${tier}" ]] && rels+=(":(literal)${f[4]}"); done
-    (( ${#rels} )) || continue
-    for p in "${(@0)$(repo_git "${tier}" ls-files -z -- "${rels[@]}" 2>/dev/null)}"; do
-      [[ -z "${p}" ]] || tracked[${tier}:${p}]=1
-    done
+# status::edit_item <tier:path> <action>: plan::parse's item check. The item names a tier that is
+# here and, for commit and restore, a file it tracks (uncommitted or not: one that went clean since
+# is dropped later by status::edit_live, not refused).
+status::edit_item() {
+  local item="${1}" tier="${1%%:*}" rel="${1#*:}"
+  local -a found
+  [[ "${item}" == (shared|local):?* ]] || { print -r -- "expected <shared|local>:<path> after the action"; return 1; }
+  [[ "${tier}" == shared ]] || is_repo_present local || { print -r -- "the local tier is not here"; return 1; }
+  [[ "${2}" != skip ]] || return 0
+  found=("${(@0)$(repo_git "${tier}" ls-files -z -- ":(literal)${rel}" 2>/dev/null)}")
+  (( ${found[(Ie)${rel}]} )) || { print -r -- "not a file the ${tier} tier tracks"; return 1; }
+}
+
+# status::edit_check <plan>: edit::session's check, every line through plan::parse. (plan::edit
+# would be this, but it hands edit::session its --resume as one word.)
+status::edit_check() { local -a reply; plan::parse status "${1}" status::edit_item; }
+
+# status::edit_choices: the caller's `choices` from plan::parse's `reply`, one
+# `N\taction\ttier\tpath\tmessage` per commit or restore line (a restore has no message).
+status::edit_choices() {
+  local r msg
+  local -a f
+  choices=()
+  for r in "${reply[@]}"; do
+    f=("${(@ps:\t:)r}")
+    [[ "${f[1]}" != skip ]] || continue
+    msg=""; [[ "${f[1]}" != commit ]] || msg="${f[3]}"
+    choices+=("${f[4]}"$'\t'"${f[1]}"$'\t'"${f[2]%%:*}"$'\t'"${f[2]#*:}"$'\t'"${msg}")
   done
-  for p in "${pending[@]}"; do
-    f=("${(@ps:\t:)p}")
-    key="${f[3]}:${f[4]}"
-    if (( ! ${+tracked[${key}]} )); then
-      print -u2 -r -- "line ${f[1]}: not a file the ${f[3]} tier tracks | item='${key}'"
-      bad=1; continue
-    fi
-    choices+=("${p}")
-  done
-  return ${bad}
 }
 
 # status::edit_live: the caller's `choices` minus every path with no uncommitted change now (a
@@ -296,14 +255,16 @@ status::edit_run() {
   (( failed == 0 ))
 }
 
-# `status --edit [FILE]`: the plan file (STATE_DIR/status-plan.dfstatus, kept across runs, or FILE
-# to resume one) opened in $EDITOR, then parsed. Bad lines: each reported with its number; on a
-# terminal, offered for another edit, else exit 1 naming the --edit FILE that resumes. A good plan
-# is shown, confirmed on a terminal (restores separately, by name), and run; then the tables.
+# `status --edit [--dry-run] [FILE]`: the plan file (STATE_DIR/status-plan.dfstatus, kept across
+# runs, or FILE to resume one) in one edit::session, every line checked by plan::parse. A good plan is shown, confirmed on a terminal
+# (restores separately, by name), and run; then the tables.
 status::edit() {
-  local resume="${1:-}" file editor before
-  local -a choices=() groups=()
-  local -A members=() restores=()
+  local -A opts members=() restores=()
+  local -a args choices=() groups=() reply
+  verb::parse status "$@"
+  (( ${#args} <= 1 )) || usage_error "status --edit takes at most one FILE | args='${args[*]}'"
+  (( ! ${+opts[--dry-run]} )) || export ARI_DOTFILES_DRY_RUN=1
+  local resume="${args[1]:-}" file
   local -i tty=0 rc=0
   [[ -t 0 && -t 1 ]] && tty=1
   export ARI_DOTFILES_NO_PUSH=1
@@ -316,38 +277,21 @@ status::edit() {
       print -r -- "status: nothing uncommitted in the tiers; no plan to write"
       return 0
     fi
-    # The extension is the plan's filetype, for an editor to highlight. Not under RUN_DIR: a later
-    # run may clear that, and the fix line names this file.
+    # Not under RUN_DIR: a later run may clear that, and the fix line names this file.
     file="${STATE_DIR}/status-plan.dfstatus"
     mkdir -p "${file:h}" || return 1
     status::edit_file > "${file}" || return 1
   fi
-  editor="${EDITOR:-vi}"
-  command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi
-  before="$(mktemp "${TMPDIR:-/tmp}/status-edit.XXXXXX")" || return 1
-  while true; do
-    cp -- "${file}" "${before}"
-    if ! ${=editor} "${file}"; then
-      rm -f -- "${before}"
-      log::err "editor exited non-zero; nothing done | editor='${editor}' file='${file}'"
-      return 1
-    fi
-    if [[ -z "${resume}" ]] && cmp -s -- "${before}" "${file}"; then
-      rm -f -- "${before}"
-      print -r -- "status: no change; nothing done | file=$(ui::paths "${file}")"
-      return 0
-    fi
-    choices=()
-    status::edit_parse "${file}" && break
-    if (( tty )) && ui::confirm "Edit the plan again?"; then
-      resume="${file}"   # an unchanged reopen is still a plan to read, not a "no change"
-      continue
-    fi
-    rm -f -- "${before}"
-    log::err "plan not run; fix the lines above, then | fix='${CLI_NAME} status --edit ${file}'"
-    return 1
-  done
-  rm -f -- "${before}"
+  # A resumed FILE is read even when saved unchanged: the earlier edit is what is checked.
+  edit::session "${file}" --check status::edit_check --what "the plan" \
+    --resume "${CLI_NAME} status --edit ${file}" ${resume:+--changed} || rc=$?
+  if (( rc == 2 )); then
+    print -r -- "status: no change; nothing done | file=$(ui::paths "${file}")"
+    return 0
+  fi
+  (( rc == 0 )) || return 1
+  plan::parse status "${file}" status::edit_item 2>/dev/null
+  status::edit_choices
   status::edit_live
   if (( ${#choices} == 0 )); then
     print -r -- "status: nothing to do: every line is skip, or its path is clean now"

@@ -34,7 +34,7 @@ mkdir -p "${EDITORS}"
 # editor NAME AWK: keeps a copy of the plan it is given in $SEEN, then rewrites it with AWK.
 editor() { printf '#!/bin/sh\ncp "$1" "%s"\nawk %s "$1" > "$1.tmp" && mv "$1.tmp" "$1"\n' "${SEEN}" "'$2'" > "${EDITORS}/$1"; chmod +x "${EDITORS}/$1"; }
 editor noop '{ print }'
-editor skip_karabiner '{ sub(/^apply  karabiner/, "skip   karabiner") } { print }'
+editor skip_karabiner '{ sub(/^apply +karabiner /, "skip  karabiner ") } { print }'
 editor skip_all '{ sub(/^apply/, "skip ") } { print }'
 editor empty '/^#/ || /^$/ { print }'
 editor bad 'END { print "frobnicate karabiner"; print "apply nosuch"; print "apply karabiner extra"; print "skip karabiner" } { print }'
@@ -76,8 +76,9 @@ head_before="$(df_git rev-parse HEAD)"
 clear_last_setup
 tty noop --timing pull --dry-run --edit
 assert_eq "unchanged plan: exit 0" 0 "${RC}"
-assert_contains "the plan: one apply line per step, with its paths" "$(cat "${SEEN}")" "apply  karabiner     # .config/karabiner/notes.txt"
-assert_contains "the plan: raycast_sync too" "$(cat "${SEEN}")" "apply  raycast_sync  # .config/karabiner/notes.txt"
+assert_contains "the plan: line 1 names the plan type for the editor" "$(head -n 1 "${SEEN}")" "# dotfiles-plan: pull · actions: apply | skip"
+assert_contains "the plan: one apply line per step, with its paths" "$(cat "${SEEN}")" $'\napply           karabiner  # .config/karabiner/notes.txt\n'
+assert_contains "the plan: raycast_sync too" "$(cat "${SEEN}")" $'\napply           raycast_sync  # .config/karabiner/notes.txt'
 assert_contains "the plan: names the actions" "$(cat "${SEEN}")" "#   skip    leave it"
 assert_contains "unchanged plan: hands over to apply" "${OUT}" "running: dotfiles apply karabiner raycast_sync"
 assert_eq "unchanged plan: the apply ran both" "karabiner,raycast_sync" "$(last_setup_steps)"
@@ -92,10 +93,10 @@ clear_last_setup
 tty bad pull --dry-run --edit
 assert_eq "bad plan: exit 1" 1 "${RC}"
 n="$(grep -c '' "${SEEN}")"
-assert_contains "bad plan: an unknown action" "${OUT}" "line $(( n + 1 )): unknown action; use apply or skip | line='frobnicate karabiner'"
-assert_contains "bad plan: an unknown step" "${OUT}" "line $(( n + 2 )): not a step here (dotfiles steps) | step='nosuch'"
-assert_contains "bad plan: two words after the action" "${OUT}" "line $(( n + 3 )): expected one step after the action"
-assert_contains "bad plan: a step twice" "${OUT}" "line $(( n + 4 )): listed twice | step='karabiner'"
+assert_contains "bad plan: an unknown action" "${OUT}" "line $(( n + 1 )): unknown action; use apply, skip | line='frobnicate karabiner'"
+assert_contains "bad plan: an unknown step" "${OUT}" "line $(( n + 2 )): not a step here (dotfiles steps) | item='nosuch'"
+assert_contains "bad plan: two words after the action" "${OUT}" "line $(( n + 3 )): expected one step after 'apply' | line='apply karabiner extra'"
+assert_contains "bad plan: a step twice" "${OUT}" "line $(( n + 4 )): listed twice | item='karabiner'"
 assert_contains "bad plan: the resume" "${OUT}" "fix='dotfiles pull --edit ${PLAN}'"
 assert_file "bad plan: kept" "${PLAN}"
 assert_eq "bad plan: nothing applied" "" "$(last_setup_steps)"

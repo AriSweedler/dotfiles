@@ -7,41 +7,31 @@ zmodload zsh/datetime   # EPOCHREALTIME / EPOCHSECONDS
 typeset -ga PULL_ORDER=()
 typeset -gA PULL_WHY=()
 
-help_pull() {
-  cat <<EOF
-update the shared tier from origin; name the steps the pulled changes affect
+verb::define pull 'update the shared tier from origin; name the steps the pulled changes affect'
+verb::usage pull 'pull [--dry-run]'
+verb::about pull <<'EOF'
+'git df pull --rebase --autostash': a fast-forward when nothing is local,
+otherwise the local commits are replayed onto origin, with uncommitted edits
+stashed around it. A replay that conflicts is aborted, the tier is left as it
+was, and the conflicting files are named: resolve by hand
+('git df pull --rebase'), then pull again. Then the pulled paths are mapped
+to the steps that watch them (no check runs): a warning names each affected
+step and its paths, and one 'dotfiles apply STEP..' brings the machine along.
+The harness (lib/, cmd/) is live as soon as it lands. The local tier is never
+pulled: it has one machine.
 
-${c_bold}Usage${c_rst}
-  ${DF} pull [--dry-run] [--edit [FILE]]
-
-  'git df pull --rebase --autostash': a fast-forward when nothing is local,
-  otherwise the local commits are replayed onto origin, with uncommitted edits
-  stashed around it. A replay that conflicts is aborted, the tier is left as it
-  was, and the conflicting files are named: resolve by hand
-  ('git df pull --rebase'), then pull again. Then the pulled paths are mapped
-  to the steps that watch them (no check runs): a warning names each affected
-  step and its paths, and one 'dotfiles apply STEP..' brings the machine along.
-  The harness (lib/, cmd/) is live as soon as it lands. The local tier is never
-  pulled: it has one machine.
-
-  With --edit (a terminal only), the affected steps then open in \$EDITOR as a
-  plan, $(help::tilde "${ARI_DOTFILES_STATE_DIR}")/pull-plan.dfpull, one
-  'apply|skip STEP  # paths' line each, every one apply. On save the plan is
-  checked line by line; an unchanged plan runs as written, one with no step
-  line aborts, and the 'apply' steps run in a fresh 'dotfiles apply'. A plan
-  with bad lines is kept: edit it again, or resume it with --edit FILE.
-
-${c_bold}Flags${c_rst}
-  --dry-run     fetch, then name what the pull would bring and the steps it
-                affects; merge nothing (with --edit, the apply is a dry run too)
-  --edit [FILE] after the pull, choose the steps to apply in \$EDITOR; FILE
-                resumes a plan that did not pass, without pulling again
-
-${c_bold}Env${c_rst}
-  $(ENV ARI_DOTFILES_REMOTE)
-      the shared repo (default ${ARI_DOTFILES_REMOTE})
+With --edit (a terminal only), the affected steps then open in \$EDITOR as a
+plan, $(help::tilde "${ARI_DOTFILES_STATE_DIR}")/pull-plan.dfpull, one
+'apply|skip STEP  # paths' line each, every one apply. On save the plan is
+checked line by line; an unchanged plan runs as written, one with no step
+line aborts, and the 'apply' steps run in a fresh 'dotfiles apply'. A plan
+with bad lines is kept: edit it again, or resume it with --edit FILE.
 EOF
-}
+verb::edit pull pull::edit_cmd '[FILE] [--dry-run]' 'after the pull, choose the steps to apply in \$EDITOR; FILE resumes a plan that did not pass, without pulling again'
+verb::flag pull '--dry-run' 'fetch, then name what the pull would bring and the steps it affects; merge nothing (edit: the apply is a dry run too)'
+verb::env pull ARI_DOTFILES_REMOTE 'the shared repo' '${ARI_DOTFILES_REMOTE}'
+
+plan::define pull --actions 'apply|skip' --item step
 
 # True (0) while a rebase is stopped in the shared tier.
 is_rebase_in_progress() {
@@ -127,19 +117,18 @@ pull::load_registry() {
   return 0
 }
 
-cmd_pull() {
-  local start="${EPOCHREALTIME}" before after resume=""
-  local -i edit=0
-  while (( $# )); do
-    case "${1}" in
-      --dry-run) export ARI_DOTFILES_DRY_RUN=1 ;;
-      --edit)
-        edit=1
-        if [[ -n "${2:-}" && "${2}" != -* ]]; then resume="${2}"; shift; fi ;;
-      *) usage_error "pull: unknown argument | arg='${1}'" ;;
-    esac
-    shift
-  done
+cmd_pull() { pull::main 0 "$@"; }
+pull::edit_cmd() { pull::main 1 "$@"; }
+
+# pull::main EDIT ARGS..: the pull, then (EDIT 1, or --edit anywhere in ARGS) the plan.
+pull::main() {
+  local -i edit="${1}"; shift
+  local -A opts; local -a args
+  verb::parse pull "$@"
+  (( ${+opts[--edit]} )) && edit=1
+  (( ! ${+opts[--dry-run]} )) || export ARI_DOTFILES_DRY_RUN=1
+  (( ${#args} <= edit )) || usage_error "pull: unknown argument | args='${args[*]}'"
+  local start="${EPOCHREALTIME}" before after resume="${args[1]:-}"
   if (( edit )); then
     [[ -t 0 && -t 1 ]] || usage_error "pull --edit opens \$EDITOR: it needs a terminal | fix='${CLI_NAME} pull, then ${CLI_NAME} apply STEP..'"
     if [[ -n "${resume}" ]]; then
@@ -179,85 +168,46 @@ pull::analyze() {
 
 # --- pull --edit: the affected steps as a plan in $EDITOR ---
 
-# The plan for PULL_ORDER: a header naming the actions, then `apply  <step>  # <paths>` per step,
-# padded to one column. A step the registry does not know (a dry run of a pull that adds one) is
-# a comment: there is nothing here to apply yet.
+# The plan for PULL_ORDER: plan::header, then `apply  <step>  # <paths>` per step. A step the
+# registry does not know (a dry run of a pull that adds one) is a comment: there is nothing here
+# to apply yet.
 pull::edit_file() {
-  local name width=0 paths
-  cat <<EOF
-# ${CLI_NAME} pull --edit: the steps the pulled changes affect, one per line: <action> <step>  # paths
-#   apply   run the step: its check, then its apply when the check asks for it
-#   skip    leave it ('${CLI_NAME} apply STEP' later)
-# Save and quit to run one '${CLI_NAME} apply' of every 'apply' step; an unchanged plan runs as
-# written. Any step '${CLI_NAME} steps' lists may be added. Lines starting with # are comments;
-# a plan with no step line aborts and applies nothing.
-
-EOF
-  for name in "${PULL_ORDER[@]}"; do (( ${#name} > width )) && width=${#name}; done
+  local name paths
+  plan::header pull \
+    "${CLI_NAME} pull --edit: the steps the pulled changes affect; the note is the paths behind each." \
+    "  apply   run the step: its check, then its apply when the check asks for it" \
+    "  skip    leave it ('${CLI_NAME} apply STEP' later)" \
+    "Save and quit to run one '${CLI_NAME} apply' of every 'apply' step; an unchanged plan runs as" \
+    "written. Any step '${CLI_NAME} steps' lists may be added; a plan with no step line aborts" \
+    "and applies nothing."
   for name in "${PULL_ORDER[@]}"; do
     paths="$(pull::paths "${(@f)${PULL_WHY[${name}]%$'\n'}}")"
-    if step::is_known "${name}"; then
-      printf 'apply  %-*s  # %s\n' "${width}" "${name}" "${paths}"
-    else
-      printf '# %s: not in this checkout yet  # %s\n' "${name}" "${paths}"
-    fi
+    if step::is_known "${name}"; then plan::line apply "${name}" "${paths}"
+    else plan::comment "${name}: not in this checkout yet  # ${paths}"; fi
   done
 }
 
-# Parses a plan: fills the caller's `chosen` (the apply steps, in plan order) and `planned` (every
-# step line's step), and prints one `line N: problem | line='…'` per bad line on stderr. Returns 1
-# when any line is bad. A line: apply or skip, one step the registry knows, at most once per file,
-# then an optional '# comment'.
-pull::edit_parse() {
-  setopt localoptions extendedglob
-  local file="${1}" line body
-  local -a words
-  local -i n=0 bad=0
-  while IFS= read -r line || [[ -n "${line}" ]]; do
-    n=$(( n + 1 ))
-    body="${${line%%\#*}##[[:space:]]#}"
-    body="${body%%[[:space:]]#}"
-    [[ -n "${body}" ]] || continue
-    words=(${=body})
-    if [[ "${words[1]}" != (apply|skip) ]]; then
-      print -u2 -r -- "line ${n}: unknown action; use apply or skip | line='${line}'"; bad=1; continue
-    fi
-    if (( ${#words} != 2 )); then
-      print -u2 -r -- "line ${n}: expected one step after the action | line='${line}'"; bad=1; continue
-    fi
-    if ! step::is_known "${words[2]}"; then
-      print -u2 -r -- "line ${n}: not a step here (${CLI_NAME} steps) | step='${words[2]}' line='${line}'"; bad=1; continue
-    fi
-    if (( ${planned[(Ie)${words[2]}]} )); then
-      print -u2 -r -- "line ${n}: listed twice | step='${words[2]}'"; bad=1; continue
-    fi
-    planned+=("${words[2]}")
-    [[ "${words[1]}" != apply ]] || chosen+=("${words[2]}")
-  done < "${file}"
-  return ${bad}
-}
+# pull::edit_step <step>: plan::parse's item check, a step the registry knows.
+pull::edit_step() { step::is_known "${1}" || { print -r -- "not a step here (${CLI_NAME} steps)"; return 1; }; }
+# pull::edit_check <plan>: edit::session's check, every line through plan::parse.
+pull::edit_check() { local -a reply; plan::parse pull "${1}" pull::edit_step; }
 
-# `pull --edit`: <plan> opened in $EDITOR, then parsed. Bad lines: each reported with its number,
-# offered for another edit, else exit 1 naming the --edit FILE that resumes. A plan with no step
-# line aborts; one that skips every step applies nothing; otherwise this process becomes a fresh
-# `dotfiles apply` of the chosen steps (the pull may have replaced lib/ under this one).
+# `pull --edit`: <plan> in one edit::session, checked on every save, an unchanged one included
+# (it runs as written). A plan with no step line aborts; one that skips every step applies
+# nothing; otherwise this process becomes a fresh `dotfiles apply` of the chosen steps (the pull
+# may have replaced lib/ under this one).
 pull::edit() {
-  local plan="${1}" editor bin
-  local -a chosen planned
-  editor="${EDITOR:-vi}"
-  command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi
-  while true; do
-    if ! ${=editor} "${plan}"; then
-      log::err "editor exited non-zero; nothing applied | editor='${editor}' plan='${plan}'"
-      return 1
-    fi
-    chosen=() planned=()
-    pull::edit_parse "${plan}" && break
-    if ui::confirm "Edit the plan again?"; then continue; fi
-    log::err "plan not run; fix the lines above, then | fix='${CLI_NAME} pull --edit ${plan}'"
-    return 1
-  done
+  local plan="${1}" bin r
+  local -a reply f chosen=() planned=()
+  edit::session "${plan}" --check pull::edit_check --what "the plan" --changed \
+    --resume "${CLI_NAME} pull --edit ${plan}" || return 1
+  plan::parse pull "${plan}" pull::edit_step 2>/dev/null
   rm -f -- "${plan}"
+  for r in "${reply[@]}"; do
+    f=("${(@ps:\t:)r}")
+    planned+=("${f[2]}")
+    [[ "${f[1]}" != apply ]] || chosen+=("${f[2]}")
+  done
   if (( ! ${#planned} )); then
     print -r -- "pull: the plan has no step line; aborted, nothing applied"
     return 0

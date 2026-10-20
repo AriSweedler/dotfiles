@@ -1,47 +1,35 @@
 # dotfiles/cmd/status.zsh — `dotfiles status`: both tiers, the submodules, the last push of each repo.
 zmodload zsh/datetime   # EPOCHREALTIME / EPOCHSECONDS
 
-help_status() {
-  cat <<EOF
-both tiers, the submodules, the last push of each repo
+verb::define status 'both tiers, the submodules, the last push of each repo'
+verb::usage status 'status'
+verb::about status <<'EOF'
+Each tier's branch, ahead/behind origin and uncommitted count; each
+submodule with the prefix 'git submodule status' prints (space = at the
+committed pointer, + = elsewhere, a commit awaiting its bump, - = not
+initialized); the timestamp and verdict of each repo's last push log.
 
-${c_bold}Usage${c_rst}
-  ${DF} status
-  ${DF} status --edit [--dry-run] [FILE]
-
-  Each tier's branch, ahead/behind origin and uncommitted count; each
-  submodule with the prefix 'git submodule status' prints (space = at the
-  committed pointer, + = elsewhere, a commit awaiting its bump, - = not
-  initialized); the timestamp and verdict of each repo's last push log.
-
-  --edit writes a commit plan to $(help::tilde "${STATE_DIR}")/status-plan.dfstatus,
-  one 'skip  <tier>:<path>' line per uncommitted tracked path, and opens it
-  in \$EDITOR (vi when unset). Change skip to commit (end the line with
-  '# message'; one tier's lines with one message are one commit) or to
-  restore (discards the change). Every line is checked before anything
-  runs: a bad one is reported by number and the file kept, on a terminal
-  offered for another edit; FILE resumes it. A path that went clean since
-  is left alone. On a terminal the commits are confirmed, then the
-  restores by name; without one (a scripted \$EDITOR) the commits run
-  unconfirmed and a plan with a restore is refused. Submodule changes are
-  comments: commit them in their own repos. Nothing is pushed: run
-  '${CLI_NAME} push' after. The tables print again at the end. Exit 1 for
-  a bad line, a refusal, a declined confirmation or a failed commit.
-
-${c_bold}Flags${c_rst}
-  --edit [FILE]  edit and run a commit plan; FILE resumes a kept one
-  --dry-run      with --edit: print what would run, restores too, change
-                 nothing
-
-${c_bold}Env${c_rst}
-  $(ENV EDITOR)
-      the editor --edit opens (default vi)
-  $(ENV ARI_DOTFILES_DF_GIT_DIR)
-      the shared tier's bare repo (default $(help::tilde "${ARI_DOTFILES_DF_GIT_DIR}"))
-  $(ENV ARI_DOTFILES_LDF_GIT_DIR)
-      the local tier's bare repo (default $(help::tilde "${ARI_DOTFILES_LDF_GIT_DIR}"))
+--edit writes a commit plan to $(help::tilde "${STATE_DIR}")/status-plan.dfstatus,
+one 'skip  <tier>:<path>' line per uncommitted tracked path, and opens it
+in \$EDITOR (vi when unset). Change skip to commit (end the line with
+'# message'; one tier's lines with one message are one commit) or to
+restore (discards the change). Every line is checked before anything
+runs: a bad one is reported by number and the file kept, on a terminal
+offered for another edit; FILE resumes it. A path that went clean since
+is left alone. On a terminal the commits are confirmed, then the
+restores by name; without one (a scripted \$EDITOR) the commits run
+unconfirmed and a plan with a restore is refused. Submodule changes are
+comments: commit them in their own repos. Nothing is pushed: run
+'${CLI_NAME} push' after. The tables print again at the end. Exit 1 for
+a bad line, a refusal, a declined confirmation or a failed commit.
 EOF
-}
+verb::edit status status::edit_cmd '[--dry-run] [FILE]' 'write a commit plan for the uncommitted tracked paths, edit it in \$EDITOR and run it; FILE resumes a kept one'
+verb::flag status '--dry-run' 'edit: print what would run, restores too, change nothing'
+verb::env status EDITOR 'the editor --edit opens' 'vi'
+verb::env status ARI_DOTFILES_DF_GIT_DIR "the shared tier's bare repo" '$(help::tilde "${ARI_DOTFILES_DF_GIT_DIR}")'
+verb::env status ARI_DOTFILES_LDF_GIT_DIR "the local tier's bare repo" '$(help::tilde "${ARI_DOTFILES_LDF_GIT_DIR}")'
+
+status::edit_cmd() { need_lib "${ARI_DOTFILES_CMD}/status/edit.zsh" || return 3; status::edit "$@"; }
 
 # One line for a tier from a single `git status`: the branch header (with ahead/behind once
 # origin/main is known) and the count of uncommitted paths.
@@ -288,17 +276,11 @@ status::cards() {
 }
 
 cmd_status() {
-  local -a edit=() dry=()
-  zparseopts -D -E -F -K -- -edit=edit -dry-run=dry || usage_error "status: bad flags | args='$*'"
-  if (( ${#edit} )); then
-    (( $# <= 1 )) || usage_error "status --edit takes at most one FILE | args='$*'"
-    (( ! ${#dry} )) || export ARI_DOTFILES_DRY_RUN=1
-    need_lib "${ARI_DOTFILES_CMD}/status/edit.zsh" || return 3
-    status::edit "$@"
-    return
-  fi
-  (( ! ${#dry} )) || usage_error "status: --dry-run goes with --edit"
-  (( $# == 0 )) || usage_error "status takes no arguments | args='$*'"
+  local -A opts; local -a args
+  verb::parse status "$@"
+  (( ${+opts[--edit]} )) && { status::edit_cmd "${@:#--edit}"; return; }
+  (( ! ${+opts[--dry-run]} )) || usage_error "status: --dry-run goes with --edit"
+  (( ${#args} == 0 )) || usage_error "status takes no arguments | args='${args[*]}'"
   status::print
 }
 

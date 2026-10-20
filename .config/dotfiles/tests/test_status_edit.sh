@@ -67,8 +67,9 @@ assert_eq "unchanged plan: exit 0" 0 "${RC}"
 assert_contains "unchanged plan: says so" "${OUT}" "status: no change; nothing done"
 assert_file "the plan is kept under the state dir" "${PLAN}"
 SEEN="$(cat "${FIX}/seen.plan")"
-assert_contains "plan: a shared line" "${SEEN}" $'\nskip  shared:.config/st/a.txt\n'
-assert_contains "plan: a local line, relative to ~/.local" "${SEEN}" $'\nskip  local:share/dotfiles/st/x.txt'
+assert_contains "plan: line 1 names the plan type for the editor" "${SEEN%%$'\n'*}" "# dotfiles-plan: status · actions: commit | restore | skip · danger: restore · note: commit"
+assert_contains "plan: a shared line" "${SEEN}" $'\nskip            shared:.config/st/a.txt\n'
+assert_contains "plan: a local line, relative to ~/.local" "${SEEN}" $'\nskip            local:share/dotfiles/st/x.txt'
 assert_contains "plan: the shared heading" "${SEEN}" "# ── shared (git df"
 assert_contains "plan: the shared diff --stat as a comment" "${SEEN}" "# 5 files changed, 5 insertions(+), 5 deletions(-)"
 assert_contains "plan: the local diff --stat as a comment" "${SEEN}" "# 1 file changed, 1 insertion(+), 1 deletion(-)"
@@ -90,12 +91,12 @@ writes bad
 df_before="$(df_count)"
 st bad status --edit
 assert_eq "bad lines: exit 1" 1 "${RC}"
-assert_contains "bad lines: an unknown action" "${ERR}" "line 2: unknown action; use commit, restore or skip"
-assert_contains "bad lines: a commit with no message" "${ERR}" "line 3: a commit needs a message"
+assert_contains "bad lines: an unknown action" "${ERR}" "line 2: unknown action; use commit, restore, skip"
+assert_contains "bad lines: a commit with no message" "${ERR}" "line 3: 'commit' needs a note: end the line with '# …' | item='shared:.config/st/b.txt'"
 assert_contains "bad lines: an untracked path" "${ERR}" "line 4: not a file the shared tier tracks | item='shared:.config/nope.txt'"
 assert_contains "bad lines: an unknown tier" "${ERR}" "line 5: expected <shared|local>:<path>"
 assert_contains "bad lines: a path twice" "${ERR}" "line 7: listed twice"
-assert_contains "bad lines: an action alone" "${ERR}" "line 8: expected <shared|local>:<path>"
+assert_contains "bad lines: an action alone" "${ERR}" "line 8: expected one tier:path after 'commit'"
 assert_not_contains "bad lines: a good line is not named" "${ERR}" "line 6:"
 assert_contains "bad lines: the resume command" "${ERR}" "fix='dotfiles status --edit ${PLAN}'"
 assert_eq "bad lines: the file is kept as edited" "$(cat "${EDITORS}/bad.plan")" "$(cat "${PLAN}")"
