@@ -83,8 +83,7 @@ brewedit::message() {
 # brewedit::edit [--global|--local] [--ignore] [--no-commit] [--no-push]
 brewedit::edit() {
   local -A opts; local -a args
-  verb::parse brew "$@"
-  brew::only edit --global --local --ignore --no-commit --no-push
+  verb::parse brew --sub edit "$@"
   (( ${#args} == 0 )) || usage_error "brew edit takes no positional arguments | args='${args[*]}'"
   (( ! ${+opts[--global]} || ! ${+opts[--local]} )) || usage_error "brew edit: --global and --local are exclusive"
   (( ${+opts[--no-push]} )) && export ARI_DOTFILES_NO_PUSH=1

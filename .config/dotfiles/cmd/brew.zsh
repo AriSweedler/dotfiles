@@ -28,18 +28,18 @@ verb::sub brew merged 'print the merged Brewfile (debugging)'
 verb::sub brew inventory 'what is installed, from receipts'
 verb::edit brew brew::edit_cmd '[--global|--local] [--ignore] [--no-commit] [--no-push]' \
   "open a tier's Brewfile (with --ignore, its Brewfile.ignore) in \\\$EDITOR. On save it must parse (a Brewfile through 'brew bundle list'; an ignore file as '<formula|cask|tap|vscode> <name>  # reason' and 'include-declared <abs path>  # reason' lines) and say why for every entry; a file that passes is committed in its tier, the subject naming each item added or removed, and one that does not is reported line by line and left as edited, uncommitted. Nothing is installed or uninstalled"
-verb::flag brew '--json' 'triage, inventory: JSON instead of text (triage: drift.json)'
-verb::flag brew '--interactive' 'triage: pick a tier and give a reason per undeclared item, confirm the grouped plan once, then run one decree (one commit) per group; needs a terminal on stdin and stdout'
-verb::flag brew '--edit [FILE]' "triage: write the undeclared items to a plan file, one 'skip kind:name' line each, and open it in \\\$EDITOR; change each skip to global add, local add, global ignore or local ignore (each ending in '# reason', kept as the line's comment), or to delete (uninstall it here). On save the plan runs as --interactive's does, then the uninstalls; a bad line is reported by number and the file kept. FILE resumes that plan file"
-verb::flag brew '--global' "decree: declare the item in the shared Brewfile; edit: open the shared tier's file"
-verb::flag brew '--local' "decree: declare the item in the local Brewfile; edit: open the local tier's file (the default)"
-verb::flag brew '--ignore-global' 'decree: record the item in the shared Brewfile.ignore'
-verb::flag brew '--ignore-local' 'decree: record the item in the local Brewfile.ignore'
-verb::flag brew '--reason TEXT' "decree: required; why the item is declared or ignored, written as each line's trailing '# TEXT' comment (brew_drift fails an entry without one)"
-verb::flag brew '--ignore' "edit: the tier's Brewfile.ignore instead of its Brewfile"
-verb::flag brew '--no-commit' 'edit: check the file, leave it uncommitted'
-verb::flag brew '--dry-run' 'triage (with --interactive or --edit): every decree prints instead of writing; decree, undecree: print the lines, paths and git commands, touch nothing'
-verb::flag brew '--no-push' "triage (with --interactive or --edit), decree, undecree, edit: skip the local tier's push"
+verb::flag brew '--json' 'triage, inventory: JSON instead of text (triage: drift.json)' --for 'triage inventory'
+verb::flag brew '--interactive' 'triage: pick a tier and give a reason per undeclared item, confirm the grouped plan once, then run one decree (one commit) per group; needs a terminal on stdin and stdout' --for 'triage'
+verb::flag brew '--edit [FILE]' "triage: write the undeclared items to a plan file, one 'skip kind:name' line each, and open it in \\\$EDITOR; change each skip to global add, local add, global ignore or local ignore (each ending in '# reason', kept as the line's comment), or to delete (uninstall it here). On save the plan runs as --interactive's does, then the uninstalls; a bad line is reported by number and the file kept. FILE resumes that plan file" --for 'triage'
+verb::flag brew '--global' "decree: declare the item in the shared Brewfile; edit: open the shared tier's file" --for 'decree edit'
+verb::flag brew '--local' "decree: declare the item in the local Brewfile; edit: open the local tier's file (the default)" --for 'decree edit'
+verb::flag brew '--ignore-global' 'decree: record the item in the shared Brewfile.ignore' --for 'decree'
+verb::flag brew '--ignore-local' 'decree: record the item in the local Brewfile.ignore' --for 'decree'
+verb::flag brew '--reason TEXT' "decree: required; why the item is declared or ignored, written as each line's trailing '# TEXT' comment (brew_drift fails an entry without one)" --for 'decree'
+verb::flag brew '--ignore' "edit: the tier's Brewfile.ignore instead of its Brewfile" --for 'edit'
+verb::flag brew '--no-commit' 'edit: check the file, leave it uncommitted' --for 'edit'
+verb::flag brew '--dry-run' 'triage (with --interactive or --edit): every decree prints instead of writing; decree, undecree: print the lines, paths and git commands, touch nothing' --for 'triage decree undecree'
+verb::flag brew '--no-push' "triage (with --interactive or --edit), decree, undecree, edit: skip the local tier's push" --for 'triage decree undecree edit'
 verb::env brew ARI_DOTFILES_GLOBAL_DIR 'directory of the global Brewfile' '$(help::tilde "${ARI_DOTFILES_GLOBAL_DIR}")'
 verb::env brew ARI_DOTFILES_LOCAL_DIR 'directory of the local Brewfile' '$(help::tilde "${ARI_DOTFILES_LOCAL_DIR}")'
 verb::env brew ARI_DOTFILES_NO_PUSH "1 skips the local tier's push after a decree, undecree or edit commit"
@@ -67,14 +67,6 @@ brew::load() {
 
 brew::edit_cmd() { brew::load || return 3; brewedit::edit "$@"; }
 
-# brew::only SUB FLAG..: a usage error when the caller's `opts` holds a flag SUB does not take
-# (verb::parse accepts every flag of the verb).
-brew::only() {
-  local sub="${1}" flag; shift
-  for flag in "${(@k)opts}"; do
-    (( ${@[(Ie)${flag}]} )) || usage_error "brew ${sub} does not take ${flag} | takes='${*:-no flags}'"
-  done
-}
 
 cmd_brew() {
   brew::load || return 3
@@ -91,11 +83,10 @@ cmd_brew() {
     *) usage_error "unknown brew subcommand | sub='${sub}' known='triage decree undecree edit merged inventory'" ;;
   esac
   local -A opts; local -a args
-  verb::parse brew "$@"
+  verb::parse brew --sub "${sub}" "$@"
   (( ${#args} == 0 )) || usage_error "brew ${sub} takes no positional arguments | args='${args[*]}'"
   case "${sub}" in
     merged)
-      brew::only merged
       local tmp
       tmp="$(mktemp)"
       brewfile::merge "${tmp}" "${GLOBAL_BREWFILE}" "${LOCAL_BREWFILE}"
@@ -103,7 +94,6 @@ cmd_brew() {
       rm -f -- "${tmp}"
       ;;
     inventory)
-      brew::only inventory --json
       if (( ${+opts[--json]} )); then
         brew::inventory
         return 0

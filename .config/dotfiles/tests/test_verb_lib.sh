@@ -69,6 +69,23 @@ assert_eq "parse: an optional value left out is 1" "1" "${OUT}"
 zrun -- "${DEMO}; verb::parse demo --help; print -r -- \"\${opts[--help]}\""
 assert_eq "parse: --help is declared for every verb" "1" "${OUT}"
 
+# ── verb: --for scopes a flag to its subcommands; a declared --edit row replaces the generated one ──
+SCOPED='verb::define sc "scoped"; verb::usage sc "sc decree|triage"
+verb::flag sc "--reason TEXT" "decree: why" --for "decree undecree"
+verb::flag sc "--edit [FILE]" "triage: a plan file"
+verb::edit sc sc_edit "" "edit it"
+typeset -A opts; typeset -a args'
+zrun -- "${SCOPED}; verb::parse sc decree --reason because; print -r -- \"\${opts[--reason]}\""
+assert_eq "--for: taken after its subcommand" "because" "${OUT}"
+zrun -- "${SCOPED}; verb::parse sc triage --reason because"
+assert_eq "--for: refused after another" 64 "${RC}"
+assert_contains "--for: says which it goes with" "${ERR}" "sc triage: --reason goes with sc decree|undecree only"
+zrun -- "${SCOPED}; verb::parse sc triage --edit plan.txt; print -r -- \"\${opts[--edit]}\""
+assert_eq "a declared --edit takes its value" "plan.txt" "${OUT}"
+zrun -- "${SCOPED}; verb::help sc"
+assert_contains "a declared --edit row is the one shown" "${OUT}" "--edit [FILE]  triage: a plan file"
+assert_not_contains "and the generated one is not" "${OUT}" "edit: the same as the edit subcommand"
+
 # ── the help rule for a declared verb (cmd/help.zsh's help::declared_gap) ──
 HELP_RULE="source '${ORIG_CONFIG_DIR}/dotfiles/cmd/help.zsh'"
 cat > "${FIX}/good.zsh" <<'X'
@@ -161,4 +178,16 @@ assert_contains "parse: the item check" "${ERR}" "line 6: not an item here | ite
 assert_contains "parse: an item twice" "${ERR}" "line 7: listed twice | item='formula:a'"
 assert_contains "parse: an extra word" "${ERR}" "line 8: expected one kind:name after 'skip'"
 assert_contains "parse: a good line after the bad ones" "${OUT}" $'delete\tcask:g\tgone\t10'
+# ── plan::edit: --resume reaches the session, --plan-check sees the whole plan ──
+WHOLE='no_two_deletes() { local -i n=0; local l; for l in "${PLAN_LINES[@]}"; do [[ "${l%%$'"'"'\t'"'"'*}" == delete ]] && (( ++n )); done; (( n < 2 )) || { print -u2 "line 0: at most one delete"; return 1; }; }'
+printf '%s\n' '# dotfiles-plan: demo' 'delete  cask:a  # x' 'delete  cask:b  # y' > "${FIX}/w.plan"
+zrun EDITOR="${EDITORS}/noop" -- "${PLAN}; ${WHOLE}; plan::edit demo '${FIX}/w.plan' known --plan-check no_two_deletes --changed --resume 'dotfiles demo --edit F'; print rc=\$?"
+assert_eq "plan-check: a rule across lines fails the plan" "rc=1" "${OUT}"
+assert_contains "plan-check: its problem is shown" "${ERR}" "at most one delete"
+assert_contains "--resume: the resume line reaches the session" "${ERR}" "fix='dotfiles demo --edit F'"
+printf '%s\n' '# dotfiles-plan: demo' 'delete  cask:a  # x' > "${FIX}/w.plan"
+zrun EDITOR="${EDITORS}/noop" -- "${PLAN}; ${WHOLE}; plan::edit demo '${FIX}/w.plan' known --plan-check no_two_deletes --changed; print rc=\$? unchanged=\${EDIT_UNCHANGED}"
+assert_eq "a plan run as written: checked, passes, and EDIT_UNCHANGED says it was not edited" "rc=0 unchanged=1" "${OUT}"
+zrun -- "PLAN_ITEM_WIDTH=10; plan::line apply ab why; plan::line apply abcdefgh why2"
+assert_eq "PLAN_ITEM_WIDTH: notes line up" $'apply           ab          # why\napply           abcdefgh    # why2' "${OUT}"
 report

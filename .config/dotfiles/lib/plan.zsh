@@ -14,9 +14,9 @@
 #     `line N: …`; an unknown action, a missing or extra item, a missing note, an item listed twice,
 #     and whatever ITEM_CHECK_FN ITEM ACTION prints (it returns non-zero for a bad item). Returns 1
 #     when any line is bad.
-#   plan::edit KIND FILE [ITEM_CHECK_FN] [--resume CMD] [--changed]
-#     edit::session on FILE with plan::parse as its check: 0 parsed (in `reply`), 2 unchanged,
-#     1 left bad.
+#   plan::edit KIND FILE [ITEM_CHECK_FN] [--plan-check FN] [--resume CMD] [--changed]
+#     edit::session on FILE with plan::parse as its check, then FN over the whole plan (rules that
+#     span lines; it reads PLAN_LINES): 0 parsed (in `reply`), 2 unchanged, 1 left bad.
 #
 # Line 1 of a plan is `# dotfiles-plan: KIND · actions: a | b c | … · danger: x · note: y`; the
 # `dotfilesplan` Neovim filetype reads it to highlight any plan, including ones added later.
@@ -52,7 +52,12 @@ plan::header() {
   print -r -- ""
 }
 
-plan::line() { print -r -- "${(r:14:)1}  ${2}${3:+  # ${3}}"; }
+# PLAN_ITEM_WIDTH (optional): the item column's width, so the notes after it line up.
+plan::line() {
+  local item="${2}"
+  [[ -z "${3:-}" || -z "${PLAN_ITEM_WIDTH:-}" ]] || item="${(r:PLAN_ITEM_WIDTH:)item}"
+  print -r -- "${(r:14:)1}  ${item}${3:+  # ${3}}"
+}
 plan::comment() { local text; for text in "$@"; do print -r -- "#${text:+ ${text}}"; done; }
 
 plan::parse() {
@@ -105,20 +110,30 @@ plan::parse() {
 }
 
 plan::edit() {
-  local kind="${1}" file="${2}" check="" resume="" changed=""
+  local kind="${1}" file="${2}" check="" planfn=""
   shift 2
   if (( $# )) && [[ "${1}" != --* ]]; then check="${1}"; shift; fi
+  local -a pass=()
   while (( $# )); do
     case "${1}" in
-      --resume) resume="${2}"; shift 2 ;;
-      --changed) changed=--changed; shift ;;
+      --resume) pass+=(--resume "${2}"); shift 2 ;;
+      --plan-check) planfn="${2}"; shift 2 ;;
+      --changed) pass+=(--changed); shift ;;
       *) print -u2 -r -- "plan::edit: bad argument '${1}'"; return 64 ;;
     esac
   done
-  typeset -g PLAN_CHECK="${check}" PLAN_KIND="${kind}"
+  typeset -g PLAN_CHECK="${check}" PLAN_KIND="${kind}" PLAN_WHOLE="${planfn}"
   local -i rc=0
-  edit::session "${file}" --check plan::_check --what "the plan" ${resume:+--resume "${resume}"} ${changed} || rc=$?
+  edit::session "${file}" --check plan::_check --what "the plan" "${pass[@]}" || rc=$?
   (( rc == 0 )) && plan::parse "${kind}" "${file}" "${check}" 2>/dev/null
   return ${rc}
 }
-plan::_check() { local -a reply; plan::parse "${PLAN_KIND}" "${1}" "${PLAN_CHECK}"; }
+
+# The session's check: every line (plan::parse), then the whole plan (--plan-check FN, which reads
+# PLAN_LINES, the parsed lines, and prints a problem per line like plan::parse does).
+plan::_check() {
+  local -a reply
+  plan::parse "${PLAN_KIND}" "${1}" "${PLAN_CHECK}" || return 1
+  typeset -ga PLAN_LINES=("${reply[@]}")
+  [[ -z "${PLAN_WHOLE}" ]] || "${PLAN_WHOLE}"
+}

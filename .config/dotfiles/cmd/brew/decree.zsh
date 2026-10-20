@@ -529,8 +529,7 @@ decree::block_tap_lines() {  # <tap>
 
 decree::triage() {
   local -A opts; local -a args
-  verb::parse brew "$@"
-  brew::only triage --json --interactive --edit --dry-run --no-push
+  verb::parse brew --sub triage "$@"
   local -i json=${+opts[--json]} interactive=${+opts[--interactive]} edit=${+opts[--edit]}
   local -a pass=()
   (( ${+opts[--dry-run]} )) && pass+=(--dry-run)
@@ -542,6 +541,9 @@ decree::triage() {
     usage_error "--dry-run and --no-push go with --interactive or --edit; plain triage writes nothing | flags='${pass[*]}'"
   fi
   if (( edit )); then
+    # --edit FILE: the parser gives FILE as the flag's value (1 when --edit stands alone).
+    [[ "${opts[--edit]}" == 1 ]] || args=("${opts[--edit]}" "${args[@]}")
+    (( ${#args} <= 1 )) || usage_error "brew triage takes one FILE, after --edit, and nothing else | args='${args[*]}'"
     decree::triage_edit "${pass[@]}" -- "${args[@]}"
     return
   fi
@@ -978,16 +980,13 @@ decree::triage_edit() {  # [--dry-run] [--no-push] [--] [FILE]
     decree::triage_edit_file "${drift}" > "${file}" || return 1
   fi
   typeset -ga DECREE_UNDECLARED=(${(f)"$(jq -r '.undeclared[] | "\(.kind):\(.name)"' "${drift}")"})
-  # The resume line is logged here: plan::edit hands its --resume to edit::session as one word.
-  plan::edit brew-triage "${file}" decree::triage_edit_item ${resume:+--changed} || rc=$?
+  plan::edit brew-triage "${file}" decree::triage_edit_item ${resume:+--changed} \
+    --resume "${CLI_NAME} brew triage --edit ${file}" || rc=$?
   if (( rc == 2 )); then
     print -r -- "no change; nothing to decree"
     return 0
   fi
-  if (( rc != 0 )); then
-    log::err "nothing decreed; the plan is kept | fix='${CLI_NAME} brew triage --edit ${file}'"
-    return 1
-  fi
+  (( rc == 0 )) || return 1
   # `global add` → global, `local ignore` → ignore-local: decree::triage_plan's actions.
   for row in "${reply[@]}"; do
     fields=("${(@ps:\t:)row}")
@@ -1017,8 +1016,7 @@ decree::commit_message() {  # <verb> <tier> <suffix> <item line>... ; suffix is 
 
 decree::decree() {  # ITEM.. TIER --reason TEXT [--dry-run] [--no-push]
   local -A opts; local -a args
-  verb::parse brew "$@"
-  brew::only decree --global --local --ignore-global --ignore-local --reason --dry-run --no-push
+  verb::parse brew --sub decree "$@"
   local -a items=("${args[@]}") tiers=(${(k)opts[(I)--global|--local|--ignore-global|--ignore-local]})
   (( ${#tiers} == 1 )) || usage_error "exactly one of --global, --local, --ignore-global, --ignore-local is required"
   (( ${#items} )) || usage_error "at least one ITEM is required"
@@ -1237,8 +1235,7 @@ decree::decree() {  # ITEM.. TIER --reason TEXT [--dry-run] [--no-push]
 
 decree::undecree() {  # ITEM.. [--dry-run] [--no-push]
   local -A opts; local -a args
-  verb::parse brew "$@"
-  brew::only undecree --dry-run --no-push
+  verb::parse brew --sub undecree "$@"
   local -a items=("${args[@]}")
   (( ${#items} )) || usage_error "at least one ITEM is required"
   (( ${+opts[--dry-run]} )) && export ARI_DOTFILES_DRY_RUN=1

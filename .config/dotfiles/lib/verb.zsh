@@ -4,8 +4,9 @@
 #   verb::usage  VERB "FORM" ..                   one Usage line each, without the leading `dotfiles`
 #   verb::about  VERB <<'EOF' … EOF               the paragraph(s) under Usage, wrapped by hand at 78
 #   verb::sub    VERB NAME "description"          a Subcommands row
-#   verb::flag   VERB "--name[|-n] [ARG]" "description"   a Flags row, and what verb::parse accepts;
-#                                                 ARG in [brackets] is optional
+#   verb::flag   VERB "--name[|-n] [ARG]" "description" [--for "SUB.."]   a Flags row, and what
+#                                                 verb::parse accepts; ARG in [brackets] is optional;
+#                                                 --for: only after those subcommands
 #   verb::env    VERB VAR "description" ["default"]   an Env row
 #   verb::edit   VERB HANDLER "ARGS" "description"    `dotfiles VERB edit ARGS` and `--edit ARGS`
 #                                                 route to HANDLER; adds the Usage line, the edit
@@ -15,22 +16,29 @@
 #
 # Texts are stored as written and expanded when help prints (${(e)…}): `$(help::tilde "${X}")`
 # and `${VAR}` work and cost nothing at startup. Write the texts in single quotes, and \$ for a
-# literal dollar sign (in double quotes the shell has already expanded them once). Rows are
+# literal dollar sign (in double quotes the shell has already expanded them once, so there it is
+# \\\$; a text with an apostrophe is easiest in double quotes with that). Rows are
 # wrapped to 80 columns with a hanging indent, so a description is written as one line.
 #
-#   verb::parse VERB "$@"   the only flag parser: fills the caller's `opts` (opts[--name]=value, or
+#   verb::parse VERB [--sub SUB] "$@"   the only flag parser (--sub: a subcommand's handler, its
+#                           word already consumed, says which it is for the --for check): fills the caller's `opts` (opts[--name]=value, or
 #                           1 for a flag without one; an alias lands under the first spelling) and `args` (the rest, in order). A word starting
 #                           with '-' that VERB does not declare is a usage error; `--` ends flags.
 #   verb::help VERB         the help, in the one shape every verb has.
 
 typeset -gA VERB_DESC VERB_EDIT VERB_EDIT_ARGS VERB_EDIT_DESC VERB_EDIT_NONE VERB_ABOUT
-typeset -gA VERB_USAGE VERB_SUBS VERB_FLAGS VERB_ENV VERB_SECTIONS
+typeset -gA VERB_USAGE VERB_SUBS VERB_FLAGS VERB_ENV VERB_SECTIONS VERB_FOR
 
 verb::define() { VERB_DESC[${1}]="${2}"; }
 verb::usage() { local v="${1}"; shift; local form; for form in "$@"; do VERB_USAGE[${v}]+="${form}"$'\n'; done; }
 verb::about() { local text; IFS= read -rd '' text || true; VERB_ABOUT[${1}]+="${text%$'\n'}"$'\n'; }
 verb::sub() { VERB_SUBS[${1}]+="${2}"$'\t'"${3}"$'\n'; }
-verb::flag() { VERB_FLAGS[${1}]+="${2}"$'\t'"${3}"$'\n'; }
+# verb::flag VERB SPEC DESC [--for "SUB.."]: --for names the subcommands that take the flag; the
+# parser refuses it after any other (and before none).
+verb::flag() {
+  VERB_FLAGS[${1}]+="${2}"$'\t'"${3}"$'\n'
+  [[ "${4:-}" != --for ]] || VERB_FOR[${1}:${${2%% *}%%|*}]="${5}"
+}
 verb::env() { VERB_ENV[${1}]+="${2}"$'\t'"${3}"$'\t'"${4:-}"$'\n'; }
 verb::section() { local text; IFS= read -rd '' text || true; VERB_SECTIONS[${1}]+="${2}"$'\t'"${text%$'\n'}"$'\x1f'; }
 
@@ -50,6 +58,8 @@ verb::_rows_of() {
     flags) REPLY="${VERB_FLAGS[${v}]:-}" ;;
   esac
   [[ -n "${VERB_EDIT[${v}]:-}" ]] || return 0
+  # A verb that declares its own --edit row (a subcommand's --edit FILE) keeps that one.
+  [[ "${2}" != flags || "${REPLY}" != (|*$'\n')--edit[[:space:]$'\t']* ]] || return 0
   case "${2}" in
     usage) REPLY+="${v} edit${VERB_EDIT_ARGS[${v}]:+ ${VERB_EDIT_ARGS[${v}]}}"$'\n' ;;
     subs) REPLY+="edit"$'\t'"${VERB_EDIT_DESC[${v}]} (also: ${v} --edit)"$'\n' ;;
@@ -80,7 +90,10 @@ verb::_flag_names() {
 }
 
 verb::parse() {
-  local v="${1}" word name value; shift
+  local v="${1}" word name value sub=""; shift
+  local -i given=0
+  # --sub SUB: a handler parsing a subcommand's words (the subcommand word already consumed).
+  if [[ "${1:-}" == --sub ]]; then sub="${2}" given=1; shift 2; fi
   local -a reply
   verb::_flag_names "${v}"
   local -a known=("${reply[@]}")
@@ -103,6 +116,14 @@ verb::parse() {
       *) [[ "${word}" != *=* ]] || usage_error "${v}: ${name} takes no value | flag='${word}'"; value=1 ;;
     esac
     opts[${VERB_CANON[${name}]:-${name}}]="${value}"
+  done
+  # A flag declared --for some subcommands is refused after any other.
+  local key
+  (( given )) || sub="${args[1]:-}"
+  for key in "${(@k)opts}"; do
+    [[ -n "${VERB_FOR[${v}:${key}]:-}" ]] || continue
+    (( ${${(z)VERB_FOR[${v}:${key}]}[(Ie)${sub}]} )) && continue
+    usage_error "${v}${sub:+ ${sub}}: ${key} goes with ${v} ${VERB_FOR[${v}:${key}]// /|} only"
   done
 }
 

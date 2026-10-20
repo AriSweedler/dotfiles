@@ -39,7 +39,8 @@ edit::open() {
 #   each problem on stderr, returns non-zero on any); passing → 0. Failing on a terminal offers
 #   "Edit WORD again?" and loops; otherwise logs the problems' fix, `CMD`, keeps FILE and returns 1.
 #   The editor failing returns 1 with FILE kept. --changed treats the first open as already changed
-#   (a resumed draft or plan: the user's earlier edit is what is being checked).
+#   (a resumed draft or plan: the user's earlier edit is what is being checked). EDIT_UNCHANGED is
+#   1 afterwards when the file ended as it started (a plan run as written still says so).
 edit::session() {
   local file="${1:?edit::session: FILE}" check="" resume="" what="" before
   shift
@@ -58,24 +59,29 @@ edit::session() {
   done
   [[ -n "${what}" ]] || what="${file:t}"
   before="$(mktemp "${TMPDIR:-/tmp}/dotfiles-edit.XXXXXX")" || return 1
+  local first; first="$(mktemp "${TMPDIR:-/tmp}/dotfiles-edit.XXXXXX")" || return 1
+  cp -- "${file}" "${first}"
+  typeset -g EDIT_UNCHANGED=0
   while true; do
     cp -- "${file}" "${before}"
     if ! edit::open --line "${line}" -- "${file}" "${also[@]}"; then
-      rm -f -- "${before}"
+      rm -f -- "${before}" "${first}"
       log::err "editor exited non-zero; ${what} kept as it was saved | file='${file}'${resume:+ fix='${resume}'}"
       return 1
     fi
     if (( ! changed )) && cmp -s -- "${before}" "${file}"; then
-      rm -f -- "${before}"
+      rm -f -- "${before}" "${first}"
+      EDIT_UNCHANGED=1
       return 2
     fi
     changed=1
     if [[ -z "${check}" ]] || "${check}" "${file}"; then
-      rm -f -- "${before}"
+      cmp -s -- "${first}" "${file}" && EDIT_UNCHANGED=1
+      rm -f -- "${before}" "${first}"
       return 0
     fi
     if [[ -t 0 && -t 1 ]] && ui::confirm "Edit ${what} again?"; then continue; fi
-    rm -f -- "${before}"
+    rm -f -- "${before}" "${first}"
     log::err "${what} not used; fix the problems above, then | file='${file}'${resume:+ fix='${resume}'}"
     return 1
   done
