@@ -8,7 +8,7 @@
 #
 # Entry points (each takes the CLI args after `dotfiles brew <sub>` and returns the exit code):
 #   decree::triage   [--json | --interactive [--dry-run] [--no-push]]
-#   decree::decree   ITEM... (--global|--local|--ignore-global|--ignore-local) [--reason TEXT] [--dry-run] [--no-push]
+#   decree::decree   ITEM... (--global|--local|--ignore-global|--ignore-local) --reason TEXT [--dry-run] [--no-push]
 #   decree::undecree ITEM... [--dry-run] [--no-push]
 # ITEM = [formula:|cask:|tap:|vscode:]name; the kind may be omitted when exactly one kind matches.
 #
@@ -23,8 +23,9 @@
 (( ${+DECREE_IGNORE_LINE_RE} )) || typeset -gr DECREE_IGNORE_LINE_RE='^[[:space:]]*(formula|cask|tap|vscode|include-declared)[[:space:]]+([^[:space:]#]+)'
 (( ${+DECREE_LOCAL_BREWFILE_HEADER} )) || typeset -gra DECREE_LOCAL_BREWFILE_HEADER=(
   "# Packages for THIS machine only (local tier, git ldf). Applied together with the shared"
-  "# ~/.config/new-machine/Brewfile by \`${CLI_NAME} setup\`. Add with \`${CLI_NAME} brew decree <name> --local\`;"
-  "# move a line into the shared file by hand when every machine should have it."
+  "# ~/.config/new-machine/Brewfile by \`${CLI_NAME} setup\`. Add with \`${CLI_NAME} brew decree <name> --local --reason why\`;"
+  "# move a line into the shared file by hand when every machine should have it. Every entry says"
+  "# why it is here: a trailing comment, or a heading comment opening its paragraph."
 )
 (( ${+DECREE_IGNORE_HEADER} )) || typeset -gra DECREE_IGNORE_HEADER=(
   "# Installed here on purpose, but dotfiles do not own it. One entry per line:"
@@ -294,6 +295,78 @@ decree::ignore_entries() {  # <file>
   decree::_rows_json "${rows[@]}"
 }
 
+# ── the documentation rule (pure zsh; no brew call) ──────────────────────────────────────────
+
+# REPLY = the text of <line>'s trailing Ruby comment, trimmed, leading #s dropped: what follows
+# the first `#` outside a quoted string; empty when there is none. Sets REPLY, so no subshell.
+decree::trailing_comment() {  # <line>
+  setopt local_options extended_glob
+  local line="${1}" q="" c rest=""
+  local -i i
+  if [[ "${line}" == *'#'* ]]; then
+    for (( i = 1; i <= ${#line}; i++ )); do
+      c="${line[i]}"
+      if [[ -n "${q}" ]]; then
+        if [[ "${c}" == '\' ]]; then (( i++ )); elif [[ "${c}" == "${q}" ]]; then q=""; fi
+      elif [[ "${c}" == '"' || "${c}" == "'" ]]; then
+        q="${c}"
+      elif [[ "${c}" == '#' ]]; then
+        rest="${line[i,-1]}"
+        break
+      fi
+    done
+  fi
+  REPLY="${${rest##[#[:space:]]#}%%[[:space:]]#}"
+}
+
+# decree::undocumented <Brewfile|Brewfile.ignore> <file>: reply = one `<line number>\t<kind>:<name>`
+# per entry that lacks its documentation (a reply, not output: the healthcheck step scans four
+# files without a subshell each). A Brewfile entry is documented by a trailing `# why`, or by
+# sitting in a paragraph (lines between blank lines) whose first line is a heading comment: a
+# comment that is neither a commented-out entry (`# brew "x"`) nor the decree marker. Every decree
+# re-sorts its block, so inside the decree block only a trailing comment counts. A Brewfile.ignore
+# entry needs a non-empty `# reason`. A missing file has no gaps.
+decree::undocumented() {
+  setopt local_options extended_glob
+  local kind="${1}" file="${2}" line body reason entry REPLY
+  typeset -ga reply=()
+  [[ -r "${file}" ]] || return 0
+  zmodload zsh/mapfile
+  local -a lines=("${(@f)mapfile[${file}]}")
+  local -i n=0 headed=0 in_block=0 opens=1
+  for line in "${lines[@]}"; do
+    n+=1
+    if [[ "${kind}" == Brewfile.ignore ]]; then
+      [[ "${line}" =~ "${DECREE_IGNORE_LINE_RE}" ]] || continue
+      reason="${line#*\#}"
+      [[ "${line}" == *'#'* && -n "${reason//[#[:space:]]/}" ]] || reply+=("${n}"$'\t'"${match[1]}:${match[2]}")
+      continue
+    fi
+    if [[ "${line}" == "${DECREE_MARKER}" ]]; then
+      in_block=1 headed=0 opens=0
+      continue
+    fi
+    body="${line##[[:space:]]#}"
+    if [[ -z "${body}" ]]; then
+      opens=1 headed=0
+      continue
+    fi
+    if (( opens )); then
+      opens=0 headed=0
+      if (( ! in_block )) && [[ "${body}" == '#'* ]]; then
+        body="${body##[#[:space:]]#}"
+        [[ -n "${body}" && ! "${body}" =~ "${DECREE_BREWFILE_LINE_RE}" ]] && headed=1
+      fi
+    fi
+    [[ "${line}" =~ "${DECREE_BREWFILE_LINE_RE}" ]] || continue
+    (( headed )) && continue
+    entry="${DECREE_KIND_OF_KEYWORD[${match[1]}]}:${match[2]}"
+    decree::trailing_comment "${line}"
+    [[ -n "${REPLY}" ]] || reply+=("${n}"$'\t'"${entry}")
+  done
+  return 0
+}
+
 # Taps declared by every readable `include-declared` Brewfile named in either tier's ignore file.
 decree::include_declared_taps() {
   # Not `path`: that is zsh's array tied to PATH, and a local one empties it.
@@ -462,13 +535,15 @@ declares, with the three commands that settle it, then orphaned kegs, duplicates
 orphans, the ignore list and classifier notes. Describes; never recommends a tier.
 
   --json         print drift.json instead
-  --interactive  pick a tier per undeclared item, confirm the grouped plan once, then run one
-                 decree (one commit) per group; needs a terminal on stdin and stdout
+  --interactive  pick a tier and give a reason per undeclared item, confirm the grouped plan
+                 once, then run one decree (one commit) per group; needs a terminal on stdin and
+                 stdout
   --edit [FILE]  write the undeclared items to a plan file, one 'skip  kind:name' line each, and
-                 open it in $EDITOR; change each skip to global add, local add, global ignore,
-                 local ignore (an ignore ends in '# reason') or delete (uninstall it here); on
-                 save the plan runs as --interactive's does, then the uninstalls. A bad line is reported by number and the file kept; FILE
-                 resumes that plan file
+                 open it in $EDITOR; change each skip to global add, local add, global ignore or
+                 local ignore (each ends in '# reason', kept as the line's comment), or delete
+                 (uninstall it here); on save the plan runs as --interactive's does, then the
+                 uninstalls. A bad line is reported by number and the file kept; FILE resumes
+                 that plan file
   --dry-run      with --interactive or --edit: every decree prints instead of writing
   --no-push      with --interactive or --edit: skip the local tier's push
   -h             this help
@@ -481,20 +556,22 @@ EOF
 }
 
 decree::help_decree() {
-  print -r -- "${CLI_NAME} brew decree ITEM... (--global|--local|--ignore-global|--ignore-local) [--reason TEXT] [--dry-run] [--no-push]"
+  print -r -- "${CLI_NAME} brew decree ITEM... (--global|--local|--ignore-global|--ignore-local) --reason TEXT [--dry-run] [--no-push]"
   cat <<'EOF'
 
 Copies the installed item's declaration (the verbatim `brew bundle dump` line) into the tier's
 Brewfile decree block and commits it; --ignore-* records the item in the tier's Brewfile.ignore
-instead. A third-party tap the item needs is declared alongside, trusted. Refuses items that are
-already declared, orphaned or not installed. Never installs, uninstalls or calls brew bundle add.
+instead. A third-party tap the item needs is declared alongside, trusted, with `# feeds <item>`.
+Refuses items that are already declared, orphaned or not installed. Never installs, uninstalls
+or calls brew bundle add.
 
   ITEM             [formula:|cask:|tap:|vscode:]name; the kind may be omitted when unambiguous
   --global         ~/.config/new-machine/Brewfile        (git df; committed, never pushed)
   --local          ~/.local/share/new-machine/Brewfile   (git ldf; committed and pushed)
-  --ignore-global  ~/.config/new-machine/Brewfile.ignore  (requires --reason)
-  --ignore-local   ~/.local/share/new-machine/Brewfile.ignore (requires --reason)
-  --reason TEXT    trailing `# TEXT` comment on the line
+  --ignore-global  ~/.config/new-machine/Brewfile.ignore
+  --ignore-local   ~/.local/share/new-machine/Brewfile.ignore
+  --reason TEXT    required: why the item is declared or ignored, written as each line's
+                   trailing `# TEXT` comment (brew_drift fails an entry without one)
   --dry-run        print the lines, paths and git commands; touch nothing
   --no-push        skip the local tier's push
   -h               this help
@@ -579,7 +656,7 @@ decree::orphan_recipe() {  # <full name> <hint>
   local name="${1}" hint="${2}" keg="${1:t}" tap="${1:h}"
   if [[ "${hint}" == *"ships cask"* && "${name}" == */*/* ]]; then
     print -r -- "  brew uninstall ${keg} && brew tap ${tap} && brew install --cask ${name}"
-    print -r -- "  then: ${CLI_NAME} brew decree cask:${name} --local"
+    print -r -- "  then: ${CLI_NAME} brew decree cask:${name} --local --reason \"…\""
   elif [[ "${hint}" == "tap not tapped" && "${name}" == */*/* ]]; then
     print -r -- "  brew tap ${tap}   # ${hint}; then re-run ${CLI_NAME} brew triage"
   else
@@ -607,8 +684,8 @@ decree::triage_render_undeclared() {  # <drift.json>
         [[ -n "${since}" ]] && tag="new since ${since}"
       fi
       printf '%-8s %-34s (%s)   %s\n' "${kind}" "${name}" "${tap}" "${tag}"
-      print -r -- "  every machine : ${CLI_NAME} brew decree ${kind}:${name} --global"
-      print -r -- "  this machine  : ${CLI_NAME} brew decree ${kind}:${name} --local"
+      print -r -- "  every machine : ${CLI_NAME} brew decree ${kind}:${name} --global --reason \"…\""
+      print -r -- "  this machine  : ${CLI_NAME} brew decree ${kind}:${name} --local --reason \"…\""
       print -r -- "  never declare : ${CLI_NAME} brew decree ${kind}:${name} --ignore-local --reason \"…\""
     done < <(jq -r --arg k "${kind}" '.undeclared[] | select(.kind == $k)
                | [.name, (.tap // "-"), ((.new // false) | tostring)] | @tsv' "${drift}")
@@ -673,12 +750,13 @@ decree::triage_render_rest() {  # <drift.json>
   [global]="shared Brewfile" [local]="local Brewfile"
   [ignore-global]="ignore (shared)" [ignore-local]="ignore (local)" [skip]="skip"
 )
+(( ${+DECREE_TRIAGE_WHERE} )) || typeset -grA DECREE_TRIAGE_WHERE=([global]="every machine" [local]="this machine")
 
 # Choices in, decree argument lists out. A CHOICE is "<action>\t<kind:name>\t<reason>", action one
-# of global, local, ignore-global, ignore-local, skip. Prints one line per group, its words quoted
-# for ${(Q)${(z)line}}: the items in choice order, the tier flag, --reason for an ignore, then the
-# pass-through flags. Groups come in tier-flag order; ignores split by reason, since one decree
-# takes one --reason. Skips are dropped. Pure.
+# of global, local, ignore-global, ignore-local, skip; every action but skip needs its reason.
+# Prints one line per group, its words quoted for ${(Q)${(z)line}}: the items in choice order, the
+# tier flag, --reason, then the pass-through flags. Groups come in tier-flag order, split by
+# reason, since one decree takes one --reason. Skips are dropped. Pure.
 decree::triage_plan() {  # [--dry-run] [--no-push] [--] CHOICE...
   local -a pass=()
   while (( $# )) && [[ "${1}" != -- ]]; do
@@ -697,10 +775,9 @@ decree::triage_plan() {  # [--dry-run] [--no-push] [--] CHOICE...
     action="${fields[1]:-}" item="${fields[2]:-}" reason="${fields[3]:-}"
     case "${action}" in
       skip) continue ;;
-      global|local) key="${action}" ;;
-      ignore-global|ignore-local)
+      global|local|ignore-global|ignore-local)
         if [[ -z "${reason}" ]]; then
-          print -u2 -r -- "decree::triage_plan: an ignore needs a reason | item='${item}'"
+          print -u2 -r -- "decree::triage_plan: a ${action} needs a reason | item='${item}'"
           return 64
         fi
         key="${action}"$'\t'"${reason}" ;;
@@ -717,8 +794,7 @@ decree::triage_plan() {  # [--dry-run] [--no-push] [--] CHOICE...
   for a in "${DECREE_TRIAGE_ACTIONS[@]}"; do
     for key in "${keys[@]}"; do
       [[ "${key%%$'\t'*}" == "${a}" ]] || continue
-      words=(${(f)members[${key}]} "--${a}")
-      [[ "${key}" != *$'\t'* ]] || words+=(--reason "${key#*$'\t'}")
+      words=(${(f)members[${key}]} "--${a}" --reason "${key#*$'\t'}")
       words+=("${pass[@]}")
       print -r -- "${(j: :)${(@q-)words}}"
     done
@@ -773,7 +849,7 @@ decree::triage_interactive() {  # [--dry-run] [--no-push]
 
   print -r -- "$(ui::paint bold "undeclared: ${#rows} item(s)") — pick where each belongs"
   local -a choices=() fields
-  local row name tap new header pick action reason key
+  local row name tap new header pick action reason key ask
   local -i n=0
   for row in "${rows[@]}"; do
     n=$(( n + 1 ))
@@ -793,9 +869,11 @@ decree::triage_interactive() {  # [--dry-run] [--no-push]
       [[ "${DECREE_TRIAGE_LABEL[${key}]}" != "${pick}" ]] || action="${key}"
     done
     reason=""
-    if [[ "${action}" == ignore-* ]]; then
+    if [[ "${action}" != skip ]]; then
+      ask="why does ${DECREE_TRIAGE_WHERE[${action}]} need ${kind}:${name}? (one line, kept as the Brewfile comment)"
+      [[ "${action}" != ignore-* ]] || ask="why does ${kind}:${name} stay undeclared? (one line, kept as the ignore comment)"
       while [[ -z "${reason}" ]]; do
-        if ! reason="$(ui::input --header "why does ${kind}:${name} stay undeclared? (one line, kept as the ignore comment)" --placeholder reason)"; then
+        if ! reason="$(ui::input --header "${ask}" --placeholder reason)"; then
           log::warn "cancelled; nothing decreed"
           return 130
         fi
@@ -943,16 +1021,17 @@ decree::triage_edit_file() {  # <drift.json>
   [[ -f "${LAST_RESULT_FILE}" ]] && since="$(jq -r '(.ts // "") | .[0:10]' "${LAST_RESULT_FILE}")"
   cat <<EOF
 # ${CLI_NAME} brew triage --edit: one line per undeclared item, <action>  <kind:name>  [# reason]
-# Change each 'skip' to one of:
+# Change each 'skip' to one of (each but skip and delete needs a '# reason', kept as the line's
+# comment in the file it lands in):
 #   global add      declare it in the shared Brewfile (every machine; git df, never pushed)
 #   local add       declare it in the local Brewfile (this machine; git ldf, pushed)
-#   global ignore   record it in the shared Brewfile.ignore; needs a '# reason'
-#   local ignore    record it in the local Brewfile.ignore; needs a '# reason'
+#   global ignore   record it in the shared Brewfile.ignore
+#   local ignore    record it in the local Brewfile.ignore
 #   delete          uninstall it from this machine (brew uninstall, brew untap, or
 #                   code --uninstall-extension); declares nothing
 #   skip            leave it undeclared
-# Save and quit to see the plan: one decree, one commit, per action (and per ignore reason),
-# then the uninstalls.
+# Save and quit to see the plan: one decree, one commit, per action and reason, then the
+# uninstalls.
 # Lines starting with # are comments. Leaving every line 'skip' decrees nothing.
 
 EOF
@@ -979,11 +1058,11 @@ EOF
 # Parses a plan file against <drift.json>: fills the caller's `choices` (decree::triage_plan's
 # CHOICE lines, skips included) and prints one `line N: problem | line='…'` per bad line on
 # stderr. Returns 1 when any line is bad. A line: an action from DECREE_EDIT_ACTION, a kind:name
-# that is undeclared here, at most once per file, then an optional '# reason' (required for an
-# ignore, dropped for an add).
+# that is undeclared here, at most once per file, then a '# reason' (required for an add or an
+# ignore, dropped for a skip or a delete).
 decree::triage_edit_parse() {  # <plan file> <drift.json>
   setopt localoptions extendedglob
-  local file="${1}" drift="${2}" line body reason word action item
+  local file="${1}" drift="${2}" line body reason word action item what
   local -a known=() seen=() words
   local -i n=0 bad=0
   known=(${(f)"$(jq -r '.undeclared[] | "\(.kind):\(.name)"' "${drift}")"})
@@ -1020,11 +1099,13 @@ decree::triage_edit_parse() {  # <plan file> <drift.json>
       bad=1; continue
     fi
     seen+=("${item}")
-    if [[ "${action}" == ignore-* && -z "${reason}" ]]; then
-      print -u2 -r -- "line ${n}: an ignore needs a reason: end the line with '# why' | item='${item}'"
+    if [[ "${action}" != (skip|delete) && -z "${reason}" ]]; then
+      what="an add"
+      [[ "${action}" != ignore-* ]] || what="an ignore"
+      print -u2 -r -- "line ${n}: ${what} needs a reason: end the line with '# why' | item='${item}'"
       bad=1; continue
     fi
-    [[ "${action}" == ignore-* ]] || reason=""
+    [[ "${action}" != (skip|delete) ]] || reason=""
     choices+=("${action}"$'\t'"${item}"$'\t'"${reason}")
   done < "${file}"
   return ${bad}
@@ -1133,8 +1214,8 @@ decree::decree() {
     decree::help_decree >&2
     return 64
   fi
-  if [[ "${action}" == ignore && -z "${reason}" ]]; then
-    log::err "--reason is required with --ignore-global/--ignore-local"
+  if [[ -z "${reason//[[:space:]]/}" ]]; then
+    log::err "--reason is required: it is the line's '# why' comment, and brew_drift fails an entry without one"
     decree::help_decree >&2
     return 64
   fi
@@ -1235,7 +1316,7 @@ decree::decree() {
     plan[subj_${tier}]+="${kind} ${written_name}"$'\n'
     if [[ "${kind}" == formula || "${kind}" == cask ]] && decree::is_third_party_tap "${tap}" \
        && (( ${declared_taps[(Ie)${tap}]} == 0 )) && (( ${pending_taps[(Ie)${tap}]} == 0 )); then
-      line="$(decree::tap_line "${tap}")"
+      line="$(decree::tap_line "${tap}")  # feeds ${written_name}"
       plan[add_${tier}]+="${line}"$'\n'
       plan[body_${tier}]+="tap ${tap} declared alongside: third-party tap declared nowhere"$'\n'
       pending_taps+=("${tap}")

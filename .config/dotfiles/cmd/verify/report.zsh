@@ -113,8 +113,8 @@ report::_rows_undeclared() {
   jq -r --arg cli "${CLI_NAME}" "${REPORT_JQ_PRELUDE}"'
     (.brew.undeclared // []) | sort_by([(.kind | kind_rank), .name])[]
     | "| \(.kind) | \(.name | cell) | \((.tap // "—") | cell)"
-      + " | `\($cli) brew decree \(.kind):\(.name) --global`"
-      + " | `\($cli) brew decree \(.kind):\(.name) --local`"
+      + " | `\($cli) brew decree \(.kind):\(.name) --global --reason \"…\"`"
+      + " | `\($cli) brew decree \(.kind):\(.name) --local --reason \"…\"`"
       + " | `\($cli) brew decree \(.kind):\(.name) --ignore-local --reason \"…\"` |"' "${1}"
 }
 
@@ -134,7 +134,7 @@ report::_bullets_human() {
     [ (.brew.orphan_keg // [])[]
       | .name as $n | ($n | keg) as $keg | ($n | tap) as $tap | (.hint // "") as $h
       | if ($h | startswith("the tap now ships cask")) then
-          "- `\($n)` is an orphaned keg: the tap converted the formula to a cask. Run\n  `brew uninstall \($keg) && brew tap \($tap) && brew install --cask \($n)`,\n  then `\($cli) brew decree cask:\($n) --local`."
+          "- `\($n)` is an orphaned keg: the tap converted the formula to a cask. Run\n  `brew uninstall \($keg) && brew tap \($tap) && brew install --cask \($n)`,\n  then `\($cli) brew decree cask:\($n) --local --reason \"…\"`."
         elif $h == "tap not tapped" then
           "- `\($n)` is an orphaned keg: its tap \($tap) is not tapped. Run `brew tap \($tap)` to restore it, or\n  `brew uninstall \($keg)` if it is no longer wanted."
         else

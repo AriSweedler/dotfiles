@@ -21,9 +21,9 @@ editor() {
 editor noop '{ print }'
 editor comment '{ print } END { print "# just looking" }'
 editor choose '
-  $0 == "skip  formula:gh"                     { print "local add  formula:gh"; next }
-  $0 == "skip  cask:instant-space-switcher"    { print "local add  cask:instant-space-switcher"; next }
-  $0 == "skip  formula:libtiff"                { print "global add  formula:libtiff"; next }
+  $0 == "skip  formula:gh"                     { print "local add  formula:gh  # work tools"; next }
+  $0 == "skip  cask:instant-space-switcher"    { print "local add  cask:instant-space-switcher  # work tools"; next }
+  $0 == "skip  formula:libtiff"                { print "global add  formula:libtiff  # image library"; next }
   $0 == "skip  formula:python@3.10"            { print "local ignore  formula:python@3.10  # pulled in by a cask"; next }
   $0 == "skip  cask:google-chrome"             { print "local ignore cask:google-chrome # pulled in by a cask"; next }
   $0 == "skip  formula:buildkite/buildkite/bk@3" { print "global ignore  formula:buildkite/buildkite/bk@3  # company Brewfile owns it"; next }
@@ -32,13 +32,14 @@ editor bad '
   $0 == "skip  formula:gh"      { print "local nope  formula:gh"; next }
   $0 == "skip  formula:libtiff" { print "local ignore  formula:libtiff"; next }
   $0 == "skip  cask:google-chrome" { print "local add  cask:google-chrome  extra"; next }
+  $0 == "skip  cask:instant-space-switcher" { print "global add  cask:instant-space-switcher"; next }
   { print }
   END { print "skip  formula:nothere"; print "skip  tap:hashicorp/tap" }'
 editor deletes '
   $0 == "skip  formula:libtiff"          { print "delete  formula:libtiff"; next }
   $0 == "skip  tap:hashicorp/tap"        { print "delete  tap:hashicorp/tap"; next }
   $0 == "skip  vscode:ms-python.python"  { print "delete vscode:ms-python.python  # never used"; next }
-  $0 == "skip  formula:gh"               { print "local add  formula:gh"; next }
+  $0 == "skip  formula:gh"               { print "local add  formula:gh  # work tools"; next }
   { print }'
 editor deletes_only '
   $0 == "skip  tap:hashicorp/tap"        { print "delete  tap:hashicorp/tap"; next }
@@ -48,6 +49,7 @@ editor fix_bad '
   $0 == "local nope  formula:gh"           { print "skip  formula:gh"; next }
   $0 == "local ignore  formula:libtiff"     { print "skip  formula:libtiff"; next }
   /^local add  cask:google-chrome/          { print "skip  cask:google-chrome"; next }
+  $0 == "global add  cask:instant-space-switcher" { print "skip  cask:instant-space-switcher"; next }
   $0 == "skip  formula:nothere"             { next }
   { print }'
 
@@ -72,7 +74,8 @@ assert_eq "unchanged: exit 0" 0 "${RC}"
 assert_contains "unchanged: nothing to decree" "${OUT}" "no change; nothing to decree"
 GIVEN="$(cat "${FIX}/plan.given")"
 assert_contains "the header names each action" "${GIVEN}" "#   global add      declare it in the shared Brewfile"
-assert_contains "the header names local ignore and its reason" "${GIVEN}" "#   local ignore    record it in the local Brewfile.ignore; needs a '# reason'"
+assert_contains "the header names local ignore" "${GIVEN}" "#   local ignore    record it in the local Brewfile.ignore"
+assert_contains "the header says adds and ignores need a reason" "${GIVEN}" "each but skip and delete needs a '# reason'"
 assert_contains "the header names delete" "${GIVEN}" "#   delete          uninstall it from this machine"
 assert_contains "one skip line per undeclared item" "${GIVEN}" $'\n'"skip  formula:gh"$'\n'
 assert_contains "each kind is listed" "${GIVEN}" $'\n'"skip  vscode:ms-python.python"
@@ -98,6 +101,7 @@ assert_eq "the plan file's extension is its filetype" brewtriage "${PLAN##*.}"
 assert_contains "an unknown action, by line" "${ERR}" "line $(line_of 'local nope  formula:gh'): unknown action; use global add, local add, global ignore, local ignore, delete or skip"
 assert_contains "an ignore without a reason, by line" "${ERR}" "line $(line_of 'local ignore  formula:libtiff'): an ignore needs a reason"
 assert_contains "a stray word, by line" "${ERR}" "line $(line_of 'local add  cask:google-chrome  extra'): expected one kind:name"
+assert_contains "an add without a reason, by line" "${ERR}" "line $(line_of 'global add  cask:instant-space-switcher'): an add needs a reason"
 assert_contains "an item that is not undeclared" "${ERR}" "not an undeclared item here | item='formula:nothere'"
 assert_contains "an item twice" "${ERR}" "listed twice | item='tap:hashicorp/tap'"
 assert_contains "the resume command" "${ERR}" "fix='dotfiles brew triage --edit ${PLAN}'"
@@ -114,8 +118,8 @@ assert_not_contains "resume: the fixed lines are fine" "${ERR}" "unknown action"
 triage_edit choose --dry-run --no-push
 assert_eq "dry run: exit 0" 0 "${RC}"
 assert_contains "dry run: the plan's title" "${OUT}" "plan: 4 decree(s), one commit each (dry run)"
-assert_contains "dry run: global add" "${OUT}" "dotfiles brew decree formula:libtiff --global --dry-run --no-push"
-assert_contains "dry run: local add, two items in one decree" "${OUT}" "dotfiles brew decree formula:gh cask:instant-space-switcher --local --dry-run --no-push"
+assert_contains "dry run: global add, with its reason" "${OUT}" "dotfiles brew decree formula:libtiff --global --reason 'image library' --dry-run --no-push"
+assert_contains "dry run: local add, two items for one reason in one decree" "${OUT}" "dotfiles brew decree formula:gh cask:instant-space-switcher --local --reason 'work tools' --dry-run --no-push"
 assert_contains "dry run: global ignore, with its reason" "${OUT}" "--ignore-global --reason 'company Brewfile owns it'"
 assert_contains "dry run: local ignore, one group for one reason" "${OUT}" "formula:python@3.10 cask:google-chrome --ignore-local --reason 'pulled in by a cask'"
 assert_eq "dry run: no df commit" "${df_before}" "$(df_count)"
@@ -126,7 +130,7 @@ triage_edit deletes --dry-run --no-push
 assert_eq "delete dry run: exit 0" 0 "${RC}"
 assert_contains "delete dry run: the title counts both" "${OUT}" "plan: 1 decree(s), one commit each, then 3 uninstall(s) (dry run)"
 assert_contains "delete dry run: its own section" "${OUT}" "uninstall from this machine (delete)"
-assert_contains "delete dry run: the decree still runs" "${OUT}" "dotfiles brew decree formula:gh --local --dry-run --no-push"
+assert_contains "delete dry run: the decree still runs" "${OUT}" "dotfiles brew decree formula:gh --local --reason 'work tools' --dry-run --no-push"
 WOULD="$(printf '%s\n' "${OUT}" | grep '^would run: ' | grep -v ' git ')"
 assert_eq "delete dry run: one command per item, extension, formula, tap" \
   "code --uninstall-extension ms-python.python|brew uninstall --formula libtiff|brew untap hashicorp/tap" \
@@ -143,6 +147,8 @@ assert_contains "real run: the df subjects" "$(df_git log -2 --format=%s)" "dotf
 assert_contains "real run: the global ignore" "$(df_git log -2 --format=%s)" "dotfiles: ignore formula buildkite/buildkite/bk@3 (global): company Brewfile owns it"
 assert_contains "real run: the ldf subjects" "$(ldf_git log -2 --format=%s)" "dotfiles: declare 2 items (local)"
 assert_contains "real run: the local ignore" "$(ldf_git log -2 --format=%s)" "dotfiles: ignore 2 items (local): pulled in by a cask"
+assert_contains "real run: the add's reason is the Brewfile comment" "$(cat "${ARI_DOTFILES_LOCAL_DIR}/Brewfile")" '"gh"  # work tools'
+assert_contains "real run: the global add's too" "$(cat "${ARI_DOTFILES_SHARED_DIR}/Brewfile")" '"libtiff"  # image library'
 assert_eq "real run: pushed" "$(ldf_git rev-parse HEAD)" "$(git --git-dir="${FIX}/remotes/local-dotfiles.git" rev-parse main)"
 
 # ── usage ──

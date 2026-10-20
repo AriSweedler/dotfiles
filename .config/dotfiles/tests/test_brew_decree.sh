@@ -35,14 +35,22 @@ block_lines() {
 }
 line_no() { grep -nF -- "$2" "$1" | head -n 1 | cut -d: -f1; }
 
+# ── --reason is required ──────────────────────────────────────────────────────
+decree gh --local
+assert_eq "a declare without --reason is a usage error" 64 "${RC}"
+assert_contains "and says the reason is the line's why" "${ERR}" "--reason is required"
+decree gh --local --reason "   "
+assert_eq "a blank --reason is no reason" 64 "${RC}"
+assert_no_file "a refused declare writes nothing" "${LOCAL}"
+
 # ── decree gh --local ─────────────────────────────────────────────────────────
 df_before="$(df_head)"
-decree gh --local
+decree gh --local --reason "dotfiles push authenticates by its token"
 assert_eq "decree gh --local exits 0" 0 "${RC}"
 assert_file "local Brewfile created" "${LOCAL}"
 assert_contains "local Brewfile carries the header" "$(cat "${LOCAL}")" "Packages for THIS machine only"
 assert_contains "local Brewfile carries the marker" "$(cat "${LOCAL}")" "${MARKER}"
-assert_eq "brew \"gh\" sits under the marker" 'brew "gh"' "$(block_lines "${LOCAL}")"
+assert_eq "brew \"gh\" sits under the marker, its reason the trailing comment" 'brew "gh"  # dotfiles push authenticates by its token' "$(block_lines "${LOCAL}")"
 assert_eq "ldf commit subject" "dotfiles: declare formula gh (local)" "$(ldf_subject)"
 assert_eq "ldf origin main advanced" "$(ldf_head)" "$(ldf_origin_main)"
 assert_eq "df HEAD unchanged" "${df_before}" "$(df_head)"
@@ -58,11 +66,11 @@ assert_eq "df remote refs untouched" "${df_remote_before}" "$(git ls-remote "${F
 
 # ── refusals ──────────────────────────────────────────────────────────────────
 ldf_before="$(ldf_head)"
-decree kubectl --local
+decree kubectl --local --reason x
 assert_eq "already declared → exit 1" 1 "${RC}"
 assert_contains "names the tier it is declared in" "${OUT}${ERR}" "already declared in global"
 
-decree spacectl --local
+decree spacectl --local --reason x
 assert_eq "orphaned keg → exit 1" 1 "${RC}"
 assert_contains "orphan refusal prints the reinstall recipe" "${OUT}${ERR}" "brew uninstall spacectl && brew tap spacelift-io/spacelift && brew install --cask spacelift-io/spacelift/spacectl"
 assert_contains "orphan refusal prints the follow-up decree" "${OUT}${ERR}" "dotfiles brew decree cask:spacelift-io/spacelift/spacectl --local"
@@ -70,10 +78,10 @@ assert_eq "refusals commit nothing" "${ldf_before}" "$(ldf_head)"
 
 # ── decree bk@3 --local adds the tap in the same commit ───────────────────────
 commits_before="$(ldf_git rev-list --count HEAD)"
-decree bk@3 --local
+decree bk@3 --local --reason "buildkite CLI"
 assert_eq "decree bk@3 --local exits 0" 0 "${RC}"
-assert_contains "bk@3 declared under its full name" "$(cat "${LOCAL}")" 'brew "buildkite/buildkite/bk@3"'
-assert_contains "tap added with trusted: true" "$(cat "${LOCAL}")" 'tap "buildkite/buildkite", trusted: true'
+assert_contains "bk@3 declared under its full name" "$(cat "${LOCAL}")" 'brew "buildkite/buildkite/bk@3"  # buildkite CLI'
+assert_contains "tap added with trusted: true, saying what it feeds" "$(cat "${LOCAL}")" 'tap "buildkite/buildkite", trusted: true  # feeds buildkite/buildkite/bk@3'
 tap_line="$(line_no "${LOCAL}" 'tap "buildkite/buildkite", trusted: true')"
 brew_line="$(line_no "${LOCAL}" 'brew "buildkite/buildkite/bk@3"')"
 if (( tap_line < brew_line )); then pass "tap line precedes the formula"; else fail "tap line precedes the formula" "tap@${tap_line} brew@${brew_line}"; fi
@@ -85,10 +93,10 @@ grep -v '^brew "terraform"' "${GLOBAL}" > "${GLOBAL}.tmp"
 mv "${GLOBAL}.tmp" "${GLOBAL}"
 df_git add -- "${GLOBAL}"
 df_git commit -q -m "drop the keg-name terraform line"
-decree hashicorp/tap/terraform --global
+decree hashicorp/tap/terraform --global --reason "infrastructure as code"
 assert_eq "decree terraform --global exits 0" 0 "${RC}"
 assert_contains "synthesized formula line" "$(cat "${GLOBAL}")" 'brew "hashicorp/tap/terraform"'
-assert_contains "tap line with trusted: true" "$(cat "${GLOBAL}")" 'tap "hashicorp/tap", trusted: true'
+assert_contains "tap line with trusted: true, saying what it feeds" "$(cat "${GLOBAL}")" 'tap "hashicorp/tap", trusted: true  # feeds hashicorp/tap/terraform'
 assert_eq "df commit subject" "dotfiles: declare formula hashicorp/tap/terraform (global)" "$(df_subject)"
 
 # ── --ignore-local libtiff, then --global removes the ignore ──────────────────
@@ -107,7 +115,7 @@ assert_json "classifier shows libtiff ignored" "$(out_json)" '[.ignored[] | sele
 printf 'formula libtiff   # library shim, hand-placed\n' > "${GLOBAL_IGNORE}"
 df_git add -- "${GLOBAL_IGNORE}"
 df_git commit -q -m "hand-place a global ignore"
-decree libtiff --global
+decree libtiff --global --reason "image library"
 assert_eq "decree libtiff --global exits 0" 0 "${RC}"
 assert_contains "global Brewfile gained libtiff" "$(cat "${GLOBAL}")" 'brew "libtiff"'
 assert_not_contains "ignore line removed" "$(cat "${LOCAL_IGNORE}")" "libtiff"
@@ -120,13 +128,13 @@ assert_contains "commit body records the dropped ignore line" "$(df_git log -1 -
 fixture_add_formula foo
 fixture_add_cask foo
 ldf_before="$(ldf_head)"
-decree foo --local
+decree foo --local --reason x
 assert_eq "ambiguous kind → exit 64" 64 "${RC}"
 assert_contains "candidates name the formula form" "${OUT}${ERR}" "formula:foo"
 assert_contains "candidates name the cask form" "${OUT}${ERR}" "cask:foo"
 
 # ── the same decree twice ─────────────────────────────────────────────────────
-decree gh --local
+decree gh --local --reason again
 assert_eq "second decree exits 1" 1 "${RC}"
 assert_eq "second decree commits nothing" "${ldf_before}" "$(ldf_head)"
 
@@ -137,7 +145,7 @@ printf 'unrelated\n' > "${HOME}/.local/bin/unrelated"
 ldf_git add -- "${HOME}/.local/bin/unrelated"
 assert_eq "test setup: an unrelated file is staged" "bin/unrelated" "$(ldf_git diff --cached --name-only)"
 local_sha_before="$(sha256 "${LOCAL}")"
-decree python@3.10 --local
+decree python@3.10 --local --reason "pinned interpreter"
 assert_eq "staged changes → exit 1" 1 "${RC}"
 assert_contains "names the refusal" "${OUT}${ERR}" "unrelated staged changes"
 assert_eq "local Brewfile untouched" "${local_sha_before}" "$(sha256 "${LOCAL}")"
@@ -149,7 +157,7 @@ ldf_git checkout -q -- "${LOCAL}"
 assert_eq "test setup: local Brewfile back at HEAD" "${local_sha_before}" "$(sha256 "${LOCAL}")"
 
 # ── --dry-run ─────────────────────────────────────────────────────────────────
-decree python@3.10 --local --dry-run
+decree python@3.10 --local --reason "pinned interpreter" --dry-run
 assert_eq "dry-run exits 0" 0 "${RC}"
 assert_eq "dry-run changes no file" "${local_sha_before}" "$(sha256 "${LOCAL}")"
 assert_eq "dry-run commits nothing" "${ldf_before}" "$(ldf_head)"
@@ -159,17 +167,19 @@ assert_contains "dry-run prints the git commands" "${OUT}${ERR}" "commit"
 
 # ── push failure is a warning (an origin that cannot be reached) ───────────────
 ldf_git remote set-url origin "${FIX}/remotes/nowhere.git"
-decree python@3.10 --local
+decree python@3.10 --local --reason "pinned interpreter"
 assert_eq "decree with an unreachable origin exits 0" 0 "${RC}"
 assert_eq "commit stands" "dotfiles: declare formula python@3.10 (local)" "$(ldf_subject)"
 assert_contains "stderr points at git ldf push" "${ERR}" "push failed; run 'git ldf push' when online"
 
 # ── the block stays sorted: taps, then formulae by name ───────────────────────
-expected_block='tap "buildkite/buildkite", trusted: true
-brew "buildkite/buildkite/bk@3"
-brew "gh"
-brew "python@3.10"'
+expected_block='tap "buildkite/buildkite", trusted: true  # feeds buildkite/buildkite/bk@3
+brew "buildkite/buildkite/bk@3"  # buildkite CLI
+brew "gh"  # dotfiles push authenticates by its token
+brew "python@3.10"  # pinned interpreter'
 assert_eq "decree block sorted by kind then name" "${expected_block}" "$(block_lines "${LOCAL}")"
+zfn decree.zsh eval "decree::undocumented Brewfile '${LOCAL}'; print -rl -- \"\${reply[@]}\""
+assert_eq "every line decree wrote says why" "" "${OUT}"
 assert_no_mutation "decree never calls a mutating brew command"
 
 report

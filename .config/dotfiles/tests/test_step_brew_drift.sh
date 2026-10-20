@@ -47,6 +47,33 @@ assert_eq "all-ignored is ok" ok "$(step_get brew_drift .status)"
 assert_json "ignored count" "${FIX}/out.json" '.brew.counts.ignored' 12
 assert_json "nothing undeclared" "${FIX}/out.json" '.brew.undeclared | length' 0
 
+# An entry that does not say why is a manual fail naming the edit that opens the first such file.
+LOCAL="${ARI_DOTFILES_LOCAL_DIR}/Brewfile"
+mkdir -p "${ARI_DOTFILES_LOCAL_DIR}"
+printf '%s\n' '# brew "jq"' 'brew "gh"' > "${LOCAL}"
+grep -v '^formula gh ' "${IGNORE}" > "${IGNORE}.tmp" && mv "${IGNORE}.tmp" "${IGNORE}"
+check_drift
+assert_eq "undocumented exits 1" 1 "${RC}"
+assert_eq "undocumented is fail" fail "$(step_get brew_drift .status)"
+assert_eq "reason undocumented" undocumented "$(step_get brew_drift .reason)"
+assert_eq "undocumented is manual" true "$(step_get brew_drift .manual)"
+assert_eq "the fix opens the local Brewfile" "dotfiles brew edit --local" "$(step_get brew_drift .fix)"
+assert_eq "the detail names the entry" "local Brewfile lacks a '# why': formula:gh" "$(step_get brew_drift .detail)"
+# set_google_chrome LINE: the ignore file with google-chrome's line replaced by LINE.
+set_google_chrome() { { grep -v '^cask google-chrome' "${IGNORE}"; printf '%s\n' "$1"; } > "${IGNORE}.tmp" && mv "${IGNORE}.tmp" "${IGNORE}"; }
+set_google_chrome 'cask google-chrome'
+check_drift
+assert_eq "the fix opens the first file with a gap" "dotfiles brew edit --global --ignore" "$(step_get brew_drift .fix)"
+assert_eq "the detail names every file's gaps" \
+  "global Brewfile.ignore lacks a '# reason': cask:google-chrome; local Brewfile lacks a '# why': formula:gh" \
+  "$(step_get brew_drift .detail)"
+printf '%s\n' '# the GitHub CLI' 'brew "gh"' > "${LOCAL}"
+set_google_chrome 'cask google-chrome  # browser'
+check_drift
+assert_eq "documented again is ok" ok "$(step_get brew_drift .status)"
+rm -f "${LOCAL}"
+{ cat "${FIX}/ignore.base"; printf '%s\n' 'vscode golang.go                   # editor' 'vscode ms-python.python            # editor'; } > "${IGNORE}"
+
 printf '%s\n' 'formula nosuch   # stale entry' >> "${IGNORE}"
 check_drift
 assert_eq "notes-only exits 0" 0 "${RC}"

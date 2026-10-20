@@ -9,7 +9,7 @@ settle Homebrew drift in the two Brewfiles
 ${c_bold}Usage${c_rst}
   ${DF} brew triage [--json | --interactive | --edit [FILE]] [--dry-run] [--no-push]
   ${DF} brew decree ITEM.. (--global|--local|--ignore-global|--ignore-local)
-                          [--reason TEXT] [--dry-run] [--no-push]
+                          --reason TEXT [--dry-run] [--no-push]
   ${DF} brew undecree ITEM.. [--dry-run] [--no-push]
   ${DF} brew edit [--global|--local] [--ignore] [--no-commit] [--no-push]
   ${DF} brew merged
@@ -23,26 +23,33 @@ ${c_bold}Usage${c_rst}
   brew_drift step reports. ITEM is [formula:|cask:|tap:|vscode:]name; the kind
   may be omitted when exactly one kind matches.
 
+  Every entry says why it is there: a Brewfile line by a trailing '# why' or a
+  heading comment opening its paragraph (the decree block: trailing only), an
+  ignore line by its '# reason'. brew_drift fails as undocumented otherwise.
+
 ${c_bold}Subcommands${c_rst}
   triage      describe undeclared, orphaned and duplicate items, with the
               commands that settle each
   decree      declare an item in a tier's Brewfile, or ignore it, and commit
   undecree    remove the lines decree wrote for the item, and commit
   edit        open a tier's Brewfile (or Brewfile.ignore) in \$EDITOR, check it
-              parses, and commit it
+              parses and says why for every entry, and commit it
   merged      print the merged Brewfile (debugging)
   inventory   what is installed, from receipts
 
 ${c_bold}Flags${c_rst}
   --json      triage, inventory: JSON instead of text
   --interactive
-              triage: pick a tier per undeclared item, confirm the plan once,
-              run one decree per group (takes --dry-run, --no-push)
+              triage: pick a tier and a reason per undeclared item, confirm the
+              plan once, run one decree per group (takes --dry-run, --no-push)
   --edit [FILE]
               triage: the same, as a plan file in \$EDITOR: one 'skip  kind:name'
               line per item, changed to global add, local add, global ignore
-              or local ignore (with '# reason'), or delete to uninstall it
-              here; FILE resumes one (takes --dry-run, --no-push)
+              or local ignore (each with '# reason'), or delete to uninstall
+              it here; FILE resumes one (takes --dry-run, --no-push)
+  --reason TEXT
+              decree: required; why the item is declared or ignored, written
+              as the line's trailing '# TEXT' comment
   --dry-run   decree, undecree: print the lines, paths and git commands; touch
               nothing
   --no-push   decree, undecree, edit: skip the local tier's push

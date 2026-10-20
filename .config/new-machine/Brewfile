@@ -2,7 +2,8 @@
 # merged with the local tier's ~/.local/share/new-machine/Brewfile. Work-specific
 # tools (bazelisk, awscli, spr, ...) are installed by company tooling, not here.
 # Commented-out entries were deliberately excluded; don't uncomment without asking.
-# Add entries with `dotfiles brew decree <name> --global`.
+# Add entries with `dotfiles brew decree <name> --global --reason why`. Every entry says why
+# it is here: a trailing comment, or a heading comment opening its paragraph.
 
 # Unix essentials
 brew "awk"
@@ -80,7 +81,7 @@ brew "terminal-notifier"  # Claude Code notification hook (~/.config/claude) and
 
 # ── decreed via 'new-machine brew decree'; move into a section when tidying ──
 brew "gh"  # dotfiles push authenticates by its gh token
-brew "rust-analyzer"
-brew "rustup"
-cask "google-chrome"
-cask "monitorcontrol"
+brew "rust-analyzer"  # Rust language server for the editor
+brew "rustup"  # Rust toolchain installer (rustc, cargo)
+cask "google-chrome"  # web browser
+cask "monitorcontrol"  # brightness and volume keys for external displays

@@ -37,7 +37,7 @@ bindkey '^X^_' redo
 
 # Edit the shared Brewfile: everything every machine gets. Applied by `dotfiles setup`
 # together with ~/.local/share/new-machine/Brewfile (this machine only). Add lines with
-# `dotfiles brew decree <name> --global|--local`.
+# `dotfiles brew decree <name> --global|--local --reason why`.
 function vi_::new_machine_brewfile() {
   "${EDITOR}" "${HOME}/.config/new-machine/Brewfile"
 }

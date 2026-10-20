@@ -1,5 +1,5 @@
 # cmd/brew/edit.zsh — `dotfiles brew edit`: open one tier's Brewfile or Brewfile.ignore in $EDITOR,
-# check it parses, and commit it. Loaded by cmd/brew.zsh after cmd/brew/{brew,decree}.zsh; defines
+# check it parses and documents every entry, and commit it. Loaded by cmd/brew.zsh after cmd/brew/{brew,decree}.zsh; defines
 # functions only.
 #
 # Entry point: edit::edit [--global|--local] [--ignore] [--no-commit] [--no-push]
@@ -11,9 +11,13 @@ edit::help() {
 
 Opens one tier's Brewfile (or, with --ignore, its Brewfile.ignore) in $EDITOR, vi when unset.
 On save the file must parse: a Brewfile through `brew bundle list`, an ignore file with every
-line `<formula|cask|tap|vscode> <name>  # reason` or `include-declared <abs path>`. A file that
-parses is committed in its tier, the subject naming each item added or removed; one that does
-not is reported and left exactly as edited, uncommitted. Nothing is installed or uninstalled.
+line `<formula|cask|tap|vscode> <name>  # reason` or `include-declared <abs path>  # reason`.
+Every entry must also say why it is there: a Brewfile entry by a trailing `# why`, or by a
+heading comment opening its paragraph (lines between blank lines; a commented-out entry is no
+heading, and in the decree block only the trailing comment counts); an ignore entry by its
+non-empty `# reason`. A file that passes is committed in its tier, the subject naming each item
+added or removed; one that does not is reported line by line and left exactly as edited,
+uncommitted. Nothing is installed or uninstalled.
 
   --local      ~/.local/share/new-machine/Brewfile   (git ldf; committed and pushed) [default]
   --global     ~/.config/new-machine/Brewfile        (git df; committed, never pushed)
@@ -22,15 +26,18 @@ not is reported and left exactly as edited, uncommitted. Nothing is installed or
   --no-push    skip the local tier's push
   -h           this help
 
-Exit 0 saved (or no change); 1 the file does not parse, the editor failed, or the commit was
-refused; 64 usage.
+Exit 0 saved (or no change); 1 the file does not parse, an entry lacks its why, the editor
+failed, or the commit was refused; 64 usage.
 EOF
 }
 
-# edit::check <Brewfile|Brewfile.ignore> <file>: 0 when the file parses, else 1 with the parser's
-# complaint on stderr. A Brewfile is Ruby, so brew is its only parser (one call, ~0.7 s).
+# edit::check <Brewfile|Brewfile.ignore> <file>: 0 when the file parses and documents every entry
+# (decree::undocumented's rule); 1 with the parser's complaint on stderr when it does not parse;
+# 2 with one `line N: kind:name lacks …` per gap when an entry lacks its why. A Brewfile is Ruby,
+# so brew is its only parser (one call, ~0.7 s).
 edit::check() {
-  local kind="${1}" file="${2}" out brew
+  local kind="${1}" file="${2}" out brew gap doc
+  local -a reply
   local -i rc=0
   if [[ "${kind}" == Brewfile ]]; then
     brew="$(brew::bin)" || { log::err "brew not found"; return 1; }
@@ -39,9 +46,18 @@ edit::check() {
     out="$(brew::parse_ignore "${file}" local 2>&1 >/dev/null)" || rc=$?
     [[ -z "${out}" ]] || rc=1
   fi
-  (( rc == 0 )) && return 0
-  print -u2 -r -- "${out}"
-  return 1
+  if (( rc != 0 )); then
+    print -u2 -r -- "${out}"
+    return 1
+  fi
+  decree::undocumented "${kind}" "${file}"
+  (( ${#reply} )) || return 0
+  doc="a trailing '# why', or a heading comment opening its paragraph"
+  [[ "${kind}" == Brewfile ]] || doc="a '# reason'"
+  for gap in "${reply[@]}"; do
+    print -u2 -r -- "line ${gap%%$'\t'*}: ${gap#*$'\t'} lacks ${doc}"
+  done
+  return 2
 }
 
 # edit::items <Brewfile|Brewfile.ignore> <file>: one `kind:name` per declared or ignored line,
@@ -143,8 +159,12 @@ edit::edit() {
     return 0
   fi
   rm -f -- "${before}"
-  if ! edit::check "${kind}" "${file}"; then
-    log::err "${kind} does not parse; left as edited, not committed | tier='${tier}' file='${file}' fix='${CLI_NAME} brew edit --${tier}${${kind:#Brewfile}:+ --ignore}'"
+  local -i check_rc=0
+  edit::check "${kind}" "${file}" || check_rc=$?
+  if (( check_rc )); then
+    local problem="does not parse"
+    (( check_rc != 2 )) || problem="has an entry that does not say why"
+    log::err "${kind} ${problem}; left as edited, not committed | tier='${tier}' file='${file}' fix='${CLI_NAME} brew edit --${tier}${${kind:#Brewfile}:+ --ignore}'"
     return 1
   fi
   if tier::git "${tier}" cat-file -e "HEAD:${rel}" 2>/dev/null && tier::git "${tier}" diff --quiet HEAD -- "${file}"; then

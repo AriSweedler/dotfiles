@@ -26,6 +26,8 @@ editor add_comment 'printf "# tidy later\n" >> "$1"'
 editor add_four 'printf "brew \"a\"\nbrew \"b\"\ncask \"c\"\ntap \"d/e\"\n" >> "$1"'
 editor ignore_libtiff 'printf "formula libtiff  # pulled in by a cask\n" >> "$1"'
 editor ignore_no_name 'printf "formula\n" >> "$1"'
+editor add_undocumented 'printf "\nbrew \"wget\"\n# brew \"curl\"\nbrew \"curl\"  # why\n" >> "$1"'
+editor ignore_no_reason 'printf "cask zoom\nformula wget  #   \n" >> "$1"'
 
 # edit EDITOR ARGS...: `dotfiles brew edit ARGS` with that editor; captures OUT, ERR, RC.
 edit() {
@@ -93,6 +95,17 @@ assert_eq "restoring the committed file exits 0" 0 "${RC}"
 assert_contains "it says nothing to commit" "${OUT}" "matches the committed file; nothing to commit"
 assert_eq "still nothing committed" "${head_before}" "$(ldf_head)"
 
+# ── an entry that does not say why: each gap by line, left as edited, nothing committed ──
+edit add_undocumented
+assert_eq "an undocumented entry exits 1" 1 "${RC}"
+assert_contains "it says an entry does not say why" "${ERR}" "Brewfile has an entry that does not say why; left as edited, not committed"
+assert_contains "the gap by line and item" "${ERR}" "line $(grep -n -x -F 'brew "wget"' "${LOCAL}" | cut -d: -f1): formula:wget lacks a trailing '# why', or a heading comment opening its paragraph"
+assert_not_contains "a trailing comment documents its line" "${ERR}" "formula:curl"
+assert_contains "the fix reopens the same file" "${ERR}" "fix='dotfiles brew edit --local'"
+assert_contains "the undocumented line is kept" "$(cat "${LOCAL}")" 'brew "wget"'
+assert_eq "an undocumented entry commits nothing" "${head_before}" "$(ldf_head)"
+ldf_git checkout -q -- "${LOCAL}"
+
 # ── a comment, --no-commit ──
 edit add_comment --no-commit
 assert_eq "--no-commit exits 0" 0 "${RC}"
@@ -133,6 +146,15 @@ assert_eq "a bad ignore line exits 1" 1 "${RC}"
 assert_contains "the parser's warning is shown" "${ERR}" "ignore entry without a name"
 assert_contains "the fix reopens the ignore file" "${ERR}" "fix='dotfiles brew edit --local --ignore'"
 assert_contains "the bad line is kept" "$(cat "${LOCAL_IGNORE}")" "formula"
+
+# ── an ignore entry without a reason ──
+df_before="$(df_git rev-parse HEAD)"
+edit ignore_no_reason --global --ignore
+assert_eq "an ignore without a reason exits 1" 1 "${RC}"
+assert_contains "the reasonless ignore, by line" "${ERR}" "line $(grep -n -x -F 'cask zoom' "${GLOBAL_IGNORE}" | cut -d: -f1): cask:zoom lacks a '# reason'"
+assert_contains "an empty comment is no reason" "${ERR}" "formula:wget lacks a '# reason'"
+assert_contains "the fix reopens the shared ignore file" "${ERR}" "fix='dotfiles brew edit --global --ignore'"
+assert_eq "nothing committed in df" "${df_before}" "$(df_git rev-parse HEAD)"
 
 assert_no_mutation "brew edit never calls a mutating brew command"
 report

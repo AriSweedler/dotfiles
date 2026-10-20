@@ -16,8 +16,8 @@ decree() { bump_now_secs 60; nm brew decree "$@"; assert_eq "decree $* exits 0" 
 undecree() { bump_now_secs 60; nm brew undecree "$@"; }
 ldf_subject() { ldf_git log -1 --format=%s; }
 
-decree gh --local
-decree bk@3 --local
+decree gh --local --reason "GitHub CLI"
+decree bk@3 --local --reason "buildkite CLI"
 commits_before="$(ldf_git rev-list --count HEAD)"
 
 undecree gh

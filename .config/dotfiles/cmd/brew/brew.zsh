@@ -771,7 +771,8 @@ brew::apply_pkgs() {
 }
 
 # check::brew_drift body. Inventory + info + classify into ${RUN_DIR}/drift.json, then the
-# verdict (§2.5): anything a human must decide is `fail drift`; bookkeeping notes are a warn.
+# verdict (§2.5): anything a human must decide is `fail drift`, then an entry without its why is
+# `fail undocumented`; bookkeeping notes are a warn.
 brew::check_drift_verdict() {
   brew::_require_step_context || return 1
   if brew::is_busy; then
@@ -812,6 +813,30 @@ brew::check_drift_verdict() {
     local detail
     detail="$(jq -r '"undeclared=\(.undeclared | length) orphaned=\(.orphan_keg | length) declared_orphan=\(.declared_orphan | length) duplicate=\(.duplicate | length)"' "${drift}")"
     verdict fail drift -m -d "${detail}" -f "${CLI_NAME} brew triage" -i "${items_file}"
+    return 0
+  fi
+
+  # Every declared entry says why it is here and every ignore why it is ignored (the rule is
+  # decree::undocumented's); the fix opens the first file with a gap.
+  need_lib "${ARI_DOTFILES_BREW_LIB:h}/decree.zsh" || return 1
+  local -a reply undocumented=()
+  local tier kind file doc fix=""
+  for tier in global local; do
+    for kind in Brewfile Brewfile.ignore; do
+      case "${tier}/${kind}" in
+        global/Brewfile) file="${global}" doc="# why" ;;
+        global/Brewfile.ignore) file="${global_ignore}" doc="# reason" ;;
+        local/Brewfile) file="${local_file}" doc="# why" ;;
+        local/Brewfile.ignore) file="${local_ignore}" doc="# reason" ;;
+      esac
+      decree::undocumented "${kind}" "${file}"
+      (( ${#reply} )) || continue
+      [[ -n "${fix}" ]] || fix="${CLI_NAME} brew edit --${tier}${${kind:#Brewfile}:+ --ignore}"
+      undocumented+=("${tier} ${kind} lacks a '${doc}': ${(j:, :)${reply[@]#*$'\t'}}")
+    done
+  done
+  if (( ${#undocumented} )); then
+    verdict fail undocumented -m -d "${(j:; :)undocumented}" -f "${fix}"
     return 0
   fi
 

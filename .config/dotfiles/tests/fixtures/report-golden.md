@@ -19,9 +19,9 @@ State lives in /tmp/nmtest/home/.local/state/new-machine/ · machine-readable: l
 
 | kind | name | from | every machine | this machine | never declare |
 |---|---|---|---|---|---|
-| formula | gh | homebrew/core | `dotfiles brew decree formula:gh --global` | `dotfiles brew decree formula:gh --local` | `dotfiles brew decree formula:gh --ignore-local --reason "…"` |
-| formula | python@3.10 | homebrew/core | `dotfiles brew decree formula:python@3.10 --global` | `dotfiles brew decree formula:python@3.10 --local` | `dotfiles brew decree formula:python@3.10 --ignore-local --reason "…"` |
-| cask | codex | homebrew/cask | `dotfiles brew decree cask:codex --global` | `dotfiles brew decree cask:codex --local` | `dotfiles brew decree cask:codex --ignore-local --reason "…"` |
+| formula | gh | homebrew/core | `dotfiles brew decree formula:gh --global --reason "…"` | `dotfiles brew decree formula:gh --local --reason "…"` | `dotfiles brew decree formula:gh --ignore-local --reason "…"` |
+| formula | python@3.10 | homebrew/core | `dotfiles brew decree formula:python@3.10 --global --reason "…"` | `dotfiles brew decree formula:python@3.10 --local --reason "…"` | `dotfiles brew decree formula:python@3.10 --ignore-local --reason "…"` |
+| cask | codex | homebrew/cask | `dotfiles brew decree cask:codex --global --reason "…"` | `dotfiles brew decree cask:codex --local --reason "…"` | `dotfiles brew decree cask:codex --ignore-local --reason "…"` |
 
 New since the last run: formula gh, cask codex.
 
@@ -29,7 +29,7 @@ New since the last run: formula gh, cask codex.
 
 - `spacelift-io/spacelift/spacectl` is an orphaned keg: the tap converted the formula to a cask. Run
   `brew uninstall spacectl && brew tap spacelift-io/spacelift && brew install --cask spacelift-io/spacelift/spacectl`,
-  then `dotfiles brew decree cask:spacelift-io/spacelift/spacectl --local`.
+  then `dotfiles brew decree cask:spacelift-io/spacelift/spacectl --local --reason "…"`.
 
 ## Also noted (warnings, no report on their own)
 

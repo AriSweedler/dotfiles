@@ -36,10 +36,11 @@ bundle_list() {
 }
 
 # `brew bundle list --all --file=F`: every name, or, like brew's Ruby parser, an error and exit 1
-# for a line that is not a comment, blank, or a `brew|cask|tap|vscode "name"[, options]` call.
+# for a line that is not a comment, blank, or a `brew|cask|tap|vscode "name"[, options]` call,
+# optionally ending in a `# comment`.
 bundle_list_all() {
   local file="$1" line n=0
-  local re='^[[:space:]]*(brew|cask|tap|vscode)[[:space:]]+"([^"]+)"[[:space:]]*(,.*)?$'
+  local re='^[[:space:]]*(brew|cask|tap|vscode)[[:space:]]+"([^"]+)"[[:space:]]*(,.*|#.*)?$'
   while IFS= read -r line || [[ -n "${line}" ]]; do
     n=$(( n + 1 ))
     [[ "${line}" =~ ^[[:space:]]*(#.*)?$ || "${line}" =~ ${re} ]] && continue
