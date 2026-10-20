@@ -58,7 +58,7 @@ step::alttab::needs_build() {
   case "${REPLY}" in
     none)
       verdict fail "${reason}" -m -d "${detail}; building it needs the Xcode app, not only Command Line Tools, and none is at ${XCODE_APP}" \
-        -f "install Xcode (open 'macappstores://apps.apple.com/app/id497799835', or: brew install mas && mas install 497799835), then ${CLI_NAME} alttab install" ;;
+        -f "install Xcode (open 'macappstores://apps.apple.com/app/id497799835', or: mas install 497799835), then ${CLI_NAME} alttab install" ;;
     not_selected)
       verdict fail "${reason}" -m -d "${detail}; ${XCODE_APP} is installed but $(xcode-select -p 2>/dev/null || print -r -- 'nothing') is selected" -f "${CLI_NAME} alttab install" ;;
     license)

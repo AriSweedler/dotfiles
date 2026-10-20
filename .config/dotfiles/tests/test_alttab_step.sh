@@ -48,7 +48,7 @@ assert_contains "missing, no certificate: the detail says why" "$(field detail)"
 check ALTTAB_APP="${FIX}/apps/Nope.app" ARI_DOTFILES_XCODE_APP="${FIX}/no-apps/Xcode.app" CERT=0
 assert_eq "missing, no Xcode app: a manual fail" "fail alttab_missing true false" \
   "$(field status) $(field reason) $(field manual) $(field actionable)"
-assert_contains "missing, no Xcode app: the fix is the App Store, then install" "$(field fix)" "install Xcode (open 'macappstores://apps.apple.com/app/id497799835', or: brew install mas && mas install 497799835), then dotfiles alttab install"
+assert_contains "missing, no Xcode app: the fix is the App Store, then install" "$(field fix)" "install Xcode (open 'macappstores://apps.apple.com/app/id497799835', or: mas install 497799835), then dotfiles alttab install"
 
 for state in "XCODE=0:is selected" "LICENSE=0:the Xcode license is not accepted" "FIRST_LAUNCH=0:Xcode's first-launch packages are not installed"; do
   check ALTTAB_APP="${FIX}/apps/Nope.app" "${state%%:*}"

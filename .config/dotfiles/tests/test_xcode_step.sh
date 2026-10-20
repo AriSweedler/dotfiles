@@ -40,7 +40,7 @@ assert_eq "ready: ok, with the version" "ok ready Xcode 27.1 selected; license a
 check ARI_DOTFILES_XCODE_APP="${FIX}/Nope.app"
 assert_eq "not installed: a manual fail" "fail xcode_missing true false" "$(field status) $(field reason) $(field manual) $(field actionable)"
 assert_contains "not installed: the App Store, or mas" "$(field fix)" "macappstores://apps.apple.com/app/id497799835"
-assert_contains "not installed: mas named" "$(field fix)" "brew install mas && mas install 497799835"
+assert_contains "not installed: mas named" "$(field fix)" "mas install 497799835"
 
 check SELECTED=/Library/Developer/CommandLineTools
 assert_eq "Command Line Tools selected: a manual fail" "fail not_selected true" "$(field status) $(field reason) $(field manual)"

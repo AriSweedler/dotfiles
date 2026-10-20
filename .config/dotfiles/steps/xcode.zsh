@@ -16,7 +16,7 @@ check::xcode() {
   local app="${ARI_DOTFILES_XCODE_APP}"
   if [[ ! -d "${app}" ]]; then
     verdict fail xcode_missing -m -d "Xcode is not installed at ${app}; alttab builds with it" \
-      -f "open 'macappstores://apps.apple.com/app/id497799835' (or: brew install mas && mas install 497799835)"
+      -f "open 'macappstores://apps.apple.com/app/id497799835' (or: mas install 497799835)"
     return 0
   fi
   local dev

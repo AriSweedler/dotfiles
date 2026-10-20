@@ -66,7 +66,7 @@ alttab::ready_xcode() {
     case "${REPLY}" in
       none)
         log::err "building AltTab needs the Xcode app, not only Command Line Tools, and none is installed | app='${XCODE_APP}'"
-        log::err "install it, then run this again | fix=\"open 'macappstores://apps.apple.com/app/id497799835' (or: brew install mas && mas install 497799835)\""
+        log::err "install it, then run this again | fix=\"open 'macappstores://apps.apple.com/app/id497799835' (or: mas install 497799835)\""
         return 1 ;;
       not_selected) cmd=(sudo xcode-select -s "${XCODE_APP}"); alttab::_say "Selecting ${XCODE_APP} for builds (xcode-select points at $(xcode-select -p 2>/dev/null || print -r -- nothing))" ;;
       license) cmd=(sudo xcodebuild -license accept); alttab::_say "Accepting the Xcode license" ;;
