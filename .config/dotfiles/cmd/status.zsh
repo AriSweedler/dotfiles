@@ -30,7 +30,8 @@ ${c_bold}Usage${c_rst}
 
 ${c_bold}Flags${c_rst}
   --edit [FILE]  edit and run a commit plan; FILE resumes a kept one
-  --dry-run      with --edit: print what would run, change nothing
+  --dry-run      with --edit: print what would run, restores too, change
+                 nothing
 
 ${c_bold}Env${c_rst}
   $(ENV EDITOR)
