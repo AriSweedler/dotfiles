@@ -16,7 +16,8 @@ assert_not_contains "probe HOME is not the real home" "${probe_home}" "${ORIG_HO
 assert_eq "command -v brew is the shim" "${FIX}/shims/brew" "$(jq -r .brew_on_path "${f}")"
 assert_eq "ARI_DOTFILES_BREW is the shim" "${FIX}/shims/brew" "$(jq -r .brew "${f}")"
 probe_path="$(jq -r .path "${f}")"
-assert_eq "PATH starts with the shim dir" "${FIX}/shims" "${probe_path%%:*}"
+assert_eq "PATH starts with the world's .config/bin, as the interactive PATH does" "${HOME}/.config/bin" "${probe_path%%:*}"
+assert_contains "PATH has the shim dir next" "${probe_path}" "${HOME}/.config/bin:${FIX}/shims:"
 assert_not_contains "PATH has no real-machine entries" "${probe_path}" "/opt/homebrew"
 
 # Sourcing a lib may create nothing anywhere in the world, not only under HOME, and runs from a

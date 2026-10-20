@@ -330,14 +330,14 @@ do_unregister() {
 
 #######################################
 # terminal-notifier for the alert below. launchd's PATH has no Homebrew, so the binary is
-# probed by absolute path; without it there is no banner at all — an osascript banner cannot
-# be removed and would sit in Notification Center forever.
+# probed by absolute path, the shared tier's logging shim first; without it there is no banner
+# at all — an osascript banner cannot be removed and would sit in Notification Center forever.
 #######################################
 notifier_bin() {
     local tn p
     tn="$(command -v terminal-notifier 2>/dev/null || true)"
     if [[ -z "${tn}" ]]; then
-        for p in /opt/homebrew/bin/terminal-notifier /usr/local/bin/terminal-notifier; do
+        for p in "${HOME}/.config/bin/terminal-notifier" /opt/homebrew/bin/terminal-notifier /usr/local/bin/terminal-notifier; do
             [[ -x "${p}" ]] && { tn="${p}"; break; }
         done
     fi

@@ -18,10 +18,10 @@ export type Meta = {
   directModifiers?: Modifier[]
 }
 
-// Karabiner runs shell_command with launchd's minimal PATH, so the notifier
-// needs its absolute path.
+// Karabiner runs shell_command with launchd's minimal PATH, so the notifier needs an absolute
+// path: the shared tier's logging shim, which execs Homebrew's binary.
 const notify = (message: string) => ({
-  shell_command: `/opt/homebrew/bin/terminal-notifier -title Keyboard -message ${JSON.stringify(message)} -group karabiner-which-keyboard`,
+  shell_command: `"$HOME/.config/bin/terminal-notifier" -title Keyboard -message ${JSON.stringify(message)} -group karabiner-which-keyboard`,
 })
 
 // karabiner.ts has no from-key aliases for shifted symbols, and its layer

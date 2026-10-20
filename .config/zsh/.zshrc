@@ -42,16 +42,22 @@ function source_zsh_dir() {
   done
 }
 
-# An idempotent way to add a path to PATH
+# Put a directory first on PATH, once: one already present moves to the front, so the policy
+# below holds in a shell whose inherited PATH (tmux's, an editor's) had it elsewhere.
 function prepend_to_path() {
   local -r add_me="$1"
-  case ":${PATH}:" in
-    *:"$add_me":*) ;;
-    *) export PATH="$add_me:$PATH" ;;
-  esac
+  path=("${add_me}" "${(@)path:#${add_me}}")
 }
 
 # Source all files in these folders
 source_file "${ZDOTDIR}/tab_completion.zsh"
 source_zsh_dir "${ZDOTDIR}/plugins"
 source_zsh_dir --optional "${XDG_DATA_HOME}/zsh/plugins"
+
+# PATH policy for both dotfile tiers, after every plugin so nothing a plugin prepends (brew
+# shellenv's Homebrew dirs, a company bin) lands ahead: this machine's local bins, then the
+# shared bins, then everything else. ~/.config/bin ahead of Homebrew makes its terminal-notifier,
+# the logging shim, the one every banner goes through.
+prepend_to_path "$HOME/.config/bin"
+prepend_to_path "$HOME/.local/bin"
+prepend_to_path "$XDG_DATA_HOME/bin"

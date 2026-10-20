@@ -1,6 +1,8 @@
 # Transient Notification Center alerts, sourced by the karabiner-* handlers via REPO_LIB.
 
-readonly NOTIFIER="/opt/homebrew/bin/terminal-notifier"
+# The shared tier's logging shim, which execs Homebrew's binary; Karabiner runs the handlers
+# with launchd's minimal PATH, hence the absolute path.
+readonly NOTIFIER="${HOME}/.config/bin/terminal-notifier"
 readonly NOTIFIER_IMAGE="${REPO_LIB:?notify.bash: REPO_LIB must be set}/../assets/karabiner-elements.png"
 
 notify_image_warn() {

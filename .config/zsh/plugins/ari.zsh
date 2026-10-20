@@ -1,10 +1,5 @@
 # source_file "$HOME/.config/macos.sh"
 
-# PATH policy for both dotfile tiers: shared bins, then this machine's local bins.
-prepend_to_path "$HOME/.config/bin"
-prepend_to_path "$HOME/.local/bin"
-prepend_to_path "$XDG_DATA_HOME/bin"
-
 # Use nvim by default
 export EDITOR="nvim"
 alias vi='nvim'

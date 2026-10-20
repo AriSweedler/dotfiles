@@ -22,6 +22,8 @@ readonly GUARD_SCRIPT="${CLAUDE_BIN_DIR}/pretooluse-headless-chrome-guard.sh"
 # Claude Code only spawns the hook for Bash commands matching this rule, so
 # ordinary commands pay nothing for it.
 readonly GUARD_IF='Bash(*--headless*)'
+# Homebrew's binary, the one NOTIFIER (the logging shim) execs; the install check looks past the shim.
+readonly NOTIFIER_BREW="/opt/homebrew/bin/terminal-notifier"
 
 #######################################
 # Installs terminal-notifier via Homebrew if not already present.
@@ -29,8 +31,8 @@ readonly GUARD_IF='Bash(*--headless*)'
 #   0 on success, 1 if brew is missing or the install failed.
 #######################################
 ensure_terminal_notifier() {
-  if [[ -x "${NOTIFIER}" ]]; then
-    log "terminal-notifier present at ${NOTIFIER}"
+  if [[ -x "${NOTIFIER_BREW}" ]]; then
+    log "terminal-notifier present at ${NOTIFIER_BREW}"
     return 0
   fi
   log "terminal-notifier missing"

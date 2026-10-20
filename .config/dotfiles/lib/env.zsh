@@ -93,6 +93,23 @@ probe_tool() {
   return 0
 }
 [[ -n "${ARI_DOTFILES_BREW:-}" ]] || { probe_tool::reply brew; typeset -gx ARI_DOTFILES_BREW="${REPLY}"; }
+
+# PATH self-heal: brew's own helpers and `code` must resolve for `brew bundle check` under launchd,
+# and ~/.local/bin holds the claude installer's symlink. Local bin wins, as in the interactive shell,
+# and ~/.config/bin leads as there too: its terminal-notifier is the logging shim every banner
+# goes through, and the probes below must find it ahead of Homebrew's whatever order the
+# inherited PATH had.
+typeset -U path
+if [[ -n "${ARI_DOTFILES_BREW}" ]]; then
+  path=("${ARI_DOTFILES_BREW:h}" $path)
+fi
+if [[ -d "${HOME}/.local/bin" ]]; then
+  path=("${HOME}/.local/bin" $path)
+fi
+if [[ -d "${HOME}/.config/bin" ]]; then
+  path=("${HOME}/.config/bin" $path)
+fi
+
 [[ -n "${ARI_DOTFILES_NOTIFIER:-}" ]] || { probe_tool::reply terminal-notifier; typeset -gx ARI_DOTFILES_NOTIFIER="${REPLY}"; }
 [[ -n "${ARI_DOTFILES_CODE:-}" ]] || { probe_tool::reply code; typeset -gx ARI_DOTFILES_CODE="${REPLY}"; }
 typeset -gx ARI_DOTFILES_BREW ARI_DOTFILES_NOTIFIER ARI_DOTFILES_CODE
@@ -101,16 +118,6 @@ typeset -gx ARI_DOTFILES_BREW ARI_DOTFILES_NOTIFIER ARI_DOTFILES_CODE
 # Through the seam, not ARI_DOTFILES_CONFIG: the tests point the seam into the fake HOME while the code
 # runs from the real checkout, and the click command must name the HOME the report is in.
 typeset -gx ARI_DOTFILES_EDIT_WINDOW="${ARI_DOTFILES_SHARED_DIR:h}/bin/tmux-edit-window"
-
-# PATH self-heal: brew's own helpers and `code` must resolve for `brew bundle check` under launchd,
-# and ~/.local/bin holds the claude installer's symlink. Local bin wins, as in the interactive shell.
-typeset -U path
-if [[ -n "${ARI_DOTFILES_BREW}" ]]; then
-  path=("${ARI_DOTFILES_BREW:h}" $path)
-fi
-if [[ -d "${HOME}/.local/bin" ]]; then
-  path=("${HOME}/.local/bin" $path)
-fi
 
 # --- Run identity: from ARI_DOTFILES_NOW alone, so the report marker can depend on it ---
 run_id() {
@@ -191,8 +198,9 @@ typeset -g JOBS_INTERVAL_SECONDS=300          # the tick; cron schedules are che
 typeset -g JOBS_TIMEOUT_SECONDS=900           # a plugin's run is killed after this unless its '# timeout:' line says otherwise
 typeset -g JOBS_HUD_SECONDS=2                 # how long the engine's "job ok" banner stays up
 typeset -g JOBS_NOTIFIER_TIMEOUT_SECONDS=10   # terminal-notifier occasionally never returns (seen on -remove); a banner is never worth a hang
-# launchd's PATH has no Homebrew; plugins shell out to jq, terminal-notifier, python3.
-typeset -g JOBS_LAUNCHD_PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+# launchd's PATH has no Homebrew; plugins shell out to jq, terminal-notifier, python3. ~/.config/bin
+# leads so that terminal-notifier is the logging shim, as on the interactive PATH.
+typeset -g JOBS_LAUNCHD_PATH="${HOME}/.config/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 # The per-plugin jobs this framework replaced; install boots them out and removes their plists.
 typeset -ga JOBS_LEGACY_LABELS=("com.${USERNAME}.git-health" "com.${USERNAME}.aws-sso-autologin" "com.${USERNAME}.new-machine-verify")
 typeset -gA JOB_PATH=() JOB_TIER=()         # name → executable, name → df | ldf; filled by jobs_discover
