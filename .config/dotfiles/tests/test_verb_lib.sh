@@ -93,6 +93,9 @@ assert_not_contains "--form: no generated one" "${OUT}" "dotfiles fw edit"
 assert_contains "a blank prose line has no trailing spaces" "${OUT}" $'  one\n\n  two'
 assert_contains "--flag-only is recorded" "${OUT}" "flag-only=1"
 
+zrun -- 'verb::define lw "l"; verb::usage lw "lw edit NAME [--new] [--local|--global] [--dep] [--no-commit] [--no-push] [--more]"; verb::help lw'
+assert_contains "a Usage form over 80 wraps under the words after the verb" "${OUT}" $'  dotfiles lw edit NAME [--new] [--local|--global] [--dep] [--no-commit]\n              [--no-push] [--more]'
+
 # ── the help rule for a declared verb (cmd/help.zsh's help::declared_gap) ──
 HELP_RULE="source '${ORIG_CONFIG_DIR}/dotfiles/cmd/help.zsh'"
 cat > "${FIX}/good.zsh" <<'X'

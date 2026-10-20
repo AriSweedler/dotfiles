@@ -184,7 +184,15 @@ verb::help() {
   print -r -- "${c_bold}Usage${c_rst}"
   local REPLY
   verb::_rows_of "${v}" usage
-  for form in "${(@f)REPLY}"; do [[ -z "${form}" ]] || print -r -- "  ${DF} ${(e)form}"; done
+  # A form wider than 80 wraps, its continuation under the words after `dotfiles VERB`.
+  local head rest
+  for form in "${(@f)REPLY}"; do
+    [[ -n "${form}" ]] || continue
+    form="${(e)form}"
+    if (( 11 + ${#form} <= 80 )) || [[ "${form}" != *' '* ]]; then print -r -- "  ${DF} ${form}"; continue; fi
+    head="${form%% *}" rest="${form#* }"
+    verb::_wrap "${rest}" $(( 12 + ${#head} )) "  ${DF} ${head} "
+  done
   if [[ -n "${VERB_ABOUT[${v}]:-}" ]]; then
     print -r -- ""
     for text in "${(@f)${(e)${VERB_ABOUT[${v}]:-}%$'\n'}}"; do print -r -- "${text:+  ${text}}"; done
