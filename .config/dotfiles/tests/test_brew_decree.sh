@@ -157,12 +157,12 @@ assert_contains "dry-run prints the line" "${OUT}${ERR}" 'brew "python@3.10"'
 assert_contains "dry-run prints the target path" "${OUT}${ERR}" "${LOCAL}"
 assert_contains "dry-run prints the git commands" "${OUT}${ERR}" "commit"
 
-# ── push failure is a warning ─────────────────────────────────────────────────
-ldf_git remote remove origin
+# ── push failure is a warning (an origin that cannot be reached) ───────────────
+ldf_git remote set-url origin "${FIX}/remotes/nowhere.git"
 decree python@3.10 --local
-assert_eq "decree without an origin exits 0" 0 "${RC}"
+assert_eq "decree with an unreachable origin exits 0" 0 "${RC}"
 assert_eq "commit stands" "dotfiles: declare formula python@3.10 (local)" "$(ldf_subject)"
-assert_contains "stderr points at git ldf push" "${ERR}" "git ldf push"
+assert_contains "stderr points at git ldf push" "${ERR}" "push failed; run 'git ldf push' when online"
 
 # ── the block stays sorted: taps, then formulae by name ───────────────────────
 expected_block='tap "buildkite/buildkite", trusted: true

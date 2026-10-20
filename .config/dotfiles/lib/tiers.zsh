@@ -169,6 +169,11 @@ tier::commit() {
         log::info "push skipped | tier='local' fix='git ldf push'"
         return 0
       fi
+      # A local tier may have no remote: it then stays on this machine, and there is nothing to push.
+      if [[ -z "$(tier::git "${tier}" remote 2>/dev/null)" ]]; then
+        log::info "local tier has no remote; committed here, nothing to push | hint='git ldf remote add origin <url>'"
+        return 0
+      fi
       rc=0
       out="$(tier::git "${tier}" push 2>&1)" || rc=$?
       # git reports a failing pre-push hook as exit 1, same as being offline; the
