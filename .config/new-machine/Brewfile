@@ -72,6 +72,7 @@ brew "hashicorp/tap/terraform"
 
 # Personal
 cask "1password-cli"
+cask "1password"  # the desktop app; 1password-cli above talks to it
 cask "karabiner-elements"
 cask "raycast"
 cask "spotify"
