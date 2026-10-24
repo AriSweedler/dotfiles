@@ -191,6 +191,7 @@ Exoskeleton is the model.
 | tmuxinator (`~/.config/tmuxinator/*.yml`) | `~/.local/share/tmuxinator/*.yml` | `TMUXINATOR_CONFIG`, set by `~/.config/zsh/plugins/tmux.zsh` when the dir exists; searched before the shared dir |
 | Neovim (`~/.config/nvim/`) | `~/.local/share/nvim/site/plugin/*.lua` | nvim's own data-dir runtimepath (kept by lazy.nvim's rtp reset) |
 | `/ari-gsw-calendar-add` event types | `~/.local/share/gsw-calendar-add/event-types.md` | the skill reads it beside its own **Event types** sections |
+| `/ari-diagram-mermaid` and `/ari-diagram-gh-todo` palette | `~/.local/share/ari-diagram-mermaid/palette.mmd` | its `classDef` lines replace the skills' own, same class names |
 | fzfdb selectors (functions in `~/.config/zsh/plugins/`) | `~/.local/share/{go_aws,kuber,aws_profile}/` | data read by the shared functions |
 | `PATH` (`prepend_to_path` in `ari.zsh`) | `~/.local/bin/`, `~/.local/share/bin/` | on `PATH` on every machine |
 

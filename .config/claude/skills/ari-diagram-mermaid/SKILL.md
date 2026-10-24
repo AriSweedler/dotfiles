@@ -38,20 +38,22 @@ Create, validate, and share Mermaid.js diagrams with a fixed palette that stay l
 
 ```mermaid
 %%{init: {'theme':'default', 'sequence': {'messageFontSize': 18, 'actorFontSize': 18, 'noteFontSize': 16}, 'themeCSS': '.messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 2px #fff) drop-shadow(0 0 3px #fff); } @media (prefers-color-scheme: dark) { .messageText, text.text, .loopText, .titleText, text.actor-man { fill: #eeeeee; } .messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 2px #000) drop-shadow(0 0 3px #000); } }'}}%%
-classDef blue fill:#2D7FF9,stroke:#1A5BC4,color:#fff,stroke-width:2px,font-weight:bold
-classDef teal fill:#20D9D2,stroke:#179B96,color:#333,stroke-width:2px,font-weight:bold
-classDef green fill:#20C933,stroke:#168E24,color:#333,stroke-width:2px,font-weight:bold
-classDef yellow fill:#FCB400,stroke:#B88000,color:#333,stroke-width:2px,font-weight:bold
-classDef orange fill:#FF6F2C,stroke:#CC5823,color:#333,stroke-width:2px,font-weight:bold
-classDef red fill:#F82B60,stroke:#C42249,color:#fff,stroke-width:2px,font-weight:bold
-classDef pink fill:#FF08C2,stroke:#CC069B,color:#fff,stroke-width:2px,font-weight:bold
-classDef purple fill:#8B46FF,stroke:#6F38CC,color:#fff,stroke-width:2px,font-weight:bold
+classDef blue fill:#3B82F6,stroke:#1D4ED8,color:#fff,stroke-width:2px,font-weight:bold
+classDef teal fill:#14B8A6,stroke:#0F766E,color:#333,stroke-width:2px,font-weight:bold
+classDef green fill:#22C55E,stroke:#15803D,color:#333,stroke-width:2px,font-weight:bold
+classDef yellow fill:#EAB308,stroke:#A16207,color:#333,stroke-width:2px,font-weight:bold
+classDef orange fill:#F97316,stroke:#C2410C,color:#333,stroke-width:2px,font-weight:bold
+classDef red fill:#EF4444,stroke:#B91C1C,color:#fff,stroke-width:2px,font-weight:bold
+classDef pink fill:#EC4899,stroke:#BE185D,color:#fff,stroke-width:2px,font-weight:bold
+classDef purple fill:#8B5CF6,stroke:#6D28D9,color:#fff,stroke-width:2px,font-weight:bold
 classDef gray fill:#666666,stroke:#444444,color:#fff,stroke-width:2px,font-weight:bold
 
 linkStyle default stroke-width:2px
 ```
 
-Every pair clears 3:1. White on blue 3.8, red 3.8, pink 3.5, purple 4.8, gray 5.7. `#333` on teal 7.2, green 5.7, yellow 7.0, orange 4.6 (white on those four scored 1.8, 2.2, 7.0 and 2.8). The first line is one fixed string: copy it, never retype it.
+Every pair clears 3:1. White on blue 3.7, red 3.8, pink 3.5, purple 4.2, gray 5.7. `#333` on teal 5.1, green 5.5, yellow 6.6, orange 4.5. The first line is one fixed string: copy it, never retype it.
+
+**A local palette replaces the nine `classDef` lines.** When `~/.local/share/ari-diagram-mermaid/palette.mmd` exists (the local dotfiles tier), copy its `classDef` lines instead of the ones above: same class names, so `class` assignments do not change. `bake` gates whichever lines the diagram carries.
 
 ## Contrast
 

@@ -74,3 +74,5 @@
 !/share/nvim/site/plugin/
 # Work event types /ari-gsw-calendar-add reads beside its own.
 !/share/gsw-calendar-add/
+# The work diagram palette that /ari-diagram-mermaid and /ari-diagram-gh-todo prefer over their own.
+!/share/ari-diagram-mermaid/

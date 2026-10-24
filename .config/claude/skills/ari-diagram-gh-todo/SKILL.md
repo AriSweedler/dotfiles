@@ -12,9 +12,11 @@ Track TODO items with dependencies as color-coded mermaid diagrams, posted as Gi
 
 | Status | Color | Hex |
 |--------|-------|-----|
-| Unstarted / Blocked | Red | `#F82B60` |
-| In Progress | Yellow | `#FCB400` |
-| Done / Complete | Green | `#20C933` |
+| Unstarted / Blocked | Red | `#EF4444` |
+| In Progress | Yellow | `#EAB308` |
+| Done / Complete | Green | `#22C55E` |
+
+When `~/.local/share/ari-diagram-mermaid/palette.mmd` exists, take the `red`, `yellow` and `green` `classDef` lines from it instead (see `/ari-diagram-mermaid` § Color Theme).
 
 ## Workflow
 
@@ -29,9 +31,9 @@ Track TODO items with dependencies as color-coded mermaid diagrams, posted as Gi
    - Dependency arrows (`A --> B` means B depends on A)
    - Status-based classDefs and class assignments; every fill carries a text color that passes bake's contrast gate:
      ```mermaid
-     classDef red fill:#F82B60,stroke:#C42249,color:#fff
-     classDef yellow fill:#FCB400,stroke:#B88000,color:#333
-     classDef green fill:#20C933,stroke:#168E24,color:#333
+     classDef red fill:#EF4444,stroke:#B91C1C,color:#fff
+     classDef yellow fill:#EAB308,stroke:#A16207,color:#333
+     classDef green fill:#22C55E,stroke:#15803D,color:#333
      ```
 4. **Bake** the file init printed:
    ```zsh
@@ -89,9 +91,9 @@ graph TD
     B --> C
     C --> D
 
-    classDef red fill:#F82B60,stroke:#C42249,color:#fff
-    classDef yellow fill:#FCB400,stroke:#B88000,color:#333
-    classDef green fill:#20C933,stroke:#168E24,color:#333
+    classDef red fill:#EF4444,stroke:#B91C1C,color:#fff
+    classDef yellow fill:#EAB308,stroke:#A16207,color:#333
+    classDef green fill:#22C55E,stroke:#15803D,color:#333
 
     class A green
     class B yellow
