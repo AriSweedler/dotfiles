@@ -54,7 +54,7 @@ return grant();
 Fine: a single two-term `&&` in a boolean expression.
 
 ### Name for what it is, consistently — PREFER
-Collections are `entries: Array<XxxSpec>` using the full `Spec` (not `…WithoutManagedFields`). The same concept keeps the same name and argument position across functions. Rename a value when its identity changes — a row merged with other data is no longer an `entry`. Spell out domain nouns; stop short of restating the type in the name.
+Collections are `entries: Array<XxxSpec>` using the full `Spec` (not a trimmed variant of it). The same concept keeps the same name and argument position across functions. Rename a value when its identity changes — a row merged with other data is no longer an `entry`. Spell out domain nouns; stop short of restating the type in the name.
 Fine: a clear domain name already used consistently.
 
 ### Colocate with use — PREFER
@@ -66,8 +66,8 @@ Separate each logical block with a blank line and order it leading-comment → o
 ```ts
 // Flatten entries with this node group's state so the type narrows.
 const statesWithEntry = entries.flatMap(...);    // operation
-h.stats.increment('node_group.candidates');      // metric (if any)
-h.assert(statesWithEntry.length > 0, '...');     // check (if any)
+metrics.increment('node_group.candidates');      // metric (if any)
+assert(statesWithEntry.length > 0, '...');       // check (if any)
 this.logger.info('selected candidates', {...});  // log (if any)
 ```
 Fine: a single-line block needs no comment.
@@ -79,8 +79,8 @@ Fine: a single field access or one comparison left inline.
 ### A test section per pure function — PREFER
 Each exported pure function gets its own `describe` block (or labeled `[fnName] …` cases) that exercises it directly. If the diff adds a new exported pure helper with no matching test section, flag it — no code rewrite, the gap itself is the finding.
 
-<!-- TODO(ari): flesh out fuller testing conventions. Exemplar: admin/custom_domain_provisioner/provisioning_operation.test.tsx
-Patterns: table-driven typed cases + `for (const testCase of ...) it(testCase.name, ...)`; one section per function; behavior-spec case names; edge cases as rows; error paths via shouldThrow + h.assert.throwsAsync; private logic via a TestableXxx subclass; log assertions via expectedWarnings: RegExp[] + errorLogSpy.
+<!-- TODO(ari): flesh out fuller testing conventions.
+Patterns: table-driven typed cases + `for (const testCase of ...) it(testCase.name, ...)`; one section per function; behavior-spec case names; edge cases as rows; error paths via an expected-throw case + an async throws assertion; private logic via a TestableXxx subclass; log assertions via expected-warning patterns + a logger spy.
 Still open (from PR review): mocked vs unmocked contracts, property-based invariants, sharding over lowering numRuns. -->
 
 ### Comments follow /ari-code-comments — NEVER
@@ -107,10 +107,10 @@ Check each changed hunk against every principle. **Every finding MUST include th
 
 One finding per block, ordered by file then line. The principle name is the exact `###` heading:
 ```
-admin/eks/foo.tsx:42 — No non-null assertions
+src/foo.ts:42 — No non-null assertions
   config.entries[0]! → const [first] = config.entries; if (first === undefined) return;
 
-admin/eks/foo.tsx:88 — Functional pipelines, not loops
+src/foo.ts:88 — Functional pipelines, not loops
   for-loop with continue → users.flatMap((u) => (u.role === 'admin' ? [u.name] : []))
 
 2 findings.
