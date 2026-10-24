@@ -178,7 +178,7 @@ Never mention a Claude skill in a Doc, let alone link one: no skill name in the 
 
 Full title + number as link text. Escape `[]` in titles; keep `()` as-is.
 
-- GOOD: `[Cache build tools on the CDN (#4821)](https://github.com/acme/shop/pull/4821)`
+- GOOD: `[[build] Cache build tools on the CDN (#4821)](https://github.com/acme/shop/pull/4821)`
 - BAD: `PR #4821: caching build tools on the CDN`
 
 ### Google Workspace URLs
@@ -252,7 +252,7 @@ One-paragraph overview.
 # Useful links
 - [ROUTES](https://github.com/{owner_repo}/blob/{sha}/...)
 - see https://docs.google.com/document/d/1abc...
-- [Cache build tools ... (#4821)](https://github.com/.../pull/4821)
+- [[build] ... (#4821)](https://github.com/.../pull/4821)
 
 🤖🌸 Generated with Claude Code
 ```

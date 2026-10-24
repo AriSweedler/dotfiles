@@ -107,7 +107,7 @@ Widget cache invalidation ensures stale widget configs are evicted within 60 sec
 
 # Gotchas
 
-TTL and LRU eviction can both evict — dual eviction means metrics undercount invalidations by ~5%. Discovered during [Fix a race in widget cache eviction (#4821)](https://github.com/{owner_repo}/pull/4821).
+TTL and LRU eviction can both evict — dual eviction means metrics undercount invalidations by ~5%. Discovered during [[fix] Race condition in widget cache eviction (#4821)](https://github.com/{owner_repo}/pull/4821).
 
 # Key details
 
@@ -121,7 +121,7 @@ TTL and LRU eviction can both evict — dual eviction means metrics undercount i
 
 ## Code and PRs
 - [`widget_cache.tsx`](https://github.com/{owner_repo}/blob/{sha}/server/widget_cache.tsx#L1)
-- [Fix a race in widget cache eviction (#4821)](https://github.com/{owner_repo}/pull/4821)
+- [[fix] Race condition in widget cache eviction (#4821)](https://github.com/{owner_repo}/pull/4821)
 
 ## Docs
 - see https://docs.google.com/document/d/1abc123_widget_cache_design
