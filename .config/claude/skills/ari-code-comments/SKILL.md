@@ -37,11 +37,11 @@ Put knowledge at the highest level that owns it. Each lower level assumes the le
 
 ```tsx
 // GOOD — the type owns the invariant, the function leans on it
-// A ShardMap is immutable after bootstrap. Rebalancing produces a new map.
-type ShardMap = ReadonlyMap<ShardId, NodeId>;
+// A RouteTable is immutable after bootstrap. Rebalancing produces a new table.
+type RouteTable = ReadonlyMap<RouteKey, BackendId>;
 
-// The old map stays live for in-flight reads until they drain.
-function rebalance(map: ShardMap): ShardMap {
+// The old table stays live for in-flight requests until they drain.
+function rebalance(table: RouteTable): RouteTable {
 ```
 
 ### Wording

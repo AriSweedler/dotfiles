@@ -98,7 +98,7 @@ Filled example:
 - **Mode**: research
 - **Pointers**: server/widget_cache.tsx, PR #4821
 - **Key findings**:
-  - Redis channel is `widget:invalidate:{tenantId}` at [widget_cache.tsx L42](https://github.com/acme/shop/blob/a1b2c3d4e5f67890abcdef1234567890abcdef12/server/widget_cache.tsx#L42)
+  - Redis channel is `widget:invalidate:{widgetId}` at [widget_cache.tsx L42](https://github.com/acme/shop/blob/a1b2c3d4e5f67890abcdef1234567890abcdef12/server/widget_cache.tsx#L42)
   - LRU max entries = 500; TTL = 60s
 - **Open questions**:
   - Is dual eviction (TTL + LRU) intentional?

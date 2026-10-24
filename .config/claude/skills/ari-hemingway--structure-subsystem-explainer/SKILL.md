@@ -36,7 +36,7 @@ If research surfaced zero gotchas, the Gotchas section body MUST be exactly `Non
 ### Reshape latitude
 
 Other sections MAY be altered only as follows:
-- Rename a section only to a title that names the subject concretely (e.g., "Key details" → "Shard routing rules"). NEVER to a vaguer title.
+- Rename a section only to a title that names the subject concretely (e.g., "Key details" → "Cache key rules"). NEVER to a vaguer title.
 - Merge two adjacent optional sections if combined content is under 300 words.
 - Drop an optional section if it would contain fewer than 2 bullets/rows.
 
@@ -96,11 +96,11 @@ Structural skeleton only — NOT a target length. See word-count buckets in `## 
 
 # Summary
 
-Widget cache invalidation ensures stale widget configs are evicted within 60 seconds of a schema change. Without it, users see outdated widget layouts after field deletions.
+Widget cache invalidation ensures stale widget configs are evicted within 60 seconds of a config change. Without it, users see outdated widgets after an edit.
 
 # How it works
 
-1. A schema change commits to the primary database.
+1. A config change commits to the primary database.
 2. The writer process publishes a `WIDGET_INVALIDATE` message to Redis Pub/Sub.
 3. Every reader process subscribed to the channel evict matching entries from their LRU cache.
 4. The next widget render fetches fresh config from the database.
@@ -113,7 +113,7 @@ TTL and LRU eviction can both evict — dual eviction means metrics undercount i
 
 | Setting | Value | Source |
 |---|---|---|
-| Redis channel | `widget:invalidate:{tenantId}` | [`widget_cache.tsx` L42](https://github.com/{owner_repo}/blob/{sha}/server/widget_cache.tsx#L42) |
+| Redis channel | `widget:invalidate:{widgetId}` | [`widget_cache.tsx` L42](https://github.com/{owner_repo}/blob/{sha}/server/widget_cache.tsx#L42) |
 | LRU max entries | 500 | [`widget_cache.tsx` L18](https://github.com/{owner_repo}/blob/{sha}/server/widget_cache.tsx#L18) |
 | TTL | 60s | [`widget_cache.tsx` L19](https://github.com/{owner_repo}/blob/{sha}/server/widget_cache.tsx#L19) |
 

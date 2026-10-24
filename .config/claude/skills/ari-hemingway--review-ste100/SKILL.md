@@ -33,11 +33,11 @@ Use the same word for the same thing everywhere in the draft. Flag elegant varia
 
 ### 6. No gerund-led clauses
 
-Flag `-ing` clauses that open a sentence or hide an actor: `Before starting the rotation` → `Before you start the rotation`; `Restarting the pod fixes it` → `Restart the pod to fix it`.
+Flag `-ing` clauses that open a sentence or hide an actor: `Before starting the migration` → `Before you start the migration`; `Restarting the pod fixes it` → `Restart the pod to fix it`.
 
 ### 7. Noun clusters of three words or fewer
 
-Flag noun strings longer than three words; break them with prepositions. `node rotation state table schema` → `the schema of the rotation-state table`.
+Flag noun strings longer than three words; break them with prepositions. `user session cache table schema` → `the schema of the session-cache table`.
 
 ### 8. Keep the articles
 

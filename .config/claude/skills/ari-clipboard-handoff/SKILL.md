@@ -26,7 +26,7 @@ Whenever Claude needs Ari to run or paste something, the command or text goes in
 
 ### Decide who runs it
 
-A command mutates when it writes to a system other people or other sessions read: DynamoDB puts and deletes, AWS `--apply`, a task runner's execute mode, pushes, publishing a shared doc. **Unsure whether it mutates? Treat it as mutating.**
+A command mutates when it writes to a system other people or other sessions read: database writes, cloud `--apply`, a job runner's execute mode, pushes, publishing a shared doc. **Unsure whether it mutates? Treat it as mutating.**
 
 - Non-mutating: run it with the Bash tool. Hand off only what the tool cannot do: interactive flows such as browser logins, `kubectl` (Claude's kube context is empty), anything needing Ari's identity or terminal.
 - Mutating: Ari runs it, unless he has allowed it this session, either explicitly ("go for it", "publish it") for that command, or by running that command with `!`, which also covers commands sufficiently similar to it (same tool, same class of effect, same target system). Anything outside what he allowed is a handoff.

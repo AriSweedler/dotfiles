@@ -80,8 +80,8 @@ Fine: a single field access or one comparison left inline.
 Each exported pure function gets its own `describe` block (or labeled `[fnName] …` cases) that exercises it directly. If the diff adds a new exported pure helper with no matching test section, flag it — no code rewrite, the gap itself is the finding.
 
 <!-- TODO(ari): flesh out fuller testing conventions.
-Patterns: table-driven typed cases + `for (const testCase of ...) it(testCase.name, ...)`; one section per function; behavior-spec case names; edge cases as rows; error paths via an expected-throw case + an async throws assertion; private logic via a TestableXxx subclass; log assertions via expected-warning patterns + a logger spy.
-Still open (from PR review): mocked vs unmocked contracts, property-based invariants, sharding over lowering numRuns. -->
+Patterns: table-driven typed cases + `for (const testCase of ...) it(testCase.name, ...)`; one section per function; behavior-spec case names; edge cases as rows; error paths via an expected-throw case + an async throws assertion; private logic via a test subclass that exposes it; log assertions via expected-warning patterns + a logger spy.
+Still open: mocked vs unmocked contracts, property-based invariants, splitting slow property runs instead of lowering their run count. -->
 
 ### Comments follow /ari-code-comments — NEVER
 Judge every comment in the diff against `/ari-code-comments` — read that skill first; it owns the conventions (restating code, JSDoc, block syntax, wording). The paste-able rewrite is the corrected comment, or its deletion.

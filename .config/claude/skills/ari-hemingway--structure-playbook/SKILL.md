@@ -22,7 +22,7 @@ Required sections, in order:
 7. **Failure & recovery branches** — what to do when a gate fails, keyed to the step it recovers from.
 8. **Rollback / abort** — how to return to a safe state from any phase, and when aborting is the right call.
 9. **Verification** — trailing consolidated section: the checks, dashboards, and expected values that prove the operation completed (e.g. a status script, `kubectl` state, a Datadog metric with the pass value spelled out).
-10. **Useful links** — tail, split into **Code and PRs** (GitHub permalinks pinned to a SHA, each with a one-line annotation), **Docs** (RFCs), and **Dashboards and playbooks** (go/ links, sibling playbooks).
+10. **Useful links** — tail, split into **Code and PRs** (GitHub permalinks pinned to a SHA, each with a one-line annotation), **Docs** (RFCs), and **Dashboards and playbooks** (short links, sibling playbooks).
 
 Optional sections:
 
@@ -47,7 +47,7 @@ Optional sections:
 
 - Prescribe exactly ONE method per step (KISS) — the most automated blessed path, naming the exact pipeline for the service and stage. Never present a menu of alternatives; if another method exists, it belongs in a failure branch or a one-line aside, not the procedure.
 - Route permissions explicitly: when a command needs elevated permissions, say so and link the per-stage pipeline or access request that grants them.
-- Call out reversibility at decision points ("use `disable-image` (reversible), not `deregister-image` (irreversible)").
+- Call out reversibility at decision points ("use `suspend` (reversible), not `delete` (irreversible)").
 
 ### Verification gates
 

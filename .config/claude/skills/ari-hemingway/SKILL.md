@@ -119,7 +119,7 @@ If a `/ari-hemingway--share-*` sibling is installed and matches the destination,
 
 ### Writing today's Slack update
 
-User invocation: `/ari-hemingway slack update about the metrics-agent PR shipments`
+User invocation: `/ari-hemingway slack update about the search-indexer PR shipments`
 
 1. Infer shape: `slack-status`. Not installed → offer meta or fallback.
 2. Fallback: pick `subsystem-explainer` (closest match) + explicitly override destination to `slack`, accept reshape latitude.

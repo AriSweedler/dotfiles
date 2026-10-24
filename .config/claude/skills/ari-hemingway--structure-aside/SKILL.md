@@ -63,16 +63,16 @@ A complete aside, after `# Useful links`:
 ```markdown
 # Aside 3: Manual cleanup
 
-Run this script once per region, with the `STAGE`, `REGION` and `SERVICE_NAME` you exported in Step 2.
+Run this script once, with the `ENV` you exported in Step 2.
 
 ```
-./bin/delete-stale-configs --stage=$STAGE --region=$REGION --service=$SERVICE_NAME
+./bin/prune-widgets --env=$ENV
 ```
 
-Expected output: the script exits 0 and the `service_configs` table returns no items for `$SERVICE_NAME`.
+Expected output: the script exits 0 and the `widget_cache` table returns no expired rows.
 ```
 
-- GOOD: `Once that merges, wait one week for the nightly sweep to clear your deleted rows. ([aside 3 ℹ️](#aside-3))` with the section above.
+- GOOD: `Once that merges, wait one week for the nightly cleanup job to finish. ([aside 3 ℹ️](#aside-3))` with the section above.
 - GOOD: `The script path is in [Manual cleanup](#aside-3).` — a reference, named like the tab, from the body or from another aside.
 - BAD: `rows.[aside 3 ℹ️](#aside-3)` — no space, no parentheses, so the link glues to the sentence.
 - BAD: `(see [manual cleanup](#aside-3))` — neither the marker form nor the title's words.

@@ -98,7 +98,7 @@ Common leaf patterns:
 
 You don't need a checklist — read the function and decide: "does tracing deeper add insight into the business logic flow?" If not, it's a leaf.
 
-Note: a test-only wrapper (e.g. `stubbable(fn)`) is not the logic. Trace the wrapped function, not the wrapper.
+Note: a test-only wrapper (e.g. `mockable(fn)`) is not the logic. Trace the wrapped function, not the wrapper.
 
 ### Depth and size limits
 
@@ -119,7 +119,7 @@ For methods on singleton/plain-object exports (not classes), use `objectName.met
 ### Inline closures
 
 When a function defines closures or local functions internally (e.g., `useCallback`, inner arrow functions, locally scoped `function` or `async function` declarations):
-- Create a separate node for each one that calls project functions. Use the variable/function name (e.g., `validateCodeAsync`, `onSubmit`, `renderFilePicker`).
+- Create a separate node for each one that calls project functions. Use the variable/function name (e.g., `validateInputAsync`, `onSubmit`, `renderFilePicker`).
 - If the closure has no name, give it one based on its purpose and prefix with `unnamed.` (e.g., `unnamed.fetchAndRetryHandler`).
 - Record an edge from the parent function to the closure (parent defines it), AND edges from the closure to its callees.
 - Trivial memoized values (`useMemo` returning simple expressions with no project function calls) are not nodes — skip them.
@@ -156,11 +156,11 @@ Write files in parallel where possible — batch independent Write calls togethe
 
 All files in one flat directory. Preserve the function's original casing.
 
-- **Leaf functions** (functions where you stopped recursing — `leaf: true` in frontmatter): `leaf.` prefix: `leaf.queryDb.ts`, `leaf._getCommonHeaders.tsx`
-- **Non-leaf functions**: just the name: `validateCard.tsx`, `_requestAsync.tsx`
+- **Leaf functions** (functions where you stopped recursing — `leaf: true` in frontmatter): `leaf.` prefix: `leaf.queryDb.ts`, `leaf._buildHeaders.ts`
+- **Non-leaf functions**: just the name: `validateCard.tsx`, `_sendAsync.ts`
 - **Class methods**: `ClassName.methodName.tsx` (e.g., `OrderRunner.retryAsync.tsx`)
 - **Singleton methods**: `objectName.methodName.tsx` (e.g., `configSerializer.loadAsync.ts`)
-- **Inline closures**: use the variable name: `validateCodeAsync.tsx`, or `unnamed.fetchHandler.tsx`
+- **Inline closures**: use the variable name: `validateInputAsync.tsx`, or `unnamed.fetchHandler.tsx`
 - **Name collisions**: shortest unique directory suffix with `--` separator. Compare full paths of colliding functions, find the first directory segment (from the end) that differs. Example: `domestic--validateCard.tsx` vs `international--validateCard.tsx`.
 - Extension matches the source file's actual extension.
 
@@ -198,7 +198,7 @@ source: src/jobs/runner.ts:212
 lines: 340
 calls:
   - findHandler
-  - withTransactionAsync
+  - runInTransactionAsync
   - _invokeHandlerAsync
 called_by:
   - processQueueBatchAsync
@@ -208,16 +208,16 @@ async _runJobAsync({job, ...}): Promise<JobResult | null> {
     // Check attempt limit — return null if exhausted
     if (job.attempts > job.maxAttempts) { return null; }
 
-    // Check the pause list (job type, tenant) — return null if paused
+    // Check the pause list (job type) — return null if paused
 
     // Look up the handler
     const handler = findHandler(job.type);
     if (!handler) { return null; }
 
-    // Validate tenant and region — return null on mismatch
+    // Validate the payload — return null if malformed
 
     // Run the handler inside one transaction
-    const result = await withTransactionAsync(async () => {
+    const result = await runInTransactionAsync(async () => {
         return await _invokeHandlerAsync(handler, job, ...);
     });
 

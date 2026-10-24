@@ -63,13 +63,13 @@ For the transition-day edge case: don't try to be clever about which side of the
 
 Single-bullet timestamps (in a timeline):
 
-- GOOD: `- May 21, 2026 13:36: ASG desired count changed 3→4.`
-- BAD: `- May 21, 2026 13:36:57: ASG desired count changed 3→4.` *(rule 4: strip seconds)*
-- BAD: `- May 21, 2026 13:36 — ASG desired count changed 3→4.` *(rule 9: use `: `, not em-dash)*
-- BAD: `- May 21, 2026 20:36 UTC: ASG desired count changed 3→4.` *(rule 3: no TZ suffix; also rule 2: should be 13:36 PT)*
-- BAD: `- **May 21, 2026 13:36**: ASG desired count changed 3→4.` *(rule 7: don't bold)*
-- BAD: `- **20:36** — ASG desired count changed 3→4.` *(rules 7, 8, 9 — bold, abbreviated, em-dash)*
-- BAD: `- May 21, 2026 12:36: ASG desired count changed 3→4.` *(rule 2: May is in PDT, UTC−7, so 20:36 UTC → 13:36, not 12:36. Using PST literally (UTC−8) on a DST date is a 1-hour error.)*
+- GOOD: `- May 21, 2026 13:36: cache hit rate fell below 80%.`
+- BAD: `- May 21, 2026 13:36:57: cache hit rate fell below 80%.` *(rule 4: strip seconds)*
+- BAD: `- May 21, 2026 13:36 — cache hit rate fell below 80%.` *(rule 9: use `: `, not em-dash)*
+- BAD: `- May 21, 2026 20:36 UTC: cache hit rate fell below 80%.` *(rule 3: no TZ suffix; also rule 2: should be 13:36 PT)*
+- BAD: `- **May 21, 2026 13:36**: cache hit rate fell below 80%.` *(rule 7: don't bold)*
+- BAD: `- **20:36** — cache hit rate fell below 80%.` *(rules 7, 8, 9 — bold, abbreviated, em-dash)*
+- BAD: `- May 21, 2026 12:36: cache hit rate fell below 80%.` *(rule 2: May is in PDT, UTC−7, so 20:36 UTC → 13:36, not 12:36. Using PST literally (UTC−8) on a DST date is a 1-hour error.)*
 
 Section header + disclaimer:
 
@@ -79,7 +79,7 @@ Section header + disclaimer:
 
   All times are in Pacific Time.
 
-  - May 21, 2026 13:36: ASG desired count changed 3→4.
+  - May 21, 2026 13:36: cache hit rate fell below 80%.
   ```
 - BAD:
   ```
@@ -87,15 +87,15 @@ Section header + disclaimer:
 
   All times UTC, 2026-05-21.
 
-  - **20:36:57** — ASG desired count changed 3→4.
+  - **20:36:57** — cache hit rate fell below 80%.
   ```
   *(disclaimer cites wrong TZ; bullet violates rules 3, 4, 7, 8, 9 simultaneously)*
 
 Prose with first + subsequent reference in same section:
 
-- GOOD: `The node was Ready at May 21, 2026 13:38. Pod scheduling started at 13:38 as well; by 13:39 the first job failure landed.`
+- GOOD: `The deploy finished at May 21, 2026 13:38. Error rates rose at 13:38 as well; by 13:39 the first alert fired.`
   *(First mention full form; subsequent mentions abbreviated per rule 8. Note the loss of sub-minute ordering — accept it.)*
-- BAD: `The node was Ready at 13:38. Pod scheduling started at 13:38.`
+- BAD: `The deploy finished at 13:38. Error rates rose at 13:38.`
   *(First reference in section drops the date — rule 8 violation. A reader pulling this sentence into Slack loses the date.)*
 
 Table cells:
@@ -104,13 +104,13 @@ Table cells:
 
   | Pod | First fail | Last fail |
   |---|---|---|
-  | `app-worker-7f9c2` | May 21, 2026 13:38 | May 21, 2026 14:03 |
+  | `web-1` | May 21, 2026 13:38 | May 21, 2026 14:03 |
 
 - BAD:
 
   | Pod | First fail | Last fail (UTC) |
   |---|---|---|
-  | `app-worker-7f9c2` | 13:38:39 | 21:03:13 |
+  | `web-1` | 13:38:39 | 21:03:13 |
 
   *(column header carries TZ, first cell abbreviated, last cell still in UTC with seconds — four violations)*
 

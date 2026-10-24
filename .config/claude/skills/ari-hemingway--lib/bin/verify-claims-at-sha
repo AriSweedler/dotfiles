@@ -132,8 +132,8 @@ ${c_bold}Behavior:${c_rst}
 ${c_bold}Examples:${c_rst}
   zsh $HOME/.claude/skills/ari-hemingway--lib/bin/verify-claims-at-sha \\
     --sha 3f51d99 \\
-    --claim src/clusters/list.ts:140:listClusterNames \\
-    --claim src/clusters/registry.ts:59
+    --claim src/orders/list.ts:140:listOrders \\
+    --claim src/orders/registry.ts:59
 EOF
 }
 
