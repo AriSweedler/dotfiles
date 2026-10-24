@@ -1,0 +1,8 @@
+{
+  "installed_on_request": true,
+  "installed_as_dependency": false,
+  "source": {
+    "tap": "homebrew/cask",
+    "path": "__PREFIX__/api/cask.jws.json"
+  }
+}

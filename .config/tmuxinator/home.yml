@@ -1,0 +1,8 @@
+# /Users/arisweedler/.config/tmuxinator/home.yml
+
+name: home
+root: ~/Desktop
+
+windows:
+  - notes: notes
+  - workspace: ls -1

@@ -1,0 +1,18 @@
+#compdef man_cx
+
+_man_cx() {
+  local curcontext="$curcontext" state line
+
+  # If we haven't seen '--' yet, complete command names
+  if ! [[ " ${words[@]} " =~ " -- " ]]; then
+    # Try to use _man completion if available, otherwise fall back to _command_names
+    if (( $+functions[_man] )); then
+      _man
+    else
+      _command_names -e
+    fi
+  fi
+  # After '--', no completion (user types their question)
+}
+
+_man_cx "$@"

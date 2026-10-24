@@ -1,0 +1,41 @@
+#compdef git
+
+# Custom git completion options from `git_wrapper`
+
+# Save the original git completion function
+if ! typeset -f _git_orig > /dev/null; then
+  # Load the original git completion
+  autoload -Uz _git
+  # Save it with a different name
+  functions[_git_orig]=$functions[_git]
+fi
+
+_git_wrapper_completion() {
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
+
+  # Check if current word is partially typed -cc flag
+  if [[ "${words[CURRENT]}" == -c* ]]; then
+    # Offer -cc as a completion option
+    compadd -- -cc
+    return 0
+  fi
+
+  # Check if we're completing after -cc
+  local i
+  for (( i=2; i <= $#words; i++ )); do
+    if [[ "${words[i]}" == "-cc" ]] && (( i + 1 == CURRENT )); then
+      # We're completing the argument to -cc
+      local -a cc_options
+      cc_options=("${(@f)$(git_wrapper::_completion_options)}")
+      _describe -t cc-options 'delta config option' cc_options
+      return 0
+    fi
+  done
+
+  # Otherwise, call original git completion
+  _git_orig
+}
+
+# Override git completion
+functions[_git]=$functions[_git_wrapper_completion]

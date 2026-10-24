@@ -1,0 +1,47 @@
+#!/usr/bin/env zsh
+# tmux-edit-window [-n NAME] FILE — open ${EDITOR} on FILE in a new tmux window of the working
+# session (the most recently active client's) and bring Terminal forward: the Hyper+O → vi_*
+# shape for callers without a tty, chiefly `terminal-notifier -execute`, where a click on
+# `-open file.md` would hand the file to Xcode. The click runs under /bin/sh with launchd's PATH,
+# so tmux is probed by absolute path; the editor resolves inside the window from the tmux
+# server's environment. Without a tmux client the file opens in a fresh Terminal window.
+set -u
+source "${HOME}/.config/zsh/plugins/log.zsh"
+
+name="vi_"
+if [[ "${1:-}" == -n ]]; then
+  name="${2:?-n needs a window name}"
+  shift 2
+fi
+file="${1:?usage: tmux-edit-window [-n NAME] FILE}"
+if [[ ! -r "${file}" ]]; then
+  log::err "cannot read file | path='${file}'"
+  exit 1
+fi
+
+tmux_bin="$(command -v tmux 2>/dev/null || true)"
+for candidate in /opt/homebrew/bin/tmux /usr/local/bin/tmux; do
+  if [[ -z "${tmux_bin}" && -x "${candidate}" ]]; then
+    tmux_bin="${candidate}"
+  fi
+done
+
+client=""
+if [[ -n "${tmux_bin}" ]]; then
+  client="$("${tmux_bin}" list-clients -F '#{client_activity} #{client_name}' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)"
+fi
+
+if [[ -n "${client}" ]]; then
+  session="$("${tmux_bin}" display-message -p -c "${client}" '#{session_name}')"
+  log::info "opening editor window | session='${session}' window='${name}' file='${file}'"
+  # FILE travels as its own argv element. The shell is interactive (as irun) because $EDITOR
+  # is nvim under bob, whose PATH entry is prepended by an interactive plugin; a plain zsh -c
+  # would fall back to vi.
+  "${tmux_bin}" new-window -t "${session}:" -n "${name}" -c "${file:h}" \
+    zsh -ic 'editor="${EDITOR:-vi}"; command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi; ${=editor} -- "$1"' _ "${file}"
+  /usr/bin/open -a Terminal
+else
+  log::warn "no tmux client; opening in a Terminal window | file='${file}'"
+  /usr/bin/osascript -e "tell application \"Terminal\" to do script \"exec ${EDITOR:-vi} ${(q)file}\"" \
+                     -e 'tell application "Terminal" to activate' > /dev/null
+fi

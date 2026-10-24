@@ -1,0 +1,147 @@
+---
+name: ari-diagram-mermaid
+description: Create, validate, and share Mermaid.js diagrams in a fixed palette that stay legible under any viewer theme and on any canvas. `bake` pins the theme in the source, makes free-standing text follow the viewer's color scheme with a soft glow as fallback, refuses low-contrast text, and mints the mermaid.ink image plus mermaid.live view link for Google Docs and GitHub.
+---
+
+# ari-diagram-mermaid
+
+Create, validate, and share Mermaid.js diagrams with a fixed palette that stay legible whatever theme the viewer's mermaid.live applies and whatever canvas it paints behind the diagram. `bake` refuses a source whose text can vanish into its fill or into the page, then prints a ready-to-paste markdown link for embedding in Google Docs and writes it to a sidecar file; the clipboard is written only on request.
+
+## Rules
+
+- **Never hand-reproduce the baked link.** `bake` prints the link and writes a `.url` sidecar. You MAY print or relay the link — but only verbatim from `bake`'s output or the sidecar file. NEVER retype, transcribe, reconstruct, or regenerate it yourself: it's a long base64 string, slow and error-prone to reproduce when the script already emitted the exact bytes. Never copy a link from the mermaid.live address bar either: the editor re-encodes its own theme into the URL (a dark-mode tab turns `theme: default` into `redux-dark-color`), so that link renders differently from the baked one. Simplest path: paste `bake`'s printed link into the message as a fenced block.
+- **The clipboard is opt-in.** `bake` never touches it unless `--clipboard` is passed (or `MERMAID_CLIPBOARD=1` is in the environment), and then it copies through `/ari-clipboard-handoff`, which names the displaced entry. Pass it only when the user asked for the link on the clipboard in the current turn; never export `MERMAID_CLIPBOARD` persistently.
+- **Default output is `markdown_link`.** Override the format only when the user explicitly asks for another form (e.g. a GitHub-native fenced block), or when a Google Doc pipeline needs the sidecars: bake `ink_url` and `live_url` on the same `.mmd` and let the caller compose `[![alt](<ink_url>?width=620)](<live_url>)`. mermaid.ink honors `?width=` (and `?height=`, `?scale=`); 620 px is 465 pt, inside a Letter page's 468 pt text width. Drive's markdown import turns that form into an inline image whose link opens the diagram fullscreen on mermaid.live (`/view#`, never `/edit#`: the reader gets the diagram, not the editor).
+- **Contrast is pinned in the source, never left to the viewer.** Line 1 of every diagram is the directive at the top of the color theme block. It pins `theme: default`, so it beats whatever theme a viewer's editor writes into the URL config, and sets the sequence fonts (message and actor 18, note 16). Its `themeCSS` handles the canvas in two layers: the Doc image is always white (mermaid.ink), but the view link's canvas follows the viewer, so free-standing text (sequence messages, box titles, loop and title text) flips to light under a dark color scheme, and a soft glow covers the case where the site toggle and the OS scheme disagree. Text on a fill (node labels, actor boxes, notes, flowchart edge labels on the edge-label rect) needs neither, so flowcharts are unaffected by the selectors. Every `classDef` or `style` that sets `fill` also sets `color`, at a contrast ratio of at least 3:1 (WCAG AA for bold text); a subgraph `style` with a light fill takes `color:#333`. `bake` checks the directive and every fill/color pair mechanically and stops on the first source that fails; `--dark-check` saves both dark renders for your eyes.
+
+## Workflow
+
+1. **Set up the session** — creates a fresh temp folder and prints the `.mmd` path to write to. Emit exactly this one Bash call:
+   ```zsh
+   zsh $HOME/.claude/skills/ari-diagram-mermaid/bin/init.zsh
+   ```
+   It prints `diagram_dir=` and `diagram_file=`; write the diagram to `diagram_file`. Pass `--name NAME` for a custom basename.
+2. **Write** the diagram source to the printed `diagram_file`
+   - Start with the color theme block below; its first line pins the theme, sizes sequence text, and makes free-standing text follow the viewer's color scheme
+   - Apply classes to nodes using `class` directives
+   - Style a subgraph as `style ID fill:#F5F5F5,stroke:#666666,color:#333`
+3. **Bake**: `zsh $HOME/.claude/skills/ari-diagram-mermaid/bin/bake <diagram_file>`
+   - Runs the directive and contrast gates, confirms the render, mints the embed URL, prints it, and writes the `.url` sidecar in one step
+   - On a gate failure it names the expected line 1, or lists every offending line as `line|directive|name|fill|color|ratio|reason`; fix the source and re-run until valid
+   - Add `--dark-check` to also save `<name>.dark.jpg` (the diagram on a `#1e1e1e` canvas, where only the glow helps) and, with Chrome installed, `<name>.dark-scheme.png` (the view URL under a dark color scheme, where the text flips light); look at both before handing the link over
+   - Add `--clipboard` only when the user asked for the link on the clipboard this turn; it copies through `/ari-clipboard-handoff` and prints where the displaced entry went
+4. **Present** to user:
+   - Paste the markdown link into the message in a fenced block, verbatim from `bake`'s output or the `url_file` sidecar — never retype it (see Rules). If `--clipboard` ran, repeat its `previous clipboard:` line.
+   - For a Google Doc published through `/ari-hemingway--share-gdoc`: bake `ink_url` and `live_url`, then embed `[![alt](<ink_url>?width=620)](<live_url>)`; its finish step fails an image whose link is not the `mermaid.live/view#` form. For a hand-edited Doc: paste the markdown link, or Insert > Image > By URL and add the live link to the image.
+
+## Color Theme (always include)
+
+```mermaid
+%%{init: {'theme':'default', 'sequence': {'messageFontSize': 18, 'actorFontSize': 18, 'noteFontSize': 16}, 'themeCSS': '.messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 2px #fff) drop-shadow(0 0 3px #fff); } @media (prefers-color-scheme: dark) { .messageText, text.text, .loopText, .titleText, text.actor-man { fill: #eeeeee; } .messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 2px #000) drop-shadow(0 0 3px #000); } }'}}%%
+classDef blue fill:#3B82F6,stroke:#1D4ED8,color:#fff,stroke-width:2px,font-weight:bold
+classDef teal fill:#14B8A6,stroke:#0F766E,color:#333,stroke-width:2px,font-weight:bold
+classDef green fill:#22C55E,stroke:#15803D,color:#333,stroke-width:2px,font-weight:bold
+classDef yellow fill:#EAB308,stroke:#A16207,color:#333,stroke-width:2px,font-weight:bold
+classDef orange fill:#F97316,stroke:#C2410C,color:#333,stroke-width:2px,font-weight:bold
+classDef red fill:#EF4444,stroke:#B91C1C,color:#fff,stroke-width:2px,font-weight:bold
+classDef pink fill:#EC4899,stroke:#BE185D,color:#fff,stroke-width:2px,font-weight:bold
+classDef purple fill:#8B5CF6,stroke:#6D28D9,color:#fff,stroke-width:2px,font-weight:bold
+classDef gray fill:#666666,stroke:#444444,color:#fff,stroke-width:2px,font-weight:bold
+
+linkStyle default stroke-width:2px
+```
+
+Every pair clears 3:1. White on blue 3.7, red 3.8, pink 3.5, purple 4.2, gray 5.7. `#333` on teal 5.1, green 5.5, yellow 6.6, orange 4.5. The first line is one fixed string: copy it, never retype it.
+
+**A local palette replaces the nine `classDef` lines.** When `~/.local/share/ari-diagram-mermaid/palette.mmd` exists (the local dotfiles tier), copy its `classDef` lines instead of the ones above: same class names, so `class` assignments do not change. `bake` gates whichever lines the diagram carries.
+
+## Contrast
+
+Two things can swallow text: its own fill, and the canvas the viewer's page paints behind the transparent SVG.
+
+```mermaid
+%% GOOD — line 1 from the theme block; the subgraph's light fill carries a dark text color
+%%{init: {'theme':'default', 'sequence': {'messageFontSize': 18, 'actorFontSize': 18, 'noteFontSize': 16}, 'themeCSS': '.messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 2px #fff) drop-shadow(0 0 3px #fff); } @media (prefers-color-scheme: dark) { .messageText, text.text, .loopText, .titleText, text.actor-man { fill: #eeeeee; } .messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 2px #000) drop-shadow(0 0 3px #000); } }'}}%%
+flowchart LR
+    subgraph OAUTH["OAuth 2.0"]
+        AS["Authorization server"]
+    end
+    style OAUTH fill:#F5F5F5,stroke:#666666,color:#333
+
+%% BAD — no directive and a fill with no color: a dark-mode viewer paints the title
+%% light on the light fill (white on #F5F5F5 is 1.1:1) and it disappears
+flowchart LR
+    subgraph OAUTH["OAuth 2.0"]
+        AS["Authorization server"]
+    end
+    style OAUTH fill:#F5F5F5,stroke:#666666
+```
+
+`bake` rejects the BAD source twice over: `No init directive`, then `31|style|OAUTH|#F5F5F5|-|-|fill without color`.
+
+```mermaid
+%% GOOD — line 1 from the theme block: under a dark color scheme the message text
+%% turns light; on a dark canvas with a light scheme it keeps a soft white glow; on
+%% the white Doc image nothing shows
+%%{init: {'theme':'default', 'sequence': {'messageFontSize': 18, 'actorFontSize': 18, 'noteFontSize': 16}, 'themeCSS': '.messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 2px #fff) drop-shadow(0 0 3px #fff); } @media (prefers-color-scheme: dark) { .messageText, text.text, .loopText, .titleText, text.actor-man { fill: #eeeeee; } .messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 2px #000) drop-shadow(0 0 3px #000); } }'}}%%
+sequenceDiagram
+    participant C as Client
+    participant AS as Authorization server
+    C->>AS: POST token endpoint (code, code_verifier)
+
+%% BAD — theme pinned but no themeCSS: the message sits on nothing, so it is #333 on
+%% whatever the viewer's page paints, and a dark-mode tab renders it near-black on black
+%%{init: {'theme':'default'}}%%
+sequenceDiagram
+    participant C as Client
+    participant AS as Authorization server
+    C->>AS: POST token endpoint (code, code_verifier)
+```
+
+`bake` rejects the second BAD source with `Directive lacks the adaptive text rules` and prints the expected line 1. Node labels never needed either layer: they sit on their fill, and flowchart edge labels sit on the theme's edge-label rect.
+
+## Tools
+
+`bin/init.zsh` — Session setup: creates a fresh `/tmp/ari-diagram-mermaid/<timestamp>/` folder and prints `diagram_dir=` / `diagram_file=` for the workflow. Replaces hand-rolled `mktemp` + `date` (BSD `date` lacks `%3N`).
+
+`bin/bake` — All-in-one: gates the line-1 directive (theme pin, sequence fonts, adaptive free-standing text) and the fill/text contrast, confirms mermaid.ink renders the source, mints the URL, prints it to stdout, and writes a `.url` sidecar next to the `.mmd` (e.g., `diagram.ink_url.url`). The clipboard is untouched unless `--clipboard` is passed.
+
+| Flag | Meaning |
+| --- | --- |
+| `--file PATH` | The `.mmd` source. A bare positional path is accepted for older callers. |
+| `--format FORMAT` | One of the formats below (default: `markdown_link`). `MERMAID_FORMAT=` in the environment is the fallback. |
+| `--validate-only` | Gate and render-check only; mint no URL. `MERMAID_VALIDATE_ONLY=1` is the fallback. |
+| `--clipboard` | Also copy the link to the clipboard, through `/ari-clipboard-handoff`'s `handoff.zsh --copy --file <sidecar>`. `MERMAID_CLIPBOARD=1` is the fallback. Only when the user asked this turn. |
+| `--dark-check` | Also save `<name>.dark.jpg` (mermaid.ink on a `#1e1e1e` canvas: site dark, OS light, exercises the glow) and, when Chrome is installed, `<name>.dark-scheme.png` (headless Chrome on the view URL with `--force-dark-mode`: site dark, OS dark, exercises the color flip). Both land next to the sidecars; legibility is judged by eye, not by the script. |
+
+| Format | Output |
+| --- | --- |
+| `markdown_link` (default) | Image linked to its source (`[![](img)](view)`), no alt, no width cap |
+| `ink_url` | Direct mermaid.ink PNG image URL; append `?width=620` for Docs |
+| `live_url` | Fullscreen mermaid.live URL (`/view#pako:`); the link target for a Docs image. Swap `view` for `edit` in the path to open the editor; the payload is identical |
+
+`lib/contrast.awk` — The WCAG check `bake` runs. Standalone: `awk -v min_ratio=3.0 -f $HOME/.claude/skills/ari-diagram-mermaid/lib/contrast.awk <diagram.mmd>` prints one `line|directive|name|fill|color|ratio|reason` record per violation and nothing when clean.
+
+## Line breaks in node labels
+
+Use `<br/>` for line breaks inside node labels — never use `\n`. The `\n` escape is not rendered as a newline by Mermaid and will appear as literal text.
+
+```mermaid
+%% GOOD
+A["First line<br/>Second line"]
+
+%% BAD — \n renders literally
+A[First line\nSecond line]
+```
+
+Node labels that contain `<br/>` must be wrapped in double quotes: `["..."]` or `{"..."}`.
+
+## Notes
+
+- The mermaid.ink URL is a live-rendered PNG — works anywhere images are supported.
+- For GitHub comments, use native mermaid fenced blocks instead of the image URL:
+  ````
+  ```mermaid
+  <diagram source>
+  ```
+  ````

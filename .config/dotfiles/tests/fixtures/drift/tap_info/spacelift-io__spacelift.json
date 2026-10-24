@@ -1,0 +1,12 @@
+[
+  {
+    "name": "spacelift-io/spacelift",
+    "formula_names": [
+      "spacelift-io/spacelift/spacelift-intent"
+    ],
+    "cask_tokens": [
+      "spacelift-io/spacelift/spacectl"
+    ],
+    "installed": true
+  }
+]

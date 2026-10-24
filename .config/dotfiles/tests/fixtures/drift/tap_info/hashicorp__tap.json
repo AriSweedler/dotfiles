@@ -1,0 +1,11 @@
+[
+  {
+    "name": "hashicorp/tap",
+    "formula_names": [
+      "hashicorp/tap/terraform",
+      "hashicorp/tap/vault"
+    ],
+    "cask_tokens": [],
+    "installed": true
+  }
+]

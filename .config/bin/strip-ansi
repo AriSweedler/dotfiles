@@ -1,0 +1,6 @@
+#!/usr/bin/env zsh
+# strip-ansi — copy stdin to stdout without ANSI escape sequences. The logic is the
+# strip_ansi plugin; this wrapper is for callers that are not already in zsh.
+# Usage: strip-ansi < file   |   producer | strip-ansi
+source "${HOME}/.config/zsh/plugins/strip_ansi.zsh"
+strip_ansi

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Fake curl: the network is forbidden in tests. Any call is logged and fails loudly, which is
+# how the tests prove the two `curl … | sh` installers were never reached.
+set -u
+printf '%s\n' "$*" >> "${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/curl.log"
+printf 'curl shim: network access is forbidden in tests: %s\n' "$*" >&2
+exit 99

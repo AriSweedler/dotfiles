@@ -1,0 +1,47 @@
+{
+  "formulae": [
+    {
+      "name": "jq",
+      "full_name": "jq",
+      "tap": "homebrew/core",
+      "aliases": [],
+      "oldnames": []
+    },
+    {
+      "name": "oniguruma",
+      "full_name": "oniguruma",
+      "tap": "homebrew/core",
+      "aliases": [],
+      "oldnames": []
+    },
+    {
+      "name": "git",
+      "full_name": "git",
+      "tap": "homebrew/core",
+      "aliases": [],
+      "oldnames": []
+    },
+    {
+      "name": "bob",
+      "full_name": "bob",
+      "tap": "homebrew/core",
+      "aliases": [],
+      "oldnames": []
+    },
+    {
+      "name": "terminal-notifier",
+      "full_name": "terminal-notifier",
+      "tap": "homebrew/core",
+      "aliases": [],
+      "oldnames": []
+    }
+  ],
+  "casks": [
+    {
+      "token": "font-caskaydia-mono-nerd-font",
+      "full_token": "font-caskaydia-mono-nerd-font",
+      "tap": "homebrew/cask",
+      "old_tokens": []
+    }
+  ]
+}

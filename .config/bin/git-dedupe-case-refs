@@ -1,0 +1,33 @@
+#!/usr/bin/env zsh
+
+# `git dedupe-case-refs`: delete remote-tracking refs whose names collide
+# case-insensitively (origin/Foo/bar + origin/foo/bar). macOS's filesystem is
+# case-insensitive, so such a pair shares one loose-ref path and one lock-file
+# path; `git fetch --prune` then fails with "cannot lock ref ... File exists"
+# when it touches both in one transaction. Remote-tracking refs are pure
+# cache — the next fetch recreates whichever casing the remote really has —
+# so deleting every member of a colliding group is safe. Deletes one ref per
+# transaction so two locks never coexist.
+
+source "${HOME}/.config/zsh/plugins/log.zsh"
+
+main() {
+  local refs; refs="$(git for-each-ref --format='%(refname)' refs/remotes/)"
+  local dupes; dupes="$(print -r -- "${refs}" | sort -f | uniq -di)"
+  if [[ -z "${dupes}" ]]; then
+    return 0
+  fi
+
+  local dupe members member
+  for dupe in ${(f)dupes}; do
+    members="$(print -r -- "${refs}" | grep -ixF -- "${dupe}")"
+    for member in ${(f)members}; do
+      if git update-ref -d "${member}"; then
+        log::info "deleted case-colliding remote-tracking ref | ref='${member}'"
+      else
+        log::warn "failed to delete ref | ref='${member}'"
+      fi
+    done
+  done
+}
+main "$@"

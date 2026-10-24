@@ -1,0 +1,333 @@
+#!/usr/bin/env zsh
+# run_log — run a command and capture it into a per-command capture directory:
+#
+#   <root>/<seq>_<slug>/
+#     metadata   user=, timestamp=, command=, mode=, exit=
+#     output     (tty mode, default) the terminal session, byte-for-byte
+#     stdout     (split mode) the command's stdout
+#     stderr     (split mode) the command's stderr
+#     <N>        one file per --fd N
+#
+# Like `irun`, the command executes in an interactive zsh so aliases,
+# functions, and everything sourced from .zshrc are available. By default it
+# runs under a pty (script(1)), so it behaves exactly as in a bare terminal —
+# colors, log pretty-printers, progress bars — while the session is captured.
+# `--split` trades that fidelity for separate stdout/stderr capture files.
+# Only fds 1 and 2 are captured by default — a command's fd 3+ writes bypass
+# the capture, because pre-opening fds changes the child's environment.
+# `--fd N` opts in per fd: the wrapper opens fd N onto <capture-dir>/<N>
+# (capture-only, never echoed to the terminal).
+#
+# Designed for agent workflows: an agent hands over a `run_log ...` command,
+# the human runs it, and the capture is already on disk at a deterministic
+# path for the agent to read. With $LOG_DIR exported, `run_log <cmd>` needs
+# no flags at all; repeated runs make 001_*, 002_*, ... under the same root.
+
+set -euo pipefail
+
+readonly LOG_LIB="${XDG_CONFIG_HOME:-$HOME/.config}/zsh/plugins/log.zsh"
+if [[ ! -r "${LOG_LIB}" ]]; then
+  print -u2 "[ERROR] missing logging lib | path='${LOG_LIB}'"
+  exit 1
+fi
+source "${LOG_LIB}"
+
+readonly DEFAULT_LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/run_log"
+
+# log.zsh colors are literal-backslash strings for `echo -e`, so the heredoc
+# must be rendered with %b, not cat'd raw.
+help() {
+  local text
+  text="$(cat <<EOF
+${c_green}run_log${c_rst} — run a command, capture metadata/stdout/stderr to a capture dir
+
+${c_green}Usage:${c_rst}
+  run_log [--name NAME] [--dir DIR] [--] CMD [ARGS...]
+
+The command runs in an interactive zsh (like irun) so aliases and .zshrc
+functions work. Each invocation creates one capture directory under the
+capture root:
+
+  <root>/<seq>_<cmd-slug>/
+    metadata   user=, timestamp=, command=, mode=, exit=
+    output     (default tty mode) the terminal session, byte-for-byte
+    stdout     (--split mode) the command's stdout
+    stderr     (--split mode) the command's stderr
+
+By default the command runs under a pty, so it behaves exactly as in your
+terminal — colors, log pretty-printers, progress bars all work — and the
+session is captured byte-for-byte (ANSI escapes and CRLF included) to a
+single output file. With --split, stdout and stderr are captured as separate
+clean files instead, but the command sees pipes: color-auto programs (git,
+npm) print plain unless forced (git -c color.ui=always).
+
+${c_green}Options:${c_rst}
+  --name NAME  Capture dir name (default: <seq>_<cmd-slug>). Absolute paths
+               are used as-is; otherwise it lands under the capture root. A
+               name already holding a capture gets a _2, _3, ... suffix.
+  --file NAME  Compat alias for --name (a trailing .log is stripped).
+  --split      Capture stdout/stderr as separate files instead of one pty
+               output file. See paragraph above for the tradeoff.
+  --fd N       Also capture fd N (3-9, repeatable) to <capture-dir>/<N>.
+               The command sees fd N as an open non-tty descriptor.
+               Capture-only: fd N output is not echoed to the terminal.
+  --dir DIR    Capture root for relative/generated names.
+               Precedence: --dir > \$LOG_DIR > \$XDG_STATE_HOME/run_log
+  -h, --help   Show this help
+
+${c_green}Argument handling:${c_rst}
+  Multiple args after the flags (or --) are an argv: each word reaches the
+  child byte-for-byte — no re-split, no glob, JSON args safe — and a bare
+  first word still expands as an alias. A single arg is a shell command
+  string, re-parsed by the interactive zsh: pipes, &&, redirections work.
+
+${c_green}Examples:${c_rst}
+  run_log kubectl get pods
+  run_log --name step1 -- aws s3 ls
+  run_log -- make deploy ARGS='{"dry_run":false}'
+  run_log 'aws_profile --query dev && aws s3 ls'
+  LOG_DIR=/tmp/investigation-42 run_log make build
+EOF
+)"
+  printf '%b\n' "${text}"
+}
+
+#######################################
+# Pick the capture root for relative/generated names.
+# Globals: LOG_DIR (env, optional), DEFAULT_LOG_DIR
+# Arguments: $1 = --dir flag value (may be empty)
+# Outputs: directory path on stdout
+#######################################
+resolve_capture_root() {
+  local flag_dir="${1}"
+  if [[ -n "${flag_dir}" ]]; then
+    log::debug "Using --dir | root='${flag_dir}'"
+    print -r -- "${flag_dir}"
+    return
+  fi
+  if [[ -n "${LOG_DIR:-}" ]]; then
+    log::debug "Using \$LOG_DIR | root='${LOG_DIR}'"
+    print -r -- "${LOG_DIR}"
+    return
+  fi
+  log::debug "Using default capture root | root='${DEFAULT_LOG_DIR}'"
+  print -r -- "${DEFAULT_LOG_DIR}"
+}
+
+#######################################
+# Next zero-padded sequence number for a generated capture dir, one past the
+# highest numeric prefix already present so captures sort chronologically.
+# Arguments: $1 = capture root
+# Outputs: e.g. "003" on stdout
+#######################################
+next_seq() {
+  local root="${1}"
+  local max=0 entry n
+  for entry in "${root}"/[0-9]*(N/:t); do
+    n="${${entry%%_*}//[^0-9]/}"
+    if [[ -n "${n}" ]] && (( n > max )); then
+      max="${n}"
+    fi
+  done
+  printf '%03d' "$((max + 1))"
+}
+
+#######################################
+# Slug of the command's first few words, so capture dirs stay greppable.
+# Arguments: $1 = full command string
+# Outputs: slug on stdout
+#######################################
+generate_slug() {
+  setopt local_options extended_glob
+  local cmd="${1}"
+  local -a words=("${(z)cmd}")
+  words=("${(@)words[1,3]}")
+  # :t basenames path-like words so /tmp/x/bin/01_foo.zsh slugs as 01_foo_zsh.
+  words=("${(@)words:t}")
+  local slug="${(j:_:)words}"
+  slug="${slug//[^A-Za-z0-9_-]/_}"
+  print -r -- "${slug%%_#}"
+}
+
+#######################################
+# Resolve the capture dir from --name/--file, the capture root, and the
+# command. Does not create it or handle collisions.
+# Arguments: $1 = name flag value (may be empty), $2 = capture root, $3 = cmd
+# Outputs: capture dir path on stdout
+#######################################
+resolve_capture_dir() {
+  local name="${1%.log}" root="${2}" cmd="${3}"
+  if [[ -n "${name}" && "${name}" == /* ]]; then
+    log::debug "Using absolute capture dir | capture_dir='${name}'"
+    print -r -- "${name}"
+    return
+  fi
+  if [[ -n "${name}" ]]; then
+    log::debug "Placing named capture under root | name='${name}' root='${root}'"
+    print -r -- "${root}/${name}"
+    return
+  fi
+  local generated="$(next_seq "${root}")_$(generate_slug "${cmd}")"
+  log::debug "Generated capture dir name | name='${generated}' root='${root}'"
+  print -r -- "${root}/${generated}"
+}
+
+#######################################
+# A dir that already holds a capture (has a metadata file) is never reused —
+# each capture describes exactly one command. Suffix _2, _3, ... until free.
+# Arguments: $1 = candidate capture dir
+# Outputs: final capture dir path on stdout
+#######################################
+uniquify_capture_dir() {
+  local dir="${1}"
+  if [[ ! -e "${dir}/metadata" ]]; then
+    print -r -- "${dir}"
+    return
+  fi
+  local n=2
+  while [[ -e "${dir}_${n}/metadata" ]]; do
+    (( n++ ))
+  done
+  log::warn "Capture dir already used; suffixing | dir='${dir}' suffixed='${dir}_${n}'"
+  print -r -- "${dir}_${n}"
+}
+
+#######################################
+# Open each requested fd in the current shell, pointed at <dir>/<n>, so the
+# command inherits it. Mutates shell fds — must NOT be called in a subshell.
+# The fd number is validated to a single digit 3-9 before reaching the eval.
+# Arguments: $1 = capture dir, rest = fd numbers
+#######################################
+open_capture_fds() {
+  local dir="${1}"
+  shift
+  local fd
+  for fd in "$@"; do
+    log::info "Capturing extra fd | fd='${fd}' file='${dir}/${fd}'"
+    eval "exec ${fd}>\"\${dir}/\${fd}\""
+  done
+}
+
+#######################################
+# Close fds opened by open_capture_fds. Mutates shell fds — no subshell.
+# Arguments: fd numbers
+#######################################
+close_capture_fds() {
+  local fd
+  for fd in "$@"; do
+    eval "exec ${fd}>&-"
+  done
+}
+
+#######################################
+# Run the command under a pty via script(1) so it behaves exactly as in a
+# bare terminal: color-auto and format-switching programs (git, npm)
+# see a tty. stdout/stderr merge into one `output` file —
+# inherent to a pty. macOS script(1) forwards the child's exit status.
+# Arguments: $1 = capture dir, $2 = command string
+# Returns: the command's exit status
+#######################################
+run_captured_tty() {
+  local capture_dir="${1}" cmd="${2}"
+  script -q "${capture_dir}/output" zsh -ic "${cmd}"
+}
+
+#######################################
+# Run the command with fds 1/2 as pipes, teeing each into its own capture
+# file while both still stream to the terminal. Piped fds mean color-auto
+# programs print plain — the price of the split.
+# zsh waits for a >(...) attached to an external command, so both capture
+# files are complete on return — no flush race.
+# Arguments: $1 = capture dir, $2 = command string
+# Returns: the command's exit status
+#######################################
+run_captured_split() {
+  local capture_dir="${1}" cmd="${2}"
+  zsh -ic "${cmd}" 2> >(tee -a "${capture_dir}/stderr" >&2) | tee -a "${capture_dir}/stdout"
+  return "${pipestatus[1]}"
+}
+
+#######################################
+# Build the string handed to `zsh -ic`. A single argument is a shell command
+# string, re-parsed by the interactive zsh (pipes, &&, redirection). Multiple
+# arguments are an argv: each word is requoted with (q-) so it reaches the
+# child byte-for-byte — no re-split, no glob — while a bare first word stays
+# unquoted and still gets alias expansion.
+# Arguments: the command args (after flags/--)
+# Outputs: command string on stdout
+#######################################
+build_command_string() {
+  if (( $# == 1 )); then
+    log::debug "Single-arg command string; interactive zsh re-parses it"
+    print -r -- "${1}"
+    return
+  fi
+  log::debug "Multi-arg command; requoting argv verbatim | argc='${#}'"
+  local -a quoted=("${(@q-)@}")
+  print -r -- "${(j: :)quoted}"
+}
+
+main() {
+  # === PARSE ===
+  local name="" dir_flag="" mode="tty"
+  local -a capture_fds=()
+  while (( $# > 0 )); do
+    case "${1}" in
+      -h|--help) help; return 0 ;;
+      --split) mode="split"; shift ;;
+      --name) name="${2:?--name requires a value}"; shift 2 ;;
+      --file) name="${2:?--file requires a value}"; shift 2 ;;
+      --fd) capture_fds+=("${2:?--fd requires a value}"); shift 2 ;;
+      --dir) dir_flag="${2:?--dir requires a value}"; shift 2 ;;
+      --) shift; break ;;
+      -*) log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+      *) break ;;
+    esac
+  done
+
+  # === VALIDATE ===
+  if (( $# == 0 )); then
+    log::err "No command given"
+    help
+    return 2
+  fi
+  local fd
+  for fd in "${capture_fds[@]}"; do
+    if [[ "${fd}" != <3-9> ]]; then
+      log::err "Invalid --fd | fd='${fd}' valid='3..9 (fds 1/2 are always captured as stdout/stderr)'"
+      return 1
+    fi
+  done
+  capture_fds=("${(u)capture_fds[@]}")
+
+  # === MASSAGE ===
+  local cmd
+  cmd="$(build_command_string "$@")"
+  local root capture_dir
+  root="$(resolve_capture_root "${dir_flag}")"
+  capture_dir="$(resolve_capture_dir "${name}" "${root}" "${cmd}")"
+  capture_dir="$(uniquify_capture_dir "${capture_dir}")"
+
+  # === LOGIC ===
+  mkdir -p "${capture_dir}"
+  cat > "${capture_dir}/metadata" <<EOF
+user=${USER:-$(whoami)}
+timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+command=${cmd}
+mode=${mode}
+EOF
+  log::info "Capturing | capture_dir='${capture_dir}' mode='${mode}'"
+  open_capture_fds "${capture_dir}" "${capture_fds[@]}"
+
+  set +e
+  "run_captured_${mode}" "${capture_dir}" "${cmd}"
+  local rc=$?
+  set -e
+  close_capture_fds "${capture_fds[@]}"
+
+  print -r -- "exit=${rc}" >> "${capture_dir}/metadata"
+  log::info "Captured command | capture_dir='${capture_dir}' rc='${rc}'"
+  return "${rc}"
+}
+
+main "$@"

@@ -1,0 +1,227 @@
+#!/usr/bin/env zsh
+# yubitap — check that the YubiKey registers a tap, via the same libfido2/CTAP
+# stack tsh uses for Teleport WebAuthn.
+#
+# Makes a throwaway non-resident FIDO2 credential (nothing is stored on the
+# key) and waits for a touch. Exit 0 when the tap registers, 1 with a logged
+# diagnosis when it doesn't, 130 on Ctrl-C.
+
+set -euo pipefail
+
+source "${HOME}/.config/zsh/plugins/log.zsh"
+
+readonly DEFAULT_TIMEOUT_SECS=45
+readonly MAX_TAP_ATTEMPTS=3
+readonly REQUIRED_CMDS=(fido2-token fido2-cred openssl)
+
+help() {
+  # log.zsh's c_* are literal '\033[..' strings; echo -e turns them into escapes.
+  echo -e "$(cat <<EOF
+${c_green}yubitap${c_rst} — check that the YubiKey registers a tap (user presence)
+
+Exercises the same libfido2/CTAP stack tsh uses for Teleport WebAuthn by
+making a throwaway non-resident FIDO2 credential; nothing is stored on the
+key. Prints result=registered on stdout and exits 0 when the tap lands.
+
+${c_cyan}Usage:${c_rst}
+  yubitap [--timeout SECS]
+
+${c_cyan}Options:${c_rst}
+  --timeout SECS  Wall-clock cap across all tap attempts (default: ${DEFAULT_TIMEOUT_SECS})
+  -h, --help      Show this help
+EOF
+)"
+}
+
+#######
+# Verify every required CLI is installed; list all missing at once.
+# Globals: REQUIRED_CMDS
+# Returns: 0 if all present, exits 1 otherwise.
+#######
+check_prerequisites() {
+  local -a missing=()
+  local cmd
+  for cmd in "${REQUIRED_CMDS[@]}"; do
+    if ! command -v "${cmd}" > /dev/null; then
+      missing+=("${cmd}")
+    fi
+  done
+  if (( ${#missing[@]} > 0 )); then
+    log::err "Missing prerequisites | missing='${(j:, :)missing}' hint='brew install libfido2'"
+    exit 1
+  fi
+}
+
+#######
+# Locate the first FIDO device on USB.
+# Returns: device path on stdout; exits 1 with a log if none found.
+#######
+find_fido_device() {
+  local line
+  line="$(fido2-token -L 2> /dev/null | head -1)"
+  if [[ -z "${line}" ]]; then
+    log::err "No FIDO device found on USB | hint='reseat the YubiKey, then check: ykman list'"
+    exit 1
+  fi
+  log::info "Found FIDO device | line='${line}'"
+  echo "${line%%: *}"
+}
+
+#######
+# Write fido2-cred -M input params (challenge hash, rp, user, user id).
+# Arguments: $1 = path to write params to.
+#######
+build_cred_params() {
+  local params_file="${1}"
+  local challenge userid
+  challenge="$(printf 'yubitap' | openssl sha256 -binary | base64)"
+  userid="$(head -c 32 /dev/urandom | base64)"
+  {
+    print -r -- "${challenge}"
+    print -r -- 'yubitap.local'
+    print -r -- 'yubitap'
+    print -r -- "${userid}"
+  } > "${params_file}"
+}
+
+#######
+# Run one fido2-cred attempt, waiting until it exits or the deadline passes.
+# Backgrounded + polled rather than run in the foreground: zsh defers signal
+# traps while a foreground child runs, so Ctrl-C would hang until fido2-cred
+# gave up on its own. Polling keeps the parent in 1s sleeps, so the INT trap
+# fires immediately and kills the child by pid.
+# Globals: CRED_PID (set; read by on_interrupt)
+# Arguments: $1 = device, $2 = params file, $3 = stderr capture file,
+#            $4 = deadline (in $SECONDS time).
+# Returns: fido2-cred's exit code, or 124 when the deadline passes.
+#######
+run_tap_attempt() {
+  local device="${1}" params_file="${2}" err_file="${3}" deadline="${4}"
+  fido2-cred -M -i "${params_file}" "${device}" es256 > /dev/null 2> "${err_file}" &
+  typeset -g CRED_PID=$!
+  while kill -0 "${CRED_PID}" 2> /dev/null; do
+    if (( SECONDS >= deadline )); then
+      kill -9 "${CRED_PID}" 2> /dev/null || true
+      wait "${CRED_PID}" 2> /dev/null || true
+      return 124
+    fi
+    sleep 1
+  done
+  local exit_code=0
+  wait "${CRED_PID}" || exit_code=$?
+  return "${exit_code}"
+}
+
+#######
+# Decide whether a failed attempt is worth another tap. Only a lost CTAP
+# response (FIDO_ERR_RX — the key answered but the reply vanished mid-transfer,
+# which happens when something else reads the FIDO device) is retryable, and
+# only while attempts and time budget remain.
+# Globals: MAX_TAP_ATTEMPTS
+# Arguments: $1 = fido2-cred stderr, $2 = attempt number, $3 = remaining secs.
+# Returns: 0 to retry, 1 to stop.
+#######
+should_retry() {
+  local err="${1}" attempt="${2}" remaining_secs="${3}"
+  if [[ "${err}" != *FIDO_ERR_RX* ]]; then
+    return 1
+  fi
+  if (( attempt >= MAX_TAP_ATTEMPTS )); then
+    log::warn "CTAP response lost again; retries exhausted | attempt='${attempt}/${MAX_TAP_ATTEMPTS}'"
+    return 1
+  fi
+  if (( remaining_secs < 2 )); then
+    log::warn "CTAP response lost; no time budget left to retry | remaining_secs='${remaining_secs}'"
+    return 1
+  fi
+  log::warn "CTAP response lost mid-transfer; tap again | err='FIDO_ERR_RX' attempt='${attempt}/${MAX_TAP_ATTEMPTS}'"
+  return 0
+}
+
+#######
+# Explain the final failed attempt.
+# Arguments: $1 = fido2-cred exit code, $2 = its stderr.
+#######
+diagnose_failure() {
+  local exit_code="${1}" err="${2}"
+  if (( exit_code == 124 )); then
+    log::err "No tap detected within the wall-clock cap | hint='reseat the key if taps keep missing'"
+    return
+  fi
+  if [[ "${err}" == *TIMEOUT* || "${err}" == *timed\ out* ]]; then
+    log::err "Device present but the tap never registered | hint='flat fingertip fully covering the exposed end; try another finger'"
+    return
+  fi
+  if [[ "${err}" == *FIDO_ERR_RX* ]]; then
+    log::err "CTAP responses kept getting lost | err='${err}' hint='something else is reading the FIDO device — close pending WebAuthn prompts (browser, tsh) and retry'"
+    return
+  fi
+  log::err "FIDO operation failed before the tap | err='${err}'"
+}
+
+#######
+# Ctrl-C during the tap wait: kill the pending fido2-cred, report the
+# cancellation, then the outcome.
+# Globals: CRED_PID
+#######
+on_interrupt() {
+  if [[ -n "${CRED_PID:-}" ]]; then
+    kill -9 "${CRED_PID}" 2> /dev/null || true
+  fi
+  log::warn "User cancelled | signal='SIGINT'"
+  log::err "No tap detected"
+  echo "result=cancelled"
+  exit 130
+}
+
+main() {
+  local timeout_secs="${DEFAULT_TIMEOUT_SECS}"
+  while (( $# > 0 )); do
+    case "${1}" in
+      -h|--help) help; exit 0 ;;
+      --timeout) timeout_secs="${2:?--timeout requires a value}"; shift 2 ;;
+      *) log::err "Unknown flag | flag='${1}'"; help; exit 1 ;;
+    esac
+  done
+
+  if [[ ! "${timeout_secs}" == <-> ]] || (( timeout_secs < 1 )); then
+    log::err "Invalid timeout | timeout_secs='${timeout_secs}' expected='positive integer'"
+    exit 1
+  fi
+
+  check_prerequisites
+
+  local device params_file err_file
+  device="$(find_fido_device)"
+  params_file="$(mktemp)"
+  err_file="$(mktemp)"
+  trap "rm -f '${params_file}' '${err_file}'" EXIT
+  trap on_interrupt INT
+  build_cred_params "${params_file}"
+
+  local deadline=$(( SECONDS + timeout_secs ))
+  local attempt=1 exit_code=0 err='' remaining_secs="${timeout_secs}"
+  while true; do
+    log::info "Tap your YubiKey now | attempt='${attempt}/${MAX_TAP_ATTEMPTS}' remaining_secs='${remaining_secs}'"
+    exit_code=0
+    run_tap_attempt "${device}" "${params_file}" "${err_file}" "${deadline}" || exit_code=$?
+    if (( exit_code == 0 )); then
+      log::info "Tap registered — FIDO applet and touch sensor work"
+      echo "result=registered"
+      return
+    fi
+    err="$(cat "${err_file}")"
+    remaining_secs=$(( deadline - SECONDS ))
+    if ! should_retry "${err}" "${attempt}" "${remaining_secs}"; then
+      break
+    fi
+    attempt=$(( attempt + 1 ))
+    sleep 1
+  done
+
+  diagnose_failure "${exit_code}" "${err}"
+  echo "result=failed"
+  exit 1
+}
+
+main "$@"

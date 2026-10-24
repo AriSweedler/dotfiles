@@ -1,0 +1,8 @@
+{
+  "installed_on_request": true,
+  "installed_as_dependency": false,
+  "source": {
+    "tap": "jurplel/tap",
+    "path": "__PREFIX__/Library/Taps/jurplel/homebrew-tap/Casks/instant-space-switcher.rb"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "installed_on_request": true,
+  "installed_as_dependency": false,
+  "source": {
+    "tap": "buildkite/buildkite",
+    "path": "__PREFIX__/Library/Taps/buildkite/homebrew-buildkite/Formula/bk@3.rb"
+  }
+}

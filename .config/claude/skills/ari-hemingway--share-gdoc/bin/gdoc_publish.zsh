@@ -1,0 +1,297 @@
+#!/usr/bin/env zsh
+# Publish a markdown draft as a Google Doc and finish it in the same run: create (inside the
+# Drive folder from --folder, else ARI_HEMINGWAY_SCRATCH_DIR) or update in place with --doc
+# via Drive's markdown→Docs conversion, then style table header rows and verify every image fits one
+# page (gdoc_finish.zsh), then rebuild the draft's asides as tabs (gdoc_asides.zsh; the
+# import deletes every tab but the first), then bookmark the draft's #bm- runs and aside
+# markers when the structure-bookmark skill's setup passes. Prints the URL. The draft's first
+# line is the Doc title and is not uploaded as body; --title overrides.
+
+set -euo pipefail
+
+readonly SCRIPT_DIR="${0:A:h}"
+# Shared libs resolve through the symlink farm, not ${SCRIPT_DIR:h:h}: skills are spread
+# across dotfiles tiers, so a relative hop lands in whichever tier this script sits in.
+readonly SKILLS_DIR="${HOME}/.claude/skills"
+
+# --- Constants ---
+
+readonly DOC_MIME="application/vnd.google-apps.document"
+readonly REPLY_FIELDS="id,name,parents,webViewLink"
+# The bookmark step is another skill's script; without it, return links stay on headings.
+readonly BOOKMARKS="${SKILLS_DIR}/ari-hemingway--structure-bookmark/bin/gdoc_bookmarks.zsh"
+
+# --- Logging ---
+
+readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+source "${SKILLS_DIR}/ari-hemingway--lib/lib/drive.zsh"
+
+# --- Prerequisites ---
+
+#######################################
+# Check that required binaries and the finishing script are present.
+# Returns: 1 if any are missing
+#######################################
+check_prerequisites() {
+  local cmd
+  local missing=()
+  for cmd in gws jq; do
+    command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
+  done
+  [[ -f "${SCRIPT_DIR}/gdoc_finish.zsh" ]] || missing+=("${SCRIPT_DIR}/gdoc_finish.zsh")
+  [[ -f "${SCRIPT_DIR}/gdoc_asides.zsh" ]] || missing+=("${SCRIPT_DIR}/gdoc_asides.zsh")
+  if (( ${#missing} > 0 )); then
+    log::err "Missing required commands or files | missing='${(j:, :)missing}'"
+    return 1
+  fi
+}
+
+#######################################
+# Reduce a Google Doc URL or bare id to the id.
+# Arguments: $1 - id or URL
+#######################################
+doc_id_from() {
+  local doc="${1}"
+  if [[ "${doc}" == *"/d/"* ]]; then
+    doc="${doc#*/d/}"
+    doc="${doc%%/*}"
+  fi
+  echo "${doc}"
+}
+
+########################################################################
+# Business logic
+########################################################################
+
+#######################################
+# Pick the folder a new Doc lands in: --folder when given, else ARI_HEMINGWAY_SCRATCH_DIR.
+# An update (--doc) keeps whatever --folder said so the doc-plus-folder check can reject it.
+# Arguments: $1 - --folder value (id, URL, or empty), $2 - doc id ("" = create)
+# Outputs: the folder id on stdout
+# Returns: 1 when creating with neither source set
+#######################################
+choose_folder() {
+  local folder="${1}" doc="${2}"
+  if [[ -n "${doc}" ]]; then
+    echo "${folder}"
+    return
+  fi
+  if [[ -n "${folder}" ]]; then
+    log::info "Target folder from flag | source='--folder' folder='${folder}'"
+    echo "${folder}"
+    return
+  fi
+  if [[ -n "${ARI_HEMINGWAY_SCRATCH_DIR:-}" ]]; then
+    folder="$(drive::folder_id_from "${ARI_HEMINGWAY_SCRATCH_DIR}")"
+    log::info "folder from ARI_HEMINGWAY_SCRATCH_DIR | source='ARI_HEMINGWAY_SCRATCH_DIR' folder='${folder}'"
+    echo "${folder}"
+    return
+  fi
+  log::err "No folder for the new Doc | fix='pass --folder ID_OR_URL or export ARI_HEMINGWAY_SCRATCH_DIR=ID_OR_URL'"
+  return 1
+}
+
+#######################################
+# Stage the upload body. Without --title the first line is the title and is stripped.
+# Arguments: $1 - draft path, $2 - title ("" = derive), $3 - body output path
+# Outputs: the resolved title on stdout
+#######################################
+stage_body() {
+  local file="${1}" title="${2}" body="${3}"
+  if [[ -n "${title}" ]]; then
+    log::info "Using explicit title; whole file is body | title='${title}'"
+    cp "${file}" "${body}"
+    echo "${title}"
+    return
+  fi
+  title="$(head -n 1 "${file}")"
+  log::info "Using first line as title; stripped from body | title='${title}'"
+  tail -n +2 "${file}" | jq -Rs 'ltrimstr("\n")' -r > "${body}"
+  echo "${title}"
+}
+
+#######################################
+# Create a new Doc (inside folder when given) or update an existing one from body.md in the cwd.
+# Arguments: $1 - title, $2 - doc id ("" = create), $3 - folder id ("" = My Drive), $4 - dry_run, $5 - reply path
+# Outputs: "created" or "updated" on stdout
+#######################################
+upload_doc() {
+  local title="${1}" doc="${2}" folder="${3}" dry_run="${4}" reply_file="${5}"
+  local -a flags
+  [[ "${dry_run}" == "true" ]] && flags+=(--dry-run)
+  if [[ -z "${doc}" ]]; then
+    local meta
+    # parents places the Doc at creation; there is no later move.
+    meta="$(jq -cn --arg name "${title}" --arg mime "${DOC_MIME}" --arg parent "${folder}" \
+      '{name: $name, mimeType: $mime} + (if $parent == "" then {} else {parents: [$parent]} end)')"
+    local params
+    params="$(jq -cn --arg f "${REPLY_FIELDS}" '{fields: $f, supportsAllDrives: true}')"
+    gws drive files create "${flags[@]}" --json "${meta}" --upload body.md --upload-content-type text/markdown --params "${params}" > "${reply_file}"
+    echo "created"
+    return
+  fi
+  local meta params
+  meta="$(jq -cn --arg name "${title}" '{name: $name}')"
+  # supportsAllDrives: without it Drive answers 404 for a doc that lives in a shared drive.
+  params="$(jq -cn --arg id "${doc}" --arg f "${REPLY_FIELDS}" '{fileId: $id, fields: $f, supportsAllDrives: true}')"
+  gws drive files update "${flags[@]}" --json "${meta}" --upload body.md --upload-content-type text/markdown --params "${params}" > "${reply_file}"
+  echo "updated"
+}
+
+#######################################
+# Rebuild the draft's asides as tabs on the published Doc; a no-op for a draft without asides.
+# Arguments: $1 - doc id, $2 - full draft path, $3 - aside count, $4 - first tab title ("" = leave)
+#######################################
+rebuild_asides() {
+  local doc="${1}" draft="${2}" n_asides="${3}" first_tab_title="${4}"
+  if (( n_asides == 0 )); then
+    log::info "No asides to rebuild | doc='${doc}'"
+    return 0
+  fi
+  local -a flags
+  [[ -n "${first_tab_title}" ]] && flags+=(--first-tab-title "${first_tab_title}")
+  zsh "${SCRIPT_DIR}/gdoc_asides.zsh" --rebuild --file "${draft}" --doc "${doc}" "${flags[@]}" > /dev/null
+}
+
+#######################################
+# Bookmark the draft's #bm- runs and aside markers when the structure-bookmark setup passes;
+# otherwise warn once with the first missing prerequisite and leave the heading links.
+# Globals: BOOKMARKS
+# Arguments: $1 - doc id, $2 - full draft path
+#######################################
+apply_bookmarks() {
+  local doc="${1}" draft="${2}"
+  if [[ ! -f "${BOOKMARKS}" ]]; then
+    log::warn "Bookmark skill not installed; return links stay on headings | path='${BOOKMARKS}'"
+    return 0
+  fi
+  local setup
+  if ! setup="$(zsh "${BOOKMARKS}" --check-setup 2>/dev/null)"; then
+    local missing
+    missing="$(print -r -- "${setup}" | awk '/^MISSING/ {print; exit}')"
+    log::warn "Bookmarks skipped; return links stay on headings | missing='${missing}'"
+    return 0
+  fi
+  zsh "${BOOKMARKS}" --apply --doc "${doc}" --file "${draft}" > /dev/null
+}
+
+# --- Help ---
+
+help() {
+  cat <<EOH
+${c_green}gdoc_publish${c_rst} — publish a markdown draft as a finished Google Doc (create or update in place)
+
+${c_bold}Usage:${c_rst}
+  zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_publish.zsh --file DRAFT.md [OPTIONS]
+
+${c_bold}Options:${c_rst}
+  --file DRAFT.md    Markdown draft; first line is the title unless --title is given (required)
+  --title TITLE      Doc title; keeps the whole file as body
+  --doc ID_OR_URL    Update this existing Doc in place (replaces its whole body)
+  --folder ID_OR_URL Create the Doc inside this Drive folder (id or drive.google.com/drive/folders URL); not with --doc
+  --first-tab-title T  With asides: rename the first tab (the import resets it to "Tab 1")
+  --dry-run          Validate the Drive request; create/update nothing
+  -h, --help         Show this help
+
+${c_bold}Environment:${c_rst}
+  ARI_HEMINGWAY_SCRATCH_DIR  Drive folder (id or URL) a new Doc lands in when --folder is absent;
+                             a create with neither set fails before any Drive call
+
+${c_bold}Output:${c_rst} the Doc URL on stdout. Non-zero exit after "Doc created" means finishing failed
+(e.g. an image taller than one page), the aside tabs could not be rebuilt, or the bookmark step
+failed after its setup check passed; fix the draft and re-run with --doc URL. A missing bookmark
+setup is a WARN, not a failure.
+EOH
+}
+
+# --- Main ---
+
+main() {
+  check_prerequisites || exit 1
+
+  # === PARSE ===
+  local file="" title="" doc="" folder="" first_tab_title="" dry_run=false
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)  help; return 0 ;;
+    --file)     file="${2:?--file requires a value}"; shift 2 ;;
+    --title)    title="${2:?--title requires a value}"; shift 2 ;;
+    --doc)      doc="${2:?--doc requires a value}"; shift 2 ;;
+    --folder)   folder="${2:?--folder requires a value}"; shift 2 ;;
+    --first-tab-title) first_tab_title="${2:?--first-tab-title requires a value}"; shift 2 ;;
+    --dry-run)  dry_run=true; shift ;;
+    -*)         log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)          log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
+  esac; done
+
+  # === MASSAGE ===
+  doc="$(doc_id_from "${doc}")"
+  folder="$(drive::folder_id_from "${folder}")"
+  folder="$(choose_folder "${folder}" "${doc}")" || return 1
+  [[ -n "${file}" ]] && file="${file:A}"
+
+  # === VALIDATE ===
+  [[ -n "${file}" ]] || { log::err "Missing --file"; help; return 1; }
+  [[ -f "${file}" ]] || { log::err "Draft not found | file='${file}'"; return 1; }
+  if [[ -n "${folder}" && -n "${doc}" ]]; then
+    log::err "An existing Doc is not moved; pass one of the two | doc='${doc}' folder='${folder}'"
+    return 1
+  fi
+
+  # === LOGIC ===
+  drive::check_token_scopes || return 1
+  # gws refuses --upload paths outside the cwd, so stage the body in a temp dir and cd there.
+  local work
+  work="$(mktemp -d /tmp/gdoc_publish.XXXXXX)"
+  title="$(stage_body "${file}" "${title}" "${work}/body.md")"
+  if [[ -z "${title}" ]]; then
+    log::err "Empty title | file='${file}'"
+    return 1
+  fi
+  if [[ "${title}" == "#"* ]]; then
+    log::err "Title line must be plain text, not a heading | title='${title}'"
+    return 1
+  fi
+  # Aside sections leave the body before upload and come back as tabs after finishing; the
+  # full draft is kept because the rebuild reads the sections from it.
+  cp "${work}/body.md" "${work}/draft.md"
+  local n_asides
+  n_asides="$(zsh "${SCRIPT_DIR}/gdoc_asides.zsh" --split --file "${work}/draft.md" --body-out "${work}/body.md" --force)" || return 1
+  log::info "Staged body | title='${title}' body='${work}/body.md' bytes='$(wc -c < "${work}/body.md" | tr -d ' ')' asides='${n_asides}'"
+
+  local folder_name=""
+  if [[ -n "${folder}" ]]; then
+    folder_name="$(drive::resolve_folder "${folder}" "${work}/folder_reply.json")" || return 1
+    log::info "Target folder | folder='${folder}' name='${folder_name}' drive='$(jq -r '.driveId // "my-drive"' "${work}/folder_reply.json")'"
+  fi
+
+  cd "${work}"
+  local action
+  action="$(upload_doc "${title}" "${doc}" "${folder}" "${dry_run}" "${work}/drive_reply.json")"
+  if [[ "${dry_run}" == "true" ]]; then
+    log::ok "Dry run valid | action='${action}' folder='${folder}' folder_name='${folder_name}' asides='${n_asides}' reply='${work}/drive_reply.json'"
+    return 0
+  fi
+
+  local doc_id
+  doc_id="$(jq -r '.id // empty' "${work}/drive_reply.json")"
+  if [[ -z "${doc_id}" ]]; then
+    log::err "Drive reply has no id | reply='${work}/drive_reply.json'"
+    return 1
+  fi
+  local url="https://docs.google.com/document/d/${doc_id}/edit"
+  log::ok "Doc ${action} | doc='${doc_id}' url='${url}' parents='$(jq -r '(.parents // []) | join(",")' "${work}/drive_reply.json")'"
+
+  local finish_rc=0
+  zsh "${SCRIPT_DIR}/gdoc_finish.zsh" --doc "${doc_id}" || finish_rc=$?
+  rebuild_asides "${doc_id}" "${work}/draft.md" "${n_asides}" "${first_tab_title}" || finish_rc=$?
+  apply_bookmarks "${doc_id}" "${work}/draft.md" || finish_rc=$?
+  echo "${url}"
+  return "${finish_rc}"
+}
+
+main "${@}"

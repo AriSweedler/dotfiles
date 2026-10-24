@@ -1,0 +1,3471 @@
+{
+  "profiles": [
+    {
+      "complex_modifications": {
+        "parameters": {
+          "basic.simultaneous_threshold_milliseconds": 50,
+          "basic.to_delayed_action_delay_milliseconds": 500,
+          "basic.to_if_alone_timeout_milliseconds": 1000,
+          "basic.to_if_held_down_threshold_milliseconds": 500,
+          "mouse_motion_to_scroll.speed": 100
+        },
+        "rules": [
+          {
+            "description": "Right option → Hyper",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "right_option"
+                },
+                "to": [
+                  {
+                    "key_code": "left_command",
+                    "modifiers": [
+                      "option",
+                      "control",
+                      "shift"
+                    ]
+                  }
+                ],
+                "to_if_alone": [
+                  {
+                    "key_code": "right_option"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "Globe → Hyper",
+            "manipulators": [
+              {
+                "from": {
+                  "apple_vendor_top_case_key_code": "keyboard_fn",
+                  "modifiers": {
+                    "optional": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "left_shift",
+                    "modifiers": [
+                      "left_command",
+                      "left_control",
+                      "left_option"
+                    ]
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "Kinesis menu → Hyper",
+            "manipulators": [
+              {
+                "conditions": [
+                  {
+                    "identifiers": [
+                      {
+                        "is_keyboard": true,
+                        "product_id": 258,
+                        "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 259,
+                        "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 37904,
+                        "vendor_id": 1423
+                      }
+                    ],
+                    "type": "device_if"
+                  }
+                ],
+                "from": {
+                  "key_code": "application"
+                },
+                "to": [
+                  {
+                    "key_code": "left_command",
+                    "modifiers": [
+                      "option",
+                      "control",
+                      "shift"
+                    ]
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "Kinesis swaps command and option",
+            "manipulators": [
+              {
+                "conditions": [
+                  {
+                    "identifiers": [
+                      {
+                        "is_keyboard": true,
+                        "product_id": 258,
+                        "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 259,
+                        "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 37904,
+                        "vendor_id": 1423
+                      }
+                    ],
+                    "type": "device_if"
+                  }
+                ],
+                "from": {
+                  "key_code": "left_command",
+                  "modifiers": {
+                    "optional": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "left_option"
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "identifiers": [
+                      {
+                        "is_keyboard": true,
+                        "product_id": 258,
+                        "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 259,
+                        "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 37904,
+                        "vendor_id": 1423
+                      }
+                    ],
+                    "type": "device_if"
+                  }
+                ],
+                "from": {
+                  "key_code": "left_option",
+                  "modifiers": {
+                    "optional": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "left_command"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "Caps locks is ctrl",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "caps_lock",
+                  "modifiers": {
+                    "optional": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "left_control"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "(hyper + a): Open application\n\n• `b` → open app: Google Chrome\n• `m` → open app: Spotify\n• `c` → open app: Slack\n• `t` → open app: Terminal\n• `z` → open app: Zoom",
+            "manipulators": [
+              {
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_unless",
+                    "value": 1
+                  },
+                  {
+                    "name": "__layer",
+                    "type": "variable_unless",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "a",
+                  "modifiers": {
+                    "mandatory": [
+                      "command",
+                      "option",
+                      "control",
+                      "shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "application-mode",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-application-mode",
+                      "text": "(hyper + a): Open application\n\n• `b` → open app: Google Chrome\n• `m` → open app: Spotify\n• `c` → open app: Slack\n• `t` → open app: Terminal\n• `z` → open app: Zoom"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "b",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -a \"Google Chrome\".app"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "application-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-application-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "m",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -a \"Spotify\".app"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "application-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-application-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "c",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -a \"Slack\".app"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "application-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-application-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "t",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -a \"Terminal\".app"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "application-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-application-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "z",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -a \"Zoom\".app"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "application-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-application-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "escape",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "application-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-application-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "application-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "caps_lock",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "application-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-application-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "(hyper + k): Karabiner development helpers\n\n• `d` → deeplink: extensions/raycast/raycast/confetti\n• `s` → run script: script-example\n• `e` → run script: karabiner-edit-index\n• `r` → run script: karabiner-recompile\n• `l` → run script: karabiner-logs\n• `x` → run script: karabiner-hello-world\n• `n` → notify keyboard name\n• `v` → open app: Karabiner-EventViewer",
+            "manipulators": [
+              {
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_unless",
+                    "value": 1
+                  },
+                  {
+                    "name": "__layer",
+                    "type": "variable_unless",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "k",
+                  "modifiers": {
+                    "mandatory": [
+                      "command",
+                      "option",
+                      "control",
+                      "shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": "(hyper + k): Karabiner development helpers\n\n• `d` → deeplink: extensions/raycast/raycast/confetti\n• `s` → run script: script-example\n• `e` → run script: karabiner-edit-index\n• `r` → run script: karabiner-recompile\n• `l` → run script: karabiner-logs\n• `x` → run script: karabiner-hello-world\n• `n` → notify keyboard name\n• `v` → open app: Karabiner-EventViewer"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "d",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open raycast://extensions/raycast/raycast/confetti"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "s",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.script-example\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/script-example\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/script-example\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.script-example/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "e",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-edit-index\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-edit-index/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "r",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-recompile\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-recompile/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "l",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-logs\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-logs\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-logs\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-logs/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "x",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-hello-world\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-hello-world\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-hello-world\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-hello-world/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "identifiers": [
+                      {
+                        "is_keyboard": true,
+                        "product_id": 258,
+                        "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 259,
+                        "vendor_id": 10730
+                      }
+                    ],
+                    "type": "device_if"
+                  },
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "n",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\"$HOME/.config/bin/atn\" -title Keyboard -message \"Kinesis Freestyle Pro\" -group karabiner-which-keyboard"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "identifiers": [
+                      {
+                        "is_keyboard": true,
+                        "product_id": 37904,
+                        "vendor_id": 1423
+                      }
+                    ],
+                    "type": "device_if"
+                  },
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "n",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\"$HOME/.config/bin/atn\" -title Keyboard -message \"Kinesis Freestyle 2\" -group karabiner-which-keyboard"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "identifiers": [
+                      {
+                        "is_built_in_keyboard": true,
+                        "is_keyboard": true
+                      }
+                    ],
+                    "type": "device_if"
+                  },
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "n",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\"$HOME/.config/bin/atn\" -title Keyboard -message \"Apple Internal Keyboard\" -group karabiner-which-keyboard"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "identifiers": [
+                      {
+                        "is_keyboard": true,
+                        "product_id": 258,
+                        "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 259,
+                        "vendor_id": 10730
+                      },
+                      {
+                        "is_keyboard": true,
+                        "product_id": 37904,
+                        "vendor_id": 1423
+                      },
+                      {
+                        "is_built_in_keyboard": true,
+                        "is_keyboard": true
+                      }
+                    ],
+                    "type": "device_unless"
+                  },
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "n",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\"$HOME/.config/bin/atn\" -title Keyboard -message \"Unknown keyboard\" -group karabiner-which-keyboard"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "v",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -a \"Karabiner-EventViewer\".app"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "escape",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "karabiner-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "caps_lock",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "karabiner-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-karabiner-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "(hyper + t): Typing practice\n\n• `0` → run script: karabiner-typing-test --words 5\n• `1` → run script: karabiner-typing-test --words 50\n• `2` → run script: karabiner-typing-test --words 100\n• `3` → run script: karabiner-typing-test --words 300\n• `s` → run script: karabiner-typing-test status\n• `#` → open url: numbers\n• `x` → builder: typing test builder\n• `r` → deeplink: extensions/raycast/typing-practice/start-typing-practice",
+            "manipulators": [
+              {
+                "conditions": [
+                  {
+                    "name": "typing-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "3",
+                  "modifiers": {
+                    "mandatory": [
+                      "shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open \"https://monkeytype.com/?testSettings=NoIgLglgtgpiA0A7ArgG1UtGBmBDVAzjPHocSDIgOaoQEAWCIiA9gE5T4KgCsAHAAYBfEAF1RQA\""
+                  },
+                  {
+                    "set_variable": {
+                      "name": "typing-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-typing-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "typing-mode",
+                    "type": "variable_unless",
+                    "value": 1
+                  },
+                  {
+                    "name": "__layer",
+                    "type": "variable_unless",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "t",
+                  "modifiers": {
+                    "mandatory": [
+                      "command",
+                      "option",
+                      "control",
+                      "shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "typing-mode",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-typing-mode",
+                      "text": "(hyper + t): Typing practice\n\n• `0` → run script: karabiner-typing-test --words 5\n• `1` → run script: karabiner-typing-test --words 50\n• `2` → run script: karabiner-typing-test --words 100\n• `3` → run script: karabiner-typing-test --words 300\n• `s` → run script: karabiner-typing-test status\n• `#` → open url: numbers\n• `x` → builder: typing test builder\n• `r` → deeplink: extensions/raycast/typing-practice/start-typing-practice"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "typing-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "0",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-typing-test\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test \"--words\" \"5\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\" \"--words\" \"5\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-typing-test/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "typing-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-typing-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "typing-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "1",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-typing-test\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test \"--words\" \"50\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\" \"--words\" \"50\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-typing-test/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "typing-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-typing-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "typing-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "2",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-typing-test\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test \"--words\" \"100\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\" \"--words\" \"100\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-typing-test/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "typing-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-typing-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "typing-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "3",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-typing-test\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test \"--words\" \"300\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\" \"--words\" \"300\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-typing-test/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "typing-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-typing-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "typing-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "s",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-typing-test\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test \"status\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\" \"status\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-typing-test/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "typing-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-typing-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "typing-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "x",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_action",
+                      "value": "next"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "value": "50"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing",
+                      "text": "(typing test builder) — ⏎ to run"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-action",
+                      "text": "action:  ● [n] next   ○ [c] current   ○ [p] previous"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": "words:  ○ [0] 5 words   ● [1] 50 words   ○ [2] 100 words   ○ [3] 300 words"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "typing-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-typing-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "typing-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "r",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open raycast://extensions/raycast/typing-practice/start-typing-practice"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "typing-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-typing-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "typing-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "escape",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "typing-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-typing-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "typing-mode",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "caps_lock",
+                  "modifiers": {
+                    "mandatory": [
+                      "any"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "typing-mode",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "__layer",
+                      "value": 0
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "layer-typing-mode",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "argbuilder: typing",
+            "manipulators": [
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "n"
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_action",
+                      "value": "next"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-action",
+                      "text": "action:  ● [n] next   ○ [c] current   ○ [p] previous"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "c"
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_action",
+                      "value": "current"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-action",
+                      "text": "action:  ○ [n] next   ● [c] current   ○ [p] previous"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "p"
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_action",
+                      "value": "previous"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-action",
+                      "text": "action:  ○ [n] next   ○ [c] current   ● [p] previous"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "0"
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "value": "5"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": "words:  ● [0] 5 words   ○ [1] 50 words   ○ [2] 100 words   ○ [3] 300 words"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "1"
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "value": "50"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": "words:  ○ [0] 5 words   ● [1] 50 words   ○ [2] 100 words   ○ [3] 300 words"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "2"
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "value": "100"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": "words:  ○ [0] 5 words   ○ [1] 50 words   ● [2] 100 words   ○ [3] 300 words"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "3"
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "value": "300"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": "words:  ○ [0] 5 words   ○ [1] 50 words   ○ [2] 100 words   ● [3] 300 words"
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_action",
+                    "type": "variable_if",
+                    "value": "next"
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_words",
+                    "type": "variable_if",
+                    "value": "5"
+                  }
+                ],
+                "from": {
+                  "key_code": "return_or_enter"
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-typing-test\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test \"next\" \"--words\" \"5\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\" \"next\" \"--words\" \"5\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-typing-test/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_action",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-action",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_action",
+                    "type": "variable_if",
+                    "value": "next"
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_words",
+                    "type": "variable_if",
+                    "value": "50"
+                  }
+                ],
+                "from": {
+                  "key_code": "return_or_enter"
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-typing-test\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test \"next\" \"--words\" \"50\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\" \"next\" \"--words\" \"50\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-typing-test/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_action",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-action",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_action",
+                    "type": "variable_if",
+                    "value": "next"
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_words",
+                    "type": "variable_if",
+                    "value": "100"
+                  }
+                ],
+                "from": {
+                  "key_code": "return_or_enter"
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-typing-test\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test \"next\" \"--words\" \"100\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\" \"next\" \"--words\" \"100\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-typing-test/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_action",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-action",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_action",
+                    "type": "variable_if",
+                    "value": "next"
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_words",
+                    "type": "variable_if",
+                    "value": "300"
+                  }
+                ],
+                "from": {
+                  "key_code": "return_or_enter"
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-typing-test\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test \"next\" \"--words\" \"300\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\" \"next\" \"--words\" \"300\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-typing-test/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_action",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-action",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_action",
+                    "type": "variable_if",
+                    "value": "current"
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_words",
+                    "type": "variable_if",
+                    "value": "5"
+                  }
+                ],
+                "from": {
+                  "key_code": "return_or_enter"
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-typing-test\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test \"current\" \"--words\" \"5\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\" \"current\" \"--words\" \"5\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-typing-test/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_action",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-action",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_action",
+                    "type": "variable_if",
+                    "value": "current"
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_words",
+                    "type": "variable_if",
+                    "value": "50"
+                  }
+                ],
+                "from": {
+                  "key_code": "return_or_enter"
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-typing-test\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test \"current\" \"--words\" \"50\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\" \"current\" \"--words\" \"50\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-typing-test/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_action",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-action",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_action",
+                    "type": "variable_if",
+                    "value": "current"
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_words",
+                    "type": "variable_if",
+                    "value": "100"
+                  }
+                ],
+                "from": {
+                  "key_code": "return_or_enter"
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-typing-test\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test \"current\" \"--words\" \"100\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\" \"current\" \"--words\" \"100\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-typing-test/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_action",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-action",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_action",
+                    "type": "variable_if",
+                    "value": "current"
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_words",
+                    "type": "variable_if",
+                    "value": "300"
+                  }
+                ],
+                "from": {
+                  "key_code": "return_or_enter"
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-typing-test\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test \"current\" \"--words\" \"300\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\" \"current\" \"--words\" \"300\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-typing-test/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_action",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-action",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_action",
+                    "type": "variable_if",
+                    "value": "previous"
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_words",
+                    "type": "variable_if",
+                    "value": "5"
+                  }
+                ],
+                "from": {
+                  "key_code": "return_or_enter"
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-typing-test\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test \"previous\" \"--words\" \"5\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\" \"previous\" \"--words\" \"5\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-typing-test/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_action",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-action",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_action",
+                    "type": "variable_if",
+                    "value": "previous"
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_words",
+                    "type": "variable_if",
+                    "value": "50"
+                  }
+                ],
+                "from": {
+                  "key_code": "return_or_enter"
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-typing-test\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test \"previous\" \"--words\" \"50\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\" \"previous\" \"--words\" \"50\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-typing-test/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_action",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-action",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_action",
+                    "type": "variable_if",
+                    "value": "previous"
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_words",
+                    "type": "variable_if",
+                    "value": "100"
+                  }
+                ],
+                "from": {
+                  "key_code": "return_or_enter"
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-typing-test\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test \"previous\" \"--words\" \"100\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\" \"previous\" \"--words\" \"100\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-typing-test/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_action",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-action",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_action",
+                    "type": "variable_if",
+                    "value": "previous"
+                  },
+                  {
+                    "name": "ari_argbuilder_typing_words",
+                    "type": "variable_if",
+                    "value": "300"
+                  }
+                ],
+                "from": {
+                  "key_code": "return_or_enter"
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.karabiner-typing-test\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test \"previous\" \"--words\" \"300\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-typing-test\" \"previous\" \"--words\" \"300\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.karabiner-typing-test/log.txt\" \"5\"\n"
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_action",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-action",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              },
+              {
+                "conditions": [
+                  {
+                    "name": "ari_argbuilder_typing",
+                    "type": "variable_if",
+                    "value": 1
+                  }
+                ],
+                "from": {
+                  "key_code": "escape"
+                },
+                "to": [
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_action",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_variable": {
+                      "name": "ari_argbuilder_typing_words",
+                      "type": "unset"
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-action",
+                      "text": ""
+                    }
+                  },
+                  {
+                    "set_notification_message": {
+                      "id": "ari-argbuilder-typing-words",
+                      "text": ""
+                    }
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "Cmd+Ctrl+A → Ctrl+A twice",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "a",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "command"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "key_code": "a",
+                    "modifiers": [
+                      "control"
+                    ]
+                  },
+                  {
+                    "key_code": "a",
+                    "modifiers": [
+                      "control"
+                    ]
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "Hyper+N → click the newest notification (fast, positional)",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "n",
+                  "modifiers": {
+                    "mandatory": [
+                      "command",
+                      "option",
+                      "control",
+                      "shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.notif-click\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/notif-click\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/notif-click\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.notif-click/log.txt\" \"50\"\n"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "Hyper+O → oneshot picker (tmux popup on the active client; Terminal window without tmux)",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "o",
+                  "modifiers": {
+                    "mandatory": [
+                      "command",
+                      "option",
+                      "control",
+                      "shift"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "software_function": {
+                      "open_application": {
+                        "bundle_identifier": "com.apple.Terminal"
+                      }
+                    }
+                  },
+                  {
+                    "shell_command": "\nd=\"/tmp/karabiner.oneshot-popup\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/oneshot-popup\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/oneshot-popup\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.oneshot-popup/log.txt\" \"5\"\n"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "Clipboard History → raycast://extensions/raycast/clipboard-history/clipboard-history",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "4",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option",
+                      "shift",
+                      "command"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open raycast://extensions/raycast/clipboard-history/clipboard-history"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "My Schedule → raycast://extensions/raycast/calendar/my-schedule",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "s",
+                  "modifiers": {
+                    "mandatory": [
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open raycast://extensions/raycast/calendar/my-schedule"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "Search Emoji & Symbols → raycast://extensions/raycast/emoji-symbols/search-emoji-symbols",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "spacebar",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "command"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open raycast://extensions/raycast/emoji-symbols/search-emoji-symbols"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "Search Snippets → raycast://extensions/raycast/snippets/search-snippets",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "grave_accent_and_tilde",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option",
+                      "shift",
+                      "command"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open raycast://extensions/raycast/snippets/search-snippets"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "Go AWS → raycast://extensions/arisweedler/raycast-go-aws/command-go-aws",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "s",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option",
+                      "shift",
+                      "command"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open raycast://extensions/arisweedler/raycast-go-aws/command-go-aws"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+⌫ → deeplink: extensions/raycast/window-management/restore",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "delete_or_backspace",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/restore"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+⏎ → deeplink: extensions/raycast/window-management/almost-maximize",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "return_or_enter",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/almost-maximize"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+h → deeplink: extensions/raycast/window-management/left-half",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "h",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/left-half"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+l → deeplink: extensions/raycast/window-management/right-half",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "l",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/right-half"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+q → deeplink: extensions/raycast/window-management/first-third",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "q",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/first-third"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+w → deeplink: extensions/raycast/window-management/center-third",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "w",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/center-third"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+e → deeplink: extensions/raycast/window-management/last-third",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "e",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/last-third"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+u → deeplink: extensions/raycast/window-management/top-left-quarter",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "u",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/top-left-quarter"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+i → deeplink: extensions/raycast/window-management/top-right-quarter",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "i",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/top-right-quarter"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+j → deeplink: extensions/raycast/window-management/bottom-left-quarter",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "j",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/bottom-left-quarter"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+k → deeplink: extensions/raycast/window-management/bottom-right-quarter",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "k",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/bottom-right-quarter"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+c → deeplink: extensions/raycast/window-management/center",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "c",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/center"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+r → deeplink: extensions/raycast/window-management/reasonable-size",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "r",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/reasonable-size"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+f → deeplink: extensions/raycast/window-management/toggle-fullscreen",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "f",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/toggle-fullscreen"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+a → deeplink: extensions/raycast/window-management/top-left-sixth",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "a",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/top-left-sixth"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+s → deeplink: extensions/raycast/window-management/top-center-sixth",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "s",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/top-center-sixth"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+d → deeplink: extensions/raycast/window-management/top-right-sixth",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "d",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/top-right-sixth"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+z → deeplink: extensions/raycast/window-management/bottom-left-sixth",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "z",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/bottom-left-sixth"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+x → deeplink: extensions/raycast/window-management/bottom-center-sixth",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "x",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/bottom-center-sixth"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+v → deeplink: extensions/raycast/window-management/bottom-right-sixth",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "v",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/bottom-right-sixth"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+- → deeplink: extensions/raycast/window-management/make-smaller",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "hyphen",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/make-smaller"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+= → deeplink: extensions/raycast/window-management/make-larger",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "equal_sign",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/make-larger"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+, → deeplink: extensions/raycast/window-management/previous-display",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "comma",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/previous-display"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+. → deeplink: extensions/raycast/window-management/next-display",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "period",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/next-display"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+[ → deeplink: extensions/raycast/window-management/previous-desktop",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "open_bracket",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/previous-desktop"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
+            "description": "window-management direct: control+option+] → deeplink: extensions/raycast/window-management/next-desktop",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "close_bracket",
+                  "modifiers": {
+                    "mandatory": [
+                      "control",
+                      "option"
+                    ]
+                  }
+                },
+                "to": [
+                  {
+                    "shell_command": "open -g raycast://extensions/raycast/window-management/next-desktop"
+                  }
+                ],
+                "type": "basic"
+              }
+            ]
+          }
+        ]
+      },
+      "devices": [
+        {
+          "identifiers": {
+            "is_keyboard": true,
+            "product_id": 37904,
+            "vendor_id": 1423
+          },
+          "ignore_vendor_events": true
+        }
+      ],
+      "name": "Default",
+      "selected": true,
+      "virtual_hid_keyboard": {
+        "keyboard_type_v2": "ansi"
+      }
+    }
+  ]
+}

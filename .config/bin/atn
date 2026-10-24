@@ -1,0 +1,49 @@
+#!/usr/bin/env zsh
+# atn — "attention", ari-terminal-notifier: the logging front for terminal-notifier, Homebrew's
+# macOS notifier. Every notification this machine posts, removes or lists is one line in
+# ${XDG_STATE_HOME:-~/.local/state}/ari-terminal-notifier/atn.log, then terminal-notifier runs
+# in this very process (exec: a caller's pid, rc and watchdog see no difference). Every caller
+# names atn, never terminal-notifier: by PATH (~/.config/bin, which the PATH policy in
+# ~/.config/zsh/.zshrc and the jobs launchd PATH both carry), or by this absolute path from
+# Karabiner and the Claude hooks, which run with launchd's minimal PATH. The log answers "who
+# posted that banner": every caller names itself in -group and -title.
+#   tail -f ~/.local/state/ari-terminal-notifier/atn.log
+# The log rotates by size: past LOG_MAX_BYTES it shifts to atn.log.bak.1 … .bak.LOG_KEEP
+# (log_rotate, the shared plugin), so a year of banners never grows unbounded. Exec-free until
+# the exec: zsh builtins only, because this runs on every Karabiner banner.
+set -u
+zmodload zsh/datetime
+zmodload -F zsh/stat b:zstat
+source "${0:A:h:h}/zsh/plugins/log_rotate.zsh"
+
+readonly LOG_MAX_BYTES=$(( 512 * 1024 ))
+readonly LOG_KEEP=3
+
+log::err() { print -u2 -r -- $'\e[31m[ERROR]\e[0m' "$@"; }
+
+log_file="${XDG_STATE_HOME:-${HOME}/.local/state}/ari-terminal-notifier/atn.log"
+verb=post
+(( ${argv[(I)-remove]} )) && verb=remove
+(( ${argv[(I)-list]} )) && verb=list
+strftime -s ts '%Y-%m-%d %H:%M:%S' "${EPOCHSECONDS}"
+# A log that cannot be written never costs a notification.
+{
+  local -A st
+  if zstat -H st "${log_file}" 2>/dev/null && (( st[size] >= LOG_MAX_BYTES )); then
+    log_rotate "${log_file}" "${LOG_KEEP}"
+  fi
+  zf_mkdir -p "${log_file:h}" && print -r -- "${ts} ${verb} ${(j: :)${(q-)@}}" >> "${log_file}"
+} 2>/dev/null
+
+# terminal-notifier by PATH, else the brew prefixes, for the callers that run with launchd's PATH.
+real="${commands[terminal-notifier]:-}"
+if [[ -z "${real}" ]]; then
+  for dir in /opt/homebrew/bin /usr/local/bin; do
+    [[ -x "${dir}/terminal-notifier" ]] && { real="${dir}/terminal-notifier"; break; }
+  done
+fi
+if [[ -z "${real}" ]]; then
+  log::err "no terminal-notifier to run; logged, posted nothing | fix='brew install terminal-notifier'"
+  exit 127
+fi
+exec "${real}" "$@"

@@ -1,0 +1,21 @@
+# helper function to write simple shell UIs
+
+# Parse args
+local -r value="${1:?}"
+shift 1
+local descr
+while (( $# > 0 )); do
+  case "$1" in
+    --description) descr="Placing value on clipboard: $2"; shift 2 || break ;;
+    *) log::err "Unkonwn argument in ${FUNCNAME[0]}: '$1'"; exit 1 ;;
+  esac
+done
+
+# Massage args
+if [ -z "$descr" ]; then
+  descr="Placing value on clipboard"
+fi
+
+# Do work
+log::info "$description | value='$value'"
+echo -n "$value" | pbcopy

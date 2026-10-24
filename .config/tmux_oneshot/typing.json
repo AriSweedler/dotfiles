@@ -1,0 +1,31 @@
+[
+  {
+    "menu": {
+      "name": "typing",
+      "text": "Monkeytype passage test (Hyper+T): action × words on one screen, ⏎ runs"
+    },
+    "cmd": "karabiner-typing-test",
+    "key": "ctrl-t",
+    "autodismiss": true,
+    "groups": [
+      {
+        "name": "action", "label": "action", "default": "n",
+        "options": [
+          {"key": "n", "label": "next", "value": "next"},
+          {"key": "c", "label": "current", "value": "current"},
+          {"key": "p", "label": "previous", "value": "previous"},
+          {"key": "s", "label": "status", "value": "status"}
+        ]
+      },
+      {
+        "name": "words", "label": "words", "default": "5",
+        "options": [
+          {"key": "5", "label": "50 words", "value": "--words 50"},
+          {"key": "1", "label": "100 words", "value": "--words 100"},
+          {"key": "2", "label": "200 words", "value": "--words 200"},
+          {"key": "o", "label": "other…", "prompt": "words: ", "value": "--words {}"}
+        ]
+      }
+    ]
+  }
+]

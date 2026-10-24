@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# `setup` from an empty HOME: clones and checks out the dotfiles, initializes the local repo,
+# installs the weekly job, and converges; `init --dry-run` on the same HOME creates nothing.
+set -u
+# shellcheck source=lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+world_new
+world_use_fixture satisfied
+world_empty_home
+seed_df_remote
+export ARI_DOTFILES_REMOTE="${FIX}/remotes/dotfiles.git"
+export BREW_SHIM_ALLOW_MUTATION=1
+export BOB_SHIM_LS="Installed: v0.11.2 Used"
+TEMPLATE="${ARI_DOTFILES_SHARED_DIR}/local-dotfiles-exclude"
+rules() { grep -vE '^[[:space:]]*(#|$)' "$1" || true; }
+
+nm init --json
+assert_eq "setup exits 0" 0 "${RC}"
+f="$(out_json)"
+assert_file "bare dotfiles repo cloned" "${ARI_DOTFILES_DF_GIT_DIR}/HEAD"
+assert_file "worktree has the log lib" "${HOME}/.config/zsh/plugins/log.zsh"
+assert_eq "df hooksPath set" "${ARI_DOTFILES_DF_HOOKS}" "$(df_git config --local --get core.hooksPath)"
+assert_file "local-dotfiles bare repo created" "${ARI_DOTFILES_LDF_GIT_DIR}/HEAD"
+assert_eq "ldf hooksPath set" "${ARI_DOTFILES_LDF_HOOKS}" "$(git --git-dir="${ARI_DOTFILES_LDF_GIT_DIR}" config --local --get core.hooksPath)"
+assert_eq "ldf info/exclude == template" "$(rules "${TEMPLATE}")" "$(rules "${ARI_DOTFILES_LDF_GIT_DIR}/info/exclude")"
+assert_file "jobs plist installed" "${HOME}/Library/LaunchAgents/com.$(id -un).dotfiles-jobs.plist"
+assert_file "jobs job loaded" "${LAUNCHCTL_SHIM_STATE}/com.$(id -un).dotfiles-jobs"
+assert_json "status ok or warn" "${f}" '.status == "ok" or .status == "warn"' true
+assert_json "no step failed or errored" "${f}" '[.steps[] | select(.status=="fail" or .status=="error") | .step + "=" + .reason] | join(",")' ""
+assert_json "no step aborted" "${f}" '[.steps[] | select(.status=="skip" and .reason=="aborted")] | length' 0
+assert_json "local_dotfiles_repo reports the optional remote" "${f}" '.steps[] | select(.step=="local_dotfiles_repo") | .reason' no_remote
+assert_json "optional remote is not manual" "${f}" '.steps[] | select(.step=="local_dotfiles_repo") | .manual' false
+assert_contains "hint: remote add" "$(jq -c '.steps[] | select(.step=="local_dotfiles_repo")' "${f}")" "git ldf remote add origin"
+assert_contains "hint: first push" "$(jq -c '.steps[] | select(.step=="local_dotfiles_repo")' "${f}")" "git ldf push --set-upstream origin main"
+assert_eq "curl never called" "" "$(shim_log curl)"
+assert_json "dotfiles_jobs converged" "${f}" '.steps[] | select(.step=="dotfiles_jobs") | .status' ok
+assert_json "dotfiles_repo converged" "${f}" '.steps[] | select(.step=="dotfiles_repo") | .status' ok
+
+if (( FAIL > 0 )); then jq -c '.steps[] | {step, status, reason, detail, applied}' "${f}" >&2; fi
+
+# ── dry-run on a fresh empty HOME ─────────────────────────────────────────────
+world_empty_home
+shim_logs_reset
+rm -rf "${LAUNCHCTL_SHIM_STATE:?}"/*
+unset BREW_SHIM_ALLOW_MUTATION
+snapshot() { find "${HOME}" -mindepth 1 -not -path "${HOME}/.local/state" -not -path "${HOME}/.local/state/*" -not -path "${HOME}/.local" | sort; }
+before="$(snapshot)"
+bump_now_secs 60
+nm init --dry-run
+# The checks still fail on an empty HOME, so the exit code follows them (1), never 2.
+if (( RC == 0 || RC == 1 )); then pass "init --dry-run exits by verdict (rc=${RC})"; else fail "init --dry-run exits by verdict" "rc=${RC}"; fi
+assert_eq "dry-run created nothing outside the state dir" "${before}" "$(snapshot)"
+assert_no_mutation "dry-run mutates nothing"
+assert_contains "dry-run announces the dotfiles clone" "${ERR}" "would run apply::dotfiles_repo"
+assert_no_file "dry-run cloned nothing" "${ARI_DOTFILES_DF_GIT_DIR}"
+
+report

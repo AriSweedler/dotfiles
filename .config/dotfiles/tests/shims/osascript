@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Fake osascript (the notifier fallback): log and succeed.
+set -u
+printf '%s\n' "$*" >> "${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/osascript.log"
+exit 0

@@ -1,0 +1,6 @@
+[alias]
+	pr = "!gh pr create --fill; git pro"
+	pro = "!f() { branch=\"${1:-$(git branch --show-current)}\"; gh pr list --head \"$branch\" --state all --json url -q '.[0].url' | xargs open; }; f"
+
+[alias]
+	dim = "!git delete-if-merged-all '^ari-sweedler/'"

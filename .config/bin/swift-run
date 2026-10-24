@@ -1,0 +1,52 @@
+#!/usr/bin/env zsh
+# swift-run — run a single-file Swift tool from the shared Swift cache, compiling it only when
+# its source or the toolchain changed. Replaces `swift file.swift args` (recompiles every
+# call) and per-script swiftc blocks. See ~/.config/zsh/plugins/swift_cache.zsh.
+set -euo pipefail
+
+readonly LOG_LIB="${XDG_CONFIG_HOME:-$HOME/.config}/zsh/plugins/log.zsh"
+if [[ ! -r "${LOG_LIB}" ]]; then
+  print -u2 "[ERROR] missing logging lib | path='${LOG_LIB}'"
+  exit 1
+fi
+source "${LOG_LIB}"
+source "${XDG_CONFIG_HOME:-$HOME/.config}/zsh/plugins/swift_cache.zsh"
+
+help() {
+  cat <<EOH
+swift-run — compile a .swift file once into \$XDG_CACHE_HOME/swift/bin and run it
+
+Usage:
+  swift-run [--rebuild] [-n] <file.swift> [args...]
+
+Options:
+  --rebuild    Recompile even when a binary for this source + toolchain exists
+  -n, --print  Print the binary's path instead of running it (compiles if needed)
+  -h, --help   Show this help
+
+Everything after <file.swift> is passed to the binary. Exit code is the binary's.
+EOH
+}
+
+main() {
+  local -a flags=()
+  local print_only=false
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)  help; return 0 ;;
+    --rebuild)  flags+=(--force); shift ;;
+    -n|--print) print_only=true; shift ;;
+    -*)         log::err "unknown flag | flag='${1}'"; help; return 1 ;;
+    *)          break ;;
+  esac; done
+  (( $# > 0 )) || { log::err "missing <file.swift>"; help; return 1; }
+  local src="${1}"; shift
+  local bin
+  bin="$(swift_cache::bin_for "${flags[@]}" "${src}")" || return 1
+  if [[ "${print_only}" == true ]]; then
+    print -r -- "${bin}"
+    return 0
+  fi
+  exec "${bin}" "$@"
+}
+
+main "$@"

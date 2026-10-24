@@ -1,0 +1,91 @@
+#!/bin/bash
+#
+# Pre-commit hook for the dotfiles bare repo.
+# Ensures karabiner.json is sorted by key before committing.
+#
+# Setup (after fresh clone):
+#   git df config core.hooksPath ~/.config/git/dotfiles-hooks
+
+set -euo pipefail
+
+readonly C_RED='\033[31m'
+readonly C_GREEN='\033[32m'
+readonly C_YELLOW='\033[33m'
+readonly C_RST='\033[0m'
+
+log::err()  { echo -e "${C_RED}[ERROR]${C_RST} $*" >&2; }
+log::warn() { echo -e "${C_YELLOW}[WARN]${C_RST} $*" >&2; }
+log::info() { echo -e "${C_GREEN}[INFO]${C_RST} $*" >&2; }
+
+# A submodule pointer bump must reference a commit already on that repo's
+# origin/main, or every other machine's `git df submodule update` fails to
+# check it out.
+check_submodule_pointer() {
+  local rel="${1}" name="${1##*/}"
+  if ! git diff --cached --name-only | grep -qx "${rel}"; then
+    return 0
+  fi
+  local sub sha
+  sub="$(git rev-parse --show-toplevel)/${rel}"
+  sha="$(git diff --cached -- "${rel}" | awk '/^\+Subproject commit/ {print $3}')"
+  [[ -n "${sha}" ]] || return 0
+  # The local origin/main first (a `dotfiles push` bump has just set it: no network);
+  # only a miss asks the remote, in case another tool pushed without refreshing it.
+  if git -C "${sub}" merge-base --is-ancestor "${sha}" origin/main 2>/dev/null; then
+    return 0
+  fi
+  log::info "Checking ${name} ${sha:0:8} against the remote's main..."
+  if ! git -C "${sub}" fetch -q origin main 2>/dev/null; then
+    log::warn "Could not fetch ${name} origin; checking against the last fetch."
+  fi
+  if ! git -C "${sub}" merge-base --is-ancestor "${sha}" origin/main 2>/dev/null; then
+    log::err "${name} pointer ${sha:0:8} is not on origin/main."
+    log::warn "Push the submodule first (dotfiles push --submodules), then re-run the commit."
+    return 1
+  fi
+  log::info "${name} pointer is published."
+}
+
+# Every path declared in the worktree's .gitmodules. The file, not the index:
+# `dotfiles push` bumps with `commit -- <path>`, whose temporary index still
+# holds HEAD's .gitmodules, so a just-added submodule is only in the file.
+check_submodule_pointers() {
+  local modules rel
+  modules="$(git rev-parse --show-toplevel)/.gitmodules"
+  [[ -f "${modules}" ]] || return 0
+  while read -r _ rel; do
+    [[ -n "${rel}" ]] || continue
+    check_submodule_pointer "${rel}" || return 1
+  done < <(git config -f "${modules}" --get-regexp '^submodule\..*\.path$' || true)
+}
+
+main() {
+  check_submodule_pointers || return 1
+
+  # git diff --cached --name-only emits paths relative to the repo root, and
+  # the bare repo's worktree is $HOME — so match the repo-relative path, not an
+  # absolute one (grep -qx needs a full-line match).
+  local rel=".config/karabiner/karabiner.json"
+
+  # Only check if karabiner.json is staged.
+  if ! git diff --cached --name-only | grep -qx "${rel}"; then
+    return 0
+  fi
+
+  log::info "Checking ${rel} is sorted by key..."
+
+  local sorted staged
+  sorted="$(git show ":${rel}" | jq --sort-keys)"
+  staged="$(git show ":${rel}")"
+
+  if [[ "${sorted}" != "${staged}" ]]; then
+    log::err "${rel} is not sorted by key."
+    log::warn "The generator writes this file with non-canonical key ordering."
+    log::warn "Run 'bake' from ~/.config/karabiner to regenerate and sort, then re-stage."
+    return 1
+  fi
+
+  log::info "karabiner.json is properly sorted."
+}
+
+main "$@"

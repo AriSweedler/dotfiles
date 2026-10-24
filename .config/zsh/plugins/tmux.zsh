@@ -1,0 +1,197 @@
+# Change the install location of tpm. Keep these in sync with
+# ~/.config/tmux/plugin/tpm.conf and ~/.config/tmux/tmux.conf
+export TMUX_DATA_DIR="$XDG_DATA_HOME/tmux"
+export TMUX_PLUGIN_MANAGER_ROOT="$TMUX_DATA_DIR/tpm"
+export TMUX_PLUGIN_MANAGER_PATH="$TMUX_DATA_DIR/tpm_plugins"
+
+# The local tier's tmuxinator projects. `tmuxinator start <name>` looks in
+# $TMUXINATOR_CONFIG first, then ~/.config/tmuxinator, so shared projects still
+# resolve; `tmuxinator list` shows only this directory while it is set.
+if [[ -d "$XDG_DATA_HOME/tmuxinator" ]]; then
+  export TMUXINATOR_CONFIG="$XDG_DATA_HOME/tmuxinator"
+fi
+
+function ensure_tpm_installed() {
+  [ -d "$TMUX_PLUGIN_MANAGER_ROOT" ] && return
+
+  function install_tpm() {
+    log::info "Installing the Tmux Plugin Manager (tpm) | TMUX_PLUGIN_MANAGER_ROOT='$TMUX_PLUGIN_MANAGER_ROOT'"
+    git clone https://github.com/tmux-plugins/tpm "$TMUX_PLUGIN_MANAGER_ROOT"
+  }
+  if ! install_tpm; then
+    log::err "Failed to install tpm"
+  fi
+  unset -f install_tpm
+
+  # Install tpm plugins
+  if ! "${TMUX_PLUGIN_MANAGER_ROOT}/bindings/install_plugins"; then
+    log::err "Failed to install tpm plugins. Try 'Prefix' + 'Capital I'"
+    return 1
+  fi
+}
+ensure_tpm_installed
+unset -f ensure_tpm_installed
+
+function tmux::rename-window() {
+  [ -z "$TMUX" ] && return
+  tmux rename-window "$@"
+}
+
+function tmux::clear() {
+  clear
+  tmux clear-history
+  log::info "Cleared scrollback buffer"
+}
+
+function tmux::cap_all() {
+  local arg="${1:-capture.txt}"
+  local capture_dir="${TMUX_CAPTURE_DIR:-$HOME/Desktop}"
+
+  if [[ "$arg" == "-" ]]; then
+    tmux capture-pane -p -J -S - | pbcopy
+    log::info "Captured scrollback buffer to clipboard"
+  else
+    # Use absolute path as-is, otherwise put in capture_dir
+    local dest
+    [[ "$arg" == /* ]] && dest="$arg" || dest="${capture_dir}/${arg}"
+    tmux capture-pane -p -J -S - > "${dest}"
+    log::info "Captured scrollback buffer to file | file='${c_grey}${dest}${c_rst}'"
+  fi
+}
+
+function tmux::_prompt_line_count() {
+  # capture-pane -J joins visually-wrapped lines, so we want logical newlines
+  # in the rendered PS1, not visual width / wrap count.
+  local expanded=$(print -P "$PS1")
+  local lines=("${(@f)expanded}")
+  echo ${#lines}
+}
+
+function tmux::_slice_history() {
+  local from="${1:-1}"  # 1-indexed inclusive start
+  local to="${2:-$from}"  # 1-indexed inclusive end
+  local prompt_re="${3:-❮|❯}"
+  local extra_lines=$(($(tmux::_prompt_line_count) - 1))
+
+  # After tac, structure is: output, prompt, [extra lines], blank, (repeat)
+  # Print all commands whose prompt_count falls within [from, to] inclusive
+  local output
+  output=$(cat | awk -v re="$prompt_re" -v from="$from" -v to="$to" -v skip_count="$extra_lines" '
+    $0 ~ re {
+      in_range = (prompt_count >= from - 1 && prompt_count < to)
+      prompt_count++
+      if (in_range) {
+        print  # Print the prompt line with command
+      }
+      for (i = 0; i < skip_count; i++) {
+        getline  # Read and skip extra prompt lines
+      }
+      next
+    }
+    prompt_count >= from - 1 && prompt_count < to {
+      print  # Print the output lines
+    }
+  ')
+
+  if [ -z "$output" ]; then
+    log::warn "No command found in history range ${from}..${to}"
+    return 1
+  fi
+
+  print -r -- "$output"
+}
+
+function tmux::_debug_pbpaste() {
+  local d="${c_grey}${(l:$COLUMNS::-:)}${c_rst}"
+  printf "%b\n%s\n%b\n" "${d}" "$(pbpaste)" "${d}"
+  log::info "Placed N lines on clipboard | N='${c_cyan}$(pbpaste | wc -l | tr -d ' ')${c_rst}'"
+}
+
+function tmux::cap() {
+  [ -z "$TMUX" ] && return
+
+  local prompt_re="${TMUX_PROMPT_RE:-❯|❮}"
+  local from to less_mode=false
+
+  # Parse arguments:
+  #   tcap        → most recent 1 command        (slice 1..1)
+  #   tcap 3      → most recent 3 commands        (slice 1..3)
+  #   tcap -2     → just the 2nd most recent       (slice 2..2)
+  #   tcap 1 3    → commands 1 through 3           (slice 1..3)
+  #   tcap -l ... → open result in less (can combine with above)
+  local -a args=()
+  local past_opts=false
+  for arg in "$@"; do
+    if ! $past_opts && [[ "$arg" == "--" ]]; then
+      past_opts=true; continue
+    fi
+    if ! $past_opts && [[ "$arg" == "-l" ]]; then
+      less_mode=true
+    else
+      args+=("$arg")
+    fi
+  done
+
+  case ${#args[@]} in
+    0) from=1; to=1 ;;
+    1)
+      local n="${args[1]}"
+      if (( n < 0 )); then
+        from=$(( -n )); to=$from
+      else
+        from=1; to=$n
+      fi
+      ;;
+    2) from="${args[1]}"; to="${args[2]}" ;;
+    *) log::err "Usage: tcap [N | -N | FROM TO] [-l]"; return 1 ;;
+  esac
+
+  # Swap if reversed (e.g. tcap 3 1 → tcap 1 3)
+  if (( from > to )); then
+    local tmp=$from; from=$to; to=$tmp
+  fi
+
+  # +1 offset to skip the tcap command itself in the scrollback
+  local slice_from=$((from + 1))
+  local slice_to=$((to + 1))
+
+  tmux capture-pane -p -J -S - \
+    | tac \
+    | tmux::_slice_history "$slice_from" "$slice_to" "$prompt_re" \
+    | tac \
+    | pbcopy
+
+  local label
+  if (( from == to )); then
+    label="command ${from}"
+  else
+    label="commands ${from}..${to}"
+  fi
+  log::info "Copied ${label} to clipboard"
+  tmux::_debug_pbpaste
+
+  if $less_mode; then
+    log::info "Opening clipboard in less"
+    local tmp_file=$(mktemp)
+    TRAPEXIT() {
+      rm -f -- "${tmp_file:?locally scoped variables do not penetrate into TRAPEXIT scope}"
+    }
+    pbpaste > "${tmp_file}"
+    less "${tmp_file}"
+  fi
+}
+
+function tmux::cap_div() {
+  # Prefix with a TMUX_PROMPT_RE match so _slice_history treats this as a prompt boundary.
+  local prompt_re="${TMUX_PROMPT_RE:-❯|❮}"
+  local prompt_char="${prompt_re%%|*}"
+  local pad_width=$((COLUMNS - ${#prompt_char} - 1))
+  (( pad_width < 1 )) && pad_width=1
+  printf "%b\n" "${c_grey}${prompt_char} ${(l:$pad_width::-:)}${c_rst}"
+}
+
+alias tmv='tmux::rename-window'
+alias tclear='tmux::clear'
+alias tcap='tmux::cap'
+alias tcap_div='tmux::cap_div'
+alias tcap_all='tmux::cap_all'

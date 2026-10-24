@@ -1,0 +1,77 @@
+# Allowlist for the per-machine local-dotfiles repo (~/.local/local-dotfiles.git).
+# `dotfiles init` installs this as info/exclude on a fresh machine; a machine
+# that has edited its copy keeps it. `dotfiles --local git --edit` edits this
+# template and installs it. Only hand-written local config is tracked;
+# tool-managed data, state, and caches under ~/.local never are.
+#
+# Every '!' entry says why on the line above it (or above its run of '!'
+# lines); local_dotfiles_repo fails on one that does not.
+/*
+# The tier's own README: what lives here and how it relates to the shared tier.
+!/README.md
+# This machine's own openers and launchers, on PATH.
+!/bin/
+# share/ is mostly tool data; only the directories below are admitted.
+!/share/
+/share/*
+# Scripts that only make sense on this machine, on PATH.
+!/share/bin/
+# This machine's zsh plugins (the shared loader sources them); history is state.
+!/share/zsh/
+/share/zsh/history*
+# Git settings true only here: the work identity and the like.
+!/share/git/
+# AWS console bookmarks, one JSON file per destination.
+!/share/go_aws/
+# Kubernetes targets, one JSON file per context and namespace.
+!/share/kuber/
+# The AWS profiles this machine uses, one file each, with notes.
+!/share/aws_profile/
+# tmux: only the local plugins below; TPM's installs beside them are not ours.
+!/share/tmux/
+/share/tmux/*
+# tmux plugins that exist only here, one directory each, tracked instead of installed by TPM.
+!/share/tmux/local-plugins/
+# Entries for the tmux one-shot menu that only make sense here.
+!/share/tmux_oneshot/
+# The c<name> jump-to-directory shortcuts for this machine.
+!/share/double_cd/
+# This machine's Brewfile and Brewfile.ignore (the local half of the brew model).
+!/share/new-machine/
+# This machine's dotfiles job plugins and deps.
+!/share/dotfiles/
+# The Claude skills that belong to this machine's tier.
+!/share/claude-skills/
+# The Chrome Exoskeleton's private plugins, its env and its leak denylist;
+# installs, build output and test results inside it are not.
+!/share/chrome-exoskeleton/
+/share/chrome-exoskeleton/plugins/node_modules
+/share/chrome-exoskeleton/**/examples/*
+# An empty examples/ keeps its place with a .gitkeep.
+!/share/chrome-exoskeleton/**/examples/.gitkeep
+/share/chrome-exoskeleton/**/test-results/
+# Secrets live in *.secret.zsh beside the plugin that needs them; never tracked.
+*.secret.zsh
+# A symlink into a tool-managed install (the claude version dir).
+/bin/claude
+# The private-terms denylist the plugged repo's hooks check commits against.
+!/share/plugged/
+# Raycast snippets: the private tier is versioned; the import manifest is machine state.
+!/share/raycast-snippets/
+/share/raycast-snippets/manifest.json
+# Starship tables joined after the shared ~/.config/starship.toml (zsh/plugins/starship.zsh).
+!/share/starship/
+# tmuxinator projects found through TMUXINATOR_CONFIG (zsh/plugins/tmux.zsh).
+!/share/tmuxinator/
+# nvim loads site/plugin/*.lua from its data dir; the rest of share/nvim is tool state.
+!/share/nvim/
+/share/nvim/*
+# site/ also holds parsers and packs; only plugin/ is hand-written.
+!/share/nvim/site/
+/share/nvim/site/*
+# The local plugin files.
+!/share/nvim/site/plugin/
+# Work event types /ari-gsw-calendar-add reads beside its own.
+!/share/gsw-calendar-add/
+# The work diagram palette that /ari-diagram-mermaid and /ari-diagram-gh-todo prefer over their own.
+!/share/ari-diagram-mermaid/

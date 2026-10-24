@@ -1,0 +1,62 @@
+#!/bin/zsh
+# irun — run a command in an *interactive* zsh so the full interactive
+# environment is available: aliases, functions, and everything sourced from
+# .zshrc (plugins under $ZDOTDIR/plugins and $XDG_DATA_HOME/zsh/plugins).
+#
+# Non-interactive shells (e.g. `zsh -c`, as spawned by Claude's Bash tool or
+# any script) source only .zshenv, so interactive-only goodies like `ap`
+# (alias -> aws_profile) are missing. This wrapper pays the interactive
+# startup cost to get them.
+#
+# Usage:
+#   irun tmv scratch
+#   irun 'aws_profile --query dev && aws s3 ls'
+
+emulate -L zsh
+
+function usage() {
+  cat <<'EOF'
+usage: irun <command> [args...]
+
+Run <command> in an interactive zsh so aliases, functions, and everything
+sourced from .zshrc are available (non-interactive shells source only
+.zshenv, so the plugins under $XDG_CONFIG_HOME/zsh/plugins and
+$XDG_DATA_HOME/zsh/plugins are missing). Pays the interactive startup cost.
+
+Options:
+  -h, --help       show this help
+  -b, --benchmark  compare interactive vs non-interactive startup (avg of 10 runs)
+
+Examples:
+  irun tmv scratch
+  irun 'aws_profile --query dev && aws s3 ls'
+EOF
+}
+
+function benchmark() {
+  zmodload zsh/datetime
+  integer runs=10 i
+  float ni=0 int=0 start
+  print -u2 "benchmarking: ${runs} interactive + ${runs} non-interactive startups..."
+  for (( i = 1; i <= runs; i++ )); do
+    start=$EPOCHREALTIME; zsh -c  : >/dev/null 2>&1; (( ni  += EPOCHREALTIME - start ))
+    start=$EPOCHREALTIME; zsh -ic : >/dev/null 2>&1; (( int += EPOCHREALTIME - start ))
+    print -nu2 "\r  ${i}/${runs}\e[K"
+  done
+  print -u2 ""
+  (( ni /= runs, int /= runs ))
+  printf 'avg of %d runs:\n  non-interactive (zsh -c):  ~%.2fs\n  interactive (zsh -ic):     ~%.2fs\n  overhead irun pays:        ~%.2fs\n' \
+    "$runs" "$ni" "$int" "$(( int - ni ))"
+}
+
+case "$1" in
+  -h|--help) usage; exit 0 ;;
+  -b|--benchmark) benchmark; exit 0 ;;
+esac
+
+if (( $# == 0 )); then
+  usage >&2
+  exit 2
+fi
+
+exec zsh -ic "$*"

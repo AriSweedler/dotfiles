@@ -1,0 +1,3 @@
+brew bundle can't satisfy your Brewfile's dependencies.
+→ Tap homebrew/autoupdate needs to be tapped.
+Satisfy missing dependencies with `brew bundle install`.

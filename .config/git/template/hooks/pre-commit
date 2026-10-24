@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+
+# Helper - run function on each file
+function check_changed() {
+  local -r fxn="${1:?}"
+  log::info "* Checking: $fxn"
+  for file in $(git diff --name-only HEAD); do
+    # Exit early - continue the loop if the file doesn't exist
+    if [ ! -f "$file" ]; then continue; fi
+
+    while ! "$fxn" "$file"; do
+      # Ask the user how to deal with files that failed the function
+      log::warn "File has failed test | file='$file' test='$fxn'"
+      echo -n "Do you want to commit file='$file' anyway? [y,n,e,?]?"
+      read -n 1 answer
+      echo
+      log::dev "USER SAYS '$answer'"
+      case "$answer" in
+        y|Y) break ;;
+        e|E) "$EDITOR" "$file" ;;
+        "?")
+          log::INFO "
+y - bypass this failed check and continue with the commit
+n - abort the commit
+e - edit the offending file then ask again
+? - print help"
+          ;;
+        n|N|*)
+          # Abort the commit
+          log::err "Failing the commit"
+          git diff --name-only | du -sh
+          exit 1
+          ;;
+      esac
+    done
+  done
+}
+
+# A file has trailing whitespace
+function trailing_whitespace() {
+  local -r file="${1:?}"
+  if grep -Iq '\s$' "$file"; then  # -I: binary files (PNG, fonts) never match
+    return 1
+  fi
+}
+
+function main() {
+  if ! source "$HOME/.config/bash/plugins/log.bash" &>/dev/null; then
+    function log::info { echo "[INFO] $@" >&2; }
+    function log::err { echo "[ERROR] $@" >&2; }
+  fi
+
+  # Preflight check
+  if ! git rev-parse HEAD &>/dev/null; then
+    log::info "First commit"
+    return
+  fi
+
+  # Read user input, assign stdin to keyboard
+  exec < /dev/tty
+  log::info "Pre-commit hook"
+  set -- "trailing_whitespace"
+  for my_check in "$@"; do check_changed "$my_check"; done
+  exec <&-
+}
+main "$@"

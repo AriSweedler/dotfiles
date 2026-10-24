@@ -1,0 +1,30 @@
+[nodejs]
+symbol = "[⬢](bold green) "
+
+[git_branch]
+symbol = ' '
+
+[git_metrics]
+disabled = true
+
+[git_status]
+style = 'bg:black fg:bold green'
+disabled = true
+
+[cmake]
+symbol = 'cmake '
+
+[terraform]
+symbol = ' '
+
+[battery]
+discharging_symbol = "⚡️ "
+
+[gcloud]
+symbol = '󰊶 '
+format = '[$symbol$active]($style) '
+
+[time]
+disabled = false
+time_format = '%T UTC'
+utc_time_offset = '0'

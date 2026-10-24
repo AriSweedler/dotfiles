@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Fake npm: its presence is all the karabiner step checks. Not on PATH unless a test adds it.
+set -u
+printf '%s\n' "$*" >> "${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/npm.log"
+exit 0

@@ -1,0 +1,41 @@
+#!/usr/bin/env zsh
+# probe-color — what can THIS terminal display? Prints the 16 ANSI colors, the
+# 256-color palette (the colors plugin's color::xterm), a 24-bit gradient, and
+# the SGR text attributes. Judge by eye: banding in the gradient means no
+# truecolor, a plain word next to an attribute name means it is unsupported.
+#
+# Usage: probe-color
+emulate -L zsh
+
+fpath=("${HOME}/.config/zsh/functions" $fpath)
+autoload -Uz log::err log::info log::warn
+source "${HOME}/.config/zsh/plugins/colors.zsh"
+
+print -- "TERM=${TERM:-} COLORTERM=${COLORTERM:-} TERM_PROGRAM=${TERM_PROGRAM:-}${TMUX:+ (inside tmux)}"
+
+print -- "\n16 ANSI colors (normal / bright), as foreground then background:"
+for i in {0..7}; do printf '\e[3%dm%3d\e[0m ' "$i" "$i"; done; print
+for i in {0..7}; do printf '\e[9%dm%3d\e[0m ' "$i" "$((i + 8))"; done; print
+for i in {0..7}; do printf '\e[4%dm%3d\e[0m ' "$i" "$i"; done; print
+for i in {0..7}; do printf '\e[10%dm%3d\e[0m ' "$i" "$((i + 8))"; done; print
+
+print -- "\n256-color palette:"
+color::xterm
+
+print -- "\n24-bit gradient (smooth = truecolor works, 6 visible steps = 256-color fallback):"
+cols=$(( ${COLUMNS:-80} - 2 ))
+for (( c = 0; c < cols; c++ )); do
+  r=$(( 255 - c * 255 / cols ))
+  g=$(( c * 510 / cols )); (( g > 255 )) && g=$(( 510 - g ))
+  b=$(( c * 255 / cols ))
+  printf '\e[48;2;%d;%d;%dm ' "$r" "$g" "$b"
+done
+printf '\e[0m\n'
+
+print -- "\nSGR attributes:"
+typeset -A attrs=(1 bold 2 dim 3 italic 4 underline 5 blink 7 reverse 9 strike 53 overline)
+for code in 1 2 3 4 5 7 9 53; do
+  printf '  \e[%sm%-10s\e[0m %s\n' "$code" "${attrs[$code]}" "ESC[${code}m"
+done
+printf '  \e[4:3m%-10s\e[0m %s\n' 'curly' 'ESC[4:3m (undercurl)'
+printf '  \e[58;2;255;0;0m\e[4m%-10s\e[0m %s\n' 'ul-color' 'ESC[58;2;r;g;bm (colored underline)'

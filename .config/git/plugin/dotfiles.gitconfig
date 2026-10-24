@@ -1,0 +1,8 @@
+[alias]
+	# Dotfiles management
+	dotfiles = "!git --git-dir=\"$HOME/dotfiles.git/\" --work-tree=\"$HOME\""
+	df = dotfiles
+	# Per-machine bare repo for ~/.local. Its remote is a private repo of this machine's own, so machines never share it.
+	# A machine may have none (the local tier then stays on it): `git ldf push` says so and exits 0 instead of failing.
+	local-dotfiles = "!f() { d=\"$HOME/.local/local-dotfiles.git/\"; if [ \"${1:-}\" = push ] && [ -z \"$(git --git-dir=\"$d\" remote)\" ]; then echo \"git ldf: no remote; the local tier stays on this machine, nothing to push\" >&2; return 0; fi; git --git-dir=\"$d\" --work-tree=\"$HOME/.local\" \"$@\"; }; f"
+	ldf = local-dotfiles

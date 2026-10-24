@@ -1,0 +1,42 @@
+# vim
+.*.swp
+*.add.spl
+tags
+.codereview.nvim
+
+# OS generated files
+.DS_Store*
+
+# No need to back this up
+.ssh
+.local
+
+# Because of https://www.atlassian.com/git/tutorials/dotfiles
+dotfiles.git
+
+# Misc utilities
+.cache
+
+# Python
+.env
+.env.local
+.venv
+.pyenv
+__pycache__/
+*.pyc
+
+# delve
+__debug_bin*
+
+# Claude
+**/.claude
+.worktrees
+thoughts
+.bk.yaml
+bk.yaml
+
+# Datadog ddviz panel runtime state (socket lock, pid)
+.ddviz
+
+# Cloudflare wrangler CLI state
+.wrangler

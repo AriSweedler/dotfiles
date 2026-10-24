@@ -1,0 +1,190 @@
+#!/usr/bin/env zsh
+#
+# Run a headless Chromium that never steals macOS focus.
+#
+# Never launch /Applications/Google Chrome.app headless while Chrome is the
+# running browser: opening a page activates the running Chrome, and about 6 s
+# in the instance asks LaunchServices to set the https handler, which
+# CoreServicesUIAgent answers by ordering its windows front. Its --dump-dom
+# also hangs after writing. Measured 2026-09-23 with an lsappinfo tracer and
+# the unified log. Playwright's browsers are separate bundles, so neither
+# effect applies to them:
+#
+# * default  chrome-headless-shell: small, exits right after --dump-dom or
+#            --screenshot. Enough for DOM dumps and screenshots.
+# * --full   Google Chrome for Testing: the whole browser (extensions, CDP),
+#            launched with the flags Playwright itself uses for it.
+#
+# Every flag after the wrapper's own is passed to Chromium unchanged.
+# --headless is added when absent, and a throwaway --user-data-dir is created
+# (and removed on exit) when none is given, so no real profile is touched.
+#
+# The Claude Code PreToolUse hook ~/.config/claude/bin/pretooluse-headless-chrome-guard.sh
+# refuses the Chrome.app binary and points here.
+
+set -euo pipefail
+
+export OTTO_LOG_NOTIF_GROUP="chrome-headless"
+export OTTO_LOG_NOTIF_TITLE="chrome-headless"
+export OTTO_DEBUG="${OTTO_DEBUG:-0}"
+source "${HOME}/.config/zsh/plugins/log.zsh"
+
+# Playwright's browser cache. PLAYWRIGHT_BROWSERS_PATH wins when set, as it does
+# for Playwright itself.
+typeset -ga CACHE_ROOTS=(
+  "${PLAYWRIGHT_BROWSERS_PATH:-}"
+  "${HOME}/Library/Caches/ms-playwright"
+  "${HOME}/.cache/ms-playwright"
+)
+
+# What Playwright passes when it launches Chrome for Testing: no first-run UI,
+# no default-browser check, a mock keychain, and none of the background services
+# a test browser has no use for.
+typeset -gra FULL_FLAGS=(
+  --no-first-run --no-default-browser-check --use-mock-keychain --password-store=basic
+  --no-service-autorun --disable-background-networking --disable-component-update
+  --disable-default-apps --disable-sync --metrics-recording-only
+)
+
+# Throwaway profile dir when the caller gives no --user-data-dir; removed at exit.
+# Global on purpose: an EXIT trap set inside main would fire after its locals
+# are gone.
+typeset -g TMP_UDD=""
+cleanup() { [[ -n "${TMP_UDD}" ]] && rm -rf -- "${TMP_UDD}"; return 0; }
+trap cleanup EXIT
+
+# --- Help ---
+
+help() {
+  echo -e "$(cat <<HELP
+${c_green}chrome-headless${c_rst} — headless Chromium that never steals focus
+
+${c_cyan}Usage:${c_rst}
+  chrome-headless [--full] [--] <chromium flags and URL>
+  chrome-headless [--full] --which
+
+${c_cyan}Options:${c_rst}
+  --full      Google Chrome for Testing (whole browser) instead of chrome-headless-shell
+  --shell     chrome-headless-shell (the default)
+  --which     Print the binary that would run, then exit
+  -h, --help  Show this help
+
+${c_cyan}Env:${c_rst}
+  CHROME_HEADLESS_BIN       Use this binary instead of discovering one
+  PLAYWRIGHT_BROWSERS_PATH  Playwright cache root (default: ~/Library/Caches/ms-playwright)
+  OTTO_DEBUG=1              Debug logs on stderr
+
+${c_cyan}Examples:${c_rst}
+  chrome-headless --dump-dom https://example.com > page.html
+  chrome-headless --window-size=1200,900 --screenshot=shot.png https://example.com
+  chrome-headless --full --remote-debugging-port=9333 --no-startup-window
+
+Missing browsers install with: npx --yes playwright install chromium-headless-shell   (or: chromium)
+HELP
+)"
+}
+
+# --- Discovery ---
+
+# Newest matching binary under the cache roots. $1 = versioned dir glob,
+# $2.. = binary globs relative to it. Prints the path; returns 1 when none.
+newest_binary() {
+  local dir_glob="${1}"; shift
+  local root dir rel
+  local -a versions candidates
+  for root in "${CACHE_ROOTS[@]}"; do
+    [[ -n "${root}" && -d "${root}" ]] || continue
+    versions=( "${root}"/${~dir_glob}(N/On) )
+    for dir in "${versions[@]}"; do
+      for rel in "$@"; do
+        candidates=( "${dir}"/${~rel}(N*) )
+        if (( ${#candidates} > 0 )); then
+          print -r -- "${candidates[1]}"
+          return 0
+        fi
+      done
+    done
+  done
+  return 1
+}
+
+resolve_binary() {
+  local mode="${1}"
+  if [[ -n "${CHROME_HEADLESS_BIN:-}" ]]; then
+    if [[ "${CHROME_HEADLESS_BIN}" == */Google\ Chrome*.app/* ]]; then
+      log::err "CHROME_HEADLESS_BIN points at the installed Chrome.app, which steals focus when headless | bin='${CHROME_HEADLESS_BIN}'"
+      return 1
+    fi
+    [[ -x "${CHROME_HEADLESS_BIN}" ]] || { log::err "CHROME_HEADLESS_BIN is not executable | bin='${CHROME_HEADLESS_BIN}'"; return 1; }
+    print -r -- "${CHROME_HEADLESS_BIN}"
+    return 0
+  fi
+  case "${mode}" in
+    shell)
+      newest_binary 'chromium_headless_shell-*' 'chrome-headless-shell-*/chrome-headless-shell' && return 0
+      log::err "No chrome-headless-shell in the Playwright cache | roots='${(j:, :)CACHE_ROOTS}' install='npx --yes playwright install chromium-headless-shell'"
+      return 1 ;;
+    full)
+      newest_binary 'chromium-*' \
+        'chrome-*/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing' \
+        'chrome-*/Chromium.app/Contents/MacOS/Chromium' \
+        'chrome-linux/chrome' && return 0
+      log::err "No Chrome for Testing in the Playwright cache | roots='${(j:, :)CACHE_ROOTS}' install='npx --yes playwright install chromium'"
+      return 1 ;;
+  esac
+}
+
+# --- Main ---
+
+# True when one of the pass-through args is $1 or $1=<value>.
+has_flag() {
+  local want="${1}"; shift
+  local arg
+  for arg in "$@"; do
+    [[ "${arg}" == "${want}" || "${arg}" == "${want}="* ]] && return 0
+  done
+  return 1
+}
+
+main() {
+  # === PREREQUISITES ===
+  command -v mktemp >/dev/null 2>&1 || { log::err "Missing required command | command='mktemp'"; return 1; }
+
+  # === PARSE ===
+  local mode="shell" which_only=0
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)  help; return 0 ;;
+    --full)     mode="full"; shift ;;
+    --shell)    mode="shell"; shift ;;
+    --which)    which_only=1; shift ;;
+    --)         shift; break ;;
+    *)          break ;;   # first Chromium flag or URL; everything from here passes through
+  esac; done
+
+  local bin
+  bin="$(resolve_binary "${mode}")" || return 1
+  if (( which_only )); then
+    print -r -- "${bin}"
+    return 0
+  fi
+
+  # === LOGIC ===
+  local -a extra=()
+  has_flag --headless "$@" || extra+=(--headless)
+  if ! has_flag --user-data-dir "$@"; then
+    TMP_UDD="$(mktemp -d "${TMPDIR:-/tmp}/chrome-headless.XXXXXX")"
+    extra+=("--user-data-dir=${TMP_UDD}")
+  fi
+  if [[ "${mode}" == "full" ]]; then
+    extra+=("${FULL_FLAGS[@]}")
+    # Same code as Chrome.app, same defect: the whole browser does not exit
+    # after a one-shot dump. The shell does.
+    if has_flag --dump-dom "$@" || has_flag --screenshot "$@" || has_flag --print-to-pdf "$@"; then
+      log::warn "Chrome for Testing hangs after a one-shot --dump-dom/--screenshot/--print-to-pdf; drop --full to use chrome-headless-shell, which exits"
+    fi
+  fi
+  log::debug "Launching | mode='${mode}' bin='${bin}' extra='${extra[*]}' args='${*}'"
+  "${bin}" "${extra[@]}" "$@"
+}
+
+main "$@"

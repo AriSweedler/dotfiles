@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+c_red=$'\e[31m'
+c_green=$'\e[32m'
+c_yellow=$'\e[33m'
+c_rst=$'\e[0m'
+
+log::err()  { echo "${c_red}[ERROR]${c_rst} $*" >&2; }
+log::info() { echo "${c_green}[INFO]${c_rst} $*" >&2; }
+log::warn() { echo "${c_yellow}[WARN]${c_rst} $*" >&2; }
+
+function main() {
+  local branch="${1:-$(git branch --show-current)}"
+
+  if [[ -z "${branch}" ]]; then
+    log::err "No branch specified and not on any branch (detached HEAD?)"
+    exit 1
+  fi
+
+  local jq_filter='
+    .[]
+    | select(.state == "MERGED" or .state == "CLOSED")
+    | "\(.number) \(.state)"
+  '
+  local pr_info
+  pr_info=$(gh pr list --head "${branch}" --state all --json number,state -q "${jq_filter}" 2>/dev/null | head -1 || true)
+
+  if [[ -z "${pr_info}" ]]; then
+    log::warn "No merged/closed PR found | branch='${branch}'"
+    exit 1
+  fi
+
+  local pr_number pr_state
+  pr_number="${pr_info%% *}"
+  pr_state="${pr_info##* }"
+  log::info "PR ${pr_state,,} | branch='${branch}' pr='#${pr_number}'"
+  git branch -D "${branch}"
+}
+main "$@"

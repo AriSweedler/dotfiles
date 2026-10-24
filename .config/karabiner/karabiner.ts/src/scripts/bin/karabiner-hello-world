@@ -1,0 +1,8 @@
+#!/bin/bash
+
+set -e
+
+source "${REPO_LIB:?}/tmux_session_window.bash"
+
+cmd="echo 'hello world from tmux'"
+tmux_session_window::run_cmd "karabiner" "hello-world" "$cmd"

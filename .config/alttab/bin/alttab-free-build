@@ -1,0 +1,758 @@
+#!/usr/bin/env zsh
+# alttab-free-build — build AltTab from source as the permanent Free tier and install it.
+#
+# The official AltTab binary starts a 14-day Pro trial on first launch and then shows a
+# series of upgrade prompts. This script clones lwouis/alt-tab-macos at a known tag, applies
+# ../free.patch (no trial, no upsells; Pro features stay locked except shortcut slot 2, AltTab's
+# default ⌥` for the active app's windows), builds the Release scheme,
+# replaces /Applications/AltTab.app (removing the Homebrew cask so `brew upgrade` cannot
+# bring Pro back), pins the in-app updater to manual, and clears the macOS permission
+# records that were keyed to the previous binary.
+#
+# Permissions: TCC stores each grant together with the app's code requirement. Builds are signed
+# with one stable local certificate (bin/alttab-free-cert creates it on first use; one admin
+# password prompt), so the requirement, and with it the grants, survive rebuilds. With
+# --identity "-" (ad-hoc) the requirement is the binary's cdhash instead: every rebuild is a new
+# app to macOS, toggling the existing row in System Settings does nothing, and AltTab re-prompts
+# for Screen Recording every 5s. Whenever the requirement does change, this script resets the
+# rows so a fresh grant sticks.
+
+set -euo pipefail
+
+readonly SCRIPT_DIR="${0:A:h}"
+readonly LIB_LOGGING="${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+
+# --- Constants ---
+
+readonly UPSTREAM_URL="https://github.com/lwouis/alt-tab-macos.git"
+readonly DEFAULT_PATCH="${SCRIPT_DIR:h}/free.patch"
+# The tag free.patch was written against lives beside the patch, so --rebase-patch can move
+# both together without editing this script.
+readonly PATCH_REF_FILE="${DEFAULT_PATCH}.ref"
+readonly DEFAULT_REF="$( [[ -r "${PATCH_REF_FILE}" ]] && tr -d '[:space:]' < "${PATCH_REF_FILE}" || print -r -- "v11.6.1" )"
+readonly DEFAULT_SRC="${XDG_CACHE_HOME:-${HOME}/.cache}/alttab-free/src"
+readonly REBASE_WORKTREE="${DEFAULT_SRC:h}/rebase"     # where --rebase-patch works; removed when done
+readonly REBASE_BRANCH="free-rebase"
+readonly CERT_SCRIPT="${SCRIPT_DIR}/alttab-free-cert"
+readonly LOCAL_IDENTITY="AltTab Free Local"     # created on first use by alttab-free-cert
+readonly DEFAULT_IDENTITY="${LOCAL_IDENTITY}"   # "-" for ad-hoc
+readonly BUNDLE_ID="com.lwouis.alt-tab-macos"
+readonly INSTALL_APP="/Applications/AltTab.app"
+readonly BREW_CASK="alt-tab"
+readonly SCHEME="Release"
+source "${HOME}/.config/zsh/plugins/swift_cache.zsh"
+readonly DERIVED_DATA="$(swift_cache::derived_data_path alttab-free)"   # kept between runs: rebuilds are incremental
+
+DRY_RUN=false
+
+# --- Prerequisites ---
+
+#######################################
+# Check that required binaries are installed.
+# Globals: None
+# Arguments: None
+# Returns: 1 if any are missing
+#######################################
+check_prerequisites() {
+  local missing=()
+  for cmd in git xcodebuild codesign security ditto tccutil defaults open osascript pgrep; do
+    command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
+  done
+  if (( ${#missing} > 0 )); then
+    log::err "Missing required commands | missing='${(j:, :)missing}' hint='xcodebuild needs full Xcode, not just Command Line Tools'"
+    return 1
+  fi
+}
+
+# --- Signing ---
+
+#######################################
+# Make sure the identity can sign: ad-hoc needs nothing, the managed local certificate is created
+# on first use, anything else must already be a valid identity in the keychain.
+# Arguments: $1 identity
+# Outputs: "true" if a certificate was created just now, else "false"
+# Returns: 1 if the identity is unusable
+#######################################
+ensure_identity() {
+  local identity="${1}"
+  if [[ "${identity}" == "-" ]]; then
+    log::warn "Ad-hoc signing; permissions must be granted again after every rebuild | identity='${identity}'"
+    echo "false"
+    return 0
+  fi
+  if [[ "${identity}" == "${LOCAL_IDENTITY}" ]]; then
+    log::info "Ensuring the local signing certificate | identity='${identity}' script='${CERT_SCRIPT}'"
+    local -a cert_args=(--name "${identity}")
+    [[ "${VERBOSE}" == "true" ]] && cert_args+=(--verbose)
+    local cert_out
+    if ! cert_out="$(zsh "${CERT_SCRIPT}" "${cert_args[@]}")"; then
+      log::err "Could not prepare the signing certificate | identity='${identity}' script='${CERT_SCRIPT}'"
+      return 1
+    fi
+    print -r -- "${cert_out}" | awk -F= '$1 == "created" { print $2 }'
+    return 0
+  fi
+  if [[ -n "$(security find-identity -v -p codesigning 2>/dev/null | grep -F "\"${identity}\"" || true)" ]]; then
+    log::info "Using existing signing identity | identity='${identity}'"
+    echo "false"
+    return 0
+  fi
+  log::err "Signing identity not found | identity='${identity}' hint='security find-identity -v -p codesigning lists valid ones; \"-\" is ad-hoc'"
+  return 1
+}
+
+#######################################
+# One line for the dry-run plan: what the signing step will do for this identity.
+# Arguments: $1 identity
+#######################################
+describe_identity_plan() {
+  local identity="${1}"
+  if [[ "${identity}" == "-" ]]; then
+    echo "sign ad-hoc (permissions redone after every rebuild)"
+    return 0
+  fi
+  if [[ "${identity}" != "${LOCAL_IDENTITY}" ]]; then
+    echo "sign with the existing keychain identity '${identity}'"
+    return 0
+  fi
+  if zsh "${CERT_SCRIPT}" --name "${identity}" --status >/dev/null 2>&1; then
+    echo "sign with the local certificate '${identity}' (already present)"
+    return 0
+  fi
+  echo "create the local certificate '${identity}' with alttab-free-cert (one admin password prompt), sign with it"
+}
+
+# --- Source ---
+
+#######################################
+# Clone upstream into src unless a clone is already there.
+# Arguments: $1 src dir, $2 ref
+#######################################
+ensure_clone() {
+  local src="${1}" ref="${2}"
+  if [[ -d "${src}/.git" ]]; then
+    log::info "Reusing existing clone | src='${src}'"
+    return 0
+  fi
+  log::info "Cloning upstream | url='${UPSTREAM_URL}' ref='${ref}' src='${src}'"
+  mkdir -p "${src:h}"
+  run_cmd git -c advice.detachedHead=false clone --quiet --depth 50 --branch "${ref}" "${UPSTREAM_URL}" "${src}"
+}
+
+#######################################
+# Fetch ref and force-checkout it, discarding any earlier patch application.
+# Arguments: $1 src dir, $2 ref
+#######################################
+checkout_ref() {
+  local src="${1}" ref="${2}"
+  lvl=DEBUG run_cmd git -C "${src}" fetch --quiet --depth 50 origin "${ref}"
+  run_cmd git -C "${src}" checkout --quiet --force --detach FETCH_HEAD
+  log::info "Source ready | ref='${ref}' commit='$(git -C "${src}" rev-parse --short HEAD)'"
+}
+
+#######################################
+# Apply the Free patch. Idempotent: a tree that already carries it is left alone.
+# Arguments: $1 src dir, $2 patch file, $3 ref (for the error message)
+# Returns: 1 if the patch does not apply
+#######################################
+apply_patch() {
+  local src="${1}" patch="${2}" ref="${3}"
+  if git -C "${src}" apply --check --reverse "${patch}" >/dev/null 2>&1; then
+    log::info "Patch already applied | patch='${patch}'"
+    return 0
+  fi
+  if ! git -C "${src}" apply --check "${patch}" >/dev/null 2>&1; then
+    log::err "Patch does not apply | patch='${patch}' ref='${ref}' hint='free.patch targets ${DEFAULT_REF}; regenerate it against this version'"
+    log::ERR "$(git -C "${src}" apply --check "${patch}" 2>&1 || true)"
+    return 1
+  fi
+  run_cmd git -C "${src}" apply "${patch}"
+}
+
+#######################################
+# Version string for Info.plist: the nearest tag without its leading "v".
+# Arguments: $1 src dir
+# Outputs: version on stdout
+#######################################
+resolve_version() {
+  local src="${1}" version
+  version="$(git -C "${src}" describe --tags --abbrev=0 2>/dev/null || true)"
+  version="${version#v}"
+  if [[ ! "${version}" =~ ^[0-9]+(\.[0-9]+)+$ ]]; then
+    log::warn "No version tag reachable; using placeholder | describe='${version}' placeholder='0.0.0'"
+    version="0.0.0"
+  fi
+  echo "${version}"
+}
+
+#######################################
+# Write config/local.xcconfig. Both upstream xcconfigs include it last, so these settings win.
+# Arguments: $1 src dir, $2 codesign identity, $3 version
+#######################################
+write_local_xcconfig() {
+  local src="${1}" identity="${2}" version="${3}"
+  local file="${src}/config/local.xcconfig"
+  log::info "Writing build overrides | file='${file}' identity='${identity}' version='${version}'"
+  cat > "${file}" <<EOF
+// Written by alttab-free-build; included last by config/{debug,release}.xcconfig.
+CODE_SIGN_IDENTITY = ${identity}
+OTHER_CODE_SIGN_FLAGS = --timestamp=none --deep --options runtime
+CURRENT_PROJECT_VERSION = ${version}
+// Xcode 26+ rejects the upstream 10.14 deployment target.
+MACOSX_DEPLOYMENT_TARGET = 12.0
+// The 12.0 target surfaces upstream deprecation warnings; do not fail the build on them.
+SWIFT_TREAT_WARNINGS_AS_ERRORS = NO
+EOF
+}
+
+# --- Build ---
+
+#######################################
+# Build the Release scheme. Output goes to a log; on failure the distinct error lines are shown.
+# Arguments: $1 src dir
+# Returns: xcodebuild's exit code
+#######################################
+build_app() {
+  local src="${1}"
+  local build_log="${DERIVED_DATA}/alttab-free-build.log"
+  log::info "Building; this takes a minute or more | scheme='${SCHEME}' log='${build_log}'"
+  if ! ( cd "${src}" && xcodebuild -project alt-tab-macos.xcodeproj -scheme "${SCHEME}" \
+          -configuration "${SCHEME}" -derivedDataPath "${DERIVED_DATA}" build >"${build_log}" 2>&1 ); then
+    log::err "Build failed | log='${build_log}'"
+    log::ERR "$(grep -E 'error:' "${build_log}" | awk '!seen[$0]++' | head -20 || true)"
+    return 1
+  fi
+  log::ok "Build succeeded"
+}
+
+#######################################
+# Verify the signature seals and the bundle id is AltTab's.
+# Arguments: $1 app bundle
+# Returns: 1 on any mismatch
+#######################################
+verify_app() {
+  local app="${1}" bundle_id
+  if [[ ! -d "${app}" ]]; then
+    log::err "Built app missing | app='${app}'"
+    return 1
+  fi
+  run_cmd codesign --verify --deep --strict "${app}"
+  bundle_id="$(defaults read "${app}/Contents/Info.plist" CFBundleIdentifier)"
+  if [[ "${bundle_id}" != "${BUNDLE_ID}" ]]; then
+    log::err "Unexpected bundle id | bundle_id='${bundle_id}' expected='${BUNDLE_ID}'"
+    return 1
+  fi
+}
+
+#######################################
+# Code directory hash of an app bundle, or empty if it does not exist.
+# Arguments: $1 app bundle
+#######################################
+app_cdhash() {
+  local app="${1}"
+  [[ -d "${app}" ]] || return 0
+  # awk must consume all input: exiting on the first match can SIGPIPE codesign, and pipefail turns that into a failure.
+  codesign -dvvv "${app}" 2>&1 | awk -F= '/^CDHash=/ && !found { print $2; found = 1 }'
+}
+
+#######################################
+# Designated code requirement of an app bundle (what TCC keys grants to), or empty.
+# Arguments: $1 app bundle
+#######################################
+app_requirement() {
+  local app="${1}"
+  [[ -d "${app}" ]] || return 0
+  codesign -d -r- "${app}" 2>&1 | awk '/designated =>/ && !found { sub(/^.*designated => /, ""); print; found = 1 }'
+}
+
+# --- Install ---
+
+#######################################
+# Quit a running AltTab and wait up to 10s for it to exit.
+#######################################
+quit_app() {
+  pgrep -x AltTab >/dev/null || return 0
+  log::info "Quitting running AltTab"
+  osascript -e 'quit app "AltTab"' >/dev/null 2>&1 || pkill -x AltTab || true
+  local i
+  for i in {1..50}; do
+    pgrep -x AltTab >/dev/null || return 0
+    sleep 0.2
+  done
+  log::warn "AltTab still running after 10s; continuing"
+}
+
+#######################################
+# Uninstall the Homebrew cask if present, so a future brew upgrade cannot reinstall the Pro build.
+#######################################
+remove_brew_cask() {
+  command -v brew >/dev/null 2>&1 || return 0
+  brew list --cask "${BREW_CASK}" >/dev/null 2>&1 || return 0
+  log::info "Removing Homebrew cask | cask='${BREW_CASK}'"
+  run_cmd brew uninstall --cask "${BREW_CASK}"
+}
+
+#######################################
+# Replace /Applications/AltTab.app with the built bundle and drop the bundle from DerivedData
+# (the rest stays for the next incremental build), so Spotlight and LaunchServices see
+# exactly one AltTab.
+# Arguments: $1 built app bundle
+#######################################
+install_app() {
+  local built="${1}"
+  quit_app
+  remove_brew_cask
+  if [[ -e "${INSTALL_APP}" ]]; then
+    log::info "Replacing existing app | app='${INSTALL_APP}'"
+    run_cmd rm -rf "${INSTALL_APP}"
+  fi
+  run_cmd ditto "${built}" "${INSTALL_APP}"
+  run_cmd rm -rf "${built}"
+}
+
+#######################################
+# Set the in-app updater to manual. The official Sparkle feed would replace this build with Pro.
+# AltTab mirrors its updatePolicy from Sparkle's own SUEnableAutomaticChecks on launch, so pinning
+# updatePolicy alone is undone the next time the app starts: Sparkle's two keys are pinned too.
+#######################################
+pin_update_policy() {
+  local policy checks auto
+  policy="$(defaults read "${BUNDLE_ID}" updatePolicy 2>/dev/null || true)"
+  checks="$(defaults read "${BUNDLE_ID}" SUEnableAutomaticChecks 2>/dev/null || true)"
+  auto="$(defaults read "${BUNDLE_ID}" SUAutomaticallyUpdate 2>/dev/null || true)"
+  if [[ "${policy}" == "0" && "${checks}" == "0" && "${auto}" == "0" ]]; then
+    log::debug "Update policy already manual"
+    return 0
+  fi
+  log::info "Pinning updater to manual | updatePolicy='${policy:-unset}' SUEnableAutomaticChecks='${checks:-unset}' SUAutomaticallyUpdate='${auto:-unset}'"
+  run_cmd defaults write "${BUNDLE_ID}" updatePolicy -string "0"
+  run_cmd defaults write "${BUNDLE_ID}" SUEnableAutomaticChecks -bool false
+  run_cmd defaults write "${BUNDLE_ID}" SUAutomaticallyUpdate -bool false
+}
+
+#######################################
+# Clear the Accessibility and Screen Recording rows; macOS keyed them to the previous binary.
+#######################################
+reset_permissions() {
+  log::info "Clearing permission records keyed to the previous binary | bundle_id='${BUNDLE_ID}'"
+  run_cmd tccutil reset ScreenCapture "${BUNDLE_ID}"
+  run_cmd tccutil reset Accessibility "${BUNDLE_ID}"
+}
+
+#######################################
+# Decide whether the permission rows must be reset: yes unless the requirement is unchanged.
+# Arguments: $1 old requirement (may be empty), $2 new requirement
+# Outputs: "true" or "false"
+#######################################
+needs_permission_reset() {
+  local old_req="${1}" new_req="${2}"
+  if [[ -n "${old_req}" && "${old_req}" == "${new_req}" ]]; then
+    log::info "Code requirement unchanged; existing permission grants remain valid"
+    echo "false"
+    return 0
+  fi
+  log::info "Code requirement changed; permission grants must be redone | old='${old_req:-none}'"
+  echo "true"
+}
+
+# --- Patch maintenance ---
+
+# Identity for the throwaway commits in the cache clone; they never leave this machine.
+readonly -a REBASE_GIT_ID=(-c user.name=alttab-free-build -c user.email=alttab-free-build@localhost)
+
+# The throwaway checkout --rebase-patch works in, beside the clone.
+rebase_worktree_for() {
+  print -r -- "${1:h}/rebase"
+}
+
+#######################################
+# The prose header of the patch: everything before its first diff line, with the Base line
+# rewritten for the new ref. git apply ignores the header; people read it.
+# Arguments: $1 patch file, $2 new ref
+#######################################
+patch_header() {
+  local patch="${1}" new_ref="${2}" line
+  while IFS= read -r line; do
+    [[ "${line}" == diff\ --git* ]] && break
+    [[ "${line}" == Base:* ]] && line="Base: lwouis/alt-tab-macos tag ${new_ref} (https://github.com/lwouis/alt-tab-macos)"
+    print -r -- "${line}"
+  done < "${patch}"
+}
+
+#######################################
+# Rewrite the patch: its header, then the diff git prints for the given revisions in the
+# worktree. Written to a temporary file and renamed over the patch (mode 600, mktemp's).
+# Arguments: $1 worktree, $2 ref (the header's Base line), $3 patch file, $4... git diff revisions
+#######################################
+write_patch() {
+  local wt="${1}" new_ref="${2}" patch="${3}" tmp
+  shift 3
+  tmp="$(mktemp)"
+  { patch_header "${patch}" "${new_ref}"; git -C "${wt}" diff --no-ext-diff --no-color "$@"; } > "${tmp}"
+  mv -f "${tmp}" "${patch}"
+  log::ok "Patch regenerated | patch='${patch}' ref='${new_ref}' hunks='$(grep -c '^@@' "${patch}")'"
+}
+
+#######################################
+# The patch moved to a new ref: record the ref beside it and say what proves it.
+# Arguments: $1 patch file, $2 new ref
+#######################################
+record_ref() {
+  print -r -- "${2}" > "${1}.ref"
+  log::info "Next: alttab-free-build --build-only to prove it builds, then alttab-free-build to install"
+}
+
+#######################################
+# Rewrite the patch from the clone's working tree (the build leaves the patch applied there), so
+# hand edits to the patched files become the patch. The ref is unchanged.
+# Arguments: $1 src dir, $2 patch file, $3 ref
+# Returns: 1 if the clone is missing or not at ref
+#######################################
+regen_patch() {
+  local src="${1}" patch="${2}" ref="${3}" head want
+  if [[ ! -d "${src}/.git" ]]; then
+    log::err "No clone to regenerate the patch from | src='${src}' fix='alttab-free-build --build-only'"
+    return 1
+  fi
+  head="$(git -C "${src}" rev-parse HEAD 2>/dev/null || true)"
+  want="$(git -C "${src}" rev-parse --verify --quiet "${ref}^{commit}" 2>/dev/null || true)"
+  if [[ -z "${want}" || "${head}" != "${want}" ]]; then
+    log::err "The clone is not at the patch's ref | src='${src}' ref='${ref}' head='${head:0:8}' fix='alttab-free-build --build-only'"
+    return 1
+  fi
+  write_patch "${src}" "${ref}" "${patch}" HEAD
+}
+
+#######################################
+# Prove the patch applies to a clean checkout of ref: git apply --check in a throwaway worktree
+# of the clone, removed afterwards. Needs no network when the clone has ref.
+# Arguments: $1 src dir, $2 patch file, $3 ref
+# Returns: 1 if the clone lacks ref or the patch does not apply
+#######################################
+check_patch() {
+  local src="${1}" patch="${2}" ref="${3}" wt out rc=0
+  if [[ ! -d "${src}/.git" ]] || ! git -C "${src}" rev-parse --verify --quiet "${ref}^{commit}" >/dev/null; then
+    log::err "The clone does not have the patch's ref | src='${src}' ref='${ref}' fix='alttab-free-build --build-only'"
+    return 1
+  fi
+  wt="$(mktemp -d "${src:h}/check.XXXXXX")"
+  {
+    git -C "${src}" worktree add --quiet --detach "${wt}" "${ref}" >/dev/null 2>&1 || rc=$?
+    if (( rc == 0 )); then
+      out="$(git -C "${wt}" apply --check "${patch}" 2>&1)" || rc=$?
+    else
+      out="git worktree add failed"
+    fi
+  } always {
+    git -C "${src}" worktree remove --force "${wt}" >/dev/null 2>&1 || rm -rf "${wt}"
+    git -C "${src}" worktree prune >/dev/null 2>&1 || true
+  }
+  if (( rc != 0 )); then
+    log::err "Patch does not apply to a clean ${ref} | patch='${patch}'"
+    log::ERR "${out}"
+    return 1
+  fi
+  log::ok "Patch applies to a clean ${ref} | patch='${patch}' files='$(grep -c '^diff --git' "${patch}")' hunks='$(grep -c '^@@' "${patch}")'"
+}
+
+#######################################
+# Remove the rebase worktree and its branch when present.
+# Arguments: $1 src dir
+#######################################
+drop_rebase_worktree() {
+  local src="${1}" wt
+  wt="$(rebase_worktree_for "${src}")"
+  [[ -d "${wt}" ]] && run_cmd git -C "${src}" worktree remove --force "${wt}"
+  git -C "${src}" worktree prune
+  if git -C "${src}" show-ref --verify --quiet "refs/heads/${REBASE_BRANCH}"; then
+    run_cmd git -C "${src}" branch -q -D "${REBASE_BRANCH}"
+  fi
+  return 0
+}
+
+#######################################
+# Move the patch to a new upstream ref: commit it on the ref it targets, git rebase onto the
+# new ref (a three-way merge, which follows moved context that git apply cannot), regenerate the
+# patch. A conflict leaves the worktree for a person; --finish-patch completes the move.
+# Arguments: $1 src dir, $2 patch file, $3 old ref, $4 new ref
+# Returns: 1 on conflict or failure
+#######################################
+rebase_patch() {
+  local src="${1}" patch="${2}" old_ref="${3}" new_ref="${4}" wt
+  wt="$(rebase_worktree_for "${src}")"
+  ensure_clone "${src}" "${old_ref}"
+  lvl=DEBUG run_cmd git -C "${src}" fetch --quiet --tags origin "${old_ref}" "${new_ref}"
+  drop_rebase_worktree "${src}"
+  run_cmd git -C "${src}" worktree add --quiet -b "${REBASE_BRANCH}" "${wt}" "${old_ref}"
+  if ! git -C "${wt}" apply "${patch}"; then
+    log::err "Patch does not apply to its own base | patch='${patch}' ref='${old_ref}'"
+    return 1
+  fi
+  run_cmd git -C "${wt}" add -A
+  run_cmd git -C "${wt}" "${REBASE_GIT_ID[@]}" -c core.hooksPath=/dev/null commit --quiet -m "free tier patch (against ${old_ref})"
+  print -r -- "${new_ref}" > "${wt}/.free-rebase-target"
+  print -r -- "${patch}" > "${wt}/.free-rebase-patch"
+  log::info "Rebasing the patch | from='${old_ref}' onto='${new_ref}' worktree='${wt}'"
+  if git -C "${wt}" "${REBASE_GIT_ID[@]}" -c core.hooksPath=/dev/null rebase --quiet "${new_ref}" >/dev/null 2>&1; then
+    write_patch "${wt}" "${new_ref}" "${patch}" "${new_ref}" HEAD
+    record_ref "${patch}" "${new_ref}"
+    drop_rebase_worktree "${src}"
+    return 0
+  fi
+  local -a conflicted=( "${(@f)$(git -C "${wt}" diff --name-only --diff-filter=U)}" )
+  log::err "Rebase stopped on conflicts | files='${(j:, :)conflicted}' worktree='${wt}'"
+  log::WARN "Resolve each file in ${wt} (keep Pro locked apart from shortcut slot 2), then:
+  git -C ${wt} add ${(j: :)conflicted}
+  GIT_EDITOR=true git -C ${wt} ${REBASE_GIT_ID[*]} -c core.hooksPath=/dev/null rebase --continue
+  alttab-free-build --finish-patch"
+  return 1
+}
+
+#######################################
+# After the conflicts are resolved and the rebase continued: regenerate the patch from the
+# worktree and remove it.
+# Arguments: $1 src dir
+#######################################
+finish_patch() {
+  local src="${1}" wt
+  wt="$(rebase_worktree_for "${src}")"
+  if [[ ! -d "${wt}" || ! -r "${wt}/.free-rebase-target" ]]; then
+    log::err "No patch rebase in progress | worktree='${wt}' hint='alttab-free-build --rebase-patch REF'"
+    return 1
+  fi
+  if [[ -d "$(git -C "${wt}" rev-parse --git-path rebase-merge)" ]]; then
+    log::err "The rebase has not been continued | worktree='${wt}' hint='git add the resolved files, then git rebase --continue'"
+    return 1
+  fi
+  if [[ -n "$(git -C "${wt}" diff --name-only --diff-filter=U)" ]]; then
+    log::err "Unmerged files remain | worktree='${wt}'"
+    return 1
+  fi
+  local new_ref patch
+  new_ref="$(<"${wt}/.free-rebase-target")"
+  patch="$(<"${wt}/.free-rebase-patch")"
+  write_patch "${wt}" "${new_ref}" "${patch}" "${new_ref}" HEAD
+  record_ref "${patch}" "${new_ref}"
+  drop_rebase_worktree "${src}"
+}
+
+# --- Help ---
+
+help() {
+  cat <<EOF
+${c_green}alttab-free-build${c_rst} — build AltTab as the permanent Free tier (no trial, no upsells) and install it
+
+${c_bold}Usage:${c_rst}
+  alttab-free-build [OPTIONS]
+  alttab-free-build --rebase-patch REF | --finish-patch
+  alttab-free-build --regen-patch | --check-patch
+
+${c_bold}Options:${c_rst}
+  --ref REF          Upstream tag or branch to build (default: ${DEFAULT_REF}, what free.patch targets)
+  --src DIR          Where to clone/build (default: ${DEFAULT_SRC})
+  --patch FILE       Patch to apply (default: ${DEFAULT_PATCH})
+  --identity ID      codesign identity (default: "${DEFAULT_IDENTITY}", a local certificate that
+                     bin/alttab-free-cert creates on first use so permission grants survive rebuilds).
+                     "-" signs ad-hoc: permissions must be granted again after every rebuild.
+  --build-only       Clone, patch, build and verify; do not touch /Applications or permissions
+  --no-launch        Install but do not open the app afterwards
+  --rebase-patch REF Upstream released REF: commit free.patch on its current base, git rebase it
+                     onto REF, rewrite free.patch and free.patch.ref. On conflicts the worktree
+                     stays at ${DEFAULT_SRC:h}/rebase with instructions; nothing else changes
+  --finish-patch     After resolving those conflicts and continuing the rebase: rewrite the patch
+                     from the worktree and remove it
+  --regen-patch      Rewrite the patch as its prose header plus \`git diff HEAD\` of the clone,
+                     which must be at --ref: edits to the patched files there become the patch
+                     (\`dotfiles alttab edit\` does this and validates it)
+  --check-patch      git apply --check the patch in a clean worktree of the clone at --ref;
+                     offline once the clone has the ref
+  --dry-run          Print the plan and exit without changing anything
+  --verbose          Enable debug logging
+  -h, --help         Show this help
+
+${c_bold}Examples:${c_rst}
+  alttab-free-build
+  alttab-free-build --build-only
+  alttab-free-build --rebase-patch v11.7.1   # upstream released: move the patch, then --build-only, then install
+  alttab-free-build --ref v11.7.0            # build another upstream ref; fails clearly if the patch no longer applies
+  alttab-free-build --identity -              # ad-hoc; permissions redone after each rebuild
+
+${c_bold}After install:${c_rst}
+  If the permission records were reset, grant Accessibility and Screen Recording to AltTab in
+  System Settings > Privacy & Security, then choose "Quit & Reopen" when macOS asks.
+EOF
+}
+
+# --- Main ---
+
+main() {
+  # === PARSE ===
+  local verbose=false build_only=false launch=true mode=build rebase_to=""
+  local ref="${DEFAULT_REF}" src="${DEFAULT_SRC}" patch="${DEFAULT_PATCH}" identity="${DEFAULT_IDENTITY}"
+
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)       help; return 0 ;;
+    --verbose)       verbose=true; shift ;;
+    --dry-run)       DRY_RUN=true; shift ;;
+    --build-only)    build_only=true; shift ;;
+    --no-launch)     launch=false; shift ;;
+    --rebase-patch)  mode=rebase; rebase_to="${2:?--rebase-patch requires a ref}"; shift 2 ;;
+    --finish-patch)  mode=finish; shift ;;
+    --regen-patch)   mode=regen; shift ;;
+    --check-patch)   mode=check; shift ;;
+    --ref)           ref="${2:?--ref requires a value}"; shift 2 ;;
+    --src)           src="${2:?--src requires a value}"; shift 2 ;;
+    --patch)         patch="${2:?--patch requires a value}"; shift 2 ;;
+    --identity)      identity="${2:?--identity requires a value}"; shift 2 ;;
+    -*)              log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)               log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
+  esac; done
+
+  export VERBOSE="${verbose}"
+  # Rewriting or checking the patch needs only git; building needs the toolchain too.
+  if [[ "${mode}" == (regen|check) ]]; then
+    command -v git >/dev/null 2>&1 || { log::err "Missing required commands | missing='git'"; return 1; }
+  else
+    check_prerequisites || exit 1
+  fi
+
+  # === MASSAGE ===
+  src="${src:A}"
+  patch="${patch:A}"
+
+  # === VALIDATE ===
+  if [[ ! -r "${patch}" ]]; then
+    log::err "Patch file not readable | patch='${patch}'"
+    return 1
+  fi
+  if [[ -e "${src}" && ! -d "${src}/.git" ]]; then
+    log::err "Source dir exists but is not a git clone | src='${src}'"
+    return 1
+  fi
+  if [[ "${mode}" == rebase && "${rebase_to}" == "${ref}" ]]; then
+    log::err "The patch already targets that ref | ref='${ref}'"
+    return 1
+  fi
+
+  # === PATCH MAINTENANCE ===
+  if [[ "${mode}" == rebase ]]; then
+    if [[ "${DRY_RUN}" == "true" ]]; then
+      log::INFO "Dry run. Would: fetch ${ref} and ${rebase_to}; add worktree $(rebase_worktree_for "${src}") at ${ref}; commit ${patch} there; git rebase onto ${rebase_to}; on success rewrite ${patch} and ${patch}.ref"
+      return 0
+    fi
+    rebase_patch "${src}" "${patch}" "${ref}" "${rebase_to}"
+    return
+  fi
+  if [[ "${mode}" == finish ]]; then
+    finish_patch "${src}"
+    return
+  fi
+  if [[ "${mode}" == regen ]]; then
+    if [[ "${DRY_RUN}" == "true" ]]; then
+      log::INFO "Dry run. Would: rewrite ${patch} as its header plus git -C ${src} diff HEAD (the clone at ${ref})"
+      return 0
+    fi
+    regen_patch "${src}" "${patch}" "${ref}"
+    return
+  fi
+  if [[ "${mode}" == check ]]; then
+    check_patch "${src}" "${patch}" "${ref}"
+    return
+  fi
+
+  local built_app="${DERIVED_DATA}/Build/Products/${SCHEME}/AltTab.app"
+  log::debug "Parsed args | ref='${ref}' src='${src}' patch='${patch}' identity='${identity}' build_only='${build_only}' launch='${launch}'"
+
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    log::info "Dry run; nothing will change | ref='${ref}' src='${src}' patch='${patch}' identity='${identity}' build_only='${build_only}'"
+    log::INFO "0. $(describe_identity_plan "${identity}")
+1. clone ${UPSTREAM_URL} into src (or reuse), force-checkout ${ref}
+2. git apply ${patch}
+3. write ${src}/config/local.xcconfig (identity, version, deployment target 12.0, warnings not errors)
+4. xcodebuild scheme ${SCHEME} -> ${built_app}
+5. codesign --verify; check bundle id ${BUNDLE_ID}
+6. quit AltTab; brew uninstall --cask ${BREW_CASK} if installed; replace ${INSTALL_APP}; delete the built bundle from ${DERIVED_DATA}
+7. defaults write ${BUNDLE_ID} updatePolicy 0, SUEnableAutomaticChecks false, SUAutomaticallyUpdate false
+8. tccutil reset ScreenCapture/Accessibility ${BUNDLE_ID} if the code requirement changed
+9. open ${INSTALL_APP}"
+    return 0
+  fi
+
+  # === LOGIC ===
+  local identity_created
+  identity_created="$(ensure_identity "${identity}")" || return 1
+  ensure_clone "${src}" "${ref}"
+  checkout_ref "${src}" "${ref}"
+  apply_patch "${src}" "${patch}" "${ref}"
+  local version
+  version="$(resolve_version "${src}")"
+  write_local_xcconfig "${src}" "${identity}" "${version}"
+  build_app "${src}"
+  verify_app "${built_app}"
+
+  local commit cdhash new_req
+  commit="$(git -C "${src}" rev-parse --short HEAD)"
+  cdhash="$(app_cdhash "${built_app}")"
+  new_req="$(app_requirement "${built_app}")"
+
+  if [[ "${build_only}" == "true" ]]; then
+    log::ok "Build only; nothing installed | app='${built_app}'"
+    log::warn "Spotlight lists this copy as a second AltTab until it is installed or deleted | app='${built_app}'"
+    cat <<EOF
+app=${built_app}
+version=${version}
+commit=${commit}
+cdhash=${cdhash}
+identity=${identity}
+identity_created=${identity_created}
+requirement=${new_req}
+installed=false
+permissions_reset=false
+EOF
+    return 0
+  fi
+
+  local installed_cdhash old_req reset="false" installed="false"
+  installed_cdhash="$(app_cdhash "${INSTALL_APP}")"
+  old_req="$(app_requirement "${INSTALL_APP}")"
+
+  if [[ -n "${installed_cdhash}" && "${installed_cdhash}" == "${cdhash}" ]]; then
+    log::info "Identical build already installed; skipping install | app='${INSTALL_APP}' cdhash='${cdhash}'"
+    run_cmd rm -rf "${built_app}"
+  else
+    reset="$(needs_permission_reset "${old_req}" "${new_req}")"
+    install_app "${built_app}"
+    installed="true"
+  fi
+
+  pin_update_policy
+  if [[ "${reset}" == "true" ]]; then
+    reset_permissions
+  fi
+  if [[ "${launch}" == "true" ]]; then
+    run_cmd open -a "${INSTALL_APP}"
+  fi
+  if [[ "${reset}" == "true" ]]; then
+    log::warn "Grant Accessibility and Screen Recording to AltTab in System Settings > Privacy & Security, then choose Quit & Reopen"
+  fi
+  log::ok "Done"
+
+  cat <<EOF
+app=${INSTALL_APP}
+version=${version}
+commit=${commit}
+cdhash=${cdhash}
+identity=${identity}
+identity_created=${identity_created}
+requirement=${new_req}
+installed=${installed}
+permissions_reset=${reset}
+EOF
+}
+
+main "${@}"

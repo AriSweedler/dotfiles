@@ -1,0 +1,70 @@
+#!/usr/bin/env zsh
+#
+# Karabiner Hyper+N handler: jump to a waiting notification.
+#
+# Claude-first for speed. A Claude notif is read from terminal-notifier (fast,
+# FDA-free, osascript-free, ~60ms) and wins over other apps. Only with no Claude
+# notif do we pay osascript to AX-press an on-screen banner of another app, and
+# only then, as a last resort, open Notification Center to recover a faded
+# non-Claude notif (terminal-notifier can't see those):
+#   1. terminal-notifier read (Claude)     — fast
+#   2. on-screen AX press (any app)         — osascript AX, ~160ms
+#   3. open-NC refresh (faded non-Claude)   — slow, last resort
+set -euo pipefail
+
+export OTTO_LOG_NOTIF_GROUP="notif-click"
+export OTTO_LOG_NOTIF_TITLE="Hyper+N → notif"
+# Debug ON so the full click flow lands in the rotated handler log
+# (/tmp/karabiner.notif-click/log.txt — see macros.ts).
+export OTTO_DEBUG="${OTTO_DEBUG:-1}"
+source "${HOME}/.config/zsh/plugins/log.zsh"
+
+readonly CLAUDE_CLICK_SIM="${HOME}/.config/claude/bin/notification-click-simulator.sh"
+
+# Profiling (NOTIF_CLICK_PROFILE=1): log foreground_ms = when focus actually leaves
+# the current app (the real "tabbed over" moment), separate from the script's full
+# elapsed_ms — the stack re-collapse / NC-close tail runs after you're already in
+# the app. Detects an app switch (→ Slack/Calendar); a Claude catch is a tmux-pane
+# jump inside Terminal, so the frontmost app may not change and this stays silent.
+# Off by default: the poll is up to 400 lsappinfo spawns (~15 ms each behind the
+# endpoint agent) racing the click path for CPU.
+if [[ "${NOTIF_CLICK_PROFILE:-0}" == 1 && -x /usr/bin/lsappinfo ]]; then
+  () {
+    zmodload zsh/datetime
+    typeset -F t0=$EPOCHREALTIME
+    local orig now
+    orig=$(/usr/bin/lsappinfo front)
+    repeat 400; do
+      now=$(/usr/bin/lsappinfo front)
+      if [[ "$now" != "$orig" ]]; then
+        printf 'foreground_ms=%.0f\n' $(( (EPOCHREALTIME - t0) * 1000 ))
+        break
+      fi
+    done
+  } &!
+fi
+
+# 1) terminal-notifier read (the Claude sim): a waiting Claude notif is caught
+#    with no osascript, and wins over a non-Claude banner.
+if "${CLAUDE_CLICK_SIM}"; then
+  exit 0
+fi
+
+# 2) No Claude notif → osascript AX-press an on-screen banner of any app (Slack,
+#    Calendar). --no-refresh: skip the slow tray retry for now (step 3). --quiet:
+#    no miss banner yet.
+log::info "no claude notif — trying on-screen AX press (any app)"
+if notif-center click --quiet --no-refresh; then
+  exit 0
+fi
+
+# 3) Last resort: a faded non-Claude notif (e.g. an old Slack banner) lives only
+#    in Notification Center. Pay for the open-NC refresh skipped in step 2.
+log::warn "SLOW PATH (~800ms): no claude notif, no on-screen banner — opening Notification Center to recover a faded one"
+if notif-center click --quiet; then
+  exit 0
+fi
+
+# 4) Everything missed → real miss; say so.
+OTTO_LOG_NOTIFY_SECS=3 log::notify "No notification to click"
+exit 1

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Fake VS Code CLI: --list-extensions replays the fixture; everything else is a logged no-op.
+set -u
+printf '%s\n' "$*" >> "${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/code.log"
+if [[ "${1:-}" == --list-extensions ]]; then
+  f="${BREW_SHIM_FIXTURE:?BREW_SHIM_FIXTURE unset}/vscode.txt"
+  if [[ -f "${f}" ]]; then cat "${f}"; fi
+fi
+exit 0

@@ -1,0 +1,312 @@
+#!/usr/bin/env zsh
+# Validate an onlinegantt.com .gantt file against the native JSON schema.
+# Run: zsh <skills-dir>/ari-diagram-onlinegantt/bin/validate --help
+
+set -euo pipefail
+
+readonly SCRIPT_DIR="${0:A:h}"
+readonly SKILLS_DIR="${SCRIPT_DIR:h:h}"  # <skill>/bin → skills root
+
+# --- Logging (source the canonical lib — never re-define log::* inline) ---
+
+readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+
+# --- Prerequisites ---
+
+#######################################
+# Check that required binaries are installed.
+# Arguments: $@ - command names to require.
+# Returns: 1 if any are missing.
+#######################################
+check_prerequisites() {
+  local missing=()
+  for cmd in "$@"; do
+    command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
+  done
+  if (( ${#missing} > 0 )); then
+    log::err "Missing required commands | missing='${(j:, :)missing}'"
+    return 1
+  fi
+}
+
+# --- Schema check ---
+
+#######################################
+# Structurally validate a .gantt file.
+# Globals: GANTT_FILE - file to check.
+# Outputs: stdout — summary on success, one problem per line on failure.
+# Returns: 0 valid, 1 invalid.
+#######################################
+validate_schema() {
+  python3 - <<'PY'
+import json, os, re, sys
+from datetime import datetime
+
+TASK_FIELDS = {
+    "TaskID": int, "TaskName": str, "StartDate": str, "EndDate": str,
+    "Duration": int, "resources": list, "Progress": int, "color": str,
+    "info": str, "DurationUnit": str,
+    # Predecessor checked separately: null on parents, str on subtasks.
+}
+TOP_LEVEL_KEYS = {"data", "resources", "projectStartDate", "projectEndDate", "advanced"}
+ADVANCED_KEYS = {
+    "columns", "zoomLevel", "timezone", "timezoneOffset", "dependencyConflict",
+    "dateFormat", "timeFormat", "firstDayOfWeek", "workWeek", "workTime", "holidays",
+}
+EXPECTED_COLUMNS = {
+    "Task ID", "Task Name", "Start Date", "End Date", "Duration",
+    "Progress %", "Dependency", "Resources", "Color",
+}
+PREDECESSOR_RE = re.compile(r"\d+(FS|SS|FF|SF)")
+
+
+def parse_iso(value):
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def check_task(task, problems, is_parent):
+    label = f"task[{task.get('TaskID', '?')}]"
+    for field, want in TASK_FIELDS.items():
+        if field not in task:
+            problems.append(f"{label}: missing field '{field}'")
+            continue
+        # bool is a subclass of int; reject it where we expect a real int.
+        if want is int and isinstance(task[field], bool):
+            problems.append(f"{label}: field '{field}' is bool, want int")
+        elif not isinstance(task[field], want):
+            problems.append(f"{label}: field '{field}' is {type(task[field]).__name__}, want {want.__name__}")
+
+    pred = task.get("Predecessor", "__missing__")
+    if pred == "__missing__":
+        problems.append(f"{label}: missing field 'Predecessor'")
+    elif is_parent:
+        if pred is not None:
+            problems.append(f"{label}: parent Predecessor should be null, got {pred!r}")
+    elif not isinstance(pred, str):
+        problems.append(f"{label}: subtask Predecessor should be a string, got {pred!r}")
+
+    if isinstance(task.get("Progress"), int) and not isinstance(task["Progress"], bool):
+        if not (0 <= task["Progress"] <= 100):
+            problems.append(f"{label}: Progress {task['Progress']} out of range 0-100")
+    if isinstance(task.get("Duration"), int) and task["Duration"] < 0:
+        problems.append(f"{label}: Duration {task['Duration']} is negative")
+
+    if isinstance(task.get("StartDate"), str) and isinstance(task.get("EndDate"), str):
+        try:
+            start, end = parse_iso(task["StartDate"]), parse_iso(task["EndDate"])
+            if end < start:
+                problems.append(f"{label}: EndDate < StartDate")
+            else:
+                # Working days can't exceed the calendar dates spanned, so Duration
+                # must fit. Date count, not timedelta: Start=08:00, End=next-midnight.
+                duration = task.get("Duration")
+                if isinstance(duration, int) and not isinstance(duration, bool) and duration > 0:
+                    span_days = (end.date() - start.date()).days
+                    if span_days < duration:
+                        problems.append(
+                            f"{label}: Duration {duration} exceeds the {span_days}-day "
+                            f"calendar span between StartDate and EndDate")
+        except ValueError:
+            problems.append(f"{label}: unparseable StartDate/EndDate")
+
+
+def main():
+    path = os.environ["GANTT_FILE"]
+    try:
+        with open(path) as handle:
+            doc = json.load(handle)
+    except json.JSONDecodeError as err:
+        print(f"invalid JSON: {err}")
+        return 1
+
+    problems = []
+
+    keys = set(doc)
+    if TOP_LEVEL_KEYS - keys:
+        problems.append(f"top-level: missing keys {sorted(TOP_LEVEL_KEYS - keys)}")
+    if keys - TOP_LEVEL_KEYS:
+        problems.append(f"top-level: unexpected keys {sorted(keys - TOP_LEVEL_KEYS)}")
+
+    advanced = doc.get("advanced", {})
+    if not isinstance(advanced, dict):
+        problems.append("advanced: not an object")
+        advanced = {}
+    else:
+        if ADVANCED_KEYS - set(advanced):
+            problems.append(f"advanced: missing keys {sorted(ADVANCED_KEYS - set(advanced))}")
+        cols = {c.get("name") for c in advanced.get("columns", []) if isinstance(c, dict)}
+        if EXPECTED_COLUMNS - cols:
+            problems.append(f"advanced.columns: missing {sorted(EXPECTED_COLUMNS - cols)}")
+        if cols - EXPECTED_COLUMNS:
+            problems.append(f"advanced.columns: unexpected {sorted(cols - EXPECTED_COLUMNS)}")
+
+    ids = []
+    data = doc.get("data", [])
+    if not isinstance(data, list):
+        problems.append("data: not an array")
+        data = []
+    for parent in data:
+        if not isinstance(parent, dict):
+            problems.append("data: parent is not an object")
+            continue
+        check_task(parent, problems, is_parent=True)
+        ids.append(parent.get("TaskID"))
+        subtasks = parent.get("subtasks")
+        if not isinstance(subtasks, list):
+            problems.append(f"task[{parent.get('TaskID', '?')}]: missing/invalid 'subtasks' array")
+            continue
+        for sub in subtasks:
+            if not isinstance(sub, dict):
+                problems.append("subtask is not an object")
+                continue
+            check_task(sub, problems, is_parent=False)
+            ids.append(sub.get("TaskID"))
+
+    real_ids = [i for i in ids if isinstance(i, int)]
+    idset = set(real_ids)
+    dupes = sorted({i for i in real_ids if real_ids.count(i) > 1})
+    if dupes:
+        problems.append(f"duplicate TaskIDs: {dupes}")
+
+    for parent in data:
+        subtasks = parent.get("subtasks") if isinstance(parent, dict) else None
+        for sub in subtasks if isinstance(subtasks, list) else []:
+            if not isinstance(sub, dict):
+                continue
+            pred = sub.get("Predecessor")
+            if isinstance(pred, str) and pred:
+                if not PREDECESSOR_RE.fullmatch(pred):
+                    problems.append(f"task[{sub.get('TaskID')}]: bad Predecessor format {pred!r}")
+                elif int(re.match(r'\d+', pred).group()) not in idset:
+                    problems.append(f"task[{sub.get('TaskID')}]: Predecessor refs missing TaskID in {pred!r}")
+
+    if problems:
+        print("\n".join(problems))
+        return 1
+
+    print(f"{len(data)} phase(s), {len(real_ids) - len(data)} task(s), {len(idset)} unique TaskIDs")
+    return 0
+
+
+sys.exit(main())
+PY
+}
+
+#######################################
+# Report a schema-check result to stderr.
+# Arguments:
+#   $1 - exit code from validate_schema (0 ok, 1 invalid)
+#   $2 - file path (for the log record)
+#   $3 - captured report from validate_schema
+# Returns: the schema-check exit code
+#######################################
+report_result() {
+  local rc="${1}" file="${2}" report="${3}"
+  if (( rc == 0 )); then
+    log::ok "Valid .gantt file | file='${file}'"
+    [[ -n "${report}" ]] && log::INFO "${report}"
+    return 0
+  fi
+  log::err "Invalid .gantt file | file='${file}'"
+  log::ERR "${report}"
+  return 1
+}
+
+# --- Task listing ---
+
+#######################################
+# Print leaf tasks (subtasks) sorted by a date field, to stdout.
+# Globals:
+#   GANTT_FILE - path to the file to read
+# Arguments:
+#   $1 - sort field: "StartDate" or "EndDate"
+# Outputs: stdout — "<start>  <end>  <task>  (<phase>)" per line
+#######################################
+list_tasks() {
+  local sort_field="${1}"
+  jq -r --arg key "${sort_field}" '
+    [.data[] as $phase | $phase.subtasks[]
+      | {StartDate, EndDate, name: .TaskName, phase: $phase.TaskName}]
+    | sort_by(.[$key])[]
+    | "\(.StartDate[0:10])  \(.EndDate[0:10])  \(.name)  (\(.phase))"
+  ' "${GANTT_FILE}"
+}
+
+# --- Help ---
+
+help() {
+  cat <<EOF
+${c_green}validate${c_rst} — schema-check an onlinegantt.com .gantt file (read-only)
+
+${c_bold}Usage:${c_rst}
+  zsh $HOME/.claude/skills/ari-diagram-onlinegantt/bin/validate --file FILE [--sort start|end]
+
+${c_bold}Options:${c_rst}
+  --file FILE       Path to the .gantt file to validate (required)
+  --sort start|end  After validating, print the task list sorted by start or
+                    end date (requires jq)
+  --verbose         Enable debug logging
+  -h, --help        Show this help
+
+${c_bold}Examples:${c_rst}
+  zsh $HOME/.claude/skills/ari-diagram-onlinegantt/bin/validate --file chart.gantt
+  zsh $HOME/.claude/skills/ari-diagram-onlinegantt/bin/validate --file chart.gantt --sort start
+EOF
+}
+
+# --- Main ---
+
+main() {
+  # === PARSE ===
+  local verbose=false file="" sort=""
+
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)  help; return 0 ;;
+    --verbose)  verbose=true; shift ;;
+    --file)     file="${2:?--file requires a value}"; shift 2 ;;
+    --sort)     sort="${2:?--sort requires a value}"; shift 2 ;;
+    -*)         log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)          log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
+  esac; done
+
+  export VERBOSE="${verbose}"
+
+  # === MASSAGE ===
+  case "${sort:l}" in
+    s|start|startdate) sort="StartDate" ;;
+    e|end|enddate)     sort="EndDate" ;;
+  esac
+  log::debug "Parsed args | file='${file}' sort='${sort}'"
+
+  # === VALIDATE ===
+  [[ -n "${file}" ]] || { log::err "Missing --file"; help; return 1; }
+  [[ -f "${file}" ]] || { log::err "File not found | file='${file}'"; return 1; }
+  if [[ -n "${sort}" && "${sort}" != "StartDate" && "${sort}" != "EndDate" ]]; then
+    log::err "Invalid --sort | sort='${sort}' valid='start, end'"; help; return 1
+  fi
+
+  local -a needed=(python3)
+  [[ -n "${sort}" ]] && needed+=(jq)
+  check_prerequisites "${needed[@]}" || return 1
+
+  # === LOGIC ===
+  local report rc
+  set +e
+  report="$(GANTT_FILE="${file}" validate_schema)"
+  rc=$?
+  set -e
+
+  report_result "${rc}" "${file}" "${report}" || return 1
+
+  if [[ -n "${sort}" ]]; then
+    log::info "Tasks by ${sort}"
+    GANTT_FILE="${file}" list_tasks "${sort}"
+  fi
+}
+
+main "${@}"
