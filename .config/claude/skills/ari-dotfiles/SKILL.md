@@ -13,7 +13,7 @@ the content should be identical on every machine or belongs to this one.
 | Shared | `git dotfiles` / `git df` | `~/dotfiles.git` | `$HOME` | Generic, every-machine config under `~/.config` | One shared repo; only Ari pushes |
 | Local | `git local-dotfiles` / `git ldf` | `~/.local/local-dotfiles.git` | `~/.local` | Company- and machine-specific code under `~/.local` | One private repo per machine; the agent pushes |
 
-On this laptop the local `origin` is a private repo under the work GitHub account
+On this laptop the local `origin` is a private repo
 (`git ldf remote get-url origin`). State (`~/.local/state`) and cache (`~/.cache`) are never versioned.
 
 ## Workflow

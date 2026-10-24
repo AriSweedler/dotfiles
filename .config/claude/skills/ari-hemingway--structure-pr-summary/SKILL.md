@@ -36,7 +36,7 @@ Optional:
 
 - Kernighan & Ritchie: no marketing, no hedging, no investigation narrative (link the thread instead).
 - Real identifiers, full cluster names, PR/ticket links as `[text](url)`.
-- Nothing the other body sections own: risks, guard, test evidence.
+- Nothing the other body sections own: risks, rollout safety, test evidence.
 
 ## Workflow
 
