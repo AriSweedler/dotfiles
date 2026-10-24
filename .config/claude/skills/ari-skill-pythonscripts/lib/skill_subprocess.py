@@ -1,11 +1,11 @@
 """Bounded subprocess helper: run a command under a wall-clock cap, die on failure.
 
 Conventions: /ari-skill-pythonscripts SKILL.md (## Subprocesses). Ships paired with
-at_log (imported below); both are on PYTHONPATH via the entrypoint.
+skill_log (imported below); both are on PYTHONPATH via the entrypoint.
 """
 import subprocess
 
-from at_log import die
+from skill_log import die
 
 
 def run_capture(cmd, timeout_s, *, what=None):

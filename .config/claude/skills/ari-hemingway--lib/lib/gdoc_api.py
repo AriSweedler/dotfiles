@@ -1,15 +1,15 @@
 """Docs API helpers shared by the hemingway publish scripts (share-gdoc's gdoc_asides.py and
 structure-bookmark's gdoc_bookmarks.py).
 
-On PYTHONPATH through each script's zsh entrypoint, beside at_log and at_subprocess. Everything here
+On PYTHONPATH through each script's zsh entrypoint, beside skill_log and skill_subprocess. Everything here
 either calls the gws CLI or walks a documents.get reply. The two literals both scripts must agree on
 (the return-link text an aside tab carries, the marker text an aside puts in the body) live here too.
 """
 import json
 import shutil
 
-from at_log import die, log_info
-from at_subprocess import run_capture
+from skill_log import die, log_info
+from skill_subprocess import run_capture
 
 GWS_TIMEOUT_S = 90
 FIRST_TAB = "t.0"

@@ -26,7 +26,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from at_log import log_info, log_warn, die
+from skill_log import log_info, log_warn, die
 
 DEFAULT_UNIVERSAL_RATIO = 0.5
 DEFAULT_MIN_ROWS = 0  # --min-rows off: an article may hoist no rows and run on glossary vocabulary alone

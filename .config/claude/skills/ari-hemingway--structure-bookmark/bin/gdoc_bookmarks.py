@@ -20,7 +20,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from at_log import die, log_info, log_warn
+from skill_log import die, log_info, log_warn
 from gdoc_api import (
     FIRST_TAB,
     GWS_TIMEOUT_S,

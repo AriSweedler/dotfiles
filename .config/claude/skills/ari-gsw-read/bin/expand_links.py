@@ -7,8 +7,8 @@ import argparse
 import json
 import re
 
-from at_log import log_info, log_warn, log_err, die
-from at_subprocess import run_capture
+from skill_log import log_info, log_warn, log_err, die
+from skill_subprocess import run_capture
 
 GWS_TIMEOUT_S = 90
 TAB_URL = "https://docs.google.com/document/d/{doc_id}/edit?tab={tab_id}"

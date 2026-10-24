@@ -11,8 +11,8 @@ import argparse
 import shutil
 from pathlib import Path
 
-from at_log import log_info, die
-from at_subprocess import run_capture
+from skill_log import log_info, die
+from skill_subprocess import run_capture
 
 VALID_MODES = ("reg", "compare")
 PREREQS = ("git",)

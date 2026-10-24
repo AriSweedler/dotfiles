@@ -29,7 +29,7 @@ import json
 import re
 from pathlib import Path
 
-from at_log import die, log_info
+from skill_log import die, log_info
 from gdoc_api import (
     FIRST_TAB,
     RETURN_TEXT,

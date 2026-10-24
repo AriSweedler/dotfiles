@@ -22,7 +22,7 @@ import sys
 import zlib
 from pathlib import Path
 
-from at_log import die, log_info
+from skill_log import die, log_info
 
 OBJ_RE = re.compile(rb"(\d+) 0 obj(.*?)endobj", re.S)
 STREAM_RE = re.compile(rb"stream\r?\n(.*?)\r?\nendstream", re.S)

@@ -20,8 +20,8 @@ import zlib
 from dataclasses import dataclass
 from pathlib import Path
 
-from at_log import log_info, log_warn, die  # on PYTHONPATH via the entrypoint
-from at_subprocess import run_capture
+from skill_log import log_info, log_warn, die  # on PYTHONPATH via the entrypoint
+from skill_subprocess import run_capture
 
 GWS_TIMEOUT_S = 90
 TMP_JSON_DIR = Path("/tmp/ari-gsw-doc-to-md")

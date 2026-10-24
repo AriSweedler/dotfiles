@@ -1,7 +1,7 @@
 """Canonical stderr logging for Python skill scripts (`log_info/log_warn/log_err/die`).
 
 Conventions and the entrypoint PYTHONPATH bootstrap: /ari-skill-pythonscripts SKILL.md.
-Named `at_log` (not `logging`) so it can't shadow the stdlib on PYTHONPATH.
+Named `skill_log` (not `logging`) so it can't shadow the stdlib on PYTHONPATH.
 """
 import sys
 

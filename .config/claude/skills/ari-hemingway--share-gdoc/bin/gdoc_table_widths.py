@@ -27,7 +27,7 @@ import argparse
 import json
 from pathlib import Path
 
-from at_log import die, log_info, log_warn
+from skill_log import die, log_info, log_warn
 
 FONT_SIZE_PT = 11.0
 LINE_HEIGHT_PT = 15.15  # measured: rendered table height minus row padding, per modeled line
