@@ -55,7 +55,7 @@ function _payloads() {  # every snippet= param of the last URL, decoded, one JSO
 # ============================================================================
 cat > "${_shared}" <<'EOF'
 [
-  {"name":"sig","text":"Ari\nAirtable","keyword":";sig"},
+  {"name":"sig","text":"Ari\nAcme","keyword":";sig"},
   {"name":"shrug","text":"¯\\_(ツ)_/¯"},
   {"name":"addr","text":"1 Main St","keyword":";addr","id":"ignored-extra-field"}
 ]
@@ -68,7 +68,7 @@ raycast_snippets::tier_file bogus >/dev/null 2>&1; _rc=$?
 _t "tier_file: unknown label rc 1" "1" "${_rc}"
 _t "placeholder_text: names the local file with HOME as ~" "OVERRIDE WITH A ~/x/y/snippets.json file" "$(ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS="${HOME}/x:${HOME}/x/y" raycast_snippets::placeholder_text)"
 _t "normalize: only name/text/keyword, keyword order then keyword-less by name, empty keyword dropped" \
-  '[{"name":"addr","text":"1 Main St","keyword":";addr"},{"name":"sig","text":"Ari\nAirtable","keyword":";sig"},{"name":"shrug","text":"¯\\_(ツ)_/¯"}]' \
+  '[{"name":"addr","text":"1 Main St","keyword":";addr"},{"name":"sig","text":"Ari\nAcme","keyword":";sig"},{"name":"shrug","text":"¯\\_(ツ)_/¯"}]' \
   "$(raycast_snippets::source | jq -c .entries)"
 _t "source: every name is shared" '{"addr":"shared","shrug":"shared","sig":"shared"}' "$(raycast_snippets::source | jq -cS .tiers)"
 print -r -- '[{"name":"a","text":1}]' | raycast_snippets::normalize >/dev/null 2>&1; _rc=$?
@@ -113,11 +113,11 @@ _t "sync: rc 0" "0" "${_rc}"
 _t "sync: one deeplink for the whole batch" "1" "$(_urls | wc -l | tr -d ' ')"
 _t "sync: deeplink is the import URL" "raycast://snippets/import?snippet=" "$(tail -n 1 "${_log}" | cut -c1-34)"
 _t "sync: payload is exactly the pending set, canonical entries" \
-  '[{"name":"addr","text":"1 Main St","keyword":";addr"},{"name":"sig","text":"Ari\nAirtable","keyword":";sig"},{"name":"shrug","text":"¯\\_(ツ)_/¯"}]' \
+  '[{"name":"addr","text":"1 Main St","keyword":";addr"},{"name":"sig","text":"Ari\nAcme","keyword":";sig"},{"name":"shrug","text":"¯\\_(ツ)_/¯"}]' \
   "$(_payloads | jq -sc .)"
 _t "sync: result line" "snippets: imported=3 changed=0 removed_in_repo=0" "$(print -r -- "${_out}" | grep '^snippets:')"
 _t "sync: manifest records the three names with text and keyword" \
-  '{"addr":{"keyword":";addr","text":"1 Main St"},"shrug":{"keyword":null,"text":"¯\\_(ツ)_/¯"},"sig":{"keyword":";sig","text":"Ari\nAirtable"}}' \
+  '{"addr":{"keyword":";addr","text":"1 Main St"},"shrug":{"keyword":null,"text":"¯\\_(ツ)_/¯"},"sig":{"keyword":";sig","text":"Ari\nAcme"}}' \
   "$(jq -c . "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 
 # --- sync: nothing to do ---
@@ -135,7 +135,7 @@ _t "no-op: manifest not rewritten" "${_mtime_before}" "${_mtime_after}"
 # --- sync: changed, new, removed together ---
 cat > "${_shared}" <<'EOF'
 [
-  {"name":"sig","text":"Ari\nAirtable, Infra","keyword":";sig"},
+  {"name":"sig","text":"Ari\nAcme, Infra","keyword":";sig"},
   {"name":"addr","text":"1 Main St","keyword":";addr"},
   {"name":"greet","text":"Hi!"}
 ]
@@ -150,7 +150,7 @@ _t "sync: result and the two delete-by-hand lines" \
   $'snippets: imported=1 changed=1 removed_in_repo=1\nstale in Raycast, delete by hand: sig\nremoved_in_repo, delete by hand in Raycast: shrug' \
   "$(print -r -- "${_out}" | grep -E '^(snippets:|stale|removed_in_repo,)')"
 _t "sync: manifest updated for sig and greet, shrug kept until reset" '["addr","greet","shrug","sig"]' "$(jq -c 'keys' "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
-_t "sync: manifest holds the new sig text" $'Ari\nAirtable, Infra' "$(jq -r '.sig.text' "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
+_t "sync: manifest holds the new sig text" $'Ari\nAcme, Infra' "$(jq -r '.sig.text' "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 : > "${_log}"
 _out="$(raycast_snippets --sync 2>/dev/null)"
 _t "no-op after a change: removed still reported, nothing opened" $'snippets: nothing to import | unchanged=3\nremoved_in_repo, delete by hand in Raycast: shrug\npending=0' "${_out}"

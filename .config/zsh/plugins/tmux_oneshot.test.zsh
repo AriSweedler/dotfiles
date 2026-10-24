@@ -119,14 +119,14 @@ chmod +x "${_stub}"
 _db2="$(mktemp /tmp/tmux-oneshot-test-db2.XXXXX.json)"
 jq --arg s "${_stub}" 'map(.cmd |= sub("STUB"; $s))' > "${_db2}" << 'EOF'
 [
- {"menu": {"name": "ap",  "text": "AWS_PROFILE → clipboard · hyperbase, pick env (4)"}, "cmd": "STUB --query \"'hyperbase' \"", "autodismiss": true},
+ {"menu": {"name": "ap",  "text": "AWS_PROFILE → clipboard · acme, pick env (4)"}, "cmd": "STUB --query \"'acme' \"", "autodismiss": true},
  {"menu": {"name": "aP",  "text": "AWS_PROFILE → clipboard · ALL accounts, pick (7)"},  "cmd": "STUB", "autodismiss": true},
- {"menu": {"name": "apa", "text": "hyperbase alpha"},      "cmd": "STUB --query \"'alpha' 'hyperbase' \"",      "autodismiss": true},
- {"menu": {"name": "aps", "text": "hyperbase staging"},    "cmd": "STUB --query \"'staging' 'hyperbase' \"",    "autodismiss": true},
- {"menu": {"name": "app", "text": "hyperbase production"}, "cmd": "STUB --query \"'production' 'hyperbase' \"", "autodismiss": true},
+ {"menu": {"name": "apa", "text": "acme alpha"},      "cmd": "STUB --query \"'alpha' 'acme' \"",      "autodismiss": true},
+ {"menu": {"name": "aps", "text": "acme staging"},    "cmd": "STUB --query \"'staging' 'acme' \"",    "autodismiss": true},
+ {"menu": {"name": "app", "text": "acme production"}, "cmd": "STUB --query \"'production' 'acme' \"", "autodismiss": true},
  {"menu": {"name": "aPa", "text": "all accounts · alpha"},   "cmd": "STUB --query \"'alpha' \"",   "autodismiss": true},
  {"menu": {"name": "aPs", "text": "all accounts · staging"}, "cmd": "STUB --query \"'staging' \"", "autodismiss": true},
- {"menu": {"name": "ap login", "text": "aws sso login · hyperbase, pick env → window sso"}, "window": "sso", "cmd": "ACTION=login STUB --query \"'hyperbase' \""},
+ {"menu": {"name": "ap login", "text": "aws sso login · acme, pick env → window sso"}, "window": "sso", "cmd": "ACTION=login STUB --query \"'acme' \""},
  {"menu": {"name": "caffeinate", "text": "keep the display awake → window caf"}, "cmd": "echo caf-ran", "window": "caf", "key": "ctrl-k"},
  {"menu": {"name": "go", "text": "open a go/ link (prompts for the short name)"}, "prompt": "go/ ", "key": "ctrl-g", "cmd": "echo \"https://go/${ONESHOT_INPUT}\"", "autodismiss": true},
  {"menu": {"name": "claude-link", "text": "open the mermaid.ink URL on the clipboard"}, "key": "ctrl-l", "cmd": "echo link-ran", "autodismiss": true}
@@ -220,7 +220,7 @@ _t "empty typed value skips flag" "mycmd" "$(tmux_oneshot::_assemble "${_entry}"
 local _nested='{"cmd": "irun", "flags": [
   {"flag": "ACTION", "type": "kv", "style": "equals", "options": ["copy_env", "login"]}
 ], "subcommands": [
-  {"cmd": "ap", "description": "hyperbase all envs"},
+  {"cmd": "ap", "description": "acme all envs"},
   {"cmd": "git", "description": "deep demo", "subcommands": [
     {"cmd": "commit", "flags": [{"flag": "--amend"}]}
   ]}
@@ -591,10 +591,10 @@ _t "_pick passes --expect and no header to fzf" "--expect=ctrl-g,ctrl-k,ctrl-l 0
 _t "_pick preview is the shared program on the hidden index" "--preview jq -r --arg i {1} ${(qq)TMUX_ONESHOT_JQ_PREVIEW} ${(qq)_db2}" \
   "$(tail -1 "${_calls_file}" | grep -o -- '--preview .*' | sed 's/ --preview-window.*//')"
 _set_picks $'apa\t\taPa'
-_t "_pick e2e: exact name beats the highlighted row" "aws_profile --query 'alpha' 'hyperbase' " \
+_t "_pick e2e: exact name beats the highlighted row" "aws_profile --query 'alpha' 'acme' " \
   "$(tmux_oneshot::_pick 2>/dev/null)"
 _set_picks $'\t\t'"${_row_apa%%$'\t'*}"$'\t'
-_t "_pick e2e: highlighted row runs" "aws_profile --query 'alpha' 'hyperbase' " \
+_t "_pick e2e: highlighted row runs" "aws_profile --query 'alpha' 'acme' " \
   "$(tmux_oneshot::_pick 2>/dev/null)"
 _set_picks "ESC"
 _err_out="$(tmux_oneshot::_pick 2>&1)"; _err_rc=$?
@@ -677,7 +677,7 @@ _t "ranking regression (real fzf): 'ap' beats 'apa' despite the longer text" "0"
 # ---------------------------------------------------------------------------
 local _calls_before
 _calls_before="$(wc -l < "${_calls_file}")"
-_t "immediate entry runs its cmd" "aws_profile --query 'alpha' 'hyperbase' " "$(_run_key apa 2>/dev/null)"
+_t "immediate entry runs its cmd" "aws_profile --query 'alpha' 'acme' " "$(_run_key apa 2>/dev/null)"
 _t "immediate entry never calls _fzf" "${_calls_before}" "$(wc -l < "${_calls_file}")"
 : > "${_tmux_file}"
 ( export TMUX=test-dummy; _run_key aPa > /dev/null 2>&1 )
@@ -687,7 +687,7 @@ _t "autodismiss flashes '✓ <name>'" "display-message|-d|1500|✓ aPa" "$(_tmux
 _err_out="$(export TMUX=test-dummy; _run_key 'ap login' 2>/dev/null)"; _err_rc=$?
 _t "window entry: rc 0, no hold" "0 " "${_err_rc} $(print -r -- "${_err_out}" | grep HELD)"
 _t "window entry: opens its named window" "new-window|-n|sso" "$(_tmux_last 1-3)"
-_t "window entry: cmd travels as one argv element, then the window name" "ACTION=login ${_stub} --query \"'hyperbase' \"|sso" "$(_tmux_last 10-)"
+_t "window entry: cmd travels as one argv element, then the window name" "ACTION=login ${_stub} --query \"'acme' \"|sso" "$(_tmux_last 10-)"
 : > "${_tmux_file}"
 ( export TMUX=test-dummy; _run_key caffeinate > /dev/null 2>&1 )
 _t "_new_window argv: -n name -c pwd zsh -c runner tmux-oneshot cmd name" \
@@ -761,11 +761,11 @@ _t "empty prompt aborts: says so, nothing evaluated" "Aborted: empty input" \
 # ---------------------------------------------------------------------------
 _t "--dry-run app: surface fields" "name=app tier=db src=${_db2} surface=popup autodismiss=true key=- prompt=-" \
   "$(tmux_oneshot --dry-run app 2>/dev/null | sed -n 1p)"
-_t "--dry-run app: cmd" "cmd=${_stub} --query \"'production' 'hyperbase' \"" \
+_t "--dry-run app: cmd" "cmd=${_stub} --query \"'production' 'acme' \"" \
   "$(tmux_oneshot --dry-run app 2>/dev/null | sed -n 2p)"
 _t "--dry-run 'ap login': surface window:sso" "surface=window:sso autodismiss=false" \
   "$(tmux_oneshot --dry-run 'ap login' 2>/dev/null | grep -o 'surface=[^ ]* autodismiss=[^ ]*')"
-_t "--dry-run 'ap login': cmd" "cmd=ACTION=login ${_stub} --query \"'hyperbase' \"" \
+_t "--dry-run 'ap login': cmd" "cmd=ACTION=login ${_stub} --query \"'acme' \"" \
   "$(tmux_oneshot --dry-run 'ap login' 2>/dev/null | sed -n 2p)"
 _t "--dry-run go: prompt left unexpanded" "cmd=echo \"https://go/\${ONESHOT_INPUT}\"" \
   "$(tmux_oneshot --dry-run go 2>/dev/null | sed -n 2p)"
@@ -790,7 +790,7 @@ export TMUX_ONESHOT_LOG="${_log}"
 # the executed CLI path end to end.
 _t "CLI select by spaced name" "named-ran" \
   "$(TMUX= zsh "${HOME}/.config/bin/tmux-oneshot" "My Name" 2>/dev/null | grep -o named-ran)"
-_t "CLI: apa runs the stub with the alias body" "aws_profile --query 'alpha' 'hyperbase' " \
+_t "CLI: apa runs the stub with the alias body" "aws_profile --query 'alpha' 'acme' " \
   "$(TMUX_ONESHOT_DB="${_db2}" TMUX= zsh "${HOME}/.config/bin/tmux-oneshot" apa 2>/dev/null)"
 
 zsh "${HOME}/.config/bin/tmux-oneshot" --list > /dev/null 2>&1
