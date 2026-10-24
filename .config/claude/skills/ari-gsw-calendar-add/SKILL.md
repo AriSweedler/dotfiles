@@ -10,7 +10,11 @@ Turn source material — a Slack post, a pasted receipt/confirmation, a verbal a
 ## Rules
 
 - **Title, time, and location are required. Notes (description) are optional.** If any required field is missing from the source material, ask the user for the missing field(s) — NEVER create an event without all three. The same applies to a type's required fields (see its section).
-- **Every title is `[<Type>] <Title>`.** Pick the type from the **Event types** sections. If no section fits, ask the user what prefix to use and offer to add a section for it via `/ari-skill-update` (a work-only type goes in the local file named under **Event types**).
+- **Every title is `[<Type>] <Title>`, unless the type has its own calendar.** A type with a **Calendar** line in its section goes on that calendar with no prefix: the calendar already says what it is. Pick the type from the **Event types** sections. If no section fits, ask the user what prefix to use and offer to add a section for it via `/ari-skill-update` (a work-only type goes in the local file named under **Event types**).
+- **Calendar:** `primary` unless the type's section names one. Resolve a named calendar by listing, never from memory:
+  ```zsh
+  gws calendar calendarList list 2>/dev/null | jq -r '.items[] | select(.summary | test("<name>"; "i")) | .id'
+  ```
 - **Times are RFC3339 with an explicit offset** (e.g. `2026-08-15T21:00:00-07:00`), using the event location's timezone.
 - **End time:** if the source gives none, use start + 2 hours and show the assumed end in the confirmation.
 - **Each description element goes on its own line** (doors time, ticket link, purchase record, playlist, …) — newline-separated, never a run-on sentence.
@@ -25,7 +29,8 @@ One section per type: its prefix plus type-specific rules. When a new type appea
 
 ### [Concert]
 
-- **Artist: required — and IS the title**, so the title is `[Concert] <artist>`.
+- **Calendar: the one whose name contains "concert"** (resolve its id per the Calendar rule), passed as `--calendar <id>`. Never `primary`.
+- **Artist: required — and IS the title**, with no prefix: the title is just `<artist>` (the Concerts calendar makes `[Concert]` redundant).
 - **Times:** the event start is ALWAYS the showtime; the doors time ALWAYS goes in the description.
 - **Ticket-purchase link: required.** Goes in the description. Strip ALL query params from the link; exceptions where a param is load-bearing will be listed here as we learn them (currently none).
 - **Ticket purchase record: required.** When/how tickets were bought — date, ticket count, platform, dollar amount (e.g. `6/24/26: 1 ticket on Ticketweb, $31.55`). Goes in the description alongside the ticket link; derivable from a receipt blob.
@@ -39,7 +44,8 @@ Worked example — a Ticketweb order receipt paste:
 
 | Field | Extracted |
 | --- | --- |
-| Title | `[Concert] Krooked Kings` |
+| Calendar | Concerts (id from `calendarList list`) |
+| Title | `Krooked Kings` |
 | Time | Sat Aug 15, 9:00 PM PDT (`2026-08-15T21:00:00-07:00`) |
 | Location | The Independent, 628 Divisadero St, San Francisco, CA 94117 |
 | Description | Four lines: `Doors: 8:30 PM PDT` / `Opener: Pink Skies` / `Tickets: https://www.ticketweb.com/event/krooked-kings-the-independent-tickets/14902833` / `Purchased 6/24/26: 1 ticket on Ticketweb, $31.55` |
@@ -83,7 +89,7 @@ Ask the user for any missing required field (title, time, location, plus the typ
 Show the assembled event and wait for approval. Mark any assumed value (defaulted end time, resolved attendee email):
 
 ```
-[Concert] Krooked Kings
+Krooked Kings  (calendar: Concerts)
 Sat Aug 15, 9:00 PM – 11:00 PM PDT (end assumed: start + 2h)
 The Independent, 628 Divisadero St, San Francisco, CA 94117
 ---
@@ -96,8 +102,10 @@ Purchased 6/24/26: 1 ticket on Ticketweb, $31.55
 Then:
 
 ```zsh
-gws calendar +insert --summary '[<Type>] <Title>' --start '<RFC3339>' --end '<RFC3339>' --location '<where>' --description '<notes>' 2>/dev/null
+gws calendar +insert --calendar '<id or primary>' --summary '<title>' --start '<RFC3339>' --end '<RFC3339>' --location '<where>' --description '<notes>' 2>/dev/null
 ```
+
+`--summary` is `[<Type>] <Title>` on `primary` and the bare title on a type's own calendar.
 
 Useful extras: `--attendee <email>` (repeatable), `--meet` (adds a Meet link). Report the `htmlLink` and `id` from the response, then open the event with the dotfiles opener (`~/.config/bin/open-link`, work-profile Chrome first):
 
@@ -112,13 +120,13 @@ If the insert fails (non-zero exit), show gws's stderr and offer retry / debug �
 For a small fix (add an attendee, tweak a field), patch the existing event. `--params` carries only URL/query parameters — body fields passed there are silently dropped (unchanged resource, same etag, no error); the request body goes in `--json`. `attendees` replaces the whole list, so include existing attendees when adding one:
 
 ```zsh
-gws calendar events patch --params '{"calendarId": "primary", "eventId": "<id>", "sendUpdates": "all"}' --json '{"attendees": [{"email": "<email>"}]}' 2>/dev/null
+gws calendar events patch --params '{"calendarId": "<the event's calendar id>", "eventId": "<id>", "sendUpdates": "all"}' --json '{"attendees": [{"email": "<email>"}]}' 2>/dev/null
 ```
 
 If the event is wholesale wrong, delete it and re-insert. `events delete` writes its empty-body response to a file in cwd (`download.html` by default) and `-o` must resolve inside cwd — so run it from `/tmp`:
 
 ```zsh
-cd /tmp && gws calendar events delete -o gws-delete-response.out --params '{"calendarId": "primary", "eventId": "<id>"}' 2>/dev/null && rm -f gws-delete-response.out
+cd /tmp && gws calendar events delete -o gws-delete-response.out --params '{"calendarId": "<calendar id>", "eventId": "<id>"}' 2>/dev/null && rm -f gws-delete-response.out
 ```
 
-Verify with `gws calendar events get --params '{"calendarId": "primary", "eventId": "<id>"}' 2>/dev/null | jq -r '.status'` — `cancelled` means deleted.
+Verify with `gws calendar events get --params '{"calendarId": "<calendar id>", "eventId": "<id>"}' 2>/dev/null | jq -r '.status'` — `cancelled` means deleted.
