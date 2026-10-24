@@ -181,6 +181,8 @@ Exoskeleton is the model.
 | `new-machine` Brewfile (`~/.config/new-machine/Brewfile`) | `~/.local/share/new-machine/Brewfile` | merged for `brew bundle` |
 | `open-any` (`~/.config/zsh/plugins/open_any.zsh`) | `~/.local/bin/open-*` | discovered by name across both bin tiers |
 | Starship prompt (`~/.config/starship.toml`, joined by `~/.config/zsh/plugins/starship.zsh`) | `~/.local/share/starship/*.toml`, whole tables only | joined after the base into `~/.local/state/starship/starship.toml` (`STARSHIP_CONFIG`) at shell start; a table in both tiers is a TOML error and the prompt falls back to the base |
+| tmuxinator (`~/.config/tmuxinator/*.yml`) | `~/.local/share/tmuxinator/*.yml` | `TMUXINATOR_CONFIG`, set by `~/.config/zsh/plugins/tmux.zsh` when the dir exists; searched before the shared dir |
+| Neovim (`~/.config/nvim/`) | `~/.local/share/nvim/site/plugin/*.lua` | nvim's own data-dir runtimepath (kept by lazy.nvim's rtp reset) |
 | fzfdb selectors (functions in `~/.config/zsh/plugins/`) | `~/.local/share/{go_aws,kuber,aws_profile}/` | data read by the shared functions |
 | `PATH` (`prepend_to_path` in `ari.zsh`) | `~/.local/bin/`, `~/.local/share/bin/` | on `PATH` on every machine |
 

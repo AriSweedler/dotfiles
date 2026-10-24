@@ -4,6 +4,13 @@ export TMUX_DATA_DIR="$XDG_DATA_HOME/tmux"
 export TMUX_PLUGIN_MANAGER_ROOT="$TMUX_DATA_DIR/tpm"
 export TMUX_PLUGIN_MANAGER_PATH="$TMUX_DATA_DIR/tpm_plugins"
 
+# The local tier's tmuxinator projects. `tmuxinator start <name>` looks in
+# $TMUXINATOR_CONFIG first, then ~/.config/tmuxinator, so shared projects still
+# resolve; `tmuxinator list` shows only this directory while it is set.
+if [[ -d "$XDG_DATA_HOME/tmuxinator" ]]; then
+  export TMUXINATOR_CONFIG="$XDG_DATA_HOME/tmuxinator"
+fi
+
 function ensure_tpm_installed() {
   [ -d "$TMUX_PLUGIN_MANAGER_ROOT" ] && return
 

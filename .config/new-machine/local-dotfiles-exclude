@@ -62,3 +62,11 @@
 /share/raycast-snippets/manifest.json
 # Starship tables joined after the shared ~/.config/starship.toml (zsh/plugins/starship.zsh).
 !/share/starship/
+# tmuxinator projects found through TMUXINATOR_CONFIG (zsh/plugins/tmux.zsh).
+!/share/tmuxinator/
+# nvim loads site/plugin/*.lua from its data dir; the rest of share/nvim is tool state.
+!/share/nvim/
+/share/nvim/*
+!/share/nvim/site/
+/share/nvim/site/*
+!/share/nvim/site/plugin/
