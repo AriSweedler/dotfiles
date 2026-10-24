@@ -9,10 +9,10 @@
 #          run_cmd / run_cmd_cap             run a command, logging before and on failure
 # Knobs (all optional):
 #   LOG_PREAMBLE=1|0   '[ts] [caller]' after the tag. Default: on when stderr is not a tty
-#                      (log files, launchd), off on a terminal. OTTO_NO_PREAMBLE and
-#                      AT_LOG_SKIP_PREAMBLE also turn it off.
-#   VERBOSE=true, OTTO_DEBUG=1, AT_DEBUG=<existing file>   turn log::debug on
-#   OTTO_ERR_LOGFILE / AT_ERR_LOGFILE   log::err also appends the bare message there
+#                      (log files, launchd), off on a terminal. OTTO_NO_PREAMBLE also
+#                      turns it off.
+#   VERBOSE=true, OTTO_DEBUG=1   turn log::debug on
+#   OTTO_ERR_LOGFILE   log::err also appends the bare message there
 #   NO_COLOR, or stderr not a tty        colours off at source time; log::colors_on|off flips
 #   lvl=INFO lvl_fail=ERR                run_cmd's tiers, per call: `lvl=DEBUG run_cmd …`
 # Colours are real escape bytes ($'\e[..'), so a heredoc renders them; they are plain variables,
@@ -31,7 +31,7 @@ if [[ -t 2 && -z "${NO_COLOR:-}" ]]; then log::colors_on; else log::colors_off; 
 
 # --- Preamble: ' [ts] [caller]', fork-free (strftime + funcstack), or nothing ---
 log::is_preamble_on() {
-  [[ -n "${OTTO_NO_PREAMBLE:-}" || -n "${AT_LOG_SKIP_PREAMBLE:-}" ]] && return 1
+  [[ -n "${OTTO_NO_PREAMBLE:-}" ]] && return 1
   case "${LOG_PREAMBLE:-}" in
     1|true|on) return 0 ;;
     0|false|off) return 1 ;;
@@ -66,14 +66,13 @@ log::dev()   { log::_line "${c_cyan}"   '[DEV]'   "$@"; }
 # Returns 0 so `set -e` callers never abort on a log line.
 log::err() {
   log::_line "${c_red}" '[ERROR]' "$@"
-  local f="${OTTO_ERR_LOGFILE:-${AT_ERR_LOGFILE:-}}"
+  local f="${OTTO_ERR_LOGFILE:-}"
   [[ -n "${f}" ]] && print -r -- "$*" >> "${f}"
   return 0
 }
 log::is_debug_on() {
   [[ "${VERBOSE:-}" == (true|1) ]] && return 0
-  [[ -n "${OTTO_DEBUG:-}" && "${OTTO_DEBUG}" != 0 ]] && return 0
-  [[ -n "${AT_DEBUG:-}" && -f "${AT_DEBUG}" ]]
+  [[ -n "${OTTO_DEBUG:-}" && "${OTTO_DEBUG}" != 0 ]]
 }
 log::debug() { log::is_debug_on || return 0; log::_line "${c_grey}" '[DEBUG]' "$@"; }
 log::_err()   { log::err "$@"; }
