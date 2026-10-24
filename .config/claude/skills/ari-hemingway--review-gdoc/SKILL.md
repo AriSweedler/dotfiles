@@ -126,7 +126,7 @@ If a reviewer has zero findings, it MUST still emit the Checklist (all PASS/N-A)
 
 Accept one of:
 - **Markdown path** — validate `[[ -f "${path}" && -r "${path}" ]]`; `file "${path}"` reports `ASCII` or `UTF-8`; size >0 bytes. On failure STOP and print reason.
-- **Google Doc URL** — validate `^https://docs\.google\.com/document/d/[A-Za-z0-9_-]+`. Fetch via `mcp__escalation_mcp_server__google_docs_read_document`.
+- **Google Doc URL** — validate `^https://docs\.google\.com/document/d/[A-Za-z0-9_-]+`. Fetch via `/ari-gsw-doc-to-md`.
   - On MCP fetch failure, STOP and present three options inline: (1) Retry the fetch, (2) Paste content directly, (3) Abort. Print the MCP error verbatim before the prompt. See `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md` `## MCP reliability` for error-printing conventions.
 - **Inline paste** — require length >50 chars; reject token-stubs and empty strings.
 
@@ -368,7 +368,7 @@ Print: `Present complete — {k} findings selected.` (or `... 0 selected — clo
 ### findings.md entry (after merge across gdoc-specific and axis)
 
 ```markdown
-## 3. Hardcoded `Hyperbase/hyperbase/blob/a1b2c3d/` in permalink
+## 3. Hardcoded `acme/shop/blob/a1b2c3d/` in permalink
 
 **Flagged by:** links, factual
 **Rule:** Link formatting → Permalinks for code references (`/ari-hemingway--format-gdoc`) + Factual rule on permalink format (`/ari-hemingway--review-factual`)

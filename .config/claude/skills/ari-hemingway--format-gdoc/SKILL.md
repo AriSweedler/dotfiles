@@ -140,19 +140,19 @@ Some Slack threads / human-written summaries cite times in PT. Verify the offset
 - **Permalink the FIRST mention per section; bare backticks for later mentions.**
   - First mention in a section: MUST be a `/blob/{sha}/` GitHub permalink. Resolve the SHA BEFORE writing any permalinks — see `Resolve permalink SHA` in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`.
   - Later mentions in the same section: bare backtick code span.
-  - New `#` section resets the counter. `##` subsections inherit from the parent `#`. Aliases count as new mentions (re-link `router` if the first mention was `WWW_ROUTES`).
+  - New `#` section resets the counter. `##` subsections inherit from the parent `#`. Aliases count as new mentions (re-link `router` if the first mention was `ROUTES`).
   - NEVER use `/blob/main/`, a branch name, a tag, or a short SHA. ALWAYS `/blob/{sha}/` with the full 40-char SHA from the script.
 - **Link labels describe the thing, NOT its address.** Line numbers (`L42`, `L104-L134`) belong in the URL fragment only — never in the visible label text. The label names the function, behavior, file, or concept; the URL carries the coordinates.
 - **Code without a stable repo location uses bare backticks with no link.** Examples: shell builtins, external library symbols, env vars set only at runtime, generated code, dynamically-constructed names. Do NOT fabricate a repo path.
 
 URL template: `https://github.com/{owner_repo}/blob/{sha}/{path}#L{line}`. Substitute `{owner_repo}` and `{sha}` from the script output — do not hardcode repo names in any example.
 
-- GOOD: `[WWW_ROUTES](https://github.com/{owner_repo}/blob/{sha}/packages/www/www_server_utilities.tsx#L28)`
+- GOOD: `[ROUTES](https://github.com/{owner_repo}/blob/{sha}/src/routes.ts#L28)`
 - GOOD: `[the cancel() override in PipelineStage.java](https://github.com/{owner_repo}/blob/{sha}/path/PipelineStage.java#L104-L134)`
 - BAD: `[PipelineStage.java L104-L134](https://github.com/{owner_repo}/blob/{sha}/path/PipelineStage.java#L104-L134)` — line numbers in label
 - BAD: `[widget_cache.tsx — pruneFn (L47)](https://...)` — line number in parenthetical
-- BAD: `[WWW_ROUTES](https://github.com/Hyperbase/hyperbase/blob/main/packages/www/www_server_utilities.tsx#L28)` — branch name, hardcoded repo
-- BAD (first mention): `` `WWW_ROUTES` ``
+- BAD: `[ROUTES](https://github.com/acme/shop/blob/main/src/routes.ts#L28)` — branch name, hardcoded repo
+- BAD (first mention): `` `ROUTES` ``
 
 ### Link density
 
@@ -178,8 +178,8 @@ Never mention a Claude skill in a Doc, let alone link one: no skill name in the 
 
 Full title + number as link text. Escape `[]` in titles; keep `()` as-is.
 
-- GOOD: `[[deploy] Mirror k8s tools (eksctl, kubectl) to Cloudfront CDN in production (#207238)](https://github.com/Hyperbase/hyperbase/pull/207238)`
-- BAD: `PR #207238: mirroring eksctl/kubectl to this CDN`
+- GOOD: `[[build] Cache build tools on the CDN (#4821)](https://github.com/acme/shop/pull/4821)`
+- BAD: `PR #4821: caching build tools on the CDN`
 
 ### Google Workspace URLs
 
@@ -250,9 +250,9 @@ One-paragraph overview.
 2. ...
 
 # Useful links
-- [WWW_ROUTES](https://github.com/{owner_repo}/blob/{sha}/...)
+- [ROUTES](https://github.com/{owner_repo}/blob/{sha}/...)
 - see https://docs.google.com/document/d/1abc...
-- [[deploy] ... (#207238)](https://github.com/.../pull/207238)
+- [[build] ... (#4821)](https://github.com/.../pull/4821)
 
 🤖🌸 Generated with Claude Code
 ```

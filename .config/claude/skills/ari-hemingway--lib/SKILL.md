@@ -98,7 +98,7 @@ Filled example:
 - **Mode**: research
 - **Pointers**: server/widget_cache.tsx, PR #198432
 - **Key findings**:
-  - Redis channel is `widget:invalidate:{appId}` at [widget_cache.tsx L42](https://github.com/Hyperbase/hyperbase/blob/a1b2c3d4e5f67890abcdef1234567890abcdef12/server/widget_cache.tsx#L42)
+  - Redis channel is `widget:invalidate:{appId}` at [widget_cache.tsx L42](https://github.com/acme/shop/blob/a1b2c3d4e5f67890abcdef1234567890abcdef12/server/widget_cache.tsx#L42)
   - LRU max entries = 500; TTL = 60s
 - **Open questions**:
   - Is dual eviction (TTL + LRU) intentional?
@@ -112,7 +112,7 @@ Filled example:
 ## Files read
 | Path | Relevant finding |
 |---|---|
-| [`server/widget_cache.tsx`](https://github.com/Hyperbase/hyperbase/blob/a1b2c3d4e5f67890abcdef1234567890abcdef12/server/widget_cache.tsx#L1-L50) | LRU cache with 500-entry cap and 60s TTL |
+| [`server/widget_cache.tsx`](https://github.com/acme/shop/blob/a1b2c3d4e5f67890abcdef1234567890abcdef12/server/widget_cache.tsx#L1-L50) | LRU cache with 500-entry cap and 60s TTL |
 
 ## Grep queries
 | Pattern | Scope | Hits | Finding |
@@ -167,7 +167,7 @@ The script synchronously runs `git fetch origin main` first, then resolves the S
 
 Sample output:
 ```
-owner_repo=Hyperbase/hyperbase
+owner_repo=acme/shop
 sha=a1b2c3d4e5f67890abcdef1234567890abcdef12
 ref=origin/main
 host=github.com
@@ -219,7 +219,7 @@ NEVER pick autonomously — if unclear, re-ask.
 
 ## MCP reliability
 
-Pattern for MCP tool calls that can fail transiently (auth, rate limits, network). Used by any sibling that fetches external state — e.g., `mcp__escalation_mcp_server__google_docs_read_document`.
+Pattern for MCP tool calls that can fail transiently (auth, rate limits, network). Used by any sibling that fetches external state — e.g., a Slack or Google Docs MCP read.
 
 On non-zero return or missing expected fields, STOP and present three options:
 1. **Retry** — re-run the MCP call.

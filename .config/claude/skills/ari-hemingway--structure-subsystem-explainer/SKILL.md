@@ -206,7 +206,7 @@ On yes: update scratchpad `Mode: research (switched from distill at {timestamp})
 
 **Distill evidence check (before drafting).** Enumerate the candidate subsystem(s) the session's reads touched. If reads don't cluster around a single subsystem, ask: `The session touched {list}. Which should I distill?` If the user has no answer, STOP.
 
-**Update mode** — fetch the existing doc via `mcp__escalation_mcp_server__google_docs_read_document`. After fetching, print `Target doc: {title} — last edited {date}.` and proceed.
+**Update mode** — fetch the existing doc via `/ari-gsw-doc-to-md`. After fetching, print `Target doc: {title} — last edited {date}.` and proceed.
 
 On fetch failure, follow the `MCP reliability` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`. Option 3 is "switch to research mode".
 

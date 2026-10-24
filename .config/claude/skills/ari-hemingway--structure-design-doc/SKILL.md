@@ -196,7 +196,7 @@ On yes: update scratchpad `Mode: propose (switched from distill at {timestamp})`
 
 **Distill open-question check (before drafting).** Enumerate every unresolved question from the conversation. For each: (a) was it explicitly answered upstream (then incorporate into the relevant section)? (b) is it still open (then add to Open questions)? (c) was it implicitly answered by a later turn (then incorporate and record under `Open questions resolved` in scratchpad)? Do NOT silently drop unresolved questions.
 
-**Update mode** — fetch the existing doc via `mcp__escalation_mcp_server__google_docs_read_document`. After fetching, print `Target doc: {title} — last edited {date}. Produce update? (y/N)` before proceeding.
+**Update mode** — fetch the existing doc via `/ari-gsw-doc-to-md`. After fetching, print `Target doc: {title} — last edited {date}. Produce update? (y/N)` before proceeding.
 
 On fetch failure, follow the `MCP reliability` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`. Option 3 is "switch to propose mode".
 
