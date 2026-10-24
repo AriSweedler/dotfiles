@@ -10,7 +10,7 @@ One axis of the Hemingway review family. Flags prose that's hard to parse even i
 ## Rules this axis checks
 
 - **Active voice preferred.** Passive voice acceptable only when the agent is unknown or unimportant.
-- **Define acronyms on first use.** `MCR` → `MCR (multi-cluster rollout)` on first mention per section.
+- **Define acronyms on first use.** `SLO` → `SLO (service-level objective)` on first mention per section.
 - **Jargon requires a one-sentence definition** if the audience isn't guaranteed to know it. "PDB" is fine for a k8s-internal doc; "disruption budget" for a general doc.
 - **Pronoun antecedent unambiguous.** `it`, `this`, `they` must refer to something identified in the previous sentence.
 - **One clause per sentence in operational text.** Split compound sentences that chain actions.
