@@ -11,10 +11,10 @@ Formatting rules: see `/ari-hemingway--format-gdoc`. Workflow patterns (investig
 
 ## Document structure
 
-Follows the service-orchestration house format (exemplar: "[Playbook] Use MCR to emergency shutdown a service"). Required sections, in order:
+Follows an ops-team house format (exemplar: "[Playbook] Emergency-shut down a service"). Required sections, in order:
 
 1. **Title** — H1, `[Playbook] <imperative phrase>`, matching the doc filename.
-2. **Contact line** — immediately under the title: the owning team's linked Slack channel (e.g. `#help-service-orchestration-and-deploy`).
+2. **Contact line** — immediately under the title: the owning team's linked Slack channel (e.g. `#help-deploys`).
 3. **Summary** — the happy path in 2–3 numbered steps before any detail ("If X: 1. do A, 2. do B"). When multiple sources of truth exist, rank them here.
 4. **When to use** — trigger conditions: the alerts, requests, or situations that route a reader here. Also state when NOT to use it, linking the sibling playbook that covers the near-miss case ("If you need X instead, see [Playbook Y]").
 5. **Preconditions & access** — roles, CLIs, auth, and safety checks the reader must have or perform before step 1. A reader who fails a precondition stops here.
@@ -38,15 +38,15 @@ Optional sections:
 ### Commands
 
 - Every command goes in a fenced code block, copy-pasteable exactly as written. One command per block — never chain commands the reader must mentally split. Never put code in gdoc tables — it converts to mush.
-- Parameterize via env vars set once up front (`export STAGE=…`, `export SERVICE_NAME=…`); long grunt invocations use `\` continuations.
+- Parameterize via env vars set once up front (`export STAGE=…`, `export SERVICE_NAME=…`); long invocations use `\` continuations.
 - Each step states its expected output or observable effect. A step whose success the reader can't recognize is not a step.
 - Commands that mutate state must be labeled as mutating so the reader — not an agent — runs them deliberately.
 - Use full resource names (full cluster names, full table names, full pipeline names) — never abbreviations or placeholders the reader must expand from memory.
 
 ### One method per step; permissions
 
-- Prescribe exactly ONE method per step (KISS) — the most automated blessed path, naming the exact pipeline (e.g. **Emergency Shutdown Pipeline `<serviceName>` `<stage>`**). Never present a menu of alternatives; if another method exists, it belongs in a failure branch or a one-line aside, not the procedure.
-- Route permissions explicitly: when a command needs elevated permissions, say so and link the per-stage admin-grunt-task Spinnaker pipelines (alpha/staging/production) and go/production-access for prod.
+- Prescribe exactly ONE method per step (KISS) — the most automated blessed path, naming the exact pipeline (e.g. **Shutdown pipeline `<service>` `<stage>`**). Never present a menu of alternatives; if another method exists, it belongs in a failure branch or a one-line aside, not the procedure.
+- Route permissions explicitly: when a command needs elevated permissions, say so and link the per-stage pipeline or access request that grants them.
 - Call out reversibility at decision points ("use `disable-image` (reversible), not `deregister-image` (irreversible)").
 
 ### Verification gates
@@ -68,7 +68,7 @@ Root path: `/tmp/hemingway/playbook/{topic-slug}/{timestamp}/`. Structure, schem
 
 ### Determine mode
 
-- **research** — build the playbook from scratch: read the code paths, grunt tasks, pipelines, and monitors that the operation touches; verify each command against the source before writing it down.
+- **research** — build the playbook from scratch: read the code paths, scripts, pipelines, and monitors that the operation touches; verify each command against the source before writing it down.
 - **distill** — the session (or a linked thread/investigation) already contains the operation's steps and evidence; extract, order, and gate them. Fact-check commands against code rather than trusting session memory.
 - **update** — an existing playbook (gdoc URL or file) needs revision; diff its claims against current code/infra, preserve its structure unless wrong, and mark stale commands.
 
@@ -92,7 +92,7 @@ Follow the `Drafting` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKIL
 
 ### Fact-check
 
-Follow the `Fact-check gate` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`. Commands get the strictest treatment: each fenced command must trace to a source (code permalink, grunt task registration, pipeline definition) in the sources file.
+Follow the `Fact-check gate` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`. Commands get the strictest treatment: each fenced command must trace to a source (code permalink, script or task definition, pipeline definition) in the sources file.
 
 ### Present
 
