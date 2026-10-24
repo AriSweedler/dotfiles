@@ -1,2 +1,38 @@
-# Set PS1 to something fancy
+# Set PS1 to something fancy.
+#
+# Starship reads exactly one file. The local tier adds whole tables in
+# ${XDG_DATA_HOME}/starship/*.toml; they are joined after the shared base into
+# ${XDG_STATE_HOME}/starship/starship.toml. A table defined in both tiers is a TOML
+# error, and an invalid join falls back to the shared base alone.
+
+# Sets REPLY to the config path starship should read. Writes <out> and validates only
+# when the join changed, so a shell start with nothing new forks nothing.
+function starship_config_join() {
+  emulate -L zsh
+  local base="$1" overlay_dir="$2" out="$3"
+  local -a overlays=("${overlay_dir}"/*.toml(N))
+  REPLY="${base}"
+  (( ${#overlays} )) || return 0
+
+  local joined="$(<"${base}")" overlay
+  for overlay in "${overlays[@]}"; do
+    joined+=$'\n\n'"# --- ${overlay} ---"$'\n'"$(<"${overlay}")"
+  done
+  if [[ -f "${out}" && "$(<"${out}")" == "${joined}" ]]; then
+    REPLY="${out}"
+    return 0
+  fi
+
+  local err
+  if ! err="$(print -r -- "${joined}" | python3 -I -c 'import sys, tomllib; tomllib.loads(sys.stdin.read())' 2>&1)"; then
+    log::err "starship: the joined config is not valid TOML, using the shared base alone | overlays='${overlays[*]}' err='${err##*$'\n'}'"
+    return 1
+  fi
+  mkdir -p "${out:h}"
+  print -r -- "${joined}" >| "${out}.tmp.$$" && mv -f "${out}.tmp.$$" "${out}" || return 1
+  REPLY="${out}"
+}
+
+starship_config_join "${XDG_CONFIG_HOME}/starship.toml" "${XDG_DATA_HOME}/starship" "${XDG_STATE_HOME}/starship/starship.toml"
+export STARSHIP_CONFIG="${REPLY}"
 eval "$(starship init zsh)"
