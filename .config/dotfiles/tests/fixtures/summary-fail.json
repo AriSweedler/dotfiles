@@ -69,8 +69,8 @@
     "declared_orphan": [],
     "duplicate": [],
     "ignored": [
-      {"kind": "formula", "name": "bazelisk", "tier": "local", "reason": "company tooling owns these",
-       "via": "include-declared /tmp/nmtest/home/src/work/Brewfile"}
+      {"kind": "formula", "name": "bazelisk", "tier": "local", "reason": "another tool owns these",
+       "via": "include-declared /tmp/nmtest/home/src/other/Brewfile"}
     ],
     "unresolvable_ignore": [],
     "redundant_ignore": [],

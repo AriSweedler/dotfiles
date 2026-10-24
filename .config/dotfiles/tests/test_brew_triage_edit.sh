@@ -27,7 +27,7 @@ editor choose '
   k == "skip formula:libtiff"                { print "global add  formula:libtiff  # image library"; next }
   k == "skip formula:python@3.10"            { print "local ignore  formula:python@3.10  # pulled in by a cask"; next }
   k == "skip cask:google-chrome"             { print "local ignore cask:google-chrome # pulled in by a cask"; next }
-  k == "skip formula:buildkite/buildkite/bk@3" { print "global ignore  formula:buildkite/buildkite/bk@3  # company Brewfile owns it"; next }
+  k == "skip formula:buildkite/buildkite/bk@3" { print "global ignore  formula:buildkite/buildkite/bk@3  # another Brewfile owns it"; next }
   { print }'
 editor bad '
   k == "skip formula:gh"      { print "local nope  formula:gh"; next }
@@ -122,7 +122,7 @@ assert_eq "dry run: exit 0" 0 "${RC}"
 assert_contains "dry run: the plan's title" "${OUT}" "plan: 4 decree(s), one commit each (dry run)"
 assert_contains "dry run: global add, with its reason" "${OUT}" "dotfiles brew decree formula:libtiff --global --reason 'image library' --dry-run --no-push"
 assert_contains "dry run: local add, two items for one reason in one decree" "${OUT}" "dotfiles brew decree formula:gh cask:instant-space-switcher --local --reason 'work tools' --dry-run --no-push"
-assert_contains "dry run: global ignore, with its reason" "${OUT}" "--ignore-global --reason 'company Brewfile owns it'"
+assert_contains "dry run: global ignore, with its reason" "${OUT}" "--ignore-global --reason 'another Brewfile owns it'"
 assert_contains "dry run: local ignore, one group for one reason" "${OUT}" "formula:python@3.10 cask:google-chrome --ignore-local --reason 'pulled in by a cask'"
 assert_eq "dry run: no df commit" "${df_before}" "$(df_count)"
 assert_eq "dry run: no ldf commit" "${ldf_before}" "$(ldf_count)"
@@ -146,7 +146,7 @@ assert_eq "real run: exit 0" 0 "${RC}"
 assert_eq "real run: two df commits (global add, global ignore)" "$(( df_before + 2 ))" "$(df_count)"
 assert_eq "real run: two ldf commits (local add, local ignore)" "$(( ldf_before + 2 ))" "$(ldf_count)"
 assert_contains "real run: the df subjects" "$(df_git log -2 --format=%s)" "dotfiles: declare formula libtiff (global)"
-assert_contains "real run: the global ignore" "$(df_git log -2 --format=%s)" "dotfiles: ignore formula buildkite/buildkite/bk@3 (global): company Brewfile owns it"
+assert_contains "real run: the global ignore" "$(df_git log -2 --format=%s)" "dotfiles: ignore formula buildkite/buildkite/bk@3 (global): another Brewfile owns it"
 assert_contains "real run: the ldf subjects" "$(ldf_git log -2 --format=%s)" "dotfiles: declare 2 items (local)"
 assert_contains "real run: the local ignore" "$(ldf_git log -2 --format=%s)" "dotfiles: ignore 2 items (local): pulled in by a cask"
 assert_contains "real run: the add's reason is the Brewfile comment" "$(cat "${ARI_DOTFILES_LOCAL_DIR}/Brewfile")" '"gh"  # work tools'

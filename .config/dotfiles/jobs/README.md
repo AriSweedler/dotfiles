@@ -52,8 +52,8 @@ its contribution to the plugin's environment, `NAME=VALUE` lines and nothing els
 before the plugin starts; its stderr is setup chatter and goes to the plugin's log. A dep that
 is unknown, exits non-zero, overruns, or prints anything but `NAME=VALUE` blocks the plugin:
 the run is recorded with rc 125, the log says which dep and why, and the alert says "blocked".
-`dotfiles jobs list` shows every dep, its tier, and the plugins that want it. This machine's
-`node` dep activates the company node venv and prints the resulting `PATH`, so the checks in
+`dotfiles jobs list` shows every dep, its tier, and the plugins that want it. A machine's
+`node` dep can activate its node toolchain and print the resulting `PATH`, so the checks in
 `dotfiles-verify` that shell out to node find it under launchd.
 
 The framework runs the plugin with the trigger as `$1`, keeps its output in

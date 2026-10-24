@@ -30,13 +30,13 @@ rm -f "${ARI_DOTFILES_STATE_DIR}/last_result.json"
 # Everything ignored (and the orphan repaired) is a clean machine.
 fixture_remove_formula spacectl spacelift-io/spacelift/spacectl
 printf '%s\n' \
-  'formula gh                         # company tooling' \
+  'formula gh                         # owned elsewhere' \
   'formula python@3.10                # pinned interpreter' \
-  'formula buildkite/buildkite/bk@3   # company tooling' \
+  'formula buildkite/buildkite/bk@3   # owned elsewhere' \
   'formula libtiff                    # library' \
   'cask google-chrome                 # browser' \
   'cask instant-space-switcher        # utility' \
-  'tap buildkite/buildkite            # company tooling' \
+  'tap buildkite/buildkite            # owned elsewhere' \
   'tap hashicorp/tap                  # terraform' \
   'tap jurplel/tap                    # instant-space-switcher' \
   'tap spacelift-io/spacelift         # spacectl' > "${FIX}/ignore.base"

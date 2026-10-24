@@ -190,7 +190,7 @@ brew::info_installed() {
 
 # brew::alias_map <info_installed.json> <inventory.json> → {formula: {<key>: [full_name...]},
 # cask: {<key>: [token...]}}. Keys: name, full_name, aliases, oldnames, and <tap>/<alias|oldname>
-# so a company `buildkite/buildkite/bk` canonicalizes to bk@3. Receipt-derived keys cover kegs the
+# so a tap-qualified oldname like `buildkite/buildkite/bk` canonicalizes to bk@3. Receipt-derived keys cover kegs the
 # JSON omits. Values are arrays: a short name claimed by two taps is ambiguous, never a guess.
 brew::alias_map() {
   local info="${1:?brew::alias_map: info_installed.json required}"

@@ -66,11 +66,11 @@ assert_eq "vscode \"Golang.Go\" satisfies installed golang.go" false "$(is_undec
 assert_eq "undeclared vscode: 1" 1 "$(undeclared_count vscode)"
 
 world_ignore local include
-classify "include-declared company" "" "" "${ARI_DOTFILES_LOCAL_DIR}/Brewfile.ignore"
-assert_json "bk@3 ignored via the company Brewfile" "${FIX}/drift.json" '[.ignored[] | .name] | index("buildkite/buildkite/bk@3") != null' true
-assert_json "gh ignored via the company Brewfile" "${FIX}/drift.json" '[.ignored[] | .name] | index("gh") != null' true
-assert_json "tap buildkite/buildkite ignored via the company Brewfile" "${FIX}/drift.json" '[.ignored[] | select(.kind=="tap") | .name] | index("buildkite/buildkite") != null' true
-assert_contains "via names the include path" "$(jq -r '.ignored[] | select(.name=="gh") | .via' "${FIX}/drift.json")" "${FIX}/brew/company.Brewfile"
+classify "include-declared included" "" "" "${ARI_DOTFILES_LOCAL_DIR}/Brewfile.ignore"
+assert_json "bk@3 ignored via the included Brewfile" "${FIX}/drift.json" '[.ignored[] | .name] | index("buildkite/buildkite/bk@3") != null' true
+assert_json "gh ignored via the included Brewfile" "${FIX}/drift.json" '[.ignored[] | .name] | index("gh") != null' true
+assert_json "tap buildkite/buildkite ignored via the included Brewfile" "${FIX}/drift.json" '[.ignored[] | select(.kind=="tap") | .name] | index("buildkite/buildkite") != null' true
+assert_contains "via names the include path" "$(jq -r '.ignored[] | select(.name=="gh") | .via' "${FIX}/drift.json")" "${FIX}/brew/included.Brewfile"
 assert_eq "undeclared formulae with the include: 2" 2 "$(undeclared_count formula)"
 assert_json "no include_declared_missing" "${FIX}/drift.json" '.include_declared_missing|length' 0
 
@@ -85,11 +85,11 @@ classify "dependency-only ignore" "" "${HOME}/.config/new-machine/Brewfile.ignor
 assert_json "dependency-only keg ignore is not unresolvable" "${FIX}/drift.json" '.unresolvable_ignore | length' 0
 assert_json "dependency-only keg ignore matches no candidate" "${FIX}/drift.json" '[.ignored[] | select(.name == "python@3.14")] | length' 0
 
-printf '%s\n' "include-declared ${FIX}/brew/no-such-company.Brewfile   # moved checkout" > "${ARI_DOTFILES_LOCAL_DIR}/Brewfile.ignore"
+printf '%s\n' "include-declared ${FIX}/brew/no-such-included.Brewfile   # moved checkout" > "${ARI_DOTFILES_LOCAL_DIR}/Brewfile.ignore"
 classify "include path missing" "" "" "${ARI_DOTFILES_LOCAL_DIR}/Brewfile.ignore"
 assert_json "include_declared_missing names the path" "${FIX}/drift.json" '.include_declared_missing | length' 1
-assert_contains "include_declared_missing carries the path" "$(jq -c '.include_declared_missing' "${FIX}/drift.json")" "no-such-company.Brewfile"
-assert_eq "company items are back in undeclared (formulae: 4)" 4 "$(undeclared_count formula)"
+assert_contains "include_declared_missing carries the path" "$(jq -c '.include_declared_missing' "${FIX}/drift.json")" "no-such-included.Brewfile"
+assert_eq "included items are back in undeclared (formulae: 4)" 4 "$(undeclared_count formula)"
 assert_eq "gh undeclared again" true "$(is_undeclared formula gh)"
 
 if [[ -d "${TESTS_DIR}/fixtures/this-machine" ]]; then

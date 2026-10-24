@@ -37,7 +37,7 @@ world_ignore local include
 bump_now_secs 60
 nm brew triage
 assert_eq "triage still exits 1 with items left" 1 "${RC}"
-assert_contains "ignored via include-declared names the path" "${OUT}" "include-declared ${FIX}/brew/company.Brewfile"
+assert_contains "ignored via include-declared names the path" "${OUT}" "include-declared ${FIX}/brew/included.Brewfile"
 assert_not_contains "gh no longer offered for decree" "${OUT}" "decree formula:gh --global"
 
 bump_now_secs 60

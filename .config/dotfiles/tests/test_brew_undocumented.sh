@@ -73,7 +73,7 @@ printf '%s\n' \
   'cask zoom' \
   'tap a/b  #' \
   'formula wget  #   ' \
-  'include-declared /x/Brewfile   # company tooling owns these' \
+  'include-declared /x/Brewfile   # another tool owns these' \
   'include-declared /y/Brewfile' \
   "${MARKER}" \
   'vscode golang.go  # editor' > "${IGNORE}"

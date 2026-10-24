@@ -18,7 +18,7 @@ check_key
 assert_eq "unconfigured → skip" skip "$(step_get ssh_key .status)"
 assert_eq "reason not_configured" not_configured "$(step_get ssh_key .reason)"
 
-export ARI_DOTFILES_SSH_KEY_OP_ITEM="SSH key: tests" ARI_DOTFILES_SSH_KEY_OP_VAULT=Employee
+export ARI_DOTFILES_SSH_KEY_OP_ITEM="SSH key: tests" ARI_DOTFILES_SSH_KEY_OP_VAULT=TestVault
 check_key
 assert_eq "no path → warn" warn "$(step_get ssh_key .status)"
 assert_eq "reason path_unknown" path_unknown "$(step_get ssh_key .reason)"
@@ -67,7 +67,7 @@ nm apply ssh_key
 assert_eq "apply exits 0" 0 "${RC}"
 assert_contains "op asked for the password field, revealed" "$(shim_log op)" "--fields password --reveal"
 assert_contains "op asked for the item" "$(shim_log op)" "SSH key: tests"
-assert_contains "op asked in the vault" "$(shim_log op)" "--vault Employee"
+assert_contains "op asked in the vault" "$(shim_log op)" "--vault TestVault"
 assert_not_contains "passphrase never on argv" "$(shim_log op)" "${PASSPHRASE}"
 assert_not_contains "passphrase never logged" "${ERR}$(cat "$(newest_run_dir)"/ssh_key*.log 2>/dev/null)" "${PASSPHRASE}"
 assert_contains "key is in the agent" "$(ssh-add -l)" "${FINGERPRINT}"
