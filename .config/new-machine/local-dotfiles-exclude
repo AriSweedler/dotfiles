@@ -67,8 +67,10 @@
 # nvim loads site/plugin/*.lua from its data dir; the rest of share/nvim is tool state.
 !/share/nvim/
 /share/nvim/*
+# site/ also holds parsers and packs; only plugin/ is hand-written.
 !/share/nvim/site/
 /share/nvim/site/*
+# The local plugin files.
 !/share/nvim/site/plugin/
 # Work event types /ari-gsw-calendar-add reads beside its own.
 !/share/gsw-calendar-add/
