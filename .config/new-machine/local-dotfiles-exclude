@@ -70,3 +70,5 @@
 !/share/nvim/site/
 /share/nvim/site/*
 !/share/nvim/site/plugin/
+# Work event types /ari-gsw-calendar-add reads beside its own.
+!/share/gsw-calendar-add/

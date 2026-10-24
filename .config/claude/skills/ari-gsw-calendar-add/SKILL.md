@@ -10,7 +10,7 @@ Turn source material — a Slack post, a pasted receipt/confirmation, a verbal a
 ## Rules
 
 - **Title, time, and location are required. Notes (description) are optional.** If any required field is missing from the source material, ask the user for the missing field(s) — NEVER create an event without all three. The same applies to a type's required fields (see its section).
-- **Every title is `[<Type>] <Title>`.** Pick the type from the **Event types** sections. If no section fits, ask the user what prefix to use and offer to add a section for it via `/ari-skill-update`.
+- **Every title is `[<Type>] <Title>`.** Pick the type from the **Event types** sections. If no section fits, ask the user what prefix to use and offer to add a section for it via `/ari-skill-update` (a work-only type goes in the local file named under **Event types**).
 - **Times are RFC3339 with an explicit offset** (e.g. `2026-08-15T21:00:00-07:00`), using the event location's timezone.
 - **End time:** if the source gives none, use start + 2 hours and show the assumed end in the confirmation.
 - **Each description element goes on its own line** (doors time, ticket link, purchase record, playlist, …) — newline-separated, never a run-on sentence.
@@ -21,9 +21,7 @@ Turn source material — a Slack post, a pasted receipt/confirmation, a verbal a
 
 One section per type: its prefix plus type-specific rules. When a new type appears, add a section for it.
 
-### [Airtable Culture Club]
-
-Events coordinated in the Airtable Culture Club (Slack channel posts about movie nights, outings, etc.). Example: a post announcing movie night Thursday — dinner at Super Duper at the office, walking out at 6:30pm, showtime 7pm at the Metreon — becomes `[Airtable Culture Club] Movie night`, start 6:30pm (the walk-out time), location Metreon, with the dinner/logistics detail in the description.
+**Also read `~/.local/share/gsw-calendar-add/event-types.md` when it exists**: work and machine-specific types live there, in the same section format, in the local dotfiles tier. A new work-only type goes in that file, not here.
 
 ### [Concert]
 
@@ -33,7 +31,7 @@ Events coordinated in the Airtable Culture Club (Slack channel posts about movie
 - **Ticket purchase record: required.** When/how tickets were bought — date, ticket count, platform, dollar amount (e.g. `6/24/26: 1 ticket on Ticketweb, $31.55`). Goes in the description alongside the ticket link; derivable from a receipt blob.
 - **Spotify playlist link: optional.** Goes in the description when supplied. No querying if absent.
 - **Opener(s): optional.** When known, each opening act goes in the description on its own line as `Opener: <name>` (e.g. `Opener: Pink Skies`). No querying if absent.
-- **Invitees: optional.** "invite Lavi", "invited Sabrina" → add each as an attendee (`--attendee <email>`, repeatable); use the @airtable.com address when confidently known, otherwise ask for the email. No querying if absent.
+- **Invitees: optional.** "invite Sam", "invited Alex" → add each as an attendee (`--attendee <email>`, repeatable); use the address the user uses for that person when confidently known, otherwise ask for the email. No querying if absent.
 - **The description holds ONLY** the doors time, opener(s), ticket link, purchase record, and optional Spotify link/notes. No incidental receipt text ("All ages", venue policies), and no processing notes like "(all query params stripped)" — just the cleaned content.
 - Missing artist, ticket link, or purchase record → ask the user, per the required-field rule.
 

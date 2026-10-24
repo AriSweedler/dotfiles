@@ -190,6 +190,7 @@ Exoskeleton is the model.
 | Starship prompt (`~/.config/starship.toml`, joined by `~/.config/zsh/plugins/starship.zsh`) | `~/.local/share/starship/*.toml`, whole tables only | joined after the base into `~/.local/state/starship/starship.toml` (`STARSHIP_CONFIG`) at shell start; a table in both tiers is a TOML error and the prompt falls back to the base |
 | tmuxinator (`~/.config/tmuxinator/*.yml`) | `~/.local/share/tmuxinator/*.yml` | `TMUXINATOR_CONFIG`, set by `~/.config/zsh/plugins/tmux.zsh` when the dir exists; searched before the shared dir |
 | Neovim (`~/.config/nvim/`) | `~/.local/share/nvim/site/plugin/*.lua` | nvim's own data-dir runtimepath (kept by lazy.nvim's rtp reset) |
+| `/ari-gsw-calendar-add` event types | `~/.local/share/gsw-calendar-add/event-types.md` | the skill reads it beside its own **Event types** sections |
 | fzfdb selectors (functions in `~/.config/zsh/plugins/`) | `~/.local/share/{go_aws,kuber,aws_profile}/` | data read by the shared functions |
 | `PATH` (`prepend_to_path` in `ari.zsh`) | `~/.local/bin/`, `~/.local/share/bin/` | on `PATH` on every machine |
 
