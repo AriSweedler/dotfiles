@@ -14,7 +14,7 @@ Formatting rules: see `/ari-hemingway--format-gdoc`. Workflow patterns (investig
 Final section order, top to bottom:
 
 1. **Summary** — 2–4 sentences. Broad strokes only: what broke, when, root cause in one phrase, how it cleared. No timestamps deeper than the hour. No code references. A reader who stops here knows the shape of the incident.
-2. **Timeline** — one bullet per load-bearing event. Each bullet ends with a parenthetical citation linking to the source: a Datadog event URL, OpenSearch log permalink, Slack message permalink, GitHub commit, or AWS console reference. No claim without a link. Times in Pacific Time per `/ari-hemingway--format-gdoc` `## Timestamps`. **First line under the `# Timeline` header MUST be the disclaimer `All times are in Pacific Time.` on its own line.**
+2. **Timeline** — one bullet per load-bearing event. Each bullet ends with a parenthetical citation linking to the source: a Datadog event URL, log search permalink, Slack message permalink, GitHub commit, or AWS console reference. No claim without a link. Times in Pacific Time per `/ari-hemingway--format-gdoc` `## Timestamps`. **First line under the `# Timeline` header MUST be the disclaimer `All times are in Pacific Time.` on its own line.**
 3. **Detailed explanation of what went wrong** — the technical narrative. Trigger, contributing factors, root cause. Each claim must cite a source (inline link or end-of-sentence parenthetical). Cite verbatim error messages, monitor IDs, instance IDs, ASG names. If a claim can't be sourced, mark it explicitly: *"Suspected: ... ; not confirmed because ..."*.
 
 That's the whole document. No "what went well", no "lucky vs unlucky", no follow-ups — those belong in a deeper RCA. This is the explainer.
@@ -28,36 +28,36 @@ When investigating or fact-checking, use these tools for these data sources. Don
 | Source | Tool | Notes |
 |---|---|---|
 | Datadog (events, metrics, monitors, logs, traces, dashboards) | `mcp__datadog__*` MCP server | Use directly. Includes `search_datadog_events`, `aggregate_events`, `search_datadog_logs`, etc. |
-| OpenSearch (application logs) | `/opensearch-query` skill | OpenSearch MCP exists but is not yet available in this environment. Use the skill (CLI path) for now. When OpenSearch MCP shows up in the tool registry, switch to it. |
-| Slack threads | `mcp__escalation_mcp_server__slack_*` | Use for resolving thread permalinks and reading messages cited as sources. |
-| Google Docs (playbooks, design docs) | `mcp__escalation_mcp_server__google_docs_read_document` | When a citation points to a gdoc. |
+| Application logs | the log store's MCP server or query skill | Prefer the MCP server when it is in the tool registry. |
+| Slack threads | the Slack MCP server (`slack_read_thread`, `slack_search_*`) | Use for resolving thread permalinks and reading messages cited as sources. |
+| Google Docs (playbooks, design docs) | `/ari-gsw-doc-to-md` | When a citation points to a gdoc. |
 
 If a post-mortem claim depends on data that lives in one of these sources, query it directly — don't paraphrase from someone else's summary. The earlier you query, the cheaper the iteration.
 
-**AWS-side data (CloudTrail, EC2 console, ASG history, etc.):** prefer the four sources above when they're sufficient. The AWS MCP isn't reliable yet, and shelling out to `aws` CLI is something the user can do but generally doesn't want to — most post-mortem questions resolve through Datadog events (resource changes, alerts), OpenSearch logs, or Slack thread context. Only ask the user to run AWS CLI when none of those can answer the question — and say specifically which CLI command would help, so they can decide whether it's worth it.
+**AWS-side data (CloudTrail, EC2 console, ASG history, etc.):** prefer the four sources above when they're sufficient. The AWS MCP isn't reliable yet, and shelling out to `aws` CLI is something the user can do but generally doesn't want to — most post-mortem questions resolve through Datadog events (resource changes, alerts), application logs, or Slack thread context. Only ask the user to run AWS CLI when none of those can answer the question — and say specifically which CLI command would help, so they can decide whether it's worth it.
 
 ### The load-bearing rule: every claim has a link
 
 This is the single non-negotiable rule of this skill.
 
-- Every timestamp links to its source event (Datadog event URL, OpenSearch query URL with time bounds, Slack message permalink).
+- Every timestamp links to its source event (Datadog event URL, log query URL with time bounds, Slack message permalink).
 - Every named identifier (monitor ID, ASG name, instance ID, pod name, PR number, IAM role) appears verbatim and links to its canonical reference.
 - Every causal claim ("X caused Y") links to evidence — a log line, a metric chart, an AWS docs page describing the mechanism.
-- If you can't link it, you can't claim it. State the gap instead: *"The actual IPAMD error message is not recoverable — aws-node logs aren't shipped to OpenSearch and the host was terminated at 21:08."*
+- If you can't link it, you can't claim it. State the gap instead: *"The agent's actual error message is not recoverable — its logs stayed on the host, and the host was terminated at 21:08."*
 
 A post-mortem without links is a story. A post-mortem with links is evidence.
 
 ### Don't inline-qualify what the link already proves
 
-The citation is the proof. Don't pad a claim with "*(per Halo's timeline; not directly verified against monitor history)*" or "*(constructed from query + time range; verify before sharing)*" parentheticals. They're noise; the reader can click the link and see for themselves.
+The citation is the proof. Don't pad a claim with "*(per the incident bot's timeline; not directly verified against monitor history)*" or "*(constructed from query + time range; verify before sharing)*" parentheticals. They're noise; the reader can click the link and see for themselves.
 
 The flow is:
 1. Made the claim → link it. Done. No qualifier.
-2. Couldn't verify the claim from a primary source but it appears in a secondary source (Halo, another investigator) → either upgrade the verification (query the primary source directly) or DON'T MAKE THE CLAIM. Don't ship a half-asserted, half-hedged sentence.
+2. Couldn't verify the claim from a primary source but it appears in a secondary source (an incident bot, another investigator) → either upgrade the verification (query the primary source directly) or DON'T MAKE THE CLAIM. Don't ship a half-asserted, half-hedged sentence.
 3. Claim is your interpretation and not sourced anywhere → mark it `**Suspected:**` / `**Inference:**` and explain why it isn't verified. This is the ONLY acceptable case for hedging in prose.
 
 Wrong:
-> 20:59:28 — Monitor X fired. *(Per Halo; not cross-checked against monitor history.)*
+> 20:59:28 — Monitor X fired. *(Per the incident bot; not cross-checked against monitor history.)*
 
 Right (either):
 > 20:59:28 — Monitor X fired. *(link to the Datadog monitor event)*
@@ -75,12 +75,12 @@ Post-mortem-specific overlay (not in format-gdoc because it's about section plac
 
 When linking to a Datadog Event Explorer query, the link text MUST start with `Datadog event explorer:` followed by a short description of what the query covers.
 
-- GOOD: `[Datadog event explorer: k8s events on node ip-172-30-98-110, 18:29-22:29 UTC](https://app.datadoghq.com/event/explorer?...)`
+- GOOD: `[Datadog event explorer: k8s events on node ip-10-0-12-34, 18:29-22:29 UTC](https://app.datadoghq.com/event/explorer?...)`
 - GOOD: `[Datadog event explorer: fleetwide `failed to assign an IP` events, 20:14-20:35 UTC](https://app.datadoghq.com/event/explorer?...)`
 - BAD: `[Datadog events on the node](https://...)` — doesn't name the destination tool
-- BAD: `[k8s events on node ip-172-30-98-110](https://...)` — same
+- BAD: `[k8s events on node ip-10-0-12-34](https://...)` — same
 
-Rationale: reader scanning the doc should know what's behind the link before clicking, both the platform (Datadog Event Explorer) and the specific query scope. The same convention applies to OpenSearch shareable links (`OpenSearch dashboards:`) and Datadog dashboards (`Datadog dashboard:`).
+Rationale: reader scanning the doc should know what's behind the link before clicking, both the platform (Datadog Event Explorer) and the specific query scope. The same convention applies to log-search shareable links (the tool's name, then a colon) and Datadog dashboards (`Datadog dashboard:`).
 
 ### Datadog Event Explorer URL template
 
@@ -174,7 +174,7 @@ Post-mortem-specific anchors to ask for:
 
 Follow `Restore context` in `$HOME/.claude/skills/ari-hemingway--lib/SKILL.md`.
 
-In *distill* mode, the prior investigation is the primary source — read it first (`findings.md`, scratch notes, transcript permalinks) before any fresh queries. In *research* mode, expect to query Datadog/OpenSearch/Slack fresh.
+In *distill* mode, the prior investigation is the primary source — read it first (`findings.md`, scratch notes, transcript permalinks) before any fresh queries. In *research* mode, expect to query Datadog/log search/Slack fresh.
 
 ### Investigate
 
@@ -190,7 +190,7 @@ The draft happens in two passes. Don't skip the order; the final shape depends o
 
 **Pass 1 — write in causal order, not reading order:**
 
-1. **Timeline first.** Build it directly from raw event sources (Datadog events, OpenSearch hits, Slack permalinks). One bullet per load-bearing moment, each with its citation. This is the spine — everything else hangs off it.
+1. **Timeline first.** Build it directly from raw event sources (Datadog events, log search hits, Slack permalinks). One bullet per load-bearing moment, each with its citation. This is the spine — everything else hangs off it.
 2. **"What went wrong" summary second.** Once the timeline exists, write 1–2 paragraphs explaining what the timeline *means* — what the failure mode was, what cleared it. This is a *working* summary; it will get rewritten in pass 2.
 3. **Detailed explanation third.** Expand on the failure mode: trigger, contributing factors, root cause, with citations on every claim. This is where verbatim error messages, monitor IDs, and mechanism explanations live.
 
