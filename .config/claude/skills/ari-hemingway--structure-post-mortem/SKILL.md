@@ -43,7 +43,7 @@ This is the single non-negotiable rule of this skill.
 - Every timestamp links to its source event (Datadog event URL, log query URL with time bounds, Slack message permalink).
 - Every named identifier (monitor ID, ASG name, instance ID, pod name, PR number, IAM role) appears verbatim and links to its canonical reference.
 - Every causal claim ("X caused Y") links to evidence — a log line, a metric chart, an AWS docs page describing the mechanism.
-- If you can't link it, you can't claim it. State the gap instead: *"The agent's actual error message is not recoverable — its logs stayed in the container, and the container was replaced at 21:08."*
+- If you can't link it, you can't claim it. State the gap instead: *"The agent's actual error message is not recoverable — its logs stayed in the container, and the container was replaced at HH:MM."*
 
 A post-mortem without links is a story. A post-mortem with links is evidence.
 
@@ -76,7 +76,7 @@ Post-mortem-specific overlay (not in format-gdoc because it's about section plac
 When linking to a Datadog Event Explorer query, the link text MUST start with `Datadog event explorer:` followed by a short description of what the query covers.
 
 - GOOD: `[Datadog event explorer: k8s events on node ip-10-0-12-34, 18:29-22:29 UTC](https://app.datadoghq.com/event/explorer?...)`
-- GOOD: `[Datadog event explorer: fleetwide `No space left on device` errors, 20:14-20:35 UTC](https://app.datadoghq.com/event/explorer?...)`
+- GOOD: `[Datadog event explorer: fleetwide `<error string>` errors, HH:MM-HH:MM UTC](https://app.datadoghq.com/event/explorer?...)`
 - BAD: `[Datadog events on the node](https://...)` — doesn't name the destination tool
 - BAD: `[k8s events on node ip-10-0-12-34](https://...)` — same
 
@@ -129,7 +129,7 @@ Summary specifically: 2–4 sentences, < 80 words. Reading it aloud should take 
 
 - Distinguish *trigger* (what kicked it off) from *contributing factors* (what made it worse) from *root cause* (the underlying weakness).
 - If you can't get to a clean root cause from the evidence, say so. Write "Suspected: ... ; not confirmed because ..." rather than asserting.
-- Don't conflate symptoms with causes. "Writes failed with ENOSPC" is a symptom. "Log rotation was off on the data volume" is a candidate root cause.
+- Don't conflate symptoms with causes. "Requests timed out" is a symptom. "The connection pool was sized below peak load" is a candidate root cause.
 
 ### What this skill is NOT
 

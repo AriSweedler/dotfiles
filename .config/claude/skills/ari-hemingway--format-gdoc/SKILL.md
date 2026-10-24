@@ -130,8 +130,8 @@ Some Slack threads / human-written summaries cite times in PT. Verify the offset
 - **Tables for structured data.** 3+ rows × 2+ attribute columns → table. Fewer → bullets.
 - **For component sections, answer "what breaks without this?" in one sentence.** Skip for Summary, How-to-run, References.
 - **Operational commands use real values.** No `<file>` / `<path>` placeholders.
-  - GOOD: `curl -sfL 'https://d1example.cloudfront.net/deps/geoip/geoip.tar.gz?cb=1' -o geoip.tar.gz`
-  - BAD: `curl -sfL 'https://d1example.cloudfront.net/<path>?cb=1' -o <file>`
+  - GOOD: `curl -sfL 'https://cdn.example.com/files/data.tar.gz' -o data.tar.gz`
+  - BAD: `curl -sfL 'https://cdn.example.com/<path>' -o <file>`
 
 ## Link formatting
 
@@ -178,7 +178,7 @@ Never mention a Claude skill in a Doc, let alone link one: no skill name in the 
 
 Full title + number as link text. Escape `[]` in titles; keep `()` as-is.
 
-- GOOD: `[[build] Cache build tools on the CDN (#4821)](https://github.com/acme/shop/pull/4821)`
+- GOOD: `[Cache build tools on the CDN (#4821)](https://github.com/acme/shop/pull/4821)`
 - BAD: `PR #4821: caching build tools on the CDN`
 
 ### Google Workspace URLs
@@ -252,7 +252,7 @@ One-paragraph overview.
 # Useful links
 - [ROUTES](https://github.com/{owner_repo}/blob/{sha}/...)
 - see https://docs.google.com/document/d/1abc...
-- [[build] ... (#4821)](https://github.com/.../pull/4821)
+- [Cache build tools ... (#4821)](https://github.com/.../pull/4821)
 
 🤖🌸 Generated with Claude Code
 ```

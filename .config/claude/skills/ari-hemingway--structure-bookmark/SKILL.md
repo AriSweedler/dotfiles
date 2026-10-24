@@ -23,8 +23,8 @@ Use a bookmark when the reader must land on one sentence: a return link from an 
 - Asides need nothing extra: each `([aside n ℹ️](#aside-n))` marker is an implicit target, and its tab's return links move from the heading above the marker onto the marker itself.
 - The text may be anything, including a code span.
 
-- GOOD: `Do not proceed until [every row reads deleted](#bm-rows-deleted).` … later, in the body or an aside: `That is the [gate in Step 2](#goto-rows-deleted).`
-- BAD: `[every row reads deleted](#bm-rows_deleted)` — underscore, not kebab-case.
+- GOOD: `Do not proceed until [the status reads done](#bm-status-done).` … later, in the body or an aside: `That is the [gate in Step 2](#goto-status-done).`
+- BAD: `[the status reads done](#bm-status_done)` — underscore, not kebab-case.
 - BAD: `[the gate](#goto-step-2)` with no `#bm-step-2` anywhere — the publish fails naming `step-2`.
 - BAD: a `#bm-` inside `# Aside 2: …` — the publish fails naming aside 2 and the slug; put the `#bm-` on the body sentence and the `#goto-` in the aside.
 - BAD: `[Manual cleanup](#goto-aside-3)` — not a form; `[Manual cleanup](#aside-3)` is the reference.
@@ -113,7 +113,7 @@ Drop `--dry-run` to apply. Its log, on success:
 
 ```
 [INFO] bookmark target | key='aside-1' text='aside 1 ℹ️' bookmark='id.abc123'
-[INFO] bookmark target | key='bm-rows-deleted' text='every row reads deleted' bookmark='id.def456'
+[INFO] bookmark target | key='bm-status-done' text='the status reads done' bookmark='id.def456'
 [INFO] bookmarks applied | targets='2' relinked_runs='4' bookmark_links='4'
 ```
 
