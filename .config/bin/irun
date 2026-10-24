@@ -10,7 +10,7 @@
 #
 # Usage:
 #   irun tmv scratch
-#   irun 'aws_profile --query alpha && aws s3 ls'
+#   irun 'aws_profile --query dev && aws s3 ls'
 
 emulate -L zsh
 
@@ -29,7 +29,7 @@ Options:
 
 Examples:
   irun tmv scratch
-  irun 'aws_profile --query alpha && aws s3 ls'
+  irun 'aws_profile --query dev && aws s3 ls'
 EOF
 }
 

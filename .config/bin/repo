@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 # repo — move among the N checkouts of one repo and label the tmux window after the
 # one $PWD is in. The checkouts come from a double_cd `dirs` entry (see double_cd.zsh):
-#   {"name": "h", "dirs": ["~/h/source/a", "~/h/source/b"], "label": "hyp", "default": true}
+#   {"name": "w", "dirs": ["~/src/a", "~/src/b"], "label": "wk", "default": true}
 #
 #   repo index  [--set NAME]   1-based position of $PWD among the set's checkouts, else 0
 #   repo cycle  [--set NAME]   the next checkout's path (wraps; the first when $PWD is outside)

@@ -1,6 +1,6 @@
 function fzfdb::help() {
   cat << EOF
-Helper utility to make "fuzzy-findable databases" (ilo_env, tenants, etc.)
+Helper utility to make "fuzzy-findable databases" (environments, tenants, etc.)
 
 This is a really common concept - I have a list of objects that I wanna
 fuzzy-find through. The easiest way for me to implement this is to define a

@@ -78,11 +78,11 @@ local JSONL="${CLAUDE_PARSERS_PROJECTS_DIR}/-proj/${UUID}.jsonl"
   print -r -- '{"type":"user","message":"hi"}'
   print -r -- '{"type":"pr-link","prNumber":100}'
   print -r -- '{"type":"assistant","message":"ok"}'
-  print -r -- '{"type":"pr-link","prNumber":218482}'
+  print -r -- '{"type":"pr-link","prNumber":4242}'
   print -r -- '{"type":"user","message":"bye"}'
 } > "${JSONL}"
 
-_t "pr: most recent pr-link wins" "218482" "$(claude_parser__pr_from_session__1_0_0 "${UUID}")"
+_t "pr: most recent pr-link wins" "4242" "$(claude_parser__pr_from_session__1_0_0 "${UUID}")"
 _t "pr: unknown uuid rc" "1" \
   "$(claude_parser__pr_from_session__1_0_0 00000000-0000-0000-0000-000000000000 2>/dev/null; print -- $?)"
 

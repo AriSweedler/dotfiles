@@ -119,12 +119,12 @@ chmod +x "${_stub}"
 _db2="$(mktemp /tmp/tmux-oneshot-test-db2.XXXXX.json)"
 jq --arg s "${_stub}" 'map(.cmd |= sub("STUB"; $s))' > "${_db2}" << 'EOF'
 [
- {"menu": {"name": "ap",  "text": "AWS_PROFILE → clipboard · acme, pick env (4)"}, "cmd": "STUB --query \"'acme' \"", "autodismiss": true},
- {"menu": {"name": "aP",  "text": "AWS_PROFILE → clipboard · ALL accounts, pick (7)"},  "cmd": "STUB", "autodismiss": true},
- {"menu": {"name": "apa", "text": "acme alpha"},      "cmd": "STUB --query \"'alpha' 'acme' \"",      "autodismiss": true},
+ {"menu": {"name": "ap",  "text": "AWS_PROFILE → clipboard · acme, pick env"}, "cmd": "STUB --query \"'acme' \"", "autodismiss": true},
+ {"menu": {"name": "aP",  "text": "AWS_PROFILE → clipboard · ALL accounts, pick"},  "cmd": "STUB", "autodismiss": true},
+ {"menu": {"name": "apa", "text": "acme dev"},      "cmd": "STUB --query \"'dev' 'acme' \"",      "autodismiss": true},
  {"menu": {"name": "aps", "text": "acme staging"},    "cmd": "STUB --query \"'staging' 'acme' \"",    "autodismiss": true},
  {"menu": {"name": "app", "text": "acme production"}, "cmd": "STUB --query \"'production' 'acme' \"", "autodismiss": true},
- {"menu": {"name": "aPa", "text": "all accounts · alpha"},   "cmd": "STUB --query \"'alpha' \"",   "autodismiss": true},
+ {"menu": {"name": "aPa", "text": "all accounts · dev"},   "cmd": "STUB --query \"'dev' \"",   "autodismiss": true},
  {"menu": {"name": "aPs", "text": "all accounts · staging"}, "cmd": "STUB --query \"'staging' \"", "autodismiss": true},
  {"menu": {"name": "ap login", "text": "aws sso login · acme, pick env → window sso"}, "window": "sso", "cmd": "ACTION=login STUB --query \"'acme' \""},
  {"menu": {"name": "caffeinate", "text": "keep the display awake → window caf"}, "cmd": "echo caf-ran", "window": "caf", "key": "ctrl-k"},
@@ -201,14 +201,14 @@ _t "unknown style rc" "1" "$?"
 local _entry='{"cmd": "mycmd", "flags": [
   {"flag": "--verbose"},
   {"flag": "--dry-run", "type": "bool"},
-  {"flag": "--env", "type": "kv", "style": "equals", "options": ["alpha", "prod"]},
+  {"flag": "--env", "type": "kv", "style": "equals", "options": ["dev", "prod"]},
   {"flag": "--msg", "type": "kv", "style": "equals-quoted"}
 ]}'
 _t "plain cmd, no args" "echo hi" "$(tmux_oneshot::_assemble '{"cmd": "echo hi"}')"
 _set_picks "verbose|dry-run"
 _t "bool flags multiselect" "mycmd --verbose --dry-run" "$(tmux_oneshot::_assemble "${_entry}")"
-_set_picks "env" "alpha"
-_t "kv flag with options" "mycmd --env=alpha" "$(tmux_oneshot::_assemble "${_entry}")"
+_set_picks "env" "dev"
+_t "kv flag with options" "mycmd --env=dev" "$(tmux_oneshot::_assemble "${_entry}")"
 _set_picks "msg"; _set_typed "hello world"
 _t "kv flag free-text quoted" "mycmd --msg='hello world'" "$(tmux_oneshot::_assemble "${_entry}" 2>/dev/null)"
 _t "kv flag prompt label adds ' value: '" "--msg value: " "$(cat "${_label_file}")"
@@ -591,10 +591,10 @@ _t "_pick passes --expect and no header to fzf" "--expect=ctrl-g,ctrl-k,ctrl-l 0
 _t "_pick preview is the shared program on the hidden index" "--preview jq -r --arg i {1} ${(qq)TMUX_ONESHOT_JQ_PREVIEW} ${(qq)_db2}" \
   "$(tail -1 "${_calls_file}" | grep -o -- '--preview .*' | sed 's/ --preview-window.*//')"
 _set_picks $'apa\t\taPa'
-_t "_pick e2e: exact name beats the highlighted row" "aws_profile --query 'alpha' 'acme' " \
+_t "_pick e2e: exact name beats the highlighted row" "aws_profile --query 'dev' 'acme' " \
   "$(tmux_oneshot::_pick 2>/dev/null)"
 _set_picks $'\t\t'"${_row_apa%%$'\t'*}"$'\t'
-_t "_pick e2e: highlighted row runs" "aws_profile --query 'alpha' 'acme' " \
+_t "_pick e2e: highlighted row runs" "aws_profile --query 'dev' 'acme' " \
   "$(tmux_oneshot::_pick 2>/dev/null)"
 _set_picks "ESC"
 _err_out="$(tmux_oneshot::_pick 2>&1)"; _err_rc=$?
@@ -627,7 +627,7 @@ _db4="$(mktemp /tmp/tmux-oneshot-test-db4.XXXXX.json)"
 cat > "${_db4}" << 'EOF'
 [
  {"menu": {"name": "misc", "text": "ungrouped"}, "cmd": "echo misc-ran", "autodismiss": true},
- {"menu": {"name": "aws/apa", "text": "alpha"}, "cmd": "echo apa-ran", "autodismiss": true},
+ {"menu": {"name": "aws/apa", "text": "dev"}, "cmd": "echo apa-ran", "autodismiss": true},
  {"menu": {"name": "aws/aps", "text": "staging"}, "cmd": "echo aps-ran", "autodismiss": true}
 ]
 EOF
@@ -677,7 +677,7 @@ _t "ranking regression (real fzf): 'ap' beats 'apa' despite the longer text" "0"
 # ---------------------------------------------------------------------------
 local _calls_before
 _calls_before="$(wc -l < "${_calls_file}")"
-_t "immediate entry runs its cmd" "aws_profile --query 'alpha' 'acme' " "$(_run_key apa 2>/dev/null)"
+_t "immediate entry runs its cmd" "aws_profile --query 'dev' 'acme' " "$(_run_key apa 2>/dev/null)"
 _t "immediate entry never calls _fzf" "${_calls_before}" "$(wc -l < "${_calls_file}")"
 : > "${_tmux_file}"
 ( export TMUX=test-dummy; _run_key aPa > /dev/null 2>&1 )
@@ -721,7 +721,7 @@ _err_out="$(export TMUX=test-dummy TMUX_ONESHOT_SURFACE=popup_pane; _run_key aPa
 _t "surface=popup_pane: new-session -d -s oneshot-<pid> -c pwd zsh -c pane-runner" \
   "new-session|-d|-s|oneshot-$$|-c|${PWD}|zsh|-c|${TMUX_ONESHOT_PANE_RUNNER}|tmux-oneshot" "$(_tmux_call new-session 1-10)"
 _t "surface=popup_pane: cmd, autodismiss and the back rc follow the runner" \
-  "${_stub} --query \"'alpha' \"|true|${FZF_GROUP_BACK_RC}" "$(_tmux_call new-session 11)|$(_tmux_call new-session 13-14)"
+  "${_stub} --query \"'dev' \"|true|${FZF_GROUP_BACK_RC}" "$(_tmux_call new-session 11)|$(_tmux_call new-session 13-14)"
 _t "surface=popup_pane: attaches to that session, naming this server's socket" "-S|test-dummy|attach-session|-t|oneshot-$$" "$(_tmux_call -S)"
 _t "surface=popup_pane: status off, attach, then kill the session" "set-option|attach-session|kill-session" \
   "$(_tmux_subcommands '^(set-option|attach-session|kill-session)$')"
@@ -790,7 +790,7 @@ export TMUX_ONESHOT_LOG="${_log}"
 # the executed CLI path end to end.
 _t "CLI select by spaced name" "named-ran" \
   "$(TMUX= zsh "${HOME}/.config/bin/tmux-oneshot" "My Name" 2>/dev/null | grep -o named-ran)"
-_t "CLI: apa runs the stub with the alias body" "aws_profile --query 'alpha' 'acme' " \
+_t "CLI: apa runs the stub with the alias body" "aws_profile --query 'dev' 'acme' " \
   "$(TMUX_ONESHOT_DB="${_db2}" TMUX= zsh "${HOME}/.config/bin/tmux-oneshot" apa 2>/dev/null)"
 
 zsh "${HOME}/.config/bin/tmux-oneshot" --list > /dev/null 2>&1

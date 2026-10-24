@@ -9,7 +9,7 @@
 #     ctmp                 pick a subdir with fzf ('.' is the dir itself)
 #     ctmp <sub>           cd straight in when it exists, else fzf with that query
 #     ctmp --new <sub>     create it first
-#   {"name": "h", "dirs": ["~/h/source/a", "~/h/source/b"], "label": "hyp", "text": "…", "default": true}
+#   {"name": "w", "dirs": ["~/src/a", "~/src/b"], "label": "wk", "text": "…", "default": true}
 #     ch                   cycle to the next checkout (wraps; the first when outside them)
 #     ch <N>               the Nth checkout
 #     ch <query>           fzf over the checkouts

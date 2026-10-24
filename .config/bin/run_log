@@ -59,7 +59,7 @@ terminal — colors, log pretty-printers, progress bars all work — and the
 session is captured byte-for-byte (ANSI escapes and CRLF included) to a
 single output file. With --split, stdout and stderr are captured as separate
 clean files instead, but the command sees pipes: color-auto programs (git,
-grunt pretty-printers) print plain unless forced (git -c color.ui=always).
+npm) print plain unless forced (git -c color.ui=always).
 
 ${c_green}Options:${c_rst}
   --name NAME  Capture dir name (default: <seq>_<cmd-slug>). Absolute paths
@@ -84,8 +84,8 @@ ${c_green}Argument handling:${c_rst}
 ${c_green}Examples:${c_rst}
   run_log kubectl get pods
   run_log --name step1 -- aws s3 ls
-  run_log -- grunt some:task --state='{"isDisabled":false}'
-  run_log 'aws_profile --query alpha && aws s3 ls'
+  run_log -- make deploy ARGS='{"dry_run":false}'
+  run_log 'aws_profile --query dev && aws s3 ls'
   LOG_DIR=/tmp/investigation-42 run_log make build
 EOF
 )"
@@ -221,8 +221,8 @@ close_capture_fds() {
 
 #######################################
 # Run the command under a pty via script(1) so it behaves exactly as in a
-# bare terminal: color-auto and format-switching programs (git, grunt log
-# pretty-printers) see a tty. stdout/stderr merge into one `output` file —
+# bare terminal: color-auto and format-switching programs (git, npm)
+# see a tty. stdout/stderr merge into one `output` file —
 # inherent to a pty. macOS script(1) forwards the child's exit status.
 # Arguments: $1 = capture dir, $2 = command string
 # Returns: the command's exit status
