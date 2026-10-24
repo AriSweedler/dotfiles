@@ -1,11 +1,11 @@
 ---
 name: ari-skill-update
-description: Edit a skill interactively, then commit it to the dotfiles tier that owns it (adopting it first if needed). Runs as a background fork by default.
+description: Edit a skill interactively, then commit it to the dotfiles tier that owns it (adopting it first if needed). A fresh-eyes reviewer blocks any commit that would put company-identifying content in a public skill. Runs as a background fork by default.
 ---
 
 # Skill Update
 
-Edit a skill interactively, then commit it to the dotfiles tier that owns it, adopting it first if it is not yet versioned. Runs in a fork by default so the main thread stays on the real work (see the first workflow step). Quality review is delegated to `/ari-skill-review`; script conventions to `/ari-skill-shellscripts` and `/ari-skill-pythonscripts`.
+Edit a skill interactively, then commit it to the dotfiles tier that owns it, adopting it first if it is not yet versioned. Before any commit to a public tier, a separate reviewer reads the whole skill for anything that identifies Ari's employer; such content belongs only in a private skill. Runs in a fork by default so the main thread stays on the real work (see the first workflow step). Quality review is delegated to `/ari-skill-review`; script conventions to `/ari-skill-shellscripts` and `/ari-skill-pythonscripts`.
 
 ## Rules
 
@@ -34,6 +34,7 @@ Edit a skill interactively, then commit it to the dotfiles tier that owns it, ad
   GOOD: zsh $HOME/.claude/skills/foo/bin/x.zsh --id 123
   ```
 - **NEVER scaffold around a self-contained script.** Skill scripts do their own setup. When a step says to run one, emit exactly that one Bash call — no `mkdir`, `ls`, `echo`, `cd`, or timestamp before or after it. Need its output? Read what it prints; don't re-derive it.
+- **Anything that identifies the employer belongs only in a private skill.** A skill in the shared tier (`tier=df`) or in a submodule with a public upstream (`source=submodule:…`; every submodule today) is public; the local tier (`tier=ldf`) is private — `/ari-dotfiles` Placement rules own that split. Identifying content includes the company's name, brand or email domain; internal repo, service, tool, CLI, pipeline, table, team or channel names; hostnames, IPs, cloud account or project IDs, ARNs and secret paths; internal file paths and PR titles; ticket systems and ticket IDs; coworkers' names; office details; and names of private skills. Never write the employer's name into a public skill, not even to forbid it. Fix each instance one of two ways: make it neutral (a placeholder such as `acme/shop`, `example.com`, `ip-10-0-12-34`, or a generic tool kind), or move it to the local tier — the whole skill (`adopt --tier ldf`), or just the company part, in a local file the public skill reads when it exists (a cutpoint, per `/ari-dotfiles` § Cutpoints).
 - **Scripts MUST follow the conventions skill for their language.** zsh → `/ari-skill-shellscripts`, Python → `/ari-skill-pythonscripts`. Read it first, then bring the whole script — not just the lines you changed — into compliance. For another language, use that language's conventions skill; if none exists, build one (mirroring these) first.
 
 ## Investigation folder
@@ -146,7 +147,8 @@ Do not start until the approval gate (see Rules) has passed.
 1. **If intent changed** — rewrite the `#` heading and opening paragraph from scratch, as if written fresh for the new purpose.
 2. **Update implementation** — read the full skill first, then place each change per **Skill anatomy** below. Before adding a new step, run `ls $HOME/.claude/skills/` and delegate to any skill that already does it — never reimplement.
 3. **Audit and syntax-check** — before showing the diff, scan the edited skill for script invocations and confirm each matches the `$HOME` form (see Rules), fixing any that don't (including pre-existing ones). Syntax-check any edited script (`zsh -n <script>.zsh`; `python3 -m py_compile <script>.py`).
-4. **Update scratchpad** — record what changed and why.
+4. **Review for company information** — when the skill is public (see Rules), dispatch a fresh reviewer with the Agent tool: you wrote the text and will read past your own examples. Give it the skill directory, the identifying-content list from Rules, and these instructions: read EVERY file in the directory (SKILL.md, `bin/`, `lib/`, templates, fixtures, tests), not just the diff; report each finding as `<file>:<line> — <what identifies the employer> — <neutral rewrite | move to ldf>`; return `none` when clean; edit nothing. Apply each fix per the Rules, then dispatch a new reviewer and repeat until it returns `none`. Report the findings and fixes with the diff. Skip this step for `tier=ldf`.
+5. **Update scratchpad** — record what changed and why, including the reviewer's findings.
 
 After edits, show the diff of all modified files. Then ask:
 
@@ -171,7 +173,7 @@ Invoke `/ari-skill-review` via the Skill tool with the skill name as the argumen
 
 ### Commit to dotfiles
 
-Re-show the current diff (or state "no changes since the last diff") immediately before committing. If the diff is empty, there is nothing to commit; skip.
+Re-show the current diff (or state "no changes since the last diff") immediately before committing. If the diff is empty, there is nothing to commit; skip. NEVER commit a public skill (`tier=df`, `source=submodule:…`, or an adoption into df) until the company-information reviewer's latest pass on the files as they stand now returned `none`; changes made since that pass, including review fixes, need a new pass. Commit messages in a public tier follow the same rule: say what changed, never what leaked.
 
 Skills are versioned in the dotfiles (`/ari-dotfiles-skill-registry`). If the setup output said `state=linked`, the tier is `tier`; stage and commit through it per `/ari-dotfiles`:
 
