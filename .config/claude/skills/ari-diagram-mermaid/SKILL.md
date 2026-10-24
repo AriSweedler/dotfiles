@@ -1,11 +1,11 @@
 ---
 name: ari-diagram-mermaid
-description: Create, validate, and share Mermaid.js diagrams in Airtable brand colors that stay legible under any viewer theme and on any canvas. `bake` pins the theme in the source, makes free-standing text follow the viewer's color scheme with a soft glow as fallback, refuses low-contrast text, and mints the mermaid.ink image plus mermaid.live view link for Google Docs and GitHub.
+description: Create, validate, and share Mermaid.js diagrams in a fixed palette that stay legible under any viewer theme and on any canvas. `bake` pins the theme in the source, makes free-standing text follow the viewer's color scheme with a soft glow as fallback, refuses low-contrast text, and mints the mermaid.ink image plus mermaid.live view link for Google Docs and GitHub.
 ---
 
 # ari-diagram-mermaid
 
-Create, validate, and share Mermaid.js diagrams with Airtable brand colors that stay legible whatever theme the viewer's mermaid.live applies and whatever canvas it paints behind the diagram. `bake` refuses a source whose text can vanish into its fill or into the page, then prints a ready-to-paste markdown link for embedding in Google Docs and writes it to a sidecar file; the clipboard is written only on request.
+Create, validate, and share Mermaid.js diagrams with a fixed palette that stay legible whatever theme the viewer's mermaid.live applies and whatever canvas it paints behind the diagram. `bake` refuses a source whose text can vanish into its fill or into the page, then prints a ready-to-paste markdown link for embedding in Google Docs and writes it to a sidecar file; the clipboard is written only on request.
 
 ## Rules
 
@@ -22,7 +22,7 @@ Create, validate, and share Mermaid.js diagrams with Airtable brand colors that 
    ```
    It prints `diagram_dir=` and `diagram_file=`; write the diagram to `diagram_file`. Pass `--name NAME` for a custom basename.
 2. **Write** the diagram source to the printed `diagram_file`
-   - Start with the Airtable color theme block below; its first line pins the theme, sizes sequence text, and makes free-standing text follow the viewer's color scheme
+   - Start with the color theme block below; its first line pins the theme, sizes sequence text, and makes free-standing text follow the viewer's color scheme
    - Apply classes to nodes using `class` directives
    - Style a subgraph as `style ID fill:#F5F5F5,stroke:#666666,color:#333`
 3. **Bake**: `zsh $HOME/.claude/skills/ari-diagram-mermaid/bin/bake <diagram_file>`
@@ -34,7 +34,7 @@ Create, validate, and share Mermaid.js diagrams with Airtable brand colors that 
    - Paste the markdown link into the message in a fenced block, verbatim from `bake`'s output or the `url_file` sidecar — never retype it (see Rules). If `--clipboard` ran, repeat its `previous clipboard:` line.
    - For a Google Doc published through `/ari-hemingway--share-gdoc`: bake `ink_url` and `live_url`, then embed `[![alt](<ink_url>?width=620)](<live_url>)`; its finish step fails an image whose link is not the `mermaid.live/view#` form. For a hand-edited Doc: paste the markdown link, or Insert > Image > By URL and add the live link to the image.
 
-## Airtable Color Theme (always include)
+## Color Theme (always include)
 
 ```mermaid
 %%{init: {'theme':'default', 'sequence': {'messageFontSize': 18, 'actorFontSize': 18, 'noteFontSize': 16}, 'themeCSS': '.messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 2px #fff) drop-shadow(0 0 3px #fff); } @media (prefers-color-scheme: dark) { .messageText, text.text, .loopText, .titleText, text.actor-man { fill: #eeeeee; } .messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 2px #000) drop-shadow(0 0 3px #000); } }'}}%%

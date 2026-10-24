@@ -18,12 +18,12 @@ Conventions for adding code comments. A comment states only what the code cannot
 
 ```tsx
 // BAD — restates the code
-// Update the import run status from FAILED to RUNNING.
-await updateStatus(FAILED, RUNNING);
+// Mark the order as shipped.
+await setStatus(order, SHIPPED);
 
 // GOOD — states what the code cannot
-// The user could be missing if their account was deactivated.
-skipIfUserMissing(userId);
+// The carrier API returns 404 for a tracking number until its first scan.
+if (response.status === 404) return PENDING;
 ```
 
 ### Placement

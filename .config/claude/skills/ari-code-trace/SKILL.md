@@ -63,20 +63,20 @@ Every edge line includes the file location or `(external)`. List each unique cal
 
 ```
 # Edges
-root: retryImportRunAsync
-source: server/imports/retry.tsx:15
+root: retryOrderAsync
+source: src/orders/retry.ts:15
 
-## retryImportRunAsync
-- -> getImportRunRecordAsync (server/imports/records.tsx:42)
-- -> updateImportRunStatusAsync (server/imports/status.tsx:88)
-- -> enqueueRetryTaskAsync (server/tasks/enqueue.tsx:12)
+## retryOrderAsync
+- -> getOrderAsync (src/orders/records.ts:42)
+- -> updateOrderStatusAsync (src/orders/status.ts:88)
+- -> enqueueRetryJobAsync (src/jobs/enqueue.ts:12)
 
-## getImportRunRecordAsync
-- -> queryShard (server/db/shard.tsx:201) [leaf: stdlib wrapper]
+## getOrderAsync
+- -> queryDb (src/db/query.ts:201) [leaf: stdlib wrapper]
 
-## enqueueRetryTaskAsync
+## enqueueRetryJobAsync
 - -> sqsClient.send (external) [leaf: AWS SDK]
-- -> getImportRunRecordAsync [cycle]
+- -> getOrderAsync [cycle]
 - -> updateStatus [already traced]
 ```
 
@@ -98,7 +98,7 @@ Common leaf patterns:
 
 You don't need a checklist — read the function and decide: "does tracing deeper add insight into the business logic flow?" If not, it's a leaf.
 
-Note: `makeStubbable(fn)` is a test wrapper. Trace the wrapped function, not the wrapper.
+Note: a test-only wrapper (e.g. `stubbable(fn)`) is not the logic. Trace the wrapped function, not the wrapper.
 
 ### Depth and size limits
 
@@ -112,9 +112,9 @@ When you see `this.someMethod()` or `instance.doThing()`:
 1. Determine the object's type from its declaration or type annotation.
 2. Navigate to the class definition and read the method.
 3. For inherited methods, follow the class hierarchy to the actual implementation.
-4. Name as `ClassName.methodName` (e.g., `ImportRunner.retryAsync`).
+4. Name as `ClassName.methodName` (e.g., `OrderRunner.retryAsync`).
 
-For methods on singleton/plain-object exports (not classes), use `objectName.methodName` (e.g., `appJsonToDbSerializer.loadDisconnectedWorkflowIdsAsync`).
+For methods on singleton/plain-object exports (not classes), use `objectName.methodName` (e.g., `configSerializer.loadAsync`).
 
 ### Inline closures
 
@@ -156,10 +156,10 @@ Write files in parallel where possible — batch independent Write calls togethe
 
 All files in one flat directory. Preserve the function's original casing.
 
-- **Leaf functions** (functions where you stopped recursing — `leaf: true` in frontmatter): `leaf.` prefix: `leaf.queryShard.tsx`, `leaf._getCommonHeaders.tsx`
+- **Leaf functions** (functions where you stopped recursing — `leaf: true` in frontmatter): `leaf.` prefix: `leaf.queryDb.ts`, `leaf._getCommonHeaders.tsx`
 - **Non-leaf functions**: just the name: `validateCard.tsx`, `_requestAsync.tsx`
-- **Class methods**: `ClassName.methodName.tsx` (e.g., `ImportRunner.retryAsync.tsx`)
-- **Singleton methods**: `objectName.methodName.tsx` (e.g., `appJsonToDbSerializer.loadAsync.tsx`)
+- **Class methods**: `ClassName.methodName.tsx` (e.g., `OrderRunner.retryAsync.tsx`)
+- **Singleton methods**: `objectName.methodName.tsx` (e.g., `configSerializer.loadAsync.ts`)
 - **Inline closures**: use the variable name: `validateCodeAsync.tsx`, or `unnamed.fetchHandler.tsx`
 - **Name collisions**: shortest unique directory suffix with `--` separator. Compare full paths of colliding functions, find the first directory segment (from the end) that differs. Example: `domestic--validateCard.tsx` vs `international--validateCard.tsx`.
 - Extension matches the source file's actual extension.
@@ -184,44 +184,44 @@ The abridged version should:
 - Preserve the function signature exactly
 - Replace implementation details with English descriptions in comments
 - Keep control flow structure (if/else, switch, try/catch, for loops) but summarize bodies
-- Preserve all function calls that appear in the call graph (these are the edges). Include leaf/infrastructure calls as comments (e.g., `// emit metrics via taskStats.onError(...)`) so the reader sees the full picture.
+- Preserve all function calls that appear in the call graph (these are the edges). Include leaf/infrastructure calls as comments (e.g., `// emit metrics via jobStats.onError(...)`) so the reader sees the full picture.
 - Omit variable declarations, type assertions, and boilerplate that don't affect control flow
 - Target ~10-15% of the original line count, clamped to 30-80 lines
 
 Example abridged file:
 
-```tsx
+```ts
 ---
-generic: Validates task eligibility and executes the task function.
+generic: Validates job eligibility and runs the job's handler.
 abridged: true
-source: server_shared/task_queue/task_executor.tsx:399
-lines: 496
+source: src/jobs/runner.ts:212
+lines: 340
 calls:
-  - getTaskDefinitionIfExists
-  - runTaskQueueFunctionWithNewMainConnectionAsync
-  - _callTaskFunctionAsync
+  - findHandler
+  - withTransactionAsync
+  - _invokeHandlerAsync
 called_by:
-  - executeTaskRecordAndUpdateDbTableAsync
+  - processQueueBatchAsync
 ---
 
-async _executeTaskRecordAsync({taskRecord, ...}): Promise<TaskResult | null> {
-    // Check retry limit — return null if exhausted
-    if (taskRecord.retryCount > taskRecord.retryLimit) { return null; }
+async _runJobAsync({job, ...}): Promise<JobResult | null> {
+    // Check attempt limit — return null if exhausted
+    if (job.attempts > job.maxAttempts) { return null; }
 
-    // Check deny lists (functionKey, applicationId) — return null if denied
+    // Check the pause list (job type, tenant) — return null if paused
 
-    // Look up the task definition
-    const taskDefinition = getTaskDefinitionIfExists(taskRecord.functionKey);
-    if (!taskDefinition) { return null; }
+    // Look up the handler
+    const handler = findHandler(job.type);
+    if (!handler) { return null; }
 
-    // Validate scope, disabled application, shard assignment — return null on mismatch
+    // Validate tenant and region — return null on mismatch
 
-    // Execute the task function in a fresh DB connection context
-    const result = await runTaskQueueFunctionWithNewMainConnectionAsync(async () => {
-        return await _callTaskFunctionAsync(taskDefinition, taskRecord, ...);
+    // Run the handler inside one transaction
+    const result = await withTransactionAsync(async () => {
+        return await _invokeHandlerAsync(handler, job, ...);
     });
 
-    // Classify result: cancel / postpone / error / success
+    // Classify result: cancel / retry later / error / success
     // Record stats for each outcome
     return result;
 }
@@ -246,7 +246,7 @@ generic: |
 specific: |
   Called by processPayment as the first gate before charging.
   If validation fails, processPayment returns early with an error.
-source: server/payments/card.tsx:42
+source: src/payments/card.ts:42
 calls:
   - isExpired
   - formatCardNumber
@@ -269,7 +269,7 @@ Filename: `leaf.isExpired.tsx`
 ```tsx
 ---
 generic: Checks whether a card's expiry date is in the past.
-source: server/payments/card.tsx:58
+source: src/payments/card.ts:58
 calls: []
 called_by:
   - validateCard

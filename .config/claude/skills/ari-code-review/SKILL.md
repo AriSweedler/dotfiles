@@ -64,9 +64,9 @@ Fine: definition and sole use are adjacent, or separated only by related setup.
 ### Order each block: comment, operation, metric, check, log — PREFER
 Separate each logical block with a blank line and order it leading-comment → operation → metric → check → log (metric/check/log only when present). The comment heads the block; a computation never trails its explanation.
 ```ts
-// Flatten entries with this node group's state so the type narrows.
+// Flatten entries with each item's state so the type narrows.
 const statesWithEntry = entries.flatMap(...);    // operation
-metrics.increment('node_group.candidates');      // metric (if any)
+metrics.increment('items.selected');             // metric (if any)
 assert(statesWithEntry.length > 0, '...');       // check (if any)
 this.logger.info('selected candidates', {...});  // log (if any)
 ```
@@ -119,4 +119,4 @@ End with `N findings.` (`0 findings.` for a clean diff).
 
 **Default mode never touches files** — report only.
 
-**`--fix`:** after reporting, apply ONLY the mechanical NEVER findings (removing a `!`, splitting a compound predicate); comment findings and every PREFER / judgment finding stay "manual" — `/ari-code-comments` gates inline comments on the user, and `--fix` must not bypass that. Apply non-overlapping rewrites only — if two touch the same lines, apply one and re-report the rest as manual. Apply a rewrite only if its original text still matches, so a re-run is a no-op. Then run `bazel run //testing/lint_prepush:cli` on the touched files and show `git diff`. If lint fails, report the error and the applied rewrites; don't claim success.
+**`--fix`:** after reporting, apply ONLY the mechanical NEVER findings (removing a `!`, splitting a compound predicate); comment findings and every PREFER / judgment finding stay "manual" — `/ari-code-comments` gates inline comments on the user, and `--fix` must not bypass that. Apply non-overlapping rewrites only — if two touch the same lines, apply one and re-report the rest as manual. Apply a rewrite only if its original text still matches, so a re-run is a no-op. Then run the repo's lint command on the touched files and show `git diff`. If lint fails, report the error and the applied rewrites; don't claim success.
