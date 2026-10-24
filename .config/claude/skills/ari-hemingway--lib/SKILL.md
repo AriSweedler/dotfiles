@@ -96,9 +96,9 @@ Filled example:
 ```markdown
 - **Subject**: Widget Cache Invalidation
 - **Mode**: research
-- **Pointers**: server/widget_cache.tsx, PR #198432
+- **Pointers**: server/widget_cache.tsx, PR #4821
 - **Key findings**:
-  - Redis channel is `widget:invalidate:{appId}` at [widget_cache.tsx L42](https://github.com/acme/shop/blob/a1b2c3d4e5f67890abcdef1234567890abcdef12/server/widget_cache.tsx#L42)
+  - Redis channel is `widget:invalidate:{tenantId}` at [widget_cache.tsx L42](https://github.com/acme/shop/blob/a1b2c3d4e5f67890abcdef1234567890abcdef12/server/widget_cache.tsx#L42)
   - LRU max entries = 500; TTL = 60s
 - **Open questions**:
   - Is dual eviction (TTL + LRU) intentional?
@@ -122,7 +122,7 @@ Filled example:
 ## Git log
 | Range | Finding |
 |---|---|
-| `HEAD~30 -- server/widget_cache.tsx` | Last change 2026-02-14 (#198432): race-condition fix |
+| `HEAD~30 -- server/widget_cache.tsx` | Last change 2026-02-14 (#4821): race-condition fix |
 
 ## External docs
 | Source | Finding |

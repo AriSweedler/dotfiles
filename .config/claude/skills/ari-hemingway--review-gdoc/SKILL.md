@@ -185,8 +185,8 @@ Two prompt templates apply, depending on whether the reviewer is gdoc-specific o
 ```
 You are reviewing a Google Doc draft as a {role} expert, READ-ONLY.
 
-Rules the draft is judged against live in `/home/ubuntu/.claude/skills/ari-hemingway--format-gdoc/SKILL.md` (sections: {rule-sections from panel table}).
-{If sibling reviewer: plus sibling rules at `/home/ubuntu/.claude/skills/ari-hemingway--structure-{skill-name}/review-rules.md`.}
+Rules the draft is judged against live in `$HOME/.claude/skills/ari-hemingway--format-gdoc/SKILL.md` (sections: {rule-sections from panel table}).
+{If sibling reviewer: plus sibling rules at `$HOME/.claude/skills/ari-hemingway--structure-{skill-name}/review-rules.md`.}
 
 Read the draft at {investigation_folder}/source.md. NEVER call Edit/Write/NotebookEdit on it — you are read-only. Report findings only.
 

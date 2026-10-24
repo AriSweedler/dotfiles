@@ -119,7 +119,7 @@ If a `/ari-hemingway--share-*` sibling is installed and matches the destination,
 
 ### Writing today's Slack update
 
-User invocation: `/ari-hemingway slack update about the k8smon PR shipments`
+User invocation: `/ari-hemingway slack update about the metrics-agent PR shipments`
 
 1. Infer shape: `slack-status`. Not installed → offer meta or fallback.
 2. Fallback: pick `subsystem-explainer` (closest match) + explicitly override destination to `slack`, accept reshape latitude.
@@ -131,7 +131,7 @@ User invocation: `/ari-hemingway slack update about the k8smon PR shipments`
 
 ### Writing a subsystem explainer
 
-User invocation: `/ari-hemingway explain the multi-cluster rollout subsystem`
+User invocation: `/ari-hemingway explain the job scheduler subsystem`
 
 1. Infer shape: `subsystem-explainer`. Installed.
 2. Run `/ari-hemingway--structure-subsystem-explainer` — its own workflow covers investigate + draft.

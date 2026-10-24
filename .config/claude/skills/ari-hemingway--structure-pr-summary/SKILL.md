@@ -7,7 +7,7 @@ description: "Distill a PR we own into its `## Summary` for review ('ari pr prep
 
 Produce the `## Summary` of a PR we own, for its reviewers. The summary says why the change exists and what it changes, in as few words as that takes. A PR whose summary cannot be short does more than one thing; the fix is a split, not a longer summary.
 
-Formatting and body structure: `.cursor/rules/pull_requests.mdc` in the repo and `/ari-pr`. Workflow patterns (restore context, fact-check, present): `/ari-hemingway--lib`.
+Formatting and body structure: the repo's PR-body guide, when it has one. Workflow patterns (restore context, fact-check, present): `/ari-hemingway--lib`.
 
 ## Document structure
 

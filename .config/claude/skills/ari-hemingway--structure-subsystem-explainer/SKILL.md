@@ -100,20 +100,20 @@ Widget cache invalidation ensures stale widget configs are evicted within 60 sec
 
 # How it works
 
-1. A schema change commits to the live shard.
-2. The Worker Child publishes a `WIDGET_INVALIDATE` message to Redis Pub/Sub.
-3. All Worker Parents subscribed to the channel evict matching entries from their LRU cache.
-4. The next widget render fetches fresh config from the shard.
+1. A schema change commits to the primary database.
+2. The writer process publishes a `WIDGET_INVALIDATE` message to Redis Pub/Sub.
+3. Every reader process subscribed to the channel evict matching entries from their LRU cache.
+4. The next widget render fetches fresh config from the database.
 
 # Gotchas
 
-TTL and LRU eviction can both evict — dual eviction means metrics undercount invalidations by ~5%. Discovered during [[fix] Race condition in widget cache eviction (#198432)](https://github.com/{owner_repo}/pull/198432).
+TTL and LRU eviction can both evict — dual eviction means metrics undercount invalidations by ~5%. Discovered during [[fix] Race condition in widget cache eviction (#4821)](https://github.com/{owner_repo}/pull/4821).
 
 # Key details
 
 | Setting | Value | Source |
 |---|---|---|
-| Redis channel | `widget:invalidate:{appId}` | [`widget_cache.tsx` L42](https://github.com/{owner_repo}/blob/{sha}/server/widget_cache.tsx#L42) |
+| Redis channel | `widget:invalidate:{tenantId}` | [`widget_cache.tsx` L42](https://github.com/{owner_repo}/blob/{sha}/server/widget_cache.tsx#L42) |
 | LRU max entries | 500 | [`widget_cache.tsx` L18](https://github.com/{owner_repo}/blob/{sha}/server/widget_cache.tsx#L18) |
 | TTL | 60s | [`widget_cache.tsx` L19](https://github.com/{owner_repo}/blob/{sha}/server/widget_cache.tsx#L19) |
 
@@ -121,7 +121,7 @@ TTL and LRU eviction can both evict — dual eviction means metrics undercount i
 
 ## Code and PRs
 - [`widget_cache.tsx`](https://github.com/{owner_repo}/blob/{sha}/server/widget_cache.tsx#L1)
-- [[fix] Race condition in widget cache eviction (#198432)](https://github.com/{owner_repo}/pull/198432)
+- [[fix] Race condition in widget cache eviction (#4821)](https://github.com/{owner_repo}/pull/4821)
 
 ## Docs
 - see https://docs.google.com/document/d/1abc123_widget_cache_design

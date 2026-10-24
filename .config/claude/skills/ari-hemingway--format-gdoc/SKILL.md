@@ -14,7 +14,7 @@ Google Docs renders `@`-typed date strings as smart chips — but smart chips do
 
 ### Hard rules
 
-1. **All displayed timestamps MUST be in Pacific Time** (the team's primary TZ). Convert every UTC, ET, GMT, ISO-with-Z, or local-other-zone source to PT before rendering.
+1. **All displayed timestamps MUST be in Pacific Time**. Convert every UTC, ET, GMT, ISO-with-Z, or local-other-zone source to PT before rendering.
 2. **Apply the correct DST offset for the event date.** Pacific Time switches between PDT (UTC−7, in effect roughly second Sunday of March → first Sunday of November) and PST (UTC−8, the rest of the year). Use the offset that was in effect *at the moment of the source event*, not "today's" offset. A May event uses UTC−7; a January event uses UTC−8.
 3. **No TZ suffix on the timestamp itself.** Not `UTC`, not `PT`, not `PDT`, not `PST`. Bare. Smart-chip constraint.
 4. **Format: `Month DD, YYYY HH:MM`** — 24-hour clock, full date, **minute precision only**. Example: `May 21, 2026 13:36`. No leading zero on the day (`May 1, 2026` not `May 01, 2026`). Leading zeros on hours and minutes. **Strip seconds from every source timestamp** — log lines, Datadog events, and monitor fires all carry second precision; truncate (don't round) when converting for the doc. Two events in the same minute become indistinguishable in the doc; that's fine for a quick-explainer. If sub-minute ordering actually matters for the narrative, that's a different document (a deep RCA), not this skill.
@@ -93,7 +93,7 @@ Section header + disclaimer:
 
 Prose with first + subsequent reference in same section:
 
-- GOOD: `The node was Ready at May 21, 2026 13:38. Pod scheduling started at 13:38 as well; by 13:39 the first sandbox failure landed.`
+- GOOD: `The node was Ready at May 21, 2026 13:38. Pod scheduling started at 13:38 as well; by 13:39 the first job failure landed.`
   *(First mention full form; subsequent mentions abbreviated per rule 8. Note the loss of sub-minute ordering — accept it.)*
 - BAD: `The node was Ready at 13:38. Pod scheduling started at 13:38.`
   *(First reference in section drops the date — rule 8 violation. A reader pulling this sentence into Slack loses the date.)*
@@ -104,13 +104,13 @@ Table cells:
 
   | Pod | First fail | Last fail |
   |---|---|---|
-  | `secrets-store-csi-driver-9qnl6` | May 21, 2026 13:38 | May 21, 2026 14:03 |
+  | `app-worker-7f9c2` | May 21, 2026 13:38 | May 21, 2026 14:03 |
 
 - BAD:
 
   | Pod | First fail | Last fail (UTC) |
   |---|---|---|
-  | `secrets-store-csi-driver-9qnl6` | 13:38:39 | 21:03:13 |
+  | `app-worker-7f9c2` | 13:38:39 | 21:03:13 |
 
   *(column header carries TZ, first cell abbreviated, last cell still in UTC with seconds — four violations)*
 
@@ -130,8 +130,8 @@ Some Slack threads / human-written summaries cite times in PT. Verify the offset
 - **Tables for structured data.** 3+ rows × 2+ attribute columns → table. Fewer → bullets.
 - **For component sections, answer "what breaks without this?" in one sentence.** Skip for Summary, How-to-run, References.
 - **Operational commands use real values.** No `<file>` / `<path>` placeholders.
-  - GOOD: `curl -sfL 'https://dr6dw6x4v1iqo.cloudfront.net/ami_dependencies/maxmind/maxmind.tar.gz?cb=1' -o maxmind.tar.gz`
-  - BAD: `curl -sfL 'https://dr6dw6x4v1iqo.cloudfront.net/<path>?cb=1' -o <file>`
+  - GOOD: `curl -sfL 'https://d1example.cloudfront.net/deps/geoip/geoip.tar.gz?cb=1' -o geoip.tar.gz`
+  - BAD: `curl -sfL 'https://d1example.cloudfront.net/<path>?cb=1' -o <file>`
 
 ## Link formatting
 
@@ -223,8 +223,8 @@ Every piece of technical jargon or literal token MUST be wrapped in backticks. L
 
 A command, a multi-line literal, or anything the reader copies goes in a fenced code block. Drive's import turns a fence into a native Docs code block (rounded grey box, monospace, language label), and `/ari-hemingway--share-gdoc` gives a fence inside an aside the same grey (`#F1F3F4`); an inline code span in a sentence stays unshaded. Never write a command as a line of inline code spans: the import lands it as unshaded monospace with no block edge.
 
-- GOOD: a fence holding `export SERVICE_NAME=taskworker-service-ai-embed` and the two `export` lines after it.
-- BAD: `` `export` `SERVICE_NAME=taskworker-service-ai-embed` `` on its own line — code spans, not a block.
+- GOOD: a fence holding `export SERVICE_NAME=worker-embed` and the two `export` lines after it.
+- BAD: `` `export` `SERVICE_NAME=worker-embed` `` on its own line — code spans, not a block.
 
 ## Document conventions
 
@@ -239,7 +239,7 @@ A command, a multi-line literal, or anything the reader copies goes in a fenced 
 Full skeleton:
 
 ```
-[🤖 AI generated] Template Gallery Traffic Routing
+[🤖 AI generated] Checkout Traffic Routing
 
 # Summary
 One-paragraph overview.

@@ -11,10 +11,10 @@ Formatting rules: see `/ari-hemingway--format-gdoc`. Workflow patterns (investig
 
 ## Document structure
 
-Follows an ops-team house format (exemplar: "[Playbook] Emergency-shut down a service"). Required sections, in order:
+Required sections, in order:
 
 1. **Title** — H1, `[Playbook] <imperative phrase>`, matching the doc filename.
-2. **Contact line** — immediately under the title: the owning team's linked Slack channel (e.g. `#help-deploys`).
+2. **Contact line** — immediately under the title: the owning team's linked Slack channel (e.g. `#ops-help`).
 3. **Summary** — the happy path in 2–3 numbered steps before any detail ("If X: 1. do A, 2. do B"). When multiple sources of truth exist, rank them here.
 4. **When to use** — trigger conditions: the alerts, requests, or situations that route a reader here. Also state when NOT to use it, linking the sibling playbook that covers the near-miss case ("If you need X instead, see [Playbook Y]").
 5. **Preconditions & access** — roles, CLIs, auth, and safety checks the reader must have or perform before step 1. A reader who fails a precondition stops here.
@@ -45,7 +45,7 @@ Optional sections:
 
 ### One method per step; permissions
 
-- Prescribe exactly ONE method per step (KISS) — the most automated blessed path, naming the exact pipeline (e.g. **Shutdown pipeline `<service>` `<stage>`**). Never present a menu of alternatives; if another method exists, it belongs in a failure branch or a one-line aside, not the procedure.
+- Prescribe exactly ONE method per step (KISS) — the most automated blessed path, naming the exact pipeline for the service and stage. Never present a menu of alternatives; if another method exists, it belongs in a failure branch or a one-line aside, not the procedure.
 - Route permissions explicitly: when a command needs elevated permissions, say so and link the per-stage pipeline or access request that grants them.
 - Call out reversibility at decision points ("use `disable-image` (reversible), not `deregister-image` (irreversible)").
 

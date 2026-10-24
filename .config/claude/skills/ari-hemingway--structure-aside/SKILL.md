@@ -26,7 +26,7 @@ Optional: references to the aside from anywhere else in the draft.
 
 ### Content scope — word count
 
-**An aside body is 15 to 80 words**, counting every word of the section body as written, code lines included, the heading excluded (the six in one published playbook: 14 to 78, median 53). Over 80 words, the content is a section of the main document or a document of its own.
+**An aside body is 15 to 80 words**, counting every word of the section body as written, code lines included, the heading excluded. Over 80 words, the content is a section of the main document or a document of its own.
 
 ### Marker
 
