@@ -34,7 +34,8 @@ assert_contains "manual step: first push" "$(step_json)" "git ldf push --set-ups
 
 # A template entry without its why: fail, by hand, naming the edit; before the drift warning.
 cp "${TEMPLATE}" "${FIX}/template.orig"
-printf '!/share/extra/\n' >> "${TEMPLATE}"
+# The blank line ends whatever documented '!' group the template ends with.
+printf '\n!/share/extra/\n' >> "${TEMPLATE}"
 check_ldf
 assert_eq "undocumented allowlist entry → fail" fail "$(step_get local_dotfiles_repo .status)"
 assert_eq "reason allowlist_undocumented" allowlist_undocumented "$(step_get local_dotfiles_repo .reason)"
