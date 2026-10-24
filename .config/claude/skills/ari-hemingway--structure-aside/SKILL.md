@@ -26,7 +26,7 @@ Optional: references to the aside from anywhere else in the draft.
 
 ### Content scope — word count
 
-**An aside body is 15 to 80 words**, counting every word of the section body as written, code lines included, the heading excluded (today's six in the MCR deletion playbook: 14 to 78, median 53). Over 80 words, the content is a section of the main document or a document of its own.
+**An aside body is 15 to 80 words**, counting every word of the section body as written, code lines included, the heading excluded (the six in one published playbook: 14 to 78, median 53). Over 80 words, the content is a section of the main document or a document of its own.
 
 ### Marker
 
@@ -63,17 +63,17 @@ A complete aside, after `# Useful links`:
 ```markdown
 # Aside 3: Manual cleanup
 
-Run this grunt task once per region, with the `STAGE`, `REGION` and `SERVICE_NAME` you exported in Step 2.
+Run this script once per region, with the `STAGE`, `REGION` and `SERVICE_NAME` you exported in Step 2.
 
 ```
-grunt eks:deleteServiceClusterConfigTombstones --stage=$STAGE --region=$REGION --serviceName=$SERVICE_NAME
+./bin/delete-stale-configs --stage=$STAGE --region=$REGION --service=$SERVICE_NAME
 ```
 
-Expected output: the task exits 0 and `hyperbase_app.serviceDeploymentConfig` returns no items for `$SERVICE_NAME`.
+Expected output: the script exits 0 and the `service_configs` table returns no items for `$SERVICE_NAME`.
 ```
 
-- GOOD: `Once that merges, wait one week for the report card to clear your deleted rows. ([aside 3 ℹ️](#aside-3))` with the section above.
-- GOOD: `The grunt path is in [Manual cleanup](#aside-3).` — a reference, named like the tab, from the body or from another aside.
+- GOOD: `Once that merges, wait one week for the nightly sweep to clear your deleted rows. ([aside 3 ℹ️](#aside-3))` with the section above.
+- GOOD: `The script path is in [Manual cleanup](#aside-3).` — a reference, named like the tab, from the body or from another aside.
 - BAD: `rows.[aside 3 ℹ️](#aside-3)` — no space, no parentheses, so the link glues to the sentence.
 - BAD: `(see [manual cleanup](#aside-3))` — neither the marker form nor the title's words.
 - BAD: `see [Aside 3: Manual cleanup](#aside-3)` — a reference carries the title only, never the `Aside n:` prefix.
