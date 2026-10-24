@@ -20,7 +20,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from at_log import die, log_info
+from at_log import die, log_info, log_warn
 from gdoc_api import (
     FIRST_TAB,
     GWS_TIMEOUT_S,
@@ -65,7 +65,8 @@ def gws_gcp_project():
     """The GCP project of the OAuth client gws signs in with; scripts.run needs the script on the same one."""
     try:
         return json.loads(GWS_CLIENT_SECRET.read_text(encoding="utf-8"))["installed"]["project_id"]
-    except (OSError, json.JSONDecodeError, KeyError):
+    except (OSError, json.JSONDecodeError, KeyError) as err:
+        log_warn(f"cannot read the gws GCP project | path='{GWS_CLIENT_SECRET}' err='{type(err).__name__}: {err}'")
         return "<the project_id in ~/.config/gws/client_secret.json>"
 
 
