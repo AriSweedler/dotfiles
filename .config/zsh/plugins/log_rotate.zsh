@@ -16,7 +16,7 @@
 # yet (nothing to rotate). Returns non-zero on a bad <keep> or mkdir failure.
 #
 # Exec-free: mkdir/mv/rm are the zsh/files builtins. A rotation is up to six of
-# them, and on a Mac with an endpoint agent every process spawn costs ~17 ms —
+# them, and where process spawns are slow (~17 ms each) that adds up —
 # this runs at the top of every Karabiner binding and every tmux-oneshot launch.
 zmodload -F zsh/files b:zf_mkdir b:zf_mv b:zf_rm 2>/dev/null || {
   function zf_mkdir() { command mkdir "$@" }

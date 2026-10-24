@@ -10,9 +10,9 @@
 #   git health                # one manual tick for the current repo
 #
 # History, so nobody rebuilds this on top of git-maintenance again: pack consolidation via
-# `git maintenance` failed silently twice on a large monorepo. First as 4,451 packs / 331k
-# loose objects / 5-minute pushes (the daily incremental-repack died mid-run on laptop
-# sleep, and launchd discards its output). Then as 215 packs 8 days after that fix — git's
+# `git maintenance` failed silently twice on a large repository. First as thousands of packs
+# and minutes-long pushes (the daily incremental-repack died mid-run on laptop
+# sleep, and launchd discards its output). Then as hundreds of packs days after that fix — git's
 # own launchd job runs `for-each-repo --config=maintenance.repo` from cwd /, and
 # maintenance.repo lived behind [includeIf "gitdir:~/"], so it resolved zero repos and
 # exited 0 forever. Any design that depends on where config lives or what cwd the scheduler

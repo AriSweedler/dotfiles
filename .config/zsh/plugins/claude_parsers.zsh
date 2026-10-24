@@ -190,8 +190,8 @@ function claude_parser__session_from_pid__2_1_0() {
 # --- family: pr_from_session — session UUID → bound PR number ---
 
 # Most recent {"type":"pr-link","prNumber":N} record in the session's JSONL
-# under ~/.claude/projects/<project>/<uuid>.jsonl (written by /pr's
-# record-pr-link.zsh). Format unchanged through 2.1.x.
+# under ~/.claude/projects/<project>/<uuid>.jsonl (written by a PR-linking
+# hook). Format unchanged through 2.1.x.
 function claude_parser__pr_from_session__1_0_0() {
   local uuid="${1:?pr_from_session requires a session uuid}"
   local projects="${CLAUDE_PARSERS_PROJECTS_DIR:-${HOME}/.claude/projects}"

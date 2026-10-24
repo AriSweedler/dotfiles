@@ -118,7 +118,7 @@ source "${HOME}/.config/zsh/plugins/log.zsh"
 source "${HOME}/.config/zsh/plugins/fzf_group.zsh"
 source "${HOME}/.config/zsh/plugins/fzf_groups.zsh"
 
-# Builtins for the launch path: on a Mac with an endpoint agent every process spawn
+# Builtins for the launch path: where every process spawn
 # costs ~17 ms, so mkdir/mv/rm/stat are zsh modules here, not commands (log.zsh
 # already loads strftime).
 zmodload -F zsh/files b:zf_mkdir b:zf_mv b:zf_rm
