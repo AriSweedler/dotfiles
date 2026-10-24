@@ -23,7 +23,7 @@ Optional:
 ### Length is a split signal
 
 - Target 1–3 sentences, under ~400 characters.
-- Over that, or needing a second "and also", means two outcomes: stop drafting and propose a split — which commits or files go to which PR, and the stack order (`/ari-listable-pr-stack`).
+- Over that, or needing a second "and also", means two outcomes: stop drafting and propose a split — which commits or files go to which PR, and the stack order (through a PR-stack skill when one is installed).
 - Never trim meaning to fit; split instead.
 
 ### Intent is the source of truth
@@ -35,14 +35,14 @@ Optional:
 ### Content
 
 - Kernighan & Ritchie: no marketing, no hedging, no investigation narrative (link the thread instead).
-- Real identifiers, full cluster names, PR/listable links as `[text](url)`.
+- Real identifiers, full cluster names, PR/ticket links as `[text](url)`.
 - Nothing the other body sections own: risks, guard, test evidence.
 
 ## Workflow
 
 ### Gather
 
-Read the diff (`gh pr diff <n>`), the commit messages, the listable Notes (`/ari-listable`), and the motivating thread when one is linked.
+Read the diff (`gh pr diff <n>`), the commit messages, the linked ticket's notes (through the tracker's skill when one is installed), and the motivating thread when one is linked.
 
 ### Record intent
 

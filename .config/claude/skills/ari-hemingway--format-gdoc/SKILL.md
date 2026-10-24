@@ -14,7 +14,7 @@ Google Docs renders `@`-typed date strings as smart chips — but smart chips do
 
 ### Hard rules
 
-1. **All displayed timestamps MUST be in Pacific Time** (Airtable's primary TZ). Convert every UTC, ET, GMT, ISO-with-Z, or local-other-zone source to PT before rendering.
+1. **All displayed timestamps MUST be in Pacific Time** (the team's primary TZ). Convert every UTC, ET, GMT, ISO-with-Z, or local-other-zone source to PT before rendering.
 2. **Apply the correct DST offset for the event date.** Pacific Time switches between PDT (UTC−7, in effect roughly second Sunday of March → first Sunday of November) and PST (UTC−8, the rest of the year). Use the offset that was in effect *at the moment of the source event*, not "today's" offset. A May event uses UTC−7; a January event uses UTC−8.
 3. **No TZ suffix on the timestamp itself.** Not `UTC`, not `PT`, not `PDT`, not `PST`. Bare. Smart-chip constraint.
 4. **Format: `Month DD, YYYY HH:MM`** — 24-hour clock, full date, **minute precision only**. Example: `May 21, 2026 13:36`. No leading zero on the day (`May 1, 2026` not `May 01, 2026`). Leading zeros on hours and minutes. **Strip seconds from every source timestamp** — log lines, Datadog events, and monitor fires all carry second precision; truncate (don't round) when converting for the doc. Two events in the same minute become indistinguishable in the doc; that's fine for a quick-explainer. If sub-minute ordering actually matters for the narrative, that's a different document (a deep RCA), not this skill.
