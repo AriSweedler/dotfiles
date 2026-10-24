@@ -70,7 +70,7 @@
     "duplicate": [],
     "ignored": [
       {"kind": "formula", "name": "bazelisk", "tier": "local", "reason": "company tooling owns these",
-       "via": "include-declared /tmp/nmtest/home/h/source/hyperbase/admin/bin/Brewfile"}
+       "via": "include-declared /tmp/nmtest/home/src/work/Brewfile"}
     ],
     "unresolvable_ignore": [],
     "redundant_ignore": [],
