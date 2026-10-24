@@ -1,6 +1,6 @@
 ---
 name: ari-gsw-calendar-add
-description: Add an event to Ari's Google Calendar via the gws CLI. Titles carry a [Type] prefix from the event-type taxonomy; title, time, and location are required. Use when asked to put something on the calendar from a Slack post, receipt paste, or verbal ask.
+description: Add an event to Ari's Google Calendar via the gws CLI. Titles carry a [Type] prefix from the event-type taxonomy; title, time, and location are required. Use when asked to put something on the calendar from a Slack post, receipt paste, or verbal ask; a chat bot drives the same insert through bin/cal-add.py.
 ---
 
 # Calendar Add
@@ -19,6 +19,7 @@ Turn source material — a Slack post, a pasted receipt/confirmation, a verbal a
 - **End time:** if the source gives none, use start + 2 hours and show the assumed end in the confirmation.
 - **Each description element goes on its own line** (doors time, ticket link, purchase record, playlist, …) — newline-separated, never a run-on sentence.
 - **Never `2>&1` a gws call you'll parse** — gws prints `Using keyring backend: keyring` on stderr, which corrupts the JSON on stdout.
+- **Headless gws (ssh, a bot) needs the file keyring.** Without a login keychain, gws's decrypt fails and it DELETES `credentials.enc` and `token_cache.json`. Copy the `gws-cli` keychain item's 44-char key into `~/.config/gws/.encryption_key` (mode 600) once, then run with `GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND=file`; `bin/cal-add.py` sets it itself when the key file exists.
 - **Confirm before inserting.** Show the assembled event (title, time, location, description) and wait for a yes.
 
 ## Event types
@@ -130,3 +131,19 @@ cd /tmp && gws calendar events delete -o gws-delete-response.out --params '{"cal
 ```
 
 Verify with `gws calendar events get --params '{"calendarId": "<calendar id>", "eventId": "<id>"}' 2>/dev/null | jq -r '.status'` — `cancelled` means deleted.
+
+## File storage
+
+- `bin/cal-add.py` — the deterministic half of this skill. Takes the event as JSON (stdin or arg) or flags, validates the required fields and the date formats, resolves the calendar by name, applies the Concert rules it knows (show time as the start, doors in the description, purchase record and doors derived from the source text, invented URLs and prices dropped), skips an event already on the calendar, inserts via gws, and prints the exact reply. `--dry-run` never calls gws; `--help` lists the fields.
+
+## From a chat bot (OpenClaw)
+
+A small model does not follow the prose above. Its one job is a JSON of the fields it read; the script owns the rest, including sending the reply into the chat that spoke last:
+
+```zsh
+python3 $HOME/.claude/skills/ari-gsw-calendar-add/bin/cal-add.py --concert <<'JSON'
+{"title": "Jai Wolf", "start": "2026-10-24 20:00", "location": "The Regency Ballroom, San Francisco"}
+JSON
+```
+
+Output contract: `FIX: <why>` means the JSON was wrong (fix it, run once more); `NO_REPLY` means the script already delivered the reply; anything else is the reply text to relay, ending in `NOT SENT: <why>` when no chat was live (a CLI run). The workspace rule that drives the bot (`~/.openclaw/workspace/AGENTS.md` on the gateway machine) must name this path and nothing under `/tmp`, which macOS clears on reboot.
