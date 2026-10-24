@@ -38,15 +38,15 @@ Optional sections:
 ### Commands
 
 - Every command goes in a fenced code block, copy-pasteable exactly as written. One command per block — never chain commands the reader must mentally split. Never put code in gdoc tables — it converts to mush.
-- Parameterize via env vars set once up front (`export STAGE=…`, `export SERVICE_NAME=…`); long invocations use `\` continuations.
+- Parameterize via env vars set once up front (`export ENV=…`, `export SERVICE_NAME=…`); long invocations use `\` continuations.
 - Each step states its expected output or observable effect. A step whose success the reader can't recognize is not a step.
 - Commands that mutate state must be labeled as mutating so the reader — not an agent — runs them deliberately.
 - Use full resource names (full cluster names, full table names, full pipeline names) — never abbreviations or placeholders the reader must expand from memory.
 
 ### One method per step; permissions
 
-- Prescribe exactly ONE method per step (KISS) — the most automated blessed path, naming the exact pipeline for the service and stage. Never present a menu of alternatives; if another method exists, it belongs in a failure branch or a one-line aside, not the procedure.
-- Route permissions explicitly: when a command needs elevated permissions, say so and link the per-stage pipeline or access request that grants them.
+- Prescribe exactly ONE method per step (KISS) — the most automated blessed path, naming the exact deploy pipeline for the service and environment. Never present a menu of alternatives; if another method exists, it belongs in a failure branch or a one-line aside, not the procedure.
+- Route permissions explicitly: when a command needs elevated permissions, say so and link the access request that grants them.
 - Call out reversibility at decision points ("use `suspend` (reversible), not `delete` (irreversible)").
 
 ### Verification gates

@@ -54,7 +54,7 @@ return grant();
 Fine: a single two-term `&&` in a boolean expression.
 
 ### Name for what it is, consistently — PREFER
-Collections are `entries: Array<XxxSpec>` using the full `Spec` (not a trimmed variant of it). The same concept keeps the same name and argument position across functions. Rename a value when its identity changes — a row merged with other data is no longer an `entry`. Spell out domain nouns; stop short of restating the type in the name.
+Name a collection for its element type (`entries: Array<FooSpec>`), using the full type name, not a trimmed variant. The same concept keeps the same name and argument position across functions. Rename a value when its identity changes — a row merged with other data is no longer an `entry`. Spell out domain nouns; stop short of restating the type in the name.
 Fine: a clear domain name already used consistently.
 
 ### Colocate with use — PREFER

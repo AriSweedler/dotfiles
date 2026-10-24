@@ -63,20 +63,20 @@ Every edge line includes the file location or `(external)`. List each unique cal
 
 ```
 # Edges
-root: retryOrderAsync
+root: retryOrder
 source: src/orders/retry.ts:15
 
-## retryOrderAsync
-- -> getOrderAsync (src/orders/records.ts:42)
-- -> updateOrderStatusAsync (src/orders/status.ts:88)
-- -> enqueueRetryJobAsync (src/jobs/enqueue.ts:12)
+## retryOrder
+- -> getOrder (src/orders/records.ts:42)
+- -> updateOrderStatus (src/orders/status.ts:88)
+- -> enqueueRetryJob (src/jobs/enqueue.ts:12)
 
-## getOrderAsync
+## getOrder
 - -> queryDb (src/db/query.ts:201) [leaf: stdlib wrapper]
 
-## enqueueRetryJobAsync
+## enqueueRetryJob
 - -> sqsClient.send (external) [leaf: AWS SDK]
-- -> getOrderAsync [cycle]
+- -> getOrder [cycle]
 - -> updateStatus [already traced]
 ```
 
@@ -112,14 +112,14 @@ When you see `this.someMethod()` or `instance.doThing()`:
 1. Determine the object's type from its declaration or type annotation.
 2. Navigate to the class definition and read the method.
 3. For inherited methods, follow the class hierarchy to the actual implementation.
-4. Name as `ClassName.methodName` (e.g., `OrderRunner.retryAsync`).
+4. Name as `ClassName.methodName` (e.g., `OrderRunner.retry`).
 
-For methods on singleton/plain-object exports (not classes), use `objectName.methodName` (e.g., `configSerializer.loadAsync`).
+For methods on singleton/plain-object exports (not classes), use `objectName.methodName` (e.g., `configSerializer.load`).
 
 ### Inline closures
 
 When a function defines closures or local functions internally (e.g., `useCallback`, inner arrow functions, locally scoped `function` or `async function` declarations):
-- Create a separate node for each one that calls project functions. Use the variable/function name (e.g., `validateInputAsync`, `onSubmit`, `renderFilePicker`).
+- Create a separate node for each one that calls project functions. Use the variable/function name (e.g., `validateInput`, `onSubmit`, `renderFilePicker`).
 - If the closure has no name, give it one based on its purpose and prefix with `unnamed.` (e.g., `unnamed.fetchAndRetryHandler`).
 - Record an edge from the parent function to the closure (parent defines it), AND edges from the closure to its callees.
 - Trivial memoized values (`useMemo` returning simple expressions with no project function calls) are not nodes — skip them.
@@ -157,10 +157,10 @@ Write files in parallel where possible — batch independent Write calls togethe
 All files in one flat directory. Preserve the function's original casing.
 
 - **Leaf functions** (functions where you stopped recursing — `leaf: true` in frontmatter): `leaf.` prefix: `leaf.queryDb.ts`, `leaf._buildHeaders.ts`
-- **Non-leaf functions**: just the name: `validateCard.tsx`, `_sendAsync.ts`
-- **Class methods**: `ClassName.methodName.tsx` (e.g., `OrderRunner.retryAsync.tsx`)
-- **Singleton methods**: `objectName.methodName.tsx` (e.g., `configSerializer.loadAsync.ts`)
-- **Inline closures**: use the variable name: `validateInputAsync.tsx`, or `unnamed.fetchHandler.tsx`
+- **Non-leaf functions**: just the name: `validateCard.tsx`, `_send.ts`
+- **Class methods**: `ClassName.methodName.tsx` (e.g., `OrderRunner.retry.tsx`)
+- **Singleton methods**: `objectName.methodName.tsx` (e.g., `configSerializer.load.ts`)
+- **Inline closures**: use the variable name: `validateInput.tsx`, or `unnamed.fetchHandler.tsx`
 - **Name collisions**: shortest unique directory suffix with `--` separator. Compare full paths of colliding functions, find the first directory segment (from the end) that differs. Example: `domestic--validateCard.tsx` vs `international--validateCard.tsx`.
 - Extension matches the source file's actual extension.
 
@@ -184,7 +184,7 @@ The abridged version should:
 - Preserve the function signature exactly
 - Replace implementation details with English descriptions in comments
 - Keep control flow structure (if/else, switch, try/catch, for loops) but summarize bodies
-- Preserve all function calls that appear in the call graph (these are the edges). Include leaf/infrastructure calls as comments (e.g., `// emit metrics via jobStats.onError(...)`) so the reader sees the full picture.
+- Preserve all function calls that appear in the call graph (these are the edges). Include leaf/infrastructure calls as comments (e.g., `// emit metrics via stats.recordError(...)`) so the reader sees the full picture.
 - Omit variable declarations, type assertions, and boilerplate that don't affect control flow
 - Target ~10-15% of the original line count, clamped to 30-80 lines
 
@@ -198,13 +198,13 @@ source: src/jobs/runner.ts:212
 lines: 340
 calls:
   - findHandler
-  - runInTransactionAsync
-  - _invokeHandlerAsync
+  - runInTransaction
+  - _invokeHandler
 called_by:
-  - processQueueBatchAsync
+  - processQueueBatch
 ---
 
-async _runJobAsync({job, ...}): Promise<JobResult | null> {
+async _runJob({job, ...}): Promise<JobResult | null> {
     // Check attempt limit — return null if exhausted
     if (job.attempts > job.maxAttempts) { return null; }
 
@@ -217,8 +217,8 @@ async _runJobAsync({job, ...}): Promise<JobResult | null> {
     // Validate the payload — return null if malformed
 
     // Run the handler inside one transaction
-    const result = await runInTransactionAsync(async () => {
-        return await _invokeHandlerAsync(handler, job, ...);
+    const result = await runInTransaction(async () => {
+        return await _invokeHandler(handler, job, ...);
     });
 
     // Classify result: cancel / retry later / error / success

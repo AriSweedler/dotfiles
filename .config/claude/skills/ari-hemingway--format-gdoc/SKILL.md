@@ -148,8 +148,8 @@ Some Slack threads / human-written summaries cite times in PT. Verify the offset
 URL template: `https://github.com/{owner_repo}/blob/{sha}/{path}#L{line}`. Substitute `{owner_repo}` and `{sha}` from the script output — do not hardcode repo names in any example.
 
 - GOOD: `[ROUTES](https://github.com/{owner_repo}/blob/{sha}/src/routes.ts#L28)`
-- GOOD: `[the cancel() override in PipelineStage.java](https://github.com/{owner_repo}/blob/{sha}/path/PipelineStage.java#L104-L134)`
-- BAD: `[PipelineStage.java L104-L134](https://github.com/{owner_repo}/blob/{sha}/path/PipelineStage.java#L104-L134)` — line numbers in label
+- GOOD: `[the retry() override in JobRunner.java](https://github.com/{owner_repo}/blob/{sha}/path/JobRunner.java#L104-L134)`
+- BAD: `[JobRunner.java L104-L134](https://github.com/{owner_repo}/blob/{sha}/path/JobRunner.java#L104-L134)` — line numbers in label
 - BAD: `[widget_cache.tsx — pruneFn (L47)](https://...)` — line number in parenthetical
 - BAD: `[ROUTES](https://github.com/acme/shop/blob/main/src/routes.ts#L28)` — branch name, hardcoded repo
 - BAD (first mention): `` `ROUTES` ``
