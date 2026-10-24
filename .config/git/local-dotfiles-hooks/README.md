@@ -18,8 +18,9 @@ git ldf config core.hooksPath ~/.config/git/local-dotfiles-hooks
 ## Hooks
 
 - **pre-commit** — Refuses to commit any path containing `.secret.` and any
-  staged content matching a known token shape (`pat…`, `bkua_`, `ghp_` prefixes,
-  AWS key id, `*_SECRET=`/`*_TOKEN=` literals). Secrets live in
+  staged content matching a known token shape (`bkua_`, `ghp_` prefixes,
+  AWS key id, `*_SECRET=`/`*_TOKEN=` literals, plus this machine's own shapes, one regex per
+  line in `~/.local/share/git/token-patterns`). Secrets live in
   `*.secret.zsh` beside the plugin that needs them and are never tracked.
 - **pre-push** — When the push touches `share/chrome-exoskeleton/` (this
   machine's private Chrome Exoskeleton plugins), runs the framework's full

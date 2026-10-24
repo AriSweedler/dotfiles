@@ -18,9 +18,22 @@ readonly C_RST='\033[0m'
 log::err()  { echo -e "${C_RED}[ERROR]${C_RST} $*" >&2; }
 log::info() { echo -e "${C_GREEN}[INFO]${C_RST} $*" >&2; }
 
-# Vendor token prefixes (pat…, bkua_, ghp_), AWS access key ids, and any
+# Vendor token prefixes (bkua_, ghp_), AWS access key ids, and any
 # *_SECRET= / *_TOKEN= assignment with a long literal value.
-readonly TOKEN_PATTERN='pat[A-Za-z0-9]{14}\.[a-f0-9]{16,}|bkua_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|_(SECRET|TOKEN|PAT)=["'"'"']?[A-Za-z0-9._-]{20,}'
+readonly TOKEN_PATTERN_BASE='bkua_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|_(SECRET|TOKEN|PAT)=["'"'"']?[A-Za-z0-9._-]{20,}'
+# This machine's own vendor token shapes: one extended regex per line, '#' comments.
+readonly TOKEN_PATTERN_FILE="${XDG_DATA_HOME:-${HOME}/.local/share}/git/token-patterns"
+
+token_pattern() {
+  local pattern="${TOKEN_PATTERN_BASE}" line
+  if [[ -r "${TOKEN_PATTERN_FILE}" ]]; then
+    while IFS= read -r line; do
+      [[ -z "${line}" || "${line}" == \#* ]] && continue
+      pattern+="|${line}"
+    done < "${TOKEN_PATTERN_FILE}"
+  fi
+  printf '%s' "${pattern}"
+}
 
 bash_has_mapfile() {
   if ! type mapfile &> /dev/null; then
@@ -36,14 +49,15 @@ main() {
   mapfile -t staged < <(git diff --cached --name-only --diff-filter=AM)
   (( ${#staged[@]} )) || return 0
 
-  local rc=0 path
+  local rc=0 path token_re
+  token_re="$(token_pattern)"
   for path in "${staged[@]}"; do
     if [[ "${path}" == *.secret.* ]]; then
       log::err "refusing to commit a secret file | path='${path}'"
       rc=1
       continue
     fi
-    if git show ":${path}" | grep -qE "${TOKEN_PATTERN}"; then
+    if git show ":${path}" | grep -qE "${token_re}"; then
       log::err "staged content looks like a credential | path='${path}'"
       rc=1
     fi

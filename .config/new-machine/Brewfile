@@ -1,6 +1,6 @@
 # Packages every machine gets. Installed by `dotfiles init` via `brew bundle`,
 # merged with the local tier's ~/.local/share/new-machine/Brewfile. Work-specific
-# tools (bazelisk, awscli, spr, ...) are installed by company tooling, not here.
+# tools are installed by work tooling, not here.
 # Commented-out entries were deliberately excluded; don't uncomment without asking.
 # Add entries with `dotfiles brew decree <name> --global --reason why`. Every entry says why
 # it is here: a trailing comment, or a heading comment opening its paragraph.
@@ -56,7 +56,7 @@ brew "tree-sitter-cli"
 brew "pipx"
 brew "uv"           # fast Python package manager
 brew "python"
-# brew "node"       # managed by company tooling; karabiner bake needs npm from it
+# brew "node"       # managed by work tooling; karabiner bake needs npm from it
 brew "shellcheck"
 brew "terraform-ls" # Terraform language server
 # cask "visual-studio-code"
