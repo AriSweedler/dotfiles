@@ -5,7 +5,7 @@ description: "Write or update design docs: proposals that present a problem, a p
 
 # Design Doc
 
-Produce design docs for Airtable engineering proposals in three modes: **propose** (from scratch), **distill** (from session knowledge or a Slack thread), **update** (from an existing doc).
+Produce design docs for engineering proposals in three modes: **propose** (from scratch), **distill** (from session knowledge or a Slack thread), **update** (from an existing doc).
 
 Formatting rules: see `/ari-hemingway--format-gdoc`. Workflow patterns (investigation folder, restore context, drafting, permalink resolution, fact-check, present/output): see `/ari-hemingway--lib`. If any rule here appears to contradict `/ari-hemingway--format-gdoc`, the format skill wins.
 
@@ -36,7 +36,7 @@ Optional and reorderable (appear between `# Proposal` and `# Sources`): `# Seque
 ### Reshape latitude
 
 Sections MAY be altered only as follows:
-- Rename a section only to a title that names the subject concretely (e.g., "Proposal" → "Move MCP publisher key to hyperbase-production"). NEVER to a vaguer title.
+- Rename a section only to a title that names the subject concretely (e.g., "Proposal" → "Move the release signing key to the release account"). NEVER to a vaguer title.
 - Merge two adjacent optional sections if combined content is under 300 words.
 - Drop an optional section per the rules above ("when each optional section is required").
 
@@ -81,39 +81,39 @@ Alternative B — rejected because <reason>.
 Structural skeleton only — NOT a target length. See word-count buckets in `## Rules` for real targets.
 
 ```markdown
-[🤖 AI generated] Move MCP Registry Publisher Key Out of Hyperbase Dev
+[🤖 AI generated] Move the Release Signing Key Out of the Shared CI Account
 
 # TL;DR
 
-The `com.airtable/mcp` publisher private key lives in the dev AWS account where ~half the company can read it. Proposal: introduce an `MCP_PUBLISHERS` LogicalGroup, move the secret to `hyperbase-production`, scope IAM to a single ARN, then rotate the key as cutover. The new home must exist before there's anywhere to land the rotated key — rotation is blocked until steps 1–5 ship.
+The release signing key lives in the shared CI account, where every CI job can read it. Proposal: add a `release-signers` group, move the key to the release account, scope IAM to its single ARN, then rotate the key as cutover. The new home must exist before there's anywhere to land the rotated key — rotation is blocked until steps 1–3 ship.
 
 # Problem
 
-`/hyperbase/mcp-registry-publisher` is stored in the dev account. `HyperbaseDevAccess` (~50% of engineering) can read it via `grunt credential:show` — see [`agent_skills/authoring/mcp-registry/README.md` L43-59](https://github.com/Hyperbase/hyperbase/blob/{sha}/agent_skills/authoring/mcp-registry/README.md#L43-L59). Anyone with that role can publish under our registry namespace.
+`/ci/release-signing-key` is stored in the shared CI account. Every CI job role can read it — see [`docs/releasing.md` L40-52](https://github.com/acme/shop/blob/{sha}/docs/releasing.md#L40-L52). Any job, including one from an unreviewed branch, can sign a release.
 
 # Proposal
 
-1. New `LogicalGroup MCP_PUBLISHERS` at `admin/engineering_access/config/logical_groups/mcp_publishers.tsx`. Members: Ari, Andrew, Clement. Precedent: any existing file in [`config/logical_groups/`](https://github.com/Hyperbase/hyperbase/tree/{sha}/admin/engineering_access/config/logical_groups).
-2. New `CustomerManagedPolicy mcp_registry_publish` granting `secretsmanager:GetSecretValue` on one ARN. Precedent: [`hyperbase_production_deny_secrets.tsx` L12-14](https://github.com/Hyperbase/hyperbase/blob/{sha}/admin/engineering_access/config/aws/customer_managed_policies/hyperbase_production_deny_secrets.tsx#L12-L14).
+1. New group `release-signers` in `iam/groups/release_signers.tf`. Precedent: any existing file in [`iam/groups/`](https://github.com/acme/shop/tree/{sha}/iam/groups).
+2. New policy `release_sign` granting `secretsmanager:GetSecretValue` on one ARN. Precedent: [`iam/policies/deploy_read.tf` L12-14](https://github.com/acme/shop/blob/{sha}/iam/policies/deploy_read.tf#L12-L14).
 3. ...
 
 # Sequencing / cutover
 
-Steps 1–5 land first (access plumbing). Rotation is the cutover: it cannot run earlier because there is no prod SM path to write the rotated key into.
+Steps 1–3 land first (access plumbing). Rotation is the cutover: it cannot run earlier because there is no release-account path to write the rotated key into.
 
 # Tradeoffs considered
 
-- Keep the secret in dev with a DenyList SCP — rejected: every new IAM principal would need to be added to the deny list, fragile.
-- Jump straight to OIDC-federated CI publish (Layer 3) — deferred: more work, and publishing is rare today.
+- Keep the key in the CI account behind a deny-list policy — rejected: every new job role would need to be added to the deny list, fragile.
+- Jump straight to OIDC-federated signing — deferred: more work, and releases are rare today.
 
 # Out of scope / future work
 
-- OIDC-federated GitHub Actions publish flow — why later: removes humans from the loop entirely, but requires workflow + OIDC role + version-bump trigger semantics. Worth a follow-up doc.
+- OIDC-federated signing from the release workflow — why later: removes humans from the loop entirely, but requires a workflow + OIDC role + version-bump trigger semantics. Worth a follow-up doc.
 
 # Sources
 
-- [`agent_skills/authoring/mcp-registry/README.md`](https://github.com/Hyperbase/hyperbase/blob/{sha}/agent_skills/authoring/mcp-registry/README.md) — current publish + rotation flow.
-- [`engineering_access.mdc` L227-232](https://github.com/Hyperbase/hyperbase/blob/{sha}/.cursor/rules/engineering_access.mdc#L227-L232) — LogicalGroup add flow.
+- [`docs/releasing.md`](https://github.com/acme/shop/blob/{sha}/docs/releasing.md) — current signing + rotation flow.
+- [`iam/README.md` L20-31](https://github.com/acme/shop/blob/{sha}/iam/README.md#L20-L31) — group add flow.
 
 🤖🌸 Generated with Claude Code
 ```
@@ -137,7 +137,7 @@ A 1-page design doc is fine. Skip sections that don't apply rather than padding 
 - **A claim about prior discussion (Slack thread, incident, decision)** MUST cite the source: thread URL, message timestamp, or named participant + date. If the source is paraphrased without a link, mark with `[TODO: verify with user]`.
 - **An open question that came up in conversation but wasn't resolved** MUST appear in the Open questions section with the conversation as its source, NOT be silently answered by the skill.
 
-GOOD: `Doug Forster surfaced this in #infra-security on 2026-05-12 — see thread <slack-url>.`
+GOOD: `Sam Rivera surfaced this in #release-eng on 2026-05-12 — see thread <slack-url>.`
 BAD: `The team has been concerned about this for some time.` — no source, speculative.
 
 ## Investigation folder
@@ -218,9 +218,9 @@ Gate by scope:
 - **Single-system change (≤500 word bucket):** minimum 2 concrete artifacts in Proposal, minimum 1 cited precedent.
 - **Multi-step or cross-system (>500 word bucket):** minimum 4 concrete artifacts, minimum 2 cited precedents.
 
-GOOD step: `New \`CustomerManagedPolicy mcp_registry_publish\` granting \`secretsmanager:GetSecretValue\` on \`arn:aws:secretsmanager:*:*:secret:/hyperbase/mcp-registry-publisher-*\`. Precedent: \`hyperbase_production_deny_secrets.tsx\`.`
+GOOD step: `New policy \`release_sign\` granting \`secretsmanager:GetSecretValue\` on \`arn:aws:secretsmanager:*:*:secret:/release/signing-key-*\`. Precedent: \`iam/policies/deploy_read.tf\`.`
 NOT a step: `Tighten secrets manager IAM.` — no artifact, no ARN, no precedent.
-NOT a step: `We should probably also do something about the Okta groups.` — speculative, no artifact.
+NOT a step: `We should probably also do something about the SSO groups.` — speculative, no artifact.
 
 If the minimum is not met, MUST stop:
 - **0 concrete artifacts in Proposal:** print `Proposal is too vague to produce a design doc. Sharpen at least N steps to name concrete artifacts (files, TF resources, IAM ARNs, commands).`
