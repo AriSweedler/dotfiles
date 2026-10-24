@@ -47,7 +47,7 @@ SCOPES_NEEDED = ("https://www.googleapis.com/auth/script.projects", "https://www
 # token's whole scope set (a login with `-s script` dropped documents and drive on 2026-09-23).
 PUBLISH_SCOPES = ("https://www.googleapis.com/auth/documents", "https://www.googleapis.com/auth/drive")
 USER_SETTINGS_URL = "https://script.google.com/home/usersettings"
-GCP_PROJECT = "airtable-gws-cli"
+GWS_CLIENT_SECRET = Path.home() / ".config" / "gws" / "client_secret.json"
 ASIDE_TAB_RE = re.compile(r"^Aside (\d+):")
 SECTION_RE = re.compile(r"^# Aside (\d+):")
 H1_RE = re.compile(r"^# ")
@@ -59,6 +59,14 @@ OK, MISSING, SKIPPED = "OK", "MISSING", "SKIPPED"
 
 
 # --- Setup probes ---
+
+
+def gws_gcp_project():
+    """The GCP project of the OAuth client gws signs in with; scripts.run needs the script on the same one."""
+    try:
+        return json.loads(GWS_CLIENT_SECRET.read_text(encoding="utf-8"))["installed"]["project_id"]
+    except (OSError, json.JSONDecodeError, KeyError):
+        return "<the project_id in ~/.config/gws/client_secret.json>"
 
 
 def gws_probe(args, json_flag=True):
@@ -185,9 +193,10 @@ def check_run_probe(config):
     if not ok:
         message = error_text(reply)
         if "PERMISSION_DENIED" in message or "403" in message:
+            project = gws_gcp_project()
             return MISSING, (
                 f"scripts.run is refused: the script must share the caller's GCP project. Open https://script.google.com/home/projects/{config['scriptId']}/settings, "
-                f"under 'Google Cloud Platform (GCP) Project' click 'Change project' and enter the project number of {GCP_PROJECT} (gcloud projects describe {GCP_PROJECT} --format='value(projectNumber)')  ({message[:120]})"
+                f"under 'Google Cloud Platform (GCP) Project' click 'Change project' and enter the project number of {project} (gcloud projects describe {project} --format='value(projectNumber)')  ({message[:120]})"
             )
         if "404" in message or "NOT_FOUND" in message:
             return MISSING, f"deployment {config['deploymentId']} not found by scripts.run; re-run the deployment step  ({message[:120]})"

@@ -57,7 +57,7 @@ Google Doc only. Slack, PR description, and markdown have no bookmark form.
 3. **project** — an Apps Script project exists and its id is recorded with `--configure`.
 4. **content** — the project's files equal `bin/gas`. `gws` rejects an absolute `--dir`, so the push runs from inside the folder: `(cd $HOME/.claude/skills/ari-hemingway--structure-bookmark/bin/gas && gws script +push --script <scriptId> --dir .)`.
 5. **deployment** — a deployment of a numbered version with an API-executable entry point exists and its id is recorded with `--configure`. Apps Script makes a HEAD deployment by itself; the check ignores it and says so.
-6. **run** — `scripts.run` reaches the project, which needs the script's GCP project switched to `airtable-gws-cli` in the Apps Script editor's project settings (click path; no API sets this).
+6. **run** — `scripts.run` reaches the project, which needs the script's GCP project switched to the one `gws` signs in with (`project_id` in `~/.config/gws/client_secret.json`) in the Apps Script editor's project settings (click path; no API sets this).
 
 A passing check:
 
