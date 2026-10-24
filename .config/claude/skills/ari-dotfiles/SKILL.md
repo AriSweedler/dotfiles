@@ -122,6 +122,13 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
   everything else is a file of the framework repo at `~/.config/chrome-exoskeleton/`,
   a submodule (see **Submodules**). Building, testing and the framework's own
   push are `/ari-dotfile--submodule-chrome-exoskeleton`'s job.
+- **Starship follows the same split, by whole table.** Generic modules go in
+  `~/.config/starship.toml` (df); a work-only module is one table in its own
+  `~/.local/share/starship/<module>.toml` (ldf, e.g. `kubernetes.toml`). A table
+  lives in one tier only. **Never edit `$STARSHIP_CONFIG`**
+  (`~/.local/state/starship/starship.toml`, what `starship config` opens): it is
+  generated at shell start and rewritten. Open a new shell to see the change; a
+  `[ERROR] starship: the joined config is not valid TOML` line names the clash.
 - **Split mixed files.** Keep the generic mechanism in config and parameterize
   the company detail from local:
   ```zsh
