@@ -1,4 +1,5 @@
-# Tests for starship_config_join in starship.zsh.
+# Tests for starship.zsh — starship_config_join: no overlay, one overlay, an unchanged join,
+# a table in both tiers, a removed overlay.
 # Only runs when OTTO_TEST__ZSH_PLUGINS_STARSHIP=true
 [[ "$OTTO_TEST__ZSH_PLUGINS_STARSHIP" == "true" ]] || return 0
 
