@@ -106,8 +106,8 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
 - **Generic → `~/.config` (df).** Anything correct on every machine: shell
   plugins, PATH policy (`prepend_to_path` for `~/.local/bin` and
   `$XDG_DATA_HOME/bin` is policy, not local), git config, nvim, `~/.config/bin`.
-- **Company or machine-specific → `~/.local` (ldf).** Airtable env vars, aws/tsh/
-  cloud-dev helpers, per-machine data for fzfdb selectors, `~/.local/bin`
+- **Company or machine-specific → `~/.local` (ldf).** Work env vars, cloud and
+  remote-shell helpers, per-machine data for fzfdb selectors, `~/.local/bin`
   wrappers. Never a framework, never a launchd job, never a script that stands
   alone: an ldf component plugs into a df framework at one of the **Cutpoints**.
   Something that should run on a schedule or on screen unlock is a job plugin
@@ -134,10 +134,10 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
   ```zsh
   # ~/.config/bin/chrome_work_open (df)
   domain="${WORK_EMAIL_DOMAIN:?set in the local tier}"
-  # ~/.local/share/zsh/plugins/airtable.zsh (ldf)
-  export WORK_EMAIL_DOMAIN=airtable.com
+  # ~/.local/share/zsh/plugins/work.zsh (ldf)
+  export WORK_EMAIL_DOMAIN=example.com
   ```
-  fzfdb selectors: function in config, Airtable aliases and bookmark data in local.
+  fzfdb selectors: function in config, work aliases and bookmark data in local.
 
 ### Secrets
 
@@ -162,11 +162,11 @@ shared `get secrets` helper exists yet; do not assume one.
 Show the block and the `rg` hits before running.
 
 ```zsh
-git df rm --cached ~/.config/zsh/plugins/airtable.zsh
-mv ~/.config/zsh/plugins/airtable.zsh ~/.local/share/zsh/plugins/airtable.zsh
-git df commit -m "Move airtable.zsh to local tier"
-git ldf add ~/.local/share/zsh/plugins/airtable.zsh && git ldf commit -m "Add airtable.zsh from shared tier"
-rg -n 'plugins/airtable.zsh' ~/.config ~/.local/share   # edit every hit; re-run until empty
+git df rm --cached ~/.config/zsh/plugins/work.zsh
+mv ~/.config/zsh/plugins/work.zsh ~/.local/share/zsh/plugins/work.zsh
+git df commit -m "Move work.zsh to local tier"
+git ldf add ~/.local/share/zsh/plugins/work.zsh && git ldf commit -m "Add work.zsh from shared tier"
+rg -n 'plugins/work.zsh' ~/.config ~/.local/share   # edit every hit; re-run until empty
 ```
 
 ## Cutpoints

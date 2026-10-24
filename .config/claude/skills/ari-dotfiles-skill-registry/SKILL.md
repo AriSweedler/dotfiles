@@ -1,6 +1,6 @@
 ---
 name: ari-dotfiles-skill-registry
-description: Claude skills are versioned in Ari's dotfiles. Link tier-held skills into ~/.claude/skills, adopt a local skill into a tier, and report which skills are unlinked, missing, or dangling. Replaces the copy-based sync to the Airtable experimental repo.
+description: Claude skills are versioned in Ari's dotfiles. Link tier-held skills into ~/.claude/skills, adopt a local skill into a tier, and report which skills are unlinked, missing, or dangling. Replaces a copy-based sync to a separate skills repo.
 ---
 
 # Dotfiles Skill Registry
@@ -14,7 +14,7 @@ copy step, no drift check against a remote, and no push here (pushing follows
 | Tier | Root | Holds |
 |---|---|---|
 | Shared (`git df`) | `~/.config/claude/skills/` | Skills correct on every machine |
-| Local (`git ldf`) | `~/.local/share/claude-skills/` | Airtable- or machine-specific skills |
+| Local (`git ldf`) | `~/.local/share/claude-skills/` | Work- or machine-specific skills |
 | Either, via a submodule | `<submodule>/skills/` for every path in the tier's `.gitmodules` (e.g. `~/.config/chrome-exoskeleton/skills/`) | Skills that travel with that repo; committed there, not with `git df`/`git ldf` |
 
 `~/.local/share/claude/` is Claude Code's own install dir, which is why the local
