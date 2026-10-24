@@ -80,8 +80,8 @@ ${c_bold}Options:${c_rst}
 
 ${c_bold}Examples:${c_rst}
   zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --help
-  zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode registry --target pr-patrol
-  zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode reg --target pr --target pr-patrol --verbose
+  zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode registry --target ari-diagram-mermaid
+  zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode reg --target ari-poem-limerick --target ari-diagram-mermaid --verbose
   zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode compare --dry-run
 EOF
 }

@@ -44,8 +44,8 @@ _t "github pull URL is a link when no open-pr exists" "https://github.com/o/r/pu
 [[ -n "${_saved_pr}" ]] && commands[open-pr]="${_saved_pr}"
 
 # Scheme-less: accepted only when the whole text is one hostname-shaped token, opened as https.
-_t "scheme-less host and path becomes https" "https://github.com/AriSweedler-at/dotfiles" \
-  "$(open_link::url_from 'github.com/AriSweedler-at/dotfiles')"
+_t "scheme-less host and path becomes https" "https://github.com/example-org/dotfiles" \
+  "$(open_link::url_from 'github.com/example-org/dotfiles')"
 _t "scheme-less bare host becomes https" "https://example.com" "$(open_link::url_from 'example.com')"
 _t "scheme-less with a query in the path" "https://x.io/p?a=1&b=2" "$(open_link::url_from 'x.io/p?a=1&b=2')"
 _t "scheme-less trailing newline from the clipboard is trimmed" "https://www.example.org/x" \

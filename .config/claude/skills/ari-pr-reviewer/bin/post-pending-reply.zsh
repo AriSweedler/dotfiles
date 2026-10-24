@@ -38,7 +38,7 @@ ${c_bold}Options:${c_rst}
   -h, --help           Show this help
 
 ${c_bold}Requires:${c_rst}
-  State from gather-pending.zsh under /tmp/ari-pr-patrol-<pr>/comments/.
+  State from gather-pending.zsh under /tmp/ari-pr-reviewer-<pr>/comments/.
 EOF
 }
 
@@ -196,7 +196,7 @@ main() {
         return 1
     fi
 
-    local comments_dir="/tmp/ari-pr-patrol-${pr}/comments"
+    local comments_dir="/tmp/ari-pr-reviewer-${pr}/comments"
     local state_file="${comments_dir}/review.json"
     local meta_file="${comments_dir}/pending_review.json"
     for file in "${state_file}" "${meta_file}"; do

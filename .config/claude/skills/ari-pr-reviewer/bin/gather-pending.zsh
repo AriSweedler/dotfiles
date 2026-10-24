@@ -31,7 +31,7 @@ ${c_bold}Options:${c_rst}
 
 ${c_bold}Output:${c_rst}
   Sections to stdout: PR, META, PENDING_COMMENTS.
-  State persisted in /tmp/ari-pr-patrol-<pr>/comments/.
+  State persisted in /tmp/ari-pr-reviewer-<pr>/comments/.
 EOF
 }
 
@@ -262,8 +262,8 @@ main() {
 
     # --- State ---
 
-    local comments_dir="/tmp/ari-pr-patrol-${pr}/comments"
-    local replies_dir="/tmp/ari-pr-patrol-${pr}/replies"
+    local comments_dir="/tmp/ari-pr-reviewer-${pr}/comments"
+    local replies_dir="/tmp/ari-pr-reviewer-${pr}/replies"
     local state_file="${comments_dir}/review.json"
     local meta_file="${comments_dir}/pending_review.json"
     mkdir -p "${comments_dir}" "${replies_dir}"

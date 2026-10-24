@@ -51,13 +51,13 @@ Each invocation creates a fresh timestamped folder, so sessions never clash.
 The setup script pre-fills the **Skill** line; fill **Goal** during "Read the skill", and **Changes made** / **Open questions** during "Edit the skill". Drop a section if it's empty.
 
 ```markdown
-- **Skill**: ari-pr — $HOME/.claude/skills/ari-pr/SKILL.md — Create or update a PR
-- **Goal**: Add draft PR support when user says "draft" or "wip"
+- **Skill**: ari-diagram-mermaid — $HOME/.claude/skills/ari-diagram-mermaid/SKILL.md — Create, validate, and share Mermaid.js diagrams
+- **Goal**: Add a dark-canvas preview when the user says "dark" or "night"
 - **Changes made**:
-  - Added --draft flag to gh pr create in the push step
-  - Updated heading to mention draft PRs
+  - Added a --dark flag to bake for the preview image
+  - Updated the Share step to mention dark previews
 - **Open questions**:
-  - Should existing PRs be convertible to draft? Check gh pr ready support.
+  - Should bake refuse a theme block that fails contrast only on the dark canvas?
 ```
 
 ## File storage

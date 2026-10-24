@@ -57,4 +57,4 @@
 
 ## Commit
 
-<!-- Optional. Extra commit or PR-body rules beyond /ari-pr. The Co-Authored-By trailer, the `[skip ci]` rule for chain lanes and the /dev/tty hook fallback always apply. -->
+<!-- Optional. Extra commit or PR-body rules. The Co-Authored-By trailer, the `[skip ci]` rule for chain lanes and the /dev/tty hook fallback always apply. -->

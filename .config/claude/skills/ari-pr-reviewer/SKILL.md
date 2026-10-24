@@ -1,6 +1,6 @@
 ---
 name: ari-pr-reviewer
-description: Reviewer side of a PR. Reads Ari's PENDING review comments on someone else's PR, tries to disprove each one, and replies under each inside the same pending review — a fenced code block, a placement rec and precedent permalinks when the comment holds, a delete-this-thread note when it fails. Never edits code or touches the author's branch; Ari submits. Use when Ari says "I am reviewing <PR>", "fact-check my comments", or "reply to my review comments". Author-side triage is /ari-pr-patrol-comments.
+description: Reviewer side of a PR. Reads Ari's PENDING review comments on someone else's PR, tries to disprove each one, and replies under each inside the same pending review — a fenced code block, a placement rec and precedent permalinks when the comment holds, a delete-this-thread note when it fails. Never edits code or touches the author's branch; Ari submits. Use when Ari says "I am reviewing <PR>", "fact-check my comments", or "reply to my review comments". Author-side triage is a separate skill.
 ---
 
 # PR Reviewer
@@ -10,7 +10,7 @@ Ari reviews another engineer's PR by leaving terse comments in a pending GitHub 
 ## Rules
 
 - **Comments only.** Never check out, edit, typecheck, or test the author's branch. "Implement my comments" means "work out the concrete recommendation", not "edit the repo". The author drives the change.
-- **Stay pending.** Post only through `post-pending-reply.zsh`; it fails unless GitHub reports the review still `PENDING`. Never post through another skill's reply script (for example `/ari-pr-patrol-comments`'s `post-reply.zsh`): those publish, resolve the thread, and append a footer. Replies here carry no footer.
+- **Stay pending.** Post only through `post-pending-reply.zsh`; it fails unless GitHub reports the review still `PENDING`. Never post through another skill's reply script (for example an author-side triage skill's reply script): those publish, resolve the thread, and append a footer. Replies here carry no footer.
 - **Ari's voice.** First person, claims scoped to their preconditions, no rhetoric, no borrowed authority. Assert only what the codebase shows, and flag anything Ari would have to defend so he can restate it.
 - **Links.** `[what is there](url)`, line numbers only in the fragment, PRs as `#NNNN`. Permalink existing code at `base_sha` and PR files at `head_sha`; the gather script prints both.
 - **Re-gather before every pass.** Ari adds comments while you work. The gather script merges and keeps each comment's status.
@@ -22,10 +22,10 @@ A PR number or URL. Ari has a pending review on it with at least one comment. Pa
 
 ## Investigation folder
 
-One state directory per PR, under the same root `/ari-pr-patrol-comments` uses where that skill is installed.
+One state directory per PR:
 
 ```
-/tmp/ari-pr-patrol-<pr>/
+/tmp/ari-pr-reviewer-<pr>/
 ├── comments/
 │   ├── pending_review.json   # review ids, viewer, head_sha, base_sha
 │   └── review.json           # one record per top-level comment
@@ -64,7 +64,7 @@ For a "this could be a type" comment: types bind only when every value is a lite
 
 ### Draft
 
-Write `/tmp/ari-pr-patrol-<pr>/replies/<comment-id>.md`. One idea per reply; the code block carries the detail.
+Write `/tmp/ari-pr-reviewer-<pr>/replies/<comment-id>.md`. One idea per reply; the code block carries the detail.
 
 - **holds / partially:** one placement sentence (file, next to what), a fenced block with the types or code, one precedent permalink, one cost if there is one.
 - **disproved:** `**Note to self, delete this thread before submitting.**` then one sentence with the reason and, if any, where the check belongs instead.
@@ -73,7 +73,7 @@ Write `/tmp/ari-pr-patrol-<pr>/replies/<comment-id>.md`. One idea per reply; the
 ### Post
 
 ```zsh
-zsh $HOME/.claude/skills/ari-pr-reviewer/bin/post-pending-reply.zsh --pr <number> --comment-id <id> --body-file /tmp/ari-pr-patrol-<pr>/replies/<id>.md --verdict <verdict>
+zsh $HOME/.claude/skills/ari-pr-reviewer/bin/post-pending-reply.zsh --pr <number> --comment-id <id> --body-file /tmp/ari-pr-reviewer-<pr>/replies/<id>.md --verdict <verdict>
 ```
 
 `review_state=PENDING` in the output is the success condition. Anything else means the reply went public; tell Ari at once. After the batch, run **Gather** again to catch comments Ari added meanwhile.

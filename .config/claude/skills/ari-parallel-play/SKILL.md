@@ -19,7 +19,7 @@ Run many small features at once with two roles: one orchestrator that owns the q
 - **Never `SendMessage` a Workflow subagent.** The harness resumes a second copy into the same worktree. Message plain Agent lanes only; change a Workflow by stopping and resuming its script.
 - **Chain a burst.** Two or more lanes in one group land as a chain in the working doc's row order: lane 1 branches from `origin/main`, lane k from lane k-1's branch, and each PR targets the branch it came from (lane 1's PR targets main). Every chain head carries `[skip ci]`, so no chain PR runs CI on its own. When the whole chain has handed off, the orchestrator finalizes it (see Watch and merge): the top PR is retargeted to main and gets one empty commit without `[skip ci]`, CI runs once, the watcher merges it with a merge commit, and the lower PRs are closed with a comment naming the top (their commits are in the merge). A red top is fixed forward on the top branch. Lanes outside any group go to main alone. Never squash sub-PRs into an integration branch yourself: that is a merge without review, and only the owner may run it.
 - **Every agent carries its role and lane in its name.** The Agent tool's `description` is the name the user sees: `orchestrator <repo>` for the orchestrator, `lane <id>` for a lane, `fixer <id>` for a fixer. Never spawn one described only by its type.
-- **Commits and PR bodies** follow `templates/fast-path.md` (the trailer, the `/dev/tty` hook fallback) and `/ari-pr`.
+- **Commits and PR bodies** follow `templates/fast-path.md` (the trailer, the `/dev/tty` hook fallback) and the repo profile's `## Commit` section.
 
 ## Input
 
@@ -41,7 +41,7 @@ One markdown file per repo, owned by the caller (a path like `<repo>/.parallel-p
 | `## Groups` | no | the areas whose lanes chain together, and how an ask maps to one; absent means every lane is solo |
 | `## Lane environment` | no | per-lane values the lane needs (a port offset formula, an env var); rendered into the prompt as given |
 | `## Live check` | no | the URL per group and the command that verifies a merge is live; absent means no live check |
-| `## Commit` | no | extra commit or PR-body rules beyond `/ari-pr`; the fast path's trailer and hook fallback always apply |
+| `## Commit` | no | extra commit or PR-body rules; the fast path's trailer and hook fallback always apply |
 
 ## Investigation folder
 
