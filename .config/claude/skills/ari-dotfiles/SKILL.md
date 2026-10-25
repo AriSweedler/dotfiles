@@ -1,12 +1,14 @@
 ---
 name: ari-dotfiles
-description: Edit and commit Ari's two-tier dotfiles — shared (`git df`, ~/.config, every machine) and local (`git ldf`, ~/.local, this machine only)
+description: Edit and commit Ari's two-tier dotfiles — shared (`git df`, ~/.config, every machine) and local (`git ldf`, ~/.local, this machine only) — and review every unpushed public commit for employer-identifying content before recommending a push
 ---
 
 # Dotfiles
 
 Ari's dotfiles are two bare git repos, one per tier. Pick the tier by whether
-the content should be identical on every machine or belongs to this one.
+the content should be identical on every machine or belongs to this one. The
+shared tier and its submodules are public, so no push is recommended until each
+unpushed commit there passes **Review before push**.
 
 | Tier | Alias | Bare repo | Worktree | Holds | Remote |
 |---|---|---|---|---|---|
@@ -23,7 +25,8 @@ On this laptop the local `origin` is a private repo
    A path inside a submodule (`~/.config/chrome-exoskeleton/…`) is refused by
    `git df add`: follow **Submodules** instead.
 3. Print `git df log --oneline -1` / `git ldf log --oneline -1` to confirm the tier.
-4. Shared: end with "Run `dotfiles push` when ready." Local: `git ldf push` now.
+4. Shared: run **Review before push**, and only when it passes end with "Run
+   `dotfiles push` when ready." Local: `git ldf push` now.
 5. Offer the **Post-change sweep**.
 
 **Always pass absolute paths to `git df` and `git ldf`.** Relative pathspecs
@@ -74,9 +77,33 @@ cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
   a refused bump blocks the shared push, nothing else blocks anything.
   Each repo's output lands in `~/.local/state/dotfiles/push/<repo>.log`
   (`shared`, `local`, or the submodule path; `.log.bak.1` … `.log.bak.5` = the five runs before).
-  After committing, end with: "Run `dotfiles push` when ready."
-- **Local: push after every ldf commit.** No confirmation needed; `dotfiles
-  push` also picks up a local commit left unpushed.
+  After committing, run **Review before push**; only when it passes, end with
+  "Run `dotfiles push` when ready."
+- **Local: push after every ldf commit.** No confirmation needed and no review
+  (the repo is private); `dotfiles push` also picks up a local commit left unpushed.
+
+### Review before push
+
+Each unpushed shared-tier or submodule commit becomes public on Ari's push, so
+review every one for content that identifies the employer, using the
+identifying-content list in `/ari-skill-update` § Rules:
+
+```zsh
+git df log --reverse --format=%h origin/main..main            # shared tier
+git -C ~/<path> log --reverse --format=%h origin/main..main   # each submodule with commits
+```
+
+For each commit, dispatch a fresh reviewer with the Agent tool, one per commit.
+Give it `git df show <sha>` (or `git -C ~/<path> show <sha>`), the full text of
+every file the commit touches as of that commit (`git df show <sha>:<path>`),
+and that list. It reports `<file>:<line> — <what identifies the employer> —
+<neutral rewrite | move to ldf>`, or `none`, and edits nothing. Commits made
+through `/ari-skill-update` get a pass too.
+
+Recommend the push only when every unpushed commit's latest pass returned `none`.
+A fix in a later commit does not help: the earlier commit would still publish
+the content. Fold each fix into the commit that introduced it (rewriting
+unpushed history needs Ari's OK), then review every rewritten commit again.
 
 ### When `dotfiles push` fails
 
@@ -243,8 +270,9 @@ One dotfiles change; never stop after the first commit.
 2. **Commit in the submodule's repo** on `main`, explicit paths:
    `git -C ~/<path> add <files> && git -C ~/<path> commit -m "…"`. Its hooks
    and commit conventions apply, not the tier's.
-3. **Its push, and the bump, are the user's**: end with "Run `dotfiles push`
-   when ready." That pushes the submodule, commits the shared tier's pointer
+3. **Its push, and the bump, are the user's**: run **Review before push** on
+   the submodule's unpushed commits, and only when it passes end with "Run
+   `dotfiles push` when ready." That pushes the submodule, commits the shared tier's pointer
    bump (`<name>: bump to <sha> (<subject>)`, that path alone) and pushes the
    shared tier with it; `dotfiles push --submodules` alone still commits the
    bump (`--shared`, `--local` and `--no-<part>` narrow the scope the same
@@ -328,8 +356,9 @@ own line before anything else:
 Both clean → those two lines are the whole answer; stop. Otherwise inspect each
 change (`diff` for modified, `cat` for untracked), then print the plan as one
 line per commit (tier: files → message), grouping tightly related files (a new
-config plus its include), before the first commit. Commit, then push local; end
-with "Run `dotfiles push` when ready." if anything landed in the shared repo.
+config plus its include), before the first commit. Commit, then push local. If
+anything landed in the shared repo, run **Review before push** and, once it
+passes, end with "Run `dotfiles push` when ready."
 
 ## Bootstrapping a machine
 
