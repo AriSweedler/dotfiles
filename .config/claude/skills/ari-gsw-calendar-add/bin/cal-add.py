@@ -46,6 +46,8 @@ CONTEXT_WINDOW_S = 15 * 60
 SENT_LOG = HOME / ".openclaw/media/cal-add-last-sent.json"   # dedupe: the same reply is not sent twice within 10 min
 OPENCLAW = shutil.which("openclaw") or "/opt/homebrew/bin/openclaw"
 PLATFORMS = ("Ticketweb", "Ticketmaster", "AXS", "Eventbrite", "DICE", "Dothebay", "See Tickets", "Etix", "Tixr", "Shotgun", "RA")
+SPOTIFY = HOME / ".claude/skills/ari-spotify/bin/spotify.zsh"   # the teaser playlist (ari-spotify skill); concerts only
+TEASER_TIMEOUT_S = 150   # a cold Liked Songs fetch (~4000 songs) takes ~40 s
 ALIASES = {"artist": "title", "summary": "title", "datetime": "start", "timezone": "tz", "venue": "location",
            "notes": "description", "text": "source"}
 KNOWN = {"title", "start", "end", "tz", "calendar", "location", "description", "attendees", "source", "allowPast",
@@ -341,11 +343,43 @@ def fmt_range(start, end):
     return f"{a} – {b} {start.tzname()}"
 
 
+def teaser_playlist(artist, start, dry):
+    """The concert teaser playlist via the ari-spotify skill: every liked song by the artist, oldest first, named
+    'YYYY-MM-DD | Artist'. Returns {"bullet": reply line, "line": description line or None, "result": raw}. Never fatal:
+    the event matters more than the playlist, so any failure becomes a reply line Ari can act on."""
+    if not SPOTIFY.exists():
+        return {"bullet": bullet("Teaser", "not made (ari-spotify skill is not on this machine)"), "line": None, "result": None}
+    cmd = ["zsh", str(SPOTIFY), "teaser", "--artist", artist, "--date", start.strftime("%Y-%m-%d")] + (["--dry-run"] if dry else [])
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=TEASER_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        return {"bullet": bullet("Teaser", f"not made (Spotify took longer than {TEASER_TIMEOUT_S} s)"), "line": None, "result": None}
+    except OSError as e:
+        return {"bullet": bullet("Teaser", f"not made ({e})"), "line": None, "result": None}
+    if p.returncode != 0:
+        why = (p.stderr.strip().splitlines() or ["unknown error"])[-1]
+        why = re.sub(r"\x1b\[[0-9;]*m", "", why).replace("[ERROR] ", "")[:160]
+        return {"bullet": bullet("Teaser", f"not made ({why})"), "line": None, "result": None}
+    try:
+        res = json.loads(p.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return {"bullet": bullet("Teaser", "not made (Spotify tool gave an unreadable answer)"), "line": None, "result": None}
+    name, n = res.get("name"), res.get("liked_count", 0)
+    if not n:
+        return {"bullet": bullet("Teaser", f"none, no liked songs by {res.get('artist', {}).get('name', artist)} yet"), "line": None, "result": res}
+    if dry or not res.get("url"):
+        return {"bullet": bullet("Teaser", f"would make {name} ({n} liked songs)"), "line": None, "result": res}
+    verb = "" if res.get("created") else " (already existed, topped up)"
+    return {"bullet": bullet("Teaser", f"[{name}]({res['url']}) {n} liked songs{verb}. Move it to Concerts › Teasers in Spotify."),
+            "line": f"Teaser playlist: {res['url']}", "result": res}
+
+
 def main():
     args = sys.argv[1:]
     global JSON_MODE, SEND
     dry, concert, JSON_MODE, SEND = "--dry-run" in args, "--concert" in args, "--json" in args, "--no-send" not in args
-    args = [a for a in args if a not in ("--dry-run", "--concert", "--json", "--no-send")]
+    want_teaser = concert and "--no-teaser" not in args
+    args = [a for a in args if a not in ("--dry-run", "--concert", "--json", "--no-send", "--no-teaser")]
     # Flag form: --title X --start Y --location Z [--description L]... [--source T]. Else one JSON object (arg or stdin).
     ev, i, positional = {}, 0, []
     while i < len(args):
@@ -441,13 +475,21 @@ def main():
         bad("attendees must be a list of email addresses", 'use ["name@example.com"]')
     cal_id, cal_name = resolve_calendar("Concerts" if concert else ev.get("calendar"), dry)
 
+    # The teaser playlist (concerts only) runs before the insert so one insert carries its link; it is never fatal.
+    teaser = teaser_playlist(title, start, dry) if want_teaser else None
+    if teaser and teaser["line"]:
+        lines.append(teaser["line"])
+
     # Telegram renders **bold** and [text](url); link previews are off in channels.telegram.linkPreview.
-    body = bullets(title, fmt_range(start, end) + (" (end assumed)" if end_assumed else ""), location, lines)
+    body = bullets(title, fmt_range(start, end) + (" (end assumed)" if end_assumed else ""), location,
+                   [ln for ln in lines if not ln.startswith("Teaser playlist: ")])
+    if teaser:
+        body += "\n" + teaser["bullet"]
     if dropped:
         notes.append(f"Left out (not in the text I was given): {'; '.join(dropped)}")
     note = "".join("\n" + n for n in notes)
     common = {"calendar": cal_name, "summary": title, "start": start.isoformat(), "end": end.isoformat(),
-              "location": location, "description": lines, "dropped": dropped}
+              "location": location, "description": lines, "dropped": dropped, "teaser": teaser and teaser["result"]}
     if dry:
         out({"ok": True, "dryRun": True, **common, "reply": f"**Would add to {cal_name}**\n{body}{note}"})
 
@@ -457,6 +499,10 @@ def main():
         "singleEvents": True, "q": title}))).get("items", [])
     for e in existing:
         if (e.get("summary") or "").strip().lower() == title.lower() and e.get("status") != "cancelled":
+            if teaser and teaser["line"] and teaser["line"] not in (e.get("description") or ""):
+                # The event predates the playlist: add the link to its description.
+                gws("calendar", "events", "patch", "--params", json.dumps({"calendarId": cal_id, "eventId": e.get("id")}),
+                    "--json", json.dumps({"description": ((e.get("description") or "").rstrip() + "\n" + teaser["line"]).strip()}))
             out({"ok": True, "duplicate": True, "id": e.get("id"), "htmlLink": e.get("htmlLink"), **common,
                  "reply": f"**Already on {cal_name}** (nothing new created)\n{body}\n[Open in Google Calendar]({event_link(e.get('htmlLink'))})"})
     cmd = ["calendar", "+insert", "--calendar", cal_id, "--summary", title, "--start", start.isoformat(),
