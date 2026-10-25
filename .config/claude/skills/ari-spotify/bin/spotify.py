@@ -478,6 +478,109 @@ def cmd_rename(args):
     print(json.dumps({"renamed": True, "id": pl["id"], "from": pl.get("name"), "to": new}, ensure_ascii=False))
 
 
+# ---------- setlist.fm ----------
+
+SETLISTFM_API = "https://api.setlist.fm/rest/1.0"
+SETLISTFM_OP_ITEM = "setlist.fm - API key"
+SETLISTFM_CONFIG = CONFIG_DIR / "setlistfm.json"
+
+
+def setlistfm_key():
+    if not SETLISTFM_CONFIG.exists():
+        die(f"no setlist.fm key yet | path='{SETLISTFM_CONFIG}' hint='run: spotify.zsh setlist-auth'")
+    return json.loads(SETLISTFM_CONFIG.read_text(encoding="utf-8"))["api_key"]
+
+
+def setlistfm_get(path, params, retries=3):
+    """One setlist.fm call (2 req/s, 1440/day). 404 means no match and returns None."""
+    url = f"{SETLISTFM_API}{path}?{urllib.parse.urlencode(params)}"
+    for attempt in range(retries + 1):
+        req = urllib.request.Request(url)
+        req.add_header("x-api-key", setlistfm_key())
+        req.add_header("Accept", "application/json")
+        req.add_header("User-Agent", "ari-spotify/1.0 (personal concert bot)")
+        try:
+            with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_S) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return None
+            if e.code == 429 and attempt < retries:
+                time.sleep(1 + attempt)
+                continue
+            die(f"setlist.fm refused | path='{path}' status='{e.code}' body='{e.read().decode('utf-8', 'replace')[:200]}'")
+        except urllib.error.URLError as e:
+            die(f"setlist.fm unreachable | path='{path}' reason='{e.reason}'")
+    die(f"setlist.fm kept rate-limiting | path='{path}'")
+
+
+def setlist_row(s):
+    songs = [song.get("name") for st in (s.get("sets") or {}).get("set", []) for song in st.get("song", []) if song.get("name")]
+    return {
+        "id": s.get("id"), "url": s.get("url"), "artist": (s.get("artist") or {}).get("name"),
+        "date": "-".join(reversed((s.get("eventDate") or "").split("-"))),  # dd-MM-yyyy -> yyyy-MM-dd
+        "venue": (s.get("venue") or {}).get("name"), "city": ((s.get("venue") or {}).get("city") or {}).get("name"),
+        "tour": (s.get("tour") or {}).get("name"), "song_count": len(songs), "songs": songs,
+    }
+
+
+def cmd_setlist_auth(args):
+    if SETLISTFM_CONFIG.exists() and not args.force:
+        die(f"setlist.fm key already stored | path='{SETLISTFM_CONFIG}' hint='pass --force to replace it'")
+    if args.manual:
+        import getpass
+        key = getpass.getpass("setlist.fm API key (hidden): ").strip()
+    else:
+        if shutil.which("op") is None:
+            die("missing prerequisite | missing='op' hint='or pass --manual'")
+        log_info(f"reading the key from 1Password | item='{SETLISTFM_OP_ITEM}' vault='{OP_VAULT}'")
+        key = run_capture(["op", "read", f"op://{OP_VAULT}/{SETLISTFM_OP_ITEM}/credential"], 120, what="op read setlist.fm key").stdout.strip()
+    if not key or key == OP_PLACEHOLDER or len(key) < 20:
+        die(f"that is not a setlist.fm key | length='{len(key)}' hint='paste the key from https://www.setlist.fm/settings/api into the 1Password item'")
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    SETLISTFM_CONFIG.write_text(json.dumps({"api_key": key}) + "\n", encoding="utf-8")
+    SETLISTFM_CONFIG.chmod(0o600)
+    probe = setlistfm_get("/search/setlists", {"artistName": "Jai Wolf", "p": 1})
+    print(json.dumps({"ok": True, "config": str(SETLISTFM_CONFIG), "probe_total": (probe or {}).get("total", 0)}))
+
+
+def cmd_setlist_find(args):
+    """The setlist.fm page for a show: exact date first, else the same artist within a day at a venue whose name shares a word."""
+    date = concert_date(args.date)
+    y, m, d = date.split("-")
+    want_venue = normalize(args.venue or "")
+    res = setlistfm_get("/search/setlists", {"artistName": args.artist, "date": f"{d}-{m}-{y}", "p": 1})
+    rows = [setlist_row(s) for s in (res or {}).get("setlist", [])]
+    if want_venue and len(rows) > 1:
+        rows.sort(key=lambda r: -len(set(want_venue.split()) & set(normalize(r["venue"]).split())))
+    how = "exact date"
+    if not rows:
+        res = setlistfm_get("/search/setlists", {"artistName": args.artist, "year": y, "p": 1})
+        import datetime
+        target = datetime.date.fromisoformat(date)
+        near = []
+        for s in (res or {}).get("setlist", []):
+            r = setlist_row(s)
+            try:
+                delta = abs((datetime.date.fromisoformat(r["date"]) - target).days)
+            except ValueError:
+                continue
+            venue_ok = not want_venue or set(want_venue.split()) & set(normalize(r["venue"]).split())
+            if delta <= 1 and venue_ok:
+                near.append((delta, r))
+        rows = [r for _, r in sorted(near, key=lambda t: t[0])]
+        how = "within a day" if rows else "none"
+    if not rows:
+        print(json.dumps({"found": False, "artist": args.artist, "date": date, "venue": args.venue, "match": how,
+                          "search_url": f"https://www.setlist.fm/search?query={urllib.parse.quote(args.artist)}"}, ensure_ascii=False))
+        return
+    best = rows[0]
+    out = {"found": True, "match": how, **{k: v for k, v in best.items() if k != "songs"}}
+    if args.songs:
+        out["songs"] = best["songs"]
+    print(json.dumps(out, ensure_ascii=False))
+
+
 def cmd_playlist_unfollow(args):
     """Remove a playlist from the library (the API cannot delete one; for the owner this is the same thing)."""
     creds = read_credentials()
@@ -537,6 +640,16 @@ def parse_args():
     p.add_argument("--name", required=True)
     p.add_argument("--dry-run", dest="dry_run", action="store_true")
     p.set_defaults(func=cmd_rename)
+    p = sub.add_parser("setlist-auth", help="copy the setlist.fm API key from 1Password into the config dir, once")
+    p.add_argument("--force", action="store_true")
+    p.add_argument("--manual", action="store_true", help="type the key instead of reading 1Password")
+    p.set_defaults(func=cmd_setlist_auth)
+    p = sub.add_parser("setlist-find", help="the setlist.fm page for a show")
+    p.add_argument("--artist", required=True)
+    p.add_argument("--date", required=True, help="concert date, YYYY-MM-DD")
+    p.add_argument("--venue", default="", help="venue name, used to break ties")
+    p.add_argument("--songs", action="store_true", help="include the song list")
+    p.set_defaults(func=cmd_setlist_find)
     p = sub.add_parser("playlist-unfollow", help="remove a playlist from the library (the API cannot delete)")
     p.add_argument("--playlist", required=True, help="playlist id")
     p.add_argument("--dry-run", dest="dry_run", action="store_true")

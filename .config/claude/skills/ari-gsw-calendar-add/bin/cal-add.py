@@ -85,6 +85,29 @@ def current_chat():
     return best or (None, None)
 
 
+def rename_topic(route, name):
+    """Rename the Telegram forum topic the request came from to the house form 'YYYY-MM-DD | Artist | Venue'. The bot
+    is a group admin with the manage-topics right; Bot API editForumTopic. Returns a status string, never raises."""
+    thread = str((route or {}).get("thread", {}).get("id") or "") if isinstance((route or {}).get("thread"), dict) else ""
+    chat = str(((route or {}).get("target") or {}).get("to") or "")
+    if (route or {}).get("channel") != "telegram" or not thread or thread == "1" or not chat.startswith("-100"):
+        return "topic not renamed: not a Telegram forum topic"
+    try:
+        token = json.loads((HOME / ".openclaw/openclaw.json").read_text(encoding="utf-8"))["channels"]["telegram"]["botToken"]
+    except Exception as e:
+        return f"topic not renamed: no bot token ({type(e).__name__})"
+    import urllib.request, urllib.parse, urllib.error
+    data = urllib.parse.urlencode({"chat_id": chat, "message_thread_id": thread, "name": name[:128]}).encode()
+    try:
+        with urllib.request.urlopen(f"https://api.telegram.org/bot{token}/editForumTopic", data=data, timeout=20) as r:
+            ok = json.loads(r.read().decode()).get("ok")
+        return f"topic renamed to {name[:128]}" if ok else "topic not renamed: Telegram said no"
+    except urllib.error.HTTPError as e:
+        return f"topic not renamed: HTTP {e.code} {e.read().decode('utf-8', 'replace')[:120]}"
+    except Exception as e:
+        return f"topic not renamed: {type(e).__name__}"
+
+
 def send_reply(text, route):
     """Deliver the reply to the chat ourselves, so no model has to copy it. Returns a status line."""
     to = str((route.get("target") or {}).get("to") or "")
@@ -374,6 +397,57 @@ def teaser_playlist(artist, start, dry):
             "line": f"Teaser playlist: {res['url']}", "result": res}
 
 
+SETLIST_QUEUE = pathlib.Path(os.environ.get("XDG_STATE_HOME", HOME / ".local/state")) / "ari-spotify/setlist-queue.json"
+
+
+def setlist_lookup(artist, start, venue):
+    """The setlist.fm page for the show, looked up the day the ticket is bought (ari-spotify `setlist-find`). Returns
+    {"bullet", "line", "result", "queue": bool}; queue is True when the page is missing or still empty, so the weekly
+    poller (beads-7q9.2) re-checks it. Never fatal."""
+    if not SPOTIFY.exists():
+        return None
+    cmd = ["zsh", str(SPOTIFY), "setlist-find", "--artist", artist, "--date", start.strftime("%Y-%m-%d"), "--venue", venue]
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    except (subprocess.TimeoutExpired, OSError) as e:
+        return {"bullet": bullet("Setlist", f"lookup failed ({str(e)[:80]})"), "line": None, "result": None, "queue": True}
+    if p.returncode != 0:
+        why = re.sub(r"\x1b\[[0-9;]*m", "", (p.stderr.strip().splitlines() or ["unknown error"])[-1]).replace("[ERROR] ", "")[:160]
+        return {"bullet": bullet("Setlist", f"lookup failed ({why})"), "line": None, "result": None, "queue": True}
+    try:
+        res = json.loads(p.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return {"bullet": bullet("Setlist", "lookup gave an unreadable answer"), "line": None, "result": None, "queue": True}
+    # Every concert is queued (Ari, 2026-10-25): a page fills in over weeks, so the poller keeps checking until two
+    # months after the show even when songs are already there.
+    if not res.get("found"):
+        return {"bullet": bullet("Setlist", "not on setlist.fm yet; checking weekly for 2 months"), "line": None, "result": res, "queue": True}
+    n = res.get("song_count", 0)
+    what = f"{n} songs so far" if n else "no songs yet"
+    return {"bullet": bullet("Setlist", f"[setlist.fm]({res['url']}) {what}; checking weekly for 2 months"),
+            "line": f"Setlist: {res['url']}", "result": res, "queue": True}
+
+
+def queue_setlist(event_id, cal_id, artist, start, venue, setlist):
+    """Remember the show for the weekly setlist poller (beads-7q9.2), which re-checks setlist.fm until `until`
+    (two months after the show) and builds or tops up the setlist playlist. Idempotent per event."""
+    if not setlist or not setlist.get("queue") or not event_id:
+        return
+    try:
+        entries = json.loads(SETLIST_QUEUE.read_text(encoding="utf-8")) if SETLIST_QUEUE.exists() else []
+    except ValueError:
+        entries = []
+    if any(e.get("event_id") == event_id for e in entries):
+        return
+    entries.append({"event_id": event_id, "calendar_id": cal_id, "artist": artist, "date": start.strftime("%Y-%m-%d"),
+                    "venue": venue, "setlistfm_url": (setlist.get("result") or {}).get("url"),
+                    "song_count": (setlist.get("result") or {}).get("song_count", 0),
+                    "until": (start + timedelta(days=61)).strftime("%Y-%m-%d"),
+                    "added": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+    SETLIST_QUEUE.parent.mkdir(parents=True, exist_ok=True)
+    SETLIST_QUEUE.write_text(json.dumps(entries, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
 def main():
     args = sys.argv[1:]
     global JSON_MODE, SEND
@@ -479,19 +553,35 @@ def main():
     teaser = teaser_playlist(title, start, dry) if want_teaser else None
     if teaser and teaser["line"]:
         lines.append(teaser["line"])
+    # The setlist.fm page, looked up the day the ticket is bought; the show is queued for the weekly poller either way.
+    setlist = setlist_lookup(title, start, location) if concert else None
+    if setlist and setlist["line"]:
+        lines.append(setlist["line"])
 
     # Telegram renders **bold** and [text](url); link previews are off in channels.telegram.linkPreview.
     body = bullets(title, fmt_range(start, end) + (" (end assumed)" if end_assumed else ""), location,
-                   [ln for ln in lines if not ln.startswith("Teaser playlist: ")])
-    if teaser:
-        body += "\n" + teaser["bullet"]
+                   [ln for ln in lines if not ln.startswith(("Teaser playlist: ", "Setlist: "))])
+    for extra in (teaser, setlist):
+        if extra:
+            body += "\n" + extra["bullet"]
+    topic_name = f"{start.strftime('%Y-%m-%d')} | {title} | {location.split(',')[0].strip()}"
     if dropped:
         notes.append(f"Left out (not in the text I was given): {'; '.join(dropped)}")
     note = "".join("\n" + n for n in notes)
     common = {"calendar": cal_name, "summary": title, "start": start.isoformat(), "end": end.isoformat(),
-              "location": location, "description": lines, "dropped": dropped, "teaser": teaser and teaser["result"]}
+              "location": location, "description": lines, "dropped": dropped, "teaser": teaser and teaser["result"],
+              "setlist": setlist and setlist["result"], "topic": topic_name}
     if dry:
         out({"ok": True, "dryRun": True, **common, "reply": f"**Would add to {cal_name}**\n{body}{note}"})
+
+    def finish(event_id, html_link, duplicate):
+        """Queue the show for the setlist poller, rename the Telegram topic, deliver the reply."""
+        queue_setlist(event_id, cal_id, title, start, location, setlist)
+        _, route = current_chat()
+        topic = rename_topic(route, topic_name) if (concert and route and SEND) else "topic not renamed: no live chat"
+        head = f"**Already on {cal_name}** (nothing new created)" if duplicate else f"**Added to {cal_name}**"
+        out({"ok": True, "duplicate": duplicate, "id": event_id, "htmlLink": html_link, "topic_status": topic, **common,
+             "reply": f"{head}\n{body}{note}\n[Open in Google Calendar]({event_link(html_link)})"})
 
     # Duplicate guard: a retried insert must not create a second event.
     existing = json.loads(gws("calendar", "events", "list", "--params", json.dumps({
@@ -499,12 +589,12 @@ def main():
         "singleEvents": True, "q": title}))).get("items", [])
     for e in existing:
         if (e.get("summary") or "").strip().lower() == title.lower() and e.get("status") != "cancelled":
-            if teaser and teaser["line"] and teaser["line"] not in (e.get("description") or ""):
-                # The event predates the playlist: add the link to its description.
+            # The event predates the playlist or the setlist page: add the missing link lines to its description.
+            missing = [x["line"] for x in (teaser, setlist) if x and x["line"] and x["line"] not in (e.get("description") or "")]
+            if missing:
                 gws("calendar", "events", "patch", "--params", json.dumps({"calendarId": cal_id, "eventId": e.get("id")}),
-                    "--json", json.dumps({"description": ((e.get("description") or "").rstrip() + "\n" + teaser["line"]).strip()}))
-            out({"ok": True, "duplicate": True, "id": e.get("id"), "htmlLink": e.get("htmlLink"), **common,
-                 "reply": f"**Already on {cal_name}** (nothing new created)\n{body}\n[Open in Google Calendar]({event_link(e.get('htmlLink'))})"})
+                    "--json", json.dumps({"description": "\n".join([(e.get("description") or "").rstrip()] + missing).strip()}))
+            finish(e.get("id"), e.get("htmlLink"), True)
     cmd = ["calendar", "+insert", "--calendar", cal_id, "--summary", title, "--start", start.isoformat(),
            "--end", end.isoformat(), "--location", location]
     if lines:
@@ -515,9 +605,7 @@ def main():
         r = json.loads(gws(*cmd))
     except ValueError:
         out({"ok": False, "error": "gws returned no JSON", "reply": "Google Calendar gave an unreadable answer. Ari: check the laptop."}, 1)
-    link = r.get("htmlLink") or ""
-    out({"ok": True, "id": r.get("id"), "htmlLink": link, **common,
-         "reply": f"**Added to {cal_name}**\n{body}{note}\n[Open in Google Calendar]({event_link(link)})"})
+    finish(r.get("id"), r.get("htmlLink") or "", False)
 
 
 if __name__ == "__main__":
