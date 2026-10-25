@@ -147,3 +147,5 @@ JSON
 ```
 
 Output contract: `FIX: <why>` means the JSON was wrong (fix it, run once more); `NO_REPLY` means the script already delivered the reply; anything else is the reply text to relay, ending in `NOT SENT: <why>` when no chat was live (a CLI run). The workspace rule that drives the bot (`~/.openclaw/workspace/AGENTS.md` on the gateway machine) must name this path and nothing under `/tmp`, which macOS clears on reboot.
+
+Deleting works the same way through `bin/cal-del.py`: the bot passes `{"title": "<artist>", "date": "YYYY-MM-DD"}` (date optional); the script searches Concerts and Personal, deletes a unique match (and drops the show from the setlist poller's queue), replies with a numbered list when several match (`--pick N` deletes the chosen one), and says "nothing deleted" when none does. It imports `cal-add.py` for gws, chat delivery and formatting, so the two scripts stay one implementation.
