@@ -159,7 +159,9 @@ def out(obj, code=0):
     elif obj.get("reply"):
         if str(obj.get("sent", "")).startswith("SENT"):
             # The chat already has the full reply. Give the caller nothing to paraphrase: just what to answer.
-            print("NO_REPLY")   # the chat already has the reply; this is the whole answer the caller should give
+            # The chat already has the reply. Say so in the tool result itself: a small model reads this line, not the
+            # rules file, when it decides what to write next.
+            print("NO_REPLY\nThe chat already received the full answer. Do not describe it or add anything. Your entire reply must be exactly: NO_REPLY")
         else:
             print(obj["reply"])
             if obj.get("sent"):
@@ -344,19 +346,15 @@ def bullets(title, when, location, lines):
     return "\n".join(rows)
 
 
-def account_email():
-    """The signed-in account's primary calendar id is its email; pinning links to it (authuser=) keeps a phone with
-    several Google accounts from opening the wrong one."""
-    try:
-        items = json.loads(gws("calendar", "calendarList", "list")).get("items", [])
-        return next((c["id"] for c in items if c.get("primary")), None)
-    except SystemExit:
-        return None
-
-
 def event_link(html_link):
-    email = account_email()
-    return f"{html_link}&authuser={email}" if html_link and email else html_link
+    """The link that opens the event in the Google Calendar phone app. Tested on Ari's phone 2026-10-25 against the
+    JAI WOLF event: the API's htmlLink (www.google.com/calendar/event?eid=) opened the app but not the event, and so
+    did calendar.google.com/calendar/event?eid=, the day view and the share template; only the eventedit form worked."""
+    if not html_link:
+        return html_link
+    from urllib.parse import urlparse, parse_qs
+    eid = (parse_qs(urlparse(html_link).query).get("eid") or [None])[0]
+    return f"https://calendar.google.com/calendar/u/0/r/eventedit/{eid}" if eid else html_link
 
 
 def fmt_range(start, end):
@@ -500,6 +498,12 @@ def main():
         bad(f"unknown tz {tz!r}", "use an IANA name like America/Los_Angeles, or omit it")
 
     title = re.sub(r"\s+", " ", str(ev.get("title") or "")).strip()
+    # "Artist with special guest X" / "Artist w/ X" / "Artist + X": the opener is a description line, not part of the title.
+    m_open = re.match(r"^(.+?)\s+(?:with|w/|\+|featuring|feat\.?)\s+(?:special guests?\s+|support from\s+)?(.+)$", title, re.I)
+    openers = []
+    if m_open and len(m_open.group(1)) >= 2:
+        title = m_open.group(1).strip()
+        openers = [o.strip() for o in re.split(r",|\s+and\s+|\s*&\s*|\s*/\s*", m_open.group(2)) if o.strip()]
     if concert:
         title = re.sub(r"^\[concert\]\s*", "", title, flags=re.I)
     if not title:
@@ -539,6 +543,12 @@ def main():
     if not isinstance(desc, list):
         bad("description must be a list of lines", 'use ["Doors: 7:00 PM", "Purchased: 1 ticket, $45"]')
     lines, dropped = derived_lines(raw_source), []
+    # Openers: from the title ("X with special guest Y") or from the text itself ("with special guest Y" on its own line).
+    if not openers:
+        m_txt = re.search(r"^\s*(?:with|w/)\s+(?:special guests?\s+|support from\s+)(.+?)\s*$", raw_source, re.I | re.M)
+        if m_txt:
+            openers = [o.strip() for o in re.split(r",|\s+and\s+|\s*&\s*|\s*/\s*", m_txt.group(1)) if o.strip()]
+    lines += [f"Opener: {o}" for o in openers if o.lower() != title.lower()]
     for ln in desc:
         ln = re.sub(r"\s+", " ", str(ln)).strip()
         if not ln or any(ln.split(":")[0].lower() == d.split(":")[0].lower() for d in lines):

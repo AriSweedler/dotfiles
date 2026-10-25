@@ -314,8 +314,10 @@ def resolve_artist(creds, name):
     if exact:
         pick = max(exact, key=lambda a: (a.get("followers") or {}).get("total", 0))
     else:
+        # Close = one name's words are a subset of the other's ("jai wolf" ~ "Jai Wolf & Friends"); a single shared
+        # word is not enough ("ZZZ Test Band" must not become "Band of Horses").
         want_words = set(want.split())
-        close = [a for a in items if want_words & set(normalize(a.get("name")).split())]
+        close = [a for a in items if (lambda w: w <= want_words or want_words <= w)(set(normalize(a.get("name")).split()))]
         if not close:
             die(f"no close Spotify artist match | artist='{name}' top_results='{', '.join(a.get('name', '') for a in items[:5])}'")
         pick = max(close, key=lambda a: (a.get("followers") or {}).get("total", 0))
