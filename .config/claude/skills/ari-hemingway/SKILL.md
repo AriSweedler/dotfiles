@@ -48,10 +48,11 @@ What are you writing?
 (6) scaffold article        → ari-hemingway--structure-scaffold  (break a topic into definitions + subsystems)
 (7) interactive explainer   → ari-hemingway--structure-ciechanowski  (one linear toy-to-real article with a figure per concept, for the explainers site)
 (8) working doc             → ari-hemingway--structure-working-doc  (a session with many orthogonal asks: one file per ask, a dependency-ordered table, dispatch to agents)
-(9) other — tell me what destination and the doc's purpose
+(9) repo quickstart           → ari-hemingway--structure-repo-quickstart  (a repository's top-level README: two sentences, screenshots, one run block, links into docs/)
+(10) other — tell me what destination and the doc's purpose
 ```
 
-Auto-detect if possible: if the user pasted a Google Doc URL → `subsystem-explainer` update mode is likely. If the session is a PR branch with uncommitted changes → `pr-description`. If the user wants to "break down", "come up to speed on", or "define the parts of" a topic they lack vocabulary for → `scaffold`. If the user wants an "interactive explainer", a "Ciechanowski-style" article, or something for `explainers.sweedler.com` → `ciechanowski` (it runs `scaffold` in Skeleton mode itself). If the session has piled up several unrelated asks, or the user wants a working doc, a task table with dependencies, or to fan asks out to agents → `working-doc`. Print the inferred shape with evidence and ask to confirm.
+Auto-detect if possible: if the user pasted a Google Doc URL → `subsystem-explainer` update mode is likely. If the session is a PR branch with uncommitted changes → `pr-description`. If the user wants to "break down", "come up to speed on", or "define the parts of" a topic they lack vocabulary for → `scaffold`. If the user wants an "interactive explainer", a "Ciechanowski-style" article, or something for `explainers.sweedler.com` → `ciechanowski` (it runs `scaffold` in Skeleton mode itself). If the user wants a README, a quick start or a getting-started page for a repository, or asks to simplify one → `repo-quickstart`. If the session has piled up several unrelated asks, or the user wants a working doc, a task table with dependencies, or to fan asks out to agents → `working-doc`. Print the inferred shape with evidence and ask to confirm.
 
 If no matching sibling is installed, STOP and print:
 ```
