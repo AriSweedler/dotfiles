@@ -43,4 +43,4 @@ The script speaks the 2025 Web API: a playlist's contents are `items` (each entr
 
 ## File storage
 
-- `bin/spotify.zsh` + `bin/spotify.py` — the CLI. Stdlib only; shared logging from `/ari-skill-pythonscripts`.
+- `bin/spotify.zsh` — a thin wrapper over `concert-mcp spotify` (and `concert-mcp teaser` / `setlist-find`), the Spotify code having moved into the homelab's `apps/concert-mcp` submodule; the CLI. Stdlib only; shared logging from `/ari-skill-pythonscripts`.

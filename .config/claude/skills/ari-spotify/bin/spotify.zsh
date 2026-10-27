@@ -1,10 +1,10 @@
 #!/usr/bin/env zsh
-# Entrypoint for spotify.py: puts the shared python lib on PYTHONPATH, then runs it.
+# Thin wrapper: the Spotify and setlist.fm commands live in concert-mcp (apps/concert-mcp of the homelab checkout).
+# `teaser` and `setlist-find` are top-level subcommands there; everything else sits under `concert-mcp spotify`.
 set -euo pipefail
-
-readonly SCRIPT_DIR="${0:A:h}"
-# Through the symlink farm, not ${SCRIPT_DIR:h:h}: skills are spread across dotfiles tiers.
-readonly SKILLS_DIR="${HOME}/.claude/skills"
-export PYTHONPATH="${SKILLS_DIR}/ari-skill-pythonscripts/lib${PYTHONPATH:+:${PYTHONPATH}}"
-export PYTHONDONTWRITEBYTECODE=1
-exec python3 "${SCRIPT_DIR}/spotify.py" "${@}"
+export CONCERT_MCP_OPERATOR_NAME="${CONCERT_MCP_OPERATOR_NAME:-Ari}"
+project="${CONCERT_MCP_HOME:-$HOME/homelab/apps/concert-mcp}"
+case "${1:-}" in
+  teaser|setlist-find) exec uv run --project "$project" concert-mcp "$@" ;;
+  *) exec uv run --project "$project" concert-mcp spotify "$@" ;;
+esac
