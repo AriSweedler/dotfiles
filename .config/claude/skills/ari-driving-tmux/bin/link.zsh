@@ -100,6 +100,7 @@ percent_encode() {
 # --- Main ---
 
 main() {
+  setopt local_options extended_glob
   # === PARSE ===
   local pane_id="" cmd="" mode=""
   while (( $# > 0 )); do case "${1}" in
@@ -125,6 +126,10 @@ main() {
   fi
 
   # === VALIDATE ===
+  if [[ "${cmd}" == [[:space:]]#clear([[:space:]\;\&\|]*|) ]]; then
+    log::err "Command starts with clear | hint='clearing wipes the typed command from Ari'\''s scrollback; drop it'"
+    return 1
+  fi
   if [[ "${pane_id}" != %<0-> ]]; then
     log::err "Missing or malformed --pane | pane='${pane_id}' expected='2.4, %N or N'"
     help
