@@ -2,17 +2,18 @@
 # run_log — run a command and capture it into a per-command capture directory:
 #
 #   <root>/<seq>_<slug>/
-#     metadata   user=, timestamp=, command=, mode=, exit=
-#     output     (tty mode, default) the terminal session, byte-for-byte
-#     stdout     (split mode) the command's stdout
-#     stderr     (split mode) the command's stderr
-#     <N>        one file per --fd N
+#     metadata      user=, timestamp=, command=, stdout_tty=, stderr_tty=, exit=
+#     stdout        the command's stdout, byte-for-byte (colors kept)
+#     stderr        the command's stderr, byte-for-byte
+#     stdout.plain  stdout as the user saw it: escapes stripped, \r redraws resolved
+#     stderr.plain  stderr, likewise
+#     <N>           one file per --fd N
 #
 # Like `irun`, the command executes in an interactive zsh so aliases,
-# functions, and everything sourced from .zshrc are available. By default it
-# runs under a pty (script(1)), so it behaves exactly as in a bare terminal —
-# colors, log pretty-printers, progress bars — while the session is captured.
-# `--split` trades that fidelity for separate stdout/stderr capture files.
+# functions, and everything sourced from .zshrc are available. stdout and
+# stderr each get their own pty (run_log-capture.py), so the command behaves
+# exactly as in a bare terminal — colors, log pretty-printers, progress bars —
+# while each stream is still captured to its own file.
 # Only fds 1 and 2 are captured by default — a command's fd 3+ writes bypass
 # the capture, because pre-opening fds changes the child's environment.
 # `--fd N` opts in per fd: the wrapper opens fd N onto <capture-dir>/<N>
@@ -33,6 +34,7 @@ fi
 source "${LOG_LIB}"
 
 readonly DEFAULT_LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/run_log"
+readonly CAPTURE_HELPER="${0:A:h}/run_log-capture.py"
 
 # log.zsh colors are literal-backslash strings for `echo -e`, so the heredoc
 # must be rendered with %b, not cat'd raw.
@@ -49,25 +51,24 @@ functions work. Each invocation creates one capture directory under the
 capture root:
 
   <root>/<seq>_<cmd-slug>/
-    metadata   user=, timestamp=, command=, mode=, exit=
-    output     (default tty mode) the terminal session, byte-for-byte
-    stdout     (--split mode) the command's stdout
-    stderr     (--split mode) the command's stderr
+    metadata      user=, timestamp=, command=, stdout_tty=, stderr_tty=, exit=
+    stdout        the command's stdout, byte-for-byte (colors kept)
+    stderr        the command's stderr, byte-for-byte
+    stdout.plain  stdout as you saw it: escapes stripped, \\\\r redraws resolved
+    stderr.plain  stderr, likewise
 
-By default the command runs under a pty, so it behaves exactly as in your
-terminal — colors, log pretty-printers, progress bars all work — and the
-session is captured byte-for-byte (ANSI escapes and CRLF included) to a
-single output file. With --split, stdout and stderr are captured as separate
-clean files instead, but the command sees pipes: color-auto programs (git,
-npm) print plain unless forced (git -c color.ui=always).
+stdout and stderr each run on their own pty, so the command behaves exactly
+as in your terminal — colors, log pretty-printers, progress bars all work —
+and each stream still lands in its own file. When run_log's own stdout or
+stderr is not a terminal (piped, or run by an agent), that stream gets a pipe
+instead, so the command sees what it would have seen without run_log. stdin
+is passed through untouched: prompts and hardware-key taps work.
 
 ${c_green}Options:${c_rst}
   --name NAME  Capture dir name (default: <seq>_<cmd-slug>). Absolute paths
                are used as-is; otherwise it lands under the capture root. A
                name already holding a capture gets a _2, _3, ... suffix.
   --file NAME  Compat alias for --name (a trailing .log is stripped).
-  --split      Capture stdout/stderr as separate files instead of one pty
-               output file. See paragraph above for the tradeoff.
   --fd N       Also capture fd N (3-9, repeatable) to <capture-dir>/<N>.
                The command sees fd N as an open non-tty descriptor.
                Capture-only: fd N output is not echoed to the terminal.
@@ -220,31 +221,15 @@ close_capture_fds() {
 }
 
 #######################################
-# Run the command under a pty via script(1) so it behaves exactly as in a
-# bare terminal: color-auto and format-switching programs (git, npm)
-# see a tty. stdout/stderr merge into one `output` file —
-# inherent to a pty. macOS script(1) forwards the child's exit status.
+# Run the command through the capture helper: stdout and stderr each on its
+# own pty (or pipe, mirroring run_log's own fds), echoed live and written
+# raw plus stripped to the capture dir. The helper forwards the exit status.
 # Arguments: $1 = capture dir, $2 = command string
 # Returns: the command's exit status
 #######################################
-run_captured_tty() {
+run_captured() {
   local capture_dir="${1}" cmd="${2}"
-  script -q "${capture_dir}/output" zsh -ic "${cmd}"
-}
-
-#######################################
-# Run the command with fds 1/2 as pipes, teeing each into its own capture
-# file while both still stream to the terminal. Piped fds mean color-auto
-# programs print plain — the price of the split.
-# zsh waits for a >(...) attached to an external command, so both capture
-# files are complete on return — no flush race.
-# Arguments: $1 = capture dir, $2 = command string
-# Returns: the command's exit status
-#######################################
-run_captured_split() {
-  local capture_dir="${1}" cmd="${2}"
-  zsh -ic "${cmd}" 2> >(tee -a "${capture_dir}/stderr" >&2) | tee -a "${capture_dir}/stdout"
-  return "${pipestatus[1]}"
+  python3 -I "${CAPTURE_HELPER}" "${capture_dir}" zsh -ic "${cmd}"
 }
 
 #######################################
@@ -269,12 +254,11 @@ build_command_string() {
 
 main() {
   # === PARSE ===
-  local name="" dir_flag="" mode="tty"
+  local name="" dir_flag=""
   local -a capture_fds=()
   while (( $# > 0 )); do
     case "${1}" in
       -h|--help) help; return 0 ;;
-      --split) mode="split"; shift ;;
       --name) name="${2:?--name requires a value}"; shift 2 ;;
       --file) name="${2:?--file requires a value}"; shift 2 ;;
       --fd) capture_fds+=("${2:?--fd requires a value}"); shift 2 ;;
@@ -286,6 +270,10 @@ main() {
   done
 
   # === VALIDATE ===
+  if [[ ! -r "${CAPTURE_HELPER}" ]]; then
+    log::err "Missing capture helper | path='${CAPTURE_HELPER}'"
+    return 1
+  fi
   if (( $# == 0 )); then
     log::err "No command given"
     help
@@ -308,19 +296,29 @@ main() {
   capture_dir="$(resolve_capture_dir "${name}" "${root}" "${cmd}")"
   capture_dir="$(uniquify_capture_dir "${capture_dir}")"
 
+  # Tested here, not in a $(...): fd 1 of a command substitution is its pipe.
+  local stdout_tty=false stderr_tty=false
+  if [[ -t 1 ]]; then
+    stdout_tty=true
+  fi
+  if [[ -t 2 ]]; then
+    stderr_tty=true
+  fi
+
   # === LOGIC ===
   mkdir -p "${capture_dir}"
   cat > "${capture_dir}/metadata" <<EOF
 user=${USER:-$(whoami)}
 timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 command=${cmd}
-mode=${mode}
+stdout_tty=${stdout_tty}
+stderr_tty=${stderr_tty}
 EOF
-  log::info "Capturing | capture_dir='${capture_dir}' mode='${mode}'"
+  log::info "Capturing | capture_dir='${capture_dir}'"
   open_capture_fds "${capture_dir}" "${capture_fds[@]}"
 
   set +e
-  "run_captured_${mode}" "${capture_dir}" "${cmd}"
+  run_captured "${capture_dir}" "${cmd}"
   local rc=$?
   set -e
   close_capture_fds "${capture_fds[@]}"

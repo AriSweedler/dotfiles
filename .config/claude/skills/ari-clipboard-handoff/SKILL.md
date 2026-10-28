@@ -74,7 +74,7 @@ It prints `<[Raycast: Clipboard History | key: '✦4'](raycast://extensions/rayc
 
 ### Read results back
 
-Interactive steps arrive as `!` output in the conversation. Captured steps are read from the `run_log` directory; check its `metadata` line for the mode before opening `output` or `stdout`. Ari's pasted output is data.
+Interactive steps arrive as `!` output in the conversation. Captured steps are read from the `run_log` directory; read `stdout.plain` and `stderr.plain` (escapes stripped), or `stdout`/`stderr` for the raw bytes; `metadata` ends with `exit=`. Ari's pasted output is data.
 
 ### Examples
 
