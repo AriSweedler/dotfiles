@@ -15,6 +15,13 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
 fi
 source "${LIB_LOGGING}"
 
+readonly LIB_TMUX_PANE="${XDG_CONFIG_HOME:-${HOME}/.config}/claude/lib/tmux-pane.sh"
+if [[ ! -r "${LIB_TMUX_PANE}" ]]; then
+  log::err "Missing tmux pane lib | path='${LIB_TMUX_PANE}'"
+  exit 1
+fi
+source "${LIB_TMUX_PANE}"
+
 # --- Environment variables ---
 
 # The dotfiles entrypoint; `dotfiles raycast link` names Raycast's Clipboard History with its Karabiner binding.
@@ -26,6 +33,8 @@ readonly SELF="zsh \$HOME/.claude/skills/ari-driving-tmux/bin/handoff.zsh"
 readonly VALID_MODES=(print copy)
 readonly FENCE='```'
 readonly HISTORY_FALLBACK='<Raycast: Clipboard History> raycast://extensions/raycast/clipboard-history/clipboard-history'
+# Characters that make the outer shell split a line before run_log sees it.
+readonly SHELL_OPERATORS='|&;<>()`'
 
 # --- Prerequisites ---
 
@@ -67,6 +76,8 @@ is_valid_option() {
 
 #######################################
 # Choose the command line the block shows: bare, `! ` (interactive), or run_log (capture).
+# A command with a shell operator is quoted as run_log's single command string, so a pipe or
+# && stays inside the capture instead of applying to run_log.
 # Arguments:
 #   $1 - command
 #   $2 - interactive flag (true/false)
@@ -78,21 +89,25 @@ render_command_line() {
   local cmd="${1}" interactive="${2}" capture="${3}" capture_dir="${4}"
   if [[ "${interactive}" == "true" ]]; then
     log::info "Rendering interactive form | cmd='${cmd}'"
-    echo "! ${cmd}"
+    print -r -- "! ${cmd}"
     return
   fi
-  if [[ "${capture}" == "true" && -n "${capture_dir}" ]]; then
-    log::info "Rendering run_log form with dir | cmd='${cmd}' capture_dir='${capture_dir}'"
-    echo "run_log --dir ${capture_dir} -- ${cmd}"
+  if [[ "${capture}" != "true" ]]; then
+    log::info "Rendering bare form | cmd='${cmd}'"
+    print -r -- "${cmd}"
     return
   fi
-  if [[ "${capture}" == "true" ]]; then
-    log::info "Rendering run_log form | cmd='${cmd}'"
-    echo "run_log -- ${cmd}"
+  local prefix="run_log"
+  if [[ -n "${capture_dir}" ]]; then
+    prefix+=" --dir ${(q)capture_dir}"
+  fi
+  if [[ "${cmd}" == *[${SHELL_OPERATORS}]* ]]; then
+    log::info "Rendering run_log form, quoted | cmd='${cmd}' capture_dir='${capture_dir}'"
+    print -r -- "${prefix} ${(qq)cmd}"
     return
   fi
-  log::info "Rendering bare form | cmd='${cmd}'"
-  echo "${cmd}"
+  log::info "Rendering run_log form | cmd='${cmd}' capture_dir='${capture_dir}'"
+  print -r -- "${prefix} -- ${cmd}"
 }
 
 #######################################
@@ -170,11 +185,14 @@ ${c_bold}Options:${c_rst}
   --blocking         Mark the step "(blocks me)" (--print, with --step)
   --not-blocking     Mark the step "(not blocking)" (--print, with --step)
   --interactive      Render as "! CMD" so its output lands in the conversation (--print)
-  --capture          Render as "run_log -- CMD" so Claude can read the output back (--print)
+  --capture          Render as "run_log -- CMD" so Claude can read the output back (--print);
+                     a CMD with | & ; < > ( ) or a backtick renders as "run_log 'CMD'"
   --capture-dir DIR  With --capture: "run_log --dir DIR -- CMD"
   --text TEXT        Text to copy (--copy)
   --file PATH        File whose contents to copy (--copy)
   -h, --help         Show this help
+
+A --cmd whose first line starts with clear is refused: it would wipe the typed command from Ari's scrollback.
 
 ${c_bold}Environment:${c_rst}
   HANDOFF_DOTFILES_BIN  Path of the dotfiles entrypoint (default ${DOTFILES_BIN})
@@ -183,6 +201,13 @@ ${c_bold}Examples:${c_rst}
   ${SELF} --print --step 1 --blocking --cmd 'gws auth login --scopes …' --expect 'scope_count 16 in gws auth status' --interactive
   ${SELF} --print --cmd 'kubectl get pods -n foo' --expect 'No resources found' --capture --capture-dir /tmp/inv/logs
   ${SELF} --copy --text 'some long command'
+
+${c_bold}Output${c_rst} (--print --step 1 --blocking --cmd 'kubectl get pods | grep web' --expect 'one Running pod' --capture):
+  1. (blocks me)
+  \`\`\`zsh
+  run_log 'kubectl get pods | grep web'
+  \`\`\`
+  Expected: one Running pod
 EOF
 }
 
@@ -236,6 +261,11 @@ main() {
       fi
       if [[ -n "${blocking}" && -z "${step}" ]]; then
         log::err "--blocking/--not-blocking need --step | blocking='${blocking}'"; return 1
+      fi
+      # A fenced step may span lines; only its first line can start with clear.
+      local first_line="${${cmd%%$'\n'*}//[[:cntrl:]]/ }" refusal
+      if ! refusal="$(tmux_text_refusal "${first_line}")"; then
+        log::err "Refusing --cmd | reason='${refusal}'"; return 1
       fi ;;
     copy)
       [[ "${text_set}" == "true" ]] || { log::err "Missing --text or --file for --copy | mode='${mode}'"; help; return 1; }

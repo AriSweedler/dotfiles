@@ -11,12 +11,7 @@
 # token (bare or path-qualified), never a fragment of a longer name; settings.json also
 # gates it with `if` so it only runs when the command mentions pbcopy at all.
 #
-# Install (per /ari-driving-tmux): copy or link next to the other hooks and add the
-# settings.json entry:
-#   cp "$HOME/.claude/skills/ari-driving-tmux/bin/pretooluse_bash_pbcopy_guard.sh" \
-#      "$HOME/.config/claude/bin/pretooluse-pbcopy-guard.sh" && chmod +x "$HOME/.config/claude/bin/pretooluse-pbcopy-guard.sh"
-#   PreToolUse: {"matcher":"Bash","hooks":[{"type":"command",
-#     "command":"/Users/arisweedler/.config/claude/bin/pretooluse-pbcopy-guard.sh","if":"Bash(*pbcopy*)","timeout":5}]}
+# Install: see /ari-driving-tmux Setup (a symlink to this file, plus the settings.json entry).
 #
 # Manual test (safe: `false &&` short-circuits, so pbcopy never runs even if the hook is not
 # firing): echo '{"tool_input":{"command":"false && pbcopy"}}' | zsh <this file>; echo $?
@@ -40,7 +35,7 @@ main() {
   [[ "${command}" == *HANDOFF_CLIP_OK=1* ]] && return 0
 
   cat >&2 <<'MSG'
-Blocked: this command writes Ari's clipboard (pbcopy) and he did not ask for that in this turn. Print the text in the chat message instead, in a fenced code block, so it lives in the conversation history; Ari copies it himself. If he explicitly asks for a copy, use the sanctioned path, which saves the current clipboard first:
+Blocked: this command writes Ari's clipboard (pbcopy) and he did not ask for that in this turn. Print the text in the chat message instead, in a fenced code block, so it lives in the conversation history; Ari copies it himself. Do not try another route to the clipboard. If he explicitly asks for a copy, use the sanctioned path; it prints where Raycast's Clipboard History kept the entry it displaces:
   zsh $HOME/.claude/skills/ari-driving-tmux/bin/handoff.zsh --copy --text '<text>'
 MSG
   return 2

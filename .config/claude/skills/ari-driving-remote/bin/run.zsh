@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 # Type one command into a tmux pane, on this machine or a remote host, wait for the shell prompt, print the pane.
 # Refuses to type into a pane that is not an idle shell at its prompt.
-# Hosts are remembered as definitions under the XDG cache, so a run names a definition, not a host.
+# Hosts are remembered as definitions under the XDG data dir, so a run names a definition, not a host.
 # Run: zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --help
 
 set -euo pipefail
@@ -14,6 +14,15 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
+
+# Sourced here for the command checks, and prepended to the host script so the gate, the exact pane
+# lookup and the lock run the same on every host as on a click (focus.zsh).
+readonly LIB_TMUX_PANE="${XDG_CONFIG_HOME:-${HOME}/.config}/claude/lib/tmux-pane.sh"
+if [[ ! -r "${LIB_TMUX_PANE}" ]]; then
+  log::err "Missing tmux pane lib | path='${LIB_TMUX_PANE}'"
+  exit 1
+fi
+source "${LIB_TMUX_PANE}"
 
 # --- Constants ---
 
@@ -42,8 +51,6 @@ readonly LOCAL_HOST=local
 # Every machine's everyday name, one word, as the host's dotfiles print it (stdout only the name;
 # a host without the verb fails on stderr).
 readonly HOST_MACHINE_NAME_CMD='"$HOME/.config/bin/dotfiles" machine-name'
-# Foreground commands that count as an idle shell, as a POSIX case pattern (login shells show a leading '-').
-readonly SHELL_PATTERN='zsh|bash|sh|fish|-zsh|-bash|-sh'
 readonly PANE_ID_PATTERN='%<0->'
 # Ari's friendly address from prefix-q display-panes: window.pane in his current session.
 readonly FRIENDLY_PATTERN='<0->.<0->'
@@ -58,7 +65,9 @@ readonly AWK_WINDOW_NAMES='{print $1}'
 readonly WINDOWS_SEPARATOR=' | '
 
 # One file per definition, key=value lines in DEFINITION_KEYS order. The file name is the definition name.
-readonly CACHE_DIR="${XDG_CACHE_HOME:-${HOME}/.cache}/ari-driving-remote/hosts"
+readonly HOSTS_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/ari-driving-remote/hosts"
+# Where definitions lived before; a cache sweep could delete what Ari said about a host. Moved on the next run.
+readonly OLD_HOSTS_DIR="${XDG_CACHE_HOME:-${HOME}/.cache}/ari-driving-remote/hosts"
 readonly DEFINITION_KEYS=(host path_prefix prompt_end windows last_seen description)
 
 # The one remote host every session starts from. Written when no definition exists.
@@ -95,17 +104,20 @@ ${c_green}run.zsh${c_rst} — type a command into a tmux pane (this machine or o
 ${c_bold}Usage:${c_rst}
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --hosts
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition NAME --list
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition NAME --target %PANE_ID --cmd TEXT [OPTIONS]
+  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition NAME --target 2.4 --cmd TEXT [OPTIONS]
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition NAME [--host USER@HOST] --describe TEXT
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition NAME --forget
 
-A ${c_bold}definition${c_rst} is a file under ${CACHE_DIR}: the host's user@host (or '${LOCAL_HOST}' for
+A ${c_bold}definition${c_rst} is a file under ${HOSTS_DIR}: the host's user@host (or '${LOCAL_HOST}' for
 this machine, no ssh), PATH prefix, shell-prompt end, the panes seen on the last --list, when it last
 answered, and a description. --host-definition fills --host, --path-prefix and --prompt-end from it;
 an explicit flag wins. The first --describe, --list or --cmd on a new NAME writes it. '${LOCAL_NAME}' is always seeded.
+Definitions still under ${OLD_HOSTS_DIR} are moved there on the next run.
 
 Before typing, --cmd refuses unless the pane option ${OPT_IN_OPTION} is on (Ari runs '${OPT_IN_COMMAND}' in that
-pane), its foreground command is a shell, and its last line ends in the prompt. Panes are named 'ID=%301|pane=2.4'.
+pane), the pane is not in copy mode or synchronized, its foreground command is a shell, and its last line ends
+in the prompt. TEXT is one line, with no control characters and no leading clear. Panes are named 'ID=%301|pane=2.4'.
+After typing it prints 'TYPED: <the exact text sent>' and, once Enter is sent (or skipped), 'SENT'.
 
 ${c_bold}Actions${c_rst} (exactly one):
   --hosts                 print every definition as name= plus its key=value lines
@@ -118,29 +130,35 @@ ${c_bold}Options:${c_rst}
   --host-definition NAME  definition to use (required unless --hosts)
   --host USER@HOST        ssh destination ('${LOCAL_HOST}' for this machine), saved onto a new definition; on an existing one needs --re-point
   --re-point              allow --host to change an existing definition (its panes and last_seen reset)
-  --target W.P|%N|S:W[.P]  pane: Ari's window.pane (2.4, resolved to its %pane_id), a %pane_id, or an address (required with --cmd)
+  --target W.P|%N|S:W[.P]  pane: Ari's window.pane (2.4, matched exactly), a %pane_id, or session:window[.pane] (required with --cmd)
   --session S             session a window.pane target is looked up in (default: the most recently active client's)
-  --no-enter              type without pressing Enter (hand a denied command to Ari)
+  --no-enter              type without pressing Enter (Ari presses it)
   --no-run-log            type the command bare; by default it is typed as run_log '<cmd>' when the host
                           has ${HOST_RUN_LOG}, so the capture lands in the host's /tmp/run_log
   --no-wait               return right after typing instead of waiting for the shell prompt
   --lines N               pane lines to print (default: ${DEFAULT_LINES})
-  --timeout S             seconds to wait for the shell prompt, at least ${POLL_SECONDS} (default: ${DEFAULT_TIMEOUT})
+  --timeout S             seconds to wait for the shell prompt, at least ${POLL_SECONDS} (default: ${DEFAULT_TIMEOUT});
+                          set the Bash tool's timeout above it
   --path-prefix DIR       prepended to PATH on the host so tmux resolves (default: ${DEFAULT_PATH_PREFIX}; '' for none)
   --prompt-end STR        what the idle shell-prompt line ends with (default: ${DEFAULT_PROMPT_END})
   --dry-run               print the host script, or the definition that would be written, and change nothing
   -h, --help              show this help
 
-${c_bold}Exit codes:${c_rst} 0 prompt returned; ${EXIT_TIMEOUT} timed out, command still running (pane printed);
-${EXIT_NO_TARGET} tmux rejected the target; ${EXIT_BUSY} pane not an idle shell at its prompt (nothing typed);
-${EXIT_NOT_OPTED_IN} pane not opted in (nothing typed); ${EXIT_NOT_FOUND} tmux not found on the host; ${EXIT_SSH} ssh could not connect
+${c_bold}Exit codes:${c_rst}
+  0    the shell prompt returned
+  ${EXIT_TIMEOUT}  still running (timed out, --no-wait, or ssh dropped after SENT); the pane is printed; never resend
+  ${EXIT_NO_TARGET}   no pane matches the target, or no attached client to resolve a window.pane against (--session)
+  ${EXIT_BUSY}   pane in copy mode, synchronized, not a shell, or not at an empty prompt, or another caller is typing (nothing typed)
+  ${EXIT_NOT_OPTED_IN}   pane not opted in (nothing typed)
+  ${EXIT_NOT_FOUND}  tmux not found on the host (--path-prefix)
+  ${EXIT_SSH}  ssh could not connect before anything was typed
 
 ${c_bold}Examples:${c_rst}
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition local --list
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition local --target 2.4 --no-enter --cmd 'kubectl get pods'
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %7 --cmd 'diskutil list external physical'
+  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target 4.1 --cmd 'diskutil list external physical'
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %7 --cmd ''
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --host ads@ganymede.local --describe 'Pi 4 B at 192.168.6.94, no tmux; reached by ssh -t from the laptop pi window'
+  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --host pi@pi.local --describe 'Pi 4 B at 192.0.2.94, no tmux; reached by ssh -t from the laptop pi window'
 EOF
 }
 
@@ -149,21 +167,21 @@ EOF
 
 #######################################
 # Path of a definition file.
-# Globals: CACHE_DIR
+# Globals: HOSTS_DIR
 # Arguments: $1 name
 # Returns: the path on stdout
 #######################################
 definition_file() {
-  print -r -- "${CACHE_DIR}/${1}"
+  print -r -- "${HOSTS_DIR}/${1}"
 }
 
 #######################################
 # Names of every definition, one per line; nothing when none exists.
-# Globals: CACHE_DIR
+# Globals: HOSTS_DIR
 #######################################
 definition_names() {
   local file
-  for file in "${CACHE_DIR}"/*(N); do print -r -- "${file:t}"; done
+  for file in "${HOSTS_DIR}"/*(N); do print -r -- "${file:t}"; done
 }
 
 #######################################
@@ -203,9 +221,9 @@ load_definition() {
 
 #######################################
 # Write def to the definition file atomically. Newlines in values are flattened.
-# Globals: CACHE_DIR, def (read)
+# Globals: HOSTS_DIR, def (read)
 # Arguments: $1 name  $2 dry_run(true|false)
-# Returns: 1 when the cache is not writable
+# Returns: 1 when the hosts dir is not writable
 #######################################
 save_definition() {
   local name="${1}" dry_run="${2}" file tmp key body=""
@@ -218,8 +236,8 @@ save_definition() {
     print -rn -- "${body}"
     return 0
   fi
-  mkdir -p "${CACHE_DIR}" 2>/dev/null || { log::err "Cache not writable | dir='${CACHE_DIR}'"; return 1; }
-  tmp="$(mktemp "${CACHE_DIR}/.${name}.XXXXXX")" || { log::err "Cache not writable | dir='${CACHE_DIR}'"; return 1; }
+  mkdir -p "${HOSTS_DIR}" 2>/dev/null || { log::err "Hosts dir not writable | dir='${HOSTS_DIR}'"; return 1; }
+  tmp="$(mktemp "${HOSTS_DIR}/.${name}.XXXXXX")" || { log::err "Hosts dir not writable | dir='${HOSTS_DIR}'"; return 1; }
   trap 'rm -f "${tmp}"' EXIT
   print -rn -- "${body}" > "${tmp}"
   mv -f "${tmp}" "${file}"
@@ -236,13 +254,37 @@ now_utc() {
 }
 
 #######################################
+# Move definitions from the old cache dir into HOSTS_DIR, once: a name already in HOSTS_DIR wins,
+# and the old dir goes when it is empty.
+# Globals: OLD_HOSTS_DIR HOSTS_DIR
+#######################################
+migrate_definitions() {
+  local file
+  local -a old_files=("${OLD_HOSTS_DIR}"/*(N))
+  if (( ${#old_files} == 0 )); then
+    return 0
+  fi
+  mkdir -p "${HOSTS_DIR}" 2>/dev/null || { log::warn "Hosts dir not writable; reading nothing from the old dir | dir='${HOSTS_DIR}'"; return 0; }
+  for file in "${old_files[@]}"; do
+    if [[ -e "${HOSTS_DIR}/${file:t}" ]]; then
+      log::warn "Definition exists in both dirs; keeping the new one | name='${file:t}' old='${file}'"
+      continue
+    fi
+    mv -n -- "${file}" "${HOSTS_DIR}/${file:t}"
+    log::info "Moved definition | name='${file:t}' from='${OLD_HOSTS_DIR}' to='${HOSTS_DIR}'"
+  done
+  rmdir "${OLD_HOSTS_DIR}" 2>/dev/null || true
+}
+
+#######################################
 # Write the seed definition when no definition exists, so the first session has a host.
 # Globals: SEED_*, DEFAULT_*, def (written)
 #######################################
 seed_definitions() {
   local key
+  migrate_definitions
   if [[ -z "$(definition_names)" ]]; then
-    log::info "No definitions — seeding | name='${SEED_NAME}' host='${SEED_HOST}' cache_dir='${CACHE_DIR}'"
+    log::info "No definitions — seeding | name='${SEED_NAME}' host='${SEED_HOST}' hosts_dir='${HOSTS_DIR}'"
     for key in "${DEFINITION_KEYS[@]}"; do def[${key}]=""; done
     def[host]="${SEED_HOST}" def[path_prefix]="${DEFAULT_PATH_PREFIX}" def[prompt_end]="${DEFAULT_PROMPT_END}"
     def[description]="${SEED_DESCRIPTION}"
@@ -251,7 +293,7 @@ seed_definitions() {
   if [[ -r "$(definition_file "${LOCAL_NAME}")" ]]; then
     return 0
   fi
-  log::info "No local definition — seeding | name='${LOCAL_NAME}' cache_dir='${CACHE_DIR}'"
+  log::info "No local definition — seeding | name='${LOCAL_NAME}' hosts_dir='${HOSTS_DIR}'"
   for key in "${DEFINITION_KEYS[@]}"; do def[${key}]=""; done
   def[host]="${LOCAL_HOST}" def[path_prefix]="${DEFAULT_PATH_PREFIX}" def[prompt_end]="${DEFAULT_PROMPT_END}"
   def[description]="${LOCAL_DESCRIPTION}"
@@ -260,7 +302,7 @@ seed_definitions() {
 
 #######################################
 # Print every definition: a name= line, the file's own key=value lines, a blank line.
-# Globals: CACHE_DIR
+# Globals: HOSTS_DIR
 #######################################
 print_definitions() {
   local name
@@ -356,13 +398,26 @@ machine_block() {
 }
 
 #######################################
+# The first lines of every host script: PATH, then the tmux checks behind exit codes 127 and 70, so a
+# missing tmux or server never reads as "no pane matches".
+# Arguments: $1 path_prefix
+# Returns: the script lines on stdout
+#######################################
+prelude_block() {
+  local path_prefix="${1}"
+  if [[ -n "${path_prefix}" ]]; then print -r -- "export PATH=${(qq)path_prefix}:\$PATH"; fi
+  print -r -- "command -v tmux >/dev/null 2>&1 || { echo \"REFUSED: tmux not on PATH=\$PATH\"; exit ${EXIT_NOT_FOUND}; }"
+  print -r -- "tmux list-sessions >/dev/null 2>&1 || { echo 'REFUSED: no tmux server on the host'; exit ${EXIT_NO_TARGET}; }"
+}
+
+#######################################
 # Compose the script that lists every tmux pane on the host.
 # Arguments: $1 path_prefix
 # Returns: the script on stdout
 #######################################
 list_script() {
   local path_prefix="${1}"
-  if [[ -n "${path_prefix}" ]]; then print -r -- "export PATH=${(qq)path_prefix}:\$PATH"; fi
+  prelude_block "${path_prefix}"
   machine_block
   # Splice the pane-only opt-in mark in after the label (the first field, 'ID=%N|pane=W.P').
   print -r -- "tmux list-panes -a -F ${(qq)TMUX_LIST_FORMAT} | while read -r label rest; do"
@@ -382,37 +437,31 @@ list_script() {
 resolve_block() {
   local target="${1}" session="${2}"
   print -r -- "target=${(qq)target}; session=${(qq)session}"
-  print -r -- "case \"\$target\" in"
-  print -r -- "  %*) pane=\$target ;;"
-  print -r -- "  *:*) pane=\$(tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_id}' | awk -v t=\"\$target\" '\$1==t {print \$2}')"
-  print -r -- "       [ -n \"\$pane\" ] || pane=\$(tmux list-windows -a -F '#{session_name}:#{window_index} #{pane_id}' | awk -v t=\"\$target\" '\$1==t {print \$2}') ;;"
-  print -r -- "  *) if [ -z \"\$session\" ]; then session=\$(tmux list-clients -F '#{client_activity} #{client_session}' | sort -rn | head -n 1 | cut -d' ' -f2-); fi"
-  print -r -- "     if [ -z \"\$session\" ]; then echo \"REFUSED: no attached client to resolve \$target against; pass --session\"; exit ${EXIT_NO_TARGET}; fi"
-  print -r -- "     pane=\$(tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_id}' | awk -v t=\"\$session:\$target\" '\$1==t {print \$2}') ;;"
+  print -r -- "pane=\$(tmux_resolve_pane \"\$target\" \"\$session\"); rc=\$?"
+  print -r -- "case \$rc in"
+  print -r -- "  0) ;;"
+  print -r -- "  2) echo \"REFUSED: no attached client to resolve \$target against; pass --session\"; exit ${EXIT_NO_TARGET} ;;"
+  print -r -- "  *) echo \"REFUSED: no pane matches \$target\"; exit ${EXIT_NO_TARGET} ;;"
   print -r -- "esac"
-  print -r -- "tmux list-panes -a -F '#{pane_id}' | grep -qx -- \"\$pane\" || { echo \"REFUSED: no pane matches \$target\"; exit ${EXIT_NO_TARGET}; }"
   machine_block
   print -r -- "label=\"\$prefix\$(tmux display-message -p -t \"\$pane\" ${(qq)PANE_LABEL_FORMAT})\""
   print -r -- "echo \"PANE: \$label\""
 }
 
 #######################################
-# The gate before any keys are sent: the pane's OPT_IN_OPTION is on, its foreground command is a shell,
-# and its last line ends in the prompt. Any failure prints why plus the pane tail and exits untyped.
+# The gate before any keys are sent (tmux_pane_gate_refusal: opted in, not in copy mode or synchronized,
+# an idle shell, last line ends in the prompt), under the pane's lock so two callers cannot both pass it.
+# Any failure prints why plus the pane tail and exits untyped. The lock is released after the send.
 # Arguments: $1 quoted_prompt_end  $2 lines
 # Returns: the script lines on stdout
 #######################################
 gate_block() {
   local quoted_prompt_end="${1}" lines="${2}"
   local tail_cmd="tmux capture-pane -p -t \"\$pane\" -S -${lines} | awk ${(qq)AWK_NONBLANK} | tail -n ${lines}"
-  # -p without -A reads the pane's own value: the window option of the same name is not inherited.
-  print -r -- "if [ \"\$(tmux show-options -pqv -t \"\$pane\" ${(qq)OPT_IN_OPTION})\" != on ]; then"
-  print -r -- "  echo \"REFUSED: \$label is not opted in; Ari runs '${OPT_IN_COMMAND}' in that pane\"; ${tail_cmd}; exit ${EXIT_NOT_OPTED_IN}"
-  print -r -- "fi"
-  print -r -- "fg=\$(tmux display-message -p -t \"\$pane\" '#{pane_current_command}')"
-  print -r -- "last=\$(tmux capture-pane -p -t \"\$pane\" | awk ${(qq)AWK_LAST_LINE})"
-  print -r -- "case \"\$fg\" in ${SHELL_PATTERN}) ;; *) echo \"REFUSED: \$label is running \$fg, not a shell\"; ${tail_cmd}; exit ${EXIT_BUSY};; esac"
-  print -r -- "case \"\$last\" in *${quoted_prompt_end}) ;; *) echo \"REFUSED: \$label last line does not end in the prompt (busy, or text already on the line)\"; ${tail_cmd}; exit ${EXIT_BUSY};; esac"
+  print -r -- "tmux_pane_lock \"\$pane\" || { echo \"REFUSED: \$label another caller is typing into it\"; ${tail_cmd}; exit ${EXIT_BUSY}; }"
+  print -r -- "trap 'tmux_pane_unlock \"\$pane\"' EXIT"
+  print -r -- "reason=\$(tmux_pane_gate_refusal \"\$pane\" ${quoted_prompt_end}); rc=\$?"
+  print -r -- "if [ \$rc -ne 0 ]; then echo \"REFUSED: \$label \$reason\"; ${tail_cmd}; exit \$rc; fi"
 }
 
 #######################################
@@ -448,7 +497,8 @@ remote_script() {
   local lines="${5}" timeout="${6}" path_prefix="${7}" prompt_end="${8}" session="${9}" run_log="${10}"
   local quoted_prompt_end="${(qq)prompt_end}"
 
-  if [[ -n "${path_prefix}" ]]; then print -r -- "export PATH=${(qq)path_prefix}:\$PATH"; fi
+  prelude_block "${path_prefix}"
+  print -r -- "$(<"${LIB_TMUX_PANE}")"
   resolve_block "${target}" "${session}"
   if [[ -n "${cmd}" ]]; then
     gate_block "${quoted_prompt_end}" "${lines}"
@@ -456,9 +506,15 @@ remote_script() {
     if [[ "${run_log}" == "true" ]]; then
       print -r -- "if [ -x \"${HOST_RUN_LOG}\" ]; then typed=${(qq)${:-run_log ${(qq)cmd}}}; else echo \"NOTE: no ${HOST_RUN_LOG} on the host; typed the command bare\"; fi"
     fi
-    print -r -- "tmux send-keys -t \"\$pane\" -l \"\$typed\" || { echo \"FAILED: send-keys to \$label\"; exit 1; }"
+    print -r -- "tmux send-keys -t \"\$pane\" -l -- \"\$typed\" || { echo \"FAILED: send-keys to \$label\"; exit 1; }"
+    print -r -- "printf 'TYPED: %s\\n' \"\$typed\""
   fi
   if [[ "${press_enter}" == "true" ]]; then print -r -- "tmux send-keys -t \"\$pane\" Enter || { echo \"FAILED: Enter to \$label\"; exit 1; }"; fi
+  if [[ -n "${cmd}" ]]; then
+    # From here a dropped connection must not read as "never typed": the caller sees SENT.
+    print -r -- "echo SENT"
+    print -r -- "sleep 0.2; tmux_pane_unlock \"\$pane\"; trap - EXIT"
+  fi
   wait_block '"$pane"' "${quoted_prompt_end}" "${wait}" "${press_enter}" "${timeout}"
   print -r -- "tmux capture-pane -p -t \"\$pane\" -S -${lines} | awk ${(qq)AWK_NONBLANK} | tail -n ${lines}"
   print -r -- "exit \$rc"
@@ -498,7 +554,7 @@ report_exit() {
     return 0
   fi
   if (( exit_code == EXIT_NO_TARGET )); then
-    log::err "tmux rejected the target | target='${target}' hint='--list prints the panes; use the window.pane Ari said, or a %pane_id'"
+    log::err "No pane matches the target, or no attached client to resolve it against | target='${target}' hint='--list prints the panes; use the window.pane Ari said, a %pane_id, or --session'"
     return 0
   fi
   if (( exit_code == EXIT_NOT_OPTED_IN )); then
@@ -506,7 +562,7 @@ report_exit() {
     return 0
   fi
   if (( exit_code == EXIT_BUSY )); then
-    log::err "Pane is not an idle shell at its prompt; nothing typed | target='${target}' hint='print the command in chat instead; never retry into a busy pane'"
+    log::err "Pane is not an idle shell at its prompt, or another caller is typing; nothing typed | target='${target}' hint='print the command in chat instead; never retry into a busy pane'"
     return 0
   fi
   if (( exit_code == EXIT_NOT_FOUND )); then
@@ -514,7 +570,7 @@ report_exit() {
     return 0
   fi
   if (( exit_code == EXIT_SSH )); then
-    log::err "ssh could not connect | host='${host}' hint='asleep, wrong address, or no key: Ari runs ssh ${host} once in a window to accept the host key or fix access'"
+    log::err "ssh could not connect; nothing was typed | host='${host}' hint='asleep, wrong address, or no key: Ari runs ssh ${host} once in a pane to accept the host key or fix access'"
     return 0
   fi
   log::err "Host script failed | host='${host}' exit_code='${exit_code}'"
@@ -543,6 +599,22 @@ list_windows() {
 }
 
 #######################################
+# An ssh failure after the host printed SENT means the keys reached the pane and the command is
+# running (a laptop went to sleep mid-wait, say): report it as still running, never as unsent.
+# Arguments: $1 exit_code  $2 host script output
+# Outputs: the exit code to report on stdout
+#######################################
+sent_exit_code() {
+  local exit_code="${1}" output="${2}"
+  if (( exit_code == EXIT_SSH )) && [[ "${output}" == (*$'\n'|)(SENT|TYPED: *)* ]]; then
+    log::warn "ssh dropped after the keys were sent; the command is still running | hint='capture with --cmd \"\" once the host answers; never resend'"
+    print -r -- "${EXIT_TIMEOUT}"
+    return 0
+  fi
+  print -r -- "${exit_code}"
+}
+
+#######################################
 # Gate, type the command into the pane, and print the pane.
 # Globals: host target cmd press_enter wait run_log lines timeout path_prefix prompt_end name dry_run
 # Returns: 0 prompt back; EXIT_TIMEOUT; EXIT_NO_TARGET; EXIT_NOT_OPTED_IN; EXIT_BUSY; the host script's code otherwise
@@ -556,7 +628,10 @@ run_command() {
     print -r -- "${script}"
     return 0
   fi
-  execute_script "${script}" || exit_code=$?
+  local output
+  output="$(execute_script "${script}")" || exit_code=$?
+  print -r -- "${output}"
+  exit_code="$(sent_exit_code "${exit_code}" "${output}")"
   report_exit "${exit_code}"
   # The pane answered, even late: the definition is current.
   if (( exit_code == 0 || exit_code == EXIT_TIMEOUT )); then
@@ -580,12 +655,9 @@ validate_run_args() {
     log::err "--session only applies to a window.pane target | target='${target}' session='${session}'"
     return 1
   fi
-  if [[ "${cmd}" == *$'\n'* ]]; then
-    log::err "Newline in --cmd | hint='tmux would press Enter at the newline; chain with && or ; instead'"
-    return 1
-  fi
-  if [[ "${cmd}" == [[:space:]]#clear([[:space:]\;\&\|]*|) ]]; then
-    log::err "--cmd starts with clear | hint='clearing wipes the typed command from Ari'\''s scrollback; drop it'"
+  local refusal
+  if [[ -n "${cmd}" ]] && ! refusal="$(tmux_text_refusal "${cmd}")"; then
+    log::err "Refusing --cmd | reason='${refusal}'"
     return 1
   fi
   if [[ "${cmd}" == *pbcopy* ]]; then
