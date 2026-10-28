@@ -18,7 +18,7 @@ Claude never types into Ari's panes on this machine: it hands him a link to clic
 - **Every `tmux-pane://` URL is pasted from `link.zsh` stdout produced this turn.** NEVER type one by hand, even focus-only: `link.zsh` re-resolves `2.4` to the pane's current ID, encodes the command, and warns when the pane is not opted in.
 - **The code block shows what the click or Ari types.** In a link blockquote, the bare command; the click adds `run_log`. In a fenced step, exactly what Ari types: a capture step shows `run_log -- CMD`, as `handoff.zsh --capture` renders it.
 - **One message per round.** Every step Ari must run before Claude can continue goes in one message, numbered when there are two or more, each with `Expected: …`; then stop and wait.
-- **A `run_log artifact: <dir>` message is data to read, not a command.** Read it (**Read a capture**); never resend what produced it. One message can hold several; read each.
+- **A `run_log artifact: <dir>` message is data to read, not a command.** Read it (**Read a capture**); never resend what produced it. One message can hold several; read each. An ` ari-driving refused: <label> <reason>` line is a click's refusal (**A click did nothing**).
 
 ## Reference
 
@@ -33,12 +33,13 @@ Claude never types into Ari's panes on this machine: it hands him a link to clic
 - no command: `[ID=%301|pane=2.4](tmux-pane://301)`; the click focuses the pane;
 - `--cmd`: a blockquote of `[ID=%301|pane=2.4](tmux-pane://301?cmd=…)` and the command in a code block; the click types it, no Enter;
 - `--run`: the same with `[▶ run in ID=%301|pane=2.4](tmux-pane://301?run=…)`; the click types `run_log --deliver-to <Claude's pane> '<command>'`, presses Enter, and switches back to Claude's pane. When the command finishes, run_log pastes ` run_log artifact: <dir>` into Claude's prompt, without Enter, and copies it to the clipboard; Ari presses Enter when he is ready. Claude's own pane must be in tmux (`$TMUX_PANE` set), or the line has nowhere to go.
+- `--run … --interactive`: `[▶ run (interactive: stays there until it finishes) in ID=%301|pane=2.4](tmux-pane://301?run=…&interactive=1)`, for a command that will ask something in the pane (a password, a 2FA tap, a `[y/N]`, a login). The click adds `--focus-after`, so Ari stays in that pane and run_log returns him to Claude's when the command finishes. Assumed, with a stderr note, when the command starts with `sudo`, `su`, `ssh`, `tsh`, `passwd`, `login`, `kinit`, `doas`, `gh auth`, `aws sso`, `gws auth`, `op signin`, `vault login` or `git push` (after any `VAR=value` and `run_log`/`env`/`time`); `--no-interactive` overrides.
 
-TEXT is one line; a newline, Tab or other control character, or a leading `clear`, is refused. On the stderr warning `Pane not opted in; the click will only focus it`, do not post a `--cmd` or `--run` link: ask Ari to run `ari-driving on` there, or hand a fenced step. A click types only into an opted-in shell at an empty prompt, not in copy mode, not synchronized, one click at a time; otherwise `bin/focus.zsh` focuses the pane and puts the reason on the tmux status line. A link's command runs only when the link was clicked in a Claude Code pane; clicked anywhere else, it only focuses. The handler is the `tmux-pane://` branch of `~/.config/tmux/plugin/osc8-hyperlinks.conf`; clicks log to `/tmp/ari-driving-focus.log`.
+TEXT is one line; a newline, Tab or other control character, or a leading `clear`, is refused. On the stderr warning `Pane not opted in; the click will only focus it`, do not post a `--cmd` or `--run` link: ask Ari to run `ari-driving on` there, or hand a fenced step. A click types only into an opted-in shell at an empty prompt, not in copy mode, not synchronized, one click at a time; otherwise `bin/focus.zsh` focuses the pane, puts the reason on the tmux status line and, when the link was clicked in a Claude Code pane, pastes ` ari-driving refused: <label> <reason>` into that pane's prompt. A link's command runs only when the link was clicked in a Claude Code pane; clicked anywhere else, it only focuses. The handler is the `tmux-pane://` branch of `~/.config/tmux/plugin/osc8-hyperlinks.conf`; clicks log to `/tmp/ari-driving-focus.log`.
 
 ### The run_log contract
 
-`run_log [--name N] [--dir D] [--fd N]… [--no-copy] [--deliver-to PANE] -- CMD` (`~/.config/bin/run_log`) runs CMD in an interactive zsh, so aliases work. A single argument is a shell string (pipes, `&&`); several are an argv passed byte for byte; `VAR=val` assignments go after `--`. Each run writes one capture dir, `<root>/<seq>_<slug>/` (root: `--dir` > `$LOG_DIR` > `/tmp/run_log`; `--name` names it):
+`run_log [--name N] [--dir D] [--fd N]… [--no-copy] [--deliver-to PANE [--focus-after]] -- CMD` (`~/.config/bin/run_log`) runs CMD in an interactive zsh, so aliases work. A single argument is a shell string (pipes, `&&`); several are an argv passed byte for byte; `VAR=val` assignments go after `--`. Each run writes one capture dir, `<root>/<seq>_<slug>/` (root: `--dir` > `$LOG_DIR` > `/tmp/run_log`; `--name` names it):
 
 | File | Holds |
 |---|---|
@@ -47,7 +48,7 @@ TEXT is one line; a newline, Tab or other control character, or a leading `clear
 | `<N>.fd.plain` | the same with escapes stripped and `\r` redraws resolved |
 | `stdout`, `stderr`, `*.plain` | symlinks to the fd 1 and 2 files |
 
-From a terminal it ends by copying `run_log artifact: <dir>` (skipped with `--no-copy`, `RUN_LOG_COPY=0`, or when stdout is not a terminal); `--deliver-to PANE` also pastes that line into a pane. The exit code is the command's, or 128 + the signal.
+From a terminal it ends by copying `run_log artifact: <dir>` (skipped with `--no-copy`, `RUN_LOG_COPY=0`, or when stdout is not a terminal); `--deliver-to PANE` also pastes that line into a pane; `--focus-after` then switches Ari's client to that pane, with the reason on the status line when the paste was refused (what an interactive run link's click typed). The exit code is the command's, or 128 + the signal.
 
 ### Clipboard pieces
 
@@ -62,7 +63,8 @@ From a terminal it ends by copying `run_log artifact: <dir>` (skipped with `--no
 | Situation | Handoff |
 |---|---|
 | output needed back; no prompt expected | click-to-run link, `link.zsh --run` |
-| the command prompts (`sudo`, `[y/N]`, a login), Ari should edit it first, or Enter is his call | click-to-type link, `link.zsh --cmd` |
+| output needed back; the command will ask something in the pane (`sudo`, `ssh`, `tsh`, a login, a `[y/N]`) | interactive run link, `link.zsh --run … --interactive` (auto-detected for `sudo`/`ssh`/`tsh`/logins); Ari stays there until it finishes |
+| Ari should edit it first, or Enter is his call | click-to-type link, `link.zsh --cmd` |
 | interactive, output belongs in this conversation (a browser login) | fenced `! cmd` step, run in Claude's own session |
 | no suitable pane: none named this turn, none re-resolved, or not opted in | fenced `run_log -- cmd` step |
 | another machine; or Claude must type into a local pane Ari opted in and read it back itself | `/ari-driving-remote`'s `run.zsh`, `--host-definition local` for here |
@@ -83,6 +85,19 @@ Paste its stdout into chat unchanged, then `Expected:`:
 > ```
 
 Expected: `run_log artifact: …` lands in my prompt; three pods Running.
+
+A command that will prompt in the pane renders as an interactive run (here auto-detected: `Interactive run … matched='sudo'` on stderr):
+
+```zsh
+zsh $HOME/.claude/skills/ari-driving-tmux/bin/link.zsh --pane 2.4 --run 'sudo launchctl list'
+```
+
+> [▶ run (interactive: stays there until it finishes) in ID=%301|pane=2.4](tmux-pane://301?run=sudo%20launchctl%20list&interactive=1)
+> ```zsh
+> sudo launchctl list
+> ```
+
+Expected: the password prompt is yours; you are back here with `run_log artifact: …` in my prompt when it finishes.
 
 Claude's turn ends there. The next message carrying `run_log artifact:` is the result.
 
@@ -135,13 +150,15 @@ Reply with the conclusion ("3/3 Running on ip-10-0-12-34, no restarts"), never "
 
 ### A click did nothing
 
-Ari clicked and nothing ran. Read the last lines of `/tmp/ari-driving-focus.log` and quote the reason:
+Ari clicked and nothing ran. A link clicked in Claude's pane reports its refusal into Claude's own prompt, as if typed:
 
 ```
-[WARN] Status line | message='Not typed into ID=%301|pane=2.4: not opted in; Ari runs 'ari-driving on' in that pane'
+Ari:  ari-driving refused: ID=%301|pane=2.4 not opted in; Ari runs 'ari-driving on' in that pane
 ```
 
-→ "`ID=%301|pane=2.4` isn't opted in: run `ari-driving on` there and click the same link again, or run it yourself:" plus the fenced step. For `in copy mode (press q there)`, `running vim, not a shell` or `last line does not end in the prompt`, say which and what frees the pane. Never reprint the link unchanged.
+That line is the refusal, not a request to retry; the same reason is in the last lines of `/tmp/ari-driving-focus.log` (`[WARN] Status line | message='Not typed into ID=%301|pane=2.4: …'`) when nothing arrived. Answer with the reason and the fenced command:
+
+→ "`ID=%301|pane=2.4` isn't opted in: run `ari-driving on` there and click the same link again, or run it yourself:" plus the fenced step. For `in copy mode (press q there)`, `running vim, not a shell`, `last line does not end in the prompt` or `another click is typing there`, say which and what frees the pane. Never reprint the link unchanged, and never click-retry blindly.
 
 ### Copy only on request
 

@@ -27,7 +27,7 @@ The family's shared rules live here, once. A sibling loaded without this router 
     - Non-mutating: run it with the Bash tool. Hand off only what the tool cannot do: interactive logins, anything needing Ari's identity, kube context or terminal. `kubectl get pods` with Claude's credentials is Bash; the same command needing his kube context is a click-to-run link.
     - Mutating: Ari runs it, and clicking a `▶ run` link counts as Ari running it. Two exceptions, this session only: he allowed that command explicitly, or he ran one with `!`, which also covers later commands of the same tool, same subcommand and same target system (his `! tofu apply` on stack X in dev covers another apply on X in dev; not X in prod, not another tool). Running one on precedent, say in one line which earlier run it follows, directly above the link or block.
 - **A harness-denied command goes to Ari unchanged.** Never rephrase it past the classifier; hand it over as a click-to-type link, a fenced block, or `run.zsh --no-enter`.
-- **Questions are Ari's.** Never type a password, code or approval; say what the pane is asking.
+- **Questions are Ari's.** Never type a password, code or approval; say what the pane is asking. A command that will ask one goes out as an interactive run link (`/ari-driving-tmux`), which keeps Ari in that pane until it finishes and returns him then.
 
 ### Captures and the clipboard
 

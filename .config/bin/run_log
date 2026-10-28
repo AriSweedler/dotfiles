@@ -39,6 +39,8 @@ source "${LOG_LIB}"
 readonly DEFAULT_LOG_DIR=/tmp/run_log
 readonly CAPTURE_HELPER="${0:A:h}/run_log-capture.py"
 readonly TMUX_PANE_LIB="${XDG_CONFIG_HOME:-$HOME/.config}/claude/lib/tmux-pane.sh"
+# Why deliver_handoff pasted nothing, for focus_after_delivery's status line.
+typeset -g DELIVERY_REFUSAL=""
 
 # log.zsh colors are literal-backslash strings for `echo -e`, so the heredoc
 # must be rendered with %b, not cat'd raw.
@@ -48,7 +50,7 @@ help() {
 ${c_green}run_log${c_rst} — run a command, capture metadata/stdout/stderr to a capture dir
 
 ${c_green}Usage:${c_rst}
-  run_log [--name NAME] [--dir DIR] [--] CMD [ARGS...]
+  run_log [--name NAME] [--dir DIR] [--deliver-to PANE [--focus-after]] [--] CMD [ARGS...]
 
 The command runs in an interactive zsh (like irun) so aliases and .zshrc
 functions work. Each invocation creates one capture directory under the
@@ -91,6 +93,13 @@ ${c_green}Options:${c_rst}
                prompt) as a bracketed paste with no Enter, then note it on
                the tmux status line. Skipped when PANE is in copy mode or
                synchronized.
+  --focus-after
+               With --deliver-to: once the artifact line is delivered, switch
+               the most recently active tmux client to PANE. For a command
+               that asks something in this pane (a password, a 2FA tap, a
+               [y/N]): the agent's run link keeps you here until it finishes,
+               then returns you. Still switches when the paste was refused,
+               and says why on the status line.
   -h, --help   Show this help
 
 ${c_green}Argument handling:${c_rst}
@@ -251,41 +260,85 @@ run_captured() {
 }
 
 #######################################
+# A note on the tmux status line. display-message runs its text through strftime, which would eat
+# the %N of a pane label, so % is doubled.
+# Arguments: $1 = message
+#######################################
+status_note() {
+  local message="${1}"
+  tmux display-message -d 4000 "${message//\%/%%}" 2>/dev/null || true
+}
+
+#######################################
+# Source the tmux pane lib, for the pane actions below. Both need tmux around us and the lib on disk.
+# Globals: TMUX TMUX_PANE_LIB
+# Arguments: $1 = what the caller is about to do (for the log)
+# Returns: 1 when either is missing
+#######################################
+source_tmux_pane_lib() {
+  local action="${1}"
+  if [[ -z "${TMUX:-}" ]]; then
+    log::warn "Not ${action}; not inside tmux"
+    return 1
+  fi
+  if [[ ! -r "${TMUX_PANE_LIB}" ]]; then
+    log::warn "Not ${action}; no tmux pane lib | lib='${TMUX_PANE_LIB}'"
+    return 1
+  fi
+  source "${TMUX_PANE_LIB}"
+}
+
+#######################################
 # Paste the artifact line into a tmux pane (an agent's prompt), and only once that worked, say so
-# on the tmux status line. A bracketed paste, not keystrokes: a busy prompt or a numbered
-# permission dialog must not read the path's digits as answers. Nothing follows it, not even
-# Enter; the leading space keeps two deliveries in a row apart.
+# on the tmux status line. tmux_paste_line does the bracketed paste with no Enter and refuses a
+# pane in copy mode or synchronized; the reason is kept for --focus-after's status line.
+# Globals: DELIVERY_REFUSAL (set: why nothing was pasted; empty when it was, or nothing was asked)
 # Arguments: $1 = handoff text, $2 = pane ID (empty: skip)
 #######################################
 deliver_handoff() {
   local text="${1}" pane="${2}"
+  DELIVERY_REFUSAL=""
   if [[ -z "${pane}" ]]; then
     return
   fi
-  if [[ -z "${TMUX:-}" ]]; then
-    log::warn "Not delivering artifact line; not inside tmux | pane='${pane}'"
-    return
-  fi
-  if [[ ! -r "${TMUX_PANE_LIB}" ]]; then
-    log::warn "Not delivering artifact line; no tmux pane lib | pane='${pane}' lib='${TMUX_PANE_LIB}'"
-    return
-  fi
-  source "${TMUX_PANE_LIB}"
+  source_tmux_pane_lib "delivering the artifact line" || return 0
   local refusal label
-  if ! refusal="$(tmux_pane_input_refusal "${pane}")"; then
+  if ! refusal="$(tmux_paste_line "${pane}" "${text}")"; then
+    DELIVERY_REFUSAL="${refusal}"
     log::warn "Not delivering artifact line | pane='${pane}' reason='${refusal}'"
-    tmux display-message -d 4000 "run_log artifact not pasted into ${pane}: ${refusal}" 2>/dev/null || true
-    return
-  fi
-  local buffer="run_log-$$"
-  if ! print -rn -- " ${text}" | tmux load-buffer -b "${buffer}" - || ! tmux paste-buffer -p -d -b "${buffer}" -t "${pane}"; then
-    log::warn "Could not paste artifact line into pane | pane='${pane}'"
-    tmux delete-buffer -b "${buffer}" 2>/dev/null || true
+    status_note "run_log artifact not pasted into ${pane}: ${refusal}"
     return
   fi
   label="$(tmux display-message -p -t "${pane}" "${ARI_DRIVING_LABEL_FORMAT}")"
-  tmux display-message -d 4000 "✦ run_log artifact pasted into ${label}"
+  status_note "✦ run_log artifact pasted into ${label}"
   log::info "Delivered artifact line | pane='${label}'"
+}
+
+#######################################
+# After the delivery, bring Ari back to the pane it went to (--focus-after): the agent's run link
+# left him here for a command that asks questions, and this is the switch back it skipped. A refused
+# delivery still switches, and the status line says what did not arrive.
+# Globals: DELIVERY_REFUSAL
+# Arguments: $1 = pane ID, $2 = "true" to switch
+#######################################
+focus_after_delivery() {
+  local pane="${1}" focus_after="${2}"
+  if [[ "${focus_after}" != true ]]; then
+    return
+  fi
+  source_tmux_pane_lib "switching back" || return 0
+  if ! tmux_switch_to_pane "${pane}"; then
+    log::warn "Not switching back; no attached tmux client | pane='${pane}'"
+    return
+  fi
+  local label
+  label="$(tmux display-message -p -t "${pane}" "${ARI_DRIVING_LABEL_FORMAT}")"
+  log::info "Switched the client back | pane='${label}' delivery_refusal='${DELIVERY_REFUSAL}'"
+  if [[ -n "${DELIVERY_REFUSAL}" ]]; then
+    status_note "✦ Back in ${label}; the artifact line was not pasted: ${DELIVERY_REFUSAL}"
+    return
+  fi
+  status_note "✦ Back in ${label}; the artifact line is in its prompt"
 }
 
 #######################################
@@ -330,13 +383,14 @@ build_command_string() {
 
 main() {
   # === PARSE ===
-  local name="" dir_flag="" copy_flag=true deliver_pane=""
+  local name="" dir_flag="" copy_flag=true deliver_pane="" focus_after=false
   local -a capture_fds=()
   while (( $# > 0 )); do
     case "${1}" in
       -h|--help) help; return 0 ;;
       --no-copy) copy_flag=false; shift ;;
       --deliver-to) deliver_pane="${2:?--deliver-to requires a pane}"; shift 2 ;;
+      --focus-after) focus_after=true; shift ;;
       --name) name="${2:?--name requires a value}"; shift 2 ;;
       --file) name="${2:?--file requires a value}"; shift 2 ;;
       --fd) capture_fds+=("${2:?--fd requires a value}"); shift 2 ;;
@@ -350,6 +404,10 @@ main() {
   # === VALIDATE ===
   if [[ "${deliver_pane}" == -* ]]; then
     log::err "Invalid --deliver-to | deliver_pane='${deliver_pane}' expected='a tmux pane such as %12, not a flag'"
+    return 2
+  fi
+  if [[ "${focus_after}" == true && -z "${deliver_pane}" ]]; then
+    log::err "--focus-after needs --deliver-to PANE | hint='it switches to the pane the artifact line went to'"
     return 2
   fi
   if [[ ! -r "${CAPTURE_HELPER}" ]]; then
@@ -420,6 +478,7 @@ EOF
   log::info "Captured command | capture_dir='${capture_dir}' rc='${rc}'"
   copy_handoff "run_log artifact: ${capture_dir}" "${should_copy}"
   deliver_handoff "run_log artifact: ${capture_dir}" "${deliver_pane}"
+  focus_after_delivery "${deliver_pane}" "${focus_after}"
   return "${rc}"
 }
 

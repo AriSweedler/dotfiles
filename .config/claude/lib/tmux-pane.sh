@@ -11,6 +11,8 @@
 #   tmux_pane_is_claude        whether a pane runs Claude Code
 #   tmux_text_refusal          why a command text must not be typed (control characters, a leading clear)
 #   tmux_pane_lock / _unlock   a short per-pane lock around gate-and-type
+#   tmux_switch_to_pane        switch a client (default: the most recently active) to a pane
+#   tmux_paste_line            paste one line into a pane's prompt, bracketed, no Enter
 #
 # Refusal functions print the reason on stdout and return non-zero; they print nothing and
 # return 0 when the action may go ahead. No `readonly`: callers may source this twice.
@@ -62,17 +64,19 @@ tmux_resolve_pane() {
 }
 
 # Copy mode would eat the keys (and Enter there copies a selection to the clipboard);
-# synchronized panes would repeat them into every pane of the window.
+# synchronized panes would repeat them into every pane of the window. pane_in_mode counts the
+# stacked modes (a view mode under a copy mode reads 2), so anything but 0 is a mode.
 tmux_pane_input_refusal() {
   _tpi_flags=$(tmux display-message -p -t "$1" '#{pane_in_mode} #{pane_synchronized}' 2>/dev/null) || {
     echo "no such pane"
     return 1
   }
   case "$_tpi_flags" in
-    1\ *) echo "in copy mode (press q there)"; return 1 ;;
-    *\ 1) echo "synchronize-panes is on"; return 1 ;;
+    0\ 0) return 0 ;;
+    0\ *) echo "synchronize-panes is on"; return 1 ;;
   esac
-  return 0
+  echo "in copy mode (press q there)"
+  return 1
 }
 
 # Login shells show a leading '-'.
@@ -152,4 +156,30 @@ tmux_pane_unlock() {
 # Keyed by the tmux server's pid too: pane IDs restart at %0 on every server.
 tmux_pane_lock_dir() {
   printf '%s/%s-%s\n' "$ARI_DRIVING_LOCK_ROOT" "$(tmux display-message -p '#{pid}' 2>/dev/null)" "${1#%}"
+}
+
+# Switch a client to the pane's session, window and pane. $2 names the client; by default the most
+# recently active one, which is the one Ari is looking at.
+# Returns: 1 when there is no client to switch.
+tmux_switch_to_pane() {
+  _tsp_pane="$1" _tsp_client="${2:-}"
+  [ -n "$_tsp_client" ] || _tsp_client=$(tmux_latest_client)
+  [ -n "$_tsp_client" ] || return 1
+  tmux switch-client -c "$_tsp_client" -t "$_tsp_pane" \; select-window -t "$_tsp_pane" \; select-pane -t "$_tsp_pane"
+}
+
+# Paste one line into a pane's prompt (an agent's): a bracketed paste, not keystrokes, so a busy
+# prompt or a numbered permission dialog never reads the text's digits as answers. Nothing follows
+# it, not even Enter; a leading space keeps two pastes in a row apart. Refuses a pane in copy mode
+# or synchronized (the text would be eaten or repeated), with the reason on stdout.
+# Returns: 1 when nothing was pasted.
+tmux_paste_line() {
+  _tpst_pane="$1" _tpst_text="$2" _tpst_buffer="ari-driving-$$"
+  _tpst_refusal=$(tmux_pane_input_refusal "$_tpst_pane") || { echo "$_tpst_refusal"; return 1; }
+  if ! printf ' %s' "$_tpst_text" | tmux load-buffer -b "$_tpst_buffer" - 2>/dev/null \
+      || ! tmux paste-buffer -p -d -b "$_tpst_buffer" -t "$_tpst_pane" 2>/dev/null; then
+    tmux delete-buffer -b "$_tpst_buffer" 2>/dev/null || true
+    echo "paste-buffer failed"
+    return 1
+  fi
 }
