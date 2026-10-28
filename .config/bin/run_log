@@ -2,11 +2,12 @@
 # run_log — run a command and capture it into a per-command capture directory:
 #
 #   <root>/<seq>_<slug>/
-#     metadata      user=, timestamp=, command=, stdout_tty=, stderr_tty=, exit=
+#     metadata      user=, timestamp=, cwd=, command=, stdout_tty=, stderr_tty=, exit=
 #     <N>.fd        fd N, byte-for-byte (colors kept); 1, 2, and each --fd N
 #     <N>.fd.plain  fd N as the user saw it: escapes stripped, \r redraws resolved
 #     stdout, stderr, stdout.plain, stderr.plain
 #                   symlinks to 1.fd, 2.fd, 1.fd.plain, 2.fd.plain
+#     handoff.md    what to paste into an agent's chat; also put on the clipboard
 #
 # Like `irun`, the command executes in an interactive zsh so aliases,
 # functions, and everything sourced from .zshrc are available. stdout and
@@ -20,10 +21,13 @@
 #
 # Designed for agent workflows: an agent hands over a `run_log ...` command,
 # the human runs it, and the capture is already on disk at a deterministic
-# path for the agent to read. With $LOG_DIR exported, `run_log <cmd>` needs
+# path for the agent to read. When run from a terminal, run_log ends by
+# putting a Markdown handoff (command, cwd, exit, output paths) on the
+# clipboard, ready to paste into the agent's chat. With $LOG_DIR exported, `run_log <cmd>` needs
 # no flags at all; repeated runs make 001_*, 002_*, ... under the same root.
 
 set -euo pipefail
+zmodload zsh/datetime
 
 readonly LOG_LIB="${XDG_CONFIG_HOME:-$HOME/.config}/zsh/plugins/log.zsh"
 if [[ ! -r "${LOG_LIB}" ]]; then
@@ -50,11 +54,16 @@ functions work. Each invocation creates one capture directory under the
 capture root:
 
   <root>/<seq>_<cmd-slug>/
-    metadata      user=, timestamp=, command=, stdout_tty=, stderr_tty=, exit=
+    metadata      user=, timestamp=, cwd=, command=, stdout_tty=, stderr_tty=, exit=
     <N>.fd        fd N, byte-for-byte (colors kept): 1, 2, and each --fd N
     <N>.fd.plain  fd N as you saw it: escapes stripped, \\\\r redraws resolved
     stdout, stderr, stdout.plain, stderr.plain
                   symlinks to 1.fd, 2.fd, 1.fd.plain, 2.fd.plain
+    handoff.md    the agent handoff (below)
+
+When the command finishes, run_log writes a Markdown handoff — command, cwd,
+start time, duration, exit, and each output file with its size — and, when
+run from a terminal, puts it on the clipboard to paste into an agent's chat.
 
 stdout and stderr each run on their own pty, so the command behaves exactly
 as in your terminal — colors, log pretty-printers, progress bars all work —
@@ -74,6 +83,8 @@ ${c_green}Options:${c_rst}
                Capture-only: fd N output is not echoed to the terminal.
   --dir DIR    Capture root for relative/generated names.
                Precedence: --dir > \$LOG_DIR > \$XDG_STATE_HOME/run_log
+  --no-copy    Write handoff.md but leave the clipboard alone (also:
+               RUN_LOG_COPY=0). Never copied when stdout is not a terminal.
   -h, --help   Show this help
 
 ${c_green}Argument handling:${c_rst}
@@ -234,6 +245,83 @@ run_captured() {
 }
 
 #######################################
+# Describe one captured stream for the handoff: path, size, line count.
+# Arguments: $1 = path to a .plain file
+# Outputs: e.g. "`/x/stdout.plain` (2048 bytes, 41 lines)" on stdout
+#######################################
+describe_stream() {
+  local file="${1}"
+  if [[ ! -e "${file}" ]]; then
+    print -r -- "\`${file}\` (missing)"
+    return
+  fi
+  local bytes lines
+  bytes="$(wc -c < "${file}")"
+  lines="$(wc -l < "${file}")"
+  print -r -- "\`${file}\` (${bytes// /} bytes, ${lines// /} lines)"
+}
+
+#######################################
+# Write the agent handoff: a short Markdown block naming the command and
+# where its output landed, so the human pastes one thing into the agent's
+# chat instead of retyping paths. Saved as <capture-dir>/handoff.md.
+# Arguments: $1 = capture dir, $2 = command, $3 = cwd, $4 = start timestamp,
+#            $5 = duration seconds, $6 = exit status
+# Outputs: the handoff text on stdout
+#######################################
+write_handoff() {
+  local capture_dir="${1}" cmd="${2}" cwd="${3}" started="${4}" duration="${5}" rc="${6}"
+  local fence='```'
+  if [[ "${cmd}" == *'```'* ]]; then
+    fence='````'
+  fi
+  local -a extra_fds=("${capture_dir}"/<3-9>.fd.plain(N))
+  local text
+  text="$(cat <<EOF
+This is the run_log information I have fetched for you:
+
+- command:
+  ${fence}zsh
+  ${cmd}
+  ${fence}
+- cwd: \`${cwd}\`
+- started: ${started}
+- duration: ${duration}s
+- exit: ${rc}
+- stdout: $(describe_stream "${capture_dir}/stdout.plain")
+- stderr: $(describe_stream "${capture_dir}/stderr.plain")
+EOF
+)"
+  local f
+  for f in "${extra_fds[@]}"; do
+    text+=$'\n'"- fd ${${f:t}%%.*}: $(describe_stream "${f}")"
+  done
+  text+=$'\n'"- capture dir: \`${capture_dir}\` (raw bytes in \`<N>.fd\`, key=value in \`metadata\`)"
+  print -r -- "${text}" > "${capture_dir}/handoff.md"
+  print -r -- "${text}"
+}
+
+#######################################
+# Put the handoff on the clipboard. Skipped with --no-copy, when
+# RUN_LOG_COPY=0, when stdout is not a terminal (an agent ran run_log, so
+# nobody is there to paste), or when pbcopy is absent.
+# Arguments: $1 = handoff text, $2 = "true" to copy
+#######################################
+copy_handoff() {
+  local text="${1}" should_copy="${2}"
+  if [[ "${should_copy}" != true ]]; then
+    log::debug "Not copying handoff | reason='disabled or stdout not a tty'"
+    return
+  fi
+  if ! command -v pbcopy > /dev/null; then
+    log::debug "Not copying handoff | reason='no pbcopy'"
+    return
+  fi
+  print -rn -- "${text}" | pbcopy
+  log::info "Copied agent handoff to clipboard | lines='${#${(f)text}}'"
+}
+
+#######################################
 # Build the string handed to `zsh -ic`. A single argument is a shell command
 # string, re-parsed by the interactive zsh (pipes, &&, redirection). Multiple
 # arguments are an argv: each word is requoted with (q-) so it reaches the
@@ -255,11 +343,12 @@ build_command_string() {
 
 main() {
   # === PARSE ===
-  local name="" dir_flag=""
+  local name="" dir_flag="" copy_flag=true
   local -a capture_fds=()
   while (( $# > 0 )); do
     case "${1}" in
       -h|--help) help; return 0 ;;
+      --no-copy) copy_flag=false; shift ;;
       --name) name="${2:?--name requires a value}"; shift 2 ;;
       --file) name="${2:?--file requires a value}"; shift 2 ;;
       --fd) capture_fds+=("${2:?--fd requires a value}"); shift 2 ;;
@@ -305,12 +394,20 @@ main() {
   if [[ -t 2 ]]; then
     stderr_tty=true
   fi
+  local should_copy=false
+  if [[ "${copy_flag}" == true && "${RUN_LOG_COPY:-1}" != 0 && "${stdout_tty}" == true ]]; then
+    should_copy=true
+  fi
 
   # === LOGIC ===
   mkdir -p "${capture_dir}"
+  local started cwd="${PWD}"
+  started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  local -F start_epoch="${EPOCHREALTIME}"
   cat > "${capture_dir}/metadata" <<EOF
 user=${USER:-$(whoami)}
-timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+timestamp=${started}
+cwd=${cwd}
 command=${cmd}
 stdout_tty=${stdout_tty}
 stderr_tty=${stderr_tty}
@@ -326,6 +423,11 @@ EOF
 
   print -r -- "exit=${rc}" >> "${capture_dir}/metadata"
   log::info "Captured command | capture_dir='${capture_dir}' rc='${rc}'"
+  local duration
+  printf -v duration '%.1f' "$(( EPOCHREALTIME - start_epoch ))"
+  local handoff
+  handoff="$(write_handoff "${capture_dir}" "${cmd}" "${cwd}" "${started}" "${duration}" "${rc}")"
+  copy_handoff "${handoff}" "${should_copy}"
   return "${rc}"
 }
 
