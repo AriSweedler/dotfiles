@@ -37,10 +37,10 @@ path_prefix=/opt/homebrew/bin
 prompt_end=❯
 windows=machine=personal|ID=%3|pane=1.1 | machine=personal|ID=%6|pane=4.1
 last_seen=2026-10-22T07:55:14Z
-description=Personal MacBook, session 0. The only machine with an ssh key on the Pi: reach pi@pi.local by nesting ssh -t inside its pi window.
+description=Personal MacBook, session 0. The only machine with an ssh key on the Pi: reach pi@pi.local from it with a nested ssh -t.
 ```
 
-`windows` holds each pane's label from the last `--list`; `last_seen` the last run that answered. Two seeds: `laptop`, written when no definition exists, and `local` (`host=local`: tmux here, no ssh). A definition whose description says it has no tmux (the Pi) is a record, not a target: run through the host it says it is reached from.
+`windows` holds each pane's label from the last `--list`; `last_seen` the last run that answered. `description` describes the machine: what it is, how it is reached, what only it can do. It never names a window or a pane; those change daily, and `run.zsh` checks the live panes on every run anyway. Two seeds: `laptop`, written when no definition exists, and `local` (`host=local`: tmux here, no ssh). A definition whose description says it has no tmux (the Pi) is a record, not a target: run through the host it says it is reached from.
 
 ### The gate
 
@@ -59,6 +59,17 @@ REFUSED: machine=personal|ID=%6|pane=4.1 running vim, not a shell
 
 → "`machine=personal|ID=%6|pane=4.1` is in vim. The command, for when it is free:" plus the fenced command. No retry.
 
+A pane that closed since it was last seen fails the same exact check on the next run, with exit 70 and the host's live panes under the refusal:
+
+```
+REFUSED: no pane matches %6
+PANES: every pane on the host, label command session: window -- title
+machine=personal|ID=%3|pane=1.1 zsh 0: caf -- laptop
+machine=personal|ID=%18|pane=3.1 zsh 0: homelab -- laptop
+```
+
+→ name the candidate under its full label and ask Ari which pane he means; `--list` adds the ✦ marks when that matters.
+
 ### Exit codes
 
 | Code | Meaning | Claude's next action |
@@ -67,7 +78,7 @@ REFUSED: machine=personal|ID=%6|pane=4.1 running vim, not a shell
 | 124 | still running: timeout, `--no-wait`, or ssh dropped after `SENT` | `--cmd ''` to capture; never resend |
 | 77 | pane not opted in; nothing typed | Ari runs `ari-driving on` there; print the command |
 | 75 | pane busy: copy mode, synchronized, not a shell, text on the line, or another caller typing; nothing typed | print the command under its label; never retry on your own |
-| 70 | no pane matches, no attached client to resolve `2.4` against, or no tmux server | `--list`, show the ✦ panes, ask which; or `--session S` |
+| 70 | no pane matches, no attached client to resolve `2.4` against, or no tmux server | read the `PANES:` lines under the refusal (every pane on the host, live), pick the one Ari means or ask him; `--list` only for the ✦ marks; or `--session S` |
 | 127 | tmux not on the host's PATH | `--path-prefix ''` (Linux) or its dir; then `--describe` the fix |
 | 255 | ssh could not connect before anything was typed | Ari runs `ssh user@host` once in a pane (key, sleep); retry only after he says done |
 
@@ -145,13 +156,13 @@ Chat: "Typed into `machine=personal|ID=%6|pane=4.1`; press Enter when ready." Af
 A host never driven before: `--host-definition NAME --host user@host`, plus `--path-prefix ''` on Linux (the default is Homebrew's `/opt/homebrew/bin`) and `--prompt-end` when the prompt does not end in `❯`. `BatchMode` ssh cannot accept a host key or a password, so Ari first runs `ssh user@host` once in a pane. The first `--describe`, `--list` or `--cmd` writes the definition:
 
 ```zsh
-zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --host pi@pi.local --describe 'Pi 4 B at 192.0.2.94, no tmux; reached by ssh -t from the laptop pi window'
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --host pi@pi.local --describe 'Pi 4 B at 192.0.2.94, no tmux; reached from the laptop with a nested ssh -t'
 ```
 
-`--describe` does not connect, and it replaces the text. Ari later says "the Pi is on .102 now"; write back the merged text, then say `was: … → now: …`:
+`--describe` does not connect, and it replaces the text. It describes the machine, never a window or pane (see Host definitions). Ari later says "the Pi is on .102 now"; write back the merged text, then say `was: … → now: …`:
 
 ```zsh
-zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --describe 'Pi 4 B at 192.0.2.102 (static lease), no tmux; reached by ssh -t from the laptop pi window'
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --describe 'Pi 4 B at 192.0.2.102 (static lease), no tmux; reached from the laptop with a nested ssh -t'
 ```
 
 A host Ari says is gone: `--host-definition NAME --forget --dry-run` shows what goes, then `--forget` deletes it.

@@ -60,6 +60,9 @@ readonly AWK_NONBLANK='{sub(/[[:space:]]+$/,"")} NF'
 # `--list` lines are 'ID=%301|pane=2.4 ✦|- zsh session: window_name -- pane_title', one per pane; ✦ marks an opted-in pane.
 # The opt-in column is filled per pane by the host script: in a format, a pane option inherits the window's.
 readonly TMUX_LIST_FORMAT="${PANE_LABEL_FORMAT} #{pane_current_command} #{session_name}: #{window_name} -- #{pane_title}"
+# Heads the inventory a "no pane matches" refusal carries: TMUX_LIST_FORMAT lines without the opt-in
+# column, so it costs one list-panes and no per-pane lookups.
+readonly INVENTORY_HEADER='PANES: every pane on the host, label command session: window -- title'
 # Saved hint per pane: the label alone, 'ID=%301|pane=2.4'.
 readonly AWK_WINDOW_NAMES='{print $1}'
 readonly WINDOWS_SEPARATOR=' | '
@@ -73,7 +76,7 @@ readonly DEFINITION_KEYS=(host path_prefix prompt_end windows last_seen descript
 # The one remote host every session starts from. Written when no definition exists.
 readonly SEED_NAME=laptop
 readonly SEED_HOST=arisweedler@Aris-MacBook-Pro.local
-readonly SEED_DESCRIPTION="Ari's personal MacBook, session 0. The only machine with an ssh key on the Pi: reach ads@ganymede.local by nesting ssh -t inside its pi window."
+readonly SEED_DESCRIPTION="Ari's personal MacBook, session 0. The only machine with an ssh key on the Pi: reach ads@ganymede.local from it with a nested ssh -t."
 # This machine. Written whenever it is missing.
 readonly LOCAL_NAME=local
 readonly LOCAL_DESCRIPTION="This machine: tmux runs directly, no ssh."
@@ -147,7 +150,8 @@ ${c_bold}Options:${c_rst}
 ${c_bold}Exit codes:${c_rst}
   0    the shell prompt returned
   ${EXIT_TIMEOUT}  still running (timed out, --no-wait, or ssh dropped after SENT); the pane is printed; never resend
-  ${EXIT_NO_TARGET}   no pane matches the target, or no attached client to resolve a window.pane against (--session)
+  ${EXIT_NO_TARGET}   no pane matches the target, or no attached client to resolve a window.pane against (--session);
+       every pane on the host is printed under the refusal, so the right one can be picked without --list
   ${EXIT_BUSY}   pane in copy mode, synchronized, not a shell, or not at an empty prompt, or another caller is typing (nothing typed)
   ${EXIT_NOT_OPTED_IN}   pane not opted in (nothing typed)
   ${EXIT_NOT_FOUND}  tmux not found on the host (--path-prefix)
@@ -158,7 +162,7 @@ ${c_bold}Examples:${c_rst}
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition local --target 2.4 --no-enter --cmd 'kubectl get pods'
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target 4.1 --cmd 'diskutil list external physical'
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %7 --cmd ''
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --host pi@pi.local --describe 'Pi 4 B at 192.0.2.94, no tmux; reached by ssh -t from the laptop pi window'
+  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --host pi@pi.local --describe 'Pi 4 B at 192.0.2.94, no tmux; reached from the laptop with a nested ssh -t'
 EOF
 }
 
@@ -428,22 +432,33 @@ list_script() {
 }
 
 #######################################
+# One sh line that prints every pane on the host under INVENTORY_HEADER, each with the machine prefix:
+# the inventory a "no pane matches" refusal carries, so the caller picks the right pane without --list.
+# Globals: INVENTORY_HEADER TMUX_LIST_FORMAT
+# Returns: the script line on stdout
+#######################################
+inventory_line() {
+  print -rn -- "echo ${(qq)INVENTORY_HEADER}; tmux list-panes -a -F \"\$prefix\"${(qq)TMUX_LIST_FORMAT}"
+}
+
+#######################################
 # Resolve the target to a pane ID in sh variable `pane`, and its label in `label`. A friendly 'W.P' is
 # looked up in --session, else the most recently active attached client's session. Exact matches only:
-# tmux's own target lookup is fuzzy and would land the keys in some other pane.
+# tmux's own target lookup is fuzzy and would land the keys in some other pane. Every run makes this
+# check, so a pane that closed since the last run is refused with the host's live pane inventory.
 # Arguments: $1 target  $2 session ('' = most recent client's)
 # Returns: the script lines on stdout
 #######################################
 resolve_block() {
   local target="${1}" session="${2}"
+  machine_block
   print -r -- "target=${(qq)target}; session=${(qq)session}"
   print -r -- "pane=\$(tmux_resolve_pane \"\$target\" \"\$session\"); rc=\$?"
   print -r -- "case \$rc in"
   print -r -- "  0) ;;"
-  print -r -- "  2) echo \"REFUSED: no attached client to resolve \$target against; pass --session\"; exit ${EXIT_NO_TARGET} ;;"
-  print -r -- "  *) echo \"REFUSED: no pane matches \$target\"; exit ${EXIT_NO_TARGET} ;;"
+  print -r -- "  2) echo \"REFUSED: no attached client to resolve \$target against; pass --session\"; $(inventory_line); exit ${EXIT_NO_TARGET} ;;"
+  print -r -- "  *) echo \"REFUSED: no pane matches \$target\"; $(inventory_line); exit ${EXIT_NO_TARGET} ;;"
   print -r -- "esac"
-  machine_block
   print -r -- "label=\"\$prefix\$(tmux display-message -p -t \"\$pane\" ${(qq)PANE_LABEL_FORMAT})\""
   print -r -- "echo \"PANE: \$label\""
 }
@@ -554,7 +569,7 @@ report_exit() {
     return 0
   fi
   if (( exit_code == EXIT_NO_TARGET )); then
-    log::err "No pane matches the target, or no attached client to resolve it against | target='${target}' hint='--list prints the panes; use the window.pane Ari said, a %pane_id, or --session'"
+    log::err "No pane matches the target, or no attached client to resolve it against | target='${target}' hint='the PANES: lines above are the host right now; pick the pane Ari means from them (a %pane_id or window.pane), or --list for the opt-in marks'"
     return 0
   fi
   if (( exit_code == EXIT_NOT_OPTED_IN )); then
