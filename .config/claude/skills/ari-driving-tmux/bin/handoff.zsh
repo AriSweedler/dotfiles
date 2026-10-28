@@ -2,7 +2,7 @@
 # Hand Ari a command or text: render the uniform chat block, or (only when he asked) copy
 # text to the clipboard. Recovery of a clobbered clipboard is Raycast's Clipboard History,
 # named through the `dotfiles raycast link` widget; this script never reads or restores the clipboard.
-# Run: zsh $HOME/.claude/skills/ari-clipboard-handoff/bin/handoff.zsh --help
+# Run: zsh $HOME/.claude/skills/ari-driving-tmux/bin/handoff.zsh --help
 
 set -euo pipefail
 
@@ -22,7 +22,7 @@ readonly DOTFILES_BIN="${HANDOFF_DOTFILES_BIN:-${XDG_CONFIG_HOME:-${HOME}/.confi
 
 # --- Constants ---
 
-readonly SELF="zsh \$HOME/.claude/skills/ari-clipboard-handoff/bin/handoff.zsh"
+readonly SELF="zsh \$HOME/.claude/skills/ari-driving-tmux/bin/handoff.zsh"
 readonly VALID_MODES=(print copy)
 readonly FENCE='```'
 readonly HISTORY_FALLBACK='<Raycast: Clipboard History> raycast://extensions/raycast/clipboard-history/clipboard-history'

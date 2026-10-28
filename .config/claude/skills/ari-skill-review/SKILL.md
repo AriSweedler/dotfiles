@@ -128,7 +128,7 @@ What happens when things go wrong? Check:
 
 Is this skill reimplementing existing functionality? Check:
 - Run `ls $HOME/.claude/skills/` and compare capabilities
-- Delegation opportunities (e.g., `/ari-diagram-mermaid` for diagrams, `/ari-clipboard-handoff` for commands the user runs)
+- Delegation opportunities (e.g., `/ari-diagram-mermaid` for diagrams, `/ari-driving-tmux` for commands the user runs)
 - `/tmp` used for runtime state, skill directory for persistent files
 - Shared patterns that should live in a base skill instead of being duplicated
 

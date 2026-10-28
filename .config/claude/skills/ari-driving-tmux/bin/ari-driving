@@ -1,0 +1,221 @@
+#!/usr/bin/env zsh
+# Mark the current tmux pane as one Claude may type into (on), unmark it (off), or report it (status).
+# Ari runs this in the pane itself; the ari-driving skills type into, or click-run in, only a pane marked on.
+# On Ari's PATH as ~/.config/bin/ari-driving (and ari-remote-tmux, the old name).
+# Run: ari-driving --help
+
+set -euo pipefail
+
+readonly LIB_LOGGING="${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+
+# --- Constants ---
+
+# The pane option is the permission run.zsh and focus.zsh check. The window option of the same name only drives the
+# status-bar marker; it stays on while any pane in the window is on.
+readonly OPTION=@ari_driving
+readonly MARKER='✦'
+readonly MARKER_FORMAT="#{?${OPTION},${MARKER},}"
+readonly LABEL_FORMAT='ID=#{pane_id}|pane=#{window_index}.#{pane_index}'
+readonly MESSAGE_MS=3000
+readonly STATUS_FORMAT_OPTIONS=(window-status-format window-status-current-format)
+
+# --- Prerequisites ---
+
+#######################################
+# Check that tmux is installed and this runs inside a tmux pane.
+# Globals: TMUX_PANE
+# Returns: 1 when either is missing
+#######################################
+check_prerequisites() {
+  if ! command -v tmux >/dev/null 2>&1; then
+    log::err "Missing required command | missing='tmux'"
+    return 1
+  fi
+  if [[ -z "${TMUX_PANE:-}" ]]; then
+    log::err "Not inside a tmux pane | TMUX_PANE='' hint='run this in the pane Claude should type into'"
+    return 1
+  fi
+}
+
+# --- Help ---
+
+help() {
+  cat <<EOF
+${c_green}ari-driving${c_rst} — let Claude type into this tmux pane, or stop it
+
+${c_bold}Usage:${c_rst}
+  ari-driving on       mark this pane; its window shows ${MARKER} in the status bar
+  ari-driving off      unmark this pane; the ${MARKER} goes when no pane in the window is marked
+  ari-driving status   print whether this pane is marked
+
+${c_bold}Options:${c_rst}
+  -h, --help   show this help
+
+Sets the tmux pane option ${OPTION} on the current pane (\$TMUX_PANE). The window gets the same option plus
+window-scoped status formats with ${MARKER} against the window number; off restores the global formats.
+EOF
+}
+
+# --- Actions ---
+
+#######################################
+# Name a pane the way every message does: 'ID=%301|pane=2.4'.
+# Arguments: $1 pane_id
+# Returns: the label on stdout
+#######################################
+pane_label() {
+  tmux display-message -p -t "${1}" "${LABEL_FORMAT}"
+}
+
+#######################################
+# Whether a pane's own option is on (the window's value is not inherited without -A).
+# Arguments: $1 pane_id
+# Returns: 0 when on
+#######################################
+is_pane_on() {
+  [[ "$(tmux show-options -pqv -t "${1}" "${OPTION}")" == "on" ]]
+}
+
+#######################################
+# Whether any pane in the window other than the given one is on.
+# Arguments: $1 window_id  $2 pane_id to skip
+# Returns: 0 when another pane is on
+#######################################
+is_other_pane_on() {
+  local window_id="${1}" skip="${2}" pane_id
+  for pane_id in ${(f)"$(tmux list-panes -t "${window_id}" -F '#{pane_id}')"}; do
+    if [[ "${pane_id}" == "${skip}" ]]; then
+      continue
+    fi
+    if is_pane_on "${pane_id}"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+#######################################
+# Give the window status formats that put the marker against the window number (#I) of the
+# live global ones, once; a format with no #I gets it prepended.
+# Arguments: $1 window_id
+#######################################
+mark_window() {
+  local window_id="${1}" option global
+  tmux set-option -w -t "${window_id}" "${OPTION}" on
+  for option in "${STATUS_FORMAT_OPTIONS[@]}"; do
+    if [[ -n "$(tmux show-options -wqv -t "${window_id}" "${option}")" ]]; then
+      log::info "Window already has its own format; keeping it | window='${window_id}' option='${option}'"
+      continue
+    fi
+    global="$(tmux show-options -gwv "${option}")"
+    if [[ "${global}" == *"#I"* ]]; then
+      tmux set-option -w -t "${window_id}" "${option}" "${global/\#I/${MARKER_FORMAT}#I}"
+    else
+      tmux set-option -w -t "${window_id}" "${option}" "${MARKER_FORMAT}${global}"
+    fi
+  done
+}
+
+#######################################
+# Drop the window option and the window-scoped formats, so the global formats show again.
+# Arguments: $1 window_id
+#######################################
+unmark_window() {
+  local window_id="${1}" option
+  tmux set-option -wu -t "${window_id}" "${OPTION}"
+  for option in "${STATUS_FORMAT_OPTIONS[@]}"; do
+    tmux set-option -wu -t "${window_id}" "${option}"
+  done
+}
+
+#######################################
+# Turn the pane on and mark its window.
+# Arguments: $1 pane_id  $2 window_id
+#######################################
+turn_on() {
+  local pane_id="${1}" window_id="${2}" label
+  tmux set-option -p -t "${pane_id}" "${OPTION}" on
+  mark_window "${window_id}"
+  label="$(pane_label "${pane_id}")"
+  tmux display-message -d "${MESSAGE_MS}" -t "${pane_id}" "${MARKER} AI control ON: ${label}"
+  log::info "AI control on | pane='${label}'"
+}
+
+#######################################
+# Unmark the window unless another pane in it is still on.
+# Arguments: $1 window_id  $2 pane_id just turned off
+#######################################
+release_window() {
+  local window_id="${1}" pane_id="${2}"
+  if is_other_pane_on "${window_id}" "${pane_id}"; then
+    log::info "Another pane in the window is still on; keeping the window marker | window='${window_id}'"
+    return 0
+  fi
+  log::info "Last marked pane in the window; restoring the global formats | window='${window_id}'"
+  unmark_window "${window_id}"
+}
+
+#######################################
+# Turn the pane off; unmark its window when no other pane in it is on.
+# Arguments: $1 pane_id  $2 window_id
+#######################################
+turn_off() {
+  local pane_id="${1}" window_id="${2}" label
+  tmux set-option -pu -t "${pane_id}" "${OPTION}"
+  label="$(pane_label "${pane_id}")"
+  release_window "${window_id}" "${pane_id}"
+  tmux display-message -d "${MESSAGE_MS}" -t "${pane_id}" "AI control OFF: ${label}"
+  log::info "AI control off | pane='${label}'"
+}
+
+#######################################
+# Print this pane's state.
+# Arguments: $1 pane_id
+#######################################
+report_status() {
+  local pane_id="${1}" state=off
+  if is_pane_on "${pane_id}"; then
+    state=on
+  fi
+  cat <<EOF
+pane=$(pane_label "${pane_id}")
+ari_driving=${state}
+EOF
+}
+
+# --- Main ---
+
+main() {
+  # === PARSE ===
+  local action=""
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help)        help; return 0 ;;
+    on|off|status)    action="${1}"; shift ;;
+    -*)               log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
+    *)                log::err "Unknown action | action='${1}' valid_actions='on, off, status'"; help; return 1 ;;
+  esac; done
+
+  # === VALIDATE ===
+  if [[ -z "${action}" ]]; then
+    log::err "Missing action | valid_actions='on, off, status'"
+    help
+    return 1
+  fi
+  check_prerequisites || return 1
+
+  # === LOGIC ===
+  local pane_id="${TMUX_PANE}" window_id
+  window_id="$(tmux display-message -p -t "${pane_id}" '#{window_id}')"
+  case "${action}" in
+    on)     turn_on "${pane_id}" "${window_id}" ;;
+    off)    turn_off "${pane_id}" "${window_id}" ;;
+    status) report_status "${pane_id}" ;;
+  esac
+}
+
+main "${@}"

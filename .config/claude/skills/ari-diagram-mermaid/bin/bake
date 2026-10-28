@@ -3,7 +3,7 @@
 # Bake a Mermaid diagram: gate its line-1 directive and contrast, confirm it renders,
 # mint the embed URL, and write a sidecar so callers relay the exact bytes. The clipboard
 # is written only on request (--clipboard or MERMAID_CLIPBOARD=1), through
-# /ari-clipboard-handoff so the displaced entry is named and the pbcopy guard's marker is
+# /ari-driving-tmux so the displaced entry is named and the pbcopy guard's marker is
 # set there and nowhere else.
 #
 # Line 1 of the source pins the theme, sizes sequence text, and carries a themeCSS
@@ -26,7 +26,7 @@ source "${LIB_LOGGING}"
 source "${SKILLS_DIR}/ari-skill-shellscripts/lib/run_with_timeout.zsh"
 
 readonly LIB_CONTRAST="${SCRIPT_DIR:h}/lib/contrast.awk"
-readonly HANDOFF_SCRIPT="${SKILLS_DIR}/ari-clipboard-handoff/bin/handoff.zsh"
+readonly HANDOFF_SCRIPT="${SKILLS_DIR}/ari-driving-tmux/bin/handoff.zsh"
 readonly VALID_FORMATS=(markdown_link ink_url live_url)
 readonly REQUIRED_THEME="default"
 # The one line every diagram starts with. Whitespace-insensitive match on its
@@ -74,7 +74,7 @@ ${c_bold}Options:${c_rst}
   --file PATH       The .mmd source (a bare positional path is accepted for older callers)
   --format FORMAT   ${(j:, :)VALID_FORMATS} (default: markdown_link; MERMAID_FORMAT env is the fallback)
   --validate-only   Run the gates and the render check; mint no URL (MERMAID_VALIDATE_ONLY=1 is the fallback)
-  --clipboard       Also copy the link to the clipboard, via /ari-clipboard-handoff (MERMAID_CLIPBOARD=1 is the
+  --clipboard       Also copy the link to the clipboard, via /ari-driving-tmux (MERMAID_CLIPBOARD=1 is the
                     fallback). Pass it only when the user asked for the link on the clipboard this turn.
   --dark-check      Also save <name>.dark.jpg (mermaid.ink on a #${DARK_CANVAS} canvas: site dark, OS light)
                     and, when Chrome is installed, <name>.dark-scheme.png (the view URL under a dark
@@ -280,7 +280,7 @@ mint_output() {
 
 #######################################
 # Deliver the output: the sidecar is already written; the clipboard is written only
-# when the caller opted in, through /ari-clipboard-handoff, which sets the pbcopy
+# when the caller opted in, through /ari-driving-tmux, which sets the pbcopy
 # guard's marker itself and names the displaced clipboard entry on stderr.
 # Globals: HANDOFF_SCRIPT
 # Arguments: $1 = format, $2 = sidecar path, $3 = clipboard ("true" to copy)
