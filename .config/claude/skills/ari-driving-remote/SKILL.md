@@ -21,6 +21,7 @@ A *definition* is a named file; its *host* is a `user@host` (or `local`, below).
 - **Exit 124 means still running, not failed**, as after `--no-wait` or a Bash-tool timeout. NEVER resend; the only call on that target until the prompt returns is a capture, `--cmd ''`.
 - **Nested ssh is one-shot and `-t`:** `ssh -t user@host "command"`. Never an interactive nested shell: its prompt does not end in the definition's `prompt_end`, so every later wait times out.
 - **No `clear`, `reset`, or `tmux clear-history`.** The scrollback is the record; raise `--lines` to see more.
+- **Commands are typed as `run_log '<cmd>'`.** `run.zsh` wraps every `--cmd` when the host has `~/.config/bin/run_log` (it prints a NOTE and types it bare when not), so the capture lands in the host's `/tmp/run_log` and run_log puts `run_log artifact: <dir>` on that host's clipboard. Read the result from the pane capture; `--no-run-log` types it bare. A `--cmd` starting with `clear` is refused.
 - **`--no-enter` when Ari runs it.** Ari said never press Enter, or the harness denied the command: type it with `--no-enter` and tell him it is on his prompt line; never rephrase a denied command past the classifier. Nothing else goes into that pane until he says he pressed Enter or cleared it. Never `pbcopy` on his machine; clipboard rules are `/ari-driving-tmux`'s.
 - **Save what Ari says about a host as he says it.** A username, an address, how it is reached, what it is for, a correction: the next `run.zsh` call MUST be `--describe`, before any `--cmd`. `--describe` REPLACES the text: take the current description from `--hosts`, fold the fact in, write the whole thing back.
 - **`--host` only for a name absent from `--hosts`.** On an existing name it is refused unless Ari said the address changed; then `--re-point`.
@@ -110,4 +111,4 @@ A host Ari says is gone: `--host-definition NAME --forget` prints the definition
 
 ## File storage
 
-- `bin/run.zsh` — `--hosts`; `--host-definition NAME` with one of `--list`, `--cmd TEXT`, `--describe TEXT`, `--forget`; `--host USER@HOST|local`, `--re-point`, `--target W.P|%N|S:W[.P]`, `--session S`, `--no-enter`, `--no-wait`, `--lines N`, `--timeout S`, `--path-prefix DIR`, `--prompt-end STR`, `--dry-run`. `--help` has the defaults. Logging comes from `/ari-skill-shellscripts`; it refuses to start without it.
+- `bin/run.zsh` — `--hosts`; `--host-definition NAME` with one of `--list`, `--cmd TEXT`, `--describe TEXT`, `--forget`; `--host USER@HOST|local`, `--re-point`, `--target W.P|%N|S:W[.P]`, `--session S`, `--no-enter`, `--no-wait`, `--no-run-log`, `--lines N`, `--timeout S`, `--path-prefix DIR`, `--prompt-end STR`, `--dry-run`. `--help` has the defaults. Logging comes from `/ari-skill-shellscripts`; it refuses to start without it.

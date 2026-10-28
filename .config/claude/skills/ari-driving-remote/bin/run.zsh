@@ -32,6 +32,8 @@ readonly OPT_IN_COMMAND='ari-driving on'
 readonly PANE_LABEL_FORMAT='ID=#{pane_id}|pane=#{window_index}.#{pane_index}'
 readonly EXIT_SSH=255
 readonly EXIT_NOT_FOUND=127
+# Where the dotfiles put run_log on any of Ari's machines; checked on the host before wrapping.
+readonly HOST_RUN_LOG='$HOME/.config/bin/run_log'
 readonly DEFAULT_PATH_PREFIX=/opt/homebrew/bin
 readonly DEFAULT_PROMPT_END='❯'
 readonly SSH_OPTS=(-o ConnectTimeout=8 -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
@@ -116,6 +118,8 @@ ${c_bold}Options:${c_rst}
   --target W.P|%N|S:W[.P]  pane: Ari's window.pane (2.4, resolved to its %pane_id), a %pane_id, or an address (required with --cmd)
   --session S             session a window.pane target is looked up in (default: the most recently active client's)
   --no-enter              type without pressing Enter (hand a denied command to Ari)
+  --no-run-log            type the command bare; by default it is typed as run_log '<cmd>' when the host
+                          has ${HOST_RUN_LOG}, so the capture lands in the host's /tmp/run_log
   --no-wait               return right after typing instead of waiting for the shell prompt
   --lines N               pane lines to print (default: ${DEFAULT_LINES})
   --timeout S             seconds to wait for the shell prompt, at least ${POLL_SECONDS} (default: ${DEFAULT_TIMEOUT})
@@ -416,19 +420,23 @@ wait_block() {
 # ssh and tmux without a second round of quoting.
 # Arguments:
 #   $1 target  $2 cmd  $3 press_enter(true|false)  $4 wait(true|false)
-#   $5 lines   $6 timeout  $7 path_prefix  $8 prompt_end  $9 session
+#   $5 lines   $6 timeout  $7 path_prefix  $8 prompt_end  $9 session  $10 run_log(true|false)
 # Returns: the script on stdout
 #######################################
 remote_script() {
   local target="${1}" cmd="${2}" press_enter="${3}" wait="${4}"
-  local lines="${5}" timeout="${6}" path_prefix="${7}" prompt_end="${8}" session="${9}"
+  local lines="${5}" timeout="${6}" path_prefix="${7}" prompt_end="${8}" session="${9}" run_log="${10}"
   local quoted_prompt_end="${(qq)prompt_end}"
 
   if [[ -n "${path_prefix}" ]]; then print -r -- "export PATH=${(qq)path_prefix}:\$PATH"; fi
   resolve_block "${target}" "${session}"
   if [[ -n "${cmd}" ]]; then
     gate_block "${quoted_prompt_end}" "${lines}"
-    print -r -- "tmux send-keys -t \"\$pane\" -l ${(qq)cmd} || { echo \"FAILED: send-keys to \$label\"; exit 1; }"
+    print -r -- "typed=${(qq)cmd}"
+    if [[ "${run_log}" == "true" ]]; then
+      print -r -- "if [ -x \"${HOST_RUN_LOG}\" ]; then typed=${(qq)${:-run_log ${(qq)cmd}}}; else echo \"NOTE: no ${HOST_RUN_LOG} on the host; typed the command bare\"; fi"
+    fi
+    print -r -- "tmux send-keys -t \"\$pane\" -l \"\$typed\" || { echo \"FAILED: send-keys to \$label\"; exit 1; }"
   fi
   if [[ "${press_enter}" == "true" ]]; then print -r -- "tmux send-keys -t \"\$pane\" Enter || { echo \"FAILED: Enter to \$label\"; exit 1; }"; fi
   wait_block '"$pane"' "${quoted_prompt_end}" "${wait}" "${press_enter}" "${timeout}"
@@ -516,12 +524,12 @@ list_windows() {
 
 #######################################
 # Gate, type the command into the pane, and print the pane.
-# Globals: host target cmd press_enter wait lines timeout path_prefix prompt_end name dry_run
+# Globals: host target cmd press_enter wait run_log lines timeout path_prefix prompt_end name dry_run
 # Returns: 0 prompt back; EXIT_TIMEOUT; EXIT_NO_TARGET; EXIT_NOT_OPTED_IN; EXIT_BUSY; the host script's code otherwise
 #######################################
 run_command() {
   local script exit_code=0
-  script="$(remote_script "${target}" "${cmd}" "${press_enter}" "${wait}" "${lines}" "${timeout}" "${path_prefix}" "${prompt_end}" "${session}")"
+  script="$(remote_script "${target}" "${cmd}" "${press_enter}" "${wait}" "${lines}" "${timeout}" "${path_prefix}" "${prompt_end}" "${session}" "${run_log}")"
   log::info "Typing into pane | host='${host}' target='${target}' enter='${press_enter}' wait='${wait}' cmd='${cmd}'"
   if [[ "${dry_run}" == "true" ]]; then
     log::info "Dry run — printing the host script, sending nothing"
@@ -543,6 +551,7 @@ run_command() {
 # Returns: 1 on the first bad value
 #######################################
 validate_run_args() {
+  setopt local_options extended_glob
   if [[ "${target}" == *[[:space:]]* ]] || [[ "${target}" != ${~PANE_ID_PATTERN} && "${target}" != ${~FRIENDLY_PATTERN} && "${target}" != *:<0-> && "${target}" != *:<0->.<0-> ]]; then
     log::err "Missing or malformed --target | target='${target}' expected='window.pane as Ari says it (2.4), %pane_id, or session:window[.pane]' panes='${def[windows]:-unknown, run --list}'"
     return 1
@@ -553,6 +562,10 @@ validate_run_args() {
   fi
   if [[ "${cmd}" == *$'\n'* ]]; then
     log::err "Newline in --cmd | hint='tmux would press Enter at the newline; chain with && or ; instead'"
+    return 1
+  fi
+  if [[ "${cmd}" == [[:space:]]#clear([[:space:]\;\&\|]*|) ]]; then
+    log::err "--cmd starts with clear | hint='clearing wipes the typed command from Ari'\''s scrollback; drop it'"
     return 1
   fi
   if [[ "${cmd}" == *pbcopy* ]]; then
@@ -577,7 +590,7 @@ main() {
 
   # === PARSE ===
   local name="" host="" host_set=false re_point=false target="" session="" cmd="" cmd_set=false describe="" describe_set=false
-  local press_enter=true wait=true dry_run=false list=false hosts=false forget=false
+  local press_enter=true wait=true run_log=true dry_run=false list=false hosts=false forget=false
   local lines="${DEFAULT_LINES}" timeout="${DEFAULT_TIMEOUT}"
   local path_prefix="${DEFAULT_PATH_PREFIX}" path_prefix_set=false prompt_end="${DEFAULT_PROMPT_END}" prompt_end_set=false
   local -A def
@@ -596,6 +609,7 @@ main() {
     --forget)           forget=true; shift ;;
     --no-enter)         press_enter=false; shift ;;
     --no-wait)          wait=false; shift ;;
+    --no-run-log)       run_log=false; shift ;;
     --lines)            lines="${2:?--lines requires a value}"; shift 2 ;;
     --timeout)          timeout="${2:?--timeout requires a value}"; shift 2 ;;
     --path-prefix)      path_prefix="${2?--path-prefix requires a value}"; path_prefix_set=true; shift 2 ;;

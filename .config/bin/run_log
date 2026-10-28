@@ -36,7 +36,7 @@ if [[ ! -r "${LOG_LIB}" ]]; then
 fi
 source "${LOG_LIB}"
 
-readonly DEFAULT_LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/run_log"
+readonly DEFAULT_LOG_DIR=/tmp/run_log
 readonly CAPTURE_HELPER="${0:A:h}/run_log-capture.py"
 
 # log.zsh colors are literal-backslash strings for `echo -e`, so the heredoc
@@ -82,7 +82,7 @@ ${c_green}Options:${c_rst}
                The command sees fd N as an open non-tty descriptor.
                Capture-only: fd N output is not echoed to the terminal.
   --dir DIR    Capture root for relative/generated names.
-               Precedence: --dir > \$LOG_DIR > \$XDG_STATE_HOME/run_log
+               Precedence: --dir > \$LOG_DIR > /tmp/run_log
   --no-copy    Leave the clipboard alone (also: RUN_LOG_COPY=0). Never
                copied when stdout is not a terminal.
   --deliver-to PANE

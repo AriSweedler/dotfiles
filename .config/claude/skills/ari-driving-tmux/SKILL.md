@@ -37,7 +37,7 @@ It warns on stderr when the pane is not opted in: the click would only focus. A 
 
 ### The run_log contract
 
-`run_log [--name N] [--dir D] [--fd N]… [--no-copy] [--deliver-to PANE] -- CMD` (`~/.config/bin/run_log`) runs CMD in an interactive zsh, so aliases work; stdout and stderr each get their own pty, so colors and progress bars behave as in a bare terminal. A single argument is a shell string (pipes, `&&`); several are an argv passed byte for byte; `VAR=val` assignments go after `--`. Each run writes one capture dir, `<root>/<seq>_<slug>/` (root: `--dir` > `$LOG_DIR` > `~/.local/state/run_log`; `--name` names it):
+`run_log [--name N] [--dir D] [--fd N]… [--no-copy] [--deliver-to PANE] -- CMD` (`~/.config/bin/run_log`) runs CMD in an interactive zsh, so aliases work; stdout and stderr each get their own pty, so colors and progress bars behave as in a bare terminal. A single argument is a shell string (pipes, `&&`); several are an argv passed byte for byte; `VAR=val` assignments go after `--`. Each run writes one capture dir, `<root>/<seq>_<slug>/` (root: `--dir` > `$LOG_DIR` > `/tmp/run_log`; `--name` names it):
 
 | File | Holds |
 |---|---|

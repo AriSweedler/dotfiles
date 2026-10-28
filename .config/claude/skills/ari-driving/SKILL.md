@@ -31,6 +31,7 @@ A new target (a browser, a device with no tmux) gets its own `ari-driving-<targe
     - Non-mutating: run it with the Bash tool. Hand off only what the tool cannot do: interactive logins, anything needing Ari's identity, kube context or terminal.
     - Mutating: Ari runs it, unless he allowed it this session, explicitly for that command, or by running it with `!`, which also covers commands of the same tool, class of effect and target system. Running one on precedent, say so in one line: which earlier run or ask, and why it is the same class.
 - **Questions are Ari's.** Never type a password, code or approval; say what the pane is asking.
+- **Every driven command is captured, and nothing erases it.** Commands go through `run_log` (the siblings wrap them), so each leaves a capture dir under `/tmp/run_log`. Never start one with `clear`: it wipes the typed command from Ari's scrollback, his record of what ran; the scripts refuse it.
 
 ## Workflow
 
