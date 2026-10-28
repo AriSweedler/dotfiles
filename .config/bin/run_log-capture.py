@@ -12,7 +12,9 @@ Every <N>.fd in the capture dir gets a .plain copy, so run_log's --fd N files
 (opened by run_log itself) are covered too.
 
 stdin is inherited untouched, so prompts, YubiKey taps and /dev/tty reads behave as in a bare
-terminal. Called by run_log; not meant to be run directly.
+terminal. Terminal queries (colour, device attributes, cursor position) are captured but not
+echoed: the terminal's reply would land in the shell's input after the command exits, as stray
+typed text on the prompt. Called by run_log; not meant to be run directly.
 
 Usage: python3 -I run_log-capture.py <capture-dir> <command> [args...]
 Exit status: the command's, or 128 + the signal number that killed it.
@@ -45,6 +47,21 @@ ESCAPE_RE = re.compile(
 )
 
 
+# Sequences that make the terminal type a reply into the tty. Dropped from the echo only.
+QUERY_RE = re.compile(
+    rb"\x1b\]\d+(?:;\d+)*;\?(?:\x07|\x1b\\)"  # OSC colour queries: 4;N;? 10;? 11;? 12;?
+    rb"|\x1b\[[>=]?0?c"  # device attributes DA1/DA2/DA3
+    rb"|\x1b\[\??[56]n"  # status and cursor-position reports
+    rb"|\x1b\[\?[\d;]*\$p"  # mode reports (DECRQM)
+    rb"|\x1b\[>0?q"  # terminal version (XTVERSION)
+    rb"|\x1b\[\?u"  # keyboard protocol query
+    rb"|\x1b\[1[468]t"  # window and cell size reports
+    rb"|\x1bP\+q[0-9A-Fa-f;]*\x1b\\"  # termcap queries (XTGETTCAP)
+)
+# An escape cut off at the end of a read: held until the next read completes it.
+PARTIAL_ESCAPE_RE = re.compile(rb"\x1b(?:\][^\x07\x1b]*\x1b?|P[^\x1b]*\x1b?|\[[0-?]*[ -/]*)?\Z")
+
+
 class Stream:
     def __init__(self, real_fd, alias, capture_dir):
         self.real_fd = real_fd
@@ -54,6 +71,7 @@ class Stream:
         link_named(capture_dir, alias + PLAIN_SUFFIX, file_name + PLAIN_SUFFIX)
         self.is_tty = os.isatty(real_fd)
         self.echo_open = True
+        self.pending = b""
         self.winsize = None
         if self.is_tty:
             self.read_fd, self.child_fd = os.openpty()
@@ -78,9 +96,16 @@ class Stream:
             fcntl.ioctl(self.read_fd, termios.TIOCSWINSZ, size)
             self.winsize = size
 
-    def echo(self, chunk):
-        """Writes to the real fd; a closed reader (run_log | head) stops the echo, not the capture."""
-        view = memoryview(chunk)
+    def echo(self, chunk, final=False):
+        """Writes to the real fd minus terminal queries; a closed reader (run_log | head) stops
+        the echo, not the capture."""
+        data = self.pending + chunk
+        self.pending = b""
+        if not final:
+            partial = PARTIAL_ESCAPE_RE.search(data)
+            if partial:
+                data, self.pending = data[: partial.start()], data[partial.start() :]
+        view = memoryview(QUERY_RE.sub(b"", data))
         while self.echo_open and view:
             try:
                 view = view[os.write(self.real_fd, view):]
@@ -130,6 +155,7 @@ def pump(streams):
             stream = by_fd[fd]
             chunk = stream.read()
             if not chunk:
+                stream.echo(b"", final=True)
                 del by_fd[fd]
                 os.close(fd)
                 continue
