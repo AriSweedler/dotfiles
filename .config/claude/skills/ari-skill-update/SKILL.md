@@ -1,11 +1,11 @@
 ---
 name: ari-skill-update
-description: Edit a skill interactively, then commit it to the dotfiles tier that owns it (adopting it first if needed). A fresh-eyes reviewer blocks any commit that would put company-identifying content in a public skill. Runs as a background fork by default.
+description: Edit a skill, review it, and propose one ready-to-land commit to the dotfiles tier that owns it (adopting it, and any other unadopted skill, first if needed); one 'yes' commits. A fresh-eyes reviewer blocks any commit that would put company-identifying content in a public skill. Owns the skill-building rule that a question authorizes a consequence, never the start of work. Runs as a background fork by default.
 ---
 
 # Skill Update
 
-Edit a skill interactively, then commit it to the dotfiles tier that owns it, adopting it first if it is not yet versioned. Before any commit to a public tier, a separate reviewer reads the whole skill for anything that identifies Ari's employer; such content belongs only in a private skill. Runs in a fork by default so the main thread stays on the real work (see the first workflow step). Quality review is delegated to `/ari-skill-review`; script conventions to `/ari-skill-shellscripts` and `/ari-skill-pythonscripts`.
+Edit a skill, review it, and end with one proposal that a single `yes` commits to the dotfiles tier that owns it, adopting it first if it is not yet versioned. Before any commit to a public tier, a separate reviewer reads the whole skill for anything that identifies Ari's employer; such content belongs only in a private skill. Runs in a fork by default so the main thread stays on the real work (see the first workflow step). Quality review is delegated to `/ari-skill-review`; script conventions to `/ari-skill-shellscripts` and `/ari-skill-pythonscripts`.
 
 ## Rules
 
@@ -23,8 +23,14 @@ Edit a skill interactively, then commit it to the dotfiles tier that owns it, ad
     Verify the branch is clean. If the user said "draft" or "wip",
     include the --draft flag. Then sync and push:
   ```
-- **Gate edits on user approval.** After presenting the planned change, wait for the user's next message. Proceed to editing ONLY on unqualified agreement ("yes", "go ahead", "do it", "lgtm"). Conditional agreement ("yes, but change X") is a modification request — address it and re-present. A question or topic change — address it first. Do NOT open or write skill files until this gate passes.
-- **MUST confirm before committing.** Show a fresh diff of all changes immediately before committing. Never commit without the user seeing what changed.
+- **Ask only to authorize a consequence.** A skill asks the user two kinds of question: for something only the user knows (which skill, which of two histories to keep), or for a `yes` to a consequence (a commit, push, send, delete, anything outward-facing or hard to undo). Never for permission to start the agent's own read-only or reversible work: editing an uncommitted file, running a reviewer, diagnosing a failure and drafting a commit plan are done, then shown. Every question arrives ready: its evidence gathered, an answer recommended, and every pending consequence folded into the one question that ends the message. A delineated optional tail step (a sweep, a cleanup, adopting stragglers) starts as soon as its inputs exist, in parallel with the main work, through a subagent when it is slow or wide (inline when already a fork), and runs to a ready-to-land proposal, so one `yes` lands it; that `yes` covers only what the proposal explains, and anything prep cannot explain is listed and left out. A question whose `yes` only starts work is a defect: on every edit, rewrite each one the target skill holds.
+  ```
+  BAD:  "Want me to check for other pending changes?"  → yes → look → "Commit these?"
+  GOOD: (a subagent already looked) "Also pending, ready to commit:
+          ldf: share/bin/foo → "Add foo" — wrapper behind the new oneshot entry
+        Commit it?"
+  ```
+- **MUST confirm before committing.** The `yes` that commits answers a diff shown in that same message. Unqualified agreement ("yes", "do it", "lgtm") commits; conditional agreement ("yes, but change X") is an edit request: make it and re-propose. Never commit what the user has not seen.
 - **Audit every documented invocation for the `$HOME` form.** On every edit — including prose-only edits — scan the skill for any line that runs a skill script. Each MUST use `$HOME` (never `~`), have no leading `cd`, and not be piped (redirect to a file if you need the output). Fix every non-conforming invocation you find, even ones unrelated to the requested change.
   ```
   BAD:  zsh ~/.claude/skills/foo/bin/x.zsh --id 123                  # ~ instead of $HOME
@@ -73,8 +79,8 @@ If this skill was invoked in a main working thread (you are not already a fork),
 ### Identify the skill
 
 - If the user gave an exact skill directory name under `$HOME/.claude/skills/`, use it.
-- If the user gave a partial name or description, list matches as `name — purpose` rows and ask the user to pick one by exact name.
-- If no name was given, list all skills and ask.
+- If the user gave a partial name or description, take the one match the conversation points at and say which; list matches as `name — purpose` rows, likeliest first, and ask only when none stands out.
+- If no name was given, take the skill the conversation was just using (Step 1 of **Understand the change**); ask with a recommended pick only when there is none.
 - If nothing matches, say so and stop.
 
 ### Set up the session
@@ -138,11 +144,9 @@ If no prior invocation exists, ask the user to describe the change.
 State it, e.g.:
 > "Currently the skill does X. You're asking it to also do Y — an intent change. I'll update the heading + description, then the implementation."
 
-**Step 3: Confirm.** Repeat the planned change in one sentence. If the behavior already exists in the skill, say so and stop — don't make an empty edit. Otherwise wait for the user to approve before touching any files.
+**Step 3: State it.** Repeat the planned change in one sentence. If the behavior already exists in the skill, say so and stop — don't make an empty edit. Otherwise go straight to editing: the user approves the commit, not the edit (see Rules).
 
 ### Edit the skill
-
-Do not start until the approval gate (see Rules) has passed.
 
 1. **If intent changed** — rewrite the `#` heading and opening paragraph from scratch, as if written fresh for the new purpose.
 2. **Update implementation** — read the full skill first, then place each change per **Skill anatomy** below. Before adding a new step, run `ls $HOME/.claude/skills/` and delegate to any skill that already does it — never reimplement.
@@ -150,30 +154,25 @@ Do not start until the approval gate (see Rules) has passed.
 4. **Review for company information** — when the skill is public (see Rules), dispatch a fresh reviewer with the Agent tool: you wrote the text and will read past your own examples. Give it the skill directory, the identifying-content list from Rules, and these instructions: read EVERY file in the directory (SKILL.md, `bin/`, `lib/`, templates, fixtures, tests), not just the diff; report each finding as `<file>:<line> — <what identifies the employer> — <neutral rewrite | move to ldf>`; return `none` when clean; edit nothing. Apply each fix per the Rules, then dispatch a new reviewer and repeat until it returns `none`. Report the findings and fixes with the diff. Skip this step for `tier=ldf`.
 5. **Update scratchpad** — record what changed and why, including the reviewer's findings.
 
-After edits, show the diff of all modified files. Then ask:
-
-> What next?
-> 1. Commit to dotfiles
-> 2. Review first, then decide
-> 3. Review and commit
-> 4. Keep editing
-
-Map responses: commit/push/ship/deploy → 1; bare "review" (no mention of committing) → 2; "review and commit" / "review then ship" → 3; edit/change → 4. If a review response is ambiguous about whether to commit afterward, choose 2. Anything else → re-ask. When in doubt, do NOT commit.
-
 ### Review
 
-Invoke `/ari-skill-review` via the Skill tool with the skill name as the argument. When it returns:
-1. Present each recommended change to the user, one per line:
-   ```
-   [1/3] EXAMPLES — scratchpad has no filled example
-     Fix: add a concrete entry with real values
-   ```
-2. Apply only the changes the user approves.
-3. Re-show the diff and re-present the four-option menu. Always re-show the diff after applying review changes — never auto-commit, even if "review and commit" was pre-selected (pre-selection is intent, not authorization to commit unseen changes). If the review fails or returns nothing, say so and re-present the menu.
+Invoke `/ari-skill-review` via the Skill tool with the skill name as the argument, unless the user said to skip it. Apply every change it recommends, number each in the scratchpad (`[1] EXAMPLES — added a filled scratchpad entry`), then re-run step 4 on the result. If the review fails or returns nothing, say so in the proposal.
+
+### Find unadopted skills
+
+```zsh
+zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/status
+```
+
+For each `unlinked` row, pick its tier with `/ari-dotfiles` Placement rules and draft its `adopt` command (see **Commit to dotfiles**), one commit each. An `ignored` skill is third-party: list it, but leave it out of the commits unless the user names it.
+
+### Propose the commit
+
+End with one message: the full diff, the numbered review changes, the company-information reviewer's verdict, the commit command, the drafted adoptions with a one-line reason each, and one question: **Commit?** `yes` commits everything shown; `drop 2` reverts that review change and re-proposes; anything else is an edit request.
 
 ### Commit to dotfiles
 
-Re-show the current diff (or state "no changes since the last diff") immediately before committing. If the diff is empty, there is nothing to commit; skip. NEVER commit a public skill (`tier=df`, `source=submodule:…`, or an adoption into df) until the company-information reviewer's latest pass on the files as they stand now returned `none`; changes made since that pass, including review fixes, need a new pass. Commit messages in a public tier follow the same rule: say what changed, never what leaked.
+Commit only on a `yes` to the proposal; if anything changed since it, re-propose instead. If the diff is empty, there is nothing to commit; skip. NEVER commit a public skill (`tier=df`, `source=submodule:…`, or an adoption into df) until the company-information reviewer's latest pass on the files as they stand now returned `none`; changes made since that pass, including review fixes, need a new pass. Commit messages in a public tier follow the same rule: say what changed, never what leaked.
 
 Skills are versioned in the dotfiles (`/ari-dotfiles-skill-registry`). If the setup output said `state=linked`, the tier is `tier`; stage and commit through it per `/ari-dotfiles`:
 
@@ -195,17 +194,9 @@ If `state` was `unlinked` or `ignored`, adopt first. Pick the tier with `/ari-do
 zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/adopt --skill <skill-name> --tier df
 ```
 
-It moves, links, and stages; commit as above. An `ignored` skill is third-party: warn that naming it adopts it into your dotfiles, and confirm first.
+It moves, links, and stages; commit as above. The adoptions drafted under **Find unadopted skills** land the same way, one commit each.
 
-On a failure, show the error, then stop and offer: **Retry** the failed command, **Skip** and keep local edits, or **Debug**. Do NOT retry automatically.
-
-### Check for other unadopted skills
-
-```zsh
-zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/status
-```
-
-List the `unlinked` rows and ask which to adopt; adopt only the ones the user names, one commit each. If nothing is actionable, say so.
+On a failure, show the error, diagnose it, and propose the fix with the command that retries; never retry before a `yes`. The edits stay local whatever the answer.
 
 ## Skill-writing principles
 
