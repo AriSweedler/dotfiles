@@ -566,11 +566,13 @@ ldf_git() { git --git-dir="${ARI_DOTFILES_LDF_GIT_DIR}" --work-tree="${HOME}/.lo
 # ── The non-brew steps' happy path ───────────────────────────────────────────
 
 # Everything the non-brew checks look at, in its "ok" state: sorted karabiner.json, the claude
-# notification hook, a loaded dotfiles-jobs job. Shim logs are reset afterwards so a following
-# read-only run can still assert_no_mutation.
+# notification hook, a loaded dotfiles-jobs job, a machine name. Shim logs are reset afterwards
+# so a following read-only run can still assert_no_mutation.
 seed_home_baseline() {
   local uid label plist
   uid="$(id -u)"
+  mkdir -p "${XDG_DATA_HOME}/dotfiles"
+  printf 'test-machine\n' > "${XDG_DATA_HOME}/dotfiles/machine-name"
   mkdir -p "${HOME}/.config/karabiner" "${HOME}/.config/claude/bin" "${HOME}/.config/bin" "${HOME}/.claude"
   cp "${TESTS_DIR}/fixtures/df-remote/.config/karabiner/karabiner.json" "${HOME}/.config/karabiner/karabiner.json"
   cp "${TESTS_DIR}/fixtures/df-remote/.config/claude/bin/initialize.sh" "${HOME}/.config/claude/bin/initialize.sh"

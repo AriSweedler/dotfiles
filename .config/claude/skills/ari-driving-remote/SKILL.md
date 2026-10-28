@@ -75,7 +75,7 @@ zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop
 zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target 4.1 --cmd 'ssh -t pi@pi.local "cd app && sudo ./install.sh"'
 ```
 
-The output starts `PANE: machine=personal|ID=%6|pane=4.1` (the host's machine name, else the definition name), then the last 60 lines of the pane once the prompt is back. Read from the line that echoes the command down to the final prompt; lines above it are history. Default `--timeout` is 90 s; raising it means also raising the Bash tool's timeout above it. `--dry-run` prints the host script, for checking the quoting of a tricky command.
+The output starts `PANE: machine=personal|ID=%6|pane=4.1` (the host's `dotfiles machine-name`, else the definition name), then the last 60 lines of the pane once the prompt is back. Read from the line that echoes the command down to the final prompt; lines above it are history. Default `--timeout` is 90 s; raising it means also raising the Bash tool's timeout above it. `--dry-run` prints the host script, for checking the quoting of a tricky command.
 
 Here the pane ends in `[sudo] password for pi:` with exit 124. Chat: "Type the Pi's sudo password in `machine=personal|ID=%6|pane=4.1`." Then capture until the last line is the laptop prompt again:
 

@@ -343,6 +343,9 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
   via `source_zsh_dir --optional "${XDG_DATA_HOME}/zsh/plugins"`
 - **Scripts**: `~/.local/bin/` and `~/.local/share/bin/`
 - **Job plugins**: `~/.local/share/dotfiles/jobs/<name>` — see **Cutpoints**
+- **Machine name**: one word in `~/.local/share/dotfiles/machine-name`. Read it with
+  `dotfiles machine-name`, never the path; `dotfiles machine-name NAME` renames and commits
+  it. `dotfiles init` writes a random one.
 - **Data**: `~/.local/share/{go_aws,kuber,aws_profile,tmux_oneshot}/`
 - **Claude skills**: `~/.local/share/claude-skills/<name>/`, symlinked from `~/.claude/skills/<name>`
   (`~/.local/share/claude/` is Claude Code's own install dir; hands off)

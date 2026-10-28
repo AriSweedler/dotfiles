@@ -39,8 +39,9 @@ readonly DEFAULT_PROMPT_END='❯'
 readonly SSH_OPTS=(-o ConnectTimeout=8 -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
 # A definition whose host is this value runs tmux on this machine instead of over ssh.
 readonly LOCAL_HOST=local
-# Every machine's everyday name, one word, written by the dotfiles machine_name step.
-readonly HOST_MACHINE_NAME_FILE='$HOME/.local/share/dotfiles/machine-name'
+# Every machine's everyday name, one word, as the host's dotfiles print it (stdout only the name;
+# a host without the verb fails on stderr).
+readonly HOST_MACHINE_NAME_CMD='"$HOME/.config/bin/dotfiles" machine-name'
 # Foreground commands that count as an idle shell, as a POSIX case pattern (login shells show a leading '-').
 readonly SHELL_PATTERN='zsh|bash|sh|fish|-zsh|-bash|-sh'
 readonly PANE_ID_PATTERN='%<0->'
@@ -340,9 +341,9 @@ forget_definition() {
 # --- Host script ---
 
 #######################################
-# Set sh variable `prefix` to 'machine=<name>|' for a remote host (its machine-name file, else the
-# definition name), so its panes are never mistaken for this machine's; '' for this machine.
-# Globals: host name LOCAL_HOST HOST_MACHINE_NAME_FILE
+# Set sh variable `prefix` to 'machine=<name>|' for a remote host (its `dotfiles machine-name`,
+# else the definition name), so its panes are never mistaken for this machine's; '' for this machine.
+# Globals: host name LOCAL_HOST HOST_MACHINE_NAME_CMD
 # Returns: the script lines on stdout
 #######################################
 machine_block() {
@@ -350,7 +351,7 @@ machine_block() {
     print -r -- "prefix=''"
     return 0
   fi
-  print -r -- "machine=\$(cat \"${HOST_MACHINE_NAME_FILE}\" 2>/dev/null | tr -d '[:space:]'); [ -n \"\$machine\" ] || machine=${(qq)name}"
+  print -r -- "machine=\$(${HOST_MACHINE_NAME_CMD} 2>/dev/null); [ -n \"\$machine\" ] || machine=${(qq)name}"
   print -r -- "prefix=\"machine=\$machine|\""
 }
 
