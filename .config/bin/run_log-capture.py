@@ -1,12 +1,16 @@
 """run_log-capture — run_log's capture engine. Runs a command with stdout and stderr each on
 its own pty (or its own pipe, when run_log's matching fd is not a terminal), so the command
 sees exactly the isatty() answers it would see without run_log. Both streams are echoed to
-the terminal and captured twice:
+the terminal and captured:
 
-    <capture-dir>/stdout        stdout, byte-for-byte as the command wrote it (colors kept)
-    <capture-dir>/stderr        stderr, byte-for-byte
-    <capture-dir>/stdout.plain  stdout as the user saw it: escapes stripped, \\r redraws resolved
-    <capture-dir>/stderr.plain  stderr, likewise
+    <capture-dir>/<N>.filedescriptor        fd N, byte-for-byte as the command wrote it
+    <capture-dir>/<N>.filedescriptor.plain  fd N as the user saw it: escapes stripped, \\r
+                                            redraws resolved
+    <capture-dir>/stdout, stderr            symlinks to 1.filedescriptor, 2.filedescriptor
+    <capture-dir>/stdout.plain, ...         symlinks to the matching .plain files
+
+Every <N>.filedescriptor in the capture dir gets a .plain copy, so run_log's --fd N files
+(opened by run_log itself) are covered too.
 
 stdin is inherited untouched, so prompts, YubiKey taps and /dev/tty reads behave as in a bare
 terminal. Called by run_log; not meant to be run directly.
@@ -17,6 +21,7 @@ Exit status: the command's, or 128 + the signal number that killed it.
 
 import errno
 import fcntl
+import glob
 import os
 import re
 import select
@@ -29,6 +34,8 @@ import termios
 # owns the terminal's foreground process group, so SIGWINCH never reaches us.
 WINSIZE_POLL_S = 0.25
 READ_CHUNK = 65536
+CAPTURE_SUFFIX = ".filedescriptor"
+PLAIN_SUFFIX = ".plain"
 
 # OSC first: its introducer (ESC ]) also matches the two-byte escape class.
 ESCAPE_RE = re.compile(
@@ -40,10 +47,12 @@ ESCAPE_RE = re.compile(
 
 
 class Stream:
-    def __init__(self, real_fd, name, capture_dir):
+    def __init__(self, real_fd, alias, capture_dir):
         self.real_fd = real_fd
-        self.name = name
-        self.path = os.path.join(capture_dir, name)
+        file_name = f"{real_fd}{CAPTURE_SUFFIX}"
+        self.path = os.path.join(capture_dir, file_name)
+        link_named(capture_dir, alias, file_name)
+        link_named(capture_dir, alias + PLAIN_SUFFIX, file_name + PLAIN_SUFFIX)
         self.is_tty = os.isatty(real_fd)
         self.echo_open = True
         self.winsize = None
@@ -91,6 +100,11 @@ class Stream:
             raise
 
 
+def link_named(capture_dir, alias, target):
+    """Relative symlink, so a moved or copied capture dir keeps working."""
+    os.symlink(target, os.path.join(capture_dir, alias))
+
+
 def plain_text(raw):
     text = ESCAPE_RE.sub(b"", raw)
     lines = text.split(b"\n")
@@ -99,11 +113,12 @@ def plain_text(raw):
     return b"\n".join(line.rstrip(b"\r").rsplit(b"\r", 1)[-1] for line in lines)
 
 
-def write_plain_copy(stream):
-    with open(stream.path, "rb") as src:
-        raw = src.read()
-    with open(stream.path + ".plain", "wb") as dst:
-        dst.write(plain_text(raw))
+def write_plain_copies(capture_dir):
+    for path in glob.glob(os.path.join(glob.escape(capture_dir), "*" + CAPTURE_SUFFIX)):
+        with open(path, "rb") as src:
+            raw = src.read()
+        with open(path + PLAIN_SUFFIX, "wb") as dst:
+            dst.write(plain_text(raw))
 
 
 def pump(streams):
@@ -146,7 +161,7 @@ def main(argv):
         rc = child.wait()
         for stream in streams:
             stream.capture.close()
-            write_plain_copy(stream)
+        write_plain_copies(capture_dir)
     return 128 - rc if rc < 0 else rc
 
 
