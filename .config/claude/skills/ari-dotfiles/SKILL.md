@@ -21,13 +21,17 @@ On this laptop the local `origin` is a private repo
 ## Workflow
 
 1. Edit the file. Pick its tier with **Placement rules**.
-2. `git df add <abs path>` or `git ldf add <abs path>`; commit with a descriptive message.
-   A path inside a submodule (`~/.config/chrome-exoskeleton/…`) is refused by
+2. `git df add <abs path>` or `git ldf add <abs path>`; commit with a descriptive
+   message and the same paths after `--` (`git df commit -m "…" -- <abs paths>`),
+   since tools like `bake` stage files of their own. A path inside a submodule (`~/.config/chrome-exoskeleton/…`) is refused by
    `git df add`: follow **Submodules** instead.
 3. Print `git df log --oneline -1` / `git ldf log --oneline -1` to confirm the tier.
-4. Shared: run **Review before push**, and only when it passes end with "Run
-   `dotfiles push` when ready." Local: `git ldf push` now.
-5. Offer the **Post-change sweep**.
+4. Shared: run **Review before push**. Local: `git ldf push` now. Start the
+   **Post-change sweep** alongside.
+5. Close with one message: what landed, the review verdicts, the sweep's plan, and
+   any history rewrite the review calls for, ending in one question that covers
+   them all (none when nothing is pending). Once every unpushed shared commit has
+   passed, including any the `yes` just made, end with "Run `dotfiles push` when ready."
 
 **Always pass absolute paths to `git df` and `git ldf`.** Relative pathspecs
 resolve against the cwd, and from inside `~/.local` a `share/...` path silently
@@ -102,8 +106,9 @@ through `/ari-skill-update` get a pass too.
 
 Recommend the push only when every unpushed commit's latest pass returned `none`.
 A fix in a later commit does not help: the earlier commit would still publish
-the content. Fold each fix into the commit that introduced it (rewriting
-unpushed history needs Ari's OK), then review every rewritten commit again.
+the content. Fold each fix into the commit that introduced it, then review every
+rewritten commit again. Rewriting unpushed history is Ari's call: propose the
+exact rewrite and what each rewritten commit will hold, and ask once.
 
 ### When `dotfiles push` fails
 
@@ -266,7 +271,8 @@ One dotfiles change; never stop after the first commit.
    update` (`submodule.recurse=true` checks the pointer out detached). Nothing
    committed yet → `git -C ~/<path> switch main`. Committed while detached →
    `git -C ~/<path> branch -f main HEAD`, only if
-   `git -C ~/<path> merge-base --is-ancestor main HEAD` succeeds; else ask.
+   `git -C ~/<path> merge-base --is-ancestor main HEAD` succeeds; else show
+   `git -C ~/<path> log --oneline --graph main...HEAD` and ask which history to keep.
 2. **Commit in the submodule's repo** on `main`, explicit paths:
    `git -C ~/<path> add <files> && git -C ~/<path> commit -m "…"`. Its hooks
    and commit conventions apply, not the tier's.
@@ -343,22 +349,21 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
 
 ## Post-change sweep
 
-After a dotfiles change lands, ask:
+As soon as a dotfiles change is committed, start the sweep without asking, in
+parallel with **Review before push**. A subagent (this agent, when it is one)
+runs `git df status`, `git ldf status` and `cd ~ && git df submodule status`,
+reads each change (`diff` for modified, `cat` for untracked), and drafts one line
+per commit, grouping tightly related files (a new config plus its include). It
+edits and commits nothing:
 
-> Want me to go through your other pending dotfiles changes and commit them too?
+    Shared (df): 1 modified
+    Local (ldf): clean
+      df: ~/.config/foo/bar.zsh → "foo: retry once on timeout" — the retry the last session left uncommitted
 
-If yes, run `git df status` and `git ldf status` and report each tier on its
-own line before anything else:
-
-    Shared (df): clean
-    Local (ldf): 2 modified, 1 untracked
-
-Both clean → those two lines are the whole answer; stop. Otherwise inspect each
-change (`diff` for modified, `cat` for untracked), then print the plan as one
-line per commit (tier: files → message), grouping tightly related files (a new
-config plus its include), before the first commit. Commit, then push local. If
-anything landed in the shared repo, run **Review before push** and, once it
-passes, end with "Run `dotfiles push` when ready."
+The plan goes into Workflow step 5's closing message; its one `yes` commits every
+planned line, pushes local, and runs **Review before push** on anything shared.
+Both tiers clean → the two status lines, nothing to ask. A change the subagent
+cannot explain is listed but left out of the plan.
 
 ## Bootstrapping a machine
 
