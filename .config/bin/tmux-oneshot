@@ -99,6 +99,9 @@
 #               the rc comes back through a file because attach-session exits 0 regardless.
 #   popup       eval in the popup's own shell. No copy mode: a popup is not a pane.
 #   window      like a window entry, the window named after the entry.
+# On every surface the cmd sees TMUX_ONESHOT_ORIGIN_PANE, the pane id (%N) the popup was
+# opened over: under popup_pane its own pane is in a throwaway session, so a cmd that
+# opens a window of its own targets this pane's session.
 #
 # groups/flags/subcommands are a builder and strictly opt-in: an entry without
 # them never prompts (beyond its own `prompt`). Assembly order per level: cmd,
@@ -1048,6 +1051,10 @@ function tmux_oneshot::_run() {
   name="$(jq -r '.menu.name // .cmd' <<< "${entry}")"
   autodismiss="$(jq -r '.autodismiss // false' <<< "${entry}")"
   surface="$(tmux_oneshot::_surface "${entry}")"
+  # A popup is not a pane, so this resolves through $TMUX to its session's active pane.
+  if [[ -n "${TMUX:-}" && -z "${TMUX_ONESHOT_ORIGIN_PANE:-}" ]]; then
+    export TMUX_ONESHOT_ORIGIN_PANE="$(tmux display-message -p '#{pane_id}' 2>/dev/null)"
+  fi
   case "${surface}" in
     window)
       local window
@@ -1161,6 +1168,7 @@ function tmux_oneshot::_new_window() {
   fi
   local -a envargs
   [[ -n "${ONESHOT_INPUT:-}" ]] && envargs=(-e "ONESHOT_INPUT=${ONESHOT_INPUT}")
+  [[ -n "${TMUX_ONESHOT_ORIGIN_PANE:-}" ]] && envargs+=(-e "TMUX_ONESHOT_ORIGIN_PANE=${TMUX_ONESHOT_ORIGIN_PANE}")
   log::info "Opening window | name='${name}' cmd='${cmd}' pwd='${PWD}'"
   tmux new-window -n "${name}" -c "${PWD}" "${envargs[@]}" zsh -c "${TMUX_ONESHOT_WINDOW_RUNNER}" tmux-oneshot "${cmd}" "${name}"
 }
@@ -1189,6 +1197,7 @@ function tmux_oneshot::_attach_session() {
   rcf="$(mktemp "${TMPDIR:-/tmp}/tmux-oneshot-rc.XXXXXX")" || return 1
   local -a envargs
   [[ -n "${ONESHOT_INPUT:-}" ]] && envargs=(-e "ONESHOT_INPUT=${ONESHOT_INPUT}")
+  [[ -n "${TMUX_ONESHOT_ORIGIN_PANE:-}" ]] && envargs+=(-e "TMUX_ONESHOT_ORIGIN_PANE=${TMUX_ONESHOT_ORIGIN_PANE}")
   log::info "Attaching session | session='${sess}' cmd='${cmd}' pwd='${PWD}'"
   if ! tmux new-session -d -s "${sess}" -c "${PWD}" "${envargs[@]}" \
       zsh -c "${TMUX_ONESHOT_PANE_RUNNER}" tmux-oneshot "${cmd}" "${rcf}" "${autodismiss}" "${FZF_GROUP_BACK_RC}"; then

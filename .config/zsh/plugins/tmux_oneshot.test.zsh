@@ -705,6 +705,9 @@ _t "_new_window argv: -n name -c pwd zsh -c runner tmux-oneshot cmd name" \
 : > "${_tmux_file}"
 ( export TMUX=test-dummy ONESHOT_INPUT="foo bar"; tmux_oneshot::_new_window sso 'echo x' > /dev/null 2>&1 )
 _t "_new_window forwards ONESHOT_INPUT with -e" "-e|ONESHOT_INPUT=foo bar" "$(_tmux_last 6-7)"
+: > "${_tmux_file}"
+( export TMUX=test-dummy TMUX_ONESHOT_ORIGIN_PANE=%7; tmux_oneshot::_new_window sso 'echo x' > /dev/null 2>&1 )
+_t "_new_window forwards TMUX_ONESHOT_ORIGIN_PANE with -e" "-e|TMUX_ONESHOT_ORIGIN_PANE=%7" "$(_tmux_last 6-7)"
 _err_out="$(unset TMUX; tmux_oneshot::_new_window caf 'echo inline-ran' 2>&1)"
 _t "_new_window outside tmux runs inline" "inline-ran" "$(print -r -- "${_err_out}" | grep -x inline-ran)"
 _t "_new_window outside tmux warns" "Not inside tmux" "$(print -r -- "${_err_out}" | grep -o 'Not inside tmux')"
@@ -735,6 +738,12 @@ _t "surface=popup_pane: cmd, autodismiss and the back rc follow the runner" \
 _t "surface=popup_pane: attaches to that session, naming this server's socket" "-S|test-dummy|attach-session|-t|oneshot-$$" "$(_tmux_call -S)"
 _t "surface=popup_pane: status off, attach, then kill the session" "set-option|attach-session|kill-session" \
   "$(_tmux_subcommands '^(set-option|attach-session|kill-session)$')"
+_t "surface=popup_pane: the origin pane is asked of the popup's own tmux context" "display-message|-p|#{pane_id}" \
+  "$(_tmux_call display-message)"
+: > "${_tmux_file}"
+( export TMUX=test-dummy TMUX_ONESHOT_ORIGIN_PANE=%7; tmux_oneshot::_attach_session aPa 'echo x' true > /dev/null 2>&1 )
+_t "surface=popup_pane: TMUX_ONESHOT_ORIGIN_PANE reaches the throwaway session with -e" "-e|TMUX_ONESHOT_ORIGIN_PANE=%7" \
+  "$(_tmux_call new-session 7-8)"
 _t "surface=popup_pane: no rc back (popup closed mid-run) is a failure, and the popup never holds" "1 " \
   "${_err_rc} $(print -r -- "${_err_out}" | grep HELD)"
 _err_out="$(unset TMUX; TMUX_ONESHOT_SURFACE=popup_pane tmux_oneshot::_attach_session aPa 'echo inline-ran' true 2>&1)"
