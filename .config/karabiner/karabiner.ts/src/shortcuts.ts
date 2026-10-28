@@ -23,11 +23,4 @@ export const shortcuts = [
         .to({ software_function: { open_application: { bundle_identifier: 'com.apple.Terminal' } } })
         .to(karabiner_script("oneshot-popup")),
     ]),
-
-  rule('Hyper+8 → oneshot kpa (kube proxy: pick clusters; the entry lives in the local tier)')
-    .manipulators([
-      map('8', 'Hyper')
-        .to({ software_function: { open_application: { bundle_identifier: 'com.apple.Terminal' } } })
-        .to(karabiner_script("oneshot-popup", { args: ["kpa"] })),
-    ]),
 ]

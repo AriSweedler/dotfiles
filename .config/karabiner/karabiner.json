@@ -2763,37 +2763,6 @@
             ]
           },
           {
-            "description": "Hyper+8 → oneshot kpa (kube proxy: pick clusters; the entry lives in the local tier)",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "8",
-                  "modifiers": {
-                    "mandatory": [
-                      "command",
-                      "option",
-                      "control",
-                      "shift"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "software_function": {
-                      "open_application": {
-                        "bundle_identifier": "com.apple.Terminal"
-                      }
-                    }
-                  },
-                  {
-                    "shell_command": "\nd=\"/tmp/karabiner.oneshot-popup\"; [ -d \"$d\" ] || mkdir -p \"$d\"\nexec zsh -c '\n  zmodload zsh/datetime\n  source \"$HOME/.config/zsh/plugins/log_rotate.zsh\"\n  log_rotate \"$1\" \"$2\" 2>/dev/null\n  export REPO_ROOT=\"$HOME/.config/karabiner/karabiner.ts\"\n  export REPO_LIB=\"${REPO_ROOT}/src/scripts/lib\"\n  export PATH=\"$HOME/.config/bin:/Users/arisweedler/h/node/env-22.14.0/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}\"\n  {\n    strftime \"%a %b %e %H:%M:%S %Z %Y\" \"$EPOCHSECONDS\"\n    cd \"${REPO_ROOT:?}\"\n    print -r -- \"Invoking /Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/oneshot-popup \"kpa\"\"\n    typeset -F _s=$EPOCHREALTIME\n    \"/Users/arisweedler/.config/karabiner/karabiner.ts/src/scripts/bin/oneshot-popup\" \"kpa\"\n    _rc=$?\n    typeset -F _e=$EPOCHREALTIME\n    printf \"elapsed_ms=%.0f rc=%d\\n\" $(( (_e - _s) * 1000 )) $_rc\n    exit $_rc\n  } &> \"$1\"\n' _ \"/tmp/karabiner.oneshot-popup/log.txt\" \"5\"\n"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
             "description": "Clipboard History → raycast://extensions/raycast/clipboard-history/clipboard-history",
             "manipulators": [
               {
