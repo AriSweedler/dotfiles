@@ -85,6 +85,9 @@ ${c_green}Options:${c_rst}
                Precedence: --dir > \$LOG_DIR > \$XDG_STATE_HOME/run_log
   --no-copy    Leave the clipboard alone (also: RUN_LOG_COPY=0). Never
                copied when stdout is not a terminal.
+  --deliver-to PANE
+               Also type the artifact line into tmux pane PANE (an agent's
+               prompt, no Enter), then note it on the tmux status line.
   -h, --help   Show this help
 
 ${c_green}Argument handling:${c_rst}
@@ -245,6 +248,30 @@ run_captured() {
 }
 
 #######################################
+# Type the artifact line into a tmux pane (an agent's prompt; no Enter), and only once that
+# worked, say so on the tmux status line.
+# Arguments: $1 = handoff text, $2 = pane ID (empty: skip)
+#######################################
+deliver_handoff() {
+  local text="${1}" pane="${2}"
+  if [[ -z "${pane}" ]]; then
+    return
+  fi
+  if [[ -z "${TMUX:-}" ]]; then
+    log::warn "Not delivering artifact line; not inside tmux | pane='${pane}'"
+    return
+  fi
+  if ! tmux send-keys -t "${pane}" -l -- "${text}"; then
+    log::warn "Could not type artifact line into pane | pane='${pane}'"
+    return
+  fi
+  local label
+  label="$(tmux display-message -p -t "${pane}" 'ID=#{pane_id}|pane=#{window_index}.#{pane_index}')"
+  tmux display-message -d 4000 "✦ run_log artifact pasted into ${label}"
+  log::info "Delivered artifact line | pane='${label}'"
+}
+
+#######################################
 # Put the one-line artifact handoff on the clipboard. Skipped with --no-copy, when
 # RUN_LOG_COPY=0, when stdout is not a terminal (an agent ran run_log, so
 # nobody is there to paste), or when pbcopy is absent.
@@ -286,12 +313,13 @@ build_command_string() {
 
 main() {
   # === PARSE ===
-  local name="" dir_flag="" copy_flag=true
+  local name="" dir_flag="" copy_flag=true deliver_pane=""
   local -a capture_fds=()
   while (( $# > 0 )); do
     case "${1}" in
       -h|--help) help; return 0 ;;
       --no-copy) copy_flag=false; shift ;;
+      --deliver-to) deliver_pane="${2:?--deliver-to requires a pane}"; shift 2 ;;
       --name) name="${2:?--name requires a value}"; shift 2 ;;
       --file) name="${2:?--file requires a value}"; shift 2 ;;
       --fd) capture_fds+=("${2:?--fd requires a value}"); shift 2 ;;
@@ -370,6 +398,7 @@ EOF
   print -r -- "duration_s=${duration}" >> "${capture_dir}/metadata"
   log::info "Captured command | capture_dir='${capture_dir}' rc='${rc}'"
   copy_handoff "run_log artifact: ${capture_dir}" "${should_copy}"
+  deliver_handoff "run_log artifact: ${capture_dir}" "${deliver_pane}"
   return "${rc}"
 }
 
