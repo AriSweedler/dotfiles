@@ -2,11 +2,11 @@
 # run_log — run a command and capture it into a per-command capture directory:
 #
 #   <root>/<seq>_<slug>/
-#     metadata                user=, timestamp=, command=, stdout_tty=, stderr_tty=, exit=
-#     <N>.filedescriptor        fd N, byte-for-byte (colors kept); 1, 2, and each --fd N
-#     <N>.filedescriptor.plain  fd N as the user saw it: escapes stripped, \r redraws resolved
-#     stdout, stderr            symlinks to 1.filedescriptor, 2.filedescriptor
-#     stdout.plain, stderr.plain  symlinks to their .plain files
+#     metadata      user=, timestamp=, command=, stdout_tty=, stderr_tty=, exit=
+#     <N>.fd        fd N, byte-for-byte (colors kept); 1, 2, and each --fd N
+#     <N>.fd.plain  fd N as the user saw it: escapes stripped, \r redraws resolved
+#     stdout, stderr, stdout.plain, stderr.plain
+#                   symlinks to 1.fd, 2.fd, 1.fd.plain, 2.fd.plain
 #
 # Like `irun`, the command executes in an interactive zsh so aliases,
 # functions, and everything sourced from .zshrc are available. stdout and
@@ -16,7 +16,7 @@
 # Only fds 1 and 2 are captured by default — a command's fd 3+ writes bypass
 # the capture, because pre-opening fds changes the child's environment.
 # `--fd N` opts in per fd: the wrapper opens fd N onto
-# <capture-dir>/<N>.filedescriptor (capture-only, never echoed to the terminal).
+# <capture-dir>/<N>.fd (capture-only, never echoed to the terminal).
 #
 # Designed for agent workflows: an agent hands over a `run_log ...` command,
 # the human runs it, and the capture is already on disk at a deterministic
@@ -50,14 +50,11 @@ functions work. Each invocation creates one capture directory under the
 capture root:
 
   <root>/<seq>_<cmd-slug>/
-    metadata                    user=, timestamp=, command=, stdout_tty=,
-                                stderr_tty=, exit=
-    <N>.filedescriptor          fd N, byte-for-byte (colors kept): 1, 2, and
-                                each --fd N
-    <N>.filedescriptor.plain    fd N as you saw it: escapes stripped, \\\\r
-                                redraws resolved
-    stdout, stderr              symlinks to 1.filedescriptor, 2.filedescriptor
-    stdout.plain, stderr.plain  symlinks to their .plain files
+    metadata      user=, timestamp=, command=, stdout_tty=, stderr_tty=, exit=
+    <N>.fd        fd N, byte-for-byte (colors kept): 1, 2, and each --fd N
+    <N>.fd.plain  fd N as you saw it: escapes stripped, \\\\r redraws resolved
+    stdout, stderr, stdout.plain, stderr.plain
+                  symlinks to 1.fd, 2.fd, 1.fd.plain, 2.fd.plain
 
 stdout and stderr each run on their own pty, so the command behaves exactly
 as in your terminal — colors, log pretty-printers, progress bars all work —
@@ -72,7 +69,7 @@ ${c_green}Options:${c_rst}
                name already holding a capture gets a _2, _3, ... suffix.
   --file NAME  Compat alias for --name (a trailing .log is stripped).
   --fd N       Also capture fd N (3-9, repeatable) to
-               <capture-dir>/<N>.filedescriptor (plus its .plain copy).
+               <capture-dir>/<N>.fd (plus its .plain copy).
                The command sees fd N as an open non-tty descriptor.
                Capture-only: fd N output is not echoed to the terminal.
   --dir DIR    Capture root for relative/generated names.
@@ -198,7 +195,7 @@ uniquify_capture_dir() {
 
 #######################################
 # Open each requested fd in the current shell, pointed at
-# <dir>/<n>.filedescriptor, so the
+# <dir>/<n>.fd, so the
 # command inherits it. Mutates shell fds — must NOT be called in a subshell.
 # The fd number is validated to a single digit 3-9 before reaching the eval.
 # Arguments: $1 = capture dir, rest = fd numbers
@@ -208,8 +205,8 @@ open_capture_fds() {
   shift
   local fd
   for fd in "$@"; do
-    log::info "Capturing extra fd | fd='${fd}' file='${dir}/${fd}.filedescriptor'"
-    eval "exec ${fd}>\"\${dir}/\${fd}.filedescriptor\""
+    log::info "Capturing extra fd | fd='${fd}' file='${dir}/${fd}.fd'"
+    eval "exec ${fd}>\"\${dir}/\${fd}.fd\""
   done
 }
 

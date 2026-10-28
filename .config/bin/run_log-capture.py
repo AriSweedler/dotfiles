@@ -3,13 +3,12 @@ its own pty (or its own pipe, when run_log's matching fd is not a terminal), so 
 sees exactly the isatty() answers it would see without run_log. Both streams are echoed to
 the terminal and captured:
 
-    <capture-dir>/<N>.filedescriptor        fd N, byte-for-byte as the command wrote it
-    <capture-dir>/<N>.filedescriptor.plain  fd N as the user saw it: escapes stripped, \\r
-                                            redraws resolved
-    <capture-dir>/stdout, stderr            symlinks to 1.filedescriptor, 2.filedescriptor
-    <capture-dir>/stdout.plain, ...         symlinks to the matching .plain files
+    <capture-dir>/<N>.fd        fd N, byte-for-byte as the command wrote it
+    <capture-dir>/<N>.fd.plain  fd N as the user saw it: escapes stripped, \\r redraws resolved
+    <capture-dir>/stdout, stderr, stdout.plain, stderr.plain
+                                symlinks to 1.fd, 2.fd, 1.fd.plain, 2.fd.plain
 
-Every <N>.filedescriptor in the capture dir gets a .plain copy, so run_log's --fd N files
+Every <N>.fd in the capture dir gets a .plain copy, so run_log's --fd N files
 (opened by run_log itself) are covered too.
 
 stdin is inherited untouched, so prompts, YubiKey taps and /dev/tty reads behave as in a bare
@@ -34,7 +33,7 @@ import termios
 # owns the terminal's foreground process group, so SIGWINCH never reaches us.
 WINSIZE_POLL_S = 0.25
 READ_CHUNK = 65536
-CAPTURE_SUFFIX = ".filedescriptor"
+CAPTURE_SUFFIX = ".fd"
 PLAIN_SUFFIX = ".plain"
 
 # OSC first: its introducer (ESC ]) also matches the two-byte escape class.
