@@ -114,7 +114,7 @@ As soon as the findings are applied, print the final draft path and take the des
 | gist | "Run `gh gist create {path} --desc '{topic}'`." |
 | readme | "Commit to `README.md` or the target path in the repo." |
 
-If a `/ari-hemingway--share-*` sibling is installed and matches the destination, offer to invoke it instead.
+If a `/ari-hemingway--share-*` sibling is installed and matches the destination, run its dry-run instead and end with "Publish?".
 
 ## Examples
 

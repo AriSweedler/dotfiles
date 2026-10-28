@@ -204,7 +204,7 @@ Distill supplement budget exceeded (6 reads). Switch to research? (y/N)
 ```
 On yes: update scratchpad `Mode: research (switched from distill at {timestamp})`, then restart Investigate without re-running mode confirmation.
 
-**Distill evidence check (before drafting).** Enumerate the candidate subsystem(s) the session's reads touched. If reads don't cluster around a single subsystem, ask: `The session touched {list}. Which should I distill?` If the user has no answer, STOP.
+**Distill evidence check (before drafting).** Enumerate the candidate subsystem(s) the session's reads touched. If reads don't cluster around a single subsystem, recommend the one with the most reads and ask: `Distill {top}? (or pick from {list})`. If the user has no answer, STOP.
 
 **Update mode** — fetch the existing doc via `/ari-gsw-doc-to-md`. After fetching, print `Target doc: {title} — last edited {date}.` and proceed.
 

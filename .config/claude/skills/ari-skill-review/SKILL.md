@@ -93,13 +93,7 @@ Share the `findings.md` path first so the user can read the full file. Then show
 
 If `spec-questions.md` has items, present those separately: "These touch the skill's purpose — your call:"
 
-Ask which items to implement. Valid answers:
-- "all" — implement everything
-- Item numbers — "1, 3, 5"
-- "top N" — "top 5"
-- Anything else — ask for clarification, do NOT guess
-
-If invoked from `/ari-skill-update`, return the approved list to the calling workflow rather than applying changes directly.
+Standalone, apply every item, then show the diff with each change numbered so the user can say `drop 2` before anything is committed. If invoked from `/ari-skill-update`, return every item with its fix to the calling workflow, unasked; it applies them.
 
 ## Reviewer panel
 
