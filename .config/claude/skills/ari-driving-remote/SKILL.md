@@ -75,9 +75,9 @@ zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop
 zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target 4.1 --cmd 'ssh -t pi@pi.local "cd app && sudo ./install.sh"'
 ```
 
-The output starts `PANE: ID=%6|pane=4.1`, then the last 60 lines of the pane once the prompt is back. Read from the line that echoes the command down to the final prompt; lines above it are history. Default `--timeout` is 90 s; raising it means also raising the Bash tool's timeout above it. `--dry-run` prints the host script, for checking the quoting of a tricky command.
+The output starts `PANE: machine=personal|ID=%6|pane=4.1` (the host's machine name, else the definition name), then the last 60 lines of the pane once the prompt is back. Read from the line that echoes the command down to the final prompt; lines above it are history. Default `--timeout` is 90 s; raising it means also raising the Bash tool's timeout above it. `--dry-run` prints the host script, for checking the quoting of a tricky command.
 
-Here the pane ends in `[sudo] password for pi:` with exit 124. Chat: "Type the Pi's sudo password in `ID=%6|pane=4.1`." Then capture until the last line is the laptop prompt again:
+Here the pane ends in `[sudo] password for pi:` with exit 124. Chat: "Type the Pi's sudo password in `machine=personal|ID=%6|pane=4.1`." Then capture until the last line is the laptop prompt again:
 
 ```zsh
 zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %6 --cmd ''
@@ -89,7 +89,7 @@ zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop
 zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target 4.1 --no-enter --cmd 'brew upgrade'
 ```
 
-Chat: "Typed into `ID=%6|pane=4.1` on laptop; press Enter when ready." After he says he did, capture; never resend. The same shape hands a harness-denied command to Ari.
+Chat: "Typed into `machine=personal|ID=%6|pane=4.1`; press Enter when ready." After he says he did, capture; never resend. The same shape hands a harness-denied command to Ari.
 
 ### Poll a long run
 

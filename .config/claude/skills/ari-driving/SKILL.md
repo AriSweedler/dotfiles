@@ -23,7 +23,7 @@ A new target (a browser, a device with no tmux) gets its own `ari-driving-<targe
 
 ## Rules
 
-- **Name every pane by its label.** `ID=%301|pane=2.4`: tmux's pane ID, fixed for the pane's life, and the `window.pane` Ari reads off prefix-q. Never one alone. A local pane's label is linked (`/ari-driving-tmux`).
+- **Name every pane by its label.** `ID=%301|pane=2.4`: tmux's pane ID, fixed for the pane's life, and the `window.pane` Ari reads off prefix-q. Never one alone. A pane on another machine also carries that machine's everyday name first, `machine=personal|ID=%18|pane=3.1`: the one word in its `~/.local/share/dotfiles/machine-name` (the dotfiles `machine_name` step writes a random one; Ari renames it by editing the file). A local pane's label is linked (`/ari-driving-tmux`).
 - **A pane assignment is a hint, never a fact.** One Ari gave earlier in the conversation, or one carried in a compaction summary, may be stale: he repurposes panes, often because Claude asked him to run something "in another terminal". The siblings re-check every time.
 - **Never raw `tmux send-keys` into Ari's panes**, locally or over ssh. Only the siblings' scripts check the opt-in and the idle prompt first.
 - **The opt-in is Ari's.** A pane not marked `ari-driving on` is refused; tell Ari to run it there himself, never type it.
