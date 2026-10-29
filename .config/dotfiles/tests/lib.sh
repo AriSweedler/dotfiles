@@ -553,6 +553,11 @@ seed_fake_repos() {
   git --git-dir="${ARI_DOTFILES_DF_GIT_DIR}" --work-tree="${HOME}" add -- "${files[@]}"
   git --git-dir="${ARI_DOTFILES_DF_GIT_DIR}" --work-tree="${HOME}" commit -q -m "seed dotfiles"
   git --git-dir="${ARI_DOTFILES_DF_GIT_DIR}" config --local core.hooksPath "${ARI_DOTFILES_DF_HOOKS}"
+  # apply::dotfiles_repo pins the personal identity in the public repo; read it from the kernel.
+  local identity
+  identity="$(zsh -f -c 'source "$1"; print -r -- "${SUBMODULE_GIT_NAME}|${SUBMODULE_GIT_EMAIL}"' _ "${TESTS_DIR}/../lib/env.zsh")"
+  git --git-dir="${ARI_DOTFILES_DF_GIT_DIR}" config --local user.name "${identity%%|*}"
+  git --git-dir="${ARI_DOTFILES_DF_GIT_DIR}" config --local user.email "${identity#*|}"
 
   git init -q --bare --initial-branch=main "${ARI_DOTFILES_LDF_GIT_DIR}"
   mkdir -p "${ARI_DOTFILES_LDF_GIT_DIR}/info"
