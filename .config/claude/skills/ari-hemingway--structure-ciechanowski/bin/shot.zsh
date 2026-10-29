@@ -102,7 +102,8 @@ main() {
   local dir="${repo}/articles/_shot-${fid}-$$"
   rm -rf "${dir}"
   mkdir -p "${dir}"
-  trap 'rm -rf "${dir}"' EXIT INT TERM
+  # Expand now: the trap fires after main returns, when the local is gone (set -u would fail).
+  trap "rm -rf '${dir}'" EXIT INT TERM
   python3 "${SCRIPT_DIR}/scratch_page.py" --repo "${repo}" --out "${dir}/index.html" "${fid}=${spec}:${aspect}" >/dev/null
   node "${repo}/tools/explainers.cjs" build "${dir}/index.html" >/dev/null 2>&1 || log::warn "build reported errors; rendering anyway | page='${dir}/index.html'"
   local frag=""
