@@ -784,8 +784,14 @@ run_command() {
   fi
   local output
   output="$(execute_script "${script}")" || exit_code=$?
-  # The host printed BIND only after the gate and the binding check passed for this session.
-  bind_line="$(print -r -- "${output}" | awk '/^BIND: / {print $2, $3; exit}')"
+  # The host printed BIND only after the gate and the binding check passed for this session. Keep this
+  # scan a parameter expansion: no `print | awk … exit`, no here-string. With set -e and pipefail, a
+  # reader that exits on the first match closes the pipe early, the print writer dies of SIGPIPE once the
+  # capture is past the pipe buffer, and the whole run exits 141 before the capture is printed (seen
+  # 2026-10-30; tests/run-large-capture.test.zsh); a here-string needs a writable $TMPPREFIX or set -e
+  # ends the run the same way. The first BIND line wins.
+  local -a bind_lines=(${(M)${(f)output}:#BIND: *})
+  bind_line="${${bind_lines[1]:-}#BIND: }"
   if [[ -n "${bind_line}" ]]; then write_binding "${name}" "${bind_line%% *}" "${bind_line##* }"; fi
   print -r -- "${output}"
   exit_code="$(sent_exit_code "${exit_code}" "${output}")"

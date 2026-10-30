@@ -14,7 +14,7 @@ Claude runs nothing on another machine except by typing into the pane Ari named,
     - **A pane from earlier in the conversation or a compaction summary is a hint.** Re-run `--list` and use it only if it still shows `✦` and a shell.
     - **One pane per branch or fork.** `run.zsh` binds a pane to the Claude session that first types into it and refuses every other session with 76; a session that must drive gets a pane of its own (**Create a pane for yourself**). When Ari explicitly makes two sessions share a pane, capture (`--cmd ''`) immediately before every send and read only from your own `TYPED:` echo down.
     - **Every pane mention carries the whole label**, `machine=personal|ID=%6|pane=4.1`, in inline code, never linked, never one part alone.
-    - **NEVER start or chain `clear`, `reset` or `tmux clear-history`**; raise `--lines` to see more. `run.zsh` refuses a leading `clear`.
+    - **NEVER start or chain `clear`, `reset` or `tmux clear-history`**; raise `--lines` to see more. `run.zsh` refuses a leading `clear`. Above the pane's tmux `history-limit`, `--lines` returns fewer lines with no marker; a capture whose top lacks the `TYPED:` echo outgrew the pane, so read the host's `/tmp/run_log/<dir>/stdout.plain` in slices (`wc -l`, then `sed -n`) instead of raising `--lines` again.
     - **NEVER `pbcopy` on his machine**; `run.zsh` refuses it in `--cmd`.
     - **Claude never sets the opt-in.** Not `ari-driving on`, `ari-remote-tmux on` or `@ari_driving`: typed, linked, chained, in a pane's startup command, through the Bash tool, or through a fork, subagent or other session. `run.zsh`, `link.zsh` and the click handler refuse any command that spells them; a self-set opt-in is undone with `ari-driving off` there, and Ari is told which pane.
 - **`--hosts` first.** The first `run.zsh` call of a conversation, and the first after compaction, MUST be `--hosts`. Never guess a name or a `user@host`; read them from its output.
@@ -105,6 +105,7 @@ machine=personal|ID=%18|pane=3.1 zsh 0: homelab -- laptop
 | 70 | no pane matches, no attached client to resolve `2.4` against, or no tmux server | read the `PANES:` lines under the refusal (every pane on the host, live), pick the one Ari means or ask him; `--list` only for the ✦ marks; or `--session S` |
 | 127 | tmux not on the host's PATH | `--path-prefix ''` (Linux) or its dir; then `--describe` the fix |
 | 255 | ssh could not connect before anything was typed | Ari runs `ssh user@host` once in a pane (key, sleep); retry only after he says done |
+| any other code, 141 among them | `run.zsh` died locally; when `TYPED:`/`SENT` printed, or nothing printed after a `--cmd`, the pane may have run the command | `--cmd ''` to capture; never resend |
 
 ### Pitfalls
 
@@ -220,3 +221,4 @@ The host needs tmux, `~/.config/bin/ari-driving` (`/ari-driving-tmux` Setup) and
 ## File storage
 
 - `bin/run.zsh` — every host action; `--help` lists the flags and defaults. It needs the logging library from `/ari-skill-shellscripts` and exits without it.
+- `tests/run-large-capture.test.zsh` — run after any edit to `run.zsh` that touches how host output is read or printed (`run_command`, `execute_script`, the BIND scan): `zsh $HOME/.claude/skills/ari-driving-remote/tests/run-large-capture.test.zsh`. Self-contained: it puts its own fake `ssh` on PATH that answers a `--cmd` run with a capture larger than a pipe buffer; no tmux, no network. Passes when the last line is `N passed, 0 failed` and it exits 0; a failure is the SIGPIPE regression (exit 141, nothing printed) or a sibling of it.
