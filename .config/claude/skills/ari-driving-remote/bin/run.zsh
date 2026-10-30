@@ -53,6 +53,10 @@ readonly HOST_RUN_LOG='$HOME/.config/bin/run_log'
 readonly DEFAULT_PATH_PREFIX=/opt/homebrew/bin
 readonly DEFAULT_PROMPT_END='❯'
 readonly SSH_OPTS=(-o ConnectTimeout=8 -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
+# Where --put lands a file on the host: named by its content hash, so the same text is the same path on every
+# host and a re-put is idempotent. Typing a long text through tmux is lossy (a 3,000-byte chunk lost 8 bytes).
+readonly PUT_DIR=/tmp
+readonly SHA_CMD='shasum -a 256'
 # A definition whose host is this value runs tmux on this machine instead of over ssh.
 readonly LOCAL_HOST=local
 # Every machine's everyday name, one word, as the host's dotfiles print it (stdout only the name;
@@ -116,6 +120,7 @@ ${c_bold}Usage:${c_rst}
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --hosts
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition NAME --list
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition NAME --target 2.4 --cmd TEXT [OPTIONS]
+  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition NAME --put FILE
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition NAME [--host USER@HOST] --describe TEXT
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition NAME --forget
 
@@ -144,6 +149,11 @@ ${c_bold}Actions${c_rst} (exactly one):
   --list                  print every pane as 'ID=%301|pane=2.4 ✦|- bound=this|other|none command session: window -- title'
                           (✦ = opted in; bound = which Claude session owns it), save them
   --cmd TEXT              gate, type TEXT into --target, wait for the shell prompt; '' types nothing and only captures
+  --put FILE              scp FILE to the host as ${PUT_DIR}/<sha256 of its bytes>.txt, verify the hash there, print
+                          'PUT: <remote path>' (with --dry-run: 'WOULD PUT: …', nothing copied); the one ssh use that
+                          is not typing (a copy, never a command). Content (more than one line, over 200 bytes, a
+                          body or description) goes this way; a --cmd then names the path. Exit 1 with no PUT: line
+                          when the file is unreadable or empty, the copy failed or the hash differs; 255 as for ssh
   --describe TEXT         replace the definition's description without connecting
   --forget                print the definition and delete it
 
@@ -181,6 +191,7 @@ ${c_bold}Examples:${c_rst}
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition local --target 2.4 --no-enter --cmd 'kubectl get pods'
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target 4.1 --cmd 'diskutil list external physical'
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %7 --cmd ''
+  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "$SCRATCHPAD/body.md"
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --host pi@pi.local --describe 'Pi 4 B at 192.0.2.94, no tmux; reached from the laptop with a nested ssh -t'
 EOF
 }
@@ -689,6 +700,70 @@ execute_script() {
 }
 
 #######################################
+# Copy a file to the host as PUT_DIR/<sha256>.txt (cp for the local definition, scp otherwise), confirm the
+# host's hash of it matches, and print 'PUT: <remote path>'. The only ssh use besides typing: it moves bytes
+# and runs nothing of the caller's. A hash mismatch removes nothing and exits 1 so a half-written file is
+# never named as done.
+# Globals: host LOCAL_HOST SSH_OPTS PUT_DIR SHA_CMD dry_run name
+# Arguments: $1 local file
+# Returns: 1 on a missing file, a failed copy or a hash mismatch; EXIT_SSH when ssh cannot connect
+#######################################
+put_file() {
+  local file="${1:A}" sha remote remote_sha bytes copy_failed=false exit_code=0 tool
+  if [[ ! -f "${file}" || ! -r "${file}" ]]; then
+    log::err "File to put is not a readable regular file | file='${file}'"
+    return 1
+  fi
+  bytes="$(wc -c < "${file}" | tr -d ' ')"
+  if (( bytes == 0 )); then
+    log::err "File to put is empty; a Write that did not land | file='${file}'"
+    return 1
+  fi
+  for tool in scp shasum; do
+    command -v "${tool}" >/dev/null 2>&1 || { log::err "Missing required command | missing='${tool}'"; return 1; }
+  done
+  # hashed from stdin: a name starting with '-' or holding a backslash would change shasum's output
+  sha="$(${=SHA_CMD} < "${file}" | awk '{print $1}')"
+  remote="${PUT_DIR}/${sha}.txt"
+  log::info "Putting file on the host | host='${host}' file='${file}' bytes='${bytes}' remote='${remote}'"
+  if [[ "${dry_run}" == "true" ]]; then
+    log::info "Dry run — would copy and verify, copying nothing"
+    print -r -- "WOULD PUT: ${remote}"
+    return 0
+  fi
+  if [[ "${host}" == "${LOCAL_HOST}" ]]; then
+    cp -f -- "${file}" "${remote}" 2>/dev/null || copy_failed=true
+    remote_sha="$(${=SHA_CMD} < "${remote}" 2>/dev/null | awk '{print $1}')"
+  else
+    # scp's own stderr stays visible: 'Permission denied', 'No space left', a missing sftp-server
+    scp "${SSH_OPTS[@]}" -- "${file}" "${host}:${remote}" || exit_code=$?
+    if (( exit_code == EXIT_SSH )); then
+      report_exit "${exit_code}"
+      return "${exit_code}"
+    fi
+    (( exit_code == 0 )) || copy_failed=true
+    exit_code=0
+    # the host may have sha256sum (Linux) or shasum (macOS, perl); try both
+    remote_sha="$(ssh "${SSH_OPTS[@]}" "${host}" "if command -v sha256sum >/dev/null 2>&1; then sha256sum -- ${remote}; else shasum -a 256 -- ${remote}; fi" 2>/dev/null | awk '{print $1}')" || exit_code=$?
+    if (( exit_code == EXIT_SSH )); then
+      report_exit "${exit_code}"
+      return "${exit_code}"
+    fi
+  fi
+  if [[ "${remote_sha}" != "${sha}" ]]; then
+    if [[ "${copy_failed}" == "true" ]]; then
+      log::err "Copy failed and the host does not hold the text | host='${host}' remote='${remote}' hint='scp's message is above; a re-put is safe; never type the content instead'"
+    else
+      log::err "Hash mismatch after copy; the remote file is not the text | local='${sha}' remote='${remote_sha:-unreadable}' remote_path='${remote}' hint='re-put once; a second mismatch goes to Ari'"
+    fi
+    return 1
+  fi
+  # a failed copy whose target already holds the exact bytes (another user's identical file in a sticky /tmp) is a put
+  print -r -- "PUT: ${remote}"
+  record_definition "${name}" false "" "" true
+}
+
+#######################################
 # Log what a host-script exit code means for the caller. 0 logs nothing.
 # Globals: host target timeout path_prefix OPT_IN_COMMAND
 # Arguments: $1 exit_code
@@ -835,6 +910,11 @@ validate_run_args() {
     log::err "pbcopy in --cmd | hint='never the clipboard on his machine; print the text in chat (/ari-driving-tmux)'"
     return 1
   fi
+  # content smuggled through the pane: typed base64 drops bytes on long sends (a 3,000-byte chunk lost 8 on 2026-10-30)
+  if [[ "${cmd}" == *base64\ -d* || "${cmd}" == *base64\ --decode* || "${cmd}" == *base64\ -D* ]]; then
+    log::err "Refusing --cmd; it decodes content typed into the pane | hint='content goes by --put FILE; the --cmd then names the PUT: path'"
+    return 1
+  fi
   if [[ -z "${prompt_end}" ]]; then
     log::err "Empty prompt end | name='${name}' hint='--prompt-end STR; the definition file has none'"
     return 1
@@ -852,7 +932,7 @@ main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local name="" host="" host_set=false re_point=false target="" session="" cmd="" cmd_set=false describe="" describe_set=false
+  local name="" host="" host_set=false re_point=false target="" session="" cmd="" cmd_set=false describe="" describe_set=false put="" put_set=false
   local press_enter=true wait=true run_log=true dry_run=false list=false hosts=false forget=false
   local lines="${DEFAULT_LINES}" timeout="${DEFAULT_TIMEOUT}"
   local path_prefix="${DEFAULT_PATH_PREFIX}" path_prefix_set=false prompt_end="${DEFAULT_PROMPT_END}" prompt_end_set=false
@@ -866,6 +946,7 @@ main() {
     --target)           target="${2:?--target requires a value}"; shift 2 ;;
     --session)          session="${2:?--session requires a value}"; shift 2 ;;
     --cmd)              cmd="${2?--cmd requires a value}"; cmd_set=true; shift 2 ;;
+    --put)              put="${2:?--put requires a value}"; put_set=true; shift 2 ;;
     --hosts)            hosts=true; shift ;;
     --list)             list=true; shift ;;
     --describe)         describe="${2:?--describe requires a value}"; describe_set=true; shift 2 ;;
@@ -884,7 +965,7 @@ main() {
 
   # === MASSAGE ===
   local actions=0 flag
-  for flag in "${hosts}" "${list}" "${cmd_set}" "${describe_set}" "${forget}"; do
+  for flag in "${hosts}" "${list}" "${cmd_set}" "${put_set}" "${describe_set}" "${forget}"; do
     [[ "${flag}" == "true" ]] && actions=$((actions + 1))
   done
   if [[ "${cmd_set}" == "true" && -z "${cmd}" && "${press_enter}" == "true" ]]; then
@@ -894,7 +975,7 @@ main() {
 
   # === VALIDATE ===
   if (( actions != 1 )); then
-    log::err "Choose one action | given='${actions}' actions='--hosts, --list, --cmd, --describe, --forget'"
+    log::err "Choose one action | given='${actions}' actions='--hosts, --list, --cmd, --put, --describe, --forget'"
     help
     return 1
   fi
@@ -923,6 +1004,10 @@ main() {
   # === LOGIC ===
   if [[ "${list}" == "true" ]]; then
     list_windows
+    return
+  fi
+  if [[ "${put_set}" == "true" ]]; then
+    put_file "${put}"
     return
   fi
   validate_run_args || return 1
