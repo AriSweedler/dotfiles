@@ -1,14 +1,22 @@
 ---
 name: ari-skill-update
-description: Edit a skill, review it, and propose one ready-to-land commit to the dotfiles tier that owns it (adopting it, and any other unadopted skill, first if needed); one 'yes' commits. A fresh-eyes reviewer blocks any commit that would put company-identifying content in a public skill. Owns the skill-building rule that a question authorizes a consequence, never the start of work. The edit runs in a background fork that hands back; the main thread reviews and proposes.
+description: Edit a skill, review it, and propose one ready-to-land commit to the dotfiles tier that owns it (adopting it, and any other unadopted skill, first if needed); one 'yes' commits. Runs on request, and unasked in the same session whenever Claude did what a skill forbade, skipped what it required, found its instruction or script wrong in use, or met a case it is silent on. A fresh-eyes reviewer blocks any commit that would put company-identifying content in a public skill. Owns the skill-building rule that a question authorizes a consequence, never the start of work. The edit runs in a background fork that hands back; the main thread reviews and proposes.
 ---
 
 # Skill Update
 
-Edit a skill, review it, and end with one proposal that a single `yes` commits to the dotfiles tier that owns it, adopting it first if it is not yet versioned. Before any commit to a public tier, a separate reviewer reads the whole skill for anything that identifies Ari's employer; such content belongs only in a private skill. The edit runs in a fork (see **Fork by default**). Quality review is delegated to `/ari-skill-review`; script conventions to `/ari-skill-shellscripts` and `/ari-skill-pythonscripts`.
+Edit a skill, review it, and end with one proposal that a single `yes` commits to the dotfiles tier that owns it, adopting it first if it is not yet versioned. The skill runs when Ari asks, and unasked whenever Claude did what a skill forbade, skipped what it required, found its instruction or script wrong in use, or met a case it is silent on (**A mistake is a skill update**). Before any commit to a public tier, a separate reviewer reads the whole skill for anything that identifies Ari's employer; such content belongs only in a private skill. The edit runs in a fork (see **Fork by default**). Quality review is delegated to `/ari-skill-review`; script conventions to `/ari-skill-shellscripts` and `/ari-skill-pythonscripts`.
 
 ## Rules
 
+- **A mistake is a skill update.** When Claude sees, or Ari points out, that Claude did what a skill forbade, skipped what it required, found its instruction or script wrong in use, or met a case it is silent on, the response is the same session and unasked: name the skill in chat, state the mistake and its evidence in one line, and once the effect is undone invoke `/ari-skill-update <skill>` with that line as the change (see **Fork by default**), then go on with the work. In a fork, which has no Skill tool, the line rides the hand-back under **Surfaced skills** and the main thread invokes; never a second fork on a skill while one lives. The fix is a rule where the behavior belongs and, when the skill has tests, a test that would have caught it. The edit starts unasked; the commit still waits for `yes`. Waiting to be asked is the failure this rule removes. A mistake with no skill behind it is not this rule's business: it goes to Claude's auto-memory, or to a bead when the project has a tracker.
+  ```
+  BAD:  "Sorry, I shouldn't have done that." … (work continues)
+  BAD:  "Want me to update the skill so this doesn't recur?"
+  BAD:  (a bare Edit of SKILL.md, no review, no proposal)
+  GOOD: "ari-driving-remote: I typed into a pane another session was driving; the read came back as its output.
+         /ari-skill-update ari-driving-remote"  → the fork starts; the work resumes
+  ```
 - **Keep skill text short.** One sentence per instruction; no preamble. Cut any sentence that adds no information.
 - **Integrate, don't append.** When editing a skill, rewrite the section where the new behavior belongs — never tack lines onto the end of a section or append bullets to a list.
   ```
@@ -130,7 +138,7 @@ Show the skill's intent:
 
 ### Understand the change
 
-**Step 1: Check conversation history.** Before asking anything, search the current conversation for prior invocations of the target skill. If the user ran it and then corrected, overrode, or worked around its output:
+**Step 1: Check conversation history.** A self-caught mistake (**A mistake is a skill update**) needs no search: the one line already stated is the change; go to step 2. Otherwise search the current conversation for prior invocations of the target skill. If the user ran it and then corrected, overrode, or worked around its output:
 1. Identify what the skill did wrong or failed to do.
 2. Identify what the user did instead.
 3. Tell the user: "Earlier you used `/X` and had to manually do Y. The skill should have done Y itself."
@@ -147,7 +155,7 @@ If no prior invocation exists, the main thread asks the user to describe the cha
 State it, e.g.:
 > "Currently the skill does X. You're asking it to also do Y — an intent change. I'll update the heading + description, then the implementation."
 
-**Step 3: State it.** Repeat the planned change in one sentence. If the behavior already exists in the skill, say so and stop — don't make an empty edit. Otherwise go straight to editing: the user approves the commit, not the edit (see Rules).
+**Step 3: State it.** Repeat the planned change in one sentence. If the behavior already exists in the skill, say so and stop — don't make an empty edit; a mistake path is the exception: the skill had the rule and it was still broken, so the edit sharpens the rule or adds the test that would have caught it, and never stops empty or falls back to asking Ari. Otherwise go straight to editing: the user approves the commit, not the edit (see Rules).
 
 ### Edit the skill
 
@@ -170,8 +178,8 @@ git df diff -- $HOME/.config/claude/skills/<skill-name>      # ldf: git ldf diff
 <the fenced brief from Review with <skill_dir> filled in>
 ### Quality review
 run | skip (the user said `skip review`)
-### Surfaced meta-skills
-<name, one line each, or none>
+### Surfaced skills
+<a meta-skill that also needs updating, or a mistake caught in the fork (A mistake is a skill update): skill name and the one line, each; or none>
 ````
 
 ### Review
