@@ -83,7 +83,7 @@ fi
 
 # The primitive. Expanded by the parser into the calling function: its EXIT trap ends the wait with
 # the function's status, its INT trap turns ctrl-c into 130; both are local to that function.
-alias await::_guard='setopt localoptions localtraps; trap '\''await::_end $?'\'' EXIT; trap '\''_await_interrupted=1; return 130'\'' INT; await::_begin'
+alias await::_guard='setopt localoptions localtraps; trap '\''await::_end $? || return $?'\'' EXIT; trap '\''_await_interrupted=1; return 130'\'' INT; await::_begin'
 
 typeset -ga _AWAIT_SPINNER=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
 typeset -ga _AWAIT_PULSE=(◆ ◆ ◆ ◆ ◇ ◇ ◇ ◇)
@@ -169,6 +169,10 @@ await::_end() {
   else
     unset AWAIT_FD AWAIT_DEPTH
   fi
+  # A `return 130` issued from inside the INT trap reaches the caller as status 1 when the trap fired
+  # mid-loop (zsh 5.9, seen on the laptop). Only a `return` in the trap list itself sets the caller's
+  # status, so the alias's EXIT trap re-returns whatever non-zero status this function hands back.
+  (( _await_interrupted )) && return 130
   return 0
 }
 
