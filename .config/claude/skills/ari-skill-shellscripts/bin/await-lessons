@@ -1,0 +1,101 @@
+#!/usr/bin/env zsh
+# Run the await.zsh lessons in order: each prints what it teaches, waits for Enter, runs, and
+# shows its exit code. Run: zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/await-lessons
+
+set -euo pipefail
+
+readonly SCRIPT_DIR="${0:A:h}"
+readonly SKILLS_DIR="${HOME}/.claude/skills"
+readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+
+readonly LESSONS_DIR="${SKILLS_DIR}/ari-skill-shellscripts/lessons/await"
+
+help() {
+  cat <<HELP
+${c_green}await-lessons${c_rst} — learn lib/await.zsh by watching it, one lesson at a time
+
+${c_bold}Usage:${c_rst}
+  zsh \$HOME/.claude/skills/ari-skill-shellscripts/bin/await-lessons [--from N] [--only N] [--list]
+
+${c_bold}Options:${c_rst}
+  --list      print the lessons and what each teaches, run nothing
+  --from N    start at lesson N (default 1)
+  --only N    run lesson N alone
+  -h, --help  this
+
+Each lesson needs a terminal: it draws on stderr and some wait for a key. Ctrl-C inside
+lesson 07 is part of the lesson; Ctrl-C anywhere else stops the run.
+HELP
+}
+
+#######################################
+# The lesson files, sorted by their two-digit prefix.
+# Globals: LESSONS_DIR
+#######################################
+lessons() { print -l -- "${LESSONS_DIR}"/[0-9][0-9]-*.zsh; }
+
+#######################################
+# The teaching text: every `#:` line of the file, stripped.
+# Arguments: $1 = lesson path
+#######################################
+teaching() { awk '/^#:/ { sub(/^#: ?/, ""); print }' "${1}"; }
+
+#######################################
+# Print one lesson's heading and text.
+# Arguments: $1 = lesson path
+#######################################
+show() {
+  local file="${1}" name="${1:t:r}"
+  print -u2 -- "
+${c_bold}${c_cyan}── ${name#*-} (${name%%-*}) ──${c_rst}"
+  teaching "${file}" | log::colorize_each_line "${c_grey}" >&2
+}
+
+from=1 only=0 list=0
+while (( $# > 0 )); do
+  case "${1}" in
+    -h|--help) help; exit 0 ;;
+    --list) list=1; shift ;;
+    --from) from="${2:?--from requires a number}"; shift 2 ;;
+    --only) only="${2:?--only requires a number}"; shift 2 ;;
+    *) log::err "Unknown flag | flag='${1}'"; help; exit 2 ;;
+  esac
+done
+
+local -a files=("${(@f)$(lessons)}")
+if (( list )); then
+  for f in "${files[@]}"; do show "${f}"; done
+  exit 0
+fi
+if [[ ! -t 2 || ! -r /dev/tty ]]; then
+  log::err "The lessons draw on a terminal; run this in one, or --list to read them"
+  exit 1
+fi
+
+for f in "${files[@]}"; do
+  n=$(( 10#${${f:t}%%-*} ))
+  (( only && n != only )) && continue
+  (( ! only && n < from )) && continue
+  show "${f}"
+  print -nu2 -- "${c_grey}⏎ to run${c_rst} "
+  read -k 1 -s < /dev/tty
+  print -u2
+  rc=0
+  trap 'true' INT     # lesson 07 wants the ctrl-c; the lesson's own trap takes it, this one just survives it
+  zsh "${f}" || rc=$?
+  trap - INT
+  if (( rc == 0 )); then
+    print -u2 -- "${c_green}exit code = ${rc}${c_rst}"
+  else
+    print -u2 -- "${c_yellow}exit code = ${rc}${c_rst}"
+  fi
+done
+print -u2 -- "
+${c_bold}That is the whole library:${c_rst} await::run owns the line and ends it from the step's code; two turns
+(computer, user), each followed by its { } group; slots; a timeout (124); ctrl-c (130); a probe loop;
+plain mode for logs; await::_guard underneath; and a refusal for every call made outside a wait."
