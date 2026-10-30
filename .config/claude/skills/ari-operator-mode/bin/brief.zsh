@@ -1,7 +1,8 @@
 #!/usr/bin/env zsh
 # brief.zsh — the deterministic parts of an operator-mode reply, from a capture's frontier.json: the
-# header line every reply opens with, or the cut-off paragraph that is the whole reply when the capture
-# was cut off. Run: zsh $HOME/.claude/skills/ari-operator-mode/bin/brief.zsh --help
+# header line every reply opens with, or the cut-off output that is the whole reply when the capture
+# was cut off (the P0 paragraph, or one waiting line for a pane busy with this session's own command or
+# with Ari's own row). Run: zsh $HOME/.claude/skills/ari-operator-mode/bin/brief.zsh --help
 
 set -euo pipefail
 
@@ -18,6 +19,7 @@ source "${LIB_LOGGING}"
 
 readonly STALE_AFTER_S=86400     # an in-progress bead untouched this long counts as stale in the header
 readonly CLOSING_QUESTION='Tell me when it is clear, or name another pane?'
+readonly WAIT_REASONS=(own_command row_pending row_running)   # not his to clear: one waiting line, never the P0 paragraph
 
 help() {
   cat <<HELP
@@ -32,11 +34,12 @@ ${c_bold}Options:${c_rst}
   --json FILE    the frontier.json itself, in place of --dir
   --header       print the one line every reply in the mode opens with
   --phase TEXT   appended to the header after the capture time, e.g. 'after row 1' (default: fresh read)
-  --cut-off      print the P0 paragraph and exit 3 when the capture was cut off; print nothing and exit 0 otherwise
+  --cut-off      print the cut-off output and exit 3 when the capture was cut off, nothing and exit 0 otherwise:
+                 the P0 paragraph, or for own_command, row_pending and row_running one waiting line with its question
   -h, --help     this help
 
-${c_bold}Exit codes:${c_rst} 0 printed (or nothing to print); 3 the cut-off paragraph was printed; 1 a bad call or
-  a file that is not a capture (it must hold cut_off and ready).
+${c_bold}Exit codes:${c_rst} 0 printed (or nothing to print); 3 the cut-off output was printed; 1 a bad call or a file that
+  is not a capture (it must hold cut_off and ready).
 HELP
 }
 
@@ -88,7 +91,26 @@ reason_sentence() {
   esac
 }
 
+#######################################
+# The one line a waiting capture renders: the pane, what holds it, whose it is, and the one question.
+# Arguments: $1 = reason; $2 = pane; $3 = prompt_holds
+#######################################
+waiting_line() {
+  local reason="${1}" pane="${2}" holds="${3}"
+  case "${reason}" in
+    own_command) print -r -- "Waiting on \`${pane}\`, busy with \`${holds:-a command of mine}\`; nothing of yours to clear. Read again?" ;;
+    row_running) print -r -- "Your row is running in \`${pane}\` (\`${holds}\`); tell me what it printed when it ends?" ;;
+    row_pending) print -r -- "Your row is on your prompt in \`${pane}\`, not entered: press Enter there, or clear it, then tell me?" ;;
+  esac
+}
+
 print_header() {
+  local reason
+  reason="$(jq -r '.cut_off.reason // ""' "${json_file}")"
+  if (( ${WAIT_REASONS[(Ie)${reason}]} )); then   # the waiting line replaces the header too: one renderer
+    waiting_line "${reason}" "$(jq -r '.cut_off.pane' "${json_file}")" "$(jq -r '.cut_off.prompt_holds // ""' "${json_file}")"
+    return 0
+  fi
   jq -r --arg phase "${phase}" --argjson stale_after "${STALE_AFTER_S}" '
     (.captured_at | if . == null then 0 else fromdateiso8601 end) as $now |
     def n(v): if (v | type) == "array" then (v | length | tostring)
@@ -104,9 +126,10 @@ print_header() {
       ] | if length == 0 then "checkout unread"
           else .[0] | .label + " " + ((.g.log[0].hash) // "no commits") + " " + (if (.g.dirty | length) == 0 then "clean" else "dirty " + (.g.dirty | length | tostring) end) end;
     (.captured_at // "" | if . == "" then "" else sub("^[0-9-]+T"; "") | sub(":[0-9]{2}Z$"; "Z") end) as $at |
+    (if (.waited_s // 0) > 0 then "; waited " + (.waited_s | tostring) + "s for " + .pane else "" end) as $waited |
     if .cut_off != null then "Cut off: " + .cut_off.pane + " (" + .cut_off.reason + "); tracker unread; read " + $at
     else "Ready " + n(.ready) + ", in progress " + n(.in_progress) + ", human " + ids(.human) + ", blocked " + ids(.blocked)
-         + ", stale " + stale_count + "; " + git_line + "; read " + $at + "; " + $phase end
+         + ", stale " + stale_count + "; " + git_line + "; read " + $at + $waited + "; " + $phase end
   ' "${json_file}"
 }
 
@@ -118,6 +141,10 @@ print_cut_off() {
   pane="$(jq -r '.cut_off.pane' "${json_file}")"
   reason="$(jq -r '.cut_off.reason' "${json_file}")"
   holds="$(jq -r '.cut_off.prompt_holds // ""' "${json_file}")"
+  if (( ${WAIT_REASONS[(Ie)${reason}]} )); then   # a wait, never his P0
+    waiting_line "${reason}" "${pane}" "${holds}"
+    return 3
+  fi
   cands="$(jq -r '(.cut_off.candidates // []) | join(", ")' "${json_file}")"
   unread_list="$(jq -r '(.cut_off.unread // []) | join(", ")' "${json_file}")"
   sentence="$(reason_sentence "${reason}" "${holds}" "${cands}")"

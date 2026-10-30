@@ -8,6 +8,7 @@
 #   FAKE_LIST_RC        make --list exit with this code and print nothing (default: 0)
 #   FAKE_PROMPT_LINE    the pane's idle prompt line after a read (default: 'at 01:00:02 UTC ❯')
 #   FAKE_RC             refuse every typed read with this exit code and FAKE_REFUSED (default: unset)
+#   FAKE_RC_TIMES       with FAKE_RC: refuse only the first N typed reads, counted in FAKE_DIR/refusals.count (default: every read)
 #   FAKE_RC_FOR         '<substring>:<code>': refuse only reads whose host command contains the substring
 #   FAKE_REFUSED        the REFUSED: line printed with a refusal (default: 'REFUSED: fake refusal')
 #   FAKE_TAIL           a pane tail line printed after the refusal, as run.zsh does (default: none)
@@ -24,6 +25,7 @@ machine=personal|ID=%30|pane=11.1 - bound=none bash 0: superseedr -- laptop}"
 : "${FAKE_LIST_RC:=0}"
 : "${FAKE_PROMPT_LINE:=at 01:00:02 UTC ❯}"
 : "${FAKE_RC:=}"
+: "${FAKE_RC_TIMES:=}"
 : "${FAKE_RC_FOR:=}"
 : "${FAKE_REFUSED:=REFUSED: fake refusal}"
 : "${FAKE_TAIL:=}"
@@ -69,7 +71,12 @@ refuse() {   # <code>
   noise
   exit "${1}"
 }
-if [[ -n "${FAKE_RC}" ]]; then refuse "${FAKE_RC}"; fi
+if [[ -n "${FAKE_RC}" ]]; then
+  if [[ -z "${FAKE_RC_TIMES}" ]]; then refuse "${FAKE_RC}"; fi
+  counter="${FAKE_DIR}/refusals.count"
+  n=0; [[ -r "${counter}" ]] && n="$(<"${counter}")"
+  if (( n < FAKE_RC_TIMES )); then print -r -- $(( n + 1 )) > "${counter}"; refuse "${FAKE_RC}"; fi
+fi
 if [[ -n "${FAKE_RC_FOR}" && "${host_cmd}" == *"${FAKE_RC_FOR%%:*}"* ]]; then refuse "${FAKE_RC_FOR##*:}"; fi
 
 print -r -- "TYPED: ${cmd}"

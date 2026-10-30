@@ -7,6 +7,7 @@
   "beads_dir": "~/beads",
   "repo": "~/homelab",
   "local_repo": "/Users/you/homelab",
+  "pending": null,
   "typed": [
     "bd -C ~/\"beads\" ready --exclude-label human --json",
     "bd -C ~/\"beads\" list -s in_progress --json",
@@ -16,19 +17,93 @@
     "bd -C ~/\"beads\" list -s deferred --json",
     "git -C ~/\"homelab\" status --short && git -C ~/\"homelab\" log -3 --oneline"
   ],
+  "waited_s": 0,
   "cut_off": null,
   "ready": [
-    {"id": "beads-abc", "title": "Fix the widget", "priority": 1, "type": "task", "parent": "beads-epic", "assignee": null, "updated_at": "2026-10-30T01:00:00Z"},
-    {"id": "beads-def", "title": "Polish the frob", "priority": 2, "type": "feature", "parent": null, "assignee": null, "updated_at": "2026-10-30T00:00:00Z"}
+    {
+      "id": "beads-abc",
+      "title": "Fix the widget",
+      "priority": 1,
+      "type": "task",
+      "parent": "beads-epic",
+      "assignee": null,
+      "updated_at": "2026-10-30T01:00:00Z"
+    },
+    {
+      "id": "beads-def",
+      "title": "Polish the frob",
+      "priority": 2,
+      "type": "feature",
+      "parent": null,
+      "assignee": null,
+      "updated_at": "2026-10-30T00:00:00Z"
+    }
   ],
   "in_progress": [
-    {"id": "beads-ip1", "title": "Half done", "priority": 2, "type": "task", "parent": null, "assignee": "claude", "updated_at": "2026-10-29T00:00:00Z"}
+    {
+      "id": "beads-ip1",
+      "title": "Half done",
+      "priority": 2,
+      "type": "task",
+      "parent": null,
+      "assignee": "claude",
+      "updated_at": "2026-10-29T00:00:00Z"
+    }
   ],
-  "human": {"text": "beads-h1  Which indexers?\n", "ids": ["beads-h1"]},
-  "blocked": {"text": "beads-bl1  Needs the PR\n  blocked by: beads-abc\n", "ids": ["beads-bl1"], "blockers": {"beads-abc": 1}},
-  "stale": {"text": "beads-ip1  Half done  (1d)\n", "ids": ["beads-ip1"]},
-  "deferred": {"count": 2},
-  "host_git": {"dirty": [" M bin/lab"], "log": [{"hash": "abc1234", "subject": "first subject"}, {"hash": "bcd2345", "subject": "second subject"}, {"hash": "cde3456", "subject": "third subject"}]},
-  "local_git": {"dirty": [], "log": [{"hash": "f00ba12", "subject": "local subject"}]},
-  "health": {"command": "bin/doctor.sh", "ran": false}
+  "human": {
+    "text": "beads-h1  Which indexers?\n",
+    "ids": [
+      "beads-h1"
+    ]
+  },
+  "blocked": {
+    "text": "beads-bl1  Needs the PR\n  blocked by: beads-abc\n",
+    "ids": [
+      "beads-bl1"
+    ],
+    "blockers": {
+      "beads-abc": 1
+    }
+  },
+  "stale": {
+    "text": "beads-ip1  Half done  (1d)\n",
+    "ids": [
+      "beads-ip1"
+    ]
+  },
+  "deferred": {
+    "count": 2
+  },
+  "host_git": {
+    "dirty": [
+      " M bin/lab"
+    ],
+    "log": [
+      {
+        "hash": "abc1234",
+        "subject": "first subject"
+      },
+      {
+        "hash": "bcd2345",
+        "subject": "second subject"
+      },
+      {
+        "hash": "cde3456",
+        "subject": "third subject"
+      }
+    ]
+  },
+  "local_git": {
+    "dirty": [],
+    "log": [
+      {
+        "hash": "f00ba12",
+        "subject": "local subject"
+      }
+    ]
+  },
+  "health": {
+    "command": "bin/doctor.sh",
+    "ran": false
+  }
 }

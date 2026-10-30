@@ -23,19 +23,19 @@ Ready 2, in progress 1, human 1, blocked 1, stale 1; laptop abc1234 dirty 1; rea
 | 4 | Run `bin/doctor.sh` on the laptop | P2 | Ari | health unknown this capture |
 | 5 | beads-def "Polish the frob" | P2 | Claude | next ready, frees nothing |
 
-Row 1, `machine=personal|ID=%18|pane=3.1|nickname=homelab`:
+Row 1, typed into `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not entered:
 ```zsh
 bd -C ~/beads human respond beads-h1 -r "the two already listed"
 ```
 Records the answer on the bead and closes it. Prints the bead id and `closed`.
 
-Row 2, `machine=personal|ID=%18|pane=3.1|nickname=homelab`:
+Row 2, for `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not typed yet:
 ```zsh
 git -C ~/homelab diff bin/lab
 ```
 Shows the uncommitted change to `bin/lab` before you decide. Prints a unified diff, or nothing when only the mode changed.
 
-Row 4, `machine=personal|ID=%18|pane=3.1|nickname=homelab`:
+Row 4, for `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not typed yet:
 ```zsh
 cd ~/homelab && bin/doctor.sh
 ```
@@ -46,6 +46,32 @@ Blocked: 1 (beads-bl1 on beads-abc). Deferred: 2. Stale: 1 (beads-ip1, 1d).
 A no is a correction. Row 1 next?
 
 ---
+
+## The run behind Row 1
+
+Before the rendering above went out, this ran once, and its `TYPED:` line is what the key "typed into …, not entered" reports; the block shows the bare command, `run.zsh` wrapped it in `run_log` on his prompt:
+
+```zsh
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %18 --no-enter --cmd 'bd -C ~/beads human respond beads-h1 -r "the two already listed"'
+```
+```
+TYPED: run_log 'bd -C ~/beads human respond beads-h1 -r "the two already listed"'
+SENT
+```
+
+## A row the pane refused
+
+The same run exited 75 with `REFUSED: machine=personal|ID=%18|pane=3.1 running nvim, not a shell`; the row renders with the why and is typed once on his yes:
+
+```
+Row 1, for `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not typed: running nvim, not a shell:
+```zsh
+bd -C ~/beads human respond beads-h1 -r "the two already listed"
+```
+Records the answer on the bead and closes it. Prints the bead id and `closed`. I type it when you say the pane is free.
+```
+
+Not this: typing it again next turn without his word, or typing it with Enter.
 
 ## A local row
 
@@ -78,3 +104,23 @@ The whole reply, nothing before or after it:
 ```
 
 Not this: the same paragraph followed by "Meanwhile this Mac's checkout is clean at f00ba12, so I could start the docs row." `local_git` did fill; it is still not said.
+
+## My own command in the pane
+
+When the capture ended `own_command`, the whole reply is this one line, and his next message captures again:
+
+```
+Waiting on `machine=personal|ID=%18|pane=3.1`, busy with `another caller is typing into it`; nothing of yours to clear. Read again?
+```
+
+Not this: the P0 paragraph above, which tells Ari to clear a pane that is busy with Claude's own work; or a second read in the same turn.
+
+## His row still on the prompt
+
+When the capture (run with `--pending`) found his un-entered row on the prompt, the whole reply is this one line:
+
+```
+Your row is on your prompt in `machine=personal|ID=%18|pane=3.1`, not entered: press Enter there, or clear it, then tell me?
+```
+
+Not this: the P0 paragraph quoting Claude's own typed row as text Ari must clear.

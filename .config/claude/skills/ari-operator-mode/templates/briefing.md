@@ -1,6 +1,6 @@
 # Briefing: the render spec
 
-One briefing is rendered from one capture (`frontier.json`), in this order, with nothing the JSON does not hold. Every sentence traces to one section of the JSON; a sentence that traces to none is deleted. The filled example is `briefing.example.md`; the capture it renders is `frontier.example.json`.
+One briefing is rendered from one capture (`frontier.json`), in this order, with nothing the JSON does not hold. Every sentence traces to one section of the JSON, or, for a row of Ari's, to this turn's `run.zsh --no-enter` result; a sentence that traces to neither is deleted. The filled example is `briefing.example.md`; the capture it renders is `frontier.example.json`.
 
 ## Line 1: the header
 
@@ -12,7 +12,7 @@ Ready failed, in progress 1, human 1, blocked 1, stale 1; laptop abc1234 clean; 
 Ready 2, in progress 0, human 0, blocked 0, stale 0; this Mac f00ba12 clean; read 09:07Z; fresh read
 ```
 
-`failed` is a section that errored; `this Mac` appears when the host checkout was skipped or unread; the time is the capture's, so a reply that did not capture shows the older time.
+`failed` is a section that errored; `this Mac` appears when the host checkout was skipped or unread; `; waited Ns for <pane>` appears when the reader waited on its own command; the time is the capture's, so a reply that did not capture shows the older time.
 
 ## First principles: one sentence
 
@@ -33,17 +33,17 @@ One bullet per non-empty section, one sentence each, at most six:
 
 ## The table
 
-At most five rows, unblocked only, columns `# | Action | Priority | Who | Why now`; sources, order and cell formats are Reference › Row triage. A row of Ari's carries its command under the table, keyed by row and pane:
+At most five rows, unblocked only, columns `# | Action | Priority | Who | Why now`; sources, order and cell formats are Reference › Row triage. A row of Ari's carries its command under the table, keyed by row and pane; Claude types his first remote row's command into the pane with `run.zsh --no-enter` before rendering, and the key says what that run printed:
 
 ```
-Row 2, `machine=personal|ID=%18|pane=3.1|nickname=homelab`:
+Row 2, typed into `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not entered:
 ```zsh
 git -C ~/homelab diff bin/lab
 ```
 Shows the uncommitted change to `bin/lab`. Prints a unified diff, or nothing when only the mode changed.
 ```
 
-A local row carries the click-to-type link `/ari-driving-tmux` mints, never a hand-written one; when no link can be minted, a fenced block under the pane label, never a bare command. A destructive row opens its Action with **destroys:** and what is lost.
+The three key forms: "typed into `<label>`, not entered" when the run printed `TYPED:`; "for `<label>`, not typed: <the why after `REFUSED: <label>`>" when it was refused; "for `<label>`, not typed yet" for his later remote rows, since one typed line sits on his panes at a time and the next Brief types the new table's first remote row. The block holds the bare command passed to `--cmd`; `run.zsh` wraps it in `run_log` on his prompt. A local row carries the click-to-type link `/ari-driving-tmux` mints, never a hand-written one; when no link can be minted, a fenced block under the pane label, never a bare command. A destructive row opens its Action with **destroys:** and what is lost, is never typed before his chat yes, and the question names it.
 
 When no row is unblocked, one line replaces the table: "Nothing is unblocked: N blocked, N deferred, N waiting on you." The trailing line and the question stay.
 
@@ -57,8 +57,8 @@ One sentence saying what a no does, then the one question mark of the reply: "A 
 
 ## After a row lands
 
-Header first (`--phase 'after row N'`), one sentence per fact of what happened and what it printed, then the next table or the one question. Every reply in the mode opens with the header from the newest capture; one that captured nothing shows the older time, which is the signal that it is stale.
+In this order: he said entered, pasted its output, or cleared; Capture; type his next row; header (`--phase 'after row N'`); one sentence per fact of what happened and what it printed; the next table or the one question. While a row of his sits typed and un-entered, nothing is captured or typed: the reply asks "Row N is on your prompt: entered, or cleared?" and nothing else. Every reply in the mode opens with the header from the newest capture; one that captured nothing shows the older time, which is the signal that it is stale.
 
 ## Cut off
 
-`cut_off` not null: the whole reply is the paragraph `brief.zsh --cut-off` prints. No header, no table, no state, no local facts, no other work that turn.
+`cut_off` not null: the whole reply is what `brief.zsh --cut-off` prints. No header, no table, no state, no local facts, no other work that turn, no second read in the same turn. For `own_command`, `row_pending` and `row_running` that output is one waiting line ending in the one question; it is not his P0.
