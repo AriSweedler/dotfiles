@@ -10,9 +10,15 @@
 set -euo pipefail
 
 readonly SCRIPT_DIR="${0:A:h}"
-# Shared libs resolve through the symlink farm, not ${SCRIPT_DIR:h:h}: skills are spread
-# across dotfiles tiers, so a relative hop lands in whichever tier this script sits in.
 readonly SKILLS_DIR="${HOME}/.claude/skills"
+readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+
+source "${SKILLS_DIR}/ari-hemingway--lib/lib/drive.zsh"
 
 # --- Constants ---
 
@@ -34,16 +40,6 @@ readonly LINE_HEIGHT_PT="15.15"
 # A rendered table may drift from the model by this much before the verify read warns: 1.5 lines,
 # because a single extra wrapped line is model rounding, not a layout problem worth a look.
 readonly DRIFT_TOLERANCE_PT="22.7"
-
-# --- Logging ---
-
-readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
-if [[ ! -r "${LIB_LOGGING}" ]]; then
-  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
-  exit 1
-fi
-source "${LIB_LOGGING}"
-source "${SKILLS_DIR}/ari-hemingway--lib/lib/drive.zsh"
 
 # --- Prerequisites ---
 
@@ -382,9 +378,13 @@ report_page_count() {
   params="$(jq -cn --arg id "${doc}" '{fileId: $id, mimeType: "application/pdf"}')"
   # gws saves the export as download.pdf in the working directory.
   (cd "${work}" && gws drive files export --params "${params}" > "${work}/export_reply.json") || { log::warn "PDF export failed; page count unknown | doc='${doc}'"; return 0; }
-  pages="$(strings -n 3 "${work}/download.pdf" | grep -A1 '/Type /Pages' | grep -oE '/Count +[0-9]+' | head -1 | tr -dc '0-9')"
+  [[ -s "${work}/download.pdf" ]] || { log::warn "PDF export wrote no file; page count unknown | pdf='${work}/download.pdf'"; return 0; }
+  # awk, not grep, and no early exit: under pipefail a no-match grep (exit 1) or a strings killed by
+  # SIGPIPE would end the script before the empty check below. /Count sits on the /Type /Pages line
+  # or the one after it.
+  pages="$(strings -n 3 "${work}/download.pdf" | awk 'found { next } /\/Type \/Pages/ { lines_left = 2 } lines_left > 0 { lines_left -= 1; if (match($0, /\/Count +[0-9]+/)) { count = substr($0, RSTART, RLENGTH); gsub(/[^0-9]/, "", count); print count; found = 1 } }')"
   if [[ -z "${pages}" ]]; then
-    log::warn "PDF export unreadable; page count unknown | pdf='${work}/download.pdf'"
+    log::warn "No /Count in PDF export; page count and table-height check skipped | pdf='${work}/download.pdf'"
     return 0
   fi
   log::info "Rendered length | pages='${pages}' pdf='${work}/download.pdf'"
