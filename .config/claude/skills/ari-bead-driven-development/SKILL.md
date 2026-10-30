@@ -1,21 +1,22 @@
 ---
 name: ari-bead-driven-development
-description: "Work Ari's projects through beads (bd) and the Scotty UI in front of them: every wish, follow-up, decision or fix becomes a bead before any code, work is picked from `bd ready` and claimed, what is learned goes back into the bead, and a close carries its evidence. Use whenever Ari voices an intention mid-work (\"I want…\", \"we should…\", \"later…\"), asks what is next or what is ready, says \"file that\", \"make a bead\", \"put it in the backlog\", \"what did we decide\", or mentions bd, beads or Scotty, in any project that has a `.beads/` directory. Not for a session with no beads workspace anywhere: that is /ari-hemingway--structure-working-doc."
+description: "Work Ari's projects through beads (bd) and the Scotty UI in front of them: every wish, follow-up, decision or fix becomes a bead before any code, work is picked from `bd ready` and claimed, what is learned goes back into the bead, and a close carries its evidence. Use whenever Ari voices an intention mid-work (\"I want…\", \"we should…\", \"later…\"), asks what is next or ready, or for the frontier, says \"file that\", \"make a bead\", \"put it in the backlog\", \"what did we decide\", or mentions bd, beads or Scotty, in any project that has a `.beads/` directory. Not for a session with no beads workspace anywhere: that is /ari-hemingway--structure-working-doc."
 ---
 
 # Bead-driven development
 
 Everything that we desire gets committed as a bead and then we work through it from the bead later. A wish is researched into a bead and waits for a pick; a directive gets its bead and is worked at once. Two surfaces read the same database: `bd` for Claude, Scotty for Ari. Scotty is a thin shell over `bd`, so fields, types and edges are chosen for how they render. This skill names no machine (Delegation); it was checked against bd 1.3.1 and Scotty 0.3.2.
 
-A *bead* is one issue in a `.beads/` *workspace*. It is *ready* when open with no unclosed blocker, *claimed* when assigned and in_progress, *blocked* when a `blocks`, waits-for or conditional-blocks edge, or its parent's own blocker, keeps it out of `bd ready`, *deferred* in Scotty's Backlog, *human* when it carries that label and waits on Ari. A *close reason* is the evidence written once at close; a *memory* is a `bd remember` fact that `bd prime` injects into every session.
+A *bead* is one issue in a `.beads/` *workspace*. It is *ready* when open with no unclosed blocker, *claimed* when assigned and in_progress, *blocked* when a `blocks`, waits-for or conditional-blocks edge, or its parent's own blocker, keeps it out of `bd ready`, *deferred* in Scotty's Backlog, *human* when it carries that label and waits on Ari. The *frontier* is the state of play the tracker reports now, ready, in progress, blocked and waiting on Ari: the five commands of Read the frontier, never recalled. A *close reason* is the evidence written once at close; a *memory* is a `bd remember` fact that `bd prime` injects into every session.
 
 ## Rules
 
-- **A wish left in chat is forgotten.** A wish ("I want…", "later…") is researched into a bead in the same turn, and the turn stops there. A directive ("do it now") is filed, claimed and worked in the same turn: `bd create --json`, then `--claim`; bead first either way. A fix already made still gets its bead, created and closed together (Close). Otherwise a pick happens when Ari asks for next work, names a bead, or gives nothing. NEVER track work in TodoWrite, TaskCreate or a markdown list where a `.beads/` exists.
+- **A wish left in chat is forgotten.** A project wish ("I want…", "later…") is researched into a bead in the same turn, its body through `--body-file`, and the turn stops there. Until the bead exists the wish is unfiled, however much of it sits in a draft, and no Claude memory of it is written before the bead; a preference about Ari himself is the one thing that stays a Claude memory. A directive ("do it now") is filed, claimed and worked in the same turn: `bd create --json`, then `--claim`; bead first either way. A fix already made still gets its bead, created and closed together (Close). Otherwise a pick happens when Ari asks for next work, names a bead, or gives nothing. NEVER track work in TodoWrite, TaskCreate or a markdown list where a `.beads/` exists.
 - **Search before filing.** `bd search "<words>"` first; it searches every status by default, closed included (`-s open` narrows). A match is the same outcome in other words. Open → `bd comment <id>` with the new words, never a new bead. Closed → say it was done (id, close reason) and ask whether this is new; if it is, file fresh with `--deps discovered-from:<closed-id>`; reopen only under the Confirm rule. `bd duplicate` and `bd supersede` are for two beads that already exist and close one of them.
 - **bd writes are Claude's to run.** Ari's standing instruction covers every create, comment, dep, claim, close-with-evidence and update, except what the Confirm rule names; `/ari-driving-tmux` is for what needs his identity, his browser or his terminal (`bd human respond`, a Scotty click, Dolt or backup commands).
 - **Every write runs as `BEADS_ACTOR=claude bd …`.** Scotty renders actors on its human allowlist as 👤 and everything else as 🤖; a bare `bd` on Ari's machine is attributed to him. The prefix reaches one command: never chain a second write behind `&&`. Reference tables show bare syntax; every Workflow command that writes carries the prefix.
-- **Resolve the workspace each time.** `command -v bd` first. A host or window Ari named this session wins over cwd until he names another or says "here"; say which workspace each turn's writes went to, and every command there goes through `/ari-driving-remote`, one command per call. A directory he named on this machine: `bd -C <dir> …` on every command, never `cd`. He named none and cwd or a parent has `.beads/` → run here. `.beads/` here and no `bd`: say so; ask whether the tracker lives on a host (`/ari-driving-remote`) or `bd` should be installed. Neither → ask which project; never guess a path. NEVER `bd init` unasked: it makes a second, empty database Scotty does not read. `bd info` confirms the database; report the prefix of its ids (the part before the dash in any `bd ready --json` id), never its path.
+- **Resolve the workspace each time.** `command -v bd` first. A host or window Ari named this session wins over cwd until he names another or says "here"; say which workspace each turn's writes went to, and every command there goes through `/ari-driving-remote`, one command per call. That host is reachable only through a pane the sibling's The gate accepts; a refusal is the Cut off rule below. A directory he named on this machine: `bd -C <dir> …` on every command, never `cd`. He named none and cwd or a parent has `.beads/` → run here. `.beads/` here and no `bd`: say so; ask whether the tracker lives on a host (`/ari-driving-remote`) or `bd` should be installed. Neither → ask which project; never guess a path. NEVER `bd init` unasked: it makes a second, empty database Scotty does not read. `bd info` confirms the database; report the prefix of its ids (the part before the dash in any `bd ready --json` id), never its path.
+- **Cut off from the tracker: the turn is a report, not an answer.** When `/ari-driving-remote` refuses the pane (its The gate, Exit codes and One driver per pane say when) and `PANES:` lists no other ✦ shell pane, nothing in the tracker can be read or written this turn. The report is the pane's full label, what it holds, and that this is Ari's P0: his first move, said in chat, not a bead at `-p 0`. Then nothing else that turn, which is stricter than the sibling's rule (it only forbids typing into that pane): no frontier, bead text or status recalled from memory, a summary or a transcript, since a bead not read this turn is unknown; a wish voiced meanwhile is quoted verbatim under "unfiled:" and written nowhere, so `bd create` is the first command once a pane returns; a claim Claude holds stays held, with `BEADS_ACTOR=claude bd unclaim <id> --if-assignee claude` printed for Ari to run.
 - **Multi-line text goes through a file.** `--body-file`, `--design-file`, `--reason-file`, `bd comment --file`, `bd note --file`, written to the scratchpad. Remote, the file must reach the host first: `/ari-driving-remote` owns user@host and runs the copy, then the command names the remote path; when that is more than the text deserves, keep remote text to one-line flags. A heredoc typed into a tmux window becomes several broken commands. NEVER `bd edit`: it opens `$EDITOR` and blocks; use `bd update <id> --description|--design|--acceptance|--append-notes`.
 - **One bd command at a time per workspace.** Embedded Dolt has a single writer and every call, even `show`, touches the store; never fan out parallel agents against one database. Many beads at once go through `bd create -f <file.md>`, one issue per `##` heading.
 - **`--json` for anything parsed.** `bd show <id> --json` returns an array even for one id; `bd list`, `bd ready` and `bd children` return arrays; `bd create --json` an object; `--silent` prints only the id.
@@ -130,6 +131,7 @@ Scotty's Respond on Needs You comments and removes the `human` label, leaving th
 | `bd ready` empty | "No open issues": nothing to do; "No ready work found": every open bead is held | No open issues → `bd list -s deferred`; a bead Ari picks: `BEADS_ACTOR=claude bd undefer <id>`, then claim; Backlog empty too → ask for the next wish. No ready work found → `bd ready --explain`, `bd blocked` |
 | `bd prime` schema error | binary and database versions differ | `bd info`, `bd doctor`, report; no writes, never `--ignore-schema-skew` unasked |
 | exit 124 via `/ari-driving-remote` | still running | capture only; never resend |
+| `REFUSED:` or `[ERROR] Refusing` from `/ari-driving-remote` (exit 75, 76 pane bound to another session, 77, 255), or exit 70 with no ✦ shell pane under `PANES:` | cut off from the tracker: nothing typed, nothing readable | the Cut off rule: report, Ari's P0, nothing else this turn. Exit 70 with a ✦ pane listed: ask Ari which pane |
 
 A flag refused as unknown: `bd <cmd> --help` on that machine is the authority, not this skill. Flags here were checked against the 1.3.1 help and source; the quoted messages marked as varying were not, so match on the sense, not the string.
 
@@ -141,9 +143,9 @@ A flag refused as unknown: `bd <cmd> --help` on that machine is the authority, n
 
 ## Workflow
 
-### Resolve the workspace and prime
+### Read the frontier
 
-Run `bd info`, then `bd prime`, at session start and again after compaction; `bd prime` prints memories and the close protocol. No `bd`, or no `.beads/` here and no host named: the Resolve rule says what to ask, and nothing runs before the answer. Then the state of play, one command per line, never chained: `&&` stops at the first nonzero exit (an empty `bd ready` hides the rest) and `/ari-driving-remote` takes one command per call:
+Run `bd info`, then `bd prime`, at session start and again after compaction; `bd prime` prints memories and the close protocol. No `bd`, or no `.beads/` here and no host named: the Resolve rule says what to ask, and nothing runs before the answer. Then the frontier, one command per line, never chained: `&&` stops at the first nonzero exit (an empty `bd ready` hides the rest) and `/ari-driving-remote` takes one command per call. A frontier answer MUST follow these five commands this turn; the first refusal stops the sequence, what did return is reported as partial, and the rest is never filled in:
 
 ```zsh
 bd ready --exclude-label human
@@ -153,7 +155,7 @@ bd human list
 bd stale -d 14 -s in_progress
 ```
 
-Nothing ready: Refusals. A non-empty `bd human list` means the next move is Ari's; a non-empty `bd stale` means a tidy (Keep the tracker honest). Chat: "Two ready (P1 first), one in flight, one waiting on you in Needs You."
+Nothing ready: Refusals. A non-empty `bd human list` means the next move is Ari's; a non-empty `bd stale` means a tidy (Keep the tracker honest). Chat, one line with every bucket's ids: "Frontier: ready beads-o27 (P1), beads-p3k; in flight beads-q8m; blocked beads-r2d on beads-o27; waiting on you beads-s5v; stale none." A refusal: "Cut off from the tracker: `machine=personal|ID=%18|pane=3.1` holds an un-entered command; your P0." Never: "From the last summary, two ready and one in flight."
 
 ### Answer what was decided
 
@@ -165,7 +167,7 @@ Nothing ready: Refusals. A non-empty `bd human list` means the next move is Ari'
 
 ```markdown
 ## Goal
-Graph view hides closed and blocked beads behind a Frontier toggle, so the open frontier of an epic is readable.
+Graph view hides closed and blocked beads behind an Open-only toggle, so an epic's open work is readable.
 
 ## What exists today
 The graph shows every bead of the scope; "Live dependencies only" hides closed and unlinked beads but keeps blocked ones.
@@ -182,7 +184,7 @@ A new view: duplicates the layout code for one filter.
 ```
 
 ```zsh
-BEADS_ACTOR=claude bd create "Graph view: Frontier toggle hides closed and blocked beads" -t feature -p 2 --body-file "$desc" --json
+BEADS_ACTOR=claude bd create "Graph view: Open-only toggle hides closed and blocked beads" -t feature -p 2 --body-file "$desc" --json
 ```
 
 Labels come from `bd label list-all` (`-l a,b`). Found while on another bead: add `--deps discovered-from:<current-id>`. Part of an epic: `--parent <epic>`. Already fixed: see Close, filed and closed. A wish ends the turn here. Chat: "Filed beads-o27 (feature, P2); it waits for a pick." A directive goes straight on to Pick and claims the new id.
@@ -220,7 +222,7 @@ Epic when a step can be claimed, closed or handed over on its own, or spans a se
 Write the question, the options and what each unblocks to a file, file it as a decision, and block the waiting work on it:
 
 ```zsh
-BEADS_ACTOR=claude bd create "Decide: keep Frontier as a toggle or a view" -t decision -p 1 -l human --body-file "$q" --json
+BEADS_ACTOR=claude bd create "Decide: keep Open-only as a toggle or a view" -t decision -p 1 -l human --body-file "$q" --json
 BEADS_ACTOR=claude bd dep add beads-o27 <decision-id>
 ```
 
@@ -229,7 +231,7 @@ Do not claim it. A question about a bead that already exists needs no new bead: 
 ### Close with evidence
 
 ```zsh
-BEADS_ACTOR=claude bd close beads-o27 --reason "Commit ab4c456: Frontier toggle hides closed and blocked beads; doctor check PASS" --suggest-next
+BEADS_ACTOR=claude bd close beads-o27 --reason "Commit ab4c456: Open-only toggle hides closed and blocked beads; doctor check PASS" --suggest-next
 ```
 
 The reason names the commit, the check and what was observed. One id: `--suggest-next` prints what the close unblocked, which is the next pick. Several ids: `BEADS_ACTOR=claude bd close a b --reason "x" --reason "y"` (exactly one reason, or one per id in order), no `--suggest-next`: bd refuses it ("only works when closing a single issue"); run `bd ready` after. An epic whose children are all closed: `BEADS_ACTOR=claude bd close <epic> --reason "<evidence naming the children>"` like any bead; `bd epic close-eligible` is the tidy sweep only. Already closed, or children open: Refusals. Wrong bead closed: read `created_by` in `bd show <id> --json`; not `claude` → confirm; then `BEADS_ACTOR=claude bd reopen <id> -r "…"`. Chat: "Closed beads-o27 (ab4c456, doctor PASS); unblocked beads-p3k, picking it next." or "…nothing unblocked; `bd ready` shows two ready."
