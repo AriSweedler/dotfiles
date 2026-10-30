@@ -27,6 +27,9 @@ readonly DEFAULT_MERGE_METHOD="merge"
 readonly VALID_MERGE_METHODS=(squash merge rebase)
 readonly HEAD_ATTEMPTS=12
 readonly RUN_LOOKUPS=12
+# How many --interval polls a red run waits for a push or a rerun before the watcher ends as unattended (30 at 60 s is 30 min).
+readonly RED_WAIT_POLLS=30
+readonly HEARTBEAT_EVERY=5
 readonly RATE_LIMIT_SLEEP=300
 readonly CURL_MAX_TIME=20
 
@@ -47,12 +50,14 @@ ${c_bold}Options:${c_rst}
   --base BRANCH       The PR's base (default: ${DEFAULT_BASE}); the base run and the live check run only for that default
   --workflow NAME     The CI workflow name as gh run list sees it (default: ${DEFAULT_WORKFLOW})
   --gate JOB          The CI job whose success merges (default: ${DEFAULT_GATE})
-  --interval SEC      CI polling interval (default: ${DEFAULT_INTERVAL}; never lower than 60 with many watchers)
+  --interval SEC      Every poll's interval: CI, run lookups, the red wait (default: ${DEFAULT_INTERVAL}; never lower than 60 with many watchers)
   --merge-method M    ${(j:|:)VALID_MERGE_METHODS} (default: ${DEFAULT_MERGE_METHOD})
   --keep-branch       Do not delete the remote branch after the merge
   --dry-run           Log the merge instead of running it
   -h, --help          Show this help
 
+The head's newest run is resolved again on every poll, so a "gh run rerun" is seen. A red run waits ${RED_WAIT_POLLS} polls
+for a push or a rerun, with a heartbeat naming the unblock commands, then the watcher ends as "Red and unattended".
 Logs go to stderr; run with "> watch-<branch>.log 2>&1 &" and tail the file. Never use --auto merges.
 EOF
 }
@@ -124,18 +129,73 @@ pr_state() {
 }
 
 #######################################
-# The CI run id for a head sha, polling until it exists.
+# A branch's head sha, or nothing when the ref cannot be read.
+# Globals: READ_TOKEN REPO
 # Arguments:
-#   $1 - branch; $2 - sha
-# Outputs: the run id, or nothing
+#   $1 - branch
 #######################################
-run_for_sha() {
-  local branch="${1}" sha="${2}" rid=""
+head_sha() {
+  gh_as "${READ_TOKEN}" api "repos/${REPO}/git/ref/heads/${1}" --jq .object.sha 2>/dev/null || true
+}
+
+#######################################
+# One look at the newest CI run for a commit: "id status conclusion", e.g. "123 completed success",
+# "123 in_progress " (a rerun in flight has no conclusion yet), or nothing when no run exists yet or
+# the API did not answer.
+# Globals: READ_TOKEN REPO WORKFLOW
+# Arguments:
+#   $1 - sha
+#######################################
+run_line_for_sha() {
+  gh_as "${READ_TOKEN}" run list --repo "${REPO}" --workflow "${WORKFLOW}" --commit "${1}" --limit 1 \
+    --json databaseId,status,conclusion --jq '.[0] | select(. != null) | "\(.databaseId) \(.status) \(.conclusion)"' 2>/dev/null || true
+}
+
+#######################################
+# The newest CI run for a head sha, polling at the interval until one exists.
+# Globals: READ_TOKEN REPO WORKFLOW INTERVAL RUN_LOOKUPS
+# Arguments:
+#   $1 - sha
+# Outputs: the run line (see run_line_for_sha), or nothing after RUN_LOOKUPS looks
+#######################################
+latest_run_for_sha() {
+  local sha="${1}" line=""
   for (( i = 1; i <= RUN_LOOKUPS; i++ )); do
-    rid="$(gh_as "${READ_TOKEN}" run list --repo "${REPO}" --workflow "${WORKFLOW}" --branch "${branch}" --limit 8 --json databaseId,headSha --jq ".[] | select(.headSha==\"${sha}\") | .databaseId" 2>/dev/null | head -1 || true)"
-    [[ -n "${rid}" ]] && { echo "${rid}"; return 0; }
-    sleep 30
+    line="$(run_line_for_sha "${sha}")"
+    [[ -n "${line}" ]] && { echo "${line}"; return 0; }
+    sleep "${INTERVAL}"
   done
+}
+
+#######################################
+# After a red run: wait for a new head on the branch or for the run line to change (a rerun puts the
+# run back in progress; a later look shows another conclusion). Checks before the first sleep, polls
+# at the interval, and every HEARTBEAT_EVERY polls logs the commands that unblock it.
+# Globals: READ_TOKEN REPO WORKFLOW INTERVAL RED_WAIT_POLLS HEARTBEAT_EVERY
+# Arguments:
+#   $1 - branch; $2 - the red head sha; $3 - the red run line, from the run view in hand ("id completed conclusion")
+# Returns: 0 when something changed; 1 when RED_WAIT_POLLS passed with no push and no rerun
+#######################################
+wait_for_push_or_rerun() {
+  local branch="${1}" sha="${2}" red_line="${3}" rid="${3%% *}" now_sha="" now_line=""
+  for (( i = 1; i <= RED_WAIT_POLLS; i++ )); do
+    now_sha="$(head_sha "${branch}")"
+    if [[ -n "${now_sha}" && "${now_sha}" != "${sha}" ]]; then
+      log::info "New head after a red run | sha='${now_sha}'"
+      return 0
+    fi
+    now_line="$(run_line_for_sha "${sha}")"
+    if [[ -n "${now_line}" && "${now_line}" != "${red_line}" ]]; then
+      log::info "Run changed after a red (a rerun or a new run) | was='${red_line}' now='${now_line}'"
+      return 0
+    fi
+    if (( i % HEARTBEAT_EVERY == 0 )); then
+      log::info "Still red | run='${rid}' sha='${sha}' poll='${i}/${RED_WAIT_POLLS}' unblock='gh run rerun ${rid} --failed (a flake), or push a fix to ${branch}'"
+    fi
+    sleep "${INTERVAL}"
+  done
+  log::warn "Still red, no push and no rerun | run='${rid}' sha='${sha}' polls='${RED_WAIT_POLLS}'"
+  return 1
 }
 
 #######################################
@@ -219,8 +279,8 @@ check_live() {
 watch_main_and_live() {
   local base="${1}" sha="" mid="" exit_code=0
   sleep 20
-  sha="$(gh_as "${READ_TOKEN}" api "repos/${REPO}/git/ref/heads/${base}" --jq .object.sha 2>/dev/null || true)"
-  mid="$(run_for_sha "${base}" "${sha}")"
+  sha="$(head_sha "${base}")"
+  mid="$(latest_run_for_sha "${sha}")"; mid="${mid%% *}"
   if [[ -z "${mid}" ]]; then
     log::warn "No run found for the base head | base='${base}' sha='${sha}'"
     MAIN_RUN=""; MAIN_EXIT="none"
@@ -283,20 +343,31 @@ main() {
   pr="$(wait_for_pr "${branch}" "${DEFAULT_PR_WAIT_MIN}")" || { log::err "No PR appeared | branch='${branch}' minutes='${DEFAULT_PR_WAIT_MIN}'"; return 1; }
   log::info "PR found | pr='${pr}' branch='${branch}'"
 
-  local merged=false sha="" rid="" jobs="" exit_code=0
+  local merged=false sha="" run_line="" rid="" view="" conclusion="" jobs="" exit_code=0
   for (( attempt = 1; attempt <= HEAD_ATTEMPTS; attempt++ )); do
     if [[ "$(pr_state "${pr}")" == "MERGED" ]]; then log::info "Already merged | pr='${pr}'"; merged=true; break; fi
-    sha="$(gh_as "${READ_TOKEN}" api "repos/${REPO}/git/ref/heads/${branch}" --jq .object.sha 2>/dev/null || true)"
+    sha="$(head_sha "${branch}")"
     log::info "Head | sha='${sha}' attempt='${attempt}'"
-    rid="$(run_for_sha "${branch}" "${sha}")"
-    if [[ -z "${rid}" ]]; then log::warn "No run for the head (a conflicting PR gets none) | sha='${sha}'"; sleep 60; continue; fi
-    log::info "CI run | run='${rid}'"
+    run_line="$(latest_run_for_sha "${sha}")"
+    if [[ -z "${run_line}" ]]; then log::warn "No run for the head (a conflicting PR gets none) | sha='${sha}'"; sleep "${INTERVAL}"; continue; fi
+    rid="${run_line%% *}"
+    log::info "CI run | run='${rid}' status='${${run_line#* }%% *}' conclusion='${run_line##* }'"
     exit_code=0
     gh_as "${READ_TOKEN}" run watch "${rid}" --repo "${REPO}" --interval "${INTERVAL}" --exit-status >/dev/null 2>&1 || exit_code=$?
-    jobs="$(gh_as "${READ_TOKEN}" run view "${rid}" --repo "${REPO}" --json jobs --jq '.jobs[] | "\(.name):\(.conclusion)"' 2>/dev/null | tr '\n' ' ' || true)"
-    log::info "Run finished | run='${rid}' exit='${exit_code}' jobs='${jobs}'"
+    # One view: the run's conclusion, then its jobs as "name:conclusion", separated by a tab.
+    view="$(gh_as "${READ_TOKEN}" run view "${rid}" --repo "${REPO}" --json jobs,conclusion \
+      --jq '"\(.conclusion)\t" + ([.jobs[] | "\(.name):\(.conclusion)"] | join(" "))' 2>/dev/null || true)"
+    conclusion="${view%%	*}"; jobs="${view#*	}"
+    log::info "Run finished | run='${rid}' exit='${exit_code}' conclusion='${conclusion}' jobs='${jobs}'"
     if [[ -z "${jobs}" ]]; then log::warn "Empty job list, a rate limit not a red run | retry_in='${RATE_LIMIT_SLEEP}s'"; sleep "${RATE_LIMIT_SLEEP}"; continue; fi
-    if ! run_is_green "${jobs}" "${gate}"; then log::info "Red; waiting for a new push"; sleep 90; continue; fi
+    if ! run_is_green "${jobs}" "${gate}"; then
+      log::info "Red; waiting for a new push or a rerun | run='${rid}'"
+      if ! wait_for_push_or_rerun "${branch}" "${sha}" "${rid} completed ${conclusion}"; then
+        log::err "Red and unattended | pr='${pr}' run='${rid}' sha='${sha}' next='gh run rerun ${rid} --failed, or push a fix, then start the watcher again'"
+        return 1
+      fi
+      continue
+    fi
     if merge_pr "${pr}"; then merged=true; break; fi
     sleep 120
   done

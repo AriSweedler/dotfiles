@@ -76,12 +76,31 @@ lane_files() {
       git -C "${source}" diff --name-only "${merge_base}..HEAD"
       git -C "${source}" diff --name-only
       git -C "${source}" ls-files --others --exclude-standard
-    } | grep -v "^${IGNORED_PREFIX}" | sort -u
+    } | drop_ignored_prefix | sort -u
     return 0
   fi
   log::info "Measuring a handed-off lane from its remote branch | branch='${source}'"
   merge_base="$(git -C "${root}" merge-base "origin/${source}" "${base}")"
-  git -C "${root}" diff --name-only "${merge_base}..origin/${source}" | grep -v "^${IGNORED_PREFIX}" | sort -u
+  git -C "${root}" diff --name-only "${merge_base}..origin/${source}" | drop_ignored_prefix | sort -u
+}
+
+#######################################
+# Drop the lines that start with the ignored prefix. awk, not grep -v: grep exits 1 when nothing is
+# left, which under pipefail made an empty lane (no files yet) kill the script.
+# Globals: IGNORED_PREFIX
+# Outputs: the remaining lines
+#######################################
+drop_ignored_prefix() {
+  # substr, not index: macOS awk's index($0, "") is 1, which would drop every line under an empty prefix.
+  awk -v prefix="${IGNORED_PREFIX}" 'prefix == "" || substr($0, 1, length(prefix)) != prefix'
+}
+
+#######################################
+# Lines on stdin as a JSON array of strings; empty input is [] and exits 0.
+# Outputs: the JSON array
+#######################################
+lines_to_json_array() {
+  jq -Rsc 'split("\n") | map(select(. != ""))'
 }
 
 #######################################
@@ -120,9 +139,10 @@ main() {
   # === MASSAGE ===
   (( ${#shared} > 0 )) || shared=("${DEFAULT_SHARED[@]}")
   typeset -g IGNORED_PREFIX="${ignored}"
+  # Unquoted subscripts throughout: zsh keeps quotes as part of an associative key, so a["A"] and a[${id}] differ.
   local -A lane_dir
   for spec in "${lane_specs[@]}"; do
-    lane_dir["${spec%%=*}"]="${spec#*=}"
+    lane_dir[${spec%%=*}]="${spec#*=}"
   done
   local -a ids
   ids=("${(@ko)lane_dir}")
@@ -146,7 +166,7 @@ main() {
 
   local -A files_of
   for id in "${ids[@]}"; do
-    files_of["${id}"]="$(lane_files "${root}" "${lane_dir[${id}]}" "${base}")"
+    files_of[${id}]="$(lane_files "${root}" "${lane_dir[${id}]}" "${base}")"
     log::info "Lane measured | id='${id}' files='$(print -l "${files_of[${id}]}" | grep -c . || true)'"
   done
 
@@ -159,24 +179,24 @@ main() {
       [[ -n "${file}" ]] && is_shared_path "${file}" "${shared[@]}" && shared_hits+=("${file}")
     done
     lanes_json="$(jq -cn --argjson lanes "${lanes_json}" --arg id "${id}" --arg dir "${lane_dir[${id}]}" \
-      --argjson owned "$(print -l "${owned[@]}" | grep . | jq -Rsc 'split("\n") | map(select(. != ""))')" \
-      --argjson shared "$(print -l "${shared_hits[@]}" | grep . | jq -Rsc 'split("\n") | map(select(. != ""))' || echo '[]')" \
+      --argjson owned "$(print -l "${owned[@]}" | lines_to_json_array)" \
+      --argjson shared "$(print -l "${shared_hits[@]}" | lines_to_json_array)" \
       '$lanes + [{id: $id, source: $dir, files_owned: $owned, shared_files: $shared}]')"
   done
 
   local -A blocked
-  local i j
+  local i j a b common   # declared once: a re-`local` inside the loop prints "common=…" to stdout in zsh
   for (( i = 1; i <= ${#ids}; i++ )); do
     for (( j = i + 1; j <= ${#ids}; j++ )); do
-      local a="${ids[i]}" b="${ids[j]}" common
+      a="${ids[i]}"; b="${ids[j]}"
       common="$(comm -12 <(print -l "${files_of[${a}]}") <(print -l "${files_of[${b}]}") | grep . || true)"
       [[ -z "${common}" ]] && continue
       overlaps_json="$(jq -cn --argjson all "${overlaps_json}" --arg a "${a}" --arg b "${b}" \
-        --argjson files "$(print -l "${common}" | jq -Rsc 'split("\n") | map(select(. != ""))')" \
+        --argjson files "$(print -l "${common}" | lines_to_json_array)" \
         '$all + [{a: $a, b: $b, files: $files}]')"
       for r in "${running[@]}"; do
-        [[ "${r}" == "${a}" ]] && blocked["${b}"]=1
-        [[ "${r}" == "${b}" ]] && blocked["${a}"]=1
+        [[ "${r}" == "${a}" ]] && blocked[${b}]=1
+        [[ "${r}" == "${b}" ]] && blocked[${a}]=1
       done
       log::info "Overlap | a='${a}' b='${b}' files='$(print -l "${common}" | grep -c . || true)'"
     done
@@ -192,7 +212,7 @@ main() {
 
   echo "=== start RESULT ==="
   jq -cn --argjson lanes "${lanes_json}" --argjson overlaps "${overlaps_json}" \
-    --argjson ready "$(print -l "${ready[@]}" | grep . | jq -Rsc 'split("\n") | map(select(. != ""))' || echo '[]')" \
+    --argjson ready "$(print -l "${ready[@]}" | lines_to_json_array)" \
     '{lanes: $lanes, overlaps: $overlaps, ready: $ready}'
   echo "=== end RESULT ==="
 }

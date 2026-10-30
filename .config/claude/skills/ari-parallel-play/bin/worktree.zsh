@@ -132,19 +132,27 @@ link_shared_dir() {
 }
 
 #######################################
-# Unlink the shared dependency symlink (when --link names one), then remove the worktree; the branch stays.
+# Hand a worktree off: refuse a dirty tree or an unpushed submodule commit, unlink the shared dependency
+# symlink (when --link names one), then remove the worktree; the branch stays. The checks run before the
+# unlink so a refused handoff leaves the worktree usable.
 # Globals: DRY_RUN
 # Arguments:
 #   $1 - root; $2 - dir; $3 - the linked directory name, or empty
-# Returns: 1 when the linked name is a real directory (never removed by this script)
+# Returns: 1 when refused (dirty, an unpushed submodule, or the linked name is a real directory)
 #######################################
 handoff_worktree() {
-  local root="${1}" dir="${2}" link_name="${3}" branch=""
+  local root="${1}" dir="${2}" link_name="${3}" branch="" dirty
   if [[ ! -d "${dir}" ]]; then
     log::info "Worktree already gone | dir='${dir}'"
     mutate git -C "${root}" worktree prune
     return 0
   fi
+  dirty="$(git -C "${dir}" status --porcelain | awk -v link="${link_name}" 'link == "" || ($2 != link && $2 != link "/")' | wc -l | tr -d ' ')"
+  if (( dirty > 0 )); then
+    log::err "Worktree has uncommitted changes; commit or discard them first | dir='${dir}' changed_files='${dirty}'"
+    return 1
+  fi
+  submodules_are_on_a_remote "${dir}" || return 1
   if [[ -n "${link_name}" ]]; then
     local target="${dir}/${link_name}"
     if [[ -L "${target}" ]]; then
@@ -154,15 +162,70 @@ handoff_worktree() {
       return 1
     fi
   fi
-  local dirty
-  dirty="$(git -C "${dir}" status --porcelain | wc -l | tr -d ' ')"
-  if (( dirty > 0 )); then
-    log::err "Worktree has uncommitted changes; commit or discard them first | dir='${dir}' changed_files='${dirty}'"
+  branch="$(git -C "${dir}" branch --show-current 2>/dev/null || true)"
+  remove_worktree "${root}" "${dir}" || return 1
+  log::info "Worktree removed, branch kept | dir='${dir}' branch='${branch}'"
+}
+
+#######################################
+# The worktree's initialized submodules, one path per line (a "-" prefix in `submodule status` means
+# not initialized).
+# Arguments:
+#   $1 - the worktree dir
+#######################################
+initialized_submodules() {
+  git -C "${1}" submodule status 2>/dev/null | awk '$1 !~ /^-/ { print $2 }' || true
+}
+
+#######################################
+# Refuse unless every initialized submodule's HEAD is on a remote branch. A linked worktree's submodule
+# gitdir is .git/worktrees/<wt>/modules/<sub>, which the forced remove below deletes, so a committed but
+# unpushed submodule commit would be lost without this guard.
+# Arguments:
+#   $1 - the worktree dir
+# Returns: 1 when a submodule commit is on no remote branch
+#######################################
+submodules_are_on_a_remote() {
+  local dir="${1}" sub="" head=""
+  for sub in ${(f)"$(initialized_submodules "${dir}")"}; do
+    [[ -n "${sub}" ]] || continue
+    head="$(git -C "${dir}/${sub}" rev-parse --short HEAD 2>/dev/null || true)"
+    if [[ -z "$(git -C "${dir}/${sub}" branch -r --contains HEAD 2>/dev/null || true)" ]]; then
+      log::err "Submodule commit is on no remote branch; push it first or the forced remove loses it | submodule='${sub}' head='${head}'"
+      return 1
+    fi
+  done
+}
+
+#######################################
+# Remove a clean, unlinked worktree: deinit its initialized submodules (without --force, so local
+# changes refuse), try the plain remove, and force only when git refuses it over the submodules, which
+# it does once a submodule has been populated in that worktree.
+# Globals: DRY_RUN
+# Arguments:
+#   $1 - root; $2 - the worktree dir
+# Returns: 1 when a deinit or the remove fails
+#######################################
+remove_worktree() {
+  local root="${1}" dir="${2}" initialized="" refusal=""
+  initialized="$(initialized_submodules "${dir}")"
+  if [[ -n "${initialized}" ]]; then
+    log::info "Deinitializing the worktree's submodules | dir='${dir}' submodules='${(j:, :)${(f)initialized}}'"
+    mutate git -C "${dir}" submodule deinit --all || return 1
+  fi
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    log::info "Dry run | command='git -C ${root} worktree remove ${dir}'"
+    return 0
+  fi
+  if refusal="$(git -C "${root}" worktree remove "${dir}" 2>&1)"; then
+    return 0
+  fi
+  if [[ "${refusal}" != *submodules* ]]; then
+    log::err "git worktree remove failed | dir='${dir}' error='${refusal}'"
     return 1
   fi
-  branch="$(git -C "${dir}" branch --show-current 2>/dev/null || true)"
-  mutate git -C "${root}" worktree remove "${dir}"
-  log::info "Worktree removed, branch kept | dir='${dir}' branch='${branch}'"
+  log::warn "git refused the plain remove over the tree's submodules; forcing after the checks above | dir='${dir}' refusal='${refusal}'"
+  run_cmd git -C "${root}" worktree remove --force "${dir}"
 }
 
 main() {

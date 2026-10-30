@@ -38,5 +38,5 @@ No review agent for a change under about 300 lines.
 2. `git push --no-verify --force-with-lease -u origin {{branch}}`.
 3. `{{gh_write}} gh pr create --base {{pr_base}} --title "<type>(<scope>): <what the user gains>" --body-file <file>`; the body: `## Summary` (the owner's words, what changes), `## Tests` (the gates you ran), then the line `🤖 Generated with [Claude Code](https://claude.com/claude-code)`. An existing PR: `gh pr edit <n> --base {{pr_base}}`.
 4. Append `## Result` to `{{ask_file}}` (outcome first, PR URL, head sha, files, gates run, what is left, denials). Touch nothing else in that folder.
-5. Hand off: `zsh $HOME/.claude/skills/ari-parallel-play/bin/worktree.zsh --action handoff --root {{root}} --dir {{worktree}} {{link_flag}}` (unlinks the shared dependency symlink if any, removes the worktree; the branch stays).
+5. Hand off: `zsh $HOME/.claude/skills/ari-parallel-play/bin/worktree.zsh --action handoff --root {{root}} --dir {{worktree}} {{link_flag}}` (unlinks the shared dependency symlink if any, removes the worktree; the branch stays). On a refusal, fix what it names (an uncommitted file, a submodule commit on no remote branch) and run it again.
 6. Return your Result as your final text.
