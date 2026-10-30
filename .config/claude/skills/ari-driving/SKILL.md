@@ -20,6 +20,7 @@ The family's shared rules live here, once. A sibling loaded without this router 
 - **A pane assignment is a hint, never a fact.** One from earlier in the conversation or from a compaction summary may be stale; after compaction, every pane in the summary is a hint. Re-resolve before each use: `link.zsh --pane <it>` here, `run.zsh --host-definition <name> --list` there.
 - **One pane per branch or fork.** `run.zsh` binds a pane to the Claude session that first types into it (`$CLAUDE_CODE_SESSION_ID`) and refuses every other session with 76; a `/branch`, a fork or a subagent is another session. A session that must drive gets its own pane, created on Ari's words this turn and opted in by him (`/ari-driving-remote` **Create a pane for yourself**); a fork sent to drive is told which pane it owns, and the parent stops driving that pane while the fork lives. When Ari explicitly makes two sessions share a pane, capture (`--cmd ''`) immediately before every send and read only from your own `TYPED:` echo down: a capture can return the other session's output.
 - **NEVER raw `tmux send-keys`** (or `paste-buffer`, `load-buffer`) into Ari's panes, locally or over ssh. Only the siblings' scripts type, after checking the opt-in and the idle prompt: `link.zsh` makes the link Ari clicks; `run.zsh --cmd` types when Claude must read the pane back itself.
+- **Content never goes through a pane: not typed, not encoded, not chunked.** Content is more than one line, over 200 bytes, or the value of a body, description or message flag (a bead body, a script, a config); there is no chunk size small enough to make it a command. For a host, `run.zsh --put FILE` copies it and one short command names the path, typed or handed as **Who runs a command** decides (`/ari-driving-remote` **Put a file on the host**). For a pane on this machine, Write the file and the link names its path. A secret is neither typed nor put: tell Ari the path and he places it.
 - **The opt-in is Ari's.** Claude never sets it: not `ari-driving on`, `ari-remote-tmux on` or `@ari_driving`, typed, linked, chained, in a pane's startup command, through the Bash tool, or through a fork, subagent or other session; `run.zsh`, `link.zsh` and the click handler refuse any command that spells them. An unmarked pane is refused (`run.zsh` exits 77; a click only focuses): put the command in chat under the pane's label and ask Ari to run `ari-driving on` there, the same when he says "turn it on for me" and for a pane Claude just created. An opt-in Claude set is undone at once with `run.zsh … --cmd 'ari-driving off'` there (exit 70: the pane is already gone), and Ari is told which pane. Seen 2026-10-30: `machine=personal|ID=%35|pane=5.1`, opted in by Claude, was gone within a minute; Ari attributed it to his guard.
 
 ### Who runs a command
@@ -29,6 +30,7 @@ The family's shared rules live here, once. A sibling loaded without this router 
     - Mutating: Ari runs it, and clicking a `▶ run` link counts as Ari running it. Two exceptions, this session only: he allowed that command explicitly, or he ran one with `!`, which also covers later commands of the same tool, same subcommand and same target system (his `! tofu apply` on stack X in dev covers another apply on X in dev; not X in prod, not another tool). Running one on precedent, say in one line which earlier run it follows, directly above the link or block.
 - **A harness-denied command goes to Ari unchanged.** Never rephrase it past the classifier; hand it over as a click-to-type link, a fenced block, or `run.zsh --no-enter`.
 - **A command Ari runs is handed in the form his terminal can take.** On this machine, a click-to-type or click-to-run link from `link.zsh`. On a remote pane, where no link can reach, the command in a fenced `zsh` block under the pane's full label, never bare in prose.
+- **A put is Claude's.** `run.zsh --put FILE` types nothing, so it needs no pane, no opt-in and no hand-off; one chat line first (what the file is, its byte count, which definition), and the file is one Claude wrote this session or one Ari named that Claude has read whole. The command that names the path is decided as above.
 - **Questions are Ari's.** Never type a password, code or approval; say what the pane is asking. A command that will ask one goes out as an interactive run link (`/ari-driving-tmux`), which keeps Ari in that pane until it finishes and returns him then.
 
 ### Captures and the clipboard
@@ -40,7 +42,7 @@ The family's shared rules live here, once. A sibling loaded without this router 
 
 ### Identify the route
 
-Infer it from Ari's words and print it with the evidence, e.g. `Route: tmux (Ari said "pane 2.4")`:
+Infer it from Ari's words and print it with the evidence, e.g. `Route: tmux (Ari said "pane 2.4")`, `Route: remote (content for the laptop)`:
 
 | Ari's words | Route | Sibling |
 |---|---|---|
@@ -50,6 +52,7 @@ Infer it from Ari's words and print it with the evidence, e.g. `Route: tmux (Ari
 | a pane from earlier in the conversation or a compaction summary | a hint: re-resolve it before use | the sibling it came from |
 | a machine name from `--hosts` ("personal"), "my laptop", `user@host`, "2.4 on the laptop" | a host over ssh | `/ari-driving-remote` |
 | "the Pi", a host whose definition says it has no tmux | the host its definition says it is reached from, nesting `ssh -t` | `/ari-driving-remote` |
+| "file that bead on my laptop", "put this script on the Pi": content (Rules) bound for a host | a host over ssh, carrying content: a file, not keystrokes | `/ari-driving-remote` (**Put a file on the host**) |
 | "send-keys this into …", "type it but don't press Enter" | not a licence for raw `send-keys`: a click-to-type link here, `run.zsh --no-enter` there | by machine |
 | Claude must type, wait for the prompt and read the pane itself, on this machine | the `local` definition | `/ari-driving-remote` |
 | nothing fits | ask in one line which machine, with the likelier one recommended | — |
