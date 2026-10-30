@@ -2,7 +2,7 @@
 # Print a Markdown link that focuses a tmux pane on click and, with --cmd, types that command into it
 # (no Enter), followed by the command in a code block, both inside one blockquote so they read as a unit.
 # With --run, the click runs it through run_log in that pane and switches back to the clicked pane; an
-# interactive run (--interactive, or auto-detected: sudo, ssh, tsh, logins) keeps Ari in that pane until the
+# interactive run (--interactive, or auto-detected: sudo, ssh, logins) keeps Ari in that pane until the
 # command finishes, since it will ask him something there, and run_log switches him back then.
 # Clicking runs focus.zsh through the tmux-pane:// branch of ~/.config/tmux/plugin/osc8-hyperlinks.conf.
 # Run: zsh $HOME/.claude/skills/ari-driving-tmux/bin/link.zsh --help
@@ -31,7 +31,7 @@ readonly SCHEME='tmux-pane://'
 readonly PATH_PREFIX=/opt/homebrew/bin
 # Commands that ask something in the pane (a password, a 2FA tap, a [y/N], a login), by first word, or by
 # first two words; a --run of one is interactive unless --no-interactive says otherwise.
-readonly -a INTERACTIVE_COMMANDS=(sudo su ssh tsh passwd login kinit doas)
+readonly -a INTERACTIVE_COMMANDS=(sudo su ssh passwd login kinit doas)
 readonly -a INTERACTIVE_COMMAND_PAIRS=('gh auth' 'aws sso' 'gws auth' 'op signin' 'vault login' 'git push')
 # Skipped before the first word: leading VAR=value assignments and these wrappers (with their flags).
 readonly -a COMMAND_WRAPPERS=(run_log env time)
@@ -239,6 +239,10 @@ main() {
   # === VALIDATE ===
   local refusal
   if [[ -n "${mode}" ]] && ! refusal="$(tmux_text_refusal "${cmd}")"; then
+    log::err "Refusing the command | reason='${refusal}'"
+    return 1
+  fi
+  if [[ -n "${mode}" ]] && ! refusal="$(tmux_opt_in_refusal "${cmd}")"; then
     log::err "Refusing the command | reason='${refusal}'"
     return 1
   fi

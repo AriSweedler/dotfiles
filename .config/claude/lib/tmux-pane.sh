@@ -10,6 +10,7 @@
 #   tmux_pane_gate_refusal     why Claude must not type into a pane (opt-in, input, idle shell prompt)
 #   tmux_pane_is_claude        whether a pane runs Claude Code
 #   tmux_text_refusal          why a command text must not be typed (control characters, a leading clear)
+#   tmux_opt_in_refusal        why a command Claude wrote must not be typed: it sets the opt-in
 #   tmux_pane_lock / _unlock   a short per-pane lock around gate-and-type
 #   tmux_switch_to_pane        switch a client (default: the most recently active) to a pane
 #   tmux_paste_line            paste one line into a pane's prompt, bracketed, no Enter
@@ -128,6 +129,23 @@ tmux_text_refusal() {
     clear|clear[[:space:]\;\&\|]*) echo "starts with clear, which wipes the typed command from Ari's scrollback; drop it"; return 1 ;;
   esac
   return 0
+}
+
+# Claude never sets the opt-in, by any route. A command Claude types (run.zsh) or a link it writes (link.zsh,
+# focus.zsh) is refused when it spells the opt-in anywhere, whether it would set, read or quote it: the rule
+# binds, the filter only catches. Case, quotes and backslashes are ignored first (`Ari-Driving on` runs on
+# APFS; `o""n` is `on` to the shell). `ari-remote-tmux` is the helper's old name, still live as a symlink
+# under ~/.local/bin. Fenced steps Ari types himself (handoff.zsh) do not call this.
+tmux_opt_in_refusal() {
+  _tor_text=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d "\"'\\\\" | tr -s '[:space:]' ' ')
+  case "$_tor_text" in
+    *"$ARI_DRIVING_OPTION"*) ;;
+    *ari-driving\ on|*ari-driving\ on[!a-z0-9_-]*) ;;
+    *ari-remote-tmux\ on|*ari-remote-tmux\ on[!a-z0-9_-]*) ;;
+    *) return 0 ;;
+  esac
+  echo "spells the opt-in (ari-driving on or $ARI_DRIVING_OPTION); refused whether it sets, reads or quotes it"
+  return 1
 }
 
 # Hold a per-pane lock so a double click or two callers cannot both pass the gate and type.

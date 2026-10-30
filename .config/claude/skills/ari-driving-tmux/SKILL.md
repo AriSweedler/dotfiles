@@ -15,6 +15,7 @@ Claude never types into Ari's panes on this machine: it hands him a link to clic
     - **Every pane mention carries both parts**, `ID=%301|pane=2.4`, never "pane 2.4" or `%301` alone.
     - **NEVER put `clear`, `reset` or `tmux clear-history` in a command**, leading or chained; `stdout.plain` already holds only this run.
     - **NEVER write the clipboard unless Ari asked this turn**, and then only through `handoff.zsh --copy`. The PreToolUse guard blocks every other `pbcopy`; never write `HANDOFF_CLIP_OK=1` yourself, and never take another route after a denial.
+    - **Claude never sets the opt-in.** Not `ari-driving on`, `ari-remote-tmux on` or `@ari_driving`: typed, linked, chained, in a pane's startup command, through the Bash tool, or through a fork, subagent or other session. `run.zsh`, `link.zsh` and the click handler refuse any command that spells them; a self-set opt-in is undone with `ari-driving off` there, and Ari is told which pane.
 - **Every `tmux-pane://` URL is pasted from `link.zsh` stdout produced this turn.** NEVER type one by hand, even focus-only: `link.zsh` re-resolves `2.4` to the pane's current ID, encodes the command, and warns when the pane is not opted in.
 - **The code block shows what the click or Ari types.** In a link blockquote, the bare command; the click adds `run_log`. In a fenced step, exactly what Ari types: a capture step shows `run_log -- CMD`, as `handoff.zsh --capture` renders it.
 - **One message per round.** Every step Ari must run before Claude can continue goes in one message, numbered when there are two or more, each with `Expected: …`; then stop and wait.
@@ -24,7 +25,7 @@ Claude never types into Ari's panes on this machine: it hands him a link to clic
 
 ### The opt-in
 
-`ari-driving on|off|status` (`bin/ari-driving`, on PATH as `~/.config/bin/ari-driving`) marks or unmarks the pane it runs in; the pane's window shows ✦ in the status bar. Only the pane option `@ari_driving` grants anything.
+`ari-driving on|off|status` (`bin/ari-driving`, on PATH as `~/.config/bin/ari-driving`) marks or unmarks the pane it runs in; the pane's window shows ✦ in the status bar, and `on` stamps `@ari_driving_since` with the grant time, which `/ari-driving-remote` reads to rebind the pane. Only the pane option `@ari_driving` grants anything; setting it is never Claude's (`/ari-driving` Rules), and `link.zsh` and the click handler refuse a command that spells it.
 
 ### Links
 
@@ -33,9 +34,9 @@ Claude never types into Ari's panes on this machine: it hands him a link to clic
 - no command: `[ID=%301|pane=2.4](tmux-pane://301)`; the click focuses the pane;
 - `--cmd`: a blockquote of `[ID=%301|pane=2.4](tmux-pane://301?cmd=…)` and the command in a code block; the click types it, no Enter;
 - `--run`: the same with `[▶ run in ID=%301|pane=2.4](tmux-pane://301?run=…)`; the click types `run_log --deliver-to <Claude's pane> '<command>'`, presses Enter, and switches back to Claude's pane. When the command finishes, run_log pastes ` run_log artifact: <dir>` into Claude's prompt, without Enter, and copies it to the clipboard; Ari presses Enter when he is ready. Claude's own pane must be in tmux (`$TMUX_PANE` set), or the line has nowhere to go.
-- `--run … --interactive`: `[▶ run (interactive: stays there until it finishes) in ID=%301|pane=2.4](tmux-pane://301?run=…&interactive=1)`, for a command that will ask something in the pane (a password, a 2FA tap, a `[y/N]`, a login). The click adds `--focus-after`, so Ari stays in that pane and run_log returns him to Claude's when the command finishes. Assumed, with a stderr note, when the command starts with `sudo`, `su`, `ssh`, `tsh`, `passwd`, `login`, `kinit`, `doas`, `gh auth`, `aws sso`, `gws auth`, `op signin`, `vault login` or `git push` (after any `VAR=value` and `run_log`/`env`/`time`); `--no-interactive` overrides.
+- `--run … --interactive`: `[▶ run (interactive: stays there until it finishes) in ID=%301|pane=2.4](tmux-pane://301?run=…&interactive=1)`, for a command that will ask something in the pane (a password, a 2FA tap, a `[y/N]`, a login). The click adds `--focus-after`, so Ari stays in that pane and run_log returns him to Claude's when the command finishes. Assumed, with a stderr note, when the command starts with `sudo`, `su`, `ssh`, `passwd`, `login`, `kinit`, `doas`, `gh auth`, `aws sso`, `gws auth`, `op signin`, `vault login` or `git push` (after any `VAR=value` and `run_log`/`env`/`time`); `--no-interactive` overrides.
 
-TEXT is one line; a newline, Tab or other control character, or a leading `clear`, is refused. On the stderr warning `Pane not opted in; the click will only focus it`, do not post a `--cmd` or `--run` link: ask Ari to run `ari-driving on` there, or hand a fenced step. A click types only into an opted-in shell at an empty prompt, not in copy mode, not synchronized, one click at a time; otherwise `bin/focus.zsh` focuses the pane, puts the reason on the tmux status line and, when the link was clicked in a Claude Code pane, pastes ` ari-driving refused: <label> <reason>` into that pane's prompt. A link's command runs only when the link was clicked in a Claude Code pane; clicked anywhere else, it only focuses. The handler is the `tmux-pane://` branch of `~/.config/tmux/plugin/osc8-hyperlinks.conf`; clicks log to `/tmp/ari-driving-focus.log`.
+TEXT is one line; a newline, Tab or other control character, a leading `clear`, or any text that spells the opt-in (`ari-driving on`, `ari-remote-tmux on`, `@ari_driving`: a text match, case and quotes ignored), is refused. On the stderr warning `Pane not opted in; the click will only focus it`, do not post a `--cmd` or `--run` link: ask Ari to run `ari-driving on` there, or hand a fenced step. A click types only into an opted-in shell at an empty prompt, not in copy mode, not synchronized, one click at a time; otherwise `bin/focus.zsh` focuses the pane, puts the reason on the tmux status line and, when the link was clicked in a Claude Code pane, pastes ` ari-driving refused: <label> <reason>` into that pane's prompt. A link's command runs only when the link was clicked in a Claude Code pane; clicked anywhere else, it only focuses. The handler is the `tmux-pane://` branch of `~/.config/tmux/plugin/osc8-hyperlinks.conf`; clicks log to `/tmp/ari-driving-focus.log`.
 
 ### The run_log contract
 
@@ -63,7 +64,7 @@ From a terminal it ends by copying `run_log artifact: <dir>` (skipped with `--no
 | Situation | Handoff |
 |---|---|
 | output needed back; no prompt expected | click-to-run link, `link.zsh --run` |
-| output needed back; the command will ask something in the pane (`sudo`, `ssh`, `tsh`, a login, a `[y/N]`) | interactive run link, `link.zsh --run … --interactive` (auto-detected for `sudo`/`ssh`/`tsh`/logins); Ari stays there until it finishes |
+| output needed back; the command will ask something in the pane (`sudo`, `ssh`, a login, a `[y/N]`) | interactive run link, `link.zsh --run … --interactive` (auto-detected for `sudo`/`ssh`/logins); Ari stays there until it finishes |
 | Ari should edit it first, or Enter is his call | click-to-type link, `link.zsh --cmd` |
 | interactive, output belongs in this conversation (a browser login) | fenced `! cmd` step, run in Claude's own session |
 | no suitable pane: none named this turn, none re-resolved, or not opted in | fenced `run_log -- cmd` step |
@@ -158,7 +159,7 @@ Ari:  ari-driving refused: ID=%301|pane=2.4 not opted in; Ari runs 'ari-driving 
 
 That line is the refusal, not a request to retry; the same reason is in the last lines of `/tmp/ari-driving-focus.log` (`[WARN] Status line | message='Not typed into ID=%301|pane=2.4: …'`) when nothing arrived. Answer with the reason and the fenced command:
 
-→ "`ID=%301|pane=2.4` isn't opted in: run `ari-driving on` there and click the same link again, or run it yourself:" plus the fenced step. For `in copy mode (press q there)`, `running vim, not a shell`, `last line does not end in the prompt` or `another click is typing there`, say which and what frees the pane. Never reprint the link unchanged, and never click-retry blindly.
+→ "`ID=%301|pane=2.4` isn't opted in: run `ari-driving on` there and click the same link again, or run it yourself:" plus the fenced step. For `in copy mode (press q there)`, `running vim, not a shell`, `last line does not end in the prompt` or `another click is typing there`, say which and what frees the pane. For `the link's command spells the opt-in …`, the text filter matched: a command that only mentions the string goes to Ari as a fenced step, never re-quoted past the filter. Never reprint the link unchanged, and never click-retry blindly.
 
 ### Copy only on request
 

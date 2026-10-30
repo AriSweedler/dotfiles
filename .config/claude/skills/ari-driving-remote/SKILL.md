@@ -12,14 +12,18 @@ Claude runs nothing on another machine except by typing into the pane Ari named,
 - **`/ari-driving` Rules apply.** If it has not run this session, invoke it first (Skill tool). These hold even without it:
     - **NEVER run `tmux send-keys` yourself, here or as `ssh host tmux …`.** Every keystroke to a host goes through `run.zsh --cmd`; nothing else runs on the host over ssh.
     - **A pane from earlier in the conversation or a compaction summary is a hint.** Re-run `--list` and use it only if it still shows `✦` and a shell.
+    - **One pane per branch or fork.** `run.zsh` binds a pane to the Claude session that first types into it and refuses every other session with 76; a session that must drive gets a pane of its own (**Create a pane for yourself**). When Ari explicitly makes two sessions share a pane, capture (`--cmd ''`) immediately before every send and read only from your own `TYPED:` echo down.
     - **Every pane mention carries the whole label**, `machine=personal|ID=%6|pane=4.1`, in inline code, never linked, never one part alone.
     - **NEVER start or chain `clear`, `reset` or `tmux clear-history`**; raise `--lines` to see more. `run.zsh` refuses a leading `clear`.
     - **NEVER `pbcopy` on his machine**; `run.zsh` refuses it in `--cmd`.
+    - **Claude never sets the opt-in.** Not `ari-driving on`, `ari-remote-tmux on` or `@ari_driving`: typed, linked, chained, in a pane's startup command, through the Bash tool, or through a fork, subagent or other session. `run.zsh`, `link.zsh` and the click handler refuse any command that spells them; a self-set opt-in is undone with `ari-driving off` there, and Ari is told which pane.
 - **`--hosts` first.** The first `run.zsh` call of a conversation, and the first after compaction, MUST be `--hosts`. Never guess a name or a `user@host`; read them from its output.
 - **Before every non-empty `--cmd`, the bare command goes in chat, in the same message**, headed by the pane's label from the latest `--list`. `run.zsh` adds the `run_log` wrapper itself and prints `TYPED:` with the exact text it sent. Captures (`--cmd ''`) and `--list` need no block.
 - **One `--cmd` per prompt.** Several commands chain with `&&` or `;` inside one `--cmd`; keys sent while a command runs are eaten by it. Directory state persists in the pane, so prefer absolute paths.
 - **Exit 124 means still running, not failed**, as after `--no-wait` or a Bash-tool timeout. NEVER resend; the only call on that pane until the prompt returns is a capture, `--cmd ''`.
-- **Exit 77 or 75: nothing was typed. NEVER work around the gate**: no other `--target` Ari did not name, no `--no-run-log`, no ssh of your own. Print the command under its label and say why; send once more only after Ari says the pane is ready.
+- **Exit 77, 76 or 75: nothing was typed; exit 1 with no `PANE:` line: nothing was connected.** NEVER work around a refusal: no other `--target` Ari did not name, no `--no-run-log`, no ssh of your own. 77: print the command under its label, Ari runs `ari-driving on` there, resend after he says so. 1: tell Ari what was dropped and why; never resend it.
+- **"Turn it on for me" is declined.** The command goes to Ari under the pane's label; the opt-in stays his.
+- **Say when you are cut off, then stop.** A required read with no pane to make it in (the only opted-in pane holds un-entered text, or is bound to another session) is reported as exactly that: which pane, what it holds, what is cut off (the beads tracker, a deploy), and that clearing it is a P0 for Ari. Nothing else happens that turn: no other pane, no workaround, no guess at what the read would have said.
 - **Nested ssh is one-shot and `-t`:** `ssh -t pi@pi.local "cd app && ./install.sh"`. Never an interactive nested shell: every later wait would time out.
 - **`--no-enter` when Ari runs it:** he said never press Enter, the harness denied the command, or it mutates and he has not allowed it. Tell him it is on his prompt line; nothing else goes into that pane until he says he pressed Enter or cleared it.
 - **Save what Ari says about a host as soon as he says it.** A username, an address, how it is reached, what it is for, a correction: the next `run.zsh` call is `--describe` with the merged text, before any `--cmd`.
@@ -42,9 +46,19 @@ description=Personal MacBook, session 0. The only machine with an ssh key on the
 
 `windows` holds each pane's label from the last `--list`; `last_seen` the last run that answered. `description` describes the machine: what it is, how it is reached, what only it can do. It never names a window or a pane; those change daily, and `run.zsh` checks the live panes on every run anyway. Two seeds: `laptop`, written when no definition exists, and `local` (`host=local`: tmux here, no ssh). A definition whose description says it has no tmux (the Pi) is a record, not a target: run through the host it says it is reached from.
 
+### The text check
+
+Before connecting, `run.zsh` reads `--cmd` itself and exits 1, with no `PANE:` line, when the text has a newline or control character, starts with `clear`, has `pbcopy` anywhere, or spells the opt-in: `ari-driving on`, `ari-remote-tmux on` or `@ari_driving`, case and quotes ignored, refused whether it sets, reads or quotes it. The rule binds, not the filter; opt-in state is read from `--list`, never from the option itself.
+
+```
+[ERROR] Refusing --cmd; nothing typed | reason='spells the opt-in (ari-driving on or @ari_driving); refused whether it sets, reads or quotes it'
+```
+
+→ tell Ari what was dropped and why; never resend it.
+
 ### The gate
 
-Every non-empty `--cmd`, before any key and under a per-pane lock: the pane option `@ari_driving` is `on`; the pane is not in copy mode or synchronized; the foreground command is a shell; the last non-blank line ends in `prompt_end`. A failure prints `REFUSED: <label> <why>` and the pane tail, types nothing, and exits 77 or 75:
+Every non-empty `--cmd`, before any key and under a per-pane lock: the pane is opted in (its option `@ari_driving` is on, set by Ari's `ari-driving on` there); it is not in copy mode or synchronized; the foreground command is a shell; the last non-blank line ends in `prompt_end`. A failure prints `REFUSED: <label> <why>` and the pane tail, types nothing, and exits 77 or 75:
 
 ```
 PANE: machine=personal|ID=%6|pane=4.1
@@ -58,6 +72,14 @@ REFUSED: machine=personal|ID=%6|pane=4.1 running vim, not a shell
 ```
 
 → "`machine=personal|ID=%6|pane=4.1` is in vim. The command, for when it is free:" plus the fenced command. No retry.
+
+After the gate, the binding: the pane belongs to the Claude session (`$CLAUDE_CODE_SESSION_ID`) that first typed into it, recorded under `~/.local/state/ari-driving-remote/bindings/<definition>/<pane>`. A `/branch` or a fork is a new session, so it is refused with exit 76:
+
+```
+REFUSED: machine=personal|ID=%18|pane=3.1 bound to another Claude session ad00f077; get a pane of your own
+```
+
+→ do not type there; ask Ari for a pane (**Create a pane for yourself**), or report the cut-off. No flag unbinds. Ari rebinds by running `ari-driving on` in the pane again (it stamps `@ari_driving_since`; a stamp newer than the binding's voids it), after which the next session to type owns it.
 
 A pane that closed since it was last seen fails the same exact check on the next run, with exit 70 and the host's live panes under the refusal:
 
@@ -76,11 +98,24 @@ machine=personal|ID=%18|pane=3.1 zsh 0: homelab -- laptop
 |---|---|---|
 | 0 | the shell prompt returned | read the pane from the `TYPED:` echo down |
 | 124 | still running: timeout, `--no-wait`, or ssh dropped after `SENT` | `--cmd ''` to capture; never resend |
-| 77 | pane not opted in; nothing typed | Ari runs `ari-driving on` there; print the command |
+| 77 | pane not opted in; nothing typed | print the command under its label; Ari runs `ari-driving on` there; resend after he says so |
+| 76 | pane bound to another Claude session; nothing typed | ask Ari for a pane of your own (**Create a pane for yourself**); only his `ari-driving on` there rebinds it |
+| 1 | the text refused before connecting, no `PANE:` line: a control character, a leading `clear`, `pbcopy`, or it spells the opt-in | tell Ari what was dropped and why; never resend it |
 | 75 | pane busy: copy mode, synchronized, not a shell, text on the line, or another caller typing; nothing typed | print the command under its label; never retry on your own |
 | 70 | no pane matches, no attached client to resolve `2.4` against, or no tmux server | read the `PANES:` lines under the refusal (every pane on the host, live), pick the one Ari means or ask him; `--list` only for the ✦ marks; or `--session S` |
 | 127 | tmux not on the host's PATH | `--path-prefix ''` (Linux) or its dir; then `--describe` the fix |
 | 255 | ssh could not connect before anything was typed | Ari runs `ssh user@host` once in a pane (key, sleep); retry only after he says done |
+
+### Pitfalls
+
+| What happens | What to do |
+|---|---|
+| a `--cmd` with a newline is typed as several commands; the gate refuses or the shell breaks | ship multi-line text as a file: `printf %s '<base64>' \| base64 -d > /tmp/x` with `--no-run-log`, then run the short command |
+| `run_log` names its capture dir after the command's first words; a very long first word fails with "File name too long" before running | keep the first words short (`cd ~/x && …`), or `--no-run-log` |
+| in the pane's zsh, `. .env` looks the bare name up on `PATH` and loads nothing | `. ./.env`, or the full path |
+| a local loop calling `run.zsh` runs only its first iteration: ssh eats the loop's stdin | `</dev/null` on every call inside a loop |
+| the permission classifier tends to refuse a typed `docker run`; `docker exec` and `curl` pass | probe through a published loopback port or `docker exec`; hand a `docker run` to Ari |
+| a refusal prints before `SENT`, so a filter that keys on the command text sees nothing | filter output on `^SENT`; an empty filtered result means capture (`--cmd ''`) before any retry |
 
 ## Workflow
 
@@ -97,11 +132,11 @@ zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop
 ```
 
 ```
-machine=personal|ID=%6|pane=4.1 ✦ zsh 0: pi -- laptop
-machine=personal|ID=%7|pane=4.2 - vim 0: pi -- notes.md
+machine=personal|ID=%6|pane=4.1 ✦ bound=this zsh 0: pi -- laptop
+machine=personal|ID=%7|pane=4.2 - bound=none vim 0: pi -- notes.md
 ```
 
-✦ means Ari opted the pane in, `-` that he did not; the next field is its foreground command. A pane running anything but a shell (`ssh`, `vim`, `less`) refuses with 75. The `local` definition's lines carry no `machine=` prefix.
+✦ means Ari opted the pane in, `-` that he did not; `bound=` says which Claude session owns it (`this`, `other`, `none`); the next field is its foreground command. Only a pane with ✦ and `bound=this` or `bound=none` is yours to type into. A pane running anything but a shell (`ssh`, `vim`, `less`) refuses with 75. The `local` definition's lines carry no `machine=` prefix.
 
 ### Run a command
 
@@ -146,6 +181,17 @@ zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop
 ```
 
 Chat: "Typed into `machine=personal|ID=%6|pane=4.1`; press Enter when ready." After he says he did, capture; never resend.
+
+### Create a pane for yourself
+
+Only on Ari's words this turn ("make yourself a pane"). Another session driving the only pane is a reason to ask him for one, not to create one. `--list` first, so a pane he already made is reused, not doubled. Never with the opt-in inside: `tmux new-window … "zsh -ic 'ari-driving on; …'"`, `tmux set-option -p … @ari_driving on` and every other spelling are refused, because the opt-in is Ari's. The plain window, in the background so his view stays put:
+
+`machine=personal|ID=%18|pane=3.1`
+```zsh
+tmux new-window -d -n claude-homelab -c ~/homelab
+```
+
+`--list` again for the new pane's label. Chat: "Created window `claude-homelab` in the background: `machine=personal|ID=%35|pane=5.1`. Run `ari-driving on` there and say so." Nothing is typed there until `--list` shows ✦ and `bound=none` or `bound=this` on it. A fork sent to drive is told which pane it owns, and the parent stops driving that pane while the fork lives.
 
 ### Poll a long run
 

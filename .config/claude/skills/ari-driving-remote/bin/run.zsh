@@ -37,6 +37,13 @@ readonly EXIT_NOT_OPTED_IN=77   # EX_NOPERM: the pane's OPT_IN_OPTION is not on;
 # the same name is display only (the ✦ in the status bar); the gate reads the pane option alone.
 readonly OPT_IN_OPTION=@ari_driving
 readonly OPT_IN_COMMAND='ari-driving on'
+# A driven pane belongs to the Claude session that first typed into it. `ari-driving on` also stamps the pane
+# with the grant's epoch; a stamp newer than the binding's is Ari granting the pane afresh, and only that rebinds.
+readonly EXIT_BOUND_ELSEWHERE=76   # the pane is bound to another Claude session; nothing was typed
+readonly STAMP_OPTION=@ari_driving_since
+readonly SESSION_ID="${CLAUDE_CODE_SESSION_ID:-}"
+# One file per bound pane under <definition>/<pane number>: 'session=<id>' and 'since=<stamp>'.
+readonly BINDINGS_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/ari-driving-remote/bindings"
 # How every message names a pane: 'ID=%301|pane=2.4', pane ID then window.pane. No spaces, so it is one field.
 readonly PANE_LABEL_FORMAT='ID=#{pane_id}|pane=#{window_index}.#{pane_index}'
 readonly EXIT_SSH=255
@@ -57,8 +64,9 @@ readonly FRIENDLY_PATTERN='<0->.<0->'
 # Last non-blank line of the pane, trailing whitespace removed (awk: BSD and GNU agree).
 readonly AWK_LAST_LINE='{sub(/[[:space:]]+$/,"")} NF {l=$0} END {print l}'
 readonly AWK_NONBLANK='{sub(/[[:space:]]+$/,"")} NF'
-# `--list` lines are 'ID=%301|pane=2.4 ✦|- zsh session: window_name -- pane_title', one per pane; ✦ marks an opted-in pane.
-# The opt-in column is filled per pane by the host script: in a format, a pane option inherits the window's.
+# `--list` lines are 'ID=%301|pane=2.4 ✦|- bound=this|other|none zsh session: window_name -- pane_title', one per
+# pane; ✦ marks an opted-in pane, bound= which Claude session owns it. The host script fills the opt-in mark and
+# the grant stamp per pane (in a format, a pane option inherits the window's); the stamp becomes bound= here.
 readonly TMUX_LIST_FORMAT="${PANE_LABEL_FORMAT} #{pane_current_command} #{session_name}: #{window_name} -- #{pane_title}"
 # Heads the inventory a "no pane matches" refusal carries: TMUX_LIST_FORMAT lines without the opt-in
 # column, so it costs one list-panes and no per-pane lookups.
@@ -119,12 +127,22 @@ Definitions still under ${OLD_HOSTS_DIR} are moved there on the next run.
 
 Before typing, --cmd refuses unless the pane option ${OPT_IN_OPTION} is on (Ari runs '${OPT_IN_COMMAND}' in that
 pane), the pane is not in copy mode or synchronized, its foreground command is a shell, and its last line ends
-in the prompt. TEXT is one line, with no control characters and no leading clear. Panes are named 'ID=%301|pane=2.4'.
+in the prompt. TEXT is one line, with no control characters, no leading clear, no pbcopy, and nothing that spells
+the opt-in ('${OPT_IN_COMMAND}', 'ari-remote-tmux on' or ${OPT_IN_OPTION}, case and quotes ignored, a new pane's
+startup command included); any of those exits 1 before connecting. Claude never sets the opt-in, by any route.
+Panes are named 'ID=%301|pane=2.4'.
 After typing it prints 'TYPED: <the exact text sent>' and, once Enter is sent (or skipped), 'SENT'.
+
+A pane is bound to the Claude session (\$CLAUDE_CODE_SESSION_ID) that first types into it, in
+${BINDINGS_DIR}/<definition>/<pane>; another session is refused with ${EXIT_BOUND_ELSEWHERE} and types nothing.
+Only Ari rebinds, by running '${OPT_IN_COMMAND}' there again (it stamps ${STAMP_OPTION}); no flag does. --list
+shows each pane's owner as bound=this|other|none and drops bindings of panes that are gone or regranted.
+Captures ('' TEXT) and --list are never bound.
 
 ${c_bold}Actions${c_rst} (exactly one):
   --hosts                 print every definition as name= plus its key=value lines
-  --list                  print every pane as 'ID=%301|pane=2.4 ✦|- command session: window -- title' (✦ = opted in), save them
+  --list                  print every pane as 'ID=%301|pane=2.4 ✦|- bound=this|other|none command session: window -- title'
+                          (✦ = opted in; bound = which Claude session owns it), save them
   --cmd TEXT              gate, type TEXT into --target, wait for the shell prompt; '' types nothing and only captures
   --describe TEXT         replace the definition's description without connecting
   --forget                print the definition and delete it
@@ -154,6 +172,7 @@ ${c_bold}Exit codes:${c_rst}
        every pane on the host is printed under the refusal, so the right one can be picked without --list
   ${EXIT_BUSY}   pane in copy mode, synchronized, not a shell, or not at an empty prompt, or another caller is typing (nothing typed)
   ${EXIT_NOT_OPTED_IN}   pane not opted in (nothing typed)
+  ${EXIT_BOUND_ELSEWHERE}   pane bound to another Claude session (nothing typed); get a pane of your own
   ${EXIT_NOT_FOUND}  tmux not found on the host (--path-prefix)
   ${EXIT_SSH}  ssh could not connect before anything was typed
 
@@ -384,6 +403,99 @@ forget_definition() {
   log::info "Deleted definition | name='${name}' file='${file}'"
 }
 
+# --- Pane bindings ---
+
+#######################################
+# Path of a pane's binding file: the definition's dir, the pane number without its %.
+# Globals: BINDINGS_DIR
+# Arguments: $1 definition name  $2 pane id (%N)
+# Returns: the path on stdout
+#######################################
+binding_file() {
+  print -r -- "${BINDINGS_DIR}/${1}/${2#%}"
+}
+
+#######################################
+# Every binding of a definition, one '%N session since' line each, for the host script's lookup and --list.
+# Globals: BINDINGS_DIR
+# Arguments: $1 definition name
+#######################################
+bindings_of() {
+  local name="${1}" file key value session since
+  for file in "${BINDINGS_DIR}/${name}"/*(N); do
+    session="" since=0
+    while IFS='=' read -r key value; do
+      case "${key}" in
+        session) session="${value}" ;;
+        since) since="${value}" ;;
+      esac
+    done < "${file}"
+    [[ -n "${session}" ]] || continue
+    print -r -- "%${file:t} ${session} ${since:-0}"
+  done
+}
+
+#######################################
+# Record that this session owns a pane, with the grant stamp it saw there.
+# Globals: SESSION_ID
+# Arguments: $1 definition name  $2 pane id  $3 since
+#######################################
+write_binding() {
+  local name="${1}" pane="${2}" since="${3}" file
+  file="$(binding_file "${name}" "${pane}")"
+  mkdir -p "${file:h}" 2>/dev/null || { log::warn "Bindings dir not writable; the pane stays unbound | dir='${file:h}'"; return 0; }
+  print -r -- "session=${SESSION_ID}"$'\n'"since=${since}" > "${file}"
+  log::info "Pane bound to this session | pane='${pane}' since='${since}'"
+}
+
+#######################################
+# Forget a binding: its pane is gone, or Ari granted the pane afresh.
+# Arguments: $1 definition name  $2 pane id  $3 why
+#######################################
+drop_binding() {
+  local name="${1}" pane="${2}" why="${3}"
+  rm -f -- "$(binding_file "${name}" "${pane}")"
+  log::info "Dropped binding | pane='${pane}' why='${why}'"
+}
+
+#######################################
+# Turn the host's list lines ('label mark since rest') into the printed form ('label mark bound=… rest'),
+# dropping bindings whose pane is gone or whose stamp is older than the pane's (Ari regranted it).
+# Globals: SESSION_ID
+# Arguments: $1 definition name  $2 host output
+# Returns: the printed lines on stdout
+#######################################
+list_with_owners() {
+  local name="${1}" output="${2}" line label mark since rest pane state
+  local -A bound_session bound_since
+  local -a parts shown
+  for line in ${(f)"$(bindings_of "${name}")"}; do
+    parts=(${=line})
+    bound_session[${parts[1]}]="${parts[2]}" bound_since[${parts[1]}]="${parts[3]}"
+  done
+  for line in ${(f)output}; do
+    label="${line%% *}" rest="${line#* }"
+    mark="${rest%% *}" rest="${rest#* }"
+    since="${rest%% *}" rest="${rest#* }"
+    pane="${${label#*ID=}%%|*}"
+    shown+=("${pane}")
+    state=none
+    if [[ -n "${bound_session[${pane}]:-}" ]]; then
+      if (( since > ${bound_since[${pane}]:-0} )); then
+        drop_binding "${name}" "${pane}" "Ari granted the pane afresh"
+      elif [[ "${bound_session[${pane}]}" == "${SESSION_ID}" ]]; then
+        state=this
+      else
+        state=other
+      fi
+    fi
+    print -r -- "${label} ${mark} bound=${state} ${rest}"
+  done
+  for pane in ${(k)bound_session}; do
+    (( ${shown[(Ie)${pane}]} )) || drop_binding "${name}" "${pane}" "pane gone"
+  done
+}
+
 # --- Host script ---
 
 #######################################
@@ -423,11 +535,12 @@ list_script() {
   local path_prefix="${1}"
   prelude_block "${path_prefix}"
   machine_block
-  # Splice the pane-only opt-in mark in after the label (the first field, 'ID=%N|pane=W.P').
+  # Splice the pane-only opt-in mark and grant stamp in after the label (the first field, 'ID=%N|pane=W.P').
   print -r -- "tmux list-panes -a -F ${(qq)TMUX_LIST_FORMAT} | while read -r label rest; do"
   print -r -- "  id=\${label%%|*}; id=\${id#ID=}"
   print -r -- "  if [ \"\$(tmux show-options -pqv -t \"\$id\" ${(qq)OPT_IN_OPTION})\" = on ]; then mark='✦'; else mark='-'; fi"
-  print -r -- "  printf '%s%s %s %s\\n' \"\$prefix\" \"\$label\" \"\$mark\" \"\$rest\""
+  print -r -- "  since=\$(tmux show-options -pqv -t \"\$id\" ${(qq)STAMP_OPTION}); since=\${since:-0}"
+  print -r -- "  printf '%s%s %s %s %s\\n' \"\$prefix\" \"\$label\" \"\$mark\" \"\$since\" \"\$rest\""
   print -r -- "done"
 }
 
@@ -480,6 +593,25 @@ gate_block() {
 }
 
 #######################################
+# The binding check, after the gate and under the same lock: the pane's grant stamp against this
+# definition's bindings. Another session's binding that the stamp does not outdate refuses with
+# EXIT_BOUND_ELSEWHERE, untyped. Otherwise 'BIND: <pane> <stamp>' tells the caller to record the pane as
+# this session's (new, refreshed, or regranted by Ari).
+# Globals: STAMP_OPTION SESSION_ID EXIT_BOUND_ELSEWHERE AWK_NONBLANK
+# Arguments: $1 bindings ('%N session since' lines)  $2 lines
+# Returns: the script lines on stdout
+#######################################
+binding_block() {
+  local bindings="${1}" lines="${2}"
+  local tail_cmd="tmux capture-pane -p -t \"\$pane\" -S -${lines} | awk ${(qq)AWK_NONBLANK} | tail -n ${lines}"
+  print -r -- "since=\$(tmux show-options -pqv -t \"\$pane\" ${(qq)STAMP_OPTION}); since=\${since:-0}"
+  print -r -- "bound=\$(printf '%s\\n' ${(qq)bindings} | awk -v p=\"\$pane\" '\$1 == p {print \$2, \$3}')"
+  print -r -- "bsession=\${bound%% *}; bsince=\${bound##* }; [ -n \"\$bound\" ] || bsince=0"
+  print -r -- "if [ -n \"\$bsession\" ] && [ \"\$bsession\" != ${(qq)SESSION_ID} ] && [ \"\$since\" -le \"\$bsince\" ]; then echo \"REFUSED: \$label bound to another Claude session \${bsession%%-*}; get a pane of your own\"; ${tail_cmd}; exit ${EXIT_BOUND_ELSEWHERE}; fi"
+  print -r -- "echo \"BIND: \$pane \$since\""
+}
+
+#######################################
 # The wait part of the remote script: poll until the pane's last line ends in the prompt, or sleep 1.
 # Arguments: $1 quoted_target  $2 quoted_prompt_end  $3 wait(true|false)  $4 press_enter(true|false)  $5 timeout
 # Returns: the script lines on stdout
@@ -505,11 +637,12 @@ wait_block() {
 # Arguments:
 #   $1 target  $2 cmd  $3 press_enter(true|false)  $4 wait(true|false)
 #   $5 lines   $6 timeout  $7 path_prefix  $8 prompt_end  $9 session  $10 run_log(true|false)
+#   $11 bindings ('%N session since' lines of this definition)
 # Returns: the script on stdout
 #######################################
 remote_script() {
   local target="${1}" cmd="${2}" press_enter="${3}" wait="${4}"
-  local lines="${5}" timeout="${6}" path_prefix="${7}" prompt_end="${8}" session="${9}" run_log="${10}"
+  local lines="${5}" timeout="${6}" path_prefix="${7}" prompt_end="${8}" session="${9}" run_log="${10}" bindings="${11}"
   local quoted_prompt_end="${(qq)prompt_end}"
 
   prelude_block "${path_prefix}"
@@ -517,6 +650,7 @@ remote_script() {
   resolve_block "${target}" "${session}"
   if [[ -n "${cmd}" ]]; then
     gate_block "${quoted_prompt_end}" "${lines}"
+    binding_block "${bindings}" "${lines}"
     print -r -- "typed=${(qq)cmd}"
     if [[ "${run_log}" == "true" ]]; then
       print -r -- "if [ -x \"${HOST_RUN_LOG}\" ]; then typed=${(qq)${:-run_log ${(qq)cmd}}}; else echo \"NOTE: no ${HOST_RUN_LOG} on the host; typed the command bare\"; fi"
@@ -576,6 +710,10 @@ report_exit() {
     log::err "Pane not opted in; nothing typed | target='${target}' hint='Ari runs ${OPT_IN_COMMAND} in that pane himself; never type it for him'"
     return 0
   fi
+  if (( exit_code == EXIT_BOUND_ELSEWHERE )); then
+    log::err "Pane bound to another Claude session; nothing typed | target='${target}' hint='a branch, fork or other session owns it: get a pane of your own; only Ari running ${OPT_IN_COMMAND} there again rebinds it'"
+    return 0
+  fi
   if (( exit_code == EXIT_BUSY )); then
     log::err "Pane is not an idle shell at its prompt, or another caller is typing; nothing typed | target='${target}' hint='print the command in chat instead; never retry into a busy pane'"
     return 0
@@ -608,6 +746,7 @@ list_windows() {
   output="$(execute_script "${script}")" || exit_code=$?
   report_exit "${exit_code}"
   (( exit_code == 0 )) || return "${exit_code}"
+  output="$(list_with_owners "${name}" "${output}")"
   print -r -- "${output}"
   windows="${(pj:$WINDOWS_SEPARATOR:)${(f)"$(print -r -- "${output}" | awk "${AWK_WINDOW_NAMES}")"}}"
   record_definition "${name}" false "${windows}" "" true
@@ -630,13 +769,13 @@ sent_exit_code() {
 }
 
 #######################################
-# Gate, type the command into the pane, and print the pane.
+# Gate, check the binding, type the command into the pane, record the binding, and print the pane.
 # Globals: host target cmd press_enter wait run_log lines timeout path_prefix prompt_end name dry_run
-# Returns: 0 prompt back; EXIT_TIMEOUT; EXIT_NO_TARGET; EXIT_NOT_OPTED_IN; EXIT_BUSY; the host script's code otherwise
+# Returns: 0 prompt back; EXIT_TIMEOUT; EXIT_NO_TARGET; EXIT_NOT_OPTED_IN; EXIT_BOUND_ELSEWHERE; EXIT_BUSY; the host script's code otherwise
 #######################################
 run_command() {
-  local script exit_code=0
-  script="$(remote_script "${target}" "${cmd}" "${press_enter}" "${wait}" "${lines}" "${timeout}" "${path_prefix}" "${prompt_end}" "${session}" "${run_log}")"
+  local script exit_code=0 bind_line
+  script="$(remote_script "${target}" "${cmd}" "${press_enter}" "${wait}" "${lines}" "${timeout}" "${path_prefix}" "${prompt_end}" "${session}" "${run_log}" "$(bindings_of "${name}")")"
   log::info "Typing into pane | host='${host}' target='${target}' enter='${press_enter}' wait='${wait}' cmd='${cmd}'"
   if [[ "${dry_run}" == "true" ]]; then
     log::info "Dry run — printing the host script, sending nothing"
@@ -645,6 +784,9 @@ run_command() {
   fi
   local output
   output="$(execute_script "${script}")" || exit_code=$?
+  # The host printed BIND only after the gate and the binding check passed for this session.
+  bind_line="$(print -r -- "${output}" | awk '/^BIND: / {print $2, $3; exit}')"
+  if [[ -n "${bind_line}" ]]; then write_binding "${name}" "${bind_line%% *}" "${bind_line##* }"; fi
   print -r -- "${output}"
   exit_code="$(sent_exit_code "${exit_code}" "${output}")"
   report_exit "${exit_code}"
@@ -673,6 +815,14 @@ validate_run_args() {
   local refusal
   if [[ -n "${cmd}" ]] && ! refusal="$(tmux_text_refusal "${cmd}")"; then
     log::err "Refusing --cmd | reason='${refusal}'"
+    return 1
+  fi
+  if [[ -n "${cmd}" ]] && ! refusal="$(tmux_opt_in_refusal "${cmd}")"; then
+    log::err "Refusing --cmd; nothing typed | reason='${refusal}'"
+    return 1
+  fi
+  if [[ -n "${cmd}" && -z "${SESSION_ID}" ]]; then
+    log::err "CLAUDE_CODE_SESSION_ID is unset; nothing typed | hint='run.zsh types only from a Claude session, whose id binds the pane; never set or unset it by hand'"
     return 1
   fi
   if [[ "${cmd}" == *pbcopy* ]]; then

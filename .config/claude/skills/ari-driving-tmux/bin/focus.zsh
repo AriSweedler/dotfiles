@@ -344,6 +344,10 @@ main() {
     report_refusal "${label}" "the link's command ${refusal}" "${return_pane}"
     cmd="" run=""
   fi
+  if [[ -n "${cmd}${run}" ]] && ! refusal="$(tmux_opt_in_refusal "${cmd}${run}")"; then
+    report_refusal "${label}" "the link's command ${refusal}" "${return_pane}"
+    cmd="" run=""
+  fi
   if [[ -n "${run}" && ! -x "${RUN_LOG_BIN}" ]]; then
     report_refusal "${label}" "run_log is not installed at ${RUN_LOG_BIN}" "${return_pane}"
     run=""

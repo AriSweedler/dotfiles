@@ -18,6 +18,9 @@ source "${LIB_LOGGING}"
 # The pane option is the permission run.zsh and focus.zsh check. The window option of the same name only drives the
 # status-bar marker; it stays on while any pane in the window is on.
 readonly OPTION=@ari_driving
+# Set to the epoch of each `on`: /ari-driving-remote binds a pane to the Claude session that first types into
+# it, and a stamp newer than the binding's is Ari granting the pane afresh, which is the only thing that rebinds.
+readonly STAMP_OPTION=@ari_driving_since
 readonly MARKER='✦'
 readonly MARKER_FORMAT="#{?${OPTION},${MARKER},}"
 readonly LABEL_FORMAT='ID=#{pane_id}|pane=#{window_index}.#{pane_index}'
@@ -56,8 +59,10 @@ ${c_bold}Usage:${c_rst}
 ${c_bold}Options:${c_rst}
   -h, --help   show this help
 
-Sets the tmux pane option ${OPTION} on the current pane (\$TMUX_PANE). The window gets the same option plus
-window-scoped status formats with ${MARKER} against the window number; off restores the global formats.
+Sets the tmux pane option ${OPTION} on the current pane (\$TMUX_PANE), and ${STAMP_OPTION} to the time of this
+on: a Claude session that drives the pane is bound to it, and only a newer on lets another session take it.
+The window gets the same option plus window-scoped status formats with ${MARKER} against the window number;
+off restores the global formats.
 EOF
 }
 
@@ -140,6 +145,7 @@ unmark_window() {
 turn_on() {
   local pane_id="${1}" window_id="${2}" label
   tmux set-option -p -t "${pane_id}" "${OPTION}" on
+  tmux set-option -p -t "${pane_id}" "${STAMP_OPTION}" "$(date +%s)"
   mark_window "${window_id}"
   label="$(pane_label "${pane_id}")"
   tmux display-message -d "${MESSAGE_MS}" -t "${pane_id}" "${MARKER} AI control ON: ${label}"
@@ -167,6 +173,7 @@ release_window() {
 turn_off() {
   local pane_id="${1}" window_id="${2}" label
   tmux set-option -pu -t "${pane_id}" "${OPTION}"
+  tmux set-option -pu -t "${pane_id}" "${STAMP_OPTION}"
   label="$(pane_label "${pane_id}")"
   release_window "${window_id}" "${pane_id}"
   tmux display-message -d "${MESSAGE_MS}" -t "${pane_id}" "AI control OFF: ${label}"
