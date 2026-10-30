@@ -45,7 +45,7 @@ ${c_bold}Options:${c_rst}
   --read-user USER    gh account for every read
   --write-user USER   gh account for the merge, its verification and the branch delete (default: the read account)
   --url URL           The live page to curl after the base deploys; omit to skip the live check
-  --bundle-regex RE   A grep -o pattern whose match in the live page proves the new build is up (needs --url; default: none)
+  --bundle-regex RE   An awk regex (ERE) whose first match in the live page proves the new build is up, e.g. 'main\.[0-9a-f]{8}\.js' (needs --url; default: none)
   --repo OWNER/NAME   The repository (default: the gh default of the current directory)
   --base BRANCH       The PR's base (default: ${DEFAULT_BASE}); the base run and the live check run only for that default
   --workflow NAME     The CI workflow name as gh run list sees it (default: ${DEFAULT_WORKFLOW})
@@ -265,7 +265,11 @@ check_live() {
   sleep 45
   LIVE_STATUS="$(curl -s --max-time "${CURL_MAX_TIME}" -o /dev/null -w '%{http_code}' "${URL}?nocache=$(date +%s)" || echo "000")"
   if [[ -n "${BUNDLE_REGEX}" ]]; then
-    LIVE_BUNDLE="$(curl -s --max-time "${CURL_MAX_TIME}" "${URL}?nocache=$(date +%s)" | grep -o "${BUNDLE_REGEX}" | head -1 || true)"
+    # The shellscripts rule: no grep mid-pipe, no early-exiting consumer under pipefail; awk latches the first match
+    # and reads to EOF. The regex goes through ENVIRON, since -v strips backslashes; LC_ALL=C, since macOS awk exits 2
+    # on invalid UTF-8. `|| true` covers only a failed curl.
+    LIVE_BUNDLE="$(curl -s --max-time "${CURL_MAX_TIME}" "${URL}?nocache=$(date +%s)" \
+      | BUNDLE_REGEX="${BUNDLE_REGEX}" LC_ALL=C awk '!found && match($0, ENVIRON["BUNDLE_REGEX"]) { print substr($0, RSTART, RLENGTH); found = 1 }' || true)"
   fi
   log::info "Live | url='${URL}' status='${LIVE_STATUS}' bundle='${LIVE_BUNDLE}'"
 }

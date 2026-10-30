@@ -263,7 +263,11 @@ main() {
     "fast_path=${fast_path}")"
 
   local unrendered
-  unrendered="$(print -r -- "${prompt}" | grep -o '{{[a-z_]*}}' | sort -u | tr '\n' ' ' || true)"
+  # The shellscripts rule: no grep mid-pipe under pipefail; awk extracts every slot. LC_ALL=C, since macOS awk exits 2
+  # on invalid UTF-8 and the script would die with no log.
+  unrendered="$(print -r -- "${prompt}" \
+    | LC_ALL=C awk '{ while (match($0, /\{\{[a-z_]*\}\}/)) { print substr($0, RSTART, RLENGTH); $0 = substr($0, RSTART + RLENGTH) } }' \
+    | sort -u | tr '\n' ' ')"
   [[ -z "${unrendered}" ]] || { log::err "Slots left unrendered | slots='${unrendered}'"; return 1; }
   log::info "Prompt rendered | id='${id}' chain='${chain}' lines='$(print -r -- "${prompt}" | wc -l | tr -d ' ')'"
 
