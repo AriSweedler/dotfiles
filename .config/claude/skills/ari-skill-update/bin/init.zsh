@@ -173,6 +173,8 @@ main() {
 - **Skill**: ${skill} — \$HOME/.claude/skills/${skill}/SKILL.md — ${purpose}
 - **Goal**: <fill from the user's request>
 - **Changes made**:
+  - [1] SECTION — change
+- **Own read**: clean | <n> fixed
 - **Open questions**:
 EOF
   log::info "Investigation folder ready | scratchpad='${scratchpad}'"
