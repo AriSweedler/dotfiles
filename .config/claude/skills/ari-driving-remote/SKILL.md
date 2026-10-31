@@ -1,34 +1,33 @@
 ---
 name: ari-driving-remote
-description: "Drive a tmux pane on another machine over ssh: type each command into the pane Ari named, wait for his shell prompt, read the pane back. Hosts are remembered as named definitions (user@host, prompt, panes, what Ari said about them). Every send is gated: the pane must be marked `ari-driving on` and idle at his prompt, or nothing is typed. Content (a bead body, a script, anything multi-line or over 200 bytes) goes over as a file with `--put`, never as keystrokes. Part of /ari-driving; use when Ari names his laptop, a Pi, a host or a definition, or says to run something over there. Never raw tmux send-keys; never pbcopy unless Ari asks."
+description: "Drive a tmux pane on another machine over ssh: type each command into the pane Ari named, wait for his shell prompt, read the pane back. Hosts are remembered as named definitions (user@host, prompt, panes, what Ari said about them). Every send is gated: the pane must be marked `ari-driving on` and idle at his prompt, or nothing is typed. Content (a bead body, a script, anything multi-line or over 200 bytes) goes over as a file with `--put FILE --project DIR`, never as keystrokes. Part of /ari-driving; use when Ari names his laptop, a Pi, a host or a definition, or says to run something over there. Never raw tmux send-keys; never pbcopy unless Ari asks."
 ---
 
 # Driving remote
 
-Claude runs nothing on another machine except by typing into the pane Ari named, through `bin/run.zsh`, which gates the send, waits for his prompt and prints the pane. Content goes over as a file, `run.zsh --put FILE`, never as keystrokes. Hosts are remembered as named definitions.
+Claude runs nothing on another machine except by typing into the pane Ari named, through `bin/run.zsh`, which gates the send, waits for his prompt and prints the pane; content goes over as a file, `run.zsh --put FILE --project DIR`, never as keystrokes. Hosts are remembered as named definitions.
 
 ## Rules
 
 - **`/ari-driving` Rules apply.** If it has not run this session, invoke it first (Skill tool). These hold even without it:
-    - **NEVER run `tmux send-keys` yourself, here or as `ssh host tmux …`.** A host gets exactly two things from Claude: a command, typed by `run.zsh --cmd`, and content, copied by `run.zsh --put FILE` (**Put a file on the host**). Nothing else runs on the host over ssh.
-    - **Content goes by `--put`, never by `--cmd`.** Content is more than one line, over 200 bytes, or the value of a body, description or message flag (a bead body, a script, a config). NEVER encode, chunk, heredoc or `printf > FILE` it through `--cmd`: tmux drops bytes from long sends (a 3,000-byte base64 chunk lost 8 on 2026-10-30), and `run.zsh` refuses a `base64 -d`. There is no chunk size small enough to make content a command.
+    - **NEVER run `tmux send-keys` yourself, here or as `ssh host tmux …`.** A host gets exactly two things from Claude: a command, typed by `run.zsh --cmd`, and content, copied by `run.zsh --put FILE --project DIR` (**Put a file on the host**). Nothing else runs on the host over ssh.
+    - **Content goes by `--put`, never by `--cmd`.** Content is more than one line, over 200 bytes, or the value of a body, description or message flag (a bead body, a script, a config, a commit message). NEVER encode, chunk, heredoc or `printf > FILE` it through `--cmd`: tmux drops bytes from long sends (a 3,000-byte base64 chunk lost 8 on 2026-10-30), and `run.zsh` refuses a `base64 -d`.
+    - **Every `--put` names `--project`, and the name is the thing, not the container.** The project's first segment is the repo or system the file belongs to (the checkout the follow-up `--cmd` runs in, `homelab`; else the definition name); one optional second segment names the subsystem when the host has a dir or tool for it (`homelab/beads`, `homelab/torrent`); never a third, never a date, a session id, `tmp`, `scratch` or `claude`; the same work keeps the same project for the whole conversation. `--name` defaults to the file's basename without its last extension (`swap.py` → `swap`, `queue.tar.gz` → `queue.tar`, `.env` → `.env`); keep it when it says what the file is, and pass a lowercase hyphenated name over `body`, `script`, `out`, `tmp` or `file`.
     - **A pane from earlier in the conversation or a compaction summary is a hint.** Re-run `--list` and use it only if it still shows `✦` and a shell.
-    - **One pane per branch or fork.** `run.zsh` binds a pane to the Claude session that first types into it and refuses every other session with 76; a session that must drive gets a pane of its own (**Create a pane for yourself**). When Ari explicitly makes two sessions share a pane, capture (`--cmd ''`) immediately before every send and read only from your own `TYPED:` echo down.
+    - **One pane per branch or fork.** `run.zsh` binds a pane to the Claude session that first types into it and refuses every other session with 76; a session that must drive gets a pane of its own (**Create a pane for yourself**). When Ari makes two sessions share a pane, he runs `ari-driving on` there before each hand-off (that rebinds it); capture (`--cmd ''`) immediately before every send and read only from your own `TYPED:` echo down. A fork sent to drive is told which pane it owns, and the parent stops driving that pane while the fork lives.
     - **Every pane mention carries the whole label**, `machine=personal|ID=%6|pane=4.1`, in inline code, never linked, never one part alone.
-    - **NEVER start or chain `clear`, `reset` or `tmux clear-history`**; raise `--lines` to see more. `run.zsh` refuses a leading `clear`. Above the pane's tmux `history-limit`, `--lines` returns fewer lines with no marker; a capture whose top lacks the `TYPED:` echo outgrew the pane, so read the host's `/tmp/run_log/<dir>/stdout.plain` in slices (`wc -l`, then `sed -n`) instead of raising `--lines` again.
+    - **NEVER start or chain `clear`, `reset` or `tmux clear-history`**; raise `--lines` to see more (**Pitfalls** for a capture that outgrew the pane). `run.zsh` refuses a leading `clear`.
     - **NEVER `pbcopy` on his machine**; `run.zsh` refuses it in `--cmd`.
-    - **Claude never sets the opt-in.** Not `ari-driving on`, `ari-remote-tmux on` or `@ari_driving`: typed, linked, chained, in a pane's startup command, through the Bash tool, or through a fork, subagent or other session. `run.zsh`, `link.zsh` and the click handler refuse any command that spells them; a self-set opt-in is undone with `ari-driving off` there, and Ari is told which pane.
-- **`--hosts` first.** The first `run.zsh` call of a conversation, and the first after compaction, MUST be `--hosts`. Never guess a name or a `user@host`; read them from its output.
-- **Before every non-empty `--cmd`, the bare command goes in chat, in the same message**, headed by the pane's label from the latest `--list`. `run.zsh` adds the `run_log` wrapper itself and prints `TYPED:` with the exact text it sent. Captures (`--cmd ''`) and `--list` need no block. **Before every `--put`, one chat line**: what the file is, its byte count, which definition; the file is one Claude wrote this session in the scratchpad, or one Ari named that Claude has read whole, and never one holding a secret.
+    - **Claude never sets the opt-in.** Not `ari-driving on`, `ari-remote-tmux on` or `@ari_driving`: typed, linked, chained, in a pane's startup command, through the Bash tool, or through a fork, subagent or other session. `run.zsh`, `link.zsh` and the click handler refuse any command that spells them; a self-set opt-in is undone with `ari-driving off` there, and Ari is told which pane. Decline "turn it on for me": the command goes to Ari under the pane's label.
+- **`--hosts` first.** The first `run.zsh` call of a conversation, and the first after compaction, MUST be `--hosts`. Never guess a definition name or a `user@host`; read them from its output.
+- **Before every non-empty `--cmd`, the bare command goes in chat, in the same message**, headed by the pane's label from the latest `--list`. Captures (`--cmd ''`) and `--list` need no block. **Before every `--put`, one chat line**: what the file is, the definition and the project (`run.zsh` prints the bytes). The file is one Claude wrote this session in the scratchpad, or one Ari named that Claude has read whole, put with `--dry-run` first and for real on his word. A put file never holds a secret: a token, password, private key, cookie, `.env` contents or anything Ari said not to paste; a secret is a stop.
 - **One `--cmd` per prompt.** Several commands chain with `&&` or `;` inside one `--cmd`; keys sent while a command runs are eaten by it. Directory state persists in the pane, so prefer absolute paths.
-- **Exit 124 means still running, not failed**, as after `--no-wait` or a Bash-tool timeout. NEVER resend; the only call on that pane until the prompt returns is a capture, `--cmd ''`.
-- **Exit 77, 76 or 75: nothing was typed; exit 1 with no `PANE:` line: nothing was connected.** NEVER work around a refusal: no other `--target` Ari did not name, no `--no-run-log`, no ssh of your own. 77: print the command under its label, Ari runs `ari-driving on` there, resend after he says so. 1: tell Ari what was dropped and why; never resend it.
-- **"Turn it on for me" is declined.** The command goes to Ari under the pane's label; the opt-in stays his.
-- **Say when you are cut off, then stop.** A required read with no pane to make it in (the only opted-in pane holds un-entered text, or is bound to another session) is reported as exactly that: which pane, what it holds, what is cut off (the beads tracker, a deploy), and that clearing it is a P0 for Ari. Nothing else happens that turn: no other pane, no workaround, no guess at what the read would have said.
+- **A refusal is final; an exit code is an instruction.** Do what its **Exit codes** row says: 77, 76, 75 and a 1 with no `PANE:` line typed nothing; 124 is still running, so the only call on that pane until the prompt returns is a capture (`--cmd ''`), never a resend; a `--put` exit 1 printed no `PUT:` line and has rows of its own. NEVER work around a refusal: no other `--target` Ari did not name, no `--no-run-log`, no ssh of your own.
+- **Say when you are cut off, then stop.** A required read (a `--cmd` whose output the task cannot continue without) with no pane to make it in (the only opted-in pane holds un-entered text, or is bound to another session): report which pane, what it holds, what is cut off (the beads tracker, a deploy), and that clearing it is a P0 for Ari. Nothing else happens that turn: no other pane, no workaround, no guess at what the read would have said.
 - **Nested ssh is one-shot and `-t`:** `ssh -t pi@pi.local "cd app && ./install.sh"`. Never an interactive nested shell: every later wait would time out.
 - **`--no-enter` when Ari runs it:** he said never press Enter, the harness denied the command, or it mutates and he has not allowed it. Tell him it is on his prompt line; nothing else goes into that pane until he says he pressed Enter or cleared it.
 - **Save what Ari says about a host as soon as he says it.** A username, an address, how it is reached, what it is for, a correction: the next `run.zsh` call is `--describe` with the merged text, before any `--cmd`.
-- **`--host` only for a name absent from `--hosts`.** On an existing name it is refused unless Ari said the address changed; then `--re-point`.
+- **`--host` only for a name absent from `--hosts`.** `run.zsh` refuses it on an existing name unless Ari said the address changed; then `--re-point`.
 
 ## Reference
 
@@ -45,11 +44,17 @@ last_seen=2026-10-22T07:55:14Z
 description=Personal MacBook, session 0. The only machine with an ssh key on the Pi: reach pi@pi.local from it with a nested ssh -t.
 ```
 
-`windows` holds each pane's label from the last `--list`; `last_seen` the last run that answered. `description` describes the machine: what it is, how it is reached, what only it can do. It never names a window or a pane; those change daily, and `run.zsh` checks the live panes on every run anyway. Two seeds: `laptop`, written when no definition exists, and `local` (`host=local`: tmux here, no ssh; `--put` copies with cp). A definition whose description says it has no tmux (the Pi) is a record, not a target: run through the host it says it is reached from, and put a file on that host, then forward it in a `--cmd` there (`scp /tmp/<sha>.txt pi@pi.local:/tmp/`).
+`windows` holds each pane's label from the last `--list`; `last_seen` the last run that answered. `description` describes the machine: what it is, how it is reached, what only it can do. It never names a window or a pane; those change daily. Two seeds: `laptop`, written when no definition exists, and `local` (`host=local`: tmux here, no ssh; a `--put` runs the same host script here). A definition whose description says it has no tmux (the Pi) is a record, not a target: run through the host it says it is reached from, and forward files from there (**Put a file on the host**, the last paragraph).
 
 ### The text check
 
-Before connecting, `run.zsh` reads `--cmd` itself and exits 1, with no `PANE:` line, when the text has a newline or control character, starts with `clear`, has `pbcopy` anywhere, or spells the opt-in: `ari-driving on`, `ari-remote-tmux on` or `@ari_driving`, case and quotes ignored, refused whether it sets, reads or quotes it. The rule binds, not the filter; opt-in state is read from `--list`, never from the option itself.
+Before connecting, `run.zsh` reads `--cmd` itself and exits 1, with no `PANE:` line, when the text has a newline or control character, starts with `clear`, has `pbcopy` anywhere, decodes content (`base64 -d`, `--decode` or `-D`), or spells the opt-in (`ari-driving on`, `ari-remote-tmux on` or `@ari_driving`, case and quotes ignored, refused whether it sets, reads or quotes it); and when `CLAUDE_CODE_SESSION_ID` is unset (not a Claude session: report it as cut off, never set it). The rule binds, not the filter; opt-in state is read from `--list`, never from the option itself.
+
+```
+[ERROR] Refusing --cmd | reason='contains a newline or control character; chain with && or ; on one line'
+```
+
+→ two commands: chain them on one line. Content: **Put a file on the host**; never flatten or encode it.
 
 ```
 [ERROR] Refusing --cmd; nothing typed | reason='spells the opt-in (ari-driving on or @ari_driving); refused whether it sets, reads or quotes it'
@@ -80,7 +85,7 @@ After the gate, the binding: the pane belongs to the Claude session (`$CLAUDE_CO
 REFUSED: machine=personal|ID=%18|pane=3.1 bound to another Claude session ad00f077; get a pane of your own
 ```
 
-→ do not type there; ask Ari for a pane (**Create a pane for yourself**), or report the cut-off. No flag unbinds. Ari rebinds by running `ari-driving on` in the pane again (it stamps `@ari_driving_since`; a stamp newer than the binding's voids it), after which the next session to type owns it.
+→ do not type there; ask Ari for a pane (**Create a pane for yourself**), or report the cut-off. No flag unbinds. Ari rebinds by running `ari-driving on` in the pane again, after which the next session to type owns it.
 
 A pane that closed since it was last seen fails the same exact check on the next run, with exit 70 and the host's live panes under the refusal:
 
@@ -95,25 +100,41 @@ machine=personal|ID=%18|pane=3.1 zsh 0: homelab -- laptop
 
 ### Exit codes
 
+A `--cmd`:
+
 | Code | Meaning | Claude's next action |
 |---|---|---|
 | 0 | the shell prompt returned | read the pane from the `TYPED:` echo down |
 | 124 | still running: timeout, `--no-wait`, or ssh dropped after `SENT` | `--cmd ''` to capture; never resend |
 | 77 | pane not opted in; nothing typed | print the command under its label; Ari runs `ari-driving on` there; resend after he says so |
 | 76 | pane bound to another Claude session; nothing typed | ask Ari for a pane of your own (**Create a pane for yourself**); only his `ari-driving on` there rebinds it |
-| 1 | the text refused before connecting, no `PANE:` line: a newline or control character, a `base64 -d`, a leading `clear`, `pbcopy`, or it spells the opt-in | a newline or `base64 -d` means the text is content: `--put` it and name the path in a short `--cmd`, never flatten or encode it. Anything else: tell Ari what was dropped and why; never resend it |
-| 1, after `--put` | no `PUT:` line: the file is unreadable or empty, the copy failed (scp's message is above), or the host's hash differs | re-put once (the same bytes land at the same path); a second failure goes to Ari with both hashes; never type the content instead |
+| 1 | the text refused before connecting, no `PANE:` line (**The text check**) | a newline or `base64 -d`: it is content, **Put a file on the host**; a leading `clear`: resend without it; `pbcopy`: print the text in chat; the opt-in or no session id: tell Ari what was dropped and why, never resend it |
 | 75 | pane busy: copy mode, synchronized, not a shell, text on the line, or another caller typing; nothing typed | print the command under its label; never retry on your own |
 | 70 | no pane matches, no attached client to resolve `2.4` against, or no tmux server | read the `PANES:` lines under the refusal (every pane on the host, live), pick the one Ari means or ask him; `--list` only for the ✦ marks; or `--session S` |
-| 127 | tmux not on the host's PATH | `--path-prefix ''` (Linux) or its dir; then `--describe` the fix |
-| 255 | ssh could not connect before anything was typed or copied | Ari runs `ssh user@host` once in a pane (key, sleep); retry only after he says done |
+| 127 | tmux not on the host's PATH | `--path-prefix ''` (Linux) or its dir; then `--describe` the fix, and say in chat what was saved |
+| 255 | ssh could not connect before anything was typed | Ari runs `ssh user@host` once in a pane (key, sleep); retry only after he says done |
 | any other code, 141 among them | `run.zsh` died locally; when `TYPED:`/`SENT` printed, or nothing printed after a `--cmd`, the pane may have run the command | `--cmd ''` to capture; never resend |
+
+A `--put` (a failure prints no `PUT:` line; the `[ERROR]` line says which row):
+
+| Code | Meaning | Claude's next action |
+|---|---|---|
+| 0 | `PUT: <path>` printed; the host's hash matched | paste the path whole into the follow-up `--cmd` |
+| 1 | `--project` or `--name` malformed: missing, absolute, a bad character, `..` or a dots-only segment; or a pane or typing flag given with `--put` | yours to fix in the flags; nothing is reported to Ari |
+| 1 | the file is missing, unreadable or empty | rewrite the scratchpad file, then put it |
+| 1 | the host refused the path (`REFUSED:` line): the project path is a file, the dir belongs to another user, a symlink or a non-file sits at the path | the same flags fail the same way: another `--project` or `--name`, or the cleanup is a `--cmd` of Ari's |
+| 1 | no sha256 tool on the host; nothing copied | tell Ari which host and that it needs `sha256sum`, `shasum` or `openssl` |
+| 1 | the host could not write the file; its message is above (`No space left`, `Permission denied`) | Ari gets the message, the remote and the local path, and the choice: fix the host and say "again", or copy it himself |
+| 1 | hash mismatch, or a failure with no message | re-put once; a second failure goes to Ari with both hashes and the paths |
+| 255 | ssh failed before or during the copy; nothing is at the path (the write lands in a `.part` file moved into place only when complete) | Ari runs `ssh user@host` once in a pane; re-put after he says done |
 
 ### Pitfalls
 
 | What happens | What to do |
 |---|---|
-| a `--cmd` with a newline exits 1 before connecting; a one-line base64 of it passes the check and loses bytes on the way (a 3,000-byte chunk lost 8; 1,000-byte chunks took eleven round-trips) | the text is content: `--put FILE`, then a short `--cmd` naming the `PUT:` path (**Put a file on the host**) |
+| a `--cmd` with a newline exits 1 before connecting, and its hint says to chain | two commands: chain them on one line; content: **Put a file on the host** |
+| `--dry-run` prints `WOULD PUT:` with a path that does not exist yet | the path may draft the follow-up `--cmd`; nothing runs before a real `PUT:` |
+| above the pane's tmux `history-limit`, `--lines` returns fewer lines with no marker; a capture whose top lacks the `TYPED:` echo outgrew the pane | read the host's `/tmp/run_log/<dir>/stdout.plain` in slices with a `--cmd` (`wc -l`, then `sed -n`), never with Read and never by raising `--lines` again |
 | `run_log` names its capture dir after the command's first words; a very long first word fails with "File name too long" before running | keep the first words short (`cd ~/x && …`), or `--no-run-log` |
 | in the pane's zsh, `. .env` looks the bare name up on `PATH` and loads nothing | `. ./.env`, or the full path |
 | a local loop calling `run.zsh` runs only its first iteration: ssh eats the loop's stdin | `</dev/null` on every call inside a loop |
@@ -139,7 +160,7 @@ machine=personal|ID=%6|pane=4.1 ✦ bound=this zsh 0: pi -- laptop
 machine=personal|ID=%7|pane=4.2 - bound=none vim 0: pi -- notes.md
 ```
 
-✦ means Ari opted the pane in, `-` that he did not; `bound=` says which Claude session owns it (`this`, `other`, `none`); the next field is its foreground command. Only a pane with ✦ and `bound=this` or `bound=none` is yours to type into. A pane running anything but a shell (`ssh`, `vim`, `less`) refuses with 75. The `local` definition's lines carry no `machine=` prefix.
+✦ means Ari opted the pane in, `-` that he did not; `bound=` says which Claude session owns it (`this`, `other`, `none`); the next field is its foreground command. Only a pane with ✦ and `bound=this` or `bound=none` is yours to type into. The `local` definition's lines carry no `machine=` prefix.
 
 ### Run a command
 
@@ -154,8 +175,6 @@ diskutil list external physical
 zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target 4.1 --cmd 'diskutil list external physical'
 ```
 
-The output starts `PANE: machine=personal|ID=%6|pane=4.1` (the host's `dotfiles machine-name`, else the definition name), then the last 60 lines of the pane once the prompt is back. Between them, `TYPED:` shows the exact text sent and `SENT` that it reached the pane. Read from the line that echoes the command down to the final prompt; lines above it are history:
-
 ```
 PANE: machine=personal|ID=%6|pane=4.1
 TYPED: run_log 'diskutil list external physical'
@@ -169,7 +188,11 @@ Desktop  Downloads
 ~ ❯
 ```
 
-`run.zsh` wraps the command in `run_log` when the host has `~/.config/bin/run_log` (else `NOTE: no … on the host; typed the command bare`), so the capture lands in the host's `/tmp/run_log`. Read results from the pane; a remote capture dir is read with `--cmd 'cat <dir>/stdout.plain'`, never with Read. `--no-run-log` types the command bare. When you raise `--timeout` (default 90 s), the Bash tool's timeout MUST be higher. Check a tricky command's quoting with `--dry-run`. A `--cmd` carries a command: one line, no file content; anything you would base64, heredoc, `printf > FILE` or split to get it through here goes by **Put a file on the host** first.
+- `PANE:` names the pane (the host's `dotfiles machine-name`, else the definition name); `TYPED:` is the exact text sent; `SENT` means it reached the pane; then the last 60 lines of the pane once the prompt is back. Read from the echo of the command down.
+- `run.zsh` wraps the command in `run_log` when the host has `~/.config/bin/run_log` (else `NOTE: no … on the host; typed the command bare`), so the capture lands in the host's `/tmp/run_log`; `--no-run-log` types it bare.
+- A remote capture dir is read with `--cmd 'cat <dir>/stdout.plain'`, never with Read.
+- When you raise `--timeout` (default 90 s), the Bash tool's timeout MUST be higher.
+- Check a tricky command's quoting with `--dry-run`.
 
 A command that asks something: the pane ends in `[sudo] password for pi:` with exit 124. Chat: "Type the Pi's sudo password in `machine=personal|ID=%6|pane=4.1`." After he says done, capture until the last line is the laptop prompt again:
 
@@ -179,35 +202,90 @@ zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop
 
 ### Put a file on the host
 
-Content (Rules): write it to the scratchpad with the Write tool, put it, then name the path in a `--cmd`. The put takes `--host-definition` only, no `--target`: it types nothing, so it needs no pane and no opt-in. Chat first: "Putting the body of bead …, 1,842 bytes, on laptop."
+Content (Rules): a file in the scratchpad, put, then a `--cmd` that names the path. The put takes `--host-definition`, `--project` and optionally `--name`, no `--target`: it types nothing, so it needs no pane and no opt-in. Chat first: "Putting the body of bead …, on laptop under `homelab/beads`."
+
+| the file | `--project` | `--name` |
+|---|---|---|
+| a bead body for the laptop's tracker | `homelab/beads` | the bead's subject, `bead-frontier` (the file is `body.md`) |
+| a script against the torrent stack | `homelab/torrent` | default, `swap` from `swap.py` |
+| a patch for the dotfiles | `dotfiles` | default, from the file's name |
+| a commit message for a repo | that repo's name | `commit-msg` |
 
 ```zsh
-zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "$SCRATCHPAD/body.md"
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "$SCRATCHPAD/body.md" --project homelab/beads --name bead-frontier
 ```
 
 ```
-[INFO] Putting file on the host | host='me@laptop.local' file='…/body.md' bytes='1842' remote='/tmp/fda28b0a…9482d.txt'
-PUT: /tmp/fda28b0aa7cecefe46e1de2efe0d645b0e8395010cc08ee89b2408188259482d.txt
+[INFO] Putting file on the host | host='me@laptop.local' file='…/body.md' bytes='1842' remote='/tmp/homelab/beads/bead-frontier.fda28b0aa7cecefe46e1de2efe0d645b0e8395010cc08ee89b2408188259482d.txt'
+PUT: /tmp/homelab/beads/bead-frontier.fda28b0aa7cecefe46e1de2efe0d645b0e8395010cc08ee89b2408188259482d.txt
 ```
 
-The name is the sha256 of the bytes: the same text lands at the same path, a repeat put changes nothing, and an edited body is a new path, so re-put after every edit. `run.zsh` hashes the copy on the host before printing `PUT:`; with `--dry-run` it prints `WOULD PUT:` and copies nothing. Then the follow-up is an ordinary `--cmd`, under its label, carrying the path pasted whole from the `PUT:` line and none of the content (a script runs as `zsh /tmp/<sha>.txt`):
+The path is `/tmp/<project>/<name>.<sha256 of the bytes>.txt`; `run.zsh` makes the project dir, hashes the copy on the host and prints `PUT:` only when the hash matches; a file already holding the bytes is left alone.
+
+- **The path goes into the `--cmd` character for character**: all 64 hex digits, pasted from the `PUT:` line, never a glob, never the `[INFO]` line.
+- **An edited file is a new put**: the same bytes land at the same path, so a changed body is a new path and the old one still holds the old text.
+- **A put file keeps its name**: no `mv`, `cp` or `chmod +x`; run it with its interpreter in front (`zsh …txt`, `python3 …txt`) or hand it to a flag (`--body-file …txt`).
+- **A path is named only in the conversation that printed it**: one from an earlier conversation or a compaction summary is re-put first (macOS clears `/tmp` entries untouched for three days). Removing a put file is a `--cmd` of Ari's; Claude never removes one.
+
+Then the follow-up, under its label:
 
 `machine=personal|ID=%6|pane=4.1`
 ```zsh
-BEADS_ACTOR=claude bd create "Graph view: Frontier toggle" -t feature --body-file /tmp/fda28b0aa7cecefe46e1de2efe0d645b0e8395010cc08ee89b2408188259482d.txt
+BEADS_ACTOR=claude bd create "Graph view: Frontier toggle" -t feature --body-file /tmp/homelab/beads/bead-frontier.fda28b0aa7cecefe46e1de2efe0d645b0e8395010cc08ee89b2408188259482d.txt
 ```
 
 ```zsh
-zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target 4.1 --cmd 'BEADS_ACTOR=claude bd create "Graph view: Frontier toggle" -t feature --body-file /tmp/fda28b0aa7cecefe46e1de2efe0d645b0e8395010cc08ee89b2408188259482d.txt'
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target 4.1 --cmd 'BEADS_ACTOR=claude bd create "Graph view: Frontier toggle" -t feature --body-file /tmp/homelab/beads/bead-frontier.fda28b0aa7cecefe46e1de2efe0d645b0e8395010cc08ee89b2408188259482d.txt'
 ```
 
-A failed put prints no `PUT:` line (Exit codes). Use the path in the same session: macOS clears `/tmp` entries untouched for three days, so re-put before reusing an old path; nothing removes the file, and removing it is a `--cmd` of Ari's, never Claude's own ssh.
+A script with the default name, and the interpreter in front:
+
+```zsh
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "$SCRATCHPAD/swap.py" --project homelab/torrent
+```
 
 ```
-[ERROR] Hash mismatch after copy; the remote file is not the text | local='fda2…' remote='9b1c…' remote_path='/tmp/fda2….txt' hint='re-put once; a second mismatch goes to Ari'
+[INFO] Defaulting --name to the file's basename | name='swap'
+PUT: /tmp/homelab/torrent/swap.2ab0a27e0f42849bd560d2c5f4295c79938895cfde87b9483e4ba379ded916c1.txt
 ```
 
-→ re-put the same file once; if it fails again, tell Ari both hashes and the path; never `--cmd 'cat'` the remote file, never type the content.
+`machine=personal|ID=%6|pane=4.1`
+```zsh
+python3 -I /tmp/homelab/torrent/swap.2ab0a27e0f42849bd560d2c5f4295c79938895cfde87b9483e4ba379ded916c1.txt
+```
+
+Wrong, the one-line forms that pass **The text check** and lose bytes or break quoting; right, the put:
+
+```
+WRONG  --cmd 'printf "import sys\nprint(sys.argv)\n" > /tmp/x.py && python3 /tmp/x.py'
+WRONG  --cmd 'bd create "Title" --body "one line that will grow"'
+RIGHT  a file in the scratchpad → --put … --project homelab/torrent → --cmd 'python3 -I /tmp/homelab/torrent/x.<sha>.txt'
+RIGHT  a file in the scratchpad → --put … --project homelab/beads → --cmd 'bd create "Title" --body-file /tmp/homelab/beads/<name>.<sha>.txt'
+```
+
+A flag refused before connecting is yours to fix, not Ari's:
+
+```
+[ERROR] Missing --project | hint='the dir under /tmp the file lands in: the repo or system it belongs to, e.g. homelab or homelab/torrent'
+[ERROR] Invalid --project | project='/tmp/homelab' expected='relative dir of letters, digits, . _ - and /; no leading /, no segment of dots only'
+[ERROR] Invalid --name | name='bead frontier' expected='letters, digits, . _ -, not dots only'
+```
+
+→ `--project homelab`; `--project homelab`; `--name bead-frontier`.
+
+`--dry-run` prints the path and copies nothing; nothing runs on the host before a real `PUT:`:
+
+```
+[INFO] Dry run — would copy and verify, copying nothing
+WOULD PUT: /tmp/homelab/torrent/swap.2ab0a27e0f42849bd560d2c5f4295c79938895cfde87b9483e4ba379ded916c1.txt
+```
+
+A host with no tmux (the Pi) is reached through the host that has its key: put the file there, then one `--cmd` there forwards it and runs it, the Pi getting the flat path:
+
+`machine=personal|ID=%6|pane=4.1`
+```zsh
+scp /tmp/homelab/pi/install.<sha>.txt pi@pi.local:/tmp/ && ssh -t pi@pi.local "zsh /tmp/install.<sha>.txt"
+```
 
 ### Type a command for Ari to run
 
@@ -219,14 +297,14 @@ Chat: "Typed into `machine=personal|ID=%6|pane=4.1`; press Enter when ready." Af
 
 ### Create a pane for yourself
 
-Only on Ari's words this turn ("make yourself a pane"). Another session driving the only pane is a reason to ask him for one, not to create one. `--list` first, so a pane he already made is reused, not doubled. Never with the opt-in inside: `tmux new-window … "zsh -ic 'ari-driving on; …'"`, `tmux set-option -p … @ari_driving on` and every other spelling are refused, because the opt-in is Ari's. The plain window, in the background so his view stays put:
+Only on Ari's words this turn ("make yourself a pane"). Another session driving the only pane is a reason to ask him for one, not to create one. `--list` first, so a pane he already made is reused, not doubled. Never with the opt-in in the startup command: `run.zsh` refuses every spelling (Rules). The plain window, in the background so his view stays put:
 
 `machine=personal|ID=%18|pane=3.1`
 ```zsh
 tmux new-window -d -n claude-homelab -c ~/homelab
 ```
 
-`--list` again for the new pane's label. Chat: "Created window `claude-homelab` in the background: `machine=personal|ID=%35|pane=5.1`. Run `ari-driving on` there and say so." Nothing is typed there until `--list` shows ✦ and `bound=none` or `bound=this` on it. A fork sent to drive is told which pane it owns, and the parent stops driving that pane while the fork lives.
+`--list` again for the new pane's label. Chat: "Created window `claude-homelab` in the background: `machine=personal|ID=%35|pane=5.1`. Run `ari-driving on` there and say so." Nothing is typed there until `--list` shows ✦ and `bound=none` or `bound=this` on it.
 
 ### Poll a long run
 
@@ -234,28 +312,29 @@ tmux new-window -d -n claude-homelab -c ~/homelab
 
 ### Add or describe a host
 
-A host never driven before: `--host-definition NAME --host user@host`, plus `--path-prefix ''` on Linux (the default is Homebrew's `/opt/homebrew/bin`) and `--prompt-end` when the prompt does not end in `❯`. `BatchMode` ssh cannot accept a host key or a password, so Ari first runs `ssh user@host` once in a pane. The first `--describe`, `--list` or `--cmd` writes the definition:
+A host never driven before: `--host-definition NAME --host user@host`, plus `--path-prefix ''` on Linux (the default is Homebrew's `/opt/homebrew/bin`) and `--prompt-end` when the prompt does not end in `❯` (**Setup** first: Ari accepts the host key once). The first `--describe`, `--list`, `--cmd` or `--put` writes the definition:
 
 ```zsh
 zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --host pi@pi.local --describe 'Pi 4 B at 192.0.2.94, no tmux; reached from the laptop with a nested ssh -t'
 ```
 
-`--describe` does not connect, and it replaces the text. It describes the machine, never a window or pane (see Host definitions). Ari later says "the Pi is on .102 now"; write back the merged text, then say `was: … → now: …`:
+`--describe` does not connect, and it replaces the text. It describes the machine, never a window or pane (**Host definitions**). Ari later says "the Pi is on .102 now"; write back the merged text, then quote `was: … → now: …`:
 
 ```zsh
 zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --describe 'Pi 4 B at 192.0.2.102 (static lease), no tmux; reached from the laptop with a nested ssh -t'
 ```
 
-A host Ari says is gone: `--host-definition NAME --forget --dry-run` shows what goes, then `--forget` deletes it.
+A host Ari says is gone: `--host-definition NAME --forget --dry-run` shows what goes, in chat; `--forget` deletes it on his yes, in a later turn.
 
 ## Setup (once per host)
 
-The host needs tmux, `~/.config/bin/ari-driving` (`/ari-driving-tmux` Setup) and, for captures, `~/.config/bin/run_log` from the dotfiles; a Mac also needs `/opt/homebrew/bin` on the pane's PATH, or `--path-prefix`. Ari accepts the host key once with `ssh user@host`.
+The host needs tmux, `~/.config/bin/ari-driving` (`/ari-driving-tmux` Setup) and, for captures, `~/.config/bin/run_log` from the dotfiles; a Mac also needs `/opt/homebrew/bin` on the pane's PATH, or `--path-prefix`. `BatchMode` ssh cannot accept a host key or a password, so Ari accepts the host key once with `ssh user@host` in a pane. A `--put` needs `sha256sum`, `shasum` or `openssl` on the host.
 
 ## File storage
 
 - `bin/run.zsh` — every host action; `--help` lists the flags and defaults. It needs the logging library from `/ari-skill-shellscripts` and exits without it.
 - `~/.local/share/ari-driving-remote/hosts/<name>` — the host definitions, this machine only, never committed.
 - `~/.local/state/ari-driving-remote/bindings/<definition>/<pane>` — which Claude session owns a pane.
-- `/tmp/<sha256>.txt` on the host — what `--put` lands; `/tmp/run_log` on the host — the captures.
-- `tests/run-large-capture.test.zsh` — run after any edit to `run.zsh` that touches how host output is read or printed (`run_command`, `execute_script`, the BIND scan): `zsh $HOME/.claude/skills/ari-driving-remote/tests/run-large-capture.test.zsh`. Self-contained: it puts its own fake `ssh` on PATH that answers a `--cmd` run with a capture larger than a pipe buffer; no tmux, no network. Passes when the last line is `N passed, 0 failed` and it exits 0; a failure is the SIGPIPE regression (exit 141, nothing printed) or a sibling of it.
+- On the host: what `--put` lands (**Put a file on the host**), and `/tmp/run_log`, the captures.
+- `tests/run-large-capture.test.zsh` — run after any edit to `run.zsh` that touches how host output is read or printed (`run_command`, `execute_script`, the BIND scan): `zsh $HOME/.claude/skills/ari-driving-remote/tests/run-large-capture.test.zsh`. Self-contained: a fake `ssh` on PATH answers a `--cmd` run with a capture larger than a pipe buffer; no tmux, no network. Passes when it exits 0; a failure is the SIGPIPE regression (exit 141, nothing printed) or a sibling of it.
+- `tests/run-put.test.zsh` — run after any edit to `--put` (`put_file`, `validate_put_args`, `host_put_script`, `report_put_exit`, the flags): `zsh $HOME/.claude/skills/ari-driving-remote/tests/run-put.test.zsh`. Self-contained: the local definition runs the host script for real into a throwaway project under `/tmp`, a fake `ssh` plays the remote host; checks the path shape, the default name, every flag refusal, the host refusals (a file in the way, a symlink, no hash tool), the no-op on a file already holding the bytes, the dry run, and a put that succeeded with an unwritable hosts dir. Passes when it exits 0.

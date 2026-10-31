@@ -53,10 +53,17 @@ readonly HOST_RUN_LOG='$HOME/.config/bin/run_log'
 readonly DEFAULT_PATH_PREFIX=/opt/homebrew/bin
 readonly DEFAULT_PROMPT_END='❯'
 readonly SSH_OPTS=(-o ConnectTimeout=8 -o BatchMode=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
-# Where --put lands a file on the host: named by its content hash, so the same text is the same path on every
-# host and a re-put is idempotent. Typing a long text through tmux is lossy (a 3,000-byte chunk lost 8 bytes).
+# Where --put lands a file on the host: PUT_DIR/<project>/<name>.<sha256>.txt; the hash makes the same text the same
+# path. Checked by tests/run-put.test.zsh.
 readonly PUT_DIR=/tmp
-readonly SHA_CMD='shasum -a 256'
+readonly PUT_PROJECT_PATTERN='[A-Za-z0-9._-]##(/[A-Za-z0-9._-]##)#'   # relative, one or more segments
+readonly PUT_NAME_PATTERN='[A-Za-z0-9._-]##'
+readonly PUT_SEGMENT_DOTS_PATTERN='(*/|).##(/*|)'   # a segment of dots only: '.', '..', '...'
+# How the host (and this machine) hash the put file, first found wins; a host with none exits EXIT_PUT_NO_HASH.
+readonly PUT_HASH_TOOLS=('sha256sum --' 'shasum -a 256 --' 'openssl dgst -sha256 -r --')
+readonly EXIT_PUT_REFUSED=2    # the host refused the path (not a dir, not ours, a symlink, not a regular file)
+readonly EXIT_PUT_NO_HASH=3    # no sha256 tool on the host; nothing copied
+readonly EXIT_PUT_WRITE=4      # the host could not write the file; its message is on stderr
 # A definition whose host is this value runs tmux on this machine instead of over ssh.
 readonly LOCAL_HOST=local
 # Every machine's everyday name, one word, as the host's dotfiles print it (stdout only the name;
@@ -118,16 +125,16 @@ ${c_green}run.zsh${c_rst} — type a command into a tmux pane (this machine or o
 
 ${c_bold}Usage:${c_rst}
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --hosts
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition NAME --list
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition NAME --target 2.4 --cmd TEXT [OPTIONS]
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition NAME --put FILE
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition NAME [--host USER@HOST] --describe TEXT
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition NAME --forget
+  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --list
+  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --target 2.4 --cmd TEXT [OPTIONS]
+  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --put FILE --project DIR [--name NAME] [--dry-run]
+  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF [--host USER@HOST] --describe TEXT
+  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --forget
 
 A ${c_bold}definition${c_rst} is a file under ${HOSTS_DIR}: the host's user@host (or '${LOCAL_HOST}' for
 this machine, no ssh), PATH prefix, shell-prompt end, the panes seen on the last --list, when it last
 answered, and a description. --host-definition fills --host, --path-prefix and --prompt-end from it;
-an explicit flag wins. The first --describe, --list or --cmd on a new NAME writes it. '${LOCAL_NAME}' is always seeded.
+an explicit flag wins. The first --describe, --list, --cmd or --put on a new DEF writes it. '${LOCAL_NAME}' is always seeded.
 Definitions still under ${OLD_HOSTS_DIR} are moved there on the next run.
 
 Before typing, --cmd refuses unless the pane option ${OPT_IN_OPTION} is on (Ari runs '${OPT_IN_COMMAND}' in that
@@ -149,20 +156,23 @@ ${c_bold}Actions${c_rst} (exactly one):
   --list                  print every pane as 'ID=%301|pane=2.4 ✦|- bound=this|other|none command session: window -- title'
                           (✦ = opted in; bound = which Claude session owns it), save them
   --cmd TEXT              gate, type TEXT into --target, wait for the shell prompt; '' types nothing and only captures
-  --put FILE              scp FILE to the host as ${PUT_DIR}/<sha256 of its bytes>.txt, verify the hash there, print
-                          'PUT: <remote path>' (with --dry-run: 'WOULD PUT: …', nothing copied); the one ssh use that
-                          is not typing (a copy, never a command). Content (more than one line, over 200 bytes, a
-                          body or description) goes this way; a --cmd then names the path. Exit 1 with no PUT: line
-                          when the file is unreadable or empty, the copy failed or the hash differs; 255 as for ssh
+  --put FILE              copy FILE to the host as ${PUT_DIR}/<--project>/<--name>.<sha256 of its bytes>.txt and print
+                          'PUT: <remote path>' once the host's hash matches (--dry-run: 'WOULD PUT: …', nothing copied).
+                          The one ssh use that is not typing: a copy, never a command; a --cmd then names the path
   --describe TEXT         replace the definition's description without connecting
   --forget                print the definition and delete it
 
 ${c_bold}Options:${c_rst}
-  --host-definition NAME  definition to use (required unless --hosts)
+  --host-definition DEF   definition to use (required unless --hosts)
   --host USER@HOST        ssh destination ('${LOCAL_HOST}' for this machine), saved onto a new definition; on an existing one needs --re-point
   --re-point              allow --host to change an existing definition (its panes and last_seen reset)
   --target W.P|%N|S:W[.P]  pane: Ari's window.pane (2.4, matched exactly), a %pane_id, or session:window[.pane] (required with --cmd)
   --session S             session a window.pane target is looked up in (default: the most recently active client's)
+  --project DIR           with --put: the dir under ${PUT_DIR} the file lands in: the repo or system the file belongs
+                          to, one optional subsystem segment (homelab, homelab/torrent); letters, digits, . _ - and /,
+                          never absolute, empty, '..' or a dots-only segment
+  --name NAME             with --put: what the file is, letters, digits, . _ -; default FILE's basename without its
+                          last extension (swap.py -> swap, queue.tar.gz -> queue.tar, .env -> .env)
   --no-enter              type without pressing Enter (Ari presses it)
   --no-run-log            type the command bare; by default it is typed as run_log '<cmd>' when the host
                           has ${HOST_RUN_LOG}, so the capture lands in the host's /tmp/run_log
@@ -176,7 +186,10 @@ ${c_bold}Options:${c_rst}
   -h, --help              show this help
 
 ${c_bold}Exit codes:${c_rst}
-  0    the shell prompt returned
+  0    the shell prompt returned, or PUT: printed
+  1    refused before connecting (the text check, a malformed --project or --name, an unreadable or empty FILE),
+       or a --put that failed on the host (no PUT: line; the [ERROR] line says which: the path refused, no sha256
+       tool, the write failed, the hash differs)
   ${EXIT_TIMEOUT}  still running (timed out, --no-wait, or ssh dropped after SENT); the pane is printed; never resend
   ${EXIT_NO_TARGET}   no pane matches the target, or no attached client to resolve a window.pane against (--session);
        every pane on the host is printed under the refusal, so the right one can be picked without --list
@@ -184,14 +197,15 @@ ${c_bold}Exit codes:${c_rst}
   ${EXIT_NOT_OPTED_IN}   pane not opted in (nothing typed)
   ${EXIT_BOUND_ELSEWHERE}   pane bound to another Claude session (nothing typed); get a pane of your own
   ${EXIT_NOT_FOUND}  tmux not found on the host (--path-prefix)
-  ${EXIT_SSH}  ssh could not connect before anything was typed
+  ${EXIT_SSH}  ssh could not connect before anything was typed; for a --put, nothing is at the path
 
 ${c_bold}Examples:${c_rst}
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition local --list
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition local --target 2.4 --no-enter --cmd 'kubectl get pods'
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target 4.1 --cmd 'diskutil list external physical'
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %7 --cmd ''
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "$SCRATCHPAD/body.md"
+  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "$SCRATCHPAD/body.md" --project homelab/beads --name bead-frontier
+  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "$SCRATCHPAD/swap.py" --project homelab/torrent --dry-run
   zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --host pi@pi.local --describe 'Pi 4 B at 192.0.2.94, no tmux; reached from the laptop with a nested ssh -t'
 EOF
 }
@@ -700,67 +714,153 @@ execute_script() {
 }
 
 #######################################
-# Copy a file to the host as PUT_DIR/<sha256>.txt (cp for the local definition, scp otherwise), confirm the
-# host's hash of it matches, and print 'PUT: <remote path>'. The only ssh use besides typing: it moves bytes
-# and runs nothing of the caller's. A hash mismatch removes nothing and exits 1 so a half-written file is
-# never named as done.
-# Globals: host LOCAL_HOST SSH_OPTS PUT_DIR SHA_CMD dry_run name
+# Check --project and --name for a put, defaulting the name to the file's basename without its last extension
+# (a dotfile keeps its whole basename). Before any connection; checked by tests/run-put.test.zsh.
+# Globals: put_project put_name (read; put_name written), PUT_PROJECT_PATTERN PUT_NAME_PATTERN PUT_SEGMENT_DOTS_PATTERN
 # Arguments: $1 local file
-# Returns: 1 on a missing file, a failed copy or a hash mismatch; EXIT_SSH when ssh cannot connect
+# Returns: 1 on a malformed project or name
+#######################################
+validate_put_args() {
+  setopt local_options extended_glob
+  if [[ -z "${put_project}" ]]; then
+    log::err "Missing --project | hint='the dir under ${PUT_DIR} the file lands in: the repo or system it belongs to, e.g. homelab or homelab/torrent'"
+    return 1
+  fi
+  if [[ "${put_project}" != ${~PUT_PROJECT_PATTERN} || "${put_project}" == ${~PUT_SEGMENT_DOTS_PATTERN} ]]; then
+    log::err "Invalid --project | project='${put_project}' expected='relative dir of letters, digits, . _ - and /; no leading /, no segment of dots only'"
+    return 1
+  fi
+  if [[ -z "${put_name}" ]]; then
+    put_name="${${1:t}%.*}"
+    [[ -n "${put_name}" ]] || put_name="${1:t}"
+    log::info "Defaulting --name to the file's basename | name='${put_name}'"
+  fi
+  if [[ "${put_name}" != ${~PUT_NAME_PATTERN} || "${put_name}" == ${~PUT_SEGMENT_DOTS_PATTERN} ]]; then
+    log::err "Invalid --name | name='${put_name}' expected='letters, digits, . _ -, not dots only'"
+    return 1
+  fi
+}
+
+#######################################
+# The sha256 command available on this machine, first of PUT_HASH_TOOLS found.
+# Globals: PUT_HASH_TOOLS
+# Returns: the command words on stdout; 1 when none is installed
+#######################################
+local_hash_command() {
+  local tool
+  for tool in "${PUT_HASH_TOOLS[@]}"; do
+    if command -v "${tool%% *}" >/dev/null 2>&1; then print -r -- "${tool}"; return 0; fi
+  done
+  log::err "No sha256 tool on this machine | tried='${(j:, :)PUT_HASH_TOOLS}'"
+  return 1
+}
+
+#######################################
+# The host side of a put, POSIX sh, the same on this machine and over ssh: find a hash tool, refuse a path that is
+# not ours to write (REFUSED: … and EXIT_PUT_REFUSED), make the project dir mode 700, leave a file that already
+# holds the bytes alone, else write stdin beside it and move it into place, and print the file's hash last. Both
+# paths are ours, validated, and single-quoted once. Checked by tests/run-put.test.zsh.
+# Globals: PUT_HASH_TOOLS EXIT_PUT_*
+# Arguments: $1 remote dir  $2 remote file  $3 expected sha256
+# Returns: the script on stdout
+#######################################
+host_put_script() {
+  local dir="${1}" file="${2}" sha="${3}" tool
+  print -r -- "h=''"
+  for tool in "${PUT_HASH_TOOLS[@]}"; do
+    print -r -- "[ -n \"\$h\" ] || command -v ${tool%% *} >/dev/null 2>&1 && h=\${h:-${(qq)tool}}"
+  done
+  print -r -- "[ -n \"\$h\" ] || { echo 'REFUSED: no sha256 tool on the host'; exit ${EXIT_PUT_NO_HASH}; }"
+  print -r -- "dir=${(qq)dir}; file=${(qq)file}; want=${(qq)sha}"
+  print -r -- "if [ -e \"\$dir\" ] && [ ! -d \"\$dir\" ]; then echo \"REFUSED: project path is not a directory: \$dir\"; exit ${EXIT_PUT_REFUSED}; fi"
+  print -r -- "mkdir -p -m 700 -- \"\$dir\" || exit ${EXIT_PUT_WRITE}"
+  print -r -- "if [ ! -O \"\$dir\" ]; then echo \"REFUSED: project dir belongs to another user: \$dir\"; exit ${EXIT_PUT_REFUSED}; fi"
+  print -r -- "if [ -L \"\$file\" ]; then echo \"REFUSED: a symlink sits at the path: \$file\"; exit ${EXIT_PUT_REFUSED}; fi"
+  print -r -- "if [ -e \"\$file\" ] && [ ! -f \"\$file\" ]; then echo \"REFUSED: the path is not a regular file: \$file\"; exit ${EXIT_PUT_REFUSED}; fi"
+  print -r -- "if [ -f \"\$file\" ] && [ \"\$(\$h \"\$file\" | awk '{print \$1}')\" = \"\$want\" ]; then echo \"\$want\"; exit 0; fi"   # the exit is sh's, after the pipeline  # lint: ok
+  print -r -- "part=\"\$file.part.\$\$\"; { cat > \"\$part\" && mv -f -- \"\$part\" \"\$file\"; } || { rm -f -- \"\$part\"; exit ${EXIT_PUT_WRITE}; }"
+  print -r -- "\$h \"\$file\" | awk '{print \$1}'"
+}
+
+#######################################
+# Log why a put's host script failed, from its exit code and its REFUSED: line. EXIT_SSH is a put's own message:
+# nothing is at the path (the write goes to a .part file that is moved into place only when complete).
+# Globals: host EXIT_PUT_* EXIT_SSH
+# Arguments: $1 exit_code  $2 host output  $3 remote path
+#######################################
+report_put_exit() {
+  local exit_code="${1}" output="${2}" remote="${3}" refused
+  local -a refusals=(${(M)${(f)output}:#REFUSED: *})
+  refused="${refusals[1]:-}"
+  if (( exit_code == EXIT_PUT_REFUSED )); then
+    log::err "Host refused the path; nothing copied | reason='${refused#REFUSED: }' hint='the same flags fail the same way: another --project or --name, or the cleanup is a --cmd of Ari'"
+    return 0
+  fi
+  if (( exit_code == EXIT_PUT_NO_HASH )); then
+    log::err "No sha256 tool on the host; nothing copied | host='${host}' tried='${(j:, :)PUT_HASH_TOOLS}' hint='tell Ari; the host needs one of them'"
+    return 0
+  fi
+  if (( exit_code == EXIT_PUT_WRITE )); then
+    log::err "Host could not write the file | host='${host}' remote='${remote}' hint='its message is above (No space left, Permission denied): Ari gets it with the remote and local paths; a re-put only after he fixed the host'"
+    return 0
+  fi
+  if (( exit_code == EXIT_SSH )); then
+    log::err "ssh failed before or during the copy; nothing is at the path | host='${host}' remote='${remote}' hint='asleep, wrong address, or no key: Ari runs ssh ${host} once in a pane; re-put after he says done'"
+    return 0
+  fi
+  log::err "Put failed on the host with no message | host='${host}' exit_code='${exit_code}' remote='${remote}' hint='re-put once; a second failure goes to Ari with both hashes'"
+}
+
+#######################################
+# Copy a file to the host as PUT_DIR/<project>/<name>.<sha256>.txt through host_put_script (sh here for the local
+# definition, one ssh otherwise, the file on stdin), confirm the hash it prints, and print 'PUT: <remote path>'.
+# The only ssh use besides typing: it moves bytes and runs nothing of the caller's. A failure prints no PUT: line.
+# Checked by tests/run-put.test.zsh.
+# Globals: host PUT_DIR put_project put_name dry_run name def
+# Arguments: $1 local file
+# Returns: 1 on a missing or empty file, a bad project or name, a refused path, a failed copy or a hash mismatch;
+#          EXIT_SSH when ssh failed
 #######################################
 put_file() {
-  local file="${1:A}" sha remote remote_sha bytes copy_failed=false exit_code=0 tool
+  local file="${1:A}" sha remote remote_dir remote_sha bytes hash_cmd output exit_code=0
   if [[ ! -f "${file}" || ! -r "${file}" ]]; then
-    log::err "File to put is not a readable regular file | file='${file}'"
+    log::err "File to put is not a readable regular file | file='${file}' hint='write it to the scratchpad first'"
     return 1
   fi
   bytes="$(wc -c < "${file}" | tr -d ' ')"
   if (( bytes == 0 )); then
-    log::err "File to put is empty; a Write that did not land | file='${file}'"
+    log::err "File to put is empty; a write that did not land | file='${file}' hint='rewrite the scratchpad file, then put it'"
     return 1
   fi
-  for tool in scp shasum; do
-    command -v "${tool}" >/dev/null 2>&1 || { log::err "Missing required command | missing='${tool}'"; return 1; }
-  done
-  # hashed from stdin: a name starting with '-' or holding a backslash would change shasum's output
-  sha="$(${=SHA_CMD} < "${file}" | awk '{print $1}')"
-  remote="${PUT_DIR}/${sha}.txt"
+  validate_put_args "${file}" || return 1
+  hash_cmd="$(local_hash_command)" || return 1
+  # hashed from stdin: a name starting with '-' or holding a backslash would change the tool's output
+  sha="$(${=hash_cmd} < "${file}" | awk '{print $1}')"
+  remote_dir="${PUT_DIR}/${put_project}"
+  remote="${remote_dir}/${put_name}.${sha}.txt"
   log::info "Putting file on the host | host='${host}' file='${file}' bytes='${bytes}' remote='${remote}'"
   if [[ "${dry_run}" == "true" ]]; then
     log::info "Dry run — would copy and verify, copying nothing"
     print -r -- "WOULD PUT: ${remote}"
     return 0
   fi
-  if [[ "${host}" == "${LOCAL_HOST}" ]]; then
-    cp -f -- "${file}" "${remote}" 2>/dev/null || copy_failed=true
-    remote_sha="$(${=SHA_CMD} < "${remote}" 2>/dev/null | awk '{print $1}')"
-  else
-    # scp's own stderr stays visible: 'Permission denied', 'No space left', a missing sftp-server
-    scp "${SSH_OPTS[@]}" -- "${file}" "${host}:${remote}" || exit_code=$?
-    if (( exit_code == EXIT_SSH )); then
-      report_exit "${exit_code}"
-      return "${exit_code}"
-    fi
-    (( exit_code == 0 )) || copy_failed=true
-    exit_code=0
-    # the host may have sha256sum (Linux) or shasum (macOS, perl); try both
-    remote_sha="$(ssh "${SSH_OPTS[@]}" "${host}" "if command -v sha256sum >/dev/null 2>&1; then sha256sum -- ${remote}; else shasum -a 256 -- ${remote}; fi" 2>/dev/null | awk '{print $1}')" || exit_code=$?
-    if (( exit_code == EXIT_SSH )); then
-      report_exit "${exit_code}"
-      return "${exit_code}"
-    fi
-  fi
-  if [[ "${remote_sha}" != "${sha}" ]]; then
-    if [[ "${copy_failed}" == "true" ]]; then
-      log::err "Copy failed and the host does not hold the text | host='${host}' remote='${remote}' hint='scp's message is above; a re-put is safe; never type the content instead'"
-    else
-      log::err "Hash mismatch after copy; the remote file is not the text | local='${sha}' remote='${remote_sha:-unreadable}' remote_path='${remote}' hint='re-put once; a second mismatch goes to Ari'"
-    fi
+  # a definition named for the first time is saved before connecting, as --describe saves it, so a retry can drop --host
+  if [[ ! -r "$(definition_file "${name}")" ]]; then record_definition "${name}" false "" "" false || true; fi
+  # the host's own stderr stays visible: 'Permission denied', 'No space left'
+  output="$(execute_script "$(host_put_script "${remote_dir}" "${remote}" "${sha}")" < "${file}")" || exit_code=$?
+  if (( exit_code != 0 )); then
+    report_put_exit "${exit_code}" "${output}" "${remote}"
+    (( exit_code == EXIT_SSH )) && return "${EXIT_SSH}"
     return 1
   fi
-  # a failed copy whose target already holds the exact bytes (another user's identical file in a sticky /tmp) is a put
+  local -a output_lines=(${(f)output})
+  remote_sha="${output_lines[-1]:-}"
+  if [[ "${remote_sha}" != "${sha}" ]]; then
+    log::err "Hash mismatch after copy; the remote file is not the text | local='${sha}' remote='${remote_sha:-unreadable}' remote_path='${remote}' hint='re-put once; a second mismatch goes to Ari with both hashes'"
+    return 1
+  fi
   print -r -- "PUT: ${remote}"
-  record_definition "${name}" false "" "" true
+  record_definition "${name}" false "" "" true || log::warn "Definition not saved; the put itself succeeded | name='${name}'"
 }
 
 #######################################
@@ -932,7 +1032,8 @@ main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local name="" host="" host_set=false re_point=false target="" session="" cmd="" cmd_set=false describe="" describe_set=false put="" put_set=false
+  local name="" host="" host_set=false re_point=false target="" session="" cmd="" cmd_set=false describe="" describe_set=false
+  local put="" put_set=false put_project="" put_name=""
   local press_enter=true wait=true run_log=true dry_run=false list=false hosts=false forget=false
   local lines="${DEFAULT_LINES}" timeout="${DEFAULT_TIMEOUT}"
   local path_prefix="${DEFAULT_PATH_PREFIX}" path_prefix_set=false prompt_end="${DEFAULT_PROMPT_END}" prompt_end_set=false
@@ -947,6 +1048,8 @@ main() {
     --session)          session="${2:?--session requires a value}"; shift 2 ;;
     --cmd)              cmd="${2?--cmd requires a value}"; cmd_set=true; shift 2 ;;
     --put)              put="${2:?--put requires a value}"; put_set=true; shift 2 ;;
+    --project)          put_project="${2:?--project requires a value}"; shift 2 ;;
+    --name)             put_name="${2:?--name requires a value}"; shift 2 ;;
     --hosts)            hosts=true; shift ;;
     --list)             list=true; shift ;;
     --describe)         describe="${2:?--describe requires a value}"; describe_set=true; shift 2 ;;
@@ -974,6 +1077,14 @@ main() {
   fi
 
   # === VALIDATE ===
+  if [[ "${put_set}" == "false" && ( -n "${put_project}" || -n "${put_name}" ) ]]; then
+    log::err "--project and --name go with --put | project='${put_project}' name='${put_name}'"
+    return 1
+  fi
+  if [[ "${put_set}" == "true" && ( -n "${target}" || -n "${session}" || "${press_enter}" == "false" || "${wait}" == "false" || "${run_log}" == "false" || "${lines}" != "${DEFAULT_LINES}" || "${timeout}" != "${DEFAULT_TIMEOUT}" ) ]]; then
+    log::err "A --put types nothing: it takes no pane or typing flag | refused='--target, --session, --no-enter, --no-wait, --no-run-log, --lines, --timeout'"
+    return 1
+  fi
   if (( actions != 1 )); then
     log::err "Choose one action | given='${actions}' actions='--hosts, --list, --cmd, --put, --describe, --forget'"
     help
