@@ -697,12 +697,15 @@ remote_script() {
 # --- Actions ---
 
 #######################################
-# Run a host script: directly through sh for the local definition, over ssh otherwise.
+# Run a host script under POSIX sh: directly for the local definition, as `sh -c` inside whatever login shell
+# sshd hands the command to otherwise (a Mac's zsh does not word-split, and ran the put's `$h "$file"` as one
+# word on 2026-10-31). A host whose login shell finds no `sh` exits EXIT_NOT_FOUND.
 # Globals: host LOCAL_HOST SSH_OPTS
 # Arguments: $1 script
 # Returns: the script's exit code
 #######################################
 execute_script() {
+  emulate -L zsh   # (qq) must quote as '\'' here, which RC_QUOTES would turn into ''
   local script="${1}"
   if [[ "${host}" == "${LOCAL_HOST}" ]]; then
     log::info "Running on this machine | host='${host}'"
@@ -710,7 +713,7 @@ execute_script() {
     return
   fi
   log::info "Running over ssh | host='${host}'"
-  ssh "${SSH_OPTS[@]}" "${host}" "${script}"
+  ssh "${SSH_OPTS[@]}" "${host}" "sh -c ${(qq)script}"
 }
 
 #######################################
@@ -783,7 +786,8 @@ host_put_script() {
 }
 
 #######################################
-# Log why a put's host script failed, from its exit code and its REFUSED: line. EXIT_SSH is a put's own message:
+# Log why a put's host script failed, from its exit code and its REFUSED: line. EXIT_NOT_FOUND is the login shell
+# finding no sh; EXIT_SSH is a put's own message:
 # nothing is at the path (the write goes to a .part file that is moved into place only when complete).
 # Globals: host EXIT_PUT_* EXIT_SSH
 # Arguments: $1 exit_code  $2 host output  $3 remote path
@@ -800,6 +804,10 @@ report_put_exit() {
     log::err "No sha256 tool on the host; nothing copied | host='${host}' tried='${(j:, :)PUT_HASH_TOOLS}' hint='tell Ari; the host needs one of them'"
     return 0
   fi
+  if (( exit_code == EXIT_NOT_FOUND )); then
+    log::err "No sh on the host; nothing copied | host='${host}' hint='its login shell said so above; tell Ari which host; a re-put fails the same way'"
+    return 0
+  fi
   if (( exit_code == EXIT_PUT_WRITE )); then
     log::err "Host could not write the file | host='${host}' remote='${remote}' hint='its message is above (No space left, Permission denied): Ari gets it with the remote and local paths; a re-put only after he fixed the host'"
     return 0
@@ -812,8 +820,8 @@ report_put_exit() {
 }
 
 #######################################
-# Copy a file to the host as PUT_DIR/<project>/<name>.<sha256>.txt through host_put_script (sh here for the local
-# definition, one ssh otherwise, the file on stdin), confirm the hash it prints, and print 'PUT: <remote path>'.
+# Copy a file to the host as PUT_DIR/<project>/<name>.<sha256>.txt through host_put_script (under sh on either side:
+# directly for the local definition, through one ssh otherwise, the file on stdin), confirm the hash it prints, and print 'PUT: <remote path>'.
 # The only ssh use besides typing: it moves bytes and runs nothing of the caller's. A failure prints no PUT: line.
 # Checked by tests/run-put.test.zsh.
 # Globals: host PUT_DIR put_project put_name dry_run name def

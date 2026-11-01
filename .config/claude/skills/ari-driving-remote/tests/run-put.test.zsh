@@ -24,14 +24,16 @@ contains() {   # <name> <needle> <haystack>
 
 readonly T="$(mktemp -d)"
 trap 'chmod -R u+w "${T}" 2>/dev/null; rm -rf "${T}" "/tmp/${PROJECT}"' EXIT
-mkdir -p "${T}/bin" "${T}/nohash" "${T}/data" "${T}/state" "${T}/cache"
+mkdir -p "${T}/bin" "${T}/nohash" "${T}/nosh" "${T}/data" "${T}/state" "${T}/cache"
 print -r -- 'hello from the put test' > "${T}/swap.py"
 print -r -- 'SECRET=1' > "${T}/.env"
 readonly SHA="$(shasum -a 256 < "${T}/swap.py" | awk '{print $1}')"
 readonly ENV_SHA="$(shasum -a 256 < "${T}/.env" | awk '{print $1}')"
 
-# The fake ssh: drops the options and the host, runs the host script here with the same stdin. FAKE_SSH_PATH
-# narrows the host's PATH (a host without a hash tool).
+# The fake ssh: drops the options and the host, runs the command here with the same stdin, in zsh, the login
+# shell sshd hands a Mac's command to. Under /bin/sh this fake passed while the laptop's zsh failed the first real
+# put (2026-10-31, `command not found: sha256sum --`: zsh does not word-split `$h`). FAKE_SSH_PATH narrows the
+# host's PATH (a host without a hash tool, or without sh).
 cat > "${T}/bin/ssh" <<'FAKE'
 #!/usr/bin/env zsh
 while (( $# > 1 )); do
@@ -40,12 +42,14 @@ while (( $# > 1 )); do
     *) shift ;;
   esac
 done
+zsh_bin="$(command -v zsh)"   # before PATH narrows: sshd finds the login shell without PATH
 if [[ -n "${FAKE_SSH_PATH:-}" ]]; then export PATH="${FAKE_SSH_PATH}"; fi
-exec /bin/sh -c "${1}"
+exec "${zsh_bin}" -c "${1}"
 FAKE
 chmod +x "${T}/bin/ssh"
-# a host with sh, mkdir, cat, mv, rm and awk, and no sha256 tool
+# a host with sh, mkdir, cat, mv, rm and awk, and no sha256 tool; and one with everything but sh
 for tool in sh mkdir cat mv rm awk; do ln -s "$(command -v "${tool}")" "${T}/nohash/${tool}"; done
+for tool in mkdir cat mv rm awk shasum; do ln -s "$(command -v "${tool}")" "${T}/nosh/${tool}"; done
 
 run() {   # <args…>; stdout on $out, exit code on $rc
   out="$(PATH="${T}/bin:${PATH}" XDG_DATA_HOME="${T}/data" XDG_STATE_HOME="${T}/state" XDG_CACHE_HOME="${T}/cache" LOG_COLOR=0 \
@@ -152,6 +156,12 @@ check "a host without a sha256 tool exits 1" 1 "${rc}"
 check "a host without a sha256 tool prints no PUT line" "" "${out}"
 contains "a host without a sha256 tool is named as such" "No sha256 tool on the host" "$(<"${T}/err")"
 check "a host without a sha256 tool got no file" "" "$(ls "/tmp/${PROJECT}/nohash" 2>/dev/null)"
+
+FAKE_SSH_PATH="${T}/nosh" run --host-definition fake --put "${T}/swap.py" --project "${PROJECT}/nosh"
+check "a host without sh exits 1" 1 "${rc}"
+check "a host without sh prints no PUT line" "" "${out}"
+contains "a host without sh is named as such, not as a hash mismatch" "No sh on the host" "$(<"${T}/err")"
+check "a host without sh got no file" "" "$(ls "/tmp/${PROJECT}/nosh" 2>/dev/null)"
 
 # --- a put that succeeded is reported as such even when the definition cannot be saved ---
 
