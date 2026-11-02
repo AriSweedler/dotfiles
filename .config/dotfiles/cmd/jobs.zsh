@@ -13,7 +13,7 @@ ${JOBS_INTERVAL_SECONDS}s. A plugin is an executable in $(help::tilde "${JOBS_RO
 or $(help::tilde "${JOBS_ROOT_LDF}") (this machine) whose header has
 '# triggers: unlock load' and any '# cron: m h dom mon dow' lines; it gets
 the trigger as \$1; the engine posts a banner when it ends (an alert, click
-opens the log, on failure), except for an ending a '# notifies: ok fail' line
+copies the log's path and opens it, on failure), except for an ending a '# notifies: ok fail' line
 says the plugin reports itself. A '# deps: name...' line names setup run before
 it: executables in $(help::tilde "${DEPS_ROOT_LDF}") (this machine, wins) or
 $(help::tilde "${DEPS_ROOT_DF}") (shared) whose stdout, NAME=VALUE lines, becomes the
@@ -523,26 +523,23 @@ jobs_notify() {
   return "${rc}"
 }
 
-# The command a failure alert's click runs: the job's log in a new tmux window on the user's
-# default server (launchd has no $TMUX, so the socket path is derived), else in Terminal.
-# Absolute paths throughout: the click runs under /bin/sh with launchd's PATH.
+# The command a failure alert's click runs: the log's path onto the clipboard (to paste into a
+# shell or a Claude prompt), then the log itself, at its end, in $EDITOR in a new tmux window
+# of the working session via tmux-edit-window (ARI_DOTFILES_EDIT_WINDOW), else in Terminal.
+# The editor resolves inside that window, not here: the click runs under /bin/sh with launchd's
+# environment, where $EDITOR is unset and nvim (under bob) is off PATH, so resolving here gave
+# vi. Absolute paths throughout, for the same reason.
 jobs_click_command() {
-  local logfile="${1}" sock="/private/tmp/tmux-$(id -u)/default" tmux_bin editor_bin
-  tmux_bin="$(command -v tmux 2>/dev/null || true)"
-  [[ -z "${tmux_bin}" && -x /opt/homebrew/bin/tmux ]] && tmux_bin=/opt/homebrew/bin/tmux
-  editor_bin="$(command -v "${${EDITOR:-vi}%% *}" 2>/dev/null || command -v vi)"
-  if [[ -S "${sock}" && -n "${tmux_bin}" ]]; then
-    print -r -- "${(q)tmux_bin} -S ${(q)sock} new-window -n dotfiles-jobs-log ${(q)editor_bin} + ${(q)logfile}"
-  else
-    print -r -- "/usr/bin/open -a Terminal ${(q)logfile}"
-  fi
+  local logfile="${1}"
+  print -r -- "printf %s ${(q)logfile} | /usr/bin/pbcopy; ${(q)ARI_DOTFILES_EDIT_WINDOW} -n dotfiles-jobs-log + ${(q)logfile}"
 }
 
 #######################################
 # Tell the user how a job ended. Success: a JOBS_HUD_SECONDS banner (post, sleep, remove by
 # group; macOS gives banners no duration control) carrying the plugin's last output line, so a
 # plugin's summary is what it prints last; any earlier failure alert for the job comes down.
-# Failure or timeout: a persistent alert, one per job (its group), whose click opens the log.
+# Failure or timeout: a persistent alert, one per job (its group), whose click copies the log's
+# path and opens the log.
 # An ending the plugin's `# notifies:` line claims (ok, fail) gets no banner and no alert from
 # here: the plugin posted its own. A timeout or a blocked dep is always the engine's alert,
 # since the plugin never got to speak.
@@ -565,7 +562,7 @@ jobs_notify_finish() {
   if (( rc != 124 && rc != JOBS_DEP_FAILED_RC && ${notifies[(I)fail]} )); then return 0; fi
   verdict="failed (rc ${rc})"; (( rc == 124 )) && verdict="timed out"; (( rc == JOBS_DEP_FAILED_RC )) && verdict="blocked: a dep failed"
   jobs_notify -group "dotfiles-jobs-${name}" -title "dotfiles jobs: ${name} ${verdict}" \
-    -message "${last:-no output} — click to open the log" -execute "$(jobs_click_command "${logfile}")" || true
+    -message "${last:-no output} — click to open the log (path copied)" -execute "$(jobs_click_command "${logfile}")" || true
 }
 
 # --- the launchd job ---

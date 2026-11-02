@@ -35,7 +35,10 @@ plugin fail_engine '' 'print -r -- "broke"; exit 3'
 run fail_engine
 assert_eq "fail: the plugin's rc" 3 "${RC}"
 assert_contains "fail: the engine's alert" "$(posted)" "fail_engine failed (rc 3)"
-assert_contains "fail: the alert carries the last line and opens the log" "$(posted)" "broke — click to open the log"
+assert_contains "fail: the alert carries the last line and opens the log" "$(posted)" "broke — click to open the log (path copied)"
+assert_contains "fail: the click copies the log's path" "$(posted)" "-execute printf %s ${HOME}/.local/state/dotfiles/jobs/fail_engine.log | /usr/bin/pbcopy;"
+assert_contains "fail: ... then opens the log at its end through tmux-edit-window (\$EDITOR resolves in the window, not under launchd)" "$(posted)" "; ${HOME}/.config/bin/tmux-edit-window -n dotfiles-jobs-log + ${HOME}/.local/state/dotfiles/jobs/fail_engine.log"
+assert_not_contains "fail: no editor is resolved under launchd (that gave vi)" "$(posted)" "/usr/bin/vi"
 
 plugin fail_self $'# notifies: fail\n' 'print -r -- "login needed, said so"; exit 1'
 run fail_self

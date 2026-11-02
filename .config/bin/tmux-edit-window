@@ -1,10 +1,12 @@
 #!/usr/bin/env zsh
-# tmux-edit-window [-n NAME] FILE — open ${EDITOR} on FILE in a new tmux window of the working
-# session (the most recently active client's) and bring Terminal forward: the Hyper+O → vi_*
-# shape for callers without a tty, chiefly `terminal-notifier -execute`, where a click on
-# `-open file.md` would hand the file to Xcode. The click runs under /bin/sh with launchd's PATH,
-# so tmux is probed by absolute path; the editor resolves inside the window from the tmux
-# server's environment. Without a tmux client the file opens in a fresh Terminal window.
+# tmux-edit-window [-n NAME] [+LINE] FILE — open ${EDITOR} on FILE (at LINE; a bare + is the
+# last line, as the vi family reads it) in a new tmux window of the working session (the most
+# recently active client's) and bring Terminal forward: the Hyper+O → vi_* shape for callers
+# without a tty, chiefly `terminal-notifier -execute`, where a click on `-open file.md` would
+# hand the file to Xcode. The click runs under /bin/sh with launchd's environment, so tmux is
+# probed by absolute path and the editor resolves inside the window (or Terminal's shell) from
+# an interactive zsh, never here: launchd sets no $EDITOR. Without a tmux client the file opens
+# in a fresh Terminal window.
 set -u
 source "${HOME}/.config/zsh/plugins/log.zsh"
 
@@ -13,7 +15,12 @@ if [[ "${1:-}" == -n ]]; then
   name="${2:?-n needs a window name}"
   shift 2
 fi
-file="${1:?usage: tmux-edit-window [-n NAME] FILE}"
+line=""
+if [[ "${1:-}" == +* ]]; then
+  line="${1}"
+  shift
+fi
+file="${1:?usage: tmux-edit-window [-n NAME] [+LINE] FILE}"
 if [[ ! -r "${file}" ]]; then
   log::err "cannot read file | path='${file}'"
   exit 1
@@ -33,15 +40,16 @@ fi
 
 if [[ -n "${client}" ]]; then
   session="$("${tmux_bin}" display-message -p -c "${client}" '#{session_name}')"
-  log::info "opening editor window | session='${session}' window='${name}' file='${file}'"
-  # FILE travels as its own argv element. The shell is interactive (as irun) because $EDITOR
-  # is nvim under bob, whose PATH entry is prepended by an interactive plugin; a plain zsh -c
-  # would fall back to vi.
+  log::info "opening editor window | session='${session}' window='${name}' file='${file}'${line:+ line='${line}'}"
+  # FILE and LINE travel as their own argv elements. The shell is interactive (as irun) because
+  # $EDITOR is nvim under bob, whose PATH entry is prepended by an interactive plugin; a plain
+  # zsh -c would fall back to vi.
   "${tmux_bin}" new-window -t "${session}:" -n "${name}" -c "${file:h}" \
-    zsh -ic 'editor="${EDITOR:-vi}"; command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi; ${=editor} -- "$1"' _ "${file}"
+    zsh -ic 'editor="${EDITOR:-vi}"; command -v "${editor%% *}" >/dev/null 2>&1 || editor=vi; ${=editor} ${2:+"$2"} -- "$1"' _ "${file}" "${line}"
   /usr/bin/open -a Terminal
 else
-  log::warn "no tmux client; opening in a Terminal window | file='${file}'"
-  /usr/bin/osascript -e "tell application \"Terminal\" to do script \"exec ${EDITOR:-vi} ${(q)file}\"" \
+  log::warn "no tmux client; opening in a Terminal window | file='${file}'${line:+ line='${line}'}"
+  # Terminal's shell is an interactive login zsh, so \$EDITOR expands there (nvim), not here.
+  /usr/bin/osascript -e "tell application \"Terminal\" to do script \"exec \\${EDITOR:-vi} ${line:+${(q)line} }${(q)file}\"" \
                      -e 'tell application "Terminal" to activate' > /dev/null
 fi

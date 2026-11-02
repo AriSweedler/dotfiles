@@ -60,7 +60,8 @@ The framework runs the plugin with the trigger as `$1`, keeps its output in
 `~/.local/state/dotfiles/jobs/<name>.log` (the five runs before it in `.log.bak.1` …
 `.log.bak.5`), stamps the run,
 and tells the user how it ended: on success a two-second banner carrying the plugin's last
-output line, on failure or timeout a persistent alert whose click opens the log. So a plugin
+output line, on failure or timeout a persistent alert whose click copies the log's path to the
+clipboard and opens the log in `$EDITOR` (`tmux-edit-window`). So a plugin
 prints a one-line summary last and posts no completion banner of its own; a notification a
 plugin does post is about its domain (aws-sso-autologin's click-to-login notice), never about
 having finished. When that domain notice *is* how an ending shows, the plugin claims the ending
