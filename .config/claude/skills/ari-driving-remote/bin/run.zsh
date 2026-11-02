@@ -931,6 +931,8 @@ list_windows() {
   (( exit_code == 0 )) || return "${exit_code}"
   output="$(list_with_owners "${name}" "${output}")"
   print -r -- "${output}"
+  # The reminder that holds after a compaction, when SKILL.md may be out of context: the first --cmd is the one sent bare.
+  print -r -- "NEXT: a --cmd into a ✦ pane goes in chat first: its label in inline code, then the bare command in a fenced block, above the Bash call; --cmd '' needs none"
   windows="${(pj:$WINDOWS_SEPARATOR:)${(f)"$(print -r -- "${output}" | awk "${AWK_WINDOW_NAMES}")"}}"
   record_definition "${name}" false "${windows}" "" true
 }
@@ -1079,6 +1081,8 @@ main() {
   for flag in "${hosts}" "${list}" "${cmd_set}" "${put_set}" "${describe_set}" "${forget}"; do
     [[ "${flag}" == "true" ]] && actions=$((actions + 1))
   done
+  # Whitespace alone is an empty command: a capture, never a typed `run_log ' '`.
+  if [[ "${cmd_set}" == "true" && "${cmd}" != *[^[:space:]]* ]]; then cmd=""; fi
   if [[ "${cmd_set}" == "true" && -z "${cmd}" && "${press_enter}" == "true" ]]; then
     log::info "Empty --cmd captures only; not pressing Enter"
     press_enter=false
