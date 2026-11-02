@@ -1,11 +1,15 @@
 #!/usr/bin/env zsh
 # Mark the current tmux pane as one Claude may type into (on), unmark it (off), or report it (status).
 # Ari runs this in the pane itself; the ari-driving skills type into, or click-run in, only a pane marked on.
-# On Ari's PATH as ~/.config/bin/ari-driving (and ari-remote-tmux, the old name).
+# on and off put the pane's full label on the clipboard, to paste into a Claude session; on arms a hook on the
+# window that runs `release` when a layout change leaves no pane in it marked, so a closed pane that was the
+# window's last one on takes the marker down and says so. On Ari's PATH as ~/.config/bin/ari-driving (and
+# ari-remote-tmux, the old name).
 # Run: ari-driving --help
 
 set -euo pipefail
 
+readonly SELF_PATH="${0:A}"
 readonly LIB_LOGGING="${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
 if [[ ! -r "${LIB_LOGGING}" ]]; then
   print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
@@ -13,34 +17,72 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
 fi
 source "${LIB_LOGGING}"
 
+# --- Environment variables ---
+
+# Where `release` logs, since a hook's run-shell shows any output in a tmux view page: the hook sends it here.
+readonly RELEASE_LOG="${ARI_DRIVING_RELEASE_LOG:-/tmp/ari-driving-release.log}"
+
 # --- Constants ---
 
-# The pane option is the permission run.zsh and focus.zsh check. The window option of the same name only drives the
-# status-bar marker; it stays on while any pane in the window is on.
+# The pane option is the permission run.zsh and focus.zsh check (show-options -p, never inherited).
 readonly OPTION=@ari_driving
+# The window's own mark, a different name on purpose: a format reads a pane's `@ari_driving` through the
+# window's, so the hook's any-pane-on test would always be true if the window carried the same name.
+readonly WINDOW_OPTION=@ari_driving_window
 # Set to the epoch of each `on`: /ari-driving-remote binds a pane to the Claude session that first types into
 # it, and a stamp newer than the binding's is Ari granting the pane afresh, which is the only thing that rebinds.
 readonly STAMP_OPTION=@ari_driving_since
 readonly MARKER='✦'
-readonly MARKER_FORMAT="#{?${OPTION},${MARKER},}"
+readonly MARKER_FORMAT="#{?${WINDOW_OPTION},${MARKER},}"
 readonly LABEL_FORMAT='ID=#{pane_id}|pane=#{window_index}.#{pane_index}'
 readonly MESSAGE_MS=3000
 readonly STATUS_FORMAT_OPTIONS=(window-status-format window-status-current-format)
+# A status format the window had of its own before `on` is kept here and restored by unmark_window.
+readonly SAVED_FORMAT_PREFIX=@ari_driving_saved_
+# The window hook `on` arms: it fires when a pane closes (a shell exit or kill-pane alike), and on splits,
+# zooms and resizes. pane-exited misses kill-pane. A window-scoped hook shadows a global one of the same
+# name in that window; none exists in the dotfiles.
+readonly HOOK=window-layout-changed
+# Non-empty when no pane of the window has its own ${OPTION} on: the hook runs `release` only then, so a
+# resize with a marked pane spawns nothing.
+readonly NONE_ON_FORMAT="#{?#{P:#{?#{==:#{${OPTION}},on},1,}},,1}"
+# The clipboard writer; macOS. Missing (a Linux host) or failing (no pasteboard over ssh) = the label is only
+# shown, with a warning.
+readonly COPY_CMD=pbcopy
+readonly ACTIONS=(on off status release)
+
+typeset -g REPLY=""
 
 # --- Prerequisites ---
 
 #######################################
-# Check that tmux is installed and this runs inside a tmux pane.
-# Globals: TMUX_PANE
-# Returns: 1 when either is missing
+# Check that tmux is installed; a hook's run-shell may carry a PATH without Homebrew.
+# Returns: 1 when missing
 #######################################
-check_prerequisites() {
+check_tmux() {
+  if command -v tmux >/dev/null 2>&1; then
+    return 0
+  fi
+  export PATH="${PATH}:/opt/homebrew/bin:/usr/local/bin"
   if ! command -v tmux >/dev/null 2>&1; then
     log::err "Missing required command | missing='tmux'"
     return 1
   fi
+}
+
+#######################################
+# Check that this runs inside a tmux pane the server still knows.
+# Globals: TMUX_PANE
+# Returns: 1 when not
+#######################################
+check_pane() {
   if [[ -z "${TMUX_PANE:-}" ]]; then
     log::err "Not inside a tmux pane | TMUX_PANE='' hint='run this in the pane Claude should type into'"
+    return 1
+  fi
+  # display-message -p answers an unknown pane with an empty line and exit 0, so the answer is compared.
+  if [[ "$(tmux display-message -p -t "${TMUX_PANE}" '#{pane_id}' 2>/dev/null)" != "${TMUX_PANE}" ]]; then
+    log::err "This pane is unknown to the tmux server | TMUX_PANE='${TMUX_PANE}' hint='a stale shell from another server?'"
     return 1
   fi
 }
@@ -52,17 +94,24 @@ help() {
 ${c_green}ari-driving${c_rst} — let Claude type into this tmux pane, or stop it
 
 ${c_bold}Usage:${c_rst}
-  ari-driving on       mark this pane; its window shows ${MARKER} in the status bar
-  ari-driving off      unmark this pane; the ${MARKER} goes when no pane in the window is marked
-  ari-driving status   print whether this pane is marked
+  ari-driving on               mark this pane; its window shows ${MARKER} in the status bar; the label is copied
+  ari-driving off              unmark this pane; the ${MARKER} goes when no pane in the window is marked; the label is copied
+  ari-driving status           print whether this pane is marked, and its full label
+  ari-driving release @N       the ${HOOK} hook's entry: when no pane in window @N is marked any more, take the
+                               ${MARKER} down and say so on its status line (log: ${RELEASE_LOG})
 
 ${c_bold}Options:${c_rst}
   -h, --help   show this help
 
 Sets the tmux pane option ${OPTION} on the current pane (\$TMUX_PANE), and ${STAMP_OPTION} to the time of this
 on: a Claude session that drives the pane is bound to it, and only a newer on lets another session take it.
-The window gets the same option plus window-scoped status formats with ${MARKER} against the window number;
-off restores the global formats.
+The window gets ${WINDOW_OPTION}, status formats with ${MARKER} against the window number (one it already had of
+its own is kept underneath and restored), and a ${HOOK} hook running \`release\`; off, or the release after
+the last marked pane closes, restores the formats and drops the hook.
+
+The label on the clipboard is the pane's full name, machine=<dotfiles machine-name>|ID=%N|pane=W.P (no machine=
+part when dotfiles is not installed here), what every Claude message calls the pane. The entry it displaces is
+the second item of Raycast's Clipboard History.
 EOF
 }
 
@@ -78,6 +127,69 @@ pane_label() {
 }
 
 #######################################
+# This machine's everyday name, what `dotfiles machine-name` prints; empty without the dotfiles harness, and
+# empty with a warning when the harness is there but fails.
+# Returns: the name on stdout, or nothing
+#######################################
+machine_name() {
+  local name
+  if ! command -v dotfiles >/dev/null 2>&1; then
+    return 0
+  fi
+  if ! name="$(dotfiles machine-name 2>/dev/null)"; then
+    log::warn "dotfiles machine-name failed; the label has no machine= part | fix='dotfiles machine-name'"
+    return 0
+  fi
+  print -r -- "${name}"
+}
+
+#######################################
+# The pane's full label, 'machine=personal|ID=%301|pane=2.4', the machine part only when known.
+# Arguments: $1 pane_id
+# Returns: the label on stdout
+#######################################
+full_label() {
+  local name
+  name="$(machine_name)"
+  print -r -- "${name:+machine=${name}|}$(pane_label "${1}")"
+}
+
+#######################################
+# Put a label on the clipboard, so Ari can paste it into a Claude session.
+# Arguments: $1 label
+# Globals: REPLY = '' when copied, else why not
+# Returns: 0 when copied; 1 when there is no clipboard command or it failed (a warning names the label)
+#######################################
+copy_label() {
+  local label="${1}"
+  REPLY=""
+  if ! command -v "${COPY_CMD}" >/dev/null 2>&1; then
+    log::warn "No clipboard command; label not copied | missing='${COPY_CMD}' label='${label}'"
+    REPLY="no ${COPY_CMD}"
+    return 1
+  fi
+  if ! print -rn -- "${label}" | "${COPY_CMD}" 2>/dev/null; then
+    log::warn "Clipboard command failed; label not copied | cmd='${COPY_CMD}' label='${label}' hint='no pasteboard in this session (ssh?)'"
+    REPLY="${COPY_CMD} failed"
+    return 1
+  fi
+  log::info "Label copied to the clipboard | label='${label}' previous='second entry in Raycast Clipboard History'"
+}
+
+#######################################
+# The parenthetical the status-line message ends in, after copy_label.
+# Arguments: $1 copy_label's REPLY
+# Returns: the text on stdout
+#######################################
+copied_note() {
+  if [[ -z "${1}" ]]; then
+    print -r -- "(copied)"
+  else
+    print -r -- "(not copied: ${1})"
+  fi
+}
+
+#######################################
 # Whether a pane's own option is on (the window's value is not inherited without -A).
 # Arguments: $1 pane_id
 # Returns: 0 when on
@@ -87,8 +199,17 @@ is_pane_on() {
 }
 
 #######################################
+# Whether a window carries the mark.
+# Arguments: $1 window_id
+# Returns: 0 when on
+#######################################
+is_window_on() {
+  [[ "$(tmux show-options -wqv -t "${1}" "${WINDOW_OPTION}")" == "on" ]]
+}
+
+#######################################
 # Whether any pane in the window other than the given one is on.
-# Arguments: $1 window_id  $2 pane_id to skip
+# Arguments: $1 window_id  $2 pane_id to skip ('' skips none)
 # Returns: 0 when another pane is on
 #######################################
 is_other_pane_on() {
@@ -105,50 +226,93 @@ is_other_pane_on() {
 }
 
 #######################################
-# Give the window status formats that put the marker against the window number (#I) of the
-# live global ones, once; a format with no #I gets it prepended.
+# The path the hook calls this script by: its PATH home when that is this very file (so a skill moved
+# between dotfiles tiers keeps old hooks working), else the resolved path.
+# Returns: the path on stdout
+#######################################
+self_for_hook() {
+  local home_bin="${HOME}/.config/bin/ari-driving"
+  if [[ -x "${home_bin}" && "${home_bin}" -ef "${SELF_PATH}" ]]; then
+    print -r -- "${home_bin}"
+  else
+    print -r -- "${SELF_PATH}"
+  fi
+}
+
+#######################################
+# Mark the window: the marker spliced against the window number (#I) into each status format, the live
+# global one or the one the window already had (kept in a saved option for unmark_window; a format that
+# already carries the marker is left as it is), then the release hook. Formats and paths are quoted for
+# tmux's parser and for /bin/sh; #{hook_window} is expanded by run-shell when the hook fires, never here.
 # Arguments: $1 window_id
 #######################################
 mark_window() {
-  local window_id="${1}" option global
-  tmux set-option -w -t "${window_id}" "${OPTION}" on
+  local window_id="${1}" option current base self shell_cmd
+  tmux set-option -w -t "${window_id}" "${WINDOW_OPTION}" on
   for option in "${STATUS_FORMAT_OPTIONS[@]}"; do
-    if [[ -n "$(tmux show-options -wqv -t "${window_id}" "${option}")" ]]; then
-      log::info "Window already has its own format; keeping it | window='${window_id}' option='${option}'"
+    current="$(tmux show-options -wqv -t "${window_id}" "${option}")"
+    if [[ "${current}" == *"${MARKER_FORMAT}"* ]]; then
       continue
     fi
-    global="$(tmux show-options -gwv "${option}")"
-    if [[ "${global}" == *"#I"* ]]; then
-      tmux set-option -w -t "${window_id}" "${option}" "${global/\#I/${MARKER_FORMAT}#I}"
+    if [[ -n "${current}" ]]; then
+      log::info "Window has a format of its own; marking it, restored on off | window='${window_id}' option='${option}'"
+      tmux set-option -w -t "${window_id}" "${SAVED_FORMAT_PREFIX}${option}" "${current}"
+      base="${current}"
     else
-      tmux set-option -w -t "${window_id}" "${option}" "${MARKER_FORMAT}${global}"
+      base="$(tmux show-options -gwv "${option}")"
+    fi
+    if [[ "${base}" == *"#I"* ]]; then
+      tmux set-option -w -t "${window_id}" "${option}" "${base/\#I/${MARKER_FORMAT}#I}"
+    else
+      tmux set-option -w -t "${window_id}" "${option}" "${MARKER_FORMAT}${base}"
     fi
   done
+  self="$(self_for_hook)"
+  shell_cmd="${(qq)self} release #{hook_window} >>${(qq)RELEASE_LOG} 2>&1"
+  tmux set-hook -w -t "${window_id}" "${HOOK}" \
+    "if-shell -F '${NONE_ON_FORMAT}' \"run-shell -b \\\"${shell_cmd}\\\"\""
 }
 
 #######################################
-# Drop the window option and the window-scoped formats, so the global formats show again.
+# Drop the window mark, the hook, and each status format that carries the marker: restored to what the
+# window had of its own, else unset so the global one shows again. A format someone replaced since is left.
 # Arguments: $1 window_id
 #######################################
 unmark_window() {
-  local window_id="${1}" option
-  tmux set-option -wu -t "${window_id}" "${OPTION}"
+  local window_id="${1}" option current saved
+  tmux set-option -wu -t "${window_id}" "${WINDOW_OPTION}"
   for option in "${STATUS_FORMAT_OPTIONS[@]}"; do
-    tmux set-option -wu -t "${window_id}" "${option}"
+    current="$(tmux show-options -wqv -t "${window_id}" "${option}")"
+    saved="$(tmux show-options -wqv -t "${window_id}" "${SAVED_FORMAT_PREFIX}${option}")"
+    if [[ "${current}" == *"${MARKER_FORMAT}"* ]]; then
+      if [[ -n "${saved}" ]]; then
+        tmux set-option -w -t "${window_id}" "${option}" "${saved}"
+      else
+        tmux set-option -wu -t "${window_id}" "${option}"
+      fi
+    fi
+    tmux set-option -wu -t "${window_id}" "${SAVED_FORMAT_PREFIX}${option}"
   done
+  tmux set-hook -wu -t "${window_id}" "${HOOK}"
 }
 
 #######################################
-# Turn the pane on and mark its window.
+# Turn the pane on, mark its window and copy the label. A pane already on is granted afresh: the stamp
+# moves, which lets another Claude session take the pane, and the message says so.
 # Arguments: $1 pane_id  $2 window_id
 #######################################
 turn_on() {
-  local pane_id="${1}" window_id="${2}" label
+  local pane_id="${1}" window_id="${2}" label verb="ON"
+  label="$(full_label "${pane_id}")"
+  if is_pane_on "${pane_id}"; then
+    verb="re-granted (another session may take it)"
+    log::info "Pane was already on; granted afresh | pane='${label}'"
+  fi
   tmux set-option -p -t "${pane_id}" "${OPTION}" on
   tmux set-option -p -t "${pane_id}" "${STAMP_OPTION}" "$(date +%s)"
   mark_window "${window_id}"
-  label="$(pane_label "${pane_id}")"
-  tmux display-message -d "${MESSAGE_MS}" -t "${pane_id}" "${MARKER} AI control ON: ${label}"
+  copy_label "${label}" || true
+  tmux display-message -d "${MESSAGE_MS}" -t "${pane_id}" "${MARKER} AI control ${verb}: ${label} $(copied_note "${REPLY}")"
   log::info "AI control on | pane='${label}'"
 }
 
@@ -167,17 +331,49 @@ release_window() {
 }
 
 #######################################
-# Turn the pane off; unmark its window when no other pane in it is on.
+# Turn the pane off, copy the label; unmark its window when no other pane in it is on. A pane that was not
+# on is said so, and still copied: the label is what Ari came for.
 # Arguments: $1 pane_id  $2 window_id
 #######################################
 turn_off() {
-  local pane_id="${1}" window_id="${2}" label
+  local pane_id="${1}" window_id="${2}" label verb="OFF"
+  label="$(full_label "${pane_id}")"
+  if ! is_pane_on "${pane_id}"; then
+    verb="already off"
+    log::info "Pane was not on | pane='${label}'"
+  fi
   tmux set-option -pu -t "${pane_id}" "${OPTION}"
   tmux set-option -pu -t "${pane_id}" "${STAMP_OPTION}"
-  label="$(pane_label "${pane_id}")"
-  release_window "${window_id}" "${pane_id}"
-  tmux display-message -d "${MESSAGE_MS}" -t "${pane_id}" "AI control OFF: ${label}"
+  if is_window_on "${window_id}"; then
+    release_window "${window_id}" "${pane_id}"
+  fi
+  copy_label "${label}" || true
+  tmux display-message -d "${MESSAGE_MS}" -t "${pane_id}" "AI control ${verb}: ${label} $(copied_note "${REPLY}")"
   log::info "AI control off | pane='${label}'"
+}
+
+#######################################
+# The hook's entry, after a window's layout changed: when the window is marked and no pane in it is on
+# any more (its last marked pane closed), unmark it and say so on its status line. A window that is
+# gone, unmarked, or still has a pane on is left alone.
+# Arguments: $1 window_id
+#######################################
+release_closed() {
+  local window_id="${1}" index
+  if ! tmux list-panes -t "${window_id}" >/dev/null 2>&1; then
+    log::info "Window is gone; nothing to release | window='${window_id}'"
+    return 0
+  fi
+  if ! is_window_on "${window_id}"; then
+    return 0
+  fi
+  if is_other_pane_on "${window_id}" ""; then
+    return 0
+  fi
+  index="$(tmux display-message -p -t "${window_id}" '#{window_index}')"
+  unmark_window "${window_id}"
+  tmux display-message -d "${MESSAGE_MS}" -t "${window_id}" "AI control OFF: window ${index}, its last driving pane closed"
+  log::info "Last driving pane closed; AI control off | window='${window_id}' index='${index}'"
 }
 
 #######################################
@@ -191,6 +387,7 @@ report_status() {
   fi
   cat <<EOF
 pane=$(pane_label "${pane_id}")
+label=$(full_label "${pane_id}")
 ari_driving=${state}
 EOF
 }
@@ -199,21 +396,31 @@ EOF
 
 main() {
   # === PARSE ===
-  local action=""
+  local action="" window_arg=""
   while (( $# > 0 )); do case "${1}" in
     -h|--help)        help; return 0 ;;
     on|off|status)    action="${1}"; shift ;;
+    release)          action="${1}"; window_arg="${2:-}"; shift "$(( $# > 1 ? 2 : 1 ))" ;;
     -*)               log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
-    *)                log::err "Unknown action | action='${1}' valid_actions='on, off, status'"; help; return 1 ;;
+    *)                log::err "Unknown action | action='${1}' valid_actions='${(j:, :)ACTIONS}'"; help; return 1 ;;
   esac; done
 
   # === VALIDATE ===
   if [[ -z "${action}" ]]; then
-    log::err "Missing action | valid_actions='on, off, status'"
+    log::err "Missing action | valid_actions='${(j:, :)ACTIONS}'"
     help
     return 1
   fi
-  check_prerequisites || return 1
+  check_tmux || return 1
+  if [[ "${action}" == release ]]; then
+    if [[ -z "${window_arg}" ]]; then
+      log::err "release needs the window | usage='ari-driving release @N'"
+      return 1
+    fi
+    release_closed "${window_arg}"
+    return 0
+  fi
+  check_pane || return 1
 
   # === LOGIC ===
   local pane_id="${TMUX_PANE}" window_id

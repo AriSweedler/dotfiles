@@ -1,6 +1,6 @@
 ---
 name: ari-driving-tmux
-description: "Hand Ari commands for a terminal on this machine and read the results back: a click-to-run link that runs the command in his tmux pane through run_log and returns him to Claude's pane with `run_log artifact: <dir>` pasted into its prompt, a click-to-type link, or a fenced block. Owns the run_log capture contract, the `ari-driving on|off|status` pane opt-in, and every clipboard rule: never write it unasked, the pbcopy guard, Raycast recovery. Part of /ari-driving; use when Ari should run something here, says \"pane 2.4\" or \"type it into my pane\", or pastes a `run_log artifact:` line. Never raw tmux send-keys; never pbcopy unless Ari asks."
+description: "Hand Ari commands for a terminal on this machine and read the results back: a click-to-run link that runs the command in his tmux pane through run_log and returns him to Claude's pane with `run_log artifact: <dir>` pasted into its prompt, a click-to-type link, or a fenced block. Owns the run_log capture contract, the `ari-driving on|off|status` pane opt-in (on and off copy the pane's label), and every clipboard rule: never write it unasked, the pbcopy guard, Raycast recovery. Part of /ari-driving; use when Ari should run something here, says \"pane 2.4\" or \"type it into my pane\", or pastes a `run_log artifact:` line. Never raw tmux send-keys; never pbcopy unless Ari asks."
 ---
 
 # Driving tmux
@@ -12,10 +12,10 @@ Claude never types into Ari's panes on this machine: it hands him a link to clic
 - **`/ari-driving` Rules apply.** If it has not run this session, invoke it first (Skill tool). These hold even without it:
     - **NEVER run `tmux send-keys`, `paste-buffer` or `load-buffer` at Ari's panes.** A command reaches a pane by Ari's click on a `link.zsh` link, or through `run.zsh` (`/ari-driving-remote`).
     - **A pane Ari did not name this turn is a hint.** Re-run `link.zsh --pane <hint>` before using it; after compaction, every pane in the summary is a hint.
-    - **Every pane mention carries both parts**, `ID=%301|pane=2.4`, never "pane 2.4" or `%301` alone.
+    - **Every pane mention carries both parts**, `ID=%301|pane=2.4`, never "pane 2.4" or `%301` alone. A label Ari pastes (his `ari-driving on` and `off` copy it) may start with `machine=<name>|`: run `dotfiles machine-name` here (Bash) first. The same name, or no `machine=` part, is a local pane: name it `ID=%N|pane=W.P` and give `link.zsh --pane %N`. Another name is a remote pane for `/ari-driving-remote`, kept whole (`/ari-driving` **Pane labels**).
     - **NEVER put `clear`, `reset` or `tmux clear-history` in a command**, leading or chained; `stdout.plain` already holds only this run.
     - **NEVER write the clipboard unless Ari asked this turn**, and then only through `handoff.zsh --copy`. The PreToolUse guard blocks every other `pbcopy`; never write `HANDOFF_CLIP_OK=1` yourself, and never take another route after a denial.
-    - **Claude never sets the opt-in.** Not `ari-driving on`, `ari-remote-tmux on` or `@ari_driving`: typed, linked, chained, in a pane's startup command, through the Bash tool, or through a fork, subagent or other session. `run.zsh`, `link.zsh` and the click handler refuse any command that spells them; a self-set opt-in is undone with `ari-driving off` there, and Ari is told which pane.
+    - **Claude never sets, clears or releases the opt-in.** Not `ari-driving on`, `ari-remote-tmux on`, `@ari_driving` or `ari-driving release`: typed, linked, chained, in a pane's startup command, through the Bash tool, or through a fork, subagent or other session. `run.zsh`, `link.zsh` and the click handler refuse any command that spells the first three; a self-set opt-in is undone with `ari-driving off` there, and Ari is told which pane. A ✦ that stays after a window's last marked pane closed is reported to Ari with the window; he runs `ari-driving release` there.
 - **Every `tmux-pane://` URL is pasted from `link.zsh` stdout produced this turn.** NEVER type one by hand, even focus-only: `link.zsh` re-resolves `2.4` to the pane's current ID, encodes the command, and warns when the pane is not opted in.
 - **The code block shows what the click or Ari types.** In a link blockquote, the bare command; the click adds `run_log`. In a fenced step, exactly what Ari types: a capture step shows `run_log -- CMD`, as `handoff.zsh --capture` renders it.
 - **One message per round.** Every step Ari must run before Claude can continue goes in one message, numbered when there are two or more, each with `Expected: …`; then stop and wait.
@@ -25,7 +25,13 @@ Claude never types into Ari's panes on this machine: it hands him a link to clic
 
 ### The opt-in
 
-`ari-driving on|off|status` (`bin/ari-driving`, on PATH as `~/.config/bin/ari-driving`) marks or unmarks the pane it runs in; the pane's window shows ✦ in the status bar, and `on` stamps `@ari_driving_since` with the grant time, which `/ari-driving-remote` reads to rebind the pane. Only the pane option `@ari_driving` grants anything; setting it is never Claude's (`/ari-driving` Rules), and `link.zsh` and the click handler refuse a command that spells it.
+`ari-driving on|off|status|release` (`bin/ari-driving`, on PATH as `~/.config/bin/ari-driving`; `ari-remote-tmux` is its old name) is Ari's command, run in the pane itself. Only the pane option `@ari_driving` grants anything; the window's `@ari_driving_window` only drives the ✦. Setting, clearing or releasing it is never Claude's (Rules).
+
+- `on` marks the pane, stamps `@ari_driving_since` with the grant time (`/ari-driving-remote` reads it: a newer stamp lets another Claude session take the pane; `on` again says `re-granted`), splices ✦ against the window's number into its status formats (one the window had of its own is marked too and restored on release), copies the full label and shows `✦ AI control ON: <label> (copied)`, or `(not copied: no pbcopy)` / `(not copied: pbcopy failed)` with the label on stderr; nothing else changes on a copy failure.
+- `off` unmarks the pane, copies the label and shows `AI control OFF: <label> (copied)` (`already off` when it was not on); the ✦ goes when no pane in the window is marked.
+- `status` prints three lines: `pane=ID=%301|pane=2.4`, `label=machine=studio|ID=%301|pane=2.4`, `ari_driving=on`.
+- The full label is `machine=<dotfiles machine-name>|ID=%N|pane=W.P`; without the dotfiles harness there is no `machine=` part, and a label without one is this machine's. The copy displaces one Raycast Clipboard History entry, which the log line names.
+- `on` arms a `window-layout-changed` hook on the window (it shadows a global hook of that name there; the dotfiles set none). The hook fires on every layout change (a pane closing by shell exit or kill-pane, but also a split, zoom or resize) and runs `ari-driving release @N` in the background only when no pane of the window is still marked, logging to `/tmp/ari-driving-release.log` (`ARI_DRIVING_RELEASE_LOG`). Release then drops the ✦, restores the status formats and the hook, and shows `AI control OFF: window N, its last driving pane closed`; a gone or unmarked window is left alone. `off` on the window's last marked pane drops the hook itself.
 
 ### Links
 
@@ -189,10 +195,15 @@ dotfiles raycast link clipboard-history
 
 ## File storage
 
-- `bin/ari-driving` — `on|off|status` for the current pane.
+- `bin/ari-driving` — `on|off|status` for the current pane; `release @N` for the pane-close hook.
 - `bin/link.zsh` — prints a link, or the link-plus-code-block blockquote.
 - `bin/focus.zsh` — what a click runs: focus, gate, type or run.
 - `bin/handoff.zsh` — renders fenced steps; the sanctioned copy.
 - `bin/pretooluse_bash_pbcopy_guard.sh` — the pbcopy guard hook.
+- `tests/ari-driving.test.zsh` — `bin/ari-driving` on a throwaway tmux server (`-L`) with a fake pbcopy; it refuses to run when the real pbcopy is reachable.
 
-`--help` on each lists its flags.
+`--help` on each lists its flags. After an edit to `bin/ari-driving`:
+
+```zsh
+zsh $HOME/.claude/skills/ari-driving-tmux/tests/ari-driving.test.zsh
+```
