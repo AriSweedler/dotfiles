@@ -14,7 +14,7 @@ Ready N, in progress N, human N, blocked N, stale N; <checkout> <hash> clean|dir
 - `<checkout>` is the host's, or `this Mac` when the host checkout was skipped or unread
 - `; waited Ns for <pane>` appears when the capture waited on an agent's command there
 - `<phase>` is `fresh read`, or `--phase 'after row N'` once a row landed
-- a cut-off capture prints `Cut off: <label> (<reason>); tracker unread; read HH:MMZ` and the paragraph replaces it; for the four wait reasons the header is the waiting line itself
+- a cut-off capture prints `Cut off: <label> (<reason>); tracker unread; read HH:MMZ` and the paragraph replaces it; for the four wait reasons the header is the waiting line itself; an announced absence (`away` set, `host_unreachable` or `read_timed_out`) prints `Away: <label> (<reason>); tracker unread; read HH:MMZ` and the away line replaces it
 - the time is the capture's: a reply that did not capture shows the older time
 
 ## First principles: one sentence
@@ -61,4 +61,4 @@ One sentence saying what a no does, then the one question mark of the reply. Row
 
 ## Cut off
 
-`cut_off` not null: the whole reply is the stdout of `brief.zsh --cut-off`, nothing before or after it (`SKILL.md › Rules › Cut off`).
+`cut_off` not null: the whole reply is the stdout of `brief.zsh --cut-off`, nothing before or after it (`SKILL.md › Rules › Cut off`); on an away capture it takes `--continuing '<the work that runs on from this Mac>'` (`SKILL.md › Reference › Announced absence`).

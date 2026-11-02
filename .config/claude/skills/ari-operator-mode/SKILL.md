@@ -13,9 +13,9 @@ Every reply in this mode is written for a reader who has read nothing, does not 
 - **A mode, not a moment.** Every reply checks `bin/mode.zsh status`, never the transcript; only his invocation switches it on, only `stop operator mode` or `normal mode` off. Off, an orienting question gets the one offer line (Reference › The offer) and nothing from the transcript.
 - **The operator knows nothing.** Define every term at first use; name every thing by what it is: a bead by id and title, a file by path, a pane by its full label with his nickname. Never "earlier", "the one-liner", "step 2" or a session's name for something.
 - **The script reads, the model renders.** `bin/frontier.zsh` is the only source of facts; every bullet and row traces to one section of its JSON; delete a sentence that traces to none. Asked for something the JSON lacks: "Not in this capture; a fresh capture would read `<section>`" (or "no section reads it; reading it is a Claude row: `<command>`"), ending "Or say `stop operator mode` to ask freely."
-- **Four facts may come from outside the JSON.** A command the permission layer refused Claude, quoted verbatim with the refusal, as his row; a recommendation on a human bead, marked "(my recommendation)" and drawn only from `human.text`; this turn's `TYPED:` or `REFUSED:` result of `run.zsh --no-enter` for row 1, as its key; and a background agent this session launched for this pane whose completion notice has not arrived, which makes the pane another agent's (Reference › Shared pane). Nothing else from the session enters a briefing.
+- **Five facts may come from outside the JSON.** A command the permission layer refused Claude, quoted verbatim with the refusal, as his row; a recommendation on a human bead, marked "(my recommendation)" and drawn only from `human.text`; this turn's `TYPED:` or `REFUSED:` result of `run.zsh --no-enter` for row 1, as its key; a background agent this session launched for this pane whose completion notice has not arrived, which makes the pane another agent's (Reference › Shared pane); and, when he said this turn or the last that the host would be unreachable, his words and the work that runs on from this Mac (lanes, PRs, a command typed and unread), which enter only through `--away` and `--continuing` (Reference › Announced absence). Nothing else from the session enters a briefing.
 - **NEVER run the health command unasked.** Not in the capture, not by hand: it is a Claude row (Reference › Row triage), run once through `run.zsh` on his yes, and its output enters only through the next capture.
-- **Cut off is the whole message.** `cut_off` not null: the reply is what `bin/brief.zsh --cut-off` prints, nothing else, no header; no second read, no `--local` or other pane as a substitute, no `local_git` or `health` even though they filled; his next message starts with a fresh Capture and authorizes no row. This renders `/ari-bead-driven-development`'s Cut off rule (Reference › Overrides).
+- **Cut off is the whole message.** `cut_off` not null: the reply is what `bin/brief.zsh --cut-off` prints, nothing else, no header; no second read, no `--local` or other pane as a substitute, no `local_git` or `health` even though they filled; his next message starts with a fresh Capture and authorizes no row. An absence he announced is a waiting line, not his P0 (Reference › Announced absence); the work on this Mac goes on behind it. This renders `/ari-bead-driven-development`'s Cut off rule (Reference › Overrides).
 - **Terse, then one question.** At most six state bullets and exactly one question mark per reply, the last thing in it (Reference › Yes and no names the forms); a bead title holding a question mark is paraphrased. Depth on request is the named section's raw text, verbatim.
 - **One yes, one row.** A yes authorizes row 1 only; when it lands, Capture, Brief, ask again. What counts as a yes or a no is Reference › Yes and no. An instruction given with the invocation is row 1 marked "(your instruction)" and is never run in the entry turn.
 - **Up to five rows, unblocked only.** Sources, priority, order and pane are Reference › Row triage; blocked, deferred and stale work is the one trailing line, never a row; a sixth candidate and beyond go there as "Also ready: …".
@@ -42,7 +42,7 @@ Every reply in this mode is written for a reader who has read nothing, does not 
 | `local_git` | the same on this Mac | the same | the checkout bullet when it differs from the host's |
 | `health` | none; recorded, never run | `{command, ran: false}` | state bullet, a row; nothing when `command` is null |
 
-A section that could not be read holds `{"error": "<why>"}` (`precondition: true` when one cause, such as no `bd` on the host, failed them all); one a cut-off kept unread holds `{"unread": true}`; a text section whose id count disagrees with bd's own summary count is an error, not a quiet miss. The top level also carries `captured_at`, `session`, `host_definition`, `pane`, `nickname` (the pane's window name), `beads_dir`, `repo`, `local_repo`, `pending`, `typed` (every command typed, in order), `waited_s` and `cut_off` (`{pane, reason, prompt_holds, busy_cmd, candidates, unread}`). The filled example is `templates/frontier.example.json`.
+A section that could not be read holds `{"error": "<why>"}` (`precondition: true` when one cause, such as no `bd` on the host, failed them all); one a cut-off kept unread holds `{"unread": true}`; a text section whose id count disagrees with bd's own summary count is an error, not a quiet miss. The top level also carries `captured_at`, `session`, `host_definition`, `pane`, `nickname` (the pane's window name), `beads_dir`, `repo`, `local_repo`, `pending`, `away` (his words from `--away`, else null), `typed` (every command typed, in order), `waited_s` and `cut_off` (`{pane, reason, prompt_holds, busy_cmd, candidates, unread}`). The filled example is `templates/frontier.example.json`.
 
 ### Cut-off reasons
 
@@ -58,8 +58,8 @@ A section that could not be read holds `{"error": "<why>"}` (`precondition: true
 | `row_running` | exit 75, his pending row is running | his: tell me what it printed when it ends |
 | `no_pane` | exit 70; the host's panes are listed | name one by its `ID=%N` |
 | `ambiguous_pane` | the target matched two panes; both listed | name one by its `ID=%N` |
-| `read_timed_out` | exit 124 with no complete stream; a read is still running there | tell me when its prompt is back; never resent |
-| `host_unreachable` | exit 255, or `--list` failed; the error is quoted | open `ssh` to the host once in a pane |
+| `read_timed_out` | exit 124 with no complete stream; a read is still running there | tell me when its prompt is back; never resent; with `away`, the away line |
+| `host_unreachable` | exit 255, or `--list` failed; the error is quoted | open `ssh` to the host once in a pane; with `away`, the away line |
 | `refused_text` | exit 1; the reader's own text was refused | a bug in the reader, not his to clear; Claude rewrites the read on one line, once |
 
 The host reads stop at the first cut-off and the rest are unread; `local_git` and `health` still fill and are still not said. How a 75 is classified, in order:
@@ -69,6 +69,10 @@ The host reads stop at the first cut-off and the rest are unread; `local_git` an
 3. un-entered text that is not his row: `holds_text`, whoever typed it; no wait clears it.
 4. a running agent's command (this capture's read, an earlier read's marker recipe, any `run_log`-wrapped line, a `BEADS_ACTOR=claude bd` write; Ari types bare): retry every 5 s (`FRONTIER_RETRY_S`) within the budget (`--timeout`, 45 s, times the seven host reads); `own_command` when the budget is spent; `own_command_persists` when the previous capture already waited on it.
 5. anything else running: `busy`.
+
+### Announced absence
+
+He said this turn or the last that the host will be unreachable (going to work, taking the laptop, travelling): every Capture while he is away carries `--away '<his words>'`, and a `host_unreachable` or `read_timed_out` cut-off then renders as one waiting line, `brief.zsh --cut-off --continuing '<the work that runs on from this Mac>'`: "Away: `<pane>` is unreachable, as you said (<his words>); the tracker is unread, read tried at HH:MMZ; work that needs only this Mac continues: <lanes, PRs, the command typed and unread>; your next message captures again. Back?" (a timed-out read adds "I never resend it"). The line is still the whole reply: no second read, no local `bd` or `git` as the tracker, no polling. Every other reason means the host answered and keeps its paragraph; the flag is dropped the turn he says he is back. Neither `--away` nor `--continuing` may hold a question mark: the reply has exactly one.
 
 ### Shared pane
 
@@ -136,8 +140,8 @@ Line 1 of every reply is the stdout of `bin/brief.zsh --header` on the newest ca
 
 | Script | Codes |
 |---|---|
-| `bin/frontier.zsh` | 0 the JSON was written, cut off or not; 1 a missing prerequisite (`jq git base64 gzip gunzip awk`, and `timeout` or `gtimeout` in host mode), a bad flag, an unreadable `--previous`, a bad `--prefix`, `FRONTIER_RETRY_S` not a positive integer, or `CLAUDE_CODE_SESSION_ID` unset without `--local` |
-| `bin/brief.zsh` | 0 printed; 3 the cut-off output was printed (the paragraph or a waiting line); 1 a bad call or a file that is not a capture |
+| `bin/frontier.zsh` | 0 the JSON was written, cut off or not; 1 a missing prerequisite (`jq git base64 gzip gunzip awk`, and `timeout` or `gtimeout` in host mode), a bad flag, an unreadable `--previous`, a bad `--prefix`, `--away` holding a question mark, `FRONTIER_RETRY_S` not a positive integer, or `CLAUDE_CODE_SESSION_ID` unset without `--local` |
+| `bin/brief.zsh` | 0 printed; 3 the cut-off output was printed (the paragraph or a waiting line); 1 a bad call, `--continuing` holding a question mark, or a file that is not a capture |
 | `bin/mode.zsh` | 0 on, or done; 3 off (`status`); 1 a bad call |
 | `bin/pending.zsh` | 0 done, or shown; 3 nothing recorded (`show`); 1 a bad call, or `--text` carrying the `TYPED: ` prefix |
 
@@ -175,11 +179,11 @@ One call, the Bash tool's timeout at 600000 ms and never in the background (the 
 zsh $HOME/.claude/skills/ari-operator-mode/bin/frontier.zsh --host-definition <host-definition> --target <pane> --beads <beads> --repo <repo> --local-repo "$PWD" --health '<health>'
 ```
 
-A tracker and checkout on this Mac take `--local` in place of the host flags. The pending row is read from `bin/pending.zsh`'s marker, so `--pending` is passed only to override it. It prints `dir=`, `json=` and `cut_off=`; the folder is the investigation folder below. A non-zero exit from a bad flag or an unset session id is Claude's to fix and run once more; a missing prerequisite on this Mac is his P0 with the install command as his row and the one question "Fixed?".
+A tracker and checkout on this Mac take `--local` in place of the host flags. The pending row is read from `bin/pending.zsh`'s marker, so `--pending` is passed only to override it. Add `--away '<his words>'` on every capture after he said the host would be unreachable, until he says he is back (Reference › Announced absence). It prints `dir=`, `json=` and `cut_off=`; the folder is the investigation folder below. A non-zero exit from a bad flag or an unset session id is Claude's to fix and run once more; a missing prerequisite on this Mac is his P0 with the install command as his row and the one question "Fixed?".
 
 ### Brief
 
-1. `cut_off=` is not `none`: the whole reply is the stdout of the command below, and nothing else happens this turn.
+1. `cut_off=` is not `none`: the whole reply is the stdout of the command below, and nothing else happens this turn; on an away capture add `--continuing '<lanes, PRs, the command typed and unread>'`, and the work on this Mac goes on.
    ```zsh
    zsh $HOME/.claude/skills/ari-operator-mode/bin/brief.zsh --dir <dir> --cut-off
    ```
@@ -223,7 +227,7 @@ On `stop operator mode` or `normal mode`: `zsh $HOME/.claude/skills/ari-operator
 ## File storage
 
 - `bin/frontier.zsh` — the one reader of state, and the only script here that touches a pane, through `/ari-driving-remote`'s `run.zsh`; needs `/ari-skill-shellscripts`' `lib/logging.zsh`, `lib/run_with_timeout.zsh` and `lib/investigation_folder.zsh`.
-- `bin/brief.zsh` — the header line and the cut-off output (the paragraph or a waiting line), from a capture.
+- `bin/brief.zsh` — the header line and the cut-off output (the paragraph, a waiting line, or the away line), from a capture.
 - `bin/mode.zsh` — the on/off marker; `bin/pending.zsh` — the typed-row marker.
 - `templates/briefing.md` — the render spec; `templates/briefing.example.md` — the spec filled, plus the scenarios; `templates/frontier.example.json` — the capture it renders.
 - `tests/frontier.test.zsh` — the suite for all four scripts, against `tests/fake-run.zsh`, a fake `run.zsh`; run it after any edit to `bin/` or `templates/`: `zsh $HOME/.claude/skills/ari-operator-mode/tests/frontier.test.zsh`.

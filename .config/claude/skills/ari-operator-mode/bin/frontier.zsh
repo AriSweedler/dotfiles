@@ -3,7 +3,9 @@
 # a fixed order through /ari-driving-remote's run.zsh and write one JSON into a fresh investigation
 # folder. Read-only: nothing here writes to the tracker, a checkout or a pane beyond typing read
 # commands. A pane busy with an agent's command (this capture's read, a fork's or a lane's run_log
-# line) is waited for, within one capture-wide budget; anything else busy there is a cut-off. Run: zsh $HOME/.claude/skills/ari-operator-mode/bin/frontier.zsh --help
+# line) is waited for, within one capture-wide budget; anything else busy there is a cut-off. The two
+# markers bin/pending.zsh and bin/away.zsh keep (his typed row, his announced absence) are read as the
+# defaults of --pending and --away. Run: zsh $HOME/.claude/skills/ari-operator-mode/bin/frontier.zsh --help
 
 set -euo pipefail
 
@@ -17,6 +19,7 @@ fi
 source "${LIB_LOGGING}"
 source "${SKILLS_DIR}/ari-skill-shellscripts/lib/run_with_timeout.zsh"
 source "${SKILLS_DIR}/ari-skill-shellscripts/lib/investigation_folder.zsh"
+source "${SCRIPT_DIR:h}/lib/marker.zsh"
 
 # --- Constants ---
 
@@ -25,6 +28,8 @@ readonly HOST_SECTIONS=(ready in_progress human blocked stale deferred host_git)
 readonly RUN_ZSH_DEFAULT="${SKILLS_DIR}/ari-driving-remote/bin/run.zsh"
 readonly FOLD_WIDTH=60
 readonly CAPTURE_LINES=500     # run.zsh dies of SIGPIPE on a capture of about 2000 lines (2026-10-30); 500 holds ~30 KB of base64
+readonly LOCAL_TIMEOUT_S=10    # a git read on this Mac; fixed, so the whole capture stays under the Bash tool's 600 s
+readonly AWAY_REASONS=(host_unreachable read_timed_out)   # the only cut-offs an announced absence explains; any other means the host answered
 readonly RETRY_S="${FRONTIER_RETRY_S:-5}"   # between retries while the pane is busy with this session's own command; tests shorten it
 readonly PROMPT_GLYPH_DEFAULT='❯'           # what the host's idle prompt line ends with; --prompt-end overrides it per host
 readonly ID_PREFIX_DEFAULT='beads'          # the bead id prefix when no bd JSON list has shown one; --prefix overrides it
@@ -72,6 +77,11 @@ ${c_bold}Options:${c_rst}
                           cut-off (default: what bin/pending.zsh set recorded for this session, if anything)
   --previous FILE         the last capture's frontier.json (default: the newest one under the root by this session on
                           this pane); a pane still busy with the same agent's command records own_command_persists
+  --away TEXT             the absence Ari announced (the host itself going away: laptop taken, closed, off its network),
+                          as the clause of his message that says so; recorded as away, so brief.zsh renders
+                          host_unreachable and read_timed_out as the away line, not his P0 (default: what bin/away.zsh
+                          set recorded for this session, if anything); a capture that reaches the host clears that
+                          marker and records away_ended; one line, no question mark or backtick; refused with --local
   --prefix TEXT           the bead id prefix (default: the prefix of the first id a bd JSON list shows, else ${ID_PREFIX_DEFAULT});
                           only PREFIX-xxx tokens count as ids in bd's text output, so a hyphenated word never does
   --prompt-end TEXT       what the host's idle prompt line ends with (default: ${PROMPT_GLYPH_DEFAULT}; run.zsh --hosts prints each host's)
@@ -80,14 +90,17 @@ ${c_bold}Options:${c_rst}
 
 ${c_bold}Output:${c_rst} key=value lines on stdout: dir= (the folder), json= (its frontier.json), cut_off=
   (none, or the reason). The JSON: captured_at, session, host_definition, pane, nickname, beads_dir,
-  repo, local_repo, pending, typed (every command typed, in order), waited_s, cut_off (null, or {pane,
-  reason, prompt_holds, candidates, unread}), then ${(j:, :)SECTIONS}. A section that could not be read
-  holds {"error": "<why>"}; one the cut-off kept unread holds {"unread": true}.
+  repo, local_repo, pending, pending_seen (true: his row was on the pane; false: the prompt was idle without
+  it, so bin/pending.zsh clear is due; null: unknown or no row), away, away_ended (true when away was set and
+  the host answered), typed (every command typed, in order), waited_s, cut_off (null, or {pane, reason,
+  prompt_holds, busy_cmd, candidates, unread}), then ${(j:, :)SECTIONS}. A section that could not be read
+  holds {"error": "<why>"}; one the cut-off kept unread holds {"unread": true}. A crash after the reads
+  still writes the JSON, the unfinished sections as errors.
 
 ${c_bold}Cut-off reasons:${c_rst} not_opted_in (77), other_session (76), busy or holds_text (75), no_pane (70),
   ambiguous_pane (the target matched more than one pane), read_timed_out (124: a read is still running
-  in the pane), host_unreachable (255, or --list failed), refused_text (1). Four more are waits, not his
-  to clear: own_command (the pane ran an agent's command for the whole budget), own_command_persists (the
+  in the pane), host_unreachable (255 from ssh), bad_definition (--list failed with another code: the
+  definition or the flags, Claude's to fix), refused_text (1). Four more are waits, not his to clear: own_command (the pane ran an agent's command for the whole budget), own_command_persists (the
   previous capture by this session on this pane already waited on that same command), row_pending (his
   --pending row sits un-entered on the prompt), row_running (his --pending row is running). The host reads
   stop at the first cut-off; local_git and health still fill.
@@ -100,8 +113,10 @@ ${c_bold}How a 75 is classified${c_rst}, in this order: the gate's words name co
   ${RETRY_S} s (FRONTIER_RETRY_S) within the budget, own_command when the budget is spent, own_command_persists
   when the previous capture already waited on it; anything else running -> busy.
 
-${c_bold}Exit codes:${c_rst} 0 the JSON was written (cut off or not); 1 a missing prerequisite or bad flag.
-  CLAUDE_CODE_SESSION_ID must be set unless --local: run.zsh refuses every command without it.
+${c_bold}Exit codes:${c_rst} 0 the JSON was written (cut off or not); 1 a missing prerequisite, a bad flag, an unreadable
+  --previous, a bad --prefix, --away empty or holding a newline, question mark or backtick, --away with --local,
+  --timeout under 5, FRONTIER_RETRY_S not a positive integer, or CLAUDE_CODE_SESSION_ID unset without --local
+  (run.zsh refuses every command without it).
   Host mode needs timeout or gtimeout (brew install coreutils): without one the fallback SIGKILLs the
   wrapper and can orphan an ssh that holds the pane lock.
 HELP
@@ -110,8 +125,8 @@ HELP
 # --- Parse ---
 
 host_definition='' target='' local_mode=0 beads_dir='~/beads' repo='' local_repo="${PWD}"
-health='' root_dir='/tmp' timeout_s=45 run_zsh="${RUN_ZSH_DEFAULT}" pending='' previous=''
-id_prefix='' prompt_glyph="${PROMPT_GLYPH_DEFAULT}" pending_given=0
+health='' root_dir='/tmp' timeout_s=45 run_zsh="${RUN_ZSH_DEFAULT}" pending='' previous='' away=''
+id_prefix='' prompt_glyph="${PROMPT_GLYPH_DEFAULT}" pending_given=0 away_given=0
 while (( $# > 0 )); do
   case "${1}" in
     --host-definition) host_definition="${2:?--host-definition requires a value}"; shift 2 ;;
@@ -127,6 +142,7 @@ while (( $# > 0 )); do
     --prefix) id_prefix="${2:?--prefix requires a value}"; shift 2 ;;
     --prompt-end) prompt_glyph="${2:?--prompt-end requires a value}"; shift 2 ;;
     --previous) previous="${2:?--previous requires a value}"; shift 2 ;;
+    --away) away="${2-}"; away_given=1; shift 2 ;;
     --run-zsh) run_zsh="${2:?--run-zsh requires a value}"; shift 2 ;;
     -h|--help) help; exit 0 ;;
     *) log::err "Unknown flag | flag='${1}'"; help; exit 1 ;;
@@ -160,6 +176,18 @@ if [[ -n "${previous}" && ! -r "${previous}" ]]; then
   log::err "--previous is not readable | previous='${previous}'"
   exit 1
 fi
+if (( away_given )) && [[ -z "${away}" ]]; then
+  log::err "--away needs his words; to end an absence run bin/away.zsh clear | flag='--away'"
+  exit 1
+fi
+if [[ "${away}" == *[$'\n?`']* ]]; then
+  log::err "--away is one line with no question mark or backtick: the away line quotes it and has exactly one question mark | away='${away}'"
+  exit 1
+fi
+if (( local_mode )) && [[ -n "${away}" ]]; then
+  log::err "--away names a host that went away; --local has none | fix='drop --away'"
+  exit 1
+fi
 if (( ! local_mode )) && ! command -v timeout >/dev/null 2>&1 && ! command -v gtimeout >/dev/null 2>&1; then
   log::err "Host mode needs timeout or gtimeout, or a stuck ssh keeps the pane lock | fix='brew install coreutils'"
   exit 1
@@ -168,17 +196,20 @@ if [[ -n "${id_prefix}" ]] && ! print -r -- "${id_prefix}" | grep -qE '^[a-z]+$'
   log::err "The id prefix is lowercase letters | id_prefix='${id_prefix}'"
   exit 1
 fi
-readonly PENDING_MARKER="${root_dir}/operator-mode/PENDING-${CLAUDE_CODE_SESSION_ID:-local}"
-if (( ! pending_given )) && [[ -r "${PENDING_MARKER}" ]]; then   # the row Brief typed for him, recorded by bin/pending.zsh set
-  pending="$(<"${PENDING_MARKER}")"
+readonly PENDING_MARKER="$(marker_path "${root_dir}" PENDING "${CLAUDE_CODE_SESSION_ID:-local}")"
+readonly AWAY_MARKER="$(marker_path "${root_dir}" AWAY "${CLAUDE_CODE_SESSION_ID:-local}")"
+if (( ! pending_given )) && pending="$(marker_show "${PENDING_MARKER}")"; then   # the row Brief typed for him, recorded by bin/pending.zsh set
   log::info "Pending row read from the marker | marker='${PENDING_MARKER}'"
+fi
+if (( ! away_given && ! local_mode )) && away="$(marker_show "${AWAY_MARKER}")"; then   # the absence he announced, recorded by bin/away.zsh set
+  log::info "Absence read from the marker | marker='${AWAY_MARKER}'"
 fi
 
 # --- State ---
 
 typeset -A section_json          # section -> JSON value
 typeset -g pane_label='' nickname='' pane_bound='' cut_reason='' cut_prompt_holds='' cut_busy_cmd='' bd_missing=''
-typeset -g capture_deadline=0 waited_s=0 prev_last_cmd='' prev_captured_at=''
+typeset -g capture_deadline=0 waited_s=0 prev_last_cmd='' prev_captured_at='' away_ended=false pending_seen=null json_written=0
 typeset -ga unread=() typed=() candidates=()
 
 # Reads set globals instead of printing: a command substitution would run them in a subshell and lose
@@ -230,14 +261,14 @@ drive() {
 }
 
 #######################################
-# Run one command on this machine with the timeout.
-# Globals: timeout_s; sets REPLY_OUT, REPLY_ERR, REPLY_RC
+# Run one command on this machine, with the fixed local timeout.
+# Globals: LOCAL_TIMEOUT_S; sets REPLY_OUT, REPLY_ERR, REPLY_RC
 # Arguments: $@ = the command
 #######################################
 local_read() {
   local out_file err_file rc=0
   out_file="$(mktemp)"; err_file="$(mktemp)"
-  run_with_timeout "${timeout_s}" "${err_file}" "$@" >"${out_file}" || rc=$?
+  run_with_timeout "${LOCAL_TIMEOUT_S}" "${err_file}" "$@" >"${out_file}" || rc=$?
   REPLY_RC="${rc}"
   REPLY_OUT="$(<"${out_file}")"
   REPLY_ERR="$(<"${err_file}")"
@@ -319,8 +350,9 @@ own_command_text() {
 
 #######################################
 # Classify a 75, in this order: the gate's words for copy mode or synchronized panes -> busy; else the
-# pane tail decides, the last prompt line's command joined across its wrapped lines: his --pending row
-# un-entered or running is his row (row_pending, row_running); un-entered text that is not his row is
+# pane tail decides, the last prompt line's command joined across its wrapped lines: his --pending row,
+# the whole command and not a substring of a later one, un-entered or running is his row (row_pending,
+# row_running, pending_seen true); un-entered text that is not his row is
 # holds_text, whoever typed it (no wait clears it); a running agent's command (own_command_text) is a
 # wait (retry), or own_command_persists when the previous capture by this session on this pane already
 # waited on the same command; anything else running is busy.
@@ -338,10 +370,10 @@ classify_75() {
     *"another caller is typing"*) ;;                      # a run.zsh holds the pane's lock: a fork or lane mid-type
     *"copy mode"*|*"synchronize-panes"*) cut_reason='busy'; cut_prompt_holds="${why}"; return 0 ;;
     *"not a shell"*)
-      if [[ -n "${pending}" && "${last_cmd}" == *"${pending}"* ]]; then cut_reason='row_running'; cut_prompt_holds="${last_cmd}"; return 0; fi
+      if [[ -n "${pending}" && "${last_cmd}" == "${pending}" ]]; then cut_reason='row_running'; cut_prompt_holds="${last_cmd}"; pending_seen=true; return 0; fi
       if ! own_command_text "${last_cmd}"; then cut_reason='busy'; cut_prompt_holds="${busy_with}"; return 0; fi ;;
     *"does not end in the prompt"*)
-      if [[ -n "${pending}" && "${last_line}" == *"${pending}"* ]]; then cut_reason='row_pending'; cut_prompt_holds="${last_line}"; return 0; fi
+      if [[ -n "${pending}" && "${last_cmd}" == "${pending}" ]]; then cut_reason='row_pending'; cut_prompt_holds="${last_line}"; pending_seen=true; return 0; fi
       # the prompt line is the tail's last line: un-entered text, which no wait clears, whoever typed it
       if [[ -n "${last_cmd}" && "${last_line}" == *"${last_cmd}" ]]; then cut_reason='holds_text'; cut_prompt_holds="${last_line}"; return 0; fi
       if ! own_command_text "${last_cmd}"; then cut_reason='holds_text'; cut_prompt_holds="${last_line}"; return 0; fi ;;
@@ -383,14 +415,15 @@ cut_off_from_rc() {
 # Find the pane in run.zsh's --list by exact match (the full label, ID=%N, or W.P) and record its full
 # label and window name. The gate itself is run.zsh's, on the first typed read.
 # Globals: target, pane_label, nickname, candidates, cut_reason, cut_prompt_holds
-# Returns: 0 when exactly one pane matches; 1 when cut off (no_pane, ambiguous_pane, host_unreachable)
+# Returns: 0 when exactly one pane matches; 1 when cut off (no_pane, ambiguous_pane, host_unreachable, bad_definition)
 #######################################
 find_pane() {
   drive --list
   if (( REPLY_RC != 0 )); then
-    cut_reason='host_unreachable'; cut_prompt_holds="$(last_line "${REPLY_ERR}"$'\n'"${REPLY_OUT}")"
+    if (( REPLY_RC == 255 )); then cut_reason='host_unreachable'; else cut_reason='bad_definition'; fi   # only ssh's 255 is the host; anything else is the reader's call
+    cut_prompt_holds="$(last_line "${REPLY_ERR}"$'\n'"${REPLY_OUT}")"
     pane_label="${target}"
-    log::warn "run.zsh --list failed | rc='${REPLY_RC}' detail='${cut_prompt_holds}'"
+    log::warn "run.zsh --list failed | rc='${REPLY_RC}' reason='${cut_reason}' detail='${cut_prompt_holds}'"
     return 1
   fi
   local -a lines
@@ -756,9 +789,98 @@ capture_dir() {
   print -r -- "${dir}"
 }
 
+#######################################
+# Assemble and write the capture. Called once by main, or by the EXIT trap when main died after the
+# reads began (then the sections not yet gathered are errors, never a lost capture).
+# Globals: section_json, cut_reason, cut_prompt_holds, cut_busy_cmd, candidates, unread, typed, waited_s,
+#          pending, pending_seen, away, away_ended, pane_label, nickname; sets json_written
+#######################################
+write_json() {
+  local cut_off='null'
+  if [[ -n "${cut_reason}" ]]; then
+    cut_off="$(jq -cn --arg p "${pane_label}" --arg r "${cut_reason}" --arg h "${cut_prompt_holds}" --arg b "${cut_busy_cmd}" \
+      --argjson c "$(json_strings "${candidates[@]}")" --argjson u "$(json_strings "${unread[@]}")" \
+      '{pane: $p, reason: $r, prompt_holds: (if $h == "" then null else $h end), busy_cmd: (if $b == "" then null else $b end), candidates: $c, unread: $u}')"
+  fi
+  local dir json_file json
+  dir="$(capture_dir)"
+  json_file="${dir}/frontier.json"
+  json="$(jq -n \
+    --arg ts "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" --arg session "${CLAUDE_CODE_SESSION_ID:-local}" \
+    --arg pane "${pane_label}" --arg nick "${nickname}" --arg hd "${host_definition:-local}" \
+    --arg beads "${beads_dir}" --arg repo "${repo}" --arg lrepo "${local_repo}" --arg pending "${pending}" --arg away "${away}" \
+    --argjson pseen "${pending_seen}" --argjson aended "${away_ended}" \
+    --argjson typed "$(json_strings "${typed[@]}")" --argjson waited "${waited_s}" --argjson cut "${cut_off}" \
+    --argjson ready "${section_json[ready]}" --argjson in_progress "${section_json[in_progress]}" \
+    --argjson human "${section_json[human]}" --argjson blocked "${section_json[blocked]}" \
+    --argjson stale "${section_json[stale]}" --argjson deferred "${section_json[deferred]}" \
+    --argjson host_git "${section_json[host_git]}" --argjson local_git "${section_json[local_git]}" \
+    --argjson health "${section_json[health]}" \
+    '{captured_at: $ts, session: $session, host_definition: $hd, pane: $pane,
+      nickname: (if $nick == "" then null else $nick end), beads_dir: $beads,
+      repo: (if $repo == "" then null else $repo end), local_repo: $lrepo,
+      pending: (if $pending == "" then null else $pending end), pending_seen: $pseen,
+      away: (if $away == "" then null else $away end), away_ended: $aended,
+      typed: $typed, waited_s: $waited, cut_off: $cut,
+      ready: $ready, in_progress: $in_progress, human: $human, blocked: $blocked, stale: $stale,
+      deferred: $deferred, host_git: $host_git, local_git: $local_git, health: $health}')"
+  print -r -- "${json}" > "${json_file}"
+  json_written=1
+  log::info "Frontier written | json='${json_file}' cut_off='${cut_reason:-none}' typed='${#typed}' waited_s='${waited_s}'"
+  cat <<EOF
+dir=${dir}
+json=${json_file}
+cut_off=${cut_reason:-none}
+EOF
+}
+
+#######################################
+# The EXIT trap: a crash after the reads began still leaves a capture, every section not gathered an
+# error naming the line that died, so seven host reads are never lost to one bad jq.
+# Globals: reading_started, json_written, section_json
+#######################################
+typeset -g reading_started=0 crash_line=''
+on_exit() {
+  local rc=$? name
+  (( reading_started && ! json_written )) || return 0
+  log::err "The reader crashed after the reads began; writing what it gathered | rc='${rc}' line='${crash_line:-?}'"
+  for name in "${SECTIONS[@]}"; do
+    [[ -n "${section_json[$name]:-}" ]] || section_json[$name]="$(json_error "the reader crashed before this section: line ${crash_line:-?}")"
+  done
+  validate_sections
+  write_json || true
+}
+trap 'crash_line=${LINENO}' ERR
+trap on_exit EXIT
+
+#######################################
+# The absence ends when the host answers: a capture with no cut-off, or one whose reason the absence
+# does not explain (the pane refused, a read timed out mid-run is still the absence). The marker goes,
+# so the next capture needs no --away, and the JSON says so.
+# Globals: away, cut_reason, AWAY_MARKER; sets away_ended
+#######################################
+end_absence_if_host_answered() {
+  [[ -n "${away}" ]] || return 0
+  if [[ -n "${cut_reason}" ]] && (( ${AWAY_REASONS[(Ie)${cut_reason}]} )); then return 0; fi
+  away_ended=true
+  if marker_clear "${AWAY_MARKER}"; then log::info "The host answered: the absence ended | marker='${AWAY_MARKER}'"; else log::info "The host answered: the absence ended (no marker to clear)"; fi
+}
+
+#######################################
+# Whether his typed row was seen: true when the cut-off was his row; false when the reads went through,
+# so the prompt was idle without it (bin/pending.zsh clear is due); null otherwise.
+# Globals: pending, cut_reason; sets pending_seen
+#######################################
+note_pending_seen() {
+  [[ -n "${pending}" ]] || return 0
+  [[ "${pending_seen}" == true ]] && return 0
+  if [[ -z "${cut_reason}" ]]; then pending_seen=false; log::info "His typed row is gone from the prompt | hint='bin/pending.zsh clear'"; fi
+}
+
 main() {
   local name
   capture_deadline=$(( SECONDS + timeout_s * ${#HOST_SECTIONS} ))
+  reading_started=1
   if (( local_mode )); then
     pane_label='local'
     read_previous
@@ -772,39 +894,9 @@ main() {
   fi
   read_local_sections
   validate_sections
-
-  local cut_off='null'
-  if [[ -n "${cut_reason}" ]]; then
-    cut_off="$(jq -cn --arg p "${pane_label}" --arg r "${cut_reason}" --arg h "${cut_prompt_holds}" --arg b "${cut_busy_cmd}" \
-      --argjson c "$(json_strings "${candidates[@]}")" --argjson u "$(json_strings "${unread[@]}")" \
-      '{pane: $p, reason: $r, prompt_holds: (if $h == "" then null else $h end), busy_cmd: (if $b == "" then null else $b end), candidates: $c, unread: $u}')"
-  fi
-  local dir json_file json
-  dir="$(capture_dir)"
-  json_file="${dir}/frontier.json"
-  json="$(jq -n \
-    --arg ts "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" --arg session "${CLAUDE_CODE_SESSION_ID:-local}" \
-    --arg pane "${pane_label}" --arg nick "${nickname}" --arg hd "${host_definition:-local}" \
-    --arg beads "${beads_dir}" --arg repo "${repo}" --arg lrepo "${local_repo}" --arg pending "${pending}" \
-    --argjson typed "$(json_strings "${typed[@]}")" --argjson waited "${waited_s}" --argjson cut "${cut_off}" \
-    --argjson ready "${section_json[ready]}" --argjson in_progress "${section_json[in_progress]}" \
-    --argjson human "${section_json[human]}" --argjson blocked "${section_json[blocked]}" \
-    --argjson stale "${section_json[stale]}" --argjson deferred "${section_json[deferred]}" \
-    --argjson host_git "${section_json[host_git]}" --argjson local_git "${section_json[local_git]}" \
-    --argjson health "${section_json[health]}" \
-    '{captured_at: $ts, session: $session, host_definition: $hd, pane: $pane,
-      nickname: (if $nick == "" then null else $nick end), beads_dir: $beads,
-      repo: (if $repo == "" then null else $repo end), local_repo: $lrepo,
-      pending: (if $pending == "" then null else $pending end), typed: $typed, waited_s: $waited, cut_off: $cut,
-      ready: $ready, in_progress: $in_progress, human: $human, blocked: $blocked, stale: $stale,
-      deferred: $deferred, host_git: $host_git, local_git: $local_git, health: $health}')"
-  print -r -- "${json}" > "${json_file}"
-  log::info "Frontier written | json='${json_file}' cut_off='${cut_reason:-none}' typed='${#typed}' waited_s='${waited_s}'"
-  cat <<EOF
-dir=${dir}
-json=${json_file}
-cut_off=${cut_reason:-none}
-EOF
+  end_absence_if_host_answered
+  note_pending_seen
+  write_json
 }
 
 main

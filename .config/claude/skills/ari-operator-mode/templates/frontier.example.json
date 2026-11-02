@@ -8,6 +8,9 @@
   "repo": "~/homelab",
   "local_repo": "/Users/you/homelab",
   "pending": null,
+  "pending_seen": null,
+  "away": null,
+  "away_ended": false,
   "typed": [
     "bd -C ~/\"beads\" ready --exclude-label human --json",
     "bd -C ~/\"beads\" list -s in_progress --json",

@@ -178,6 +178,16 @@ Still waiting on `machine=personal|ID=%18|pane=3.1|nickname=homelab`, busy with 
 
 Not this: the P0 paragraph, which tells Ari to clear a pane that is busy with Claude's own work; or a second read in the same turn.
 
+## An absence he announced
+
+He said "going to work, you'll lose the laptop until tonight"; the capture carried `--away 'going to work, back tonight'` and `--list` failed (`host_unreachable`). The whole reply is this one line, rendered with `--continuing 'lane beads-abc (PR open), lane beads-def, the deploy typed into the pane and unread'`:
+
+```
+Away: `%18` is unreachable, as you said (going to work, back tonight); the tracker is unread, read tried at 21:01Z; work that needs only this Mac continues: lane beads-abc (PR open), lane beads-def, the deploy typed into the pane and unread; your next message captures again. Back?
+```
+
+Not this: the P0 paragraph telling him to open `ssh` from a pane he does not have, or "I do nothing else until it is read" while lanes run on this Mac.
+
 ## His row still on the prompt
 
 The capture (its `--pending` defaulted from `pending.zsh`) found his un-entered row on the prompt; the whole reply is this one line:
