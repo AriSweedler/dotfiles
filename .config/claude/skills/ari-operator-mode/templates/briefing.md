@@ -1,51 +1,55 @@
 # Briefing: the render spec
 
-One briefing is rendered from one capture (`frontier.json`), in this order, with nothing the JSON does not hold. Every sentence traces to one section of the JSON, or, for a row of Ari's, to this turn's `run.zsh --no-enter` result; a sentence that traces to neither is deleted. The filled example is `briefing.example.md`; the capture it renders is `frontier.example.json`.
+Render one briefing from one capture (`frontier.json`), in this order, with nothing the JSON does not hold. Every sentence traces to one section of the JSON, or to this turn's `run.zsh --no-enter` result for row 1 when it is Ari's; delete a sentence that traces to neither. When to capture, type or ask is `SKILL.md › Workflow`; this file is only the shape of the reply. The filled example is `briefing.example.md`; the capture it renders is `frontier.example.json`.
 
 ## Line 1: the header
 
-The stdout of `brief.zsh --header`, unformatted, then a blank line. Its forms:
+The stdout of `brief.zsh --header`, pasted as printed, then a blank line:
 
 ```
-Ready 2, in progress 1, human 1, blocked 1, stale 1; laptop abc1234 dirty 1; read 09:07Z; fresh read
-Ready failed, in progress 1, human 1, blocked 1, stale 1; laptop abc1234 clean; read 09:07Z; after row 1
-Ready 2, in progress 0, human 0, blocked 0, stale 0; this Mac f00ba12 clean; read 09:07Z; fresh read
+Ready N, in progress N, human N, blocked N, stale N; <checkout> <hash> clean|dirty N; read HH:MMZ[; waited Ns for <pane>]; <phase>
 ```
 
-`failed` is a section that errored; `this Mac` appears when the host checkout was skipped or unread; `; waited Ns for <pane>` appears when the reader waited on its own command; the time is the capture's, so a reply that did not capture shows the older time.
+- a section that errored reads `failed`; `human` counts the gates that wait on him (a deferred one is not among them)
+- `<checkout>` is the host's, or `this Mac` when the host checkout was skipped or unread
+- `; waited Ns for <pane>` appears when the capture waited on an agent's command there
+- `<phase>` is `fresh read`, or `--phase 'after row N'` once a row landed
+- a cut-off capture prints `Cut off: <label> (<reason>); tracker unread; read HH:MMZ` and the paragraph replaces it; for the four wait reasons the header is the waiting line itself
+- the time is the capture's: a reply that did not capture shows the older time
 
 ## First principles: one sentence
 
-Where the tracker is (`beads_dir` on `host_definition`), how Claude reaches it (`pane` with `nickname`), where the checkouts are (`repo`, `local_repo`), and the health command (`health.command`), with every term the briefing goes on to use defined at its first appearance as a two-to-five-word parenthetical, from Reference › Terms. About ninety words at most. A term whose section is empty this capture is left out.
+Where the tracker is (`beads_dir` on `host_definition`), how Claude reaches it (`pane` with `nickname`), where the checkouts are (`repo`, `local_repo`), and the health command (`health.command`), with every term the briefing goes on to use defined at its first appearance as a two-to-five-word parenthetical from `SKILL.md › Reference › Terms`. Ninety words at most. A term whose section is empty this capture is left out; a null `health.command` means no doctor is named.
 
 ## `**State right now**`
 
-One bullet per non-empty section, one sentence each, at most six:
+One sentence per bullet, at most six; a section that is empty has no bullet:
 
 - `ready`: the count and the top bead as id, title and priority.
-- `in_progress`: each bead as id, title and holder; past `stale` it says so.
-- `human`: the count and each id with its title.
-- `blocked` and `deferred`: counts only; the ids go in the trailing line.
-- `host_git`: the dirty paths by name or "clean", then the three latest commits as hash and subject.
-- `local_git`: only when its head hash differs from the host's or its `dirty` is non-empty.
-- `health`: "<command> has not been run this capture" when `ran` is false.
-- A section holding `{"error": …}`: "`<section>` could not be read: <why>", and a retry row.
+- `in_progress`: each bead as id, title and holder; one that `stale` lists says so.
+- `human`: the count and each id with its title; `deferred_ids` are not counted.
+- `blocked` and `deferred`: one bullet, counts only; the ids go in the trailing line.
+- `host_git` and `local_git`: one bullet: the host's dirty paths by name or "clean", then its three latest commits as hash and subject; then this Mac's head and dirt only when its head differs from the host's or its `dirty` is non-empty.
+- `health`: "<command> has not been run this capture" when `ran` is false; no bullet when `command` is null.
+- A section holding `{"error": …}`: "`<section>` could not be read: <why>"; one with `precondition: true` is said once for all of them.
 
 ## The table
 
-At most five rows, unblocked only, columns `# | Action | Priority | Who | Why now`; sources, order and cell formats are Reference › Row triage. A row of Ari's carries its command under the table, keyed by row and pane; Claude types his first remote row's command into the pane with `run.zsh --no-enter` before rendering, and the key says what that run printed:
+At most five rows, unblocked only, columns `# | Action | Priority | Who | Why now`; sources, priority, order and pane are `SKILL.md › Reference › Row triage`. Cell formats: `Who` is exactly `Ari` or `Claude`; a priority of null renders P2; a Claude row's Action names its writes (claim, branch, PR, merge, deploy); an Action that discards work opens with **destroys:** and what is lost, one that ships work (merge, deploy, push to main, delete data) opens with **irreversible:** and what ships.
 
-```
-Row 2, typed into `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not entered:
-```zsh
-git -C ~/homelab diff bin/lab
-```
-Shows the uncommitted change to `bin/lab`. Prints a unified diff, or nothing when only the mode changed.
-```
+Every row of Ari's carries its command under the table, keyed by row and pane, with one sentence of what it does and one of what it prints. The block holds the bare command passed to `--cmd`; `run.zsh` wraps it in `run_log` on his prompt. Only row 1 is ever typed; the key says what happened:
 
-The three key forms: "typed into `<label>`, not entered" when the run printed `TYPED:`; "for `<label>`, not typed: <the why after `REFUSED: <label>`>" when it was refused; "for `<label>`, not typed yet" for his later remote rows, since one typed line sits on his panes at a time and the next Brief types the new table's first remote row. The block holds the bare command passed to `--cmd`; `run.zsh` wraps it in `run_log` on his prompt. A local row carries the click-to-type link `/ari-driving-tmux` mints, never a hand-written one; when no link can be minted, a fenced block under the pane label, never a bare command. A destructive row opens its Action with **destroys:** and what is lost, is never typed before his chat yes, and the question names it.
+| When | Key, ending in the colon that opens the fence |
+|---|---|
+| row 1, `run.zsh --no-enter` printed `TYPED:` | "Row 1, typed into `<label>`, not entered:" |
+| row 1, the run was refused (exit 75, 70, 76, 77 or 255) | "Row 1, for `<label>`, not typed: <the why after `REFUSED: <label>`>; <the move from Cut-off reasons>:" |
+| row 1, no run attempted: `waited_s` > 0, or a background agent of this session is using the pane | "Row 1, for `<label>`, not typed: another agent is using this pane; typed when it is free:" |
+| row 1 opens with **destroys:** or **irreversible:** | "Row 1, for `<label>`, not typed: destroys <what>; typed after your yes:" |
+| any later row of his | "Row N, for `<label>`, not typed yet:" |
 
-When no row is unblocked, one line replaces the table: "Nothing is unblocked: N blocked, N deferred, N waiting on you." The trailing line and the question stay.
+A local row (this Mac) carries the click-to-type link `/ari-driving-tmux` mints under the local pane's label, never a hand-written one; when no link can be minted, a fenced block under that label, never a bare command.
+
+When no row is unblocked, one line replaces the table: "Nothing is unblocked: N blocked, N deferred, N waiting on you." (`failed` for an errored count). The trailing line and the question stay.
 
 ## One trailing line
 
@@ -53,12 +57,8 @@ When no row is unblocked, one line replaces the table: "Nothing is unblocked: N 
 
 ## Exactly one question
 
-One sentence saying what a no does, then the one question mark of the reply: "A no is a correction. Row 1 next?" When row 1 is destructive the question names it: "Discard the edits to `bin/lab` (row 1)?"
-
-## After a row lands
-
-In this order: he said entered, pasted its output, or cleared; Capture; type his next row; header (`--phase 'after row N'`); one sentence per fact of what happened and what it printed; the next table or the one question. While a row of his sits typed and un-entered, nothing is captured or typed: the reply asks "Row N is on your prompt: entered, or cleared?" and nothing else. Every reply in the mode opens with the header from the newest capture; one that captured nothing shows the older time, which is the signal that it is stale.
+One sentence saying what a no does, then the one question mark of the reply. Row 1 is Claude's: "A no is a correction. Row 1 next?" Row 1 is his and typed: "A no is a correction. Row 1 is on `<label>`: Enter it?" Row 1 destroys or is irreversible: "A no is a correction. Discard the edit to `bin/lab` (row 1)?" (the thing named). A bead title that holds a question mark is paraphrased as a statement.
 
 ## Cut off
 
-`cut_off` not null: the whole reply is what `brief.zsh --cut-off` prints. No header, no table, no state, no local facts, no other work that turn, no second read in the same turn. For `own_command`, `row_pending` and `row_running` that output is one waiting line ending in the one question; it is not his P0.
+`cut_off` not null: the whole reply is the stdout of `brief.zsh --cut-off`, nothing before or after it (`SKILL.md › Rules › Cut off`).

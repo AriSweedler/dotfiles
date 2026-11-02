@@ -2,8 +2,8 @@
 # frontier.zsh — the one reader of state for operator mode: find the pane, then read nine sections in
 # a fixed order through /ari-driving-remote's run.zsh and write one JSON into a fresh investigation
 # folder. Read-only: nothing here writes to the tracker, a checkout or a pane beyond typing read
-# commands. A pane busy with this session's own command is waited for, within one capture-wide
-# budget; a pane busy with anything else is a cut-off. Run: zsh $HOME/.claude/skills/ari-operator-mode/bin/frontier.zsh --help
+# commands. A pane busy with an agent's command (this capture's read, a fork's or a lane's run_log
+# line) is waited for, within one capture-wide budget; anything else busy there is a cut-off. Run: zsh $HOME/.claude/skills/ari-operator-mode/bin/frontier.zsh --help
 
 set -euo pipefail
 
@@ -26,7 +26,8 @@ readonly RUN_ZSH_DEFAULT="${SKILLS_DIR}/ari-driving-remote/bin/run.zsh"
 readonly FOLD_WIDTH=60
 readonly CAPTURE_LINES=500     # run.zsh dies of SIGPIPE on a capture of about 2000 lines (2026-10-30); 500 holds ~30 KB of base64
 readonly RETRY_S="${FRONTIER_RETRY_S:-5}"   # between retries while the pane is busy with this session's own command; tests shorten it
-readonly PROMPT_GLYPH='❯'                   # what the host's idle prompt line ends with; the text after it on a tail line is the command typed there
+readonly PROMPT_GLYPH_DEFAULT='❯'           # what the host's idle prompt line ends with; --prompt-end overrides it per host
+readonly ID_PREFIX_DEFAULT='beads'          # the bead id prefix when no bd JSON list has shown one; --prefix overrides it
 
 # --- Prerequisites ---
 
@@ -36,7 +37,7 @@ readonly PROMPT_GLYPH='❯'                   # what the host's idle prompt line
 #######################################
 check_prerequisites() {
   local missing=()
-  for cmd in jq git base64 awk; do
+  for cmd in jq git base64 gzip gunzip awk; do
     command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
   done
   if (( ${#missing} > 0 )); then
@@ -66,10 +67,14 @@ ${c_bold}Options:${c_rst}
   --root DIR              the investigation root (default: /tmp); the folder is DIR/operator-mode/<UTC stamp>
   --timeout S             seconds allowed per read (default: 45; at least 5); the whole capture gets S times the
                           number of host reads, and every retry sleep fits inside what is left
-  --pending TEXT          the line a row of his left un-entered on the pane (run.zsh's TYPED: text), so a pane
-                          holding or running it is reported as his row (row_pending, row_running), never as a cut-off
-  --previous FILE         the last capture's frontier.json (default: the newest one under the root before this one);
-                          a second own_command on the same busy pane escalates to busy
+  --pending TEXT          the line a row of his left un-entered on the pane (the text after run.zsh's TYPED:), so a
+                          pane holding or running it is reported as his row (row_pending, row_running), never as a
+                          cut-off (default: what bin/pending.zsh set recorded for this session, if anything)
+  --previous FILE         the last capture's frontier.json (default: the newest one under the root by this session on
+                          this pane); a pane still busy with the same agent's command records own_command_persists
+  --prefix TEXT           the bead id prefix (default: the prefix of the first id a bd JSON list shows, else ${ID_PREFIX_DEFAULT});
+                          only PREFIX-xxx tokens count as ids in bd's text output, so a hyphenated word never does
+  --prompt-end TEXT       what the host's idle prompt line ends with (default: ${PROMPT_GLYPH_DEFAULT}; run.zsh --hosts prints each host's)
   --run-zsh PATH          the run.zsh to drive the pane with (default: the driving-remote skill's; tests pass a fake)
   -h, --help              this help
 
@@ -81,21 +86,24 @@ ${c_bold}Output:${c_rst} key=value lines on stdout: dir= (the folder), json= (it
 
 ${c_bold}Cut-off reasons:${c_rst} not_opted_in (77), other_session (76), busy or holds_text (75), no_pane (70),
   ambiguous_pane (the target matched more than one pane), read_timed_out (124: a read is still running
-  in the pane), host_unreachable (255, or --list failed), refused_text (1). Three more are waits, not his
-  to clear: own_command (the pane ran this session's own command for the whole budget), row_pending (his
+  in the pane), host_unreachable (255, or --list failed), refused_text (1). Four more are waits, not his
+  to clear: own_command (the pane ran an agent's command for the whole budget), own_command_persists (the
+  previous capture by this session on this pane already waited on that same command), row_pending (his
   --pending row sits un-entered on the prompt), row_running (his --pending row is running). The host reads
   stop at the first cut-off; local_git and health still fill.
 
-${c_bold}A 75 is classified by the pane tail, never by its words alone:${c_rst} the last prompt line's command is one this
-  capture typed, an earlier frontier read, or a run_log of a bd or git command -> this session's own, so the
-  read retries every ${RETRY_S} s (FRONTIER_RETRY_S) within the budget (a second capture finding the same command
-  still there records busy); it is the --pending text -> row_pending or row_running; anything else -> busy, or
-  holds_text when the pane is at a shell with text on the line.
+${c_bold}How a 75 is classified${c_rst}, in this order: the gate's words name copy mode or synchronized panes -> busy.
+  Else the pane tail decides, the last prompt line's command joined across its wrapped lines: it is the
+  --pending text -> row_pending (un-entered) or row_running; un-entered text that is not his row ->
+  holds_text, whoever typed it; a running command that is an agent's (this capture's read, an earlier
+  frontier read, a run_log-wrapped line, a BEADS_ACTOR=claude bd write; Ari types bare) -> retry every
+  ${RETRY_S} s (FRONTIER_RETRY_S) within the budget, own_command when the budget is spent, own_command_persists
+  when the previous capture already waited on it; anything else running -> busy.
 
 ${c_bold}Exit codes:${c_rst} 0 the JSON was written (cut off or not); 1 a missing prerequisite or bad flag.
   CLAUDE_CODE_SESSION_ID must be set unless --local: run.zsh refuses every command without it.
-  Without timeout/gtimeout the fallback SIGKILLs the wrapper and can orphan an ssh that holds the
-  pane lock; a Mac wants coreutils (gtimeout).
+  Host mode needs timeout or gtimeout (brew install coreutils): without one the fallback SIGKILLs the
+  wrapper and can orphan an ssh that holds the pane lock.
 HELP
 }
 
@@ -103,6 +111,7 @@ HELP
 
 host_definition='' target='' local_mode=0 beads_dir='~/beads' repo='' local_repo="${PWD}"
 health='' root_dir='/tmp' timeout_s=45 run_zsh="${RUN_ZSH_DEFAULT}" pending='' previous=''
+id_prefix='' prompt_glyph="${PROMPT_GLYPH_DEFAULT}" pending_given=0
 while (( $# > 0 )); do
   case "${1}" in
     --host-definition) host_definition="${2:?--host-definition requires a value}"; shift 2 ;;
@@ -114,7 +123,9 @@ while (( $# > 0 )); do
     --health) health="${2:?--health requires a value}"; shift 2 ;;
     --root) root_dir="${2:?--root requires a value}"; shift 2 ;;
     --timeout) timeout_s="${2:?--timeout requires a value}"; shift 2 ;;
-    --pending) pending="${2:?--pending requires a value}"; shift 2 ;;
+    --pending) pending="${2:?--pending requires a value}"; pending_given=1; shift 2 ;;
+    --prefix) id_prefix="${2:?--prefix requires a value}"; shift 2 ;;
+    --prompt-end) prompt_glyph="${2:?--prompt-end requires a value}"; shift 2 ;;
     --previous) previous="${2:?--previous requires a value}"; shift 2 ;;
     --run-zsh) run_zsh="${2:?--run-zsh requires a value}"; shift 2 ;;
     -h|--help) help; exit 0 ;;
@@ -149,12 +160,25 @@ if [[ -n "${previous}" && ! -r "${previous}" ]]; then
   log::err "--previous is not readable | previous='${previous}'"
   exit 1
 fi
+if (( ! local_mode )) && ! command -v timeout >/dev/null 2>&1 && ! command -v gtimeout >/dev/null 2>&1; then
+  log::err "Host mode needs timeout or gtimeout, or a stuck ssh keeps the pane lock | fix='brew install coreutils'"
+  exit 1
+fi
+if [[ -n "${id_prefix}" ]] && ! print -r -- "${id_prefix}" | grep -qE '^[a-z]+$'; then
+  log::err "The id prefix is lowercase letters | id_prefix='${id_prefix}'"
+  exit 1
+fi
+readonly PENDING_MARKER="${root_dir}/operator-mode/PENDING-${CLAUDE_CODE_SESSION_ID:-local}"
+if (( ! pending_given )) && [[ -r "${PENDING_MARKER}" ]]; then   # the row Brief typed for him, recorded by bin/pending.zsh set
+  pending="$(<"${PENDING_MARKER}")"
+  log::info "Pending row read from the marker | marker='${PENDING_MARKER}'"
+fi
 
 # --- State ---
 
 typeset -A section_json          # section -> JSON value
-typeset -g pane_label='' nickname='' pane_bound='' cut_reason='' cut_prompt_holds=''
-typeset -g capture_deadline=0 waited_s=0 prev_busy_with=''
+typeset -g pane_label='' nickname='' pane_bound='' cut_reason='' cut_prompt_holds='' cut_busy_cmd='' bd_missing=''
+typeset -g capture_deadline=0 waited_s=0 prev_last_cmd='' prev_captured_at=''
 typeset -ga unread=() typed=() candidates=()
 
 # Reads set globals instead of printing: a command substitution would run them in a subshell and lose
@@ -228,25 +252,55 @@ refused_line() { print -r -- "${1}"$'\n'"${2}" | awk '/^REFUSED:/ { l=$0 } END {
 
 #######################################
 # The command typed on the pane's last prompt line, from run.zsh's pane tail: the text after the prompt
-# glyph on the last tail line that holds one. Empty when no prompt line is in the tail.
+# glyph on the last tail line that holds one, joined with its wrapped continuations (tmux wraps a long
+# command over several lines and run.zsh captures without -J; a line is a continuation when the line
+# before it ran the full pane width: the widest width in the tail, reached by at least two lines, so a
+# tail whose longest line is the command itself joins nothing). Empty when no prompt line is in the tail.
+# Globals: prompt_glyph
 # Arguments: $1 = run.zsh stdout
 #######################################
 tail_prompt_command() {
-  print -r -- "${1}" | awk -v g="${PROMPT_GLYPH}" '!/^(TYPED|SENT|PANE|BIND|REFUSED|PANES):?/ && !/^\[INFO\]/ { i=index($0, g); if (i) { c=substr($0, i + length(g)); sub(/^[[:space:]]+/, "", c); sub(/[[:space:]]+$/, "", c); l=c } } END { print l }'
+  print -r -- "${1}" | awk -v g="${prompt_glyph}" '
+    /^(TYPED|SENT|PANE|BIND|REFUSED|PANES):?/ || /^\[INFO\]/ { next }
+    { n++; line[n]=$0; if (length($0) > w) { w=length($0); at=1 } else if (length($0) == w) at++ }
+    END {
+      if (at < 2) w=-1
+      for (k = 1; k <= n; k++) {
+        i=index(line[k], g)
+        if (i) { c=substr(line[k], i + length(g)); sub(/^[[:space:]]+/, "", c); l=c; open=(length(line[k]) == w) }
+        else if (open) { l = l line[k]; open=(length(line[k]) == w) }
+      }
+      sub(/[[:space:]]+$/, "", l); print l
+    }'
 }
 
 #######################################
-# The last pane line of a run.zsh answer, run.zsh's own lines and trailing whitespace dropped.
+# The last pane line of a run.zsh answer, run.zsh's own lines and trailing whitespace dropped; a prompt
+# line wrapped over several tail lines (each but the last at the full pane width, a width at least two
+# tail lines reach) is one line here.
+# Globals: prompt_glyph
 # Arguments: $1 = run.zsh stdout
 #######################################
 tail_last_line() {
-  print -r -- "${1}" | awk '!/^(TYPED|SENT|PANE|BIND|REFUSED|PANES):?/ && !/^\[INFO\]/ && NF { sub(/[[:space:]]+$/, ""); l=$0 } END { print l }'
+  print -r -- "${1}" | awk -v g="${prompt_glyph}" '
+    /^(TYPED|SENT|PANE|BIND|REFUSED|PANES):?/ || /^\[INFO\]/ || !NF { next }
+    { n++; line[n]=$0; if (length($0) > w) { w=length($0); at=1 } else if (length($0) == w) at++ }
+    END {
+      if (at < 2) w=-1
+      for (k = 1; k <= n; k++) {
+        if (index(line[k], g)) { l=line[k]; open=(length(line[k]) == w) }
+        else if (open) { l = l line[k]; open=(length(line[k]) == w) }
+        else l=line[k]
+      }
+      sub(/[[:space:]]+$/, "", l); print l
+    }'
 }
 
 #######################################
-# Whether a command on the pane is this session's own: one this capture typed, an earlier frontier
-# read (the marker recipe), or a bd or git command a fork or lane of this session typed, bare or
-# through run_log.
+# Whether a command on the pane is a Claude agent's, not Ari's: one this capture typed, an earlier
+# frontier read (the marker recipe), any command wrapped in run_log (run.zsh wraps every command a
+# session, fork or lane types; Ari types bare), or a BEADS_ACTOR=claude bd write (only Claude writes
+# as claude). A bare bd or git command is Ari's.
 # Globals: typed
 # Arguments: $1 = the command text from the pane
 #######################################
@@ -258,19 +312,21 @@ own_command_text() {
     [[ -n "${t}" && "${c}" == *"${t}"* ]] && return 0
   done
   case "${c}" in
-    "run_log 'BEADS_ACTOR=claude bd "*|"run_log 'bd -C "*|"run_log 'git -C "*|"BEADS_ACTOR=claude bd "*|"bd -C "*|"git -C "*) return 0 ;;
+    "run_log '"*|"BEADS_ACTOR=claude bd "*) return 0 ;;
   esac
   return 1
 }
 
 #######################################
-# Classify a 75 by the pane tail, never by the refusal's words alone. The gate says the same thing for a
-# running command and for text on the line, so the tail decides: his --pending row on the prompt or
-# running is his row (row_pending, row_running); a command this session typed is a wait (retry); an
-# editor, a TUI, copy mode or a stranger's text is his to clear (busy, holds_text).
-# Globals: pending, prev_busy_with; sets cut_reason, cut_prompt_holds
+# Classify a 75, in this order: the gate's words for copy mode or synchronized panes -> busy; else the
+# pane tail decides, the last prompt line's command joined across its wrapped lines: his --pending row
+# un-entered or running is his row (row_pending, row_running); un-entered text that is not his row is
+# holds_text, whoever typed it (no wait clears it); a running agent's command (own_command_text) is a
+# wait (retry), or own_command_persists when the previous capture by this session on this pane already
+# waited on the same command; anything else running is busy.
+# Globals: pending, prev_last_cmd, prev_captured_at; sets cut_reason, cut_prompt_holds
 # Arguments: $1 = the REFUSED line; $2 = run.zsh stdout
-# Returns: 0 when a reason was recorded; 3 when the pane holds this session's own command (retry)
+# Returns: 0 when a reason was recorded; 3 when the pane runs an agent's command (retry)
 #######################################
 classify_75() {
   local refused="${1}" out="${2}" why last_cmd last_line busy_with
@@ -286,11 +342,14 @@ classify_75() {
       if ! own_command_text "${last_cmd}"; then cut_reason='busy'; cut_prompt_holds="${busy_with}"; return 0; fi ;;
     *"does not end in the prompt"*)
       if [[ -n "${pending}" && "${last_line}" == *"${pending}"* ]]; then cut_reason='row_pending'; cut_prompt_holds="${last_line}"; return 0; fi
+      # the prompt line is the tail's last line: un-entered text, which no wait clears, whoever typed it
+      if [[ -n "${last_cmd}" && "${last_line}" == *"${last_cmd}" ]]; then cut_reason='holds_text'; cut_prompt_holds="${last_line}"; return 0; fi
       if ! own_command_text "${last_cmd}"; then cut_reason='holds_text'; cut_prompt_holds="${last_line}"; return 0; fi ;;
     *) cut_reason='busy'; cut_prompt_holds="${why}"; return 0 ;;
   esac
-  if [[ -n "${prev_busy_with}" && "${prev_busy_with}" == "${busy_with}" ]]; then   # the last capture already waited on this: it is not clearing
-    cut_reason='busy'; cut_prompt_holds="still ${busy_with} since the last capture"; return 0
+  cut_busy_cmd="${last_cmd:-${why}}"
+  if [[ -n "${prev_last_cmd}" && "${prev_last_cmd}" == "${cut_busy_cmd}" ]]; then   # the last capture already waited on this agent's command: not clearing, still not his
+    cut_reason='own_command_persists'; cut_prompt_holds="${busy_with} since ${prev_captured_at}"; return 0
   fi
   cut_prompt_holds="${busy_with}"
   return 3
@@ -356,8 +415,8 @@ find_pane() {
   fi
   pane_label="${lines[1]%% *}"
   # the rest of the line is 'mark bound=… command session: window -- title'
-  pane_bound="$(print -r -- "${lines[1]}" | awk '{ for (i = 2; i <= NF; i++) if ($i ~ /^bound=/) { print $i; exit } }')"
-  nickname="$(print -r -- "${lines[1]}" | awk '{ s=index($0, ": "); if (!s) exit; rest=substr($0, s + 2); e=index(rest, " -- "); if (e) rest=substr(rest, 1, e - 1); print rest }')"
+  pane_bound="$(print -r -- "${lines[1]}" | awk '{ for (i = 2; i <= NF; i++) if ($i ~ /^bound=/) { print $i; exit } }')"   # one short line # lint: ok
+  nickname="$(print -r -- "${lines[1]}" | awk '{ s=index($0, ": "); if (!s) exit; rest=substr($0, s + 2); e=index(rest, " -- "); if (e) rest=substr(rest, 1, e - 1); print rest }')"   # one short line # lint: ok
   log::info "Pane found | pane='${pane_label}' nickname='${nickname}' ${pane_bound}"
   return 0
 }
@@ -406,11 +465,15 @@ remote_read() {
     waited_s=$(( waited_s + nap ))
   done
   local raw="${REPLY_OUT}" rc="${REPLY_RC}"
+  local end_line expected payload
+  end_line="$(print -r -- "${raw}" | awk -v m="${marker}" 'index($0, m "END ") == 1 && $2 ~ /^[0-9]+$/ { l=$0 } END { print l }')"
+  if (( rc == 124 )) && [[ -n "${end_line}" ]]; then   # the host finished and ssh dropped after; the stream is whole
+    log::info "The read finished before run.zsh gave up; decoding it | rc='124'"
+    rc=0
+  fi
   if (( rc != 0 )) && cut_off_from_rc "${rc}" "${REPLY_OUT}" "${REPLY_ERR}"; then
     return 2
   fi
-  local end_line expected payload
-  end_line="$(print -r -- "${raw}" | awk -v m="${marker}" 'index($0, m "END ") == 1 && $2 ~ /^[0-9]+$/ { l=$0 } END { print l }')"
   if [[ -z "${end_line}" ]]; then
     REPLY_RC=1; REPLY_OUT=''
     REPLY_ERR="read did not finish in ${timeout_s}s; last line: $(last_line "${raw}")"
@@ -432,7 +495,7 @@ remote_read() {
     return 0
   fi
   REPLY_RC="$(print -r -- "${decoded}" | awk '/^__RC=[0-9]+$/ { rc=substr($0, 6) } END { print (rc == "" ? 1 : rc) }')"
-  REPLY_OUT="$(print -r -- "${decoded}" | awk '/^__RC=[0-9]+$/ { exit } { print }')"
+  REPLY_OUT="$(print -r -- "${decoded}" | awk '/^__RC=[0-9]+$/ { exit } { print }')"   # __RC is the last line, so awk reads to EOF # lint: ok
   REPLY_ERR=''
 }
 
@@ -467,33 +530,63 @@ bead_list() {
   if (( rc != 0 )); then json_error "${why:-"command failed (rc ${rc}): $(last_line "${raw}")"}"; return 0; fi
   if [[ -z "${raw//[[:space:]]/}" ]]; then print -r -- '[]'; return 0; fi
   if trimmed="$(json_part "${raw}" | jq -ce 'if type == "array" then [.[] | {id, title, priority, type: (.issue_type // .type // null), parent: (.parent // null), assignee: (.assignee // null), updated_at: (.updated_at // null)}] else error("not an array") end' 2>/dev/null)"; then
+    if [[ -z "${id_prefix}" ]]; then   # the first id a list shows pins the prefix for the text sections
+      id_prefix="$(print -r -- "${trimmed}" | jq -r '[.[].id // empty | capture("^(?<p>[a-z]+)-")? | .p] | first // ""')"
+      [[ -n "${id_prefix}" ]] && log::info "Id prefix learned | id_prefix='${id_prefix}'"
+    fi
     print -r -- "${trimmed}"
     return 0
   fi
-  json_error "not a JSON array: $(print -r -- "${raw}" | head -c 160 | tr '\n' ' ')"
+  json_error "not a JSON array: $(first_chars "${raw}")"
 }
 
 #######################################
-# Lines of text as {text, ids}: ids are the bead ids found at line starts.
+# The first 160 characters of a text on one line, read to EOF (a head would SIGPIPE a large print).
+# Arguments: $1 = text
+#######################################
+first_chars() { print -r -- "${1}" | awk '{ s = s $0 " " } END { print substr(s, 1, 160) }'; }
+
+#######################################
+# Lines of text as {text, ids}: ids are the PREFIX-xxx tokens that open a line, after an optional
+# priority tag (bd human list prints `  beads-h1  title`, bd blocked prints `[P1] beads-bl1: title`), so
+# a hyphenated word never counts. bd's summary line names a count (`(7)`, `(5 found)`); when it
+# disagrees with the ids parsed, the section is an error: bd's text shape changed. A human bead whose
+# block says `Status: deferred` is listed under deferred_ids, not ids: deferred is never a row.
+# Globals: id_prefix
 # Arguments: $1 = raw output; $2 = rc; $3 = why the read failed, if it did
 #######################################
 text_section() {
-  local raw="${1}" rc="${2}" why="${3}"
+  local raw="${1}" rc="${2}" why="${3}" prefix="${id_prefix:-${ID_PREFIX_DEFAULT}}"
   if (( rc != 0 )); then json_error "${why:-"command failed (rc ${rc}): $(last_line "${raw}")"}"; return 0; fi
-  jq -cn --arg t "${raw}" '{text: $t, ids: ([$t | split("\n")[] | capture("^\\s*(?<id>[a-z]+-[a-z0-9]{2,}(\\.[0-9]+)?)\\b")? | .id] | unique)}'
+  jq -cn --arg t "${raw}" --arg p "${prefix}" '
+    ($t | split("\n")) as $lines
+    | ("^\\s*(\\[P[0-9]\\]\\s+)?(?<id>" + $p + "-[a-z0-9]{2,}(\\.[0-9]+)?)(\\s|:|$)") as $re
+    | [ $lines | to_entries[] | select(.value | test($re)) | {id: (.value | capture($re) | .id), i: .key} ] as $hits
+    | ($lines | map(capture("^[^a-z0-9]*[A-Za-z][A-Za-z -]*\\((?<n>[0-9]+)( found)?\\):?\\s*$")? | .n | tonumber) | first) as $count
+    | ($hits | map(.id) | unique) as $all
+    | ([ range(0; $hits | length) as $k
+        | ($hits[$k].i) as $from
+        | (if $k + 1 < ($hits | length) then $hits[$k + 1].i else ($lines | length) end) as $to
+        | select(any($lines[$from:$to][]; test("^\\s*Status:\\s*deferred")))
+        | $hits[$k].id ] | unique) as $deferred
+    | if $count != null and $count != ($all | length)
+      then {error: ("parsed " + ($all | length | tostring) + " ids of " + ($count | tostring) + " listed; the bd text shape changed"), text: $t}
+      else {text: $t, ids: ($all - $deferred), deferred_ids: $deferred} end'
 }
 
 #######################################
 # {text, ids, blockers}: blockers maps a blocking bead id to how many beads wait on it, from the
-# "blocked by: <id>" lines bd blocked prints.
+# "blocked by: <id>" or "Blocked by N open dependencies: [<id>]" lines bd blocked prints (a line that
+# opens with those words; a title that mentions them is not one).
 # Arguments: $1 = raw output; $2 = rc; $3 = why the read failed, if it did
 #######################################
 blocked_section() {
   local raw="${1}" rc="${2}" why="${3}" base blockers
   if (( rc != 0 )); then json_error "${why:-"command failed (rc ${rc}): $(last_line "${raw}")"}"; return 0; fi
   base="$(text_section "${raw}" 0 '')"
+  if print -r -- "${base}" | jq -e 'has("error")' >/dev/null 2>&1; then print -r -- "${base}"; return 0; fi
   blockers="$(print -r -- "${raw}" \
-    | awk 'tolower($0) ~ /blocked by/ { s=$0; sub(/.*[Bb]locked by[^:\[]*[:\[][[:space:]]*/, "", s); gsub(/[\]\[]/, "", s); n=split(s, ids, /[,[:space:]]+/); for (i=1; i<=n; i++) if (ids[i] ~ /^[a-z]+-[a-z0-9.]+$/) c[ids[i]]++ } END { for (k in c) printf "%s\t%d\n", k, c[k] }' \
+    | awk 'tolower($0) ~ /^[[:space:]]*blocked by/ { s=$0; sub(/^[[:space:]]*[Bb]locked by[^:\[]*[:\[][[:space:]]*/, "", s); gsub(/[\]\[]/, "", s); n=split(s, ids, /[,[:space:]]+/); for (i=1; i<=n; i++) if (ids[i] ~ /^[a-z]+-[a-z0-9.]+$/) c[ids[i]]++ } END { for (k in c) printf "%s\t%d\n", k, c[k] }' \
     | jq -Rsc 'split("\n") | map(select(length > 0) | split("\t")) | map({key: .[0], value: (.[1] | tonumber)}) | from_entries')"
   jq -cn --argjson b "${base}" --argjson k "${blockers}" '$b + {blockers: $k}'
 }
@@ -520,7 +613,7 @@ count_section() {
   if n="$(json_part "${raw}" | jq -e 'if type == "array" then length else error("not an array") end' 2>/dev/null)"; then
     print -r -- "{\"count\": ${n}}"; return 0
   fi
-  json_error "not a JSON array: $(print -r -- "${raw}" | head -c 160 | tr '\n' ' ')"
+  json_error "not a JSON array: $(first_chars "${raw}")"
 }
 
 #######################################
@@ -545,6 +638,9 @@ read_section() {
   esac
   read_cmd "${cmd}" || rc=$?
   if (( rc == 2 )); then return 2; fi
+  if [[ "${name}" == ready ]] && (( REPLY_RC == 127 )); then   # no bd on the host: the five other bd reads would fail the same way
+    bd_missing="bd is not on the host's PATH, or ${beads_dir} is not a bd workspace (rc 127): $(last_line "${REPLY_OUT}")"
+  fi
   case "${name}" in
     ready|in_progress) section_json[$name]="$(bead_list "${REPLY_OUT}" "${REPLY_RC}" "${REPLY_ERR}")" ;;
     human|stale)       section_json[$name]="$(text_section "${REPLY_OUT}" "${REPLY_RC}" "${REPLY_ERR}")" ;;
@@ -583,6 +679,10 @@ read_host_sections() {
   local name n rc i=0
   for name in "${HOST_SECTIONS[@]}"; do
     i=$(( i + 1 ))
+    if [[ -n "${bd_missing}" && "${name}" != host_git ]]; then   # one precondition, one row: never five more typed reads
+      section_json[$name]="$(jq -cn --arg e "${bd_missing}" '{error: $e, precondition: true}')"
+      continue
+    fi
     rc=0; read_section "${name}" || rc=$?
     if (( rc == 2 )); then
       unread=("${(@)HOST_SECTIONS[i,-1]}")
@@ -618,17 +718,28 @@ json_strings() {
 # --- Logic ---
 
 #######################################
-# The last capture's own_command detail, so a pane still busy with the same command escalates to busy.
-# Globals: previous, root_dir; sets prev_busy_with
+# The last capture's wait on this pane by this session, so a pane still busy with the same agent's
+# command records own_command_persists instead of waiting the whole budget again. Another session's
+# or another pane's capture is never read.
+# Globals: previous, root_dir, pane_label; sets prev_last_cmd, prev_captured_at
 #######################################
 read_previous() {
-  local file="${previous}"
+  local file="${previous}" session="${CLAUDE_CODE_SESSION_ID:-local}"
   if [[ -z "${file}" ]]; then
-    file="$(ls -t "${root_dir}"/operator-mode/*/frontier.json 2>/dev/null | head -1 || true)"
+    local -a files
+    files=("${(@f)$(ls -t "${root_dir}"/operator-mode/*/frontier.json 2>/dev/null || true)}")
+    for file in "${files[@]}"; do
+      [[ -n "${file}" ]] || continue
+      jq -e --arg s "${session}" --arg p "${pane_label}" '.session == $s and .pane == $p' "${file}" >/dev/null 2>&1 && break
+      file=''
+    done
   fi
   [[ -n "${file}" && -r "${file}" ]] || return 0
-  prev_busy_with="$(jq -r '.cut_off | select(. != null and .reason == "own_command") | .prompt_holds // ""' "${file}" 2>/dev/null || true)"
-  [[ -n "${prev_busy_with}" ]] && log::info "Previous capture waited on this pane | previous='${file}' busy_with='${prev_busy_with}'"
+  prev_last_cmd="$(jq -r '.cut_off | select(. != null and (.reason == "own_command" or .reason == "own_command_persists")) | .busy_cmd // ""' "${file}" 2>/dev/null || true)"
+  if [[ -n "${prev_last_cmd}" ]]; then
+    prev_captured_at="$(jq -r '.captured_at // ""' "${file}")"
+    log::info "Previous capture waited on this pane | previous='${file}' busy_cmd='${prev_last_cmd}'"
+  fi
   return 0
 }
 
@@ -647,12 +758,13 @@ capture_dir() {
 
 main() {
   local name
-  read_previous
   capture_deadline=$(( SECONDS + timeout_s * ${#HOST_SECTIONS} ))
   if (( local_mode )); then
     pane_label='local'
+    read_previous
     read_host_sections
   elif find_pane; then
+    read_previous
     read_host_sections
   else
     unread=("${HOST_SECTIONS[@]}")
@@ -663,9 +775,9 @@ main() {
 
   local cut_off='null'
   if [[ -n "${cut_reason}" ]]; then
-    cut_off="$(jq -cn --arg p "${pane_label}" --arg r "${cut_reason}" --arg h "${cut_prompt_holds}" \
+    cut_off="$(jq -cn --arg p "${pane_label}" --arg r "${cut_reason}" --arg h "${cut_prompt_holds}" --arg b "${cut_busy_cmd}" \
       --argjson c "$(json_strings "${candidates[@]}")" --argjson u "$(json_strings "${unread[@]}")" \
-      '{pane: $p, reason: $r, prompt_holds: (if $h == "" then null else $h end), candidates: $c, unread: $u}')"
+      '{pane: $p, reason: $r, prompt_holds: (if $h == "" then null else $h end), busy_cmd: (if $b == "" then null else $b end), candidates: $c, unread: $u}')"
   fi
   local dir json_file json
   dir="$(capture_dir)"
