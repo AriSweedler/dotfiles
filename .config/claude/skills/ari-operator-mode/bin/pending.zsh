@@ -1,8 +1,9 @@
 #!/usr/bin/env zsh
 # pending.zsh — the row Claude typed onto Ari's prompt and he has not yet entered or cleared, kept on
-# disk per Claude session so a compaction cannot lose it: frontier.zsh reads it as the default --pending
-# and names that line as his row (row_pending, row_running), never as text he must clear. Brief sets it
-# right after run.zsh prints TYPED:; Proceed clears it when he says entered or cleared.
+# disk per Claude session (lib/marker.zsh) so a compaction cannot lose it: frontier.zsh reads it as the
+# default --pending and names that line as his row (row_pending, row_running), never as text he must
+# clear. Brief sets it right after run.zsh prints TYPED:; Proceed clears it when he says entered or
+# cleared, or when a capture finds the prompt idle without it (pending_seen false).
 # Run: zsh $HOME/.claude/skills/ari-operator-mode/bin/pending.zsh --help
 
 set -euo pipefail
@@ -15,6 +16,7 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
+source "${SCRIPT_DIR:h}/lib/marker.zsh"
 
 # --- Constants ---
 
@@ -66,20 +68,18 @@ if [[ "${action}" == set && "${text}" == "TYPED: "* ]]; then
   exit 1
 fi
 
-readonly MARKER="${root_dir}/operator-mode/PENDING-${session}"
+readonly MARKER="$(marker_path "${root_dir}" PENDING "${session}")"
 
 # --- Logic ---
 
 pending_set() {
-  mkdir -p "${MARKER:h}"
-  print -r -- "${text}" > "${MARKER}"
+  marker_set "${MARKER}" "${text}"
   log::info "Pending row recorded | session='${session}' marker='${MARKER}'"
   print -r -- "pending=${text}"
 }
 
 pending_clear() {
-  if [[ -f "${MARKER}" ]]; then
-    rm -f "${MARKER}"
+  if marker_clear "${MARKER}"; then
     log::info "Pending row cleared | session='${session}'"
   else
     log::info "No pending row to clear | session='${session}'"
@@ -88,8 +88,9 @@ pending_clear() {
 }
 
 pending_show() {
-  if [[ -f "${MARKER}" ]]; then
-    print -r -- "pending=$(<"${MARKER}")"
+  local recorded
+  if recorded="$(marker_show "${MARKER}")"; then
+    print -r -- "pending=${recorded}"
     return 0
   fi
   print -r -- "pending="

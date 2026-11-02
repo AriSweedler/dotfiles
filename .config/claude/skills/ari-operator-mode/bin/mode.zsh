@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 # mode.zsh — the on/off state of operator mode, kept on disk so a compaction cannot lose it: a marker
-# file per Claude session under /tmp/operator-mode. Every reply in a session asks `status`; nothing is
-# inferred from the transcript. Run: zsh $HOME/.claude/skills/ari-operator-mode/bin/mode.zsh --help
+# file per Claude session under /tmp/operator-mode (lib/marker.zsh). Every reply in a session asks
+# `status`; nothing is inferred from the transcript. Run: zsh $HOME/.claude/skills/ari-operator-mode/bin/mode.zsh --help
 
 set -euo pipefail
 
@@ -13,6 +13,7 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
+source "${SCRIPT_DIR:h}/lib/marker.zsh"
 
 # --- Constants ---
 
@@ -57,25 +58,25 @@ done
 if [[ -z "${action}" ]]; then log::err "An action is required | actions='${(j:, :)ACTIONS}'"; help; exit 1; fi
 if [[ -z "${session}" ]]; then log::err "No session: set CLAUDE_CODE_SESSION_ID or pass --session"; exit 1; fi
 
-readonly MARKER="${root_dir}/operator-mode/ON-${session}"
+readonly MARKER="$(marker_path "${root_dir}" ON "${session}")"
 
 # --- Logic ---
 
 mode_on() {
-  if [[ -f "${MARKER}" ]]; then
-    log::info "Operator mode already on | session='${session}' since='$(<"${MARKER}")'"
+  local since
+  if since="$(marker_show "${MARKER}")"; then
+    log::info "Operator mode already on | session='${session}' since='${since}'"
   else
-    mkdir -p "${MARKER:h}"
-    date -u '+%Y-%m-%dT%H:%M:%SZ' > "${MARKER}"
+    since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    marker_set "${MARKER}" "${since}"
     log::info "Operator mode on | session='${session}' marker='${MARKER}'"
   fi
   print -r -- "mode=on"
-  print -r -- "since=$(<"${MARKER}")"
+  print -r -- "since=${since}"
 }
 
 mode_off() {
-  if [[ -f "${MARKER}" ]]; then
-    rm -f "${MARKER}"
+  if marker_clear "${MARKER}"; then
     log::info "Operator mode off | session='${session}'"
   else
     log::info "Operator mode was already off | session='${session}'"
@@ -84,9 +85,10 @@ mode_off() {
 }
 
 mode_status() {
-  if [[ -f "${MARKER}" ]]; then
+  local since
+  if since="$(marker_show "${MARKER}")"; then
     print -r -- "mode=on"
-    print -r -- "since=$(<"${MARKER}")"
+    print -r -- "since=${since}"
     return 0
   fi
   print -r -- "mode=off"

@@ -1,6 +1,6 @@
 # Briefing: the render spec
 
-Render one briefing from one capture (`frontier.json`), in this order, with nothing the JSON does not hold. Every sentence traces to one section of the JSON, or to this turn's `run.zsh --no-enter` result for row 1 when it is Ari's; delete a sentence that traces to neither. When to capture, type or ask is `SKILL.md › Workflow`; this file is only the shape of the reply. The filled example is `briefing.example.md`; the capture it renders is `frontier.example.json`.
+Render one briefing from one capture (`frontier.json`), in this order, with nothing the JSON does not hold (`SKILL.md › Rules › The script reads`; the exceptions are `SKILL.md › Reference › Outside facts`). When to capture, type or ask is `SKILL.md › Workflow`; this file is only the shape of the reply. The filled example is `briefing.example.md`; the capture it renders is `frontier.example.json`.
 
 ## Line 1: the header
 
@@ -12,10 +12,15 @@ Ready N, in progress N, human N, blocked N, stale N; <checkout> <hash> clean|dir
 
 - a section that errored reads `failed`; `human` counts the gates that wait on him (a deferred one is not among them)
 - `<checkout>` is the host's, or `this Mac` when the host checkout was skipped or unread
-- `; waited Ns for <pane>` appears when the capture waited on an agent's command there
+- `; waited Ns for <pane>` appears when the capture waited on an agent's command there; the pane is `pane`, without its nickname
+- `; host answered` appears once, on the capture that ended an announced absence (`away_ended` true)
 - `<phase>` is `fresh read`, or `--phase 'after row N'` once a row landed
-- a cut-off capture prints `Cut off: <label> (<reason>); tracker unread; read HH:MMZ` and the paragraph replaces it; for the four wait reasons the header is the waiting line itself; an announced absence (`away` set, `host_unreachable` or `read_timed_out`) prints `Away: <label> (<reason>); tracker unread; read HH:MMZ` and the away line replaces it
 - the time is the capture's: a reply that did not capture shows the older time
+- a cut-off capture prints `Cut off: <label> (<reason>); tracker unread; read HH:MMZ`, and the paragraph replaces it
+- for the four wait reasons (`own_command`, `own_command_persists`, `row_pending`, `row_running`) the header is the waiting line itself
+- an announced absence (`away` set, `host_unreachable` or `read_timed_out`) prints `Away: <host_definition> (<reason>); tracker unread; read HH:MMZ`, and the away line replaces it; the host is named, not a pane, because a listing that never answered resolves none
+
+The replies that do not open with the header: the entry turn (the acknowledgement comes first, the header second), the unknown-pane reply (the acknowledgement and one question), every cut-off reply (`brief.zsh --cut-off` is the whole reply), and the progress or completion-notice line, which is the header plus one sentence.
 
 ## First principles: one sentence
 
@@ -23,7 +28,7 @@ Where the tracker is (`beads_dir` on `host_definition`), how Claude reaches it (
 
 ## `**State right now**`
 
-One sentence per bullet, at most six; a section that is empty has no bullet:
+One sentence per bullet, at most six; a section that is empty has no bullet; when seven sources fill, drop `health`, then `deferred`, then `local_git`. An empty tracker (every section empty) is one bullet, "The tracker holds nothing ready, in progress, blocked, deferred or waiting on you.", and the header `**State right now**` is left out:
 
 - `ready`: the count and the top bead as id, title and priority.
 - `in_progress`: each bead as id, title and holder; one that `stale` lists says so.
@@ -49,7 +54,7 @@ Every row of Ari's carries its command under the table, keyed by row and pane, w
 
 A local row (this Mac) carries the click-to-type link `/ari-driving-tmux` mints under the local pane's label, never a hand-written one; when no link can be minted, a fenced block under that label, never a bare command.
 
-When no row is unblocked, one line replaces the table: "Nothing is unblocked: N blocked, N deferred, N waiting on you." (`failed` for an errored count). The trailing line and the question stay.
+When no row is unblocked, one line replaces the table: "Nothing is unblocked: N blocked, N deferred, N waiting on you." (`failed` for an errored count). The trailing line stays, and the question becomes "A no is a correction. Nothing is unblocked: read again, or `stop operator mode`?".
 
 ## One trailing line
 
@@ -59,6 +64,10 @@ When no row is unblocked, one line replaces the table: "Nothing is unblocked: N 
 
 One sentence saying what a no does, then the one question mark of the reply. Row 1 is Claude's: "A no is a correction. Row 1 next?" Row 1 is his and typed: "A no is a correction. Row 1 is on `<label>`: Enter it?" Row 1 destroys or is irreversible: "A no is a correction. Discard the edit to `bin/lab` (row 1)?" (the thing named). A bead title that holds a question mark is paraphrased as a statement.
 
+## Not in this capture
+
+Asked for something the JSON lacks: "Not in this capture; a fresh capture would read `<section>`." when a section holds it, else "Not in this capture; no section reads it. Reading it is a Claude row: `<command>`."; either ends "Or say `stop operator mode` to ask freely." Depth on a section the capture holds is its raw text, verbatim, then the one question.
+
 ## Cut off
 
-`cut_off` not null: the whole reply is the stdout of `brief.zsh --cut-off`, nothing before or after it (`SKILL.md › Rules › Cut off`); on an away capture it takes `--continuing '<the work that runs on from this Mac>'` (`SKILL.md › Reference › Announced absence`).
+`cut_off` not null: the whole reply is the stdout of `brief.zsh --cut-off`, nothing before or after it (`SKILL.md › Rules › Cut off`).
