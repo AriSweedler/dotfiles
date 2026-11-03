@@ -119,17 +119,19 @@ check_prerequisites() {
 
 # --- Help ---
 
+# Script constants expand in the heredoc; every environment variable ($HOME, $SCRATCHPAD, $CLAUDE_CODE_SESSION_ID)
+# is written \$NAME, so the help is the same on every machine and set -u cannot kill it (tests/run-help.test.zsh).
 help() {
   cat <<EOF
 ${c_green}run.zsh${c_rst} — type a command into a tmux pane (this machine or over ssh), wait for the shell prompt, print the pane
 
 ${c_bold}Usage:${c_rst}
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --hosts
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --list
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --target 2.4 --cmd TEXT [OPTIONS]
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --put FILE --project DIR [--name NAME] [--dry-run]
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF [--host USER@HOST] --describe TEXT
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --forget
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --hosts
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --list
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --target %6 --cmd TEXT [OPTIONS]
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --put FILE --project DIR [--name NAME] [--dry-run]
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF [--host USER@HOST] --describe TEXT
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --forget
 
 A ${c_bold}definition${c_rst} is a file under ${HOSTS_DIR}: the host's user@host (or '${LOCAL_HOST}' for
 this machine, no ssh), PATH prefix, shell-prompt end, the panes seen on the last --list, when it last
@@ -200,13 +202,13 @@ ${c_bold}Exit codes:${c_rst}
   ${EXIT_SSH}  ssh could not connect before anything was typed; for a --put, nothing is at the path
 
 ${c_bold}Examples:${c_rst}
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition local --list
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition local --target 2.4 --no-enter --cmd 'kubectl get pods'
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target 4.1 --cmd 'diskutil list external physical'
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %7 --cmd ''
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "$SCRATCHPAD/body.md" --project homelab/beads --name bead-frontier
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "$SCRATCHPAD/swap.py" --project homelab/torrent --dry-run
-  zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --host pi@pi.local --describe 'Pi 4 B at 192.0.2.94, no tmux; reached from the laptop with a nested ssh -t'
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition local --list
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition local --target %6 --no-enter --cmd 'kubectl get pods'
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %6 --cmd 'diskutil list external physical'
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %7 --cmd ''
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "\$SCRATCHPAD/body.md" --project homelab/beads --name bead-frontier
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "\$SCRATCHPAD/swap.py" --project homelab/torrent --dry-run
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --host pi@pi.local --describe 'Pi 4 B at 192.0.2.94, no tmux; reached from the laptop with a nested ssh -t'
 EOF
 }
 
@@ -931,7 +933,7 @@ list_windows() {
   (( exit_code == 0 )) || return "${exit_code}"
   output="$(list_with_owners "${name}" "${output}")"
   print -r -- "${output}"
-  # The reminder that holds after a compaction, when SKILL.md may be out of context: the first --cmd is the one sent bare.
+  # The reminder that holds after a compaction, when SKILL.md may be out of context: the first --cmd is the one most often sent unannounced.
   print -r -- "NEXT: a --cmd into a ✦ pane goes in chat first: its label in inline code, then the bare command in a fenced block, above the Bash call; --cmd '' needs none"
   windows="${(pj:$WINDOWS_SEPARATOR:)${(f)"$(print -r -- "${output}" | awk "${AWK_WINDOW_NAMES}")"}}"
   record_definition "${name}" false "${windows}" "" true
