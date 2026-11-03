@@ -2,9 +2,11 @@
 # run_log — run a command and capture it into a per-command capture directory:
 #
 #   <root>/<seq>_<slug>/
-#     metadata      user=, timestamp=, cwd=, command=, stdout_tty=, stderr_tty=, exit=, duration_s=
+#     metadata      user=, timestamp=, cwd=, command=, stdout_tty=, stderr_tty= at start;
+#                   exit=, duration_s= at exit (helper_killed_by=SIGNAL when the capture died first)
 #     <N>.fd        fd N, byte-for-byte (colors kept); 1, 2, and each --fd N
-#     <N>.fd.plain  fd N as the user saw it: escapes stripped, \r redraws resolved
+#     <N>.fd.plain  fd N as the user saw it: escapes stripped, \r redraws resolved;
+#                   live while the command runs (--help says how), rewritten whole at exit
 #     stdout, stderr, stdout.plain, stderr.plain
 #                   symlinks to 1.fd, 2.fd, 1.fd.plain, 2.fd.plain
 #
@@ -57,9 +59,16 @@ functions work. Each invocation creates one capture directory under the
 capture root:
 
   <root>/<seq>_<cmd-slug>/
-    metadata      user=, timestamp=, cwd=, command=, stdout_tty=, stderr_tty=, exit=, duration_s=
+    metadata      user=, timestamp=, cwd=, command=, stdout_tty=, stderr_tty= at start;
+                  exit=, duration_s= at exit, before the artifact line is copied or
+                  pasted (helper_killed_by=SIGNAL instead when the pane closed or
+                  the capture was killed first)
     <N>.fd        fd N, byte-for-byte (colors kept): 1, 2, and each --fd N
-    <N>.fd.plain  fd N as you saw it: escapes stripped, \\\\r redraws resolved
+    <N>.fd.plain  fd N as you saw it: escapes stripped, \\\\r redraws resolved;
+                  live while the command runs: 1 and 2 hold every complete line
+                  plus the unfinished last line as the terminal shows it (a prompt,
+                  a progress bar's latest redraw); a --fd N copy is rewritten about
+                  once a second; every one is rewritten whole at exit
     stdout, stderr, stdout.plain, stderr.plain
                   symlinks to 1.fd, 2.fd, 1.fd.plain, 2.fd.plain
 
