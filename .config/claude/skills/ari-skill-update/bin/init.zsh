@@ -1,17 +1,11 @@
 #!/usr/bin/env zsh
-# Set up an /ari-skill-update session: confirm the skill exists (or is brand-new),
-# report where it stands in the dotfiles tiers, create the investigation folder +
-# pre-filled scratchpad, and enumerate the skill's files for the model to read.
-# Run: zsh $HOME/.claude/skills/ari-skill-update/bin/init.zsh --skill <name> [--new]
+# Session setup for /ari-skill-update: check the skill, report its dotfiles tier
+# state, make the investigation folder, list the files to read. help() has the
+# flags and the output contract.
 
 set -euo pipefail
 
-# Shared libs resolve through the symlink farm, not ${0:A:h:h:h}: skills are spread
-# across dotfiles tiers, so a relative hop lands in whichever tier this script sits in.
 readonly SKILLS_DIR="${HOME}/.claude/skills"
-
-# --- Logging (source the canonical lib — never re-define log::* inline) ---
-
 readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
 if [[ ! -r "${LIB_LOGGING}" ]]; then
   print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
@@ -55,10 +49,29 @@ check_prerequisites() {
 # --- Helpers ---
 
 #######################################
-# Extract the `description:` value from a SKILL.md frontmatter block.
+# Reduce a --skill value to a bare directory name: a full path under SKILLS_DIR
+# or a tab-completed trailing slash both arrive here.
+# Globals: SKILLS_DIR
+# Arguments:
+#   $1 - raw --skill value
+# Outputs: the bare name (may still hold a slash; the caller validates)
+#######################################
+normalize_skill_name() {
+  local raw="${1}"
+  raw="${raw#${SKILLS_DIR}/}"
+  while [[ "${raw}" == */ ]]; do
+    raw="${raw%/}"
+  done
+  print -- "${raw}"
+}
+
+#######################################
+# Extract the `description:` value from a SKILL.md frontmatter block. A block
+# scalar (`>` or `|`) spans lines the caller cannot use; it reads as absent.
+# Globals: None
 # Arguments:
 #   $1 - path to SKILL.md
-# Outputs: the description text (empty if absent or unreadable)
+# Outputs: the description text (empty if absent, unreadable, or a block scalar)
 #######################################
 read_frontmatter_description() {
   local file="${1}"
@@ -67,6 +80,7 @@ read_frontmatter_description() {
     /^---[[:space:]]*$/ { fence++; next }
     fence == 1 && /^description:[[:space:]]*/ {
       sub(/^description:[[:space:]]*/, "")
+      if ($0 ~ /^[>|]-?[[:space:]]*$/) exit
       print
       exit
     }
@@ -76,6 +90,7 @@ read_frontmatter_description() {
 #######################################
 # Reject the combinations of --new and on-disk state that make no sense, and say
 # where an existing skill stands relative to the dotfiles tiers.
+# Globals: SKILLS_DIR
 # Arguments:
 #   $1 - skill name
 #   $2 - is_new (true|false)
@@ -86,11 +101,11 @@ read_frontmatter_description() {
 check_skill_state() {
   local skill="${1}" is_new="${2}" state="${3}" tier="${4}"
   if [[ "${is_new}" == "true" && "${state}" != "absent" ]]; then
-    log::err "--new given but the skill exists | skill='${skill}' state='${state}' tier='${tier}'"
+    log::err "--new given but the skill exists | skill='${skill}' state='${state}' tier='${tier}' hint='drop --new and re-run'"
     return 1
   fi
   if [[ "${is_new}" == "true" ]]; then
-    log::info "New skill | skill='${skill}' hint='adopt it into a tier once it works'"
+    log::info "New skill | skill='${skill}' hint='draft its adopt command in the proposal once SKILL.md exists'"
     return 0
   fi
   if [[ "${state}" == "absent" ]]; then
@@ -101,7 +116,7 @@ check_skill_state() {
     log::info "Skill is versioned in the dotfiles | skill='${skill}' tier='${tier}'"
     return 0
   fi
-  log::warn "Skill is not adopted into a dotfiles tier | skill='${skill}' state='${state}' hint='adopt after editing, see /ari-dotfiles-skill-registry'"
+  log::warn "Skill is not adopted into a dotfiles tier | skill='${skill}' state='${state}' hint='draft the adopt command in the proposal; it runs only on yes'"
 }
 
 # --- Help ---
@@ -114,16 +129,16 @@ ${c_bold}Usage:${c_rst}
   zsh \$HOME/.claude/skills/ari-skill-update/bin/init.zsh --skill <name> [--new]
 
 ${c_bold}Options:${c_rst}
-  --skill NAME   Skill to edit (required)
+  --skill NAME   Skill to edit (required); a path under \$HOME/.claude/skills/ or a trailing slash is accepted
   --new          Brand-new skill — it must not exist yet
   -h, --help     Show this help
 
 ${c_bold}Output:${c_rst}
   key=value lines (skill, is_new, state, tier, source, skill_dir, investigation_dir,
   scratchpad) plus a FILES section listing the skill's files to read. Creates the
-  investigation folder and a pre-filled scratchpad. state/tier come from
-  /ari-dotfiles-skill-registry (linked, unlinked, ignored, ...); source is
-  submodule:<path> when a submodule's skills/ holds the skill, else empty.
+  investigation folder and a pre-filled scratchpad. state/tier per
+  /ari-dotfiles-skill-registry; source is submodule:<path> when a submodule's
+  skills/ holds the skill, else empty.
 EOF
 }
 
@@ -133,14 +148,18 @@ main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local skill="" is_new=false
+  local raw_skill="" is_new=false
   while (( $# > 0 )); do case "${1}" in
     -h|--help) help; return 0 ;;
-    --skill)   skill="${2:?--skill requires a value}"; shift 2 ;;
+    --skill)   raw_skill="${2:?--skill requires a value}"; shift 2 ;;
     --new)     is_new=true; shift ;;
     -*)        log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)         log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
   esac; done
+
+  # === MASSAGE ===
+  local skill
+  skill="$(normalize_skill_name "${raw_skill}")"
 
   # === VALIDATE ===
   if [[ -z "${skill}" ]]; then
@@ -148,9 +167,17 @@ main() {
     help
     return 1
   fi
+  if [[ "${skill}" == */* ]]; then
+    log::err "Invalid skill name | skill='${raw_skill}' expected='a directory name under ${SKILLS_DIR}'"
+    return 1
+  fi
 
   local state tier source=""
   read -r state tier <<< "$(skill_state "${skill}")"
+  if [[ -z "${state}" ]]; then
+    log::err "skill_state returned nothing | skill='${skill}' lib='${LIB_REGISTRY}'"
+    return 1
+  fi
   check_skill_state "${skill}" "${is_new}" "${state}" "${tier}" || return 1
   # A skill held by a submodule's skills/ is committed in that repo, not the tier.
   if [[ "${state}" == "linked" || "${state}" == "missing" ]]; then
@@ -171,17 +198,19 @@ main() {
 
   cat > "${scratchpad}" <<EOF
 - **Skill**: ${skill} — \$HOME/.claude/skills/${skill}/SKILL.md — ${purpose}
-- **Goal**: <fill from the user's request>
+- **Purpose**: <one sentence from the # heading + opening paragraph>
+- **Goal**: <the brief's Change line (inline: the user's request)> — <intent | implementation | both> (<why>)
 - **Changes made**:
   - [1] SECTION — change
 - **Own read**: clean | <n> fixed
 - **Open questions**:
+  - <question> assumed: <answer>
 EOF
   log::info "Investigation folder ready | scratchpad='${scratchpad}'"
 
   local files=""
   if [[ -d "${skill_dir}" ]]; then
-    files="$(find "${skill_dir}/" -type f | sort)"
+    files="$(find "${skill_dir}/" \( -name .git -o -name __pycache__ -o -name node_modules \) -prune -o -type f -print | sort)"
   fi
   local file_count=0
   [[ -n "${files}" ]] && file_count="$(echo "${files}" | wc -l | tr -d ' ')"
