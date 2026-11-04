@@ -54,6 +54,8 @@
 *.secret.zsh
 # A symlink into a tool-managed install (the claude version dir).
 /bin/claude
+# A downloaded third-party CLI binary (about 170 MB), not hand-written.
+/bin/cilium
 # The private-terms denylist the plugged repo's hooks check commits against.
 !/share/plugged/
 # Raycast snippets: the private tier is versioned; the import manifest is machine state.
