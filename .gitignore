@@ -9,6 +9,7 @@
 .azure/
 .bash_history
 .bashrc*
+.beads/
 .bundle/
 .cagent/
 .cargo/
@@ -21,6 +22,7 @@
 .config/Google/
 .config/Microsoft\\VisualStudio Services/
 .config/aws-sso/
+.config/bd/
 .config/cagent/
 .config/containers/
 .config/dlv
@@ -49,6 +51,7 @@
 .cursor/
 .deno/
 .docker/
+.dolt/
 .gnupg
 .gradle/
 .groot_data/
