@@ -33,6 +33,23 @@ readonly EXIT_TIMEOUT=124
 readonly EXIT_NO_TARGET=70
 readonly EXIT_BUSY=75   # EX_TEMPFAIL: the pane is not an idle shell at its prompt; nothing was typed
 readonly EXIT_NOT_OPTED_IN=77   # EX_NOPERM: the pane's OPT_IN_OPTION is not on; nothing was typed
+# A 75 or 77 prints 'REFUSED_KIND: <kind>' on the line right after its REFUSED: text, and no other exit prints
+# one; callers classify by the kind, never by the REFUSED: words. The exit code follows from the kind:
+# not_opted_in is 77, every other kind 75. A held lock is other_caller; each reason tmux_pane_gate_refusal gives
+# is an sh case pattern below, with its kind; a reason none matches (the lib changed) is unknown.
+# tests/run-refusal-kind.test.zsh puts every reason the lib holds through the case.
+readonly REFUSED_KIND_PREFIX='REFUSED_KIND: '
+readonly KIND_NOT_OPTED_IN=not_opted_in
+readonly KIND_OTHER_CALLER=other_caller
+readonly KIND_UNKNOWN=unknown
+readonly GATE_REASON_KINDS=(
+  "'not opted in'*"                          "${KIND_NOT_OPTED_IN}"
+  "'in copy mode'*"                          copy_mode
+  "'synchronize-panes'*"                     synchronized
+  "'running '*', not a shell'"               not_a_shell
+  "'last line does not end in the prompt'*"  not_at_prompt
+  "'no such pane'"                           pane_gone
+)
 # Ari marks a pane typeable with `ari-driving on` in it, which sets this pane option. The window option of
 # the same name is display only (the ✦ in the status bar); the gate reads the pane option alone.
 readonly OPT_IN_OPTION=@ari_driving
@@ -195,8 +212,11 @@ ${c_bold}Exit codes:${c_rst}
   ${EXIT_TIMEOUT}  still running (timed out, --no-wait, or ssh dropped after SENT); the pane is printed; never resend
   ${EXIT_NO_TARGET}   no pane matches the target, or no attached client to resolve a window.pane against (--session);
        every pane on the host is printed under the refusal, so the right one can be picked without --list
-  ${EXIT_BUSY}   pane in copy mode, synchronized, not a shell, or not at an empty prompt, or another caller is typing (nothing typed)
-  ${EXIT_NOT_OPTED_IN}   pane not opted in (nothing typed)
+  ${EXIT_NOT_OPTED_IN}   pane not opted in (nothing typed); the line after REFUSED: is '${REFUSED_KIND_PREFIX}${KIND_NOT_OPTED_IN}'
+  ${EXIT_BUSY}   pane busy (nothing typed); the line after REFUSED: is '${REFUSED_KIND_PREFIX}<kind>', one of
+       ${KIND_OTHER_CALLER}, $(gate_busy_kinds),
+       ${KIND_UNKNOWN} (a gate reason this version does not map).
+       Only ${EXIT_NOT_OPTED_IN} and ${EXIT_BUSY} carry a kind; switch on the exit code first, then on the kind
   ${EXIT_BOUND_ELSEWHERE}   pane bound to another Claude session (nothing typed); get a pane of your own
   ${EXIT_NOT_FOUND}  tmux not found on the host (--path-prefix)
   ${EXIT_SSH}  ssh could not connect before anything was typed; for a --put, nothing is at the path
@@ -604,19 +624,61 @@ resolve_block() {
 }
 
 #######################################
+# The sh pipeline that prints the pane's last non-blank lines: the tail under a refusal, and the capture.
+# Globals: AWK_NONBLANK
+# Arguments: $1 lines
+# Returns: the pipeline on stdout
+#######################################
+pane_tail_cmd() {
+  print -r -- "tmux capture-pane -p -t \"\$pane\" -S -${1} | awk ${(qq)AWK_NONBLANK} | tail -n ${1}"
+}
+
+#######################################
+# The kinds of a 75 that the gate's reasons map to, comma-separated, for the help.
+# Globals: GATE_REASON_KINDS KIND_NOT_OPTED_IN
+#######################################
+gate_busy_kinds() {
+  local pattern kind
+  local -a kinds=()
+  for pattern kind in "${GATE_REASON_KINDS[@]}"; do
+    [[ "${kind}" == "${KIND_NOT_OPTED_IN}" ]] || kinds+=("${kind}")
+  done
+  print -r -- "${(j:, :)kinds}"
+}
+
+#######################################
+# One sh statement that sets sh variable `kind` from the gate's `reason`, per GATE_REASON_KINDS.
+# Globals: GATE_REASON_KINDS KIND_UNKNOWN
+# Returns: the statement on stdout
+#######################################
+gate_kind_case() {
+  local pattern kind statement="case \"\$reason\" in"
+  for pattern kind in "${GATE_REASON_KINDS[@]}"; do
+    statement+=" ${pattern}) kind=${kind} ;;"
+  done
+  print -r -- "${statement} *) kind=${KIND_UNKNOWN} ;; esac"
+}
+
+#######################################
 # The gate before any keys are sent (tmux_pane_gate_refusal: opted in, not in copy mode or synchronized,
 # an idle shell, last line ends in the prompt), under the pane's lock so two callers cannot both pass it.
-# Any failure prints why plus the pane tail and exits untyped. The lock is released after the send.
+# A refusal on a pane that closed since it resolved is EXIT_NO_TARGET with the inventory, as in resolve_block:
+# the lib reads a gone pane as not opted in. Any other refusal prints why, its REFUSED_KIND line and the pane
+# tail, and exits untyped with the kind's code. The lock is released after the send.
+# Globals: REFUSED_KIND_PREFIX KIND_* EXIT_BUSY EXIT_NOT_OPTED_IN EXIT_NO_TARGET
 # Arguments: $1 quoted_prompt_end  $2 lines
 # Returns: the script lines on stdout
 #######################################
 gate_block() {
   local quoted_prompt_end="${1}" lines="${2}"
-  local tail_cmd="tmux capture-pane -p -t \"\$pane\" -S -${lines} | awk ${(qq)AWK_NONBLANK} | tail -n ${lines}"
-  print -r -- "tmux_pane_lock \"\$pane\" || { echo \"REFUSED: \$label another caller is typing into it\"; ${tail_cmd}; exit ${EXIT_BUSY}; }"
+  print -r -- "tmux_pane_lock \"\$pane\" || { echo \"REFUSED: \$label another caller is typing into it\"; echo ${(qq)REFUSED_KIND_PREFIX}${KIND_OTHER_CALLER}; $(pane_tail_cmd "${lines}"); exit ${EXIT_BUSY}; }"
   print -r -- "trap 'tmux_pane_unlock \"\$pane\"' EXIT"
   print -r -- "reason=\$(tmux_pane_gate_refusal \"\$pane\" ${quoted_prompt_end}); rc=\$?"
-  print -r -- "if [ \$rc -ne 0 ]; then echo \"REFUSED: \$label \$reason\"; ${tail_cmd}; exit \$rc; fi"
+  print -r -- "if [ \$rc -ne 0 ]; then"
+  print -r -- "  tmux list-panes -a -F '#{pane_id}' | awk -v p=\"\$pane\" '\$1 == p {f = 1} END {exit !f}' || { echo \"REFUSED: no pane matches \$target\"; $(inventory_line); exit ${EXIT_NO_TARGET}; }"   # sh, no pipefail; awk reads to EOF  # lint: ok
+  print -r -- "  echo \"REFUSED: \$label \$reason\"; $(gate_kind_case); echo ${(qq)REFUSED_KIND_PREFIX}\"\$kind\"; $(pane_tail_cmd "${lines}")"
+  print -r -- "  if [ \"\$kind\" = ${KIND_NOT_OPTED_IN} ]; then exit ${EXIT_NOT_OPTED_IN}; fi; exit ${EXIT_BUSY}"
+  print -r -- "fi"
 }
 
 #######################################
@@ -624,13 +686,14 @@ gate_block() {
 # definition's bindings. Another session's binding that the stamp does not outdate refuses with
 # EXIT_BOUND_ELSEWHERE, untyped. Otherwise 'BIND: <pane> <stamp>' tells the caller to record the pane as
 # this session's (new, refreshed, or regranted by Ari).
-# Globals: STAMP_OPTION SESSION_ID EXIT_BOUND_ELSEWHERE AWK_NONBLANK
+# Globals: STAMP_OPTION SESSION_ID EXIT_BOUND_ELSEWHERE
 # Arguments: $1 bindings ('%N session since' lines)  $2 lines
 # Returns: the script lines on stdout
 #######################################
 binding_block() {
   local bindings="${1}" lines="${2}"
-  local tail_cmd="tmux capture-pane -p -t \"\$pane\" -S -${lines} | awk ${(qq)AWK_NONBLANK} | tail -n ${lines}"
+  local tail_cmd
+  tail_cmd="$(pane_tail_cmd "${lines}")"
   print -r -- "since=\$(tmux show-options -pqv -t \"\$pane\" ${(qq)STAMP_OPTION}); since=\${since:-0}"
   print -r -- "bound=\$(printf '%s\\n' ${(qq)bindings} | awk -v p=\"\$pane\" '\$1 == p {print \$2, \$3}')"
   print -r -- "bsession=\${bound%% *}; bsince=\${bound##* }; [ -n \"\$bound\" ] || bsince=0"
@@ -692,7 +755,7 @@ remote_script() {
     print -r -- "sleep 0.2; tmux_pane_unlock \"\$pane\"; trap - EXIT"
   fi
   wait_block '"$pane"' "${quoted_prompt_end}" "${wait}" "${press_enter}" "${timeout}"
-  print -r -- "tmux capture-pane -p -t \"\$pane\" -S -${lines} | awk ${(qq)AWK_NONBLANK} | tail -n ${lines}"
+  pane_tail_cmd "${lines}"
   print -r -- "exit \$rc"
 }
 
@@ -876,10 +939,10 @@ put_file() {
 #######################################
 # Log what a host-script exit code means for the caller. 0 logs nothing.
 # Globals: host target timeout path_prefix OPT_IN_COMMAND
-# Arguments: $1 exit_code
+# Arguments: $1 exit_code  $2 kind (the REFUSED_KIND of a 75 or 77; '' otherwise)
 #######################################
 report_exit() {
-  local exit_code="${1}"
+  local exit_code="${1}" kind="${2:-}"
   if (( exit_code == 0 )); then
     return 0
   fi
@@ -892,7 +955,7 @@ report_exit() {
     return 0
   fi
   if (( exit_code == EXIT_NOT_OPTED_IN )); then
-    log::err "Pane not opted in; nothing typed | target='${target}' hint='Ari runs ${OPT_IN_COMMAND} in that pane himself; never type it for him'"
+    log::err "Pane not opted in; nothing typed | target='${target}' kind='${kind}' hint='Ari runs ${OPT_IN_COMMAND} in that pane himself; never type it for him'"
     return 0
   fi
   if (( exit_code == EXIT_BOUND_ELSEWHERE )); then
@@ -900,7 +963,10 @@ report_exit() {
     return 0
   fi
   if (( exit_code == EXIT_BUSY )); then
-    log::err "Pane is not an idle shell at its prompt, or another caller is typing; nothing typed | target='${target}' hint='print the command in chat instead; never retry into a busy pane'"
+    log::err "Pane is not an idle shell at its prompt, or another caller is typing; nothing typed | target='${target}' kind='${kind}' hint='say nothing was typed; the command announced above stands, never reprinted; never retry into a busy pane'"
+    if [[ "${kind}" == "${KIND_UNKNOWN}" ]]; then
+      log::warn "Gate reason with no GATE_REASON_KINDS pattern | target='${target}' hint='run tests/run-refusal-kind.test.zsh; /ari-skill-update ari-driving-remote'"
+    fi
     return 0
   fi
   if (( exit_code == EXIT_NOT_FOUND )); then
@@ -956,12 +1022,36 @@ sent_exit_code() {
 }
 
 #######################################
+# The kind of a 75 or 77: the line right after the first REFUSED: line, which the host prints before the pane
+# tail; unknown when that line is not a kind. Any other exit has none, whatever the pane tail holds.
+# Globals: EXIT_BUSY EXIT_NOT_OPTED_IN REFUSED_KIND_PREFIX KIND_UNKNOWN
+# Arguments: $1 exit_code  $2 host output
+# Outputs: the kind on stdout, or nothing
+#######################################
+refusal_kind() {
+  local exit_code="${1}" output="${2}" i
+  if (( exit_code != EXIT_BUSY && exit_code != EXIT_NOT_OPTED_IN )); then
+    return 0
+  fi
+  local -a lines=("${(@f)output}")
+  for (( i = 1; i < ${#lines}; i++ )); do
+    [[ "${lines[i]}" == 'REFUSED: '* ]] || continue
+    if [[ "${lines[i+1]}" == "${REFUSED_KIND_PREFIX}"* ]]; then
+      print -r -- "${lines[i+1]#${REFUSED_KIND_PREFIX}}"
+      return 0
+    fi
+    break
+  done
+  print -r -- "${KIND_UNKNOWN}"
+}
+
+#######################################
 # Gate, check the binding, type the command into the pane, record the binding, and print the pane.
 # Globals: host target cmd press_enter wait run_log lines timeout path_prefix prompt_end name dry_run
 # Returns: 0 prompt back; EXIT_TIMEOUT; EXIT_NO_TARGET; EXIT_NOT_OPTED_IN; EXIT_BOUND_ELSEWHERE; EXIT_BUSY; the host script's code otherwise
 #######################################
 run_command() {
-  local script exit_code=0 bind_line
+  local script exit_code=0 bind_line kind
   script="$(remote_script "${target}" "${cmd}" "${press_enter}" "${wait}" "${lines}" "${timeout}" "${path_prefix}" "${prompt_end}" "${session}" "${run_log}" "$(bindings_of "${name}")")"
   log::info "Typing into pane | host='${host}' target='${target}' enter='${press_enter}' wait='${wait}' cmd='${cmd}'"
   if [[ "${dry_run}" == "true" ]]; then
@@ -982,7 +1072,8 @@ run_command() {
   if [[ -n "${bind_line}" ]]; then write_binding "${name}" "${bind_line%% *}" "${bind_line##* }"; fi
   print -r -- "${output}"
   exit_code="$(sent_exit_code "${exit_code}" "${output}")"
-  report_exit "${exit_code}"
+  kind="$(refusal_kind "${exit_code}" "${output}")"
+  report_exit "${exit_code}" "${kind}"
   # The pane answered, even late: the definition is current.
   if (( exit_code == 0 || exit_code == EXIT_TIMEOUT )); then
     record_definition "${name}" false "" "" true
