@@ -681,6 +681,9 @@ read_section() {
     deferred)          section_json[$name]="$(count_section "${REPLY_OUT}" "${REPLY_RC}" "${REPLY_ERR}")" ;;
     host_git)          section_json[$name]="$(git_section "${REPLY_OUT}" "${REPLY_RC}" "${REPLY_ERR}")" ;;
   esac
+  if [[ "${name}" == ready && -n "${bd_missing}" ]]; then   # the read that found the precondition carries it too, so triage sees one cause for all six
+    section_json[$name]="$(jq -cn --arg e "${bd_missing}" '{error: $e, precondition: true}')"
+  fi
   log::info "Read section | section='${name}' rc='${REPLY_RC}'"
 }
 

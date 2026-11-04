@@ -1,58 +1,55 @@
 # Briefing example
 
-The briefing runs from the acknowledgement to the first `---`, rendered from `frontier.example.json` by the spec in `briefing.md`; the sections after it are scenarios the spec names, each with the capture detail it needs inline and a "Not this". Every line a script prints (the header, a cut-off paragraph, a waiting line, the away line) is pasted as printed, never retyped.
+The briefing runs between the first two `---` lines, rendered from `frontier.example.json` by the spec in `briefing.md`; the sections after it are scenarios the spec names, each with the capture detail it needs inline and a "Not this". Every line a script prints (the header, a cut-off paragraph, a waiting line, the away line) is pasted as printed, never retyped.
 
 ---
 
-Operator mode on. Reading the tracker through `machine=personal|ID=%18|pane=3.1|nickname=homelab`: seven read-only commands, up to 45 s each; if your row is first, I type it onto that prompt, un-entered, and Enter is your yes. Answers: yes, row N, a bead id, no, or `stop operator mode`.
+Operator mode on. Reading the tracker through `machine=personal|ID=%18|pane=3.1|nickname=homelab`: seven read-only commands, up to 45 s each; the table lists only what you can do, and I type row 1 onto that prompt, un-entered, unless it destroys or ships work; Enter is your yes. Answers: yes, row N, a bead id (I start that bead), no, or `stop operator mode`.
 
-Ready 2, in progress 1, human 1, blocked 2, stale 1; laptop abc1234 dirty 1; read 09:07Z; fresh read
+Ready 3, in progress 1, human 1, blocked 2, stale 1; laptop abc1234 dirty 1; read 09:07Z; fresh read
 
 **First principles.** The work is tracked as *beads* (one tracked issue each) in the `bd` workspace `~/beads` on the host `laptop`, which Claude reaches only by typing into one tmux *pane* (`machine=personal|ID=%18|pane=3.1|nickname=homelab`, the pane's full label); the checkout there is `~/homelab`, on this Mac `/Users/you/homelab`; a bead is *ready* (open, nothing blocks it), *in progress* (claimed), *stale* (untouched fourteen days), a *human gate* (only Ari answers it) or *blocked* (waits on another bead); *doctor* is `bin/doctor.sh`, the project's health command.
 
 **State right now**
-- 2 ready; the top is beads-abc "Fix the widget" (P1).
+- 3 ready; the top is beads-abc "Fix the widget" (P1).
 - 1 in progress: beads-ip1 "Half done", held by claude, stale.
 - 1 waits on you: beads-h1 "Decide the indexers".
 - 2 blocked, 2 deferred.
 - Laptop checkout `~/homelab`: `bin/lab` modified and uncommitted; last commits abc1234 first subject, bcd2345 second subject, cde3456 third subject; this Mac's `/Users/you/homelab` is clean at f00ba12.
 - `bin/doctor.sh` has not been run this capture.
 
-| # | Action | Priority | Who | Why now |
-|---|--------|----------|-----|---------|
-| 1 | beads-abc "Fix the widget": claim it, branch, PR; no merge | P1 | Claude | it blocks beads-bl1 |
-| 2 | beads-h1 "Decide the indexers": record your answer (my recommendation: stop at Prowlarr's 1337x and TPB, the two its text names) | P2 | Ari | it blocks beads-bl2 |
-| 3 | Show the uncommitted edit to `bin/lab` | P2 | Ari | a dirty checkout hides what beads-abc will change; no row waits on it, so P2 |
-| 4 | beads-ip1 "Half done": resume it, commit, PR; no merge | P2 | Claude | in progress, held by claude, untouched 15 days |
-| 5 | beads-def "Polish the frob": claim it, branch, PR; no merge | P2 | Claude | next ready, frees nothing |
+| # | Action | Priority | Why now |
+|---|--------|----------|---------|
+| 1 | beads-h1 "Decide the indexers": record your answer (my recommendation: stop at 1337x and TPB) | P2 | it blocks beads-bl2 |
+| 2 | Show the uncommitted edit to `bin/lab` | P2 | `bin/lab` is uncommitted on the host; no bead waits on it |
 
-Row 2, for `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not typed yet:
+Row 1, typed into `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not entered:
 ```zsh
 bd -C ~/beads human respond beads-h1 -r "stop at 1337x and TPB"
 ```
 Records the answer on the bead and closes it. Prints the bead id and `closed`.
 
-Row 3, for `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not typed yet:
+Row 2, for `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not typed yet:
 ```zsh
 git -C ~/homelab diff bin/lab
 ```
 Shows the uncommitted change to `bin/lab` before you decide its fate. Prints a unified diff, or nothing when only the mode changed.
 
-Blocked: 2 (beads-bl1 on beads-abc, beads-bl2 on beads-h1). Deferred: 2. Stale: 1 (beads-ip1, 15d). Also ready: the `bin/doctor.sh` run.
+Blocked: 2 (beads-bl1 on beads-abc, beads-bl2 on beads-h1). Deferred: 2. Stale: 1 (beads-ip1, 15d).
 
-A no is a correction. Row 1 next?
+A no is a correction. Row 1 is on `machine=personal|ID=%18|pane=3.1|nickname=homelab`: Enter it?
 
 ---
 
 ## Why the rows sit where they do
 
-Priority first (beads-abc is the one P1), then blockers (beads-h1 frees beads-bl2), then Ari before Claude (the show row), then Claude's: an in-progress bead held by claude goes ahead of the ready ones of its priority, and the health run, sixth, goes to the trailing line. The show row has no bead and no row waits on it, so it is P2; a row that stood in front of a P1 bead's row would be P1, said in Why now.
+Both rows are his: beads-h1 first on blockers (it frees beads-bl2), then the show row. The show row has no bead and no bead waits on it, so it is P2; a row that stood in front of a P1 bead would be P1, said in Why now. The recommendation is the `Recommendation:` line of `human.text`. Everything else is Claude's and only a state bullet: beads-abc and beads-def (ready), beads-ip1 (held by claude), the `bin/doctor.sh` run, and beads-epic (`type` `epic`, the parent of beads-abc), which counts among the 3 ready and is never named.
 
-Not this: the human row at P1 because what it blocks is P1; a row with a bead keeps that bead's priority.
+Not this: a row for beads-abc, beads-ip1, the doctor run, or "beads-epic: no write; it closes once its children close"; none is his to do. Not this either: the human row at P1 because what it blocks is P1; a row with a bead keeps that bead's priority.
 
-## Row 1 is his
+## How row 1 was typed
 
-A later capture, after row 1 landed (beads-abc claimed, its PR open), puts beads-h1 first. Row 1 is his, on the capture's pane, neither destroys nor irreversible, and no agent is using the pane, so it is typed before the table is shown; its `TYPED:` line is the key, and `pending.zsh set` records the typed text so the next capture knows the line on his prompt is his row even after a compaction. The block holds the bare command; `run.zsh` wrapped it in `run_log` (the capture's `typed` entries quote paths as `~/"beads"`; that is the script's own quoting, his row is bare):
+Row 1 is on the capture's pane, neither destroys nor irreversible, and no agent is using the pane, so it is typed before the table is shown; its `TYPED:` line is the key, and `pending.zsh set` records the typed text so the next capture knows the line on his prompt is his row even after a compaction. The block holds the bare command; `run.zsh` wrapped it in `run_log` (the capture's `typed` entries quote paths as `~/"beads"`; that is the script's own quoting, his row is bare):
 
 ```zsh
 zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %18 --no-enter --cmd 'bd -C ~/beads human respond beads-h1 -r "stop at 1337x and TPB"'
@@ -63,18 +60,6 @@ SENT
 ```
 ```zsh
 zsh $HOME/.claude/skills/ari-operator-mode/bin/pending.zsh set --text 'run_log '"'"'bd -C ~/beads human respond beads-h1 -r "stop at 1337x and TPB"'"'"''
-```
-
-The row then renders:
-
-```
-Row 1, typed into `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not entered:
-```zsh
-bd -C ~/beads human respond beads-h1 -r "stop at 1337x and TPB"
-```
-Records the answer on the bead and closes it. Prints the bead id and `closed`.
-
-A no is a correction. Row 1 is on `machine=personal|ID=%18|pane=3.1|nickname=homelab`: Enter it?
 ```
 
 Not this: typing it with Enter, or typing it again next turn without his word.
@@ -111,10 +96,10 @@ Not this: typing it anyway, which parks a line on the prompt and makes every com
 
 ## A destructive row first
 
-A later capture, after row 3's diff was seen: the dirty checkout is now row 1 and destroys, so nothing is typed and the question names it:
+A later capture, after he pasted row 2's diff: the dirty checkout is now row 1 and destroys, so nothing is typed and the question names it:
 
 ```
-| 1 | **destroys:** the uncommitted edit to `bin/lab` | P2 | Ari | the diff showed a stray debug line |
+| 1 | **destroys:** the uncommitted edit to `bin/lab` | P2 | you pasted its diff; keep or discard |
 
 Row 1, for `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not typed: destroys the edit to `bin/lab`; typed after your yes:
 ```zsh
@@ -129,10 +114,10 @@ Not this: "ok" taken as that yes; a destroying row proceeds on "yes", its row nu
 
 ## A local row
 
-When the row's pane is this Mac's, the command is the click-to-type link `/ari-driving-tmux` mints, under that pane's label:
+A capture whose `local_git.dirty` lists ` M bin/lab` gives a row on this Mac's pane; the command is the click-to-type link `/ari-driving-tmux` mints, under that pane's label:
 
 ```
-Row 3, for `ID=%4|pane=2.1|nickname=homelab`, not typed yet:
+Row 2, for `ID=%4|pane=2.1|nickname=homelab`, not typed yet:
 [type: git -C /Users/you/homelab diff bin/lab](<the link that skill minted>)
 Shows the uncommitted change. Prints a unified diff.
 ```
@@ -142,19 +127,15 @@ Shows the uncommitted change. Prints a unified diff.
 He pressed Enter on his typed row; `pending.zsh clear`, then the capture, then the reply:
 
 ```
-Ready 1, in progress 2, human 0, blocked 1, stale 1; laptop abc1234 dirty 1; read 09:12Z; after row 1
+Ready 4, in progress 1, human 0, blocked 1, stale 1; laptop abc1234 dirty 1; read 09:12Z; after row 1
 
-Row 1 printed `beads-h1 closed`; the capture no longer lists it under human, and beads-bl2 is no longer blocked.
+Row 1 printed `beads-h1 closed`; the capture no longer lists it under human, and beads-bl2 is ready.
 
-| # | Action | Priority | Who | Why now |
-|---|--------|----------|-----|---------|
-| 1 | beads-abc "Fix the widget": commit, PR; no merge | P1 | Claude | in progress, held by claude; it blocks beads-bl1 |
-| 2 | Show the uncommitted edit to `bin/lab` | P2 | Ari | a dirty checkout hides what beads-abc will change |
-| 3 | beads-ip1 "Half done": resume it, commit, PR; no merge | P2 | Claude | in progress, held by claude, untouched 15 days |
-| 4 | beads-def "Polish the frob": claim it, branch, PR; no merge | P2 | Claude | next ready, frees nothing |
-| 5 | Run `bin/doctor.sh` on the laptop | P2 | Claude | health unknown this capture |
+| # | Action | Priority | Why now |
+|---|--------|----------|---------|
+| 1 | Show the uncommitted edit to `bin/lab` | P2 | `bin/lab` is uncommitted on the host; no bead waits on it |
 
-Row 2, for `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not typed yet:
+Row 1, typed into `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not entered:
 ```zsh
 git -C ~/homelab diff bin/lab
 ```
@@ -162,50 +143,95 @@ Shows the uncommitted change to `bin/lab`. Prints a unified diff, or nothing whe
 
 Blocked: 1 (beads-bl1 on beads-abc). Deferred: 2. Stale: 1 (beads-ip1, 15d).
 
-A no is a correction. Row 1 next?
+A no is a correction. Row 1 is on `machine=personal|ID=%18|pane=3.1|nickname=homelab`: Enter it?
 ```
 
-Not this: typing row 2 because it is his; only row 1 is ever typed. Not this either: the outcome sentence written before the capture ran.
+Not this: the outcome sentence written before the capture ran. Not this either: a row for beads-bl2 now that it is ready; it is Claude's, a state bullet.
 
-## A Claude row reports
+## An instruction with the invocation
 
-Row 1 was Claude's; three progress lines, each the header and one sentence with no question mark, then at its end a Capture before the outcome:
+He invoked `/ari-operator-mode fix the widget`: an open instruction, so no row; the entry briefing is the one above and only its question changes, while row 1 still waits for his Enter:
 
 ```
-Ready 1, in progress 2, human 0, blocked 1, stale 1; laptop abc1234 dirty 1; read 09:12Z; after row 1
+A no is a correction. Start beads-abc "Fix the widget": claim it, branch, PR; no merge?
+```
+
+Mid-mode, "Fix the widget" (the title verbatim) is its own yes and asks nothing; "the widget stuff" gets "Which row?".
+
+Not this: a row 1 "(your instruction)" for work Claude runs; that row is only for an instruction that needs a permission Claude lacks.
+
+## Claude's run reports
+
+He said yes to that question; three progress lines, each the newest capture's header and one sentence with no question mark:
+
+```
+Ready 3, in progress 1, human 1, blocked 2, stale 1; laptop abc1234 dirty 1; read 09:07Z; fresh read
 
 Claimed beads-abc "Fix the widget"; branch abc-widget.
 ```
 
-Not this: "PR opened for beads-abc" from memory; the end of the row is a Capture, and the outcome sentence names what the new JSON shows plus the command's last printed line, quoted.
-
-## Nothing is unblocked
+Then "Committed 8542e79 on abc-widget." and "Opened PR #12 for beads-abc.", each under the same header. At its end, a Capture, then the after-a-run briefing, which opens:
 
 ```
-Ready 0, in progress 0, human 0, blocked 2, stale 0; laptop abc1234 clean; read 09:20Z; fresh read
+Ready 2, in progress 2, human 1, blocked 2, stale 1; laptop abc1234 dirty 1; read 09:15Z; after beads-abc
 
-Nothing is unblocked: 2 blocked, 2 deferred, 0 waiting on you.
-
-Blocked: 2 (beads-bl1 on beads-abc, beads-bl2 on beads-h1). Deferred: 2.
-
-A no is a correction. Nothing is unblocked: read again, or `stop operator mode`?
+beads-abc landed: `gh pr create` printed `…/pull/12`; the capture lists beads-abc in progress.
 ```
+
+Not this: "PR opened for beads-abc" from memory; the end of the run is a Capture, and the outcome sentence names what the new JSON shows plus the command's last printed line, quoted.
+
+## A refused run
+
+He said "run the doctor"; the permission layer refused Claude's `run.zsh` call for `bin/doctor.sh`. The next briefing's row is his until he reports its run:
+
+```
+| 1 | Run `bin/doctor.sh` | P2 | my run was refused: "<the refusal, verbatim>" |
+
+Row 1, typed into `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not entered:
+```zsh
+bin/doctor.sh
+```
+Runs the project's health checks. Prints one PASS or FAIL line per check.
+```
+
+## Nothing needs you
+
+A later fresh read: no First principles, and Claude's work stays a state bullet that nothing asks about:
+
+```
+Ready 1, in progress 1, human 0, blocked 1, stale 0; laptop abc1234 clean; read 09:20Z; fresh read
+
+**State right now**
+- 1 ready; the top is beads-def "Polish the frob" (P2).
+- 1 in progress: beads-abc "Fix the widget", held by claude.
+- 1 blocked, 2 deferred.
+- Laptop checkout `~/homelab` clean; last commits abc1234 first subject, bcd2345 second subject, cde3456 third subject.
+- `bin/doctor.sh` has not been run this capture.
+
+Nothing needs you.
+
+Blocked: 1 (beads-bl1 on beads-abc). Deferred: 2.
+
+A no is a correction. Nothing needs you; `stop operator mode` leaves. Read again?
+```
+
+Not this: "Nothing needs you." when `human` could not be read; that is "Nothing known to need you; `human` could not be read."
 
 ## Asked what the capture cannot answer
 
 Asked "is beads-h1 still open?":
 
 ```
-Not in this capture; a fresh capture would read `human`. Or say `stop operator mode` to ask freely.
+Not in this capture; a fresh capture would read `human`. Or say `stop operator mode` to ask freely. A no is a correction. Row 1 is on `machine=personal|ID=%18|pane=3.1|nickname=homelab`: Enter it?
 ```
 
 Asked what beads-abc's body says:
 
 ```
-Not in this capture; no section reads a bead's body. Reading beads-abc is a Claude row: `bd -C ~/beads show beads-abc`. Or say `stop operator mode` to ask freely.
+Not in this capture; no section reads a bead's body. Reading beads-abc is Claude's on your word: `bd -C ~/beads show beads-abc`. Or say `stop operator mode` to ask freely. A no is a correction. Row 1 is on `machine=personal|ID=%18|pane=3.1|nickname=homelab`: Enter it?
 ```
 
-Asked "tell me more about blocked": the `blocked.text` pasted verbatim in a fenced block, then "A no is a correction. Row 1 next?". Not this: a summary of it.
+Asked "tell me more about blocked": the `blocked.text` pasted verbatim in a fenced block, then the briefing's one question. Not this: a summary of it.
 
 ## Cut off
 
@@ -319,23 +345,23 @@ Not this: the away line when the capture ended `holds_text` or `busy`; the host 
 
 ```
 Not: "beads-abc is done, I finished it before you stepped away."
-This: "beads-abc 'Fix the widget' is ready (P1)."            ← the capture lists it under ready; a belief the tracker is stale is a row, never an edit
+This: "beads-abc "Fix the widget" is ready (P1)."            ← the capture lists it under ready; Claude's belief that the tracker is stale is neither a row nor an edit
 Not: "Step 2 is the compose variable, as in the one-liner."
 This: "The compose variable in apps/media/compose.yaml."     ← paths and names, no session shorthand
 Not: "Since this morning we merged the PR and fixed the doctor."
 This: "Last commits: abc1234 first subject; bcd2345 second subject."   ← host_git.log, nothing more
 Not: "Doctor is green."
-This: "bin/doctor.sh has not been run this capture."         ← health.ran is false; the run is a row
+This: "bin/doctor.sh has not been run this capture."         ← health.ran is false; the run is Claude's, on his word, never a row
 Not: (off, to "where did we leave off?") a recap from the transcript
 This: "Want operator mode? `/ari-operator-mode` reads the tracker, the checkouts and your pane and briefs you from scratch."
-Not: (to "fix the widget") a new task
-This: a yes to the beads-abc row                             ← its title verbatim; "the widget stuff" would get "Which row?"
+Not: (mode on, to "fix the widget") a new task Claude invents
+This: Claude works beads-abc, his instruction and its yes      ← its title verbatim; "the widget stuff" would get "Which row?"
 Not: (to "do rows 1 to 3") three rows run
 This: "Rows run one at a time; this yes is row 1's." then row 1   ← one yes, one row
 Not: (to "no, the laptop checkout is clean, I committed it") dropping the dirty row
 This: "- Ari said: `~/homelab` is clean; the capture still shows `bin/lab` modified." and the row stays until the next capture
 Not: (to "that bead is done" about beads-def) editing the state bullet
-This: a row: beads-def "Polish the frob": close it, `bd -C ~/beads close beads-def`   ← a tracker correction is a row
+This: Claude runs `bd -C ~/beads close beads-def`, then Capture   ← he named the bead and the act: his yes
 Not: (to a bare "no") a re-render
 This: "What is wrong?"
 ```

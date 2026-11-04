@@ -40,6 +40,15 @@
       "parent": null,
       "assignee": null,
       "updated_at": "2026-10-30T00:00:00Z"
+    },
+    {
+      "id": "beads-epic",
+      "title": "Rework the widgets",
+      "priority": 2,
+      "type": "epic",
+      "parent": null,
+      "assignee": null,
+      "updated_at": "2026-10-29T00:00:00Z"
     }
   ],
   "in_progress": [
@@ -54,7 +63,7 @@
     }
   ],
   "human": {
-    "text": "\nHuman-needed beads (1 found)\n\n  beads-h1 Decide the indexers: Prowlarr has 1337x and TPB, add more or stop there\n    Priority: P2\n",
+    "text": "\nHuman-needed beads (1 found)\n\n  beads-h1 Decide the indexers: Prowlarr has 1337x and TPB, add more or stop there\n    Recommendation: stop at 1337x and TPB\n    Priority: P2\n",
     "ids": [
       "beads-h1"
     ],

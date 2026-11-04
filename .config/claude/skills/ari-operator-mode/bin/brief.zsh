@@ -194,11 +194,12 @@ print_header() {
               elif (v | type) == "object" and (v | has("error")) then "failed" else "?" end;
     def ids(v): if (v | type) == "object" and (v | has("ids")) then (v.ids | length | tostring)
                 elif (v | type) == "object" and (v | has("error")) then "failed" else "?" end;
-    def git_line: [
+    def git_line: if (.host_git | type) == "object" and (.host_git | has("error")) then .host_definition + " checkout failed"   # never this Mac in its place: that hides the failure
+      else [
         (if (.host_git | type) == "object" and (.host_git | has("log")) then {label: .host_definition, g: .host_git} else empty end),
         (if (.local_git | type) == "object" and (.local_git | has("log")) then {label: "this Mac", g: .local_git} else empty end)
       ] | if length == 0 then "checkout unread"
-          else .[0] | .label + " " + ((.g.log[0].hash) // "no commits") + " " + (if (.g.dirty | length) == 0 then "clean" else "dirty " + (.g.dirty | length | tostring) end) end;
+          else .[0] | .label + " " + ((.g.log[0].hash) // "no commits") + " " + (if (.g.dirty | length) == 0 then "clean" else "dirty " + (.g.dirty | length | tostring) end) end end;
     (.captured_at // "" | if . == "" then "" else sub("^[0-9-]+T"; "") | sub(":[0-9]{2}Z$"; "Z") end) as $at |
     (if (.waited_s // 0) > 0 then "; waited " + (.waited_s | tostring) + "s for " + .pane else "" end) as $waited |
     (if .away_ended == true then "; host answered" else "" end) as $answered |
