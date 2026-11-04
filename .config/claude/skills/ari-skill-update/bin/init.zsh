@@ -5,6 +5,7 @@
 
 set -euo pipefail
 
+readonly SCRIPT_DIR="${0:A:h}"
 readonly SKILLS_DIR="${HOME}/.claude/skills"
 readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
 if [[ ! -r "${LIB_LOGGING}" ]]; then
@@ -135,8 +136,9 @@ ${c_bold}Options:${c_rst}
 
 ${c_bold}Output:${c_rst}
   key=value lines (skill, is_new, state, tier, source, skill_dir, investigation_dir,
-  scratchpad) plus a FILES section listing the skill's files to read. Creates the
-  investigation folder and a pre-filled scratchpad. state/tier per
+  scratchpad, proposal) plus a FILES section listing the skill's files to read.
+  Creates the investigation folder and a pre-filled scratchpad; proposal is the
+  path the driver writes the proposal to (not created here). state/tier per
   /ari-dotfiles-skill-registry; source is submodule:<path> when a submodule's
   skills/ holds the skill, else empty.
 EOF
@@ -167,7 +169,7 @@ main() {
     help
     return 1
   fi
-  if [[ "${skill}" == */* ]]; then
+  if [[ "${skill}" == */* || "${skill}" == "." || "${skill}" == ".." ]]; then
     log::err "Invalid skill name | skill='${raw_skill}' expected='a directory name under ${SKILLS_DIR}'"
     return 1
   fi
@@ -190,11 +192,12 @@ main() {
 
   local purpose
   purpose="$(read_frontmatter_description "${skill_md}")"
-  [[ -n "${purpose}" ]] || purpose="<no description: in frontmatter — synthesize from the heading>"
+  [[ -n "${purpose}" ]] || purpose="<no single-line description field in the frontmatter — synthesize from the heading>"
 
-  local inv_dir scratchpad
+  local inv_dir scratchpad proposal
   inv_dir="$(mk_investigation_dir /tmp/skill-update "${skill}")"
   scratchpad="${inv_dir}/scratchpad.md"
+  proposal="${inv_dir}/proposal.md"
 
   cat > "${scratchpad}" <<EOF
 - **Skill**: ${skill} — \$HOME/.claude/skills/${skill}/SKILL.md — ${purpose}
@@ -210,7 +213,7 @@ EOF
 
   local files=""
   if [[ -d "${skill_dir}" ]]; then
-    files="$(find "${skill_dir}/" \( -name .git -o -name __pycache__ -o -name node_modules \) -prune -o -type f -print | sort)"
+    files="$(find "${skill_dir}/" \( -name .git -o -name __pycache__ -o -name node_modules -o -name .DS_Store \) -prune -o -type f -print | sort)"
   fi
   local file_count=0
   [[ -n "${files}" ]] && file_count="$(echo "${files}" | wc -l | tr -d ' ')"
@@ -228,6 +231,7 @@ source=${source}
 skill_dir=${skill_dir}
 investigation_dir=${inv_dir}
 scratchpad=${scratchpad}
+proposal=${proposal}
 EOF
   echo "=== start FILES ==="
   [[ -n "${files}" ]] && echo "${files}"
