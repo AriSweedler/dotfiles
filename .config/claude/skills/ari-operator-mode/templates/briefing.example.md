@@ -66,7 +66,7 @@ Not this: typing it with Enter, or typing it again next turn without his word.
 
 ## A row the pane refused
 
-The same run exited 75 with `REFUSED: machine=personal|ID=%18|pane=3.1 running nvim, not a shell`; the row renders with the why and the move, and is typed once on his yes:
+The same run exited 75 with `REFUSED: machine=personal|ID=%18|pane=3.1 running nvim, not a shell` and, on the next line, `REFUSED_KIND: not_a_shell`; the kind, never the words, makes the reason (`nvim` is no agent's command, so `busy`), the why is the words quoted, and the row is typed once on his yes:
 
 ```
 Row 1, for `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not typed: running nvim, not a shell; wait, or name another pane:

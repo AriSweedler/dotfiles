@@ -55,7 +55,7 @@ Every row carries its command under the table, keyed by row and pane, with one s
 | When | Key, ending in the colon that opens the fence |
 |---|---|
 | row 1, `run.zsh --no-enter` printed `TYPED:` | "Row 1, typed into `<label>`, not entered:" |
-| row 1, the run was refused (exit 75, 70, 76, 77 or 255) | "Row 1, for `<label>`, not typed: <the why after `REFUSED: <label>`>; <the move from Cut-off reasons>:" |
+| row 1, the run was refused (exit 75, 70, 76, 77 or 255) | "Row 1, for `<label>`, not typed: <the why after `REFUSED: <label>`>; <the move from Cut-off reasons, for the reason the `REFUSED_KIND:` line gives (SKILL.md › How a 75 is classified)>:" |
 | row 1, no run attempted: `waited_s` > 0, or a background agent of this session is using the pane | "Row 1, for `<label>`, not typed: another agent is using this pane; typed when it is free:" |
 | row 1 opens with **destroys:** or **irreversible:** | "Row 1, for `<label>`, not typed: <destroys|ships> <what>; typed after your yes:" |
 | a row on this Mac (a `local_git` row, or any row of a `--local` capture) | "Row N, for `<label>`, a link:", or "Row N, for `<label>`, a link; it destroys <what>:" |

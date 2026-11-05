@@ -16,7 +16,7 @@ Every reply in this mode is written for a reader who has read nothing, does not 
 - **This session's work only.** NEVER a row, a bullet that names it, or a write for another session's bead or an edit this session did not make, even when Ari names it (Reference › Yes and no): every capture carries this session's scope and own paths (Workflow › Resolve the inputs), and a `bd` write goes only to a bead the newest capture lists.
 - **Seven named facts may come from outside the JSON** (Reference › Outside facts); nothing else from the session enters a briefing.
 - **NEVER run the health command unasked.** Not in the capture, not by hand: it is Claude's work, run once through `run.zsh` only as his instruction, and its output enters through the pane read of that run; it is a row only after the permission layer refuses that run (Reference › Row triage).
-- **Cut off is the whole message.** `cut_off` not null: the reply is what `bin/brief.zsh --cut-off` prints and nothing else; no second read, no `--local` or other pane as a substitute, no `local_git` or `health` even though they filled; his next message starts with a fresh Capture and authorizes no row. An announced absence is the away line, not his P0 (Reference › Announced absence). This renders `/ari-bead-driven-development`'s Cut off rule (Reference › Overrides).
+- **Cut off is the whole message.** `cut_off` not null: the reply is what `bin/brief.zsh --cut-off` prints and nothing else but the spawn line of a `skill_fix=` update (Workflow › Capture); no second read, no `--local` or other pane as a substitute, no `local_git` or `health` even though they filled; his next message starts with a fresh Capture and authorizes no row. An announced absence is the away line, not his P0 (Reference › Announced absence). This renders `/ari-bead-driven-development`'s Cut off rule (Reference › Overrides).
 - **A run's end is a Capture.** Row 1 or Claude's run of his instruction landed, failed, or he reported on it: run Capture before writing one word about the outcome; the outcome sentence names what the new JSON shows plus the command's last printed line, quoted (Reference › Outside facts).
 - **Terse, then one question.** At most six state bullets and exactly one question mark per reply, the last thing in it, inside no code span (`templates/briefing.md` › Exactly one question names the forms); the two replies with none are a progress line on a long Claude run (Workflow › Proceed) and a completion-notice line (Reference › Announced absence). Depth on request is the named section's raw text, verbatim.
 - **One yes, one thing.** A yes authorizes only what the one question names (row 1, or his open instruction), or the bead he names with it (Reference › Yes and no); when it lands, Capture, Brief, ask again.
@@ -109,7 +109,7 @@ The only facts a briefing may carry that are not in the capture's JSON:
 |---|---|---|
 | a refused command | the permission layer's refusal this session, quoted verbatim | his row, with the refusal |
 | his open instruction | his words this session (Reference › Terms) | the one question |
-| the typed result | this turn's `TYPED:` or `REFUSED:` from `run.zsh --no-enter` on row 1 | row 1's key |
+| the typed result | this turn's `TYPED:`, or `REFUSED:` and the `REFUSED_KIND:` line after it, from `run.zsh --no-enter` on row 1 | row 1's key; the kind picks the move (Reference › How a 75 is classified) |
 | a background agent | one this session launched for this pane whose completion notice has not arrived | the pane is another agent's (Reference › Shared pane) |
 | the run's last line | the last line row 1's command, or Claude's run of his instruction, printed, quoted | the outcome sentence after that run's Capture |
 | Ari said | a fact he states that the tracker does not hold | one bullet "Ari said: …"; the capture's fact stays until the next capture |
@@ -121,26 +121,39 @@ The only facts a briefing may carry that are not in the capture's JSON:
 |---|---|---|
 | `not_opted_in` | `run.zsh` exit 77 | run `ari-driving on` there |
 | `other_session` | exit 76 | `ari-driving off` then `on` there, or another pane |
-| `busy` | exit 75, the pane running a command Ari typed (an editor, a TUI, copy mode, a bare command) | wait, or name another pane |
+| `busy` | exit 75, the pane running a command Ari typed (an editor, a TUI, a bare command), in copy mode or synchronized, or refused for a reason `run.zsh` could not name (Reference › How a 75 is classified) | wait, or name another pane |
 | `holds_text` | exit 75, un-entered text on the prompt that is not his pending row, whoever typed it; the line is quoted | clear it or run it, then tell me |
 | `own_command` | exit 75, the pane ran an agent's command for the whole capture budget | a wait, not his: one waiting line with its question; his next message captures again |
 | `own_command_persists` | exit 75, the previous capture by this session on this pane already waited on that same command | the same wait; "Wait, or name another pane?" |
 | `row_pending` | exit 75, his pending row sits un-entered on the prompt | his: press Enter there, or clear it, then tell me |
 | `row_running` | exit 75, his pending row is running | his: tell me what it printed when it ends |
-| `no_pane` | exit 70; the host's panes are listed | name one by its `ID=%N` |
+| `no_pane` | exit 70 (the pane closed before or during the gate), or a 75 of kind `pane_gone`; the host's panes are listed | name one by its `ID=%N` |
 | `ambiguous_pane` | the target matched two panes; both listed | name one by its `ID=%N` |
 | `read_timed_out` | exit 124 with no complete stream; a read is still running there | tell me when its prompt is back; never resent; with `away`, the away line |
 | `host_unreachable` | exit 255 from ssh, on a read or on `--list`; the error is quoted | open `ssh` to the host once in a pane; with `away`, the away line |
 | `bad_definition` | `--list` failed with another code (an unknown definition, a bad flag); the error is quoted | Claude's to fix, never his, never the absence; "Shall I fix the definition and read again?" |
 | `refused_text` | exit 1; the reader's own text was refused | a bug in the reader, not his to clear; his yes to the paragraph's question is one rewritten read |
 
-The host reads stop at the first cut-off and the rest are unread; `local_git` and `health` still fill. Every P0 paragraph ends with the standing alternatives as statements (name another pane by its `ID=%N`, or `stop operator mode`), then its one question. How a 75 is classified, in order:
+The host reads stop at the first cut-off and the rest are unread; `local_git` and `health` still fill. Every P0 paragraph ends with the standing alternatives as statements (name another pane by its `ID=%N`, or `stop operator mode`), then its one question.
 
-1. the `REFUSED_KIND:` line right after `run.zsh`'s `REFUSED:` (`/ari-driving-remote` › The gate), never the `REFUSED:` words: `copy_mode`, `synchronized`, `pane_gone`: `busy`; `unknown`, an unmapped kind or no kind line: `busy`, and the stderr log names the `/ari-skill-update` to run; `other_caller` (another `run.zsh` holds the pane's lock): step 4's wait; `not_a_shell`, `not_at_prompt`: on to step 2.
-2. the pane tail decides, the last prompt line's command joined across its wrapped lines: it is the pending row, the whole command (`--pending`, defaulted from `bin/pending.zsh`): `row_pending` un-entered, `row_running` running.
-3. un-entered text that is not his row: `holds_text`, whoever typed it; no wait clears it.
-4. a running agent's command (Reference › Terms): retry every 5 s (`FRONTIER_RETRY_S`) within the budget (`--timeout`); `own_command` when the budget is spent; `own_command_persists` when the previous capture already waited on it.
-5. anything else running: `busy`.
+### How a 75 is classified
+
+By the `REFUSED_KIND:` line right after `run.zsh`'s first `REFUSED:` line (`/ari-driving-remote` › The gate). **NEVER by the `REFUSED:` words**: they may change, and the gate's "last line does not end in the prompt (busy, or text already on the line)" names `busy` for what is `holds_text`. The words are only quoted.
+
+| Kind | Reason |
+|---|---|
+| `copy_mode`, `synchronized` | `busy` |
+| `pane_gone` | `no_pane`, the candidates from a fresh `--list` (as for a 70) |
+| `other_caller` (another `run.zsh` holds the pane's lock) | the agent's-command wait below |
+| `not_a_shell`, `not_at_prompt` | the pane tail decides, below |
+| `unknown`, no kind line, or a kind not in this table | his pending row on the tail is `row_pending` or `row_running`; else `busy`; `skill_fix=` names the skill to update (Workflow › Capture) |
+
+The pane tail, the last prompt line's command joined across its wrapped lines, in order:
+
+1. the pending row, the whole command (`--pending`, defaulted from `bin/pending.zsh`): `row_pending` un-entered, `row_running` running.
+2. un-entered text that is not his row: `holds_text`, whoever typed it; no wait clears it.
+3. a running agent's command (Reference › Terms): retry every 5 s (`FRONTIER_RETRY_S`) within the budget (`--timeout`); `own_command` when the budget is spent; `own_command_persists` when the previous capture already waited on it.
+4. anything else running: `busy`.
 
 ### Shared pane
 
@@ -245,7 +258,7 @@ A tracker and checkout on this Mac:
 zsh $HOME/.claude/skills/ari-operator-mode/bin/frontier.zsh --local --beads <beads> --scope <scope> --local-repo "$PWD" --own-paths '<own-paths>' --health '<health>'
 ```
 
-`--scope` and `--own-paths` are left off only as Workflow › Resolve the inputs says. The pending row and the absence are read from their markers (`bin/pending.zsh`, `bin/away.zsh`), so `--pending` and `--away` are passed only to override them. It prints `dir=`, `json=` and `cut_off=`; the folder is the investigation folder below.
+`--scope` and `--own-paths` are left off only as Workflow › Resolve the inputs says. The pending row and the absence are read from their markers (`bin/pending.zsh`, `bin/away.zsh`), so `--pending` and `--away` are passed only to override them. It prints `dir=`, `json=`, `cut_off=` and `skill_fix=`; the folder is the investigation folder below. **`skill_fix=` not empty MUST be a skill update that turn**: `/ari-skill-update <skill_fix>` with the stderr warning that names it as its line (`/ari-skill-update` › A mistake is a skill update); its one spawn line follows the briefing, the one line Rules › Cut off is the whole message allows after the cut-off output.
 
 **Exit 4 is the unknown-scope reply (Workflow › Resolve the inputs) and ends the turn: NEVER capture again this turn, not with `--scope all` and not with ids from its `epics=`.**
 
