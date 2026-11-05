@@ -2,7 +2,9 @@
 # Focus a tmux pane by ID: switch the most recently active client to it, then bring the terminal to the front.
 # With a command (--cmd, or a tmux-pane://<n>?cmd=<percent-encoded> link), also type it into the pane
 # without pressing Enter, only when the pane passes the gate (opted in, keys reach the shell, idle prompt).
-# With --run (or ?run=), type `run_log --deliver-to <return pane> '<command>'`, press Enter, and switch
+# A long command is typed laid out as the link's code block shows it (lib/wrap.zsh), several lines as one
+# bracketed paste. With --run (or ?run=), type `run_log --deliver-to <return pane>` and the command as one
+# shell string (quoted, or in a heredoc when laid out or full of quotes), press Enter, and switch
 # back to --return-pane (the pane the link was clicked in): when the command finishes, run_log pastes its
 # artifact line into the agent's prompt, so Ari never leaves that pane. An interactive run (--interactive,
 # or ?run=…&interactive=1: the command will ask something in the pane) adds --focus-after and skips the
@@ -30,6 +32,13 @@ if [[ ! -r "${LIB_TMUX_PANE}" ]]; then
   exit 1
 fi
 source "${LIB_TMUX_PANE}"
+
+readonly LIB_WRAP="${SCRIPT_DIR:h}/lib/wrap.zsh"
+if [[ ! -r "${LIB_WRAP}" ]]; then
+  log::err "Missing command layout lib | path='${LIB_WRAP}'"
+  exit 1
+fi
+source "${LIB_WRAP}"
 
 # --- Constants ---
 
@@ -73,8 +82,9 @@ ${c_bold}Options:${c_rst}
                    or --run [--interactive], honoured only when --return-pane runs Claude Code.
   --cmd TEXT       after focusing, type TEXT into the pane (no Enter); refused unless the pane
                    is opted in (ari-driving on), not in copy mode or synchronized, and idle at an empty prompt
-  --run TEXT       like --cmd, but type run_log --deliver-to <return pane> 'TEXT', press Enter, and switch
-                   back to --return-pane
+  --run TEXT       like --cmd, but type run_log --deliver-to <return pane> with TEXT as one shell string
+                   ('TEXT', "TEXT", or a heredoc when it is laid out), press Enter, and switch back to
+                   --return-pane
   --interactive    with --run: TEXT will ask something in the pane, so add --focus-after and stay there;
                    run_log switches back to --return-pane when TEXT finishes
   --return-pane %M the pane the link was clicked in (the click handler passes it)
@@ -170,13 +180,20 @@ report_refusal() {
 }
 
 #######################################
-# Type a command into the pane literally, without Enter.
-# Arguments: $1 pane_id  $2 label  $3 cmd
+# Put text on the pane's command line without running it, as one bracketed paste: zsh's line editor
+# inserts it whole, each newline a newline in the buffer, not an Enter. Never send-keys: tmux would read a
+# trailing ; of the text as its own command separator.
+# Arguments: $1 pane_id  $2 text
+# Returns: 1 when the paste failed
 #######################################
-type_command() {
-  local pane_id="${1}" label="${2}" cmd="${3}"
-  tmux send-keys -t "${pane_id}" -l -- "${cmd}"
-  log::info "Typed command into pane; Enter not pressed | pane='${label}' chars='${#cmd}'"
+put_on_line() {
+  local pane_id="${1}" text="${2}" buffer="ari-driving-type-$$"
+  if ! print -rn -- "${text}" | tmux load-buffer -b "${buffer}" - \
+      || ! tmux paste-buffer -p -r -d -b "${buffer}" -t "${pane_id}"; then
+    tmux delete-buffer -b "${buffer}" 2>/dev/null || true
+    log::err "Could not paste into the pane | pane='${pane_id}' buffer='${buffer}'"
+    return 1
+  fi
 }
 
 #######################################
@@ -189,44 +206,72 @@ delivers_elsewhere() {
 }
 
 #######################################
-# Run a command in the pane through run_log, so its output is captured; when it finishes, run_log
-# pastes its artifact line into the return pane (the agent's prompt). An interactive run also asks
-# run_log to switch the client back there then (--focus-after), since this script will not.
-# Arguments: $1 pane_id  $2 label  $3 cmd  $4 return_pane (may be empty)  $5 interactive(true|false)
+# The text a click puts on the pane's line, laid out as the link's code block shows it: a --cmd as is
+# (wrap_command); a --run handed to run_log as one shell string (wrap_run_log_text), with --deliver-to the
+# return pane, and --focus-after for an interactive run, since this script will not switch back then.
+# Computed before the pane is locked: a long program takes seconds to lay out.
+# Arguments: $1 pane_id  $2 cmd  $3 run  $4 return_pane (may be empty)  $5 interactive(true|false)
+# Outputs: the text on stdout
 #######################################
-run_command() {
-  local pane_id="${1}" label="${2}" cmd="${3}" return_pane="${4}" interactive="${5}"
-  local deliver=""
+click_text() {
+  local pane_id="${1}" cmd="${2}" run="${3}" return_pane="${4}" interactive="${5}" deliver=""
+  if [[ -n "${cmd}" ]]; then
+    wrap_command "${cmd}"
+    return 0
+  fi
   if delivers_elsewhere "${pane_id}" "${return_pane}"; then
     deliver="--deliver-to ${return_pane} "
     if [[ "${interactive}" == "true" ]]; then
       deliver+="--focus-after "
     fi
   fi
-  tmux send-keys -t "${pane_id}" -l -- "run_log ${deliver}${(qq)cmd}"
-  tmux send-keys -t "${pane_id}" Enter
-  log::info "Started command through run_log | pane='${label}' chars='${#cmd}' interactive='${interactive}'"
+  wrap_run_log_text "${deliver}" "${run}"
 }
 
 #######################################
-# Gate, then type or run, under the pane's lock so a double click cannot type twice. A refusal is reported
-# (status line, log, the Claude Code pane's prompt).
-# Arguments: $1 pane_id  $2 label  $3 cmd  $4 run  $5 return_pane  $6 interactive(true|false)
+# Why laid-out text must not go to this pane: a ` \` continuation and a quoted heredoc are zsh's; another
+# shell (fish) would run them differently.
+# Arguments: $1 pane_id  $2 text
+# Outputs: the reason on stdout
+# Returns: 1 when refused
+#######################################
+layout_refusal() {
+  local pane_id="${1}" text="${2}" program
+  if [[ "${text}" != *$'\n'* ]]; then
+    return 0
+  fi
+  program="$(tmux display-message -p -t "${pane_id}" '#{pane_current_command}')"
+  if [[ "${program}" == (-|)zsh ]]; then
+    return 0
+  fi
+  print -r -- "the command is laid out over several lines, which only zsh reads as one; ${program} runs there"
+  return 1
+}
+
+#######################################
+# Gate, then put the text on the line and, for a run, press Enter, under the pane's lock so a double click
+# cannot type twice. A refusal is reported (status line, log, the Claude Code pane's prompt).
+# Arguments: $1 pane_id  $2 label  $3 text  $4 enter(true|false)  $5 return_pane
 # Returns: 0 when something was typed
 #######################################
 gate_and_type() {
-  local pane_id="${1}" label="${2}" cmd="${3}" run="${4}" return_pane="${5}" interactive="${6}" exit_code=0 reason
+  local pane_id="${1}" label="${2}" text="${3}" enter="${4}" return_pane="${5}" reason
   if ! tmux_pane_lock "${pane_id}"; then
     report_refusal "${label}" "another click is typing there" "${return_pane}"
     return 1
   fi
-  if ! reason="$(tmux_pane_gate_refusal "${pane_id}" "${PROMPT_END}")"; then
+  local -i exit_code=0
+  if ! reason="$(tmux_pane_gate_refusal "${pane_id}" "${PROMPT_END}")" || ! reason="$(layout_refusal "${pane_id}" "${text}")"; then
     report_refusal "${label}" "${reason}" "${return_pane}"
     exit_code=1
-  elif [[ -n "${cmd}" ]]; then
-    type_command "${pane_id}" "${label}" "${cmd}"
+  elif ! put_on_line "${pane_id}" "${text}"; then
+    report_refusal "${label}" "the paste into the pane failed" "${return_pane}"
+    exit_code=1
+  elif [[ "${enter}" == "true" ]]; then
+    tmux send-keys -t "${pane_id}" Enter
+    log::info "Started command through run_log | pane='${label}' chars='${#text}'"
   else
-    run_command "${pane_id}" "${label}" "${run}" "${return_pane}" "${interactive}"
+    log::info "Typed command into pane; Enter not pressed | pane='${label}' chars='${#text}'"
   fi
   sleep "${TYPE_SETTLE_SECONDS}"
   tmux_pane_unlock "${pane_id}"
@@ -354,9 +399,16 @@ main() {
   fi
 
   # === LOGIC ===
+  local text="" enter=false
+  if [[ -n "${cmd}${run}" ]]; then
+    text="$(click_text "${pane_id}" "${cmd}" "${run}" "${return_pane}" "${interactive}")"
+  fi
+  if [[ -n "${run}" ]]; then
+    enter=true
+  fi
   switch_to_pane "${client}" "${pane_id}"
   log::info "Focused pane | pane='${label}' client='${client}'"
-  if [[ -n "${cmd}${run}" ]] && gate_and_type "${pane_id}" "${label}" "${cmd}" "${run}" "${return_pane}" "${interactive}" \
+  if [[ -n "${text}" ]] && gate_and_type "${pane_id}" "${label}" "${text}" "${enter}" "${return_pane}" \
       && [[ -n "${run}" ]]; then
     return_after_run "${client}" "${pane_id}" "${label}" "${return_pane}" "${interactive}"
   fi

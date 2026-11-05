@@ -22,6 +22,13 @@ if [[ ! -r "${LIB_TMUX_PANE}" ]]; then
 fi
 source "${LIB_TMUX_PANE}"
 
+readonly LIB_WRAP="${SCRIPT_DIR:h}/lib/wrap.zsh"
+if [[ ! -r "${LIB_WRAP}" ]]; then
+  log::err "Missing command layout lib | path='${LIB_WRAP}'"
+  exit 1
+fi
+source "${LIB_WRAP}"
+
 # --- Environment variables ---
 
 # The dotfiles entrypoint; `dotfiles raycast link` names Raycast's Clipboard History with its Karabiner binding.
@@ -75,9 +82,10 @@ is_valid_option() {
 ########################################################################
 
 #######################################
-# Choose the command line the block shows: bare, `! ` (interactive), or run_log (capture).
-# A command with a shell operator is quoted as run_log's single command string, so a pipe or
-# && stays inside the capture instead of applying to run_log.
+# Choose the command line the block shows: bare, `! ` (interactive), or run_log (capture). A long
+# one-line command is laid out as link.zsh lays it out (lib/wrap.zsh); `! ` stays one line.
+# A command with a shell operator is run_log's single command string, so a pipe or && stays
+# inside the capture instead of applying to run_log: quoted when short, else a quoted heredoc.
 # Arguments:
 #   $1 - command
 #   $2 - interactive flag (true/false)
@@ -86,20 +94,27 @@ is_valid_option() {
 # Returns: the rendered line on stdout
 #######################################
 render_command_line() {
-  local cmd="${1}" interactive="${2}" capture="${3}" capture_dir="${4}"
+  local cmd="${1}" interactive="${2}" capture="${3}" capture_dir="${4}" display
   if [[ "${interactive}" == "true" ]]; then
     log::info "Rendering interactive form | cmd='${cmd}'"
     print -r -- "! ${cmd}"
     return
   fi
+  display="$(wrap_command "${cmd}")"
   if [[ "${capture}" != "true" ]]; then
     log::info "Rendering bare form | cmd='${cmd}'"
-    print -r -- "${cmd}"
+    print -r -- "${display}"
     return
   fi
-  local prefix="run_log"
+  local prefix="run_log" flags=""
   if [[ -n "${capture_dir}" ]]; then
-    prefix+=" --dir ${(q)capture_dir}"
+    flags="--dir ${(q)capture_dir} "
+    prefix+=" ${flags% }"
+  fi
+  if [[ "${cmd}" != *$'\n'* ]] && [[ "${display}" == *$'\n'* || ( "${cmd}" == *[${SHELL_OPERATORS}]* && "${cmd}" == *\'* ) ]]; then
+    log::info "Rendering run_log form, laid out or quoted | cmd='${cmd}' capture_dir='${capture_dir}'"
+    wrap_run_log_text "${flags}" "${cmd}"
+    return
   fi
   if [[ "${cmd}" == *[${SHELL_OPERATORS}]* ]]; then
     log::info "Rendering run_log form, quoted | cmd='${cmd}' capture_dir='${capture_dir}'"
@@ -126,10 +141,10 @@ print_block() {
   elif [[ -n "${step}" ]]; then
     echo "${step}."
   fi
-  echo "${FENCE}zsh"
-  echo "${line}"
-  echo "${FENCE}"
-  echo "Expected: ${expect}"
+  print -r -- "${FENCE}zsh"
+  print -r -- "${line}"
+  print -r -- "${FENCE}"
+  print -r -- "Expected: ${expect}"
 }
 
 #######################################
@@ -186,7 +201,9 @@ ${c_bold}Options:${c_rst}
   --not-blocking     Mark the step "(not blocking)" (--print, with --step)
   --interactive      Render as "! CMD" so its output lands in the conversation (--print)
   --capture          Render as "run_log -- CMD" so Claude can read the output back (--print);
-                     a CMD with | & ; < > ( ) or a backtick renders as "run_log 'CMD'"
+                     a CMD with | & ; < > ( ) or a backtick renders as "run_log 'CMD'";
+                     a long one, or one with operators and single quotes, as a quoted heredoc,
+                     laid out as link.zsh lays it out (lib/wrap.zsh)
   --capture-dir DIR  With --capture: "run_log --dir DIR -- CMD"
   --text TEXT        Text to copy (--copy)
   --file PATH        File whose contents to copy (--copy)

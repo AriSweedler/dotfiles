@@ -1,6 +1,7 @@
 #!/usr/bin/env zsh
 # Print a Markdown link that focuses a tmux pane on click and, with --cmd, types that command into it
 # (no Enter), followed by the command in a code block, both inside one blockquote so they read as a unit.
+# A long command shows laid out over several lines (lib/wrap.zsh), as the click will type it.
 # With --run, the click runs it through run_log in that pane and switches back to the clicked pane; an
 # interactive run (--interactive, or auto-detected: sudo, ssh, logins) keeps Ari in that pane until the
 # command finishes, since it will ask him something there, and run_log switches him back then.
@@ -25,6 +26,13 @@ if [[ ! -r "${LIB_TMUX_PANE}" ]]; then
 fi
 source "${LIB_TMUX_PANE}"
 
+readonly LIB_WRAP="${SCRIPT_DIR:h}/lib/wrap.zsh"
+if [[ ! -r "${LIB_WRAP}" ]]; then
+  log::err "Missing command layout lib | path='${LIB_WRAP}'"
+  exit 1
+fi
+source "${LIB_WRAP}"
+
 # --- Constants ---
 
 readonly SCHEME='tmux-pane://'
@@ -47,7 +55,7 @@ ${c_bold}Usage:${c_rst}
 
 ${c_bold}Options:${c_rst}
   --pane 2.4|%N window.pane as Ari reads it off prefix-q (exact match in his most recently active
-                session), or a tmux pane ID (a bare number is taken as %N)
+                client's session), or a tmux pane ID (a bare number is taken as %N)
   --cmd TEXT    command the click types into the pane, without Enter
   --run TEXT    command the click runs there through run_log; the click switches back to the pane the
                 link was clicked in, and run_log types 'run_log artifact: <dir>' into its prompt
@@ -59,7 +67,9 @@ ${c_bold}Options:${c_rst}
                 with --run: a plain run even when TEXT looks interactive
   -h, --help    show this help
 
-TEXT is one line: a newline, Tab or other control character, or a leading clear, is refused.
+TEXT is one line: a newline, Tab or other control character, or a leading clear, is refused. The link
+carries it as given; the code block, and what the click types, is it laid out by lib/wrap.zsh (its header
+has the rules) when it is over ${WRAP_WIDTH} characters or has a program argument over ${WRAP_LONG}.
 
 ${c_bold}Output:${c_rst}
   Focus only:
@@ -238,6 +248,10 @@ main() {
 
   # === VALIDATE ===
   local refusal
+  if [[ "${cmd}" == *$'\n'* ]]; then
+    log::err "Refusing a command with a newline | hint='pass the one-line command: link.zsh lays it out itself; a second purpose is a second link, never chained on'"
+    return 1
+  fi
   if [[ -n "${mode}" ]] && ! refusal="$(tmux_text_refusal "${cmd}")"; then
     log::err "Refusing the command | reason='${refusal}'"
     return 1
@@ -282,13 +296,16 @@ main() {
     url+="&interactive=1"
     text="▶ run (interactive: stays there until it finishes) in ${label}"
   fi
-  local fence='```'
-  if [[ "${cmd}" == *'```'* ]]; then
+  local display fence='```' display_line
+  display="$(wrap_command "${cmd}")"
+  if [[ "${display}" == *'```'* ]]; then
     fence='````'
   fi
   print -r -- "> [${text}](${url})"
   print -r -- "> ${fence}zsh"
-  print -r -- "> ${cmd}"
+  for display_line in "${(@f)display}"; do
+    print -r -- "> ${display_line}"
+  done
   print -r -- "> ${fence}"
 }
 
