@@ -8,16 +8,20 @@ is an implicit target: its tab's return links move from the heading above the ma
 The Docs REST API cannot create bookmarks; Apps Script can. --apply runs addBookmarks in the Apps Script
 project under bin/gas through scripts.run, then sends one batchUpdate that points every #goto- link and
 aside return link at link.bookmark and strips the #bm- link style. Bookmarks die on republish like tabs,
-so gdoc_publish.zsh runs --check-setup and then --apply after every publish.
+so gdoc_publish.zsh runs --check-setup and then --apply --execute after every publish.
 
 Modes: --check-setup (one line per prerequisite in dependency order: scopes, api, project, content,
 deployment, run; OK or the exact next command or click path; exit 1 if anything is missing), --configure
-(record the script and deployment ids), --apply [--dry-run].
+(record the script and deployment ids), --apply. --configure and --apply are dry runs unless the
+entrypoint hands them --execute, which it does only when lib/dry_run.zsh resolved this run to act.
 """
 import argparse
 import json
+import os
 import re
+import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 from skill_log import die, log_info, log_warn
@@ -30,10 +34,13 @@ from gdoc_api import (
     check_gws,
     doc_id_from,
     fetch_doc,
+    first_tab,
     gws_json,
     marker_text,
+    paragraphs,
     run_link,
     runs_in,
+    text_runs,
 )
 
 CONFIG_PATH = Path.home() / ".local" / "share" / "ari-hemingway" / "gdoc_bookmarks.json"
@@ -53,6 +60,8 @@ SECTION_RE = re.compile(r"^# Aside (\d+):")
 H1_RE = re.compile(r"^# ")
 FOOTER_PREFIX = "🤖🌸"
 ANCHOR_RE = re.compile(r"\[([^\]]+)\]\(#(bm|goto|aside)-([a-z0-9][a-z0-9-]*)\)")
+LOOSE_ANCHOR_RE = re.compile(r"\]\(#(?:bm|goto)-[^)]*\)")
+MARKUP_RE = re.compile(r"`|\*")
 PING_FUNCTION = "ping"
 ADD_FUNCTION = "addBookmarks"
 OK, MISSING, SKIPPED = "OK", "MISSING", "SKIPPED"
@@ -99,12 +108,43 @@ def error_text(error):
 def load_config():
     if not CONFIG_PATH.exists():
         return {}
-    return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    try:
+        return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as err:
+        die(f"bookmark config is not JSON | path='{CONFIG_PATH}' err='{err}' fix='delete it, then re-run {SELF} --check-setup'")
 
 
 def save_config(config):
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+
+# --- Dry run ---
+
+
+def is_dry_run(args):
+    """lib/dry_run.zsh decides in the entrypoint, which hands on --execute only when this run acts and
+    exports DRY_RUN=0 then. Missing either, the run is a dry run."""
+    return not (args.execute and os.environ.get("DRY_RUN") == "0")
+
+
+def outcome(dry_run, done, planned):
+    """A dry run logs what it would do: a past-tense line there reads as if the Doc already changed."""
+    if dry_run:
+        return planned
+    return done
+
+
+def report_dry_run(dry_run, changes):
+    """The closing log line, worded as lib/dry_run.zsh's report_dry_run words it."""
+    if changes == 0:
+        log_info("Nothing to change | changes='0'")
+        return
+    if not dry_run:
+        log_info(f"Executed | changes='{changes}'")
+        return
+    rerun = f"{SELF} {shlex.join(sys.argv[1:])} --execute"
+    log_info(f"Dry run; nothing changed | changes='{changes}' rerun='{rerun}'")
 
 
 def check_scopes():
@@ -142,7 +182,7 @@ def check_api(config):
 def check_config(config):
     if config.get("scriptId"):
         return OK, f"scriptId={config['scriptId']} in {CONFIG_PATH}"
-    return MISSING, f"no script project recorded; run: gws script projects create --json '{{\"title\":\"gdoc bookmarks\"}}'  then: {SELF} --configure --script-id <scriptId from the reply>"
+    return MISSING, f"no script project recorded; run: gws script projects create --json '{{\"title\":\"gdoc bookmarks\"}}'  then: {SELF} --configure --script-id <scriptId from the reply> --execute"
 
 
 def local_gas_files():
@@ -180,12 +220,12 @@ def check_deployment(config):
     if wanted and wanted in executable:
         return OK, f"API-executable deployment {wanted}{ignored}"
     if wanted:
-        return MISSING, f"deploymentId {wanted} is not a versioned API-executable deployment of this project (found: {executable or 'none'}{ignored}); re-run: {SELF} --configure --script-id {config['scriptId']} --deployment-id <id>"
+        return MISSING, f"deploymentId {wanted} is not a versioned API-executable deployment of this project (found: {executable or 'none'}{ignored}); re-run: {SELF} --configure --script-id {config['scriptId']} --deployment-id <id> --execute"
     if executable:
-        return MISSING, f"deployment(s) exist but none is recorded ({', '.join(executable)}{ignored}); run: {SELF} --configure --script-id {config['scriptId']} --deployment-id {executable[-1]}"
+        return MISSING, f"deployment(s) exist but none is recorded ({', '.join(executable)}{ignored}); run: {SELF} --configure --script-id {config['scriptId']} --deployment-id {executable[-1]} --execute"
     create_version = f"gws script projects versions create --params '{{\"scriptId\":\"{config['scriptId']}\"}}' --json '{{\"description\":\"gdoc bookmarks\"}}'"
     create_deployment = f"gws script projects deployments create --params '{{\"scriptId\":\"{config['scriptId']}\"}}' --json '{{\"versionNumber\":<versionNumber from the reply>,\"manifestFileName\":\"appsscript\",\"description\":\"gdoc bookmarks\"}}'"
-    return MISSING, f"no versioned API-executable deployment{ignored}; run: {create_version}  then: {create_deployment}  then: {SELF} --configure --script-id {config['scriptId']} --deployment-id <deploymentId from the reply>"
+    return MISSING, f"no versioned API-executable deployment{ignored}; run: {create_version}  then: {create_deployment}  then: {SELF} --configure --script-id {config['scriptId']} --deployment-id <deploymentId from the reply> --execute"
 
 
 def check_run_probe(config):
@@ -235,26 +275,60 @@ def run_check_setup():
         raise SystemExit(1)
 
 
-def run_configure(args):
+def record_config(config, previous, dry_run):
+    """Write the config when it changed. Returns the writes this run makes: 0 or 1."""
+    record = f"path='{CONFIG_PATH}' scriptId='{config.get('scriptId')}' deploymentId='{config.get('deploymentId', '')}' previous='{json.dumps(previous)}'"
+    if config == previous:
+        log_info(f"bookmark setup already recorded | {record}")
+        return 0
+    if dry_run:
+        log_info(f"would record bookmark setup | {record}")
+        return 1
+    save_config(config)
+    log_info(f"bookmark setup recorded | {record}")
+    return 1
+
+
+def run_configure(args, dry_run):
     config = load_config()
     previous = dict(config)
+    if args.script_id and args.script_id != config.get("scriptId") and not args.deployment_id and "deploymentId" in config:
+        log_warn(f"new script project; dropping the old project's deployment | scriptId='{args.script_id}' dropped_deploymentId='{config['deploymentId']}'")
+        del config["deploymentId"]
     if args.script_id:
         config["scriptId"] = args.script_id
     if args.deployment_id:
         config["deploymentId"] = args.deployment_id
     if not config.get("scriptId"):
         die("--configure needs --script-id at least once")
-    save_config(config)
-    log_info(f"bookmark setup recorded | path='{CONFIG_PATH}' scriptId='{config.get('scriptId')}' deploymentId='{config.get('deploymentId', '')}' previous='{json.dumps(previous)}'")
-    print(str(CONFIG_PATH))
+    changes = record_config(config, previous, dry_run)
+    report_dry_run(dry_run, changes)
+    print(json.dumps({"config": str(CONFIG_PATH), "changes": changes, "dry_run": int(dry_run)}))
 
 
 # --- Draft parsing ---
 
 
+def plain_text(label):
+    """The label as the Doc renders it: the import drops code-span and emphasis delimiters, and a
+    re-apply finds the target by this text."""
+    return MARKUP_RE.sub("", label)
+
+
+def check_anchor_forms(line):
+    """A #bm-/#goto- link ANCHOR_RE cannot read would otherwise be skipped silently and fail verify
+    only after the Doc was written."""
+    readable = {m.end() for m in ANCHOR_RE.finditer(line)}
+    for loose in LOOSE_ANCHOR_RE.finditer(line):
+        if loose.end() not in readable:
+            die(f"malformed #bm-/#goto- link | link='{loose.group(0)}' expected='[text](#bm-<slug>) with a kebab-case slug ([a-z0-9-], starting with a letter or digit) and text on one line with no ]'")
+
+
 def parse_draft(path):
     """Return (targets {key: {url, text}}, gotos [(slug, text)]). Aside markers are implicit targets;
     a #bm- inside an aside section is rejected, since bookmarks are created in the first tab only."""
+    if not Path(path).is_file():
+        die(f"draft not found | file='{path}' expected='the full draft the Doc was published from'")
     lines = Path(path).read_text(encoding="utf-8").split("\n")
     targets, gotos = {}, []
     in_aside = None
@@ -264,8 +338,9 @@ def parse_draft(path):
             in_aside = int(section.group(1))
         elif in_aside is not None and (H1_RE.match(line) or line.startswith(FOOTER_PREFIX)):
             in_aside = None
+        check_anchor_forms(line)
         for match in ANCHOR_RE.finditer(line):
-            label, kind, slug = match.group(1), match.group(2), match.group(3)
+            label, kind, slug = plain_text(match.group(1)), match.group(2), match.group(3)
             if kind == "bm":
                 if in_aside is not None:
                     die(f"#bm- inside an aside body; bookmarks live in the main body, #goto- may point here | aside='{in_aside}' slug='{slug}' text='{label}'")
@@ -286,9 +361,14 @@ def parse_draft(path):
 # --- Apply ---
 
 
-def add_bookmarks(doc, targets, config):
+def add_bookmarks(doc, targets, config, dry_run):
+    """Run addBookmarks; in a dry run, placeholder ids stand in for the ids it would return."""
     payload = [{"key": key, "url": t["url"], "text": t["text"]} for key, t in targets.items()]
     body = json.dumps({"function": ADD_FUNCTION, "parameters": [doc, payload], "devMode": True}, ensure_ascii=False)
+    if dry_run:
+        log_info(f"would run scripts.run addBookmarks | doc='{doc}' deployment='{config['deploymentId']}' targets='{len(payload)}'")
+        return {key: f"BOOKMARK_{key}" for key in targets}
+    log_info(f"running scripts.run addBookmarks | doc='{doc}' targets='{len(payload)}'")
     reply = gws_json(["script", "scripts", "run", "--params", json.dumps({"scriptId": config["deploymentId"]}), "--json", body], what="scripts.run addBookmarks")
     if "error" in reply:
         die(f"addBookmarks failed | error='{json.dumps(reply['error'])[:300]}'")
@@ -311,7 +391,8 @@ def bookmark_link(bookmark_id):
 def build_relink_requests(doc_json, gotos, bookmarks):
     """Point every #goto- run and aside return run at its bookmark; strip the link from every #bm- run."""
     requests = []
-    goto_text = {f"bm-{slug}": text for slug, text in gotos}
+    # Every #goto- label, so a re-apply (the #goto- URLs already relinked) finds each one by its text.
+    key_by_goto_text = {text: f"bm-{slug}" for slug, text in gotos}
     for props, tab in all_tabs(doc_json):
         tab_id = props["tabId"]
         aside = ASIDE_TAB_RE.match(props.get("title", ""))
@@ -320,10 +401,12 @@ def build_relink_requests(doc_json, gotos, bookmarks):
             link, content = run_link(run), run["textRun"]["content"]
             url = link.get("url", "")
             if url.startswith("#goto-"):
-                requests.append(link_style(tab_id, run, bookmark_link(bookmarks[f"bm-{url[len('#goto-'):]}"])))
-            elif "bookmark" in link and content in goto_text.values():
-                key = next(k for k, t in goto_text.items() if t == content)
+                key = f"bm-{url[len('#goto-'):]}"
+                if key not in bookmarks:
+                    die(f"the Doc links to a slug the draft does not bookmark | url='{url}' fix='pass --file the draft this Doc was published from'")
                 requests.append(link_style(tab_id, run, bookmark_link(bookmarks[key])))
+            elif "bookmark" in link and content in key_by_goto_text:
+                requests.append(link_style(tab_id, run, bookmark_link(bookmarks[key_by_goto_text[content]])))
             elif url.startswith("#bm-") and tab_id == FIRST_TAB:
                 requests.append(link_style(tab_id, run, {}))
             elif aside_key in bookmarks and content == RETURN_TEXT and link:
@@ -331,46 +414,91 @@ def build_relink_requests(doc_json, gotos, bookmarks):
     return requests
 
 
-def verify(doc_json):
-    leftovers, bookmark_links = [], 0
-    for _, tab in all_tabs(doc_json):
-        for run in runs_in(tab):
-            link = run_link(run)
-            url = link.get("url", "")
-            if url.startswith("#bm-") or url.startswith("#goto-"):
-                leftovers.append(url)
-            if "bookmark" in link:
-                bookmark_links += 1
+def anchor_runs(doc_json):
+    """[(tabId, startIndex, url)] of every run still linked to #bm- or #goto-."""
+    return [
+        (props["tabId"], run["startIndex"], run_link(run).get("url", ""))
+        for props, tab in all_tabs(doc_json)
+        for run in runs_in(tab)
+        if run_link(run).get("url", "").startswith(("#bm-", "#goto-"))
+    ]
+
+
+def verify(doc_json, bookmarks):
+    leftovers = [url for _, _, url in anchor_runs(doc_json)]
     if leftovers:
         die(f"anchor links left after apply | urls='{leftovers}'")
-    return bookmark_links
+    links = [run_link(run)["bookmark"] for _, tab in all_tabs(doc_json) for run in runs_in(tab) if "bookmark" in run_link(run)]
+    # addBookmarks removed every first-tab bookmark, so a link to any id it did not return goes nowhere.
+    stale = sorted({b.get("id") for b in links if b.get("tabId", FIRST_TAB) == FIRST_TAB} - set(bookmarks.values()))
+    if stale:
+        die(f"links to bookmarks this apply removed | ids='{stale}' fix='a #goto- label the draft no longer has; edit the link in the Doc or republish'")
+    return len(links)
 
 
-def run_apply(args):
+def paragraph_texts(tab):
+    return ["".join(run["textRun"]["content"] for run in text_runs(p)) for p in paragraphs(tab)]
+
+
+def check_targets(doc_json, targets):
+    """What addBookmarks does first, read from the Doc: each target by its link URL in the first tab, else
+    by text that occurs exactly once there. It runs before any write, in a dry run too: Bookmarks.gs
+    removes every bookmark before it looks a target up."""
+    tab = first_tab(doc_json)
+    urls = {run_link(run).get("url", "") for run in runs_in(tab)}
+    texts = paragraph_texts(tab)
+    for key, target in targets.items():
+        if target["url"] in urls:
+            continue
+        hits = sum(text.count(target["text"]) for text in texts)
+        if hits == 0:
+            die(f"target not found in the first tab | key='{key}' text='{target['text']}' fix='pass --file the draft this Doc was published from'")
+        if hits > 1:
+            die(f"target text occurs more than once | key='{key}' text='{target['text']}' hits='{hits}' fix='bookmark a longer, unique phrase and republish'")
+
+
+def verify_plan(doc_json, requests):
+    """The dry run's verify: every #bm- and #goto- run has a request in the relink batch, else the
+    real run would leave it and fail verify."""
+    planned = {(r["updateTextStyle"]["range"]["tabId"], r["updateTextStyle"]["range"]["startIndex"]) for r in requests}
+    leftovers = [url for tab_id, start, url in anchor_runs(doc_json) if (tab_id, start) not in planned]
+    if leftovers:
+        die(f"anchor links the relink batch would leave | urls='{leftovers}'")
+
+
+def run_apply(args, dry_run):
     doc = doc_id_from(args.doc)
     targets, gotos = parse_draft(args.file)
     if not targets:
         log_info(f"nothing to bookmark | file='{args.file}'")
+        report_dry_run(dry_run, 0)
+        print(json.dumps({"doc": doc, "bookmarks": {}, "relinked_runs": 0, "dry_run": int(dry_run)}))
         return
     config = load_config()
-    if not args.dry_run and not config.get("deploymentId"):
+    if not config.get("deploymentId"):
         die(f"bookmark setup incomplete; run: {SELF} --check-setup")
     doc_json = fetch_doc(doc)
-    if args.dry_run:
-        bookmarks = {key: f"BOOKMARK_{key}" for key in targets}
+    log_info(f"{outcome(dry_run, 'applying bookmarks', 'would apply bookmarks')} | doc='{doc}' title='{doc_json.get('title', '')}' targets='{len(targets)}' goto_links='{len(gotos)}'")
+    check_targets(doc_json, targets)
+    if dry_run:
         print(json.dumps({"targets": targets, "gotos": gotos}, ensure_ascii=False))
-    else:
-        bookmarks = add_bookmarks(doc, targets, config)
-        doc_json = fetch_doc(doc)
+    bookmarks = add_bookmarks(doc, targets, config, dry_run)
+    doc_json = fetch_doc(doc)
     requests = build_relink_requests(doc_json, gotos, bookmarks)
     for key in sorted(targets):
-        log_info(f"bookmark target | key='{key}' text='{targets[key]['text']}' bookmark='{bookmarks[key]}'")
-    batch_update(doc, requests, doc_json["revisionId"], args.dry_run, what="relink batch")
-    if args.dry_run:
+        log_info(f"{outcome(dry_run, 'bookmark target', 'would bookmark target')} | key='{key}' text='{targets[key]['text']}' bookmark='{bookmarks[key]}'")
+    batch_update(doc, requests, doc_json["revisionId"], dry_run, what="relink batch")
+    changes = 1 + (1 if requests else 0)
+    summary = {"doc": doc, "bookmarks": bookmarks, "relinked_runs": len(requests), "dry_run": int(dry_run)}
+    if dry_run:
+        verify_plan(doc_json, requests)
+        report_dry_run(dry_run, changes)
+        print(json.dumps(summary, ensure_ascii=False))
         return
-    count = verify(fetch_doc(doc))
+    count = verify(fetch_doc(doc), bookmarks)
     log_info(f"bookmarks applied | targets='{len(targets)}' relinked_runs='{len(requests)}' bookmark_links='{count}'")
-    print(json.dumps({"doc": doc, "bookmarks": bookmarks, "relinked_runs": len(requests)}, ensure_ascii=False))
+    report_dry_run(dry_run, changes)
+    print(json.dumps(summary, ensure_ascii=False))
 
 
 def parse_args():
@@ -383,7 +511,7 @@ def parse_args():
     parser.add_argument("--deployment-id", dest="deployment_id", help="--configure: API-executable deployment id")
     parser.add_argument("--doc", help="--apply: Google Doc id or URL")
     parser.add_argument("--file", help="--apply: the markdown draft")
-    parser.add_argument("--dry-run", dest="dry_run", action="store_true", help="--apply: print the plan and the batch, send nothing")
+    parser.add_argument("--execute", action="store_true", help="--configure, --apply: write; the entrypoint passes it only when lib/dry_run.zsh resolved this run to act")
     return parser.parse_args()
 
 
@@ -393,12 +521,13 @@ def main():
     if args.check_setup:
         run_check_setup()
         return
+    dry_run = is_dry_run(args)
     if args.configure:
-        run_configure(args)
+        run_configure(args, dry_run)
         return
     if not args.doc or not args.file:
         die("--apply needs --doc and --file")
-    run_apply(args)
+    run_apply(args, dry_run)
 
 
 if __name__ == "__main__":
