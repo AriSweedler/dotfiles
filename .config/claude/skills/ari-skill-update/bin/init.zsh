@@ -27,6 +27,7 @@ if [[ ! -r "${LIB_REGISTRY}" ]]; then
   exit 1
 fi
 source "${LIB_REGISTRY}"
+source "${SCRIPT_DIR:h}/lib/blobs.zsh"
 
 # --- Prerequisites ---
 
@@ -136,7 +137,9 @@ ${c_bold}Options:${c_rst}
 
 ${c_bold}Output:${c_rst}
   key=value lines (skill, is_new, state, tier, source, skill_dir, investigation_dir,
-  scratchpad, proposal) plus a FILES section listing the skill's files to read.
+  scratchpad, proposal, concurrent) plus a FILES section listing the skill's files to read.
+  concurrent lists, comma-separated, this skill's other investigation folders with a
+  file newer than its last commit and the last 24 hours.
   Creates the investigation folder and a pre-filled scratchpad; proposal is the
   path the driver writes the proposal to (not created here). state/tier per
   /ari-dotfiles-skill-registry; source is submodule:<path> when a submodule's
@@ -195,7 +198,7 @@ main() {
   [[ -n "${purpose}" ]] || purpose="<no single-line description field in the frontmatter — synthesize from the heading>"
 
   local inv_dir scratchpad proposal
-  inv_dir="$(mk_investigation_dir /tmp/skill-update "${skill}")"
+  inv_dir="$(mk_investigation_dir "${INVESTIGATION_ROOT}" "${skill}")"
   scratchpad="${inv_dir}/scratchpad.md"
   proposal="${inv_dir}/proposal.md"
 
@@ -205,11 +208,21 @@ main() {
 - **Goal**: <the brief's Change line (inline: the user's request)> — <intent | implementation | both> (<why>)
 - **Changes made**:
   - [1] SECTION — change
-- **Own read**: clean | <n> fixed
+- **Files edited**: <one per edit, absolute or skill-dir-relative; each becomes an --edited>
+- **Own read**: clean | <n> fixed | n/a (private)
 - **Open questions**:
   - <question> assumed: <answer>
 EOF
   log::info "Investigation folder ready | scratchpad='${scratchpad}'"
+
+  local committed=0 concurrent
+  if is_valid_tier "${tier}"; then
+    committed="$(last_commit_epoch "${tier}" "${source}" "$(repo_skill_rel "${tier}" "${source}" "${skill}")")"
+  fi
+  concurrent="$(live_sibling_dirs "${skill}" "${inv_dir}" "${committed}")"
+  if [[ -n "${concurrent}" ]]; then
+    log::warn "Another driver of this skill may be live | concurrent='${concurrent}'"
+  fi
 
   local files=""
   if [[ -d "${skill_dir}" ]]; then
@@ -232,6 +245,7 @@ skill_dir=${skill_dir}
 investigation_dir=${inv_dir}
 scratchpad=${scratchpad}
 proposal=${proposal}
+concurrent=${concurrent}
 EOF
   echo "=== start FILES ==="
   [[ -n "${files}" ]] && echo "${files}"
