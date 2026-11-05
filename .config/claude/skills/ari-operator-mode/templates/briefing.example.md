@@ -4,18 +4,18 @@ The briefing runs between the first two `---` lines, rendered from `frontier.exa
 
 ---
 
-Operator mode on. Reading the tracker through `machine=personal|ID=%18|pane=3.1|nickname=homelab`: seven read-only commands, up to 45 s each; the table lists only what you can do, and I type row 1 onto that prompt, un-entered, unless it destroys or ships work; Enter is your yes. Answers: yes, row N, a bead id (I start that bead), no, or `stop operator mode`.
+Operator mode on. Reading the tracker through `machine=personal|ID=%18|pane=3.1|nickname=homelab`, scoped to this session's `beads-epic`: eight read-only commands, up to 45 s each; the table lists only what you can do, and I type row 1 onto that prompt, un-entered, unless it destroys or ships work; Enter is your yes. Answers: yes, row N, a bead id (I start that bead), no, or `stop operator mode`.
 
 Ready 3, in progress 1, human 1, blocked 2, stale 1; laptop abc1234 dirty 1; read 09:07Z; fresh read
 
-**First principles.** The work is tracked as *beads* (one tracked issue each) in the `bd` workspace `~/beads` on the host `laptop`, which Claude reaches only by typing into one tmux *pane* (`machine=personal|ID=%18|pane=3.1|nickname=homelab`, the pane's full label); the checkout there is `~/homelab`, on this Mac `/Users/you/homelab`; a bead is *ready* (open, nothing blocks it), *in progress* (claimed), *stale* (untouched fourteen days), a *human gate* (only Ari answers it) or *blocked* (waits on another bead); *doctor* is `bin/doctor.sh`, the project's health command.
+**First principles.** The work is tracked as *beads* (one tracked issue each) in the `bd` workspace `~/beads` on the host `laptop` (shown: the *scope*, this session's epic `beads-epic`), which Claude reaches only by typing into one tmux *pane* (`machine=personal|ID=%18|pane=3.1|nickname=homelab`, the pane's full label); the checkout there is `~/homelab`, on this Mac `/Users/you/homelab`; a bead is *ready* (open, nothing blocks it), *in progress* (claimed), *stale* (untouched fourteen days), a *human gate* (only Ari answers it) or *blocked* (waits on another bead); *doctor* is `bin/doctor.sh`, the project's health command.
 
 **State right now**
 - 3 ready; the top is beads-abc "Fix the widget" (P1).
 - 1 in progress: beads-ip1 "Half done", held by claude, stale.
 - 1 waits on you: beads-h1 "Decide the indexers".
 - 2 blocked, 2 deferred.
-- Laptop checkout `~/homelab`: `bin/lab` modified and uncommitted; last commits abc1234 first subject, bcd2345 second subject, cde3456 third subject; this Mac's `/Users/you/homelab` is clean at f00ba12.
+- Laptop checkout `~/homelab`: `bin/lab` modified by this session and uncommitted; last commits abc1234 first subject, bcd2345 second subject, cde3456 third subject; this Mac's `/Users/you/homelab` is clean at f00ba12.
 - `bin/doctor.sh` has not been run this capture.
 
 | # | Action | Priority | Why now |
@@ -43,7 +43,7 @@ A no is a correction. Row 1 is on `machine=personal|ID=%18|pane=3.1|nickname=hom
 
 ## Why the rows sit where they do
 
-Both rows are his: beads-h1 first on blockers (it frees beads-bl2), then the show row. The show row has no bead and no bead waits on it, so it is P2; a row that stood in front of a P1 bead would be P1, said in Why now. The recommendation is the `Recommendation:` line of `human.text`. Everything else is Claude's and only a state bullet: beads-abc and beads-def (ready), beads-ip1 (held by claude), the `bin/doctor.sh` run, and beads-epic (`type` `epic`, the parent of beads-abc), which counts among the 3 ready and is never named.
+Both rows are his: beads-h1 first on blockers (it frees beads-bl2), then the show row, for the edit to `bin/lab` that `host_git.own` lists as this session's. The show row has no bead and no bead waits on it, so it is P2; a row that stood in front of a P1 bead would be P1, said in Why now. The recommendation is the `Recommendation:` line of `human.text`. Everything else is Claude's and only a state bullet: beads-abc and beads-def (ready), beads-ip1 (held by claude), the `bin/doctor.sh` run, and beads-epic (`type` `epic`, the parent of beads-abc), which counts among the 3 ready and is never named.
 
 Not this: a row for beads-abc, beads-ip1, the doctor run, or "beads-epic: no write; it closes once its children close"; none is his to do. Not this either: the human row at P1 because what it blocks is P1; a row with a bead keeps that bead's priority.
 
@@ -114,13 +114,19 @@ Not this: "ok" taken as that yes; a destroying row proceeds on "yes", its row nu
 
 ## A local row
 
-A capture whose `local_git.dirty` lists ` M bin/lab` gives a row on this Mac's pane; the command is the click-to-type link `/ari-driving-tmux` mints, under that pane's label:
+A capture whose `local_git.own` lists ` M bin/lab` gives a row on this Mac's pane, and every row of a `--local` capture (`pane` is `local`) is one of these: `run.zsh` never types it, and Claude never runs it. A show row carries the click-to-run link `/ari-driving-tmux` mints, so its output comes back; as row 1 it renders, and asks:
 
 ```
-Row 2, for `ID=%4|pane=2.1|nickname=homelab`, not typed yet:
-[type: git -C /Users/you/homelab diff bin/lab](<the link that skill minted>)
+Row 1, for `ID=%4|pane=2.1|nickname=homelab`, a link:
+[run: git -C /Users/you/homelab diff bin/lab](<the link that skill minted>)
 Shows the uncommitted change. Prints a unified diff.
+
+A no is a correction. Click row 1's link for `ID=%4|pane=2.1|nickname=homelab`?
 ```
+
+Its **destroys:** row, after the diff came back, carries the click-to-type link instead, so Enter stays his: "Row 1, for `ID=%4|pane=2.1|nickname=homelab`, a link; it destroys the edit to `bin/lab`:".
+
+Not this: "Type row 1 onto `local`?" (there is no pane named `local`), or Claude running the discard itself on his yes.
 
 ## After row 1 landed
 
@@ -216,6 +222,26 @@ A no is a correction. Nothing needs you; `stop operator mode` leaves. Read again
 ```
 
 Not this: "Nothing needs you." when `human` could not be read; that is "Nothing known to need you; `human` could not be read."
+
+## Another session in the same workspace
+
+`~/beads` also holds another session's epics, and that session left `secrets.tf` uncommitted in `~/homelab`. This session had filed no bead yet, so it knew no scope; the capture without `--scope` exited 4 (`scope=needed`) and wrote nothing, and the whole entry reply is:
+
+```
+Operator mode on. Reading the tracker through `machine=personal|ID=%18|pane=3.1|nickname=homelab`: eight read-only commands, up to 45 s each; the table lists only what you can do, and I type row 1 onto that prompt, un-entered, unless it destroys or ships work; Enter is your yes. Answers: yes, row N, a bead id (I start that bead), no, or `stop operator mode`.
+
+Which epic is this session's?
+```
+
+His next message, "beads-epic", is the scope, not the epic row of Yes and no: the capture runs with `--scope beads-epic --own-paths 'bin/lab'`, and the reply is the briefing at the top without its acknowledgement (already said), its header reading `laptop abc1234 dirty 2`, its checkout bullet counting the other edit, and no row for it:
+
+```
+- Laptop checkout `~/homelab`: `bin/lab` modified by this session and uncommitted; 1 uncommitted edit not listed as this session's; last commits abc1234 first subject, bcd2345 second subject, cde3456 third subject; this Mac's `/Users/you/homelab` is clean at f00ba12.
+```
+
+Asked to act on a bead the capture does not list: "`<id>` is not among this capture's beads (scope `beads-epic`); I write nothing to it; `add <its epic>` widens the scope.", then the briefing's one question.
+
+Not this: a row for the other session's human gate because bd lists it, a bullet naming its in-progress beads, a show row for `secrets.tf`, a second capture this turn with `--scope all` or with an epic picked from `epics=`, or "beads-epic closes when its children close." as the answer to his scope.
 
 ## Asked what the capture cannot answer
 

@@ -7,18 +7,27 @@
   "beads_dir": "~/beads",
   "repo": "~/homelab",
   "local_repo": "/Users/you/homelab",
+  "scope": {
+    "epics": [
+      "beads-epic"
+    ],
+    "all": false,
+    "unknown": [],
+    "error": null
+  },
   "pending": null,
   "pending_seen": null,
   "away": null,
   "away_ended": false,
   "typed": [
+    "{ bd -C ~/\"beads\" list -n 0 -s open,in_progress,blocked,deferred --json; printf '__BDRC=%s\\n' $?; } | awk '/\"(id|parent|issue_type)\": *\"/ || /^__BDRC=/ { print } END { print \"__LINES=\" NR }'",
     "bd -C ~/\"beads\" ready --exclude-label human --json",
     "bd -C ~/\"beads\" list -s in_progress --json",
     "bd -C ~/\"beads\" human list",
     "bd -C ~/\"beads\" blocked",
     "bd -C ~/\"beads\" stale -d 14 -s in_progress",
     "bd -C ~/\"beads\" list -s deferred --json",
-    "git -C ~/\"homelab\" status --short && git -C ~/\"homelab\" log -3 --oneline"
+    "git -C ~/\"homelab\" -c core.quotePath=false status --porcelain && git -C ~/\"homelab\" log -3 --oneline"
   ],
   "waited_s": 0,
   "cut_off": null,
@@ -37,7 +46,7 @@
       "title": "Polish the frob",
       "priority": 2,
       "type": "feature",
-      "parent": null,
+      "parent": "beads-epic",
       "assignee": null,
       "updated_at": "2026-10-30T00:00:00Z"
     },
@@ -57,7 +66,7 @@
       "title": "Half done",
       "priority": 2,
       "type": "task",
-      "parent": null,
+      "parent": "beads-epic",
       "assignee": "claude",
       "updated_at": "2026-10-15T00:00:00Z"
     }
@@ -95,6 +104,9 @@
     "dirty": [
       " M bin/lab"
     ],
+    "own": [
+      " M bin/lab"
+    ],
     "log": [
       {
         "hash": "abc1234",
@@ -112,6 +124,7 @@
   },
   "local_git": {
     "dirty": [],
+    "own": [],
     "log": [
       {
         "hash": "f00ba12",

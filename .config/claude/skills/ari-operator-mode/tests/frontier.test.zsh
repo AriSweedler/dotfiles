@@ -1,8 +1,8 @@
 #!/usr/bin/env zsh
 # Tests for bin/frontier.zsh, bin/brief.zsh, bin/mode.zsh, bin/pending.zsh and bin/away.zsh against
 # tests/fake-run.zsh: the JSON shape of a full read, every cut-off reason, reads that fail after the
-# gate, --local, the header, the cut-off paragraph, the away line, the three markers and the example
-# capture. No tmux, no network.
+# gate, --local, the scope (two sessions in one workspace) and own paths, the header, the cut-off
+# paragraph, the away line, the three markers and the example capture. No tmux, no network.
 # Run: zsh $HOME/.claude/skills/ari-operator-mode/tests/frontier.test.zsh
 set -uo pipefail
 
@@ -41,6 +41,7 @@ capture() {
   local out rc=0
   out="$(env "${envs[@]}" zsh "${FRONTIER}" "$@" 2>"${T}/last.err")" || rc=$?
   LAST_RC="${rc}"
+  print -r -- "${out}" > "${T}/last.out"
   print -r -- "${out}" | awk -F= '/^json=/ { print $2 }'
 }
 typeset -g LAST_RC=0
@@ -71,8 +72,8 @@ check "full read: cut_off is null" null "$(q "${full}" '.cut_off')"
 check "full read: pane label" "machine=personal|ID=%18|pane=3.1" "$(q "${full}" '.pane')"
 check "full read: nickname from the window name" homelab "$(q "${full}" '.nickname')"
 check "full read: where the state lives is recorded" "~/beads ~/homelab ${T}/repo" "$(q "${full}" '"\(.beads_dir) \(.repo) \(.local_repo)"')"
-check "full read: seven commands typed, in order" 7 "$(q "${full}" '.typed | length')"
-check "full read: nine sections in order" "ready,in_progress,human,blocked,stale,deferred,host_git,local_git,health" "$(q "${full}" '[keys_unsorted[] | select(. as $k | ["captured_at","session","host_definition","pane","nickname","beads_dir","repo","local_repo","pending","pending_seen","away","away_ended","typed","waited_s","cut_off"] | index($k) | not)] | join(",")')"
+check "full read: eight commands typed, the bead map first" "8 list -n 0" "$(q "${full}" '"\(.typed | length) \(.typed[0] | capture("(?<c>list -n 0)").c)"')"
+check "full read: nine sections in order" "ready,in_progress,human,blocked,stale,deferred,host_git,local_git,health" "$(q "${full}" '[keys_unsorted[] | select(. as $k | ["captured_at","session","host_definition","pane","nickname","beads_dir","repo","local_repo","scope","pending","pending_seen","away","away_ended","typed","waited_s","cut_off"] | index($k) | not)] | join(",")')"
 check "ready: first id" beads-abc "$(q "${full}" '.ready[0].id')"
 check "ready: type from issue_type" task "$(q "${full}" '.ready[0].type')"
 check "in_progress: holder" claude "$(q "${full}" '.in_progress[0].assignee')"
@@ -131,12 +132,13 @@ case "$*" in
   "blocked") cat "${FAKE_DIR}/blocked.txt" ;;
   "stale -d 14 -s in_progress") cat "${FAKE_DIR}/stale.txt" ;;
   "list -s deferred --json") cat "${FAKE_DIR}/deferred.json" ;;
+  "list -n 0 -s open,in_progress,blocked,deferred --json") if [[ -r "${FAKE_DIR}/scope.json" ]]; then cat "${FAKE_DIR}/scope.json"; else print -r -- '[]'; fi ;;
   "exit7") exit 7 ;;
   *) print -u2 "fake bd: unknown $*"; exit 2 ;;
 esac
 B
 chmod +x "${T}/fakebin/bd"
-first_typed="$(awk 'NR == 1' "${T}/canned/typed.log")"
+first_typed="$(awk '!f && / ready --exclude-label/ { print; f=1 }' "${T}/canned/typed.log")"
 real_stream="$(PATH="${T}/fakebin:${PATH}" HOME="${T}" zsh -c "${first_typed}" 2>&1)"
 nonce="${first_typed#*printf \'Q%sQ\' }"; nonce="${nonce%% *}"; marker="@${nonce}@"
 payload="$(print -r -- "${real_stream}" | awk -v m="${marker}" -v l=$(( ${#nonce} + 2 )) '$0 == m "BEGIN" { on=1; next } index($0, m "END ") == 1 { on=0 } on && index($0, m) == 1 { printf "%s", substr($0, l + 1) }')"
@@ -159,15 +161,59 @@ run_cut() {   # <name> <expected reason> [env assignments…]
   CUT_FILE="${file}"
 }
 typeset -g CUT_FILE=''
-run_cut not_opted_in not_opted_in FAKE_RC=77 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 not opted in; Ari runs 'ari-driving on' in that pane"
+run_cut not_opted_in not_opted_in FAKE_RC=77 FAKE_KIND=not_opted_in "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 not opted in; Ari runs 'ari-driving on' in that pane"
 run_cut other_session other_session FAKE_RC=76 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 bound to another Claude session d60c; get a pane of your own"
 readonly GATE_TEXT='last line does not end in the prompt (busy, or text already on the line)'
-run_cut holds_text holds_text FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ cd ~/homelab && bin/lab up apps/torrent"
+run_cut holds_text holds_text FAKE_RC=75 FAKE_KIND=not_at_prompt "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ cd ~/homelab && bin/lab up apps/torrent"
 check "holds_text: the prompt's line, verbatim" 'at 01:00:00 UTC ❯ cd ~/homelab && bin/lab up apps/torrent' "$(q "${CUT_FILE}" '.cut_off.prompt_holds')"
-run_cut busy busy FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running nvim, not a shell" "FAKE_TAIL=at 01:00:00 UTC ❯ nvim notes.md"
+run_cut busy busy FAKE_RC=75 FAKE_KIND=not_a_shell "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running nvim, not a shell" "FAKE_TAIL=at 01:00:00 UTC ❯ nvim notes.md"
 check "busy: what runs there, with the command" "running nvim, not a shell (nvim notes.md)" "$(q "${CUT_FILE}" '.cut_off.prompt_holds')"
-run_cut copy_mode busy FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 in copy mode (press q there)"
+run_cut "a pane that closed during the gate (70)" no_pane FAKE_RC=70 "FAKE_REFUSED=REFUSED: no pane matches %18" "FAKE_TAIL=PANES: every pane on the host, label command session: window -- title
+machine=personal|ID=%3|pane=1.1 zsh 0: caf -- laptop
+machine=personal|ID=%30|pane=11.1 bash 0: superseedr -- laptop"
+check "a pane that closed during the gate: the host's panes are the candidates" "machine=personal|ID=%3|pane=1.1,machine=personal|ID=%30|pane=11.1" "$(q "${CUT_FILE}" '.cut_off.candidates | join(",")')"
+contains "a pane that closed during the gate: brief lists them" "the panes there are machine=personal|ID=%3|pane=1.1, machine=personal|ID=%30|pane=11.1" "$(zsh "${BRIEF}" --json "${CUT_FILE}" --cut-off)"
+# 2a. a 75 is classified by the REFUSED_KIND line right after REFUSED:, never by the REFUSED: words
+run_cut copy_mode busy FAKE_RC=75 FAKE_KIND=copy_mode "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 in copy mode (press q there)"
 check "copy mode: his to clear" "in copy mode (press q there)" "$(q "${CUT_FILE}" '.cut_off.prompt_holds')"
+check "a kind it maps: skill_fix is empty" "skill_fix=" "$(awk '/^skill_fix=/' "${T}/last.out")"
+run_cut synchronized busy FAKE_RC=75 FAKE_KIND=synchronized "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 synchronize-panes is on"
+run_cut "pane_gone: as for a 70" no_pane FAKE_RC=75 FAKE_KIND=pane_gone "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 no such pane"
+check "pane_gone: the candidates come from a fresh --list" 3 "$(q "${CUT_FILE}" '.cut_off.candidates | length')"
+run_cut "words matching no reason, kind not_at_prompt" holds_text FAKE_RC=75 FAKE_KIND=not_at_prompt "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 the prompt was not reached" "FAKE_TAIL=at 01:00:00 UTC ❯ cd ~/homelab && bin/lab up apps/torrent"
+run_cut "words that say copy mode, kind not_a_shell" busy FAKE_RC=75 FAKE_KIND=not_a_shell "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 in copy mode (press q there)" "FAKE_TAIL=at 01:00:00 UTC ❯ nvim notes.md"
+check "words that say copy mode, kind not_a_shell: the tail decided" "in copy mode (press q there) (nvim notes.md)" "$(q "${CUT_FILE}" '.cut_off.prompt_holds')"
+rm -f "${T}/canned/refusals.count"
+file="$(capture FAKE_RC=75 FAKE_RC_TIMES=1 FAKE_KIND=other_caller "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 the lock is held" FRONTIER_RETRY_S=1 -- "${common[@]}")"
+check "words matching no reason, kind other_caller: waited through" null "$(q "${file}" '.cut_off')"
+run_cut "kind unknown" busy FAKE_RC=75 FAKE_KIND=unknown "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 a reason the lib gained"
+check "kind unknown: the REFUSED words are kept for Ari" "a reason the lib gained" "$(q "${CUT_FILE}" '.cut_off.prompt_holds')"
+check "kind unknown: stdout names the skill to update" "skill_fix=ari-driving-remote" "$(awk '/^skill_fix=/' "${T}/last.out")"
+contains "kind unknown: the log says which list lacks the reason" "GATE_REASON_KINDS has no kind" "$(<"${T}/last.err")"
+run_cut "no kind line (an older run.zsh)" busy FAKE_RC=75 FAKE_KIND=none "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ cd ~/homelab && bin/lab up apps/torrent"
+check "no kind line: stdout names the skill to update" "skill_fix=ari-driving-remote" "$(awk '/^skill_fix=/' "${T}/last.out")"
+contains "no kind line: the log says none followed REFUSED:" "No REFUSED_KIND line follows REFUSED:" "$(<"${T}/last.err")"
+run_cut "a kind line further down is old pane text" busy FAKE_RC=75 FAKE_KIND=none "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 another caller is typing into it" "FAKE_TAIL=at 01:00:00 UTC ❯ echo old"$'\nREFUSED_KIND: other_caller'
+check "a kind line further down: never a wait" 0 "$(q "${CUT_FILE}" '.waited_s')"
+run_cut "a kind this reader does not map" busy FAKE_RC=75 FAKE_KIND=brand_new_kind "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 something new"
+check "a kind this reader does not map: stdout names this skill" "skill_fix=ari-operator-mode" "$(awk '/^skill_fix=/' "${T}/last.out")"
+pending_row="run_log 'bin/doctor.sh --fix'"
+file="$(capture FAKE_RC=75 FAKE_KIND=unknown "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 a reason the lib gained" "FAKE_TAIL=at 01:00:00 UTC ❯ ${pending_row}" -- "${common[@]}" --pending "${pending_row}")"
+check "kind unknown, his row on the prompt: still row_pending, never busy" row_pending "$(q "${file}" '.cut_off.reason')"
+check "kind unknown, his row on the prompt: pending_seen" true "$(q "${file}" '.pending_seen')"
+# every kind the real run.zsh's --help lists for a 75 (its "one of" list, up to "does not map")
+run_kinds="$(zsh "${HOME}/.claude/skills/ari-driving-remote/bin/run.zsh" --help 2>/dev/null | awk '
+  done { next }
+  /REFUSED_KIND: <kind>/ { on=1; next }
+  on { s = s $0 " " }
+  on && /does not map/ { done=1 }
+  END { sub(/\(.*$/, "", s); n = split(s, a, /[ ,]+/); for (i = 1; i <= n; i++) if (a[i] ~ /^[a-z_]+$/) print a[i] }')"
+check "run.zsh --help names its seven busy kinds" "other_caller copy_mode synchronized not_a_shell not_at_prompt pane_gone unknown" "${(j: :)${(f)run_kinds}}"
+for kind in ${(f)run_kinds}; do
+  rm -f "${T}/canned/refusals.count"
+  capture FAKE_RC=75 FAKE_RC_TIMES=1 "FAKE_KIND=${kind}" "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 any words" FRONTIER_RETRY_S=1 -- "${common[@]}" >/dev/null
+  lacks "run.zsh's kind ${kind}: classify_75 maps it" "does not map this kind" "$(<"${T}/last.err")"
+done
 run_cut read_timed_out read_timed_out FAKE_RC=124 "FAKE_REFUSED=" "FAKE_TAIL=at 01:00:00 UTC ❯ M=…still running"
 run_cut host_unreachable host_unreachable FAKE_RC=255 "FAKE_REFUSED="
 run_cut refused_text refused_text FAKE_RC=1 "FAKE_REFUSED="
@@ -195,12 +241,12 @@ file="$(capture "FAKE_PROMPT_LINE=at 01:00:02 UTC ❯   " -- "${common[@]}")"
 check "a trailing space after the prompt is not a cut-off" null "$(q "${file}" '.cut_off')"
 
 # 3. a read refused after the gate passed is a cut-off from that section on
-file="$(capture "FAKE_RC_FOR=human list:75" "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running nvim, not a shell" "FAKE_TAIL=at 01:00:00 UTC ❯ nvim notes.md" -- "${common[@]}")"
+file="$(capture "FAKE_RC_FOR=human list:75" FAKE_KIND=not_a_shell "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running nvim, not a shell" "FAKE_TAIL=at 01:00:00 UTC ❯ nvim notes.md" -- "${common[@]}")"
 check "mid-run refusal: cut off" busy "$(q "${file}" '.cut_off.reason')"
 check "mid-run refusal: the sections before it were read" beads-abc "$(q "${file}" '.ready[0].id')"
 check "mid-run refusal: the rest are unread" "human,blocked,stale,deferred,host_git" "$(q "${file}" '.cut_off.unread | join(",")')"
 check "mid-run refusal: human marked unread" true "$(q "${file}" '.human.unread')"
-file="$(capture "FAKE_RC_FOR=blocked:124" -- "${common[@]}")"
+file="$(capture "FAKE_RC_FOR= blocked:124" -- "${common[@]}")"
 check "mid-run timeout: read_timed_out" read_timed_out "$(q "${file}" '.cut_off.reason')"
 check "mid-run timeout: ready and human were read" "beads-abc beads-h1" "$(q "${file}" '"\(.ready[0].id) \(.human.ids[0])"')"
 
@@ -208,36 +254,36 @@ check "mid-run timeout: ready and human were read" "beads-abc beads-h1" "$(q "${
 own_tail=$'at 01:00:00 UTC ❯  M=$(printf \'Q%sQ\' 4242 | tr Q @); printf \'%sBEGIN\\n\' "$M"; { bd -C ~/"beads" blocked; }\n@4242@BEGIN'
 lane_tail="at 01:00:00 UTC ❯ run_log 'BEADS_ACTOR=claude bd -C ~/beads update beads-g5l --claim'"
 rm -f "${T}/canned/refusals.count"
-file="$(capture FAKE_RC=75 FAKE_RC_TIMES=2 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 another caller is typing into it" FRONTIER_RETRY_S=1 -- "${common[@]}")"
+file="$(capture FAKE_RC=75 FAKE_RC_TIMES=2 FAKE_KIND=other_caller "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 another caller is typing into it" FRONTIER_RETRY_S=1 -- "${common[@]}")"
 check "own command clears: no cut-off" null "$(q "${file}" '.cut_off')"
 check "own command clears: the read landed after the retries" beads-abc "$(q "${file}" '.ready[0].id')"
 check "own command clears: two refusals were waited through" 2 "$(<"${T}/canned/refusals.count")"
 check "own command clears: the wait is recorded" 2 "$(q "${file}" '.waited_s')"
 contains "own command clears: one waiting line was logged" "waiting for the pane" "$(<"${T}/last.err")"
 check "own command clears: the waiting line is logged once" 1 "$(grep -c 'waiting for the pane' "${T}/last.err")"
-check "own command clears: the command is typed once in the record" 7 "$(q "${file}" '.typed | length')"
+check "own command clears: the command is typed once in the record" 8 "$(q "${file}" '.typed | length')"
 contains "own command clears: the header says how long it waited" "; waited 2s for machine=personal|ID=%18|pane=3.1;" "$(zsh "${BRIEF}" --json "${file}" --header)"
 rm -f "${T}/canned/refusals.count"
-file="$(capture FAKE_RC=75 FAKE_RC_TIMES=1 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running bd, not a shell" "FAKE_TAIL=${own_tail}" FRONTIER_RETRY_S=1 -- "${common[@]}")"
+file="$(capture FAKE_RC=75 FAKE_RC_TIMES=1 FAKE_KIND=not_a_shell "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running bd, not a shell" "FAKE_TAIL=${own_tail}" FRONTIER_RETRY_S=1 -- "${common[@]}")"
 check "own read running (the marker recipe on the prompt line): waited through" null "$(q "${file}" '.cut_off')"
 rm -f "${T}/canned/refusals.count"
-file="$(capture FAKE_RC=75 FAKE_RC_TIMES=1 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running bd, not a shell" "FAKE_TAIL=${lane_tail}" FRONTIER_RETRY_S=1 -- "${common[@]}")"
+file="$(capture FAKE_RC=75 FAKE_RC_TIMES=1 FAKE_KIND=not_a_shell "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running bd, not a shell" "FAKE_TAIL=${lane_tail}" FRONTIER_RETRY_S=1 -- "${common[@]}")"
 check "a lane's bd write running: waited through" null "$(q "${file}" '.cut_off')"
 rm -f "${T}/canned/refusals.count"
-file="$(capture FAKE_RC=75 FAKE_RC_TIMES=1 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=${lane_tail}"$'\nsome output still scrolling' FRONTIER_RETRY_S=1 -- "${common[@]}")"
+file="$(capture FAKE_RC=75 FAKE_RC_TIMES=1 FAKE_KIND=not_at_prompt "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=${lane_tail}"$'\nsome output still scrolling' FRONTIER_RETRY_S=1 -- "${common[@]}")"
 check "a lane between commands, output still scrolling: waited through, not holds_text" null "$(q "${file}" '.cut_off')"
 fork_tail="at 01:00:00 UTC ❯ run_log '( . ~/homelab/.env; curl -s http://127.0.0.1:8096/Items -H \"\$A\" | jq .TotalRecordCount )'"
 rm -f "${T}/canned/refusals.count"
-file="$(capture FAKE_RC=75 FAKE_RC_TIMES=1 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running curl, not a shell" "FAKE_TAIL=${fork_tail}" FRONTIER_RETRY_S=1 -- "${common[@]}")"
+file="$(capture FAKE_RC=75 FAKE_RC_TIMES=1 FAKE_KIND=not_a_shell "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running curl, not a shell" "FAKE_TAIL=${fork_tail}" FRONTIER_RETRY_S=1 -- "${common[@]}")"
 check "a fork's run_log-wrapped command running (not bd, not git): waited through, not busy" null "$(q "${file}" '.cut_off')"
 rm -f "${T}/canned/refusals.count"
-file="$(capture FAKE_RC=75 FAKE_RC_TIMES=1 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running curl, not a shell" "FAKE_TAIL=at 01:00:00 UTC ❯ curl -s http://127.0.0.1:8096/Items" FRONTIER_RETRY_S=1 -- "${common[@]}")"
+file="$(capture FAKE_RC=75 FAKE_RC_TIMES=1 FAKE_KIND=not_a_shell "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running curl, not a shell" "FAKE_TAIL=at 01:00:00 UTC ❯ curl -s http://127.0.0.1:8096/Items" FRONTIER_RETRY_S=1 -- "${common[@]}")"
 check "the same command typed bare is Ari's: busy" busy "$(q "${file}" '.cut_off.reason')"
 rm -f "${T}/canned/refusals.count"
-file="$(capture FAKE_RC=75 FAKE_RC_TIMES=1 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running git, not a shell" "FAKE_TAIL=at 01:00:00 UTC ❯ git -C ~/homelab rebase -i main" FRONTIER_RETRY_S=1 -- "${common[@]}")"
+file="$(capture FAKE_RC=75 FAKE_RC_TIMES=1 FAKE_KIND=not_a_shell "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running git, not a shell" "FAKE_TAIL=at 01:00:00 UTC ❯ git -C ~/homelab rebase -i main" FRONTIER_RETRY_S=1 -- "${common[@]}")"
 check "a bare git command is Ari's, not an agent's: busy" busy "$(q "${file}" '.cut_off.reason')"
 rm -f "${T}/canned/refusals.count"
-file="$(capture FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 another caller is typing into it" FRONTIER_RETRY_S=1 -- "${common[@]}" --timeout 5 --previous /dev/null)"
+file="$(capture FAKE_RC=75 FAKE_KIND=other_caller "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 another caller is typing into it" FRONTIER_RETRY_S=1 -- "${common[@]}" --timeout 5 --previous /dev/null)"
 check "own command never clears: own_command" own_command "$(q "${file}" '.cut_off.reason')"
 check "own command never clears: exit 0" 0 "${LAST_RC}"
 check "own command never clears: the sections are unread" 7 "$(q "${file}" '.cut_off.unread | length')"
@@ -250,7 +296,7 @@ check "own command: what held the pane is kept for the next capture" "another ca
 lacks "own command: never called his P0" "P0" "${own_text}"
 check "own command: the header is the same line" "${own_text}" "$(zsh "${BRIEF}" --json "${file}" --header)"
 prev_own="${file}"
-file="$(capture FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 another caller is typing into it" FRONTIER_RETRY_S=1 -- "${common[@]}" --timeout 5)"
+file="$(capture FAKE_RC=75 FAKE_KIND=other_caller "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 another caller is typing into it" FRONTIER_RETRY_S=1 -- "${common[@]}" --timeout 5)"
 check "the newest capture by this session on this pane is the default --previous: the same busy pane is own_command_persists, never his" own_command_persists "$(q "${file}" '.cut_off.reason')"
 contains "the persisting wait says since when" "since 20" "$(q "${file}" '.cut_off.prompt_holds')"
 check "the persisting wait waits for nothing" 0 "$(q "${file}" '.waited_s')"
@@ -259,17 +305,17 @@ check "persisting wait: brief prints a waiting line, exit 3" 3 "${rc}"
 contains "persisting wait: still an agent's, nothing of his" "Still waiting on \`machine=personal|ID=%18|pane=3.1|nickname=homelab\`" "${persist_text}"
 lacks "persisting wait: never his P0" "P0" "${persist_text}"
 check "persisting wait: one question mark" 1 "$(print -rn -- "${persist_text}" | tr -cd '?' | wc -c | tr -d ' ')"
-file="$(capture FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 another caller is typing into it" FRONTIER_RETRY_S=1 -- "${common[@]}" --timeout 5 --previous "${prev_own}")"
+file="$(capture FAKE_RC=75 FAKE_KIND=other_caller "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 another caller is typing into it" FRONTIER_RETRY_S=1 -- "${common[@]}" --timeout 5 --previous "${prev_own}")"
 check "--previous names the capture to compare with" own_command_persists "$(q "${file}" '.cut_off.reason')"
-file="$(capture CLAUDE_CODE_SESSION_ID=other-session FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 another caller is typing into it" FRONTIER_RETRY_S=1 -- "${common[@]}" --timeout 5)"
+file="$(capture CLAUDE_CODE_SESSION_ID=other-session FAKE_RC=75 FAKE_KIND=other_caller "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 another caller is typing into it" FRONTIER_RETRY_S=1 -- "${common[@]}" --timeout 5)"
 check "another session's capture is never the default --previous: this one waits its own budget" own_command "$(q "${file}" '.cut_off.reason')"
 row="run_log 'cd ~/homelab && git pull -q --ff-only && bin/doctor.sh --fix --only torrent-logs'"
-file="$(capture FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ ${row}" -- "${common[@]}" --pending "${row}")"
+file="$(capture FAKE_RC=75 FAKE_KIND=not_at_prompt "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ ${row}" -- "${common[@]}" --pending "${row}")"
 check "his row un-entered on the prompt: row_pending" row_pending "$(q "${file}" '.cut_off.reason')"
 check "his row un-entered: the pending text is recorded" "${row}" "$(q "${file}" '.pending')"
 check "his row un-entered: no waiting" 0 "$(q "${file}" '.waited_s')"
 check "his row un-entered: the line" 'Your row is on your prompt in `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not entered: press Enter there, or clear it, then tell me?' "$(zsh "${BRIEF}" --json "${file}" --cut-off)"
-file="$(capture FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ ${row}" -- "${common[@]}")"
+file="$(capture FAKE_RC=75 FAKE_KIND=not_at_prompt "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ ${row}" -- "${common[@]}")"
 check "the same line without --pending is holds_text" holds_text "$(q "${file}" '.cut_off.reason')"
 # 3c. his row wrapped by tmux over three tail lines at a pane width of 70: two full-width lines, then the rest
 long_row="run_log 'cd ~/homelab && git pull -q --ff-only && bin/doctor.sh --fix --only torrent-logs,torrent-queue,media && bin/lab up apps/torrent'"
@@ -277,30 +323,30 @@ wrap_head="at 01:00:00 UTC ❯ ${long_row[1,52]}"
 wrap_mid="${long_row[53,122]}"
 wrap_tail_rest="${long_row[123,-1]}"
 check "wrapped fixture: the first two lines are the pane width" "70 70" "${#wrap_head} ${#wrap_mid}"
-file="$(capture FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=${wrap_head}"$'\n'"${wrap_mid}"$'\n'"${wrap_tail_rest}" -- "${common[@]}" --pending "${long_row}")"
+file="$(capture FAKE_RC=75 FAKE_KIND=not_at_prompt "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=${wrap_head}"$'\n'"${wrap_mid}"$'\n'"${wrap_tail_rest}" -- "${common[@]}" --pending "${long_row}")"
 check "his row wrapped over three lines: still row_pending" row_pending "$(q "${file}" '.cut_off.reason')"
 check "his row wrapped: the joined line is recorded" "${wrap_head}${wrap_mid}${wrap_tail_rest}" "$(q "${file}" '.cut_off.prompt_holds')"
-file="$(capture FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=${wrap_head}"$'\n'"${wrap_mid}"$'\n'"${wrap_tail_rest}" -- "${common[@]}")"
+file="$(capture FAKE_RC=75 FAKE_KIND=not_at_prompt "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=${wrap_head}"$'\n'"${wrap_mid}"$'\n'"${wrap_tail_rest}" -- "${common[@]}")"
 check "a wrapped un-entered agent line without --pending: holds_text, not a wait" holds_text "$(q "${file}" '.cut_off.reason')"
 check "a wrapped un-entered line waits for nothing" 0 "$(q "${file}" '.waited_s')"
 # 3d. the pending row lives on disk: pending.zsh set is frontier.zsh's default --pending
 check "pending: nothing recorded, exit 3" 3 "$(zsh "${SKILL}/bin/pending.zsh" show --session test-session --root "${T}/root" >/dev/null 2>&1; print $?)"
 check "pending: set records the text" "pending=${row}" "$(zsh "${SKILL}/bin/pending.zsh" set --text "${row}" --session test-session --root "${T}/root" 2>/dev/null)"
 check "pending: the TYPED: prefix is refused" 1 "$(zsh "${SKILL}/bin/pending.zsh" set --text "TYPED: ${row}" --session test-session --root "${T}/root" >/dev/null 2>&1; print $?)"
-file="$(capture FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ ${row}" -- "${common[@]}")"
+file="$(capture FAKE_RC=75 FAKE_KIND=not_at_prompt "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ ${row}" -- "${common[@]}")"
 check "pending from the marker: his row on the prompt is row_pending without --pending" row_pending "$(q "${file}" '.cut_off.reason')"
 check "pending from the marker: recorded in the capture" "${row}" "$(q "${file}" '.pending')"
-file="$(capture CLAUDE_CODE_SESSION_ID=other-session FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ ${row}" -- "${common[@]}")"
+file="$(capture CLAUDE_CODE_SESSION_ID=other-session FAKE_RC=75 FAKE_KIND=not_at_prompt "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ ${row}" -- "${common[@]}")"
 check "pending from the marker: another session's marker is not read" holds_text "$(q "${file}" '.cut_off.reason')"
 check "pending: clear" "pending=" "$(zsh "${SKILL}/bin/pending.zsh" clear --session test-session --root "${T}/root" 2>/dev/null)"
-file="$(capture FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ ${row}" -- "${common[@]}")"
+file="$(capture FAKE_RC=75 FAKE_KIND=not_at_prompt "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ ${row}" -- "${common[@]}")"
 check "pending cleared: the same line is holds_text again" holds_text "$(q "${file}" '.cut_off.reason')"
-file="$(capture FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running grep, not a shell" "FAKE_TAIL=at 01:00:00 UTC ❯ grep -c closed ${row}" -- "${common[@]}" --pending "${row}")"
+file="$(capture FAKE_RC=75 FAKE_KIND=not_a_shell "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running grep, not a shell" "FAKE_TAIL=at 01:00:00 UTC ❯ grep -c closed ${row}" -- "${common[@]}" --pending "${row}")"
 check "pending: a bare command of his that contains the row is not his row" busy "$(q "${file}" '.cut_off.reason')"
 file="$(capture -- "${common[@]}" --pending "${row}")"
 check "pending: the reads went through, so the row is gone: pending_seen false" false "$(q "${file}" '.pending_seen')"
 check "no pending: pending_seen null" null "$(q "${full}" '.pending_seen')"
-file="$(capture FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running doctor.sh, not a shell" "FAKE_TAIL=at 01:00:00 UTC ❯ ${row}"$'\nPASS torrent' -- "${common[@]}" --pending "${row}")"
+file="$(capture FAKE_RC=75 FAKE_KIND=not_a_shell "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running doctor.sh, not a shell" "FAKE_TAIL=at 01:00:00 UTC ❯ ${row}"$'\nPASS torrent' -- "${common[@]}" --pending "${row}")"
 check "his row running: row_running" row_running "$(q "${file}" '.cut_off.reason')"
 check "his row running: pending_seen true" true "$(q "${file}" '.pending_seen')"
 contains "his row running: the line names his command" 'Your row is running in `machine=personal|ID=%18|pane=3.1|nickname=homelab` (`run_log' "$(zsh "${BRIEF}" --json "${file}" --cut-off)"
@@ -315,14 +361,18 @@ file="$(capture "FAKE_HOST_RC=git -C:128" -- "${common[@]}")"
 check "host rc: cut_off stays null" null "$(q "${file}" '.cut_off')"
 contains "host rc: git failure is an error, not an empty clean checkout" "git failed (rc 128)" "$(q "${file}" '.host_git.error')"
 contains "header: a failed host checkout says so, never this Mac's head in its place" "; laptop checkout failed; read " "$(zsh "${BRIEF}" --json "${file}" --header)"
-file="$(capture "FAKE_HOST_RC=deferred:127" -- "${common[@]}")"
+file="$(capture "FAKE_HOST_RC=list -s deferred:127" -- "${common[@]}")"
 contains "host rc: a failed deferred read is an error, not a count" "command failed (rc 127)" "$(q "${file}" '.deferred.error')"
 check "host rc: deferred has no count" null "$(q "${file}" '.deferred.count')"
 file="$(capture "FAKE_HOST_RC=ready:127" -- "${common[@]}")"
-check "bd missing on the host (rc 127 on ready): the other bd reads are not typed" 2 "$(q "${file}" '.typed | length')"
+check "bd missing on the host (rc 127 on ready): the other bd reads are not typed" 3 "$(q "${file}" '.typed | length')"
 check "bd missing: every bd section carries the one precondition" true "$(q "${file}" '[.ready, .in_progress, .human, .blocked, .stale, .deferred] | all(.precondition == true)')"
 contains "bd missing: the error names the cause" "bd is not on the host" "$(q "${file}" '.human.error')"
 check "bd missing: host_git is still read" abc1234 "$(q "${file}" '.host_git.log[0].hash')"
+file="$(capture "FAKE_HOST_RC= list -n 0:127" -- "${common[@]}")"
+check "bd missing on the bead map read: a capture, never a scope refusal" 0 "${LAST_RC}"
+check "bd missing on the bead map read: only the map and host_git are typed" 2 "$(q "${file}" '.typed | length')"
+check "bd missing on the bead map read: every bd section carries the one precondition" true "$(q "${file}" '[.ready, .in_progress, .human, .blocked, .stale, .deferred] | all(.precondition == true)')"
 file="$(capture "FAKE_HOST_RC=human list:1" -- "${common[@]}")"
 contains "host rc: a failed text read is an error" "rc 1" "$(q "${file}" '.human.error')"
 check "host rc: the other sections still fill" beads-abc "$(q "${file}" '.ready[0].id')"
@@ -333,7 +383,7 @@ check "empty bd output lands as []" "[]" "$(q "${file}" '.ready | tojson')"
 check "empty bd output: the capture still landed" 0 "${LAST_RC}"
 file="$(capture "FAKE_EMPTY=deferred" -- "${common[@]}")"
 check "empty deferred is a count of 0" 0 "$(q "${file}" '.deferred.count')"
-file="$(capture "FAKE_TRUNCATE=in_progress" -- "${common[@]}")"
+file="$(capture "FAKE_TRUNCATE=list -s in_progress" -- "${common[@]}")"
 contains "an unfinished read says so, with the timeout" "read did not finish in 45s" "$(q "${file}" '.in_progress.error')"
 check "an unfinished read is not a cut-off" null "$(q "${file}" '.cut_off')"
 file="$(capture "FAKE_SHORT=ready" -- "${common[@]}")"
@@ -355,6 +405,113 @@ check "local: no session needed" 0 "$(env -u CLAUDE_CODE_SESSION_ID PATH="${T}/f
 file="$(capture -- "${common[@]}" --local-repo "${T}/nowhere")"
 contains "local_git on a non-repo is an error" "git failed" "$(q "${file}" '.local_git.error')"
 
+# 7b. two sessions in one workspace: this session's epic beads-xy9, another's beads-amm and beads-qrv
+mkdir -p "${T}/cannedscope"
+S="${T}/cannedscope"
+jq -n '[
+  {id: "beads-xy9", issue_type: "epic"},
+  {id: "beads-xy9.6", issue_type: "task", parent: "beads-xy9", dependencies: [{issue_id: "beads-xy9.6", depends_on_id: "beads-xy9", type: "parent-child"}]},
+  {id: "beads-xy9.6.1", issue_type: "task", parent: "beads-xy9.6"},
+  {id: "beads-xy9.2", issue_type: "task", parent: "beads-xy9"},
+  {id: "beads-xy9.9", issue_type: "task", parent: "beads-xy9"},
+  {id: "beads-k2p", issue_type: "task", parent: "beads-xy9"},
+  {id: "beads-g7m", issue_type: "task", parent: "beads-k2p"},
+  {id: "beads-amm", issue_type: "epic"}, {id: "beads-amm.1", issue_type: "decision", parent: "beads-amm"},
+  {id: "beads-amm.3", issue_type: "task", parent: "beads-amm"}, {id: "beads-amm.5", issue_type: "task", parent: "beads-amm"},
+  {id: "beads-amm.8", issue_type: "task", parent: "beads-amm"},
+  {id: "beads-qrv", issue_type: "epic"}, {id: "beads-qrv.2", issue_type: "task", parent: "beads-qrv"},
+  {id: "beads-qrv.4", issue_type: "task", parent: "beads-qrv"}, {id: "beads-qrv.7", issue_type: "task", parent: "beads-qrv"},
+  {id: "beads-qrv.9", issue_type: "task", parent: "beads-qrv"},
+  {id: "beads-j9w", issue_type: "task", parent: "beads-xy9"},
+  {id: "beads-lone", issue_type: "task"}]' > "${S}/scope.json"
+jq -n '[
+  {id: "beads-xy9", title: "Unify the dotfiles", priority: 1, issue_type: "epic"},
+  {id: "beads-k2p", title: "Joined the epic later", priority: 2, issue_type: "task", parent: "beads-xy9"},
+  {id: "beads-g7m", title: "Child of a joined bead", priority: 2, issue_type: "task", parent: "beads-k2p"},
+  {id: "beads-qrv", title: "Their probe work", priority: 1, issue_type: "epic"},
+  {id: "beads-amm", title: "Their upgrade", priority: 1, issue_type: "epic"},
+  {id: "beads-lone", title: "A loose bead", priority: 2, issue_type: "task"},
+  {id: "beads-j9w", title: "Its list row lacks its parent", priority: 2, issue_type: "task"},
+  {id: "beads-qrv.9", title: "Their next step", priority: 1, issue_type: "task", parent: "beads-qrv"}]' > "${S}/ready.json"
+jq -n '[
+  {id: "beads-xy9.6", title: "Move the shell config", priority: 2, issue_type: "task", parent: "beads-xy9", assignee: "claude"},
+  {id: "beads-amm.3", title: "Their rollout", priority: 1, issue_type: "task", parent: "beads-amm", assignee: "claude"},
+  {id: "beads-qrv.7", title: "Their tuning", priority: 2, issue_type: "task", parent: "beads-qrv", assignee: "claude"}]' > "${S}/in_progress.json"
+print -r -- $'\nHuman-needed beads (3 found)\n\n  beads-xy9.2 Pick the dotfiles layout\n    Priority: P2\n\n  beads-amm.1 Pin their version\n    Recommendation: the newest patch\n    Priority: P1\n\n  beads-qrv.2 Decide their probe port\n    Priority: P2\n' > "${S}/human.txt"
+print -r -- $'\n🚫 Blocked issues (2):\n\n[P2] beads-xy9.6.1: Wire the new layout\n  Blocked by 2 open dependencies: [beads-xy9.6, beads-amm.3]\n\n[P1] beads-qrv.4: Roll their probe\n  Blocked by 1 open dependencies: [beads-xy9.6]\n' > "${S}/blocked.txt"
+print -r -- $'beads-xy9.6  Move the shell config  (20d)\nbeads-qrv.7  Their tuning  (16d)\n' > "${S}/stale.txt"
+print -r -- '[{"id":"beads-xy9.9","parent":"beads-xy9"},{"id":"beads-amm.5","parent":"beads-amm"},{"id":"beads-amm.8","parent":"beads-amm"}]' > "${S}/deferred.json"
+print -r -- $' M secrets.tf\n?? notes/\n M bin/lab\nabc1234 first subject' > "${S}/hostgit.txt"
+captures_now() { ls "${T}/root/operator-mode/"*/frontier.json 2>/dev/null | wc -l | tr -d ' '; }
+foreign='beads-(amm|qrv|lone)'
+before="$(captures_now)"; typed_before="$(wc -l < "${S}/typed.log" 2>/dev/null || print 0)"
+out="$(FAKE_DIR="${S}" zsh "${FRONTIER}" "${common[@]}" 2>/dev/null)"; rc=$?
+check "no --scope, open epics in the workspace: exit 4" 4 "${rc}"
+contains "no --scope: says the scope is needed" "scope=needed" "${out}"
+contains "no --scope: names the open epics for the one question" "epics=beads-amm,beads-qrv,beads-xy9" "${out}"
+check "no --scope: nothing written, no capture" "${before}" "$(captures_now)"
+check "no --scope: only the bead map was typed" $(( typed_before + 1 )) "$(wc -l < "${S}/typed.log" | tr -d ' ')"
+file="$(capture "FAKE_DIR=${S}" -- "${common[@]}" --scope beads-xy9 --own-paths 'bin/lab,notes/todo.md')"
+check "scope: exit 0" 0 "${LAST_RC}"
+check "scope: recorded" '{"epics":["beads-xy9"],"all":false,"unknown":[],"error":null}' "$(q "${file}" '.scope | tojson')"
+check "scope: ready keeps the epic, a bead joined later by parent, its child through the chain, and a bead whose list row lacks its parent" "beads-xy9,beads-k2p,beads-g7m,beads-j9w" "$(q "${file}" '[.ready[].id] | join(",")')"
+check "scope: in_progress keeps only this session's bead" "beads-xy9.6" "$(q "${file}" '[.in_progress[].id] | join(",")')"
+check "scope: human keeps only this session's gate" "beads-xy9.2" "$(q "${file}" '.human.ids | join(",")')"
+contains "scope: human.text keeps its block, the summary count rewritten" "Human-needed beads (1 found)" "$(q "${file}" '.human.text')"
+lacks "scope: human.text drops the other session's blocks" "beads-amm" "$(q "${file}" '.human.text')"
+lacks "scope: human.text drops the other session's recommendation" "newest patch" "$(q "${file}" '.human.text')"
+check "scope: blocked keeps only this session's bead" "beads-xy9.6.1" "$(q "${file}" '.blocked.ids | join(",")')"
+check "scope: blockers count only edges with both beads in scope" '{"beads-xy9.6":1}' "$(q "${file}" '.blocked.blockers | tojson')"
+contains "scope: blocked.text count rewritten" "Blocked issues (1):" "$(q "${file}" '.blocked.text')"
+lacks "scope: blocked.text drops the other session's block" "beads-qrv" "$(q "${file}" '.blocked.text')"
+check "scope: stale keeps only this session's bead" "beads-xy9.6" "$(q "${file}" '.stale.ids | join(",")')"
+lacks "scope: stale.text drops the other session's line" "beads-qrv" "$(q "${file}" '.stale.text')"
+check "scope: deferred counts only this session's beads" 1 "$(q "${file}" '.deferred.count')"
+check "scope: no id outside the scope is listed in any section" 0 "$(jq -r --arg re "${foreign}" '[.ready[].id, .in_progress[].id, .human.ids[], .human.deferred_ids[], .blocked.ids[], (.blocked.blockers | keys[]), .stale.ids[], .stale.deferred_ids[]] | map(select(test($re))) | length' "${file}")"
+check "scope: no other session's bead appears in any bd section at all" false "$(jq -r --arg re "${foreign}" '[.ready, .in_progress, .human, .blocked, .stale, .deferred] | tostring | test($re)' "${file}")"
+contains "scope: a blocker outside the scope is named as one, never by id" "[beads-xy9.6, a bead outside the scope]" "$(q "${file}" '.blocked.text')"
+contains "scope: the header counts this session's beads only" "Ready 4, in progress 1, human 1, blocked 1, stale 1;" "$(zsh "${BRIEF}" --json "${file}" --header)"
+check "own paths: a dirty path this session edited, and an untracked dir holding one, are own" '["?? notes/"," M bin/lab"]' "$(q "${file}" '.host_git.own | tojson')"
+check "own paths: every dirty path is still listed" 3 "$(q "${file}" '.host_git.dirty | length')"
+check "own paths: a dirty path no flag names is never own" '[]' "$(q "${file}" '.local_git.own | tojson')"
+file="$(capture "FAKE_DIR=${S}" -- "${common[@]}" --scope beads-xy9,beads-amm)"
+check "scope of two epics: both sessions' gates, never the third's" "beads-amm.1,beads-xy9.2" "$(q "${file}" '.human.ids | join(",")')"
+check "scope of two epics: an edge between them counts" '{"beads-amm.3":1,"beads-xy9.6":1}' "$(q "${file}" '.blocked.blockers | tojson')"
+check "scope of two epics: deferred counts both" 3 "$(q "${file}" '.deferred.count')"
+file="$(capture "FAKE_DIR=${S}" -- "${common[@]}" --scope all)"
+check "scope all: every bead" "8 3 2" "$(q "${file}" '"\(.ready | length) \(.human.ids | length) \(.blocked.ids | length)"')"
+check "scope all: recorded" true "$(q "${file}" '.scope.all')"
+file="$(capture "FAKE_DIR=${S}" -- "${common[@]}" --scope beads-nope)"
+check "scope: an id the workspace does not hold is reported" '["beads-nope"]' "$(q "${file}" '.scope.unknown | tojson')"
+check "scope: an unknown id keeps nothing" 0 "$(q "${file}" '.ready | length')"
+file="$(capture "FAKE_DIR=${S}" "FAKE_TRUNCATE= list -n 0" -- "${common[@]}" --scope beads-xy9)"
+contains "scope: a map that did not read is recorded" "read did not finish" "$(q "${file}" '.scope.error')"
+check "scope: without the map, hierarchical ids and each bead's own parent still place beads" "beads-xy9,beads-k2p beads-xy9.2 beads-xy9.6" "$(q "${file}" '"\([.ready[].id] | join(",")) \(.human.ids | join(",")) \(.stale.ids | join(","))"')"
+file="$(capture "FAKE_DIR=${S}" "FAKE_TRUNCATE= list -n 0" -- "${common[@]}")"
+check "no --scope and a map that did not read: a capture, never a refusal" 0 "${LAST_RC}"
+check "no --scope and a map that did not read: every bd section is the precondition, none typed" "true 2" "$(q "${file}" '"\([.ready, .in_progress, .human, .blocked, .stale, .deferred] | all(.precondition == true)) \(.typed | length)"')"
+check "a --scope id must be a bead id" 1 "$(zsh "${FRONTIER}" "${common[@]}" --scope 'Beads X' >/dev/null 2>&1; print $?)"
+check "--scope must name a bead" 1 "$(zsh "${FRONTIER}" "${common[@]}" --scope ',' >/dev/null 2>&1; print $?)"
+check "a workspace with no open epic needs no --scope: scope null" null "$(q "${full}" '.scope')"
+file="$(PATH="${T}/fakebin:${PATH}" capture "FAKE_DIR=${S}" -- --local --beads "${T}/beads" --local-repo "${T}/repo" --root "${T}/root" --scope beads-xy9)"
+check "local scope: the real filter on bd's JSON keeps the same beads" "beads-xy9,beads-k2p,beads-g7m,beads-j9w beads-xy9.2" "$(q "${file}" '"\([.ready[].id] | join(",")) \(.human.ids | join(","))"')"
+out="$(FAKE_DIR="${S}" PATH="${T}/fakebin:${PATH}" zsh "${FRONTIER}" --local --beads "${T}/beads" --local-repo "${T}/repo" --root "${T}/root" 2>/dev/null)"; rc=$?
+check "local, no --scope, open epics: exit 4" 4 "${rc}"
+mkdir -p "${T}/cannedcompact" "${T}/cannedshape"
+cp "${S}"/*.{json,txt} "${T}/cannedcompact/"; cp "${S}"/*.{json,txt} "${T}/cannedshape/"
+jq -c . "${S}/scope.json" > "${T}/cannedcompact/scope.json"
+jq '[.[] | {identifier: .id, kind: .issue_type}]' "${S}/scope.json" > "${T}/cannedshape/scope.json"
+file="$(PATH="${T}/fakebin:${PATH}" capture "FAKE_DIR=${T}/cannedcompact" -- --local --beads "${T}/beads" --local-repo "${T}/repo" --root "${T}/root" --scope beads-xy9)"
+check "local scope: compact bd JSON maps the same beads" "beads-xy9,beads-k2p,beads-g7m,beads-j9w null" "$(q "${file}" '"\([.ready[].id] | join(",")) \(.scope.error)"')"
+out="$(FAKE_DIR="${T}/cannedcompact" PATH="${T}/fakebin:${PATH}" zsh "${FRONTIER}" --local --beads "${T}/beads" --local-repo "${T}/repo" --root "${T}/root" 2>/dev/null)"; rc=$?
+check "local, compact bd JSON, no --scope: the open epics still refuse" 4 "${rc}"
+file="$(PATH="${T}/fakebin:${PATH}" capture "FAKE_DIR=${T}/cannedshape" -- --local --beads "${T}/beads" --local-repo "${T}/repo" --root "${T}/root")"
+check "a bd JSON shape the filter misses is never an empty workspace: every bd section is the precondition" true "$(q "${file}" '[.ready, .in_progress, .human, .blocked, .stale, .deferred] | all(.precondition == true)')"
+contains "a bd JSON shape the filter misses: the error says so" "no id field" "$(q "${file}" '.human.error')"
+mkdir -p "${T}/repo/sub"
+file="$(PATH="${T}/fakebin:${PATH}" capture "FAKE_DIR=${S}" -- --local --beads "${T}/beads" --local-repo "${T}/repo/sub" --root "${T}/root" --scope beads-xy9 --own-paths dirty.txt)"
+check "own paths match from the checkout root, whatever subdirectory --local-repo names" '["?? dirty.txt"]' "$(q "${file}" '.local_git.own | tojson')"
+
 # 8. the preconditions
 check "host mode needs both flags" 1 "$(zsh "${FRONTIER}" --target %18 --run-zsh "${FAKE}" --root "${T}/root" >/dev/null 2>&1; print $?)"
 check "host mode needs the session id" 1 "$(env -u CLAUDE_CODE_SESSION_ID zsh "${FRONTIER}" "${common[@]}" >/dev/null 2>&1; print $?)"
@@ -375,7 +532,7 @@ print -r -- '[{"id":"beads-ip1","title":"Half done","priority":2,"issue_type":"t
 print -r -- '' > "${T}/cannedts/stale.txt"
 file="$(capture "FAKE_DIR=${T}/cannedts" -- "${common[@]}")"
 contains "header: stale is the stale section's count, not a date heuristic; an offset timestamp never crashes it" ", stale 0;" "$(zsh "${BRIEF}" --json "${file}" --header)"
-holds_file="$(capture FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ cd ~/homelab && bin/lab up apps/torrent" -- "${common[@]}")"
+holds_file="$(capture FAKE_RC=75 FAKE_KIND=not_at_prompt "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ cd ~/homelab && bin/lab up apps/torrent" -- "${common[@]}")"
 contains "header: cut off" "Cut off: machine=personal|ID=%18|pane=3.1|nickname=homelab (holds_text); tracker unread" "$(zsh "${BRIEF}" --json "${holds_file}" --header)"
 file="$(capture "FAKE_HOST_RC=ready:1" -- "${common[@]}")"
 contains "header: an errored section reads failed, not ?" "Ready failed, in progress 1" "$(zsh "${BRIEF}" --json "${file}" --header)"
@@ -441,7 +598,7 @@ file="$(capture FAKE_RC_FOR=blocked:124 -- "${common[@]}" --away 'going to work'
 timed_away="$(zsh "${BRIEF}" --json "${file}" --cut-off)"
 contains "away: a timed-out read is the absence too, and names the pane it resolved" 'Away: the host `laptop` did not answer a read of mine in `machine=personal|ID=%18|pane=3.1|nickname=homelab`, as you said it would not (going to work); I never resend it;' "${timed_away}"
 check "away: a timed-out read keeps one question mark" 1 "$(print -rn -- "${timed_away}" | tr -cd '?' | wc -c | tr -d ' ')"
-file="$(capture FAKE_RC=75 "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ cd ~/homelab && bin/lab up apps/torrent" -- "${common[@]}" --away 'going to work')"
+file="$(capture FAKE_RC=75 FAKE_KIND=not_at_prompt "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ cd ~/homelab && bin/lab up apps/torrent" -- "${common[@]}" --away 'going to work')"
 contains "away: a pane that answered is not the absence; holds_text stays his P0" "**P0, cut off from the tracker.**" "$(zsh "${BRIEF}" --json "${file}" --cut-off)"
 check "away: a pane that answered ends the absence" true "$(q "${file}" '.away_ended')"
 file="$(capture FAKE_LIST_RC=255 -- "${common[@]}")"
@@ -499,6 +656,9 @@ readonly SPEC_MD="${SKILL}/templates/briefing.md"
 check "example: the header renders from it" "Ready 3, in progress 1, human 1, blocked 2, stale 1; laptop abc1234 dirty 1; read 09:07Z; fresh read" "$(zsh "${BRIEF}" --json "${EXAMPLE}" --header)"
 check "example: the rendered header is the one in the example markdown" "$(zsh "${BRIEF}" --json "${EXAMPLE}" --header)" "$(awk 'NR > 1 && /^Ready / { print; exit }' "${EXAMPLE_MD}")"
 check "example: the first-principles paragraph is ninety words or fewer" 1 "$(( $(awk '/^\*\*First principles\.\*\*/ { print }' "${EXAMPLE_MD}" | wc -w) <= 90 ))"
+entry_spec="$(awk '/^Text first, then the Capture call/ { s=$0; sub(/^[^"]*"/, "", s); sub(/" An instruction.*$/, "", s); sub(/" With `--local`.*$/, "", s); print s }' "${SKILL}/SKILL.md")"
+entry_spec="${entry_spec//<label with nickname>/machine=personal|ID=%18|pane=3.1|nickname=homelab}"
+check "example: the entry line is SKILL.md's acknowledgement, filled" "${entry_spec//<scope>/beads-epic}" "$(awk '/^Operator mode on\./ { print; exit }' "${EXAMPLE_MD}")"
 for form in 'typed into `' 'not typed: ' 'another agent is using this pane; typed when it is free' 'not typed yet' 'destroys'; do
   contains "example: the key form is shown: ${form}" "${form}" "$(<"${EXAMPLE_MD}")"
   contains "spec: the key form is named: ${form}" "${form}" "$(<"${SPEC_MD}")"

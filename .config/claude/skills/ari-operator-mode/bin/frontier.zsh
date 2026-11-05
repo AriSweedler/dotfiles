@@ -36,6 +36,7 @@ readonly AWAY_REASONS=(host_unreachable read_timed_out)   # the only cut-offs an
 readonly RETRY_S="${FRONTIER_RETRY_S:-5}"   # between retries while the pane is busy with this session's own command; tests shorten it
 readonly PROMPT_GLYPH_DEFAULT='❯'           # what the host's idle prompt line ends with; --prompt-end overrides it per host
 readonly ID_PREFIX_DEFAULT='beads'          # the bead id prefix when no bd JSON list has shown one; --prefix overrides it
+readonly REFUSED_KIND_PREFIX='REFUSED_KIND: '   # run.zsh's 75 or 77 prints it on the line right after REFUSED: (/ari-driving-remote › The gate)
 readonly SCOPE_STATUSES='open,in_progress,blocked,deferred'   # every status a briefing section can list; closed beads are never mapped
 readonly EXIT_SCOPE_NEEDED=4
 # Whether a bead id is one of the scope ids or descends from one: the id itself, a hierarchical child
@@ -44,7 +45,7 @@ readonly EXIT_SCOPE_NEEDED=4
 # created keeps its own id). The limit stops a parent cycle.
 readonly SCOPE_JQ_DEF='def inscope($e; $m): . as $id
   | [limit(64; $id | recurse(($m[.] // {}).parent // empty))]
-  | any(.[]; . as $a | any($e[]; $a == . or ($a | startswith(. + "."))));'
+  | any(.[]; . as $a | any($e[]; . as $x | $a == $x or ($a | startswith($x + "."))));'
 
 # --- Prerequisites ---
 
@@ -84,8 +85,8 @@ ${c_bold}Options:${c_rst}
   --repo PATH             the project checkout on the host (default: none; host_git is skipped)
   --local-repo PATH       the project checkout on this machine (default: the current directory)
   --own-paths PATHS       the paths this session edited and has not committed, comma-separated, relative to the
-                          checkout root; a dirty path among them is listed under own (default: none, so no dirty
-                          path is this session's)
+                          checkout root; one list for both checkouts; a dirty path among them is listed under own
+                          (default: none, so no dirty path is this session's)
   --health CMD            the project's health command, recorded in the JSON, never run
   --root DIR              the investigation root (default: /tmp); the folder is DIR/operator-mode/<UTC stamp>
   --timeout S             seconds allowed per read (default: 45; at least 5); the whole capture gets S times the
@@ -100,15 +101,17 @@ ${c_bold}Options:${c_rst}
                           host_unreachable and read_timed_out as the away line, not his P0 (default: what bin/away.zsh
                           set recorded for this session, if anything); a capture that reaches the host clears that
                           marker and records away_ended; one line, no question mark or backtick; refused with --local
-  --prefix TEXT           the bead id prefix (default: the prefix of the first id a bd JSON list shows, else ${ID_PREFIX_DEFAULT});
+  --prefix TEXT           the bead id prefix (default: the first --scope id's, else the bead map's first id's, else ${ID_PREFIX_DEFAULT});
                           only PREFIX-xxx tokens count as ids in bd's text output, so a hyphenated word never does
   --prompt-end TEXT       what the host's idle prompt line ends with (default: ${PROMPT_GLYPH_DEFAULT}; run.zsh --hosts prints each host's)
   --run-zsh PATH          the run.zsh to drive the pane with (default: the driving-remote skill's; tests pass a fake)
   -h, --help              this help
 
 ${c_bold}Output:${c_rst} key=value lines on stdout: dir= (the folder), json= (its frontier.json), cut_off=
-  (none, or the reason); on exit ${EXIT_SCOPE_NEEDED} instead scope=needed, epics= (the open epics, comma-joined) and
-  error= (why the bead map could not be read, when it could not). The JSON: captured_at, session,
+  (none, or the reason), skill_fix= (empty, or the skill whose update a 75 this reader could not classify
+  calls for: ari-driving-remote for unknown or no kind line, ari-operator-mode for a kind it does not map); on exit ${EXIT_SCOPE_NEEDED} instead scope=needed and epics= (the open epics, comma-joined, for
+  the log only). Without --scope, a bead map that could not be read makes every bd section the precondition
+  error, so nothing unscoped is shown. The JSON: captured_at, session,
   host_definition, pane, nickname, beads_dir, repo, local_repo, scope (null without --scope, else {epics, all,
   unknown: scope ids that are no open bead, error: why the bead map could not be read, so only hierarchical ids
   and each listed bead's own parent placed beads}), pending, pending_seen (true: his row was on the pane; false:
@@ -129,19 +132,27 @@ ${c_bold}Cut-off reasons:${c_rst} not_opted_in (77), other_session (76), busy or
   --pending row sits un-entered on the prompt), row_running (his --pending row is running). The host reads
   stop at the first cut-off; local_git and health still fill.
 
-${c_bold}How a 75 is classified${c_rst}, in this order: the gate's words name copy mode or synchronized panes -> busy.
-  Else the pane tail decides, the last prompt line's command joined across its wrapped lines: it is the
-  --pending text -> row_pending (un-entered) or row_running; un-entered text that is not his row ->
-  holds_text, whoever typed it; a running command that is an agent's (this capture's read, an earlier
-  frontier read, a run_log-wrapped line, a BEADS_ACTOR=claude bd write; Ari types bare) -> retry every
-  ${RETRY_S} s (FRONTIER_RETRY_S) within the budget, own_command when the budget is spent, own_command_persists
-  when the previous capture already waited on it; anything else running -> busy.
+${c_bold}How a 75 is classified${c_rst}: by the ${REFUSED_KIND_PREFIX}line right after run.zsh's first REFUSED: line; the
+  REFUSED: words, which may change, are quoted, never matched.
+    copy_mode, synchronized          -> busy
+    pane_gone                        -> no_pane, the candidates from a fresh --list
+    other_caller                     -> a wait (another run.zsh holds the pane's lock), as for an agent's command
+    not_a_shell, not_at_prompt       -> the pane tail decides, below
+    unknown, no kind line, any other -> his --pending row on the tail is row_pending or row_running; else
+                                        busy; skill_fix= names the skill to update
+  The pane tail is the last prompt line's command joined across its wrapped lines: the --pending text ->
+  row_pending (un-entered) or row_running; un-entered text that is not his row -> holds_text, whoever typed
+  it; a running command that is an agent's (this capture's read, an earlier frontier read, a run_log-wrapped
+  line, a BEADS_ACTOR=claude bd write; Ari types bare) -> retry every ${RETRY_S} s (FRONTIER_RETRY_S) within
+  the budget, own_command when the budget is spent, own_command_persists when the previous capture already
+  waited on it; anything else running -> busy. A pane that closed before or during the gate is a 70:
+  no_pane, the candidates from run.zsh's PANES: inventory.
 
 ${c_bold}Exit codes:${c_rst} 0 the JSON was written (cut off or not); 1 a missing prerequisite, a bad flag, an unreadable
   --previous, a bad --prefix, a --scope id that is not a bead id, --away empty or holding a newline, question
   mark or backtick, --away with --local, --timeout under 5, FRONTIER_RETRY_S not a positive integer, or
   CLAUDE_CODE_SESSION_ID unset without --local (run.zsh refuses every command without it);
-  ${EXIT_SCOPE_NEEDED} no --scope while the workspace holds an open epic, or while the bead map could not be read: nothing
+  ${EXIT_SCOPE_NEEDED} no --scope while the workspace holds an open epic: nothing
   is written.
   Host mode needs timeout or gtimeout (brew install coreutils): without one the fallback SIGKILLs the
   wrapper and can orphan an ssh that holds the pane lock.
@@ -180,7 +191,7 @@ done
 # --- Massage ---
 
 typeset -a scope_ids own_paths
-scope_ids=("${(@s/,/)scope_arg}"); scope_ids=("${(@)scope_ids:#}")
+scope_ids=("${(@s/,/)${scope_arg// /}}"); scope_ids=("${(@)scope_ids:#}")
 own_paths=("${(@s/,/)own_paths_arg}"); own_paths=("${(@)own_paths:#}")
 scope_all=false
 if [[ "${scope_arg:l}" == all ]]; then scope_all=true; scope_ids=(); fi
@@ -254,7 +265,7 @@ fi
 # --- State ---
 
 typeset -A section_json          # section -> JSON value
-typeset -g pane_label='' nickname='' pane_bound='' cut_reason='' cut_prompt_holds='' cut_busy_cmd='' bd_missing=''
+typeset -g pane_label='' nickname='' pane_bound='' cut_reason='' cut_prompt_holds='' cut_busy_cmd='' bd_missing='' skill_fix=''
 typeset -g capture_deadline=0 waited_s=0 prev_last_cmd='' prev_captured_at='' away_ended=false pending_seen=null json_written=0
 typeset -ga unread=() typed=() candidates=() open_epics=()
 # The bead map {id: {parent, issue_type}} from the first read, and why it could not be read. scope_jq_args
@@ -326,10 +337,23 @@ local_read() {
 }
 
 #######################################
-# The REFUSED: line of a run.zsh answer, or empty.
+# The first REFUSED: line of a run.zsh answer, or empty: run.zsh prints its own before the pane tail, so a
+# later one is old pane text.
 # Arguments: $1 = run.zsh stdout; $2 = run.zsh stderr
 #######################################
-refused_line() { print -r -- "${1}"$'\n'"${2}" | awk '/^REFUSED:/ { l=$0 } END { print l }'; }
+refused_line() { print -r -- "${1}"$'\n'"${2}" | awk '!f && /^REFUSED:/ { print; f=1 }'; }
+
+#######################################
+# The kind of a 75 or 77: the REFUSED_KIND line right after the first REFUSED: line, or empty when that
+# line is not one (a run.zsh older than the kind line); a kind line further down is old pane text.
+# Arguments: $1 = run.zsh stdout; $2 = run.zsh stderr
+#######################################
+refusal_kind() {
+  print -r -- "${1}"$'\n'"${2}" | awk -v k="${REFUSED_KIND_PREFIX}" '
+    done { next }
+    seen { if (index($0, k) == 1) print substr($0, length(k) + 1); done=1; next }
+    /^REFUSED:/ { seen=1 }'
+}
 
 #######################################
 # The command typed on the pane's last prompt line, from run.zsh's pane tail: the text after the prompt
@@ -399,35 +423,59 @@ own_command_text() {
 }
 
 #######################################
-# Classify a 75, in this order: the gate's words for copy mode or synchronized panes -> busy; else the
-# pane tail decides, the last prompt line's command joined across its wrapped lines: his --pending row,
-# the whole command and not a substring of a later one, un-entered or running is his row (row_pending,
-# row_running, pending_seen true); un-entered text that is not his row is
-# holds_text, whoever typed it (no wait clears it); a running agent's command (own_command_text) is a
-# wait (retry), or own_command_persists when the previous capture by this session on this pane already
-# waited on the same command; anything else running is busy.
-# Globals: pending, prev_last_cmd, prev_captured_at; sets cut_reason, cut_prompt_holds
-# Arguments: $1 = the REFUSED line; $2 = run.zsh stdout
+# Set candidates to the pane labels in a run.zsh answer: --list, or the PANES: inventory under a 70.
+# Globals: sets candidates
+# Arguments: $1 = run.zsh stdout
+#######################################
+set_candidates() {
+  candidates=("${(@f)$(print -r -- "${1}" | awk '/^(machine=[^|]+\|)?ID=%[0-9]+\|pane=[0-9]+\.[0-9]+ / { print $1 }')}")
+  candidates=("${(@)candidates:#}")
+}
+
+#######################################
+# Classify a 75; the mapping is --help's "How a 75 is classified". The REFUSED: words are only quoted,
+# never matched.
+# Globals: pending, prev_last_cmd, prev_captured_at; sets cut_reason, cut_prompt_holds, cut_busy_cmd,
+#          pending_seen, candidates, skill_fix
+# Arguments: $1 = the REFUSED_KIND (empty when none followed REFUSED:); $2 = the REFUSED line; $3 = run.zsh stdout
 # Returns: 0 when a reason was recorded; 3 when the pane runs an agent's command (retry)
 #######################################
 classify_75() {
-  local refused="${1}" out="${2}" why last_cmd last_line busy_with
+  local kind="${1}" refused="${2}" out="${3}" why last_cmd last_line busy_with
   why="${refused#REFUSED: }"; why="${why#* }"
   last_cmd="$(tail_prompt_command "${out}")"
   last_line="$(tail_last_line "${out}")"
   busy_with="${why}${last_cmd:+ (${last_cmd})}"
-  case "${why}" in
-    *"another caller is typing"*) ;;                      # a run.zsh holds the pane's lock: a fork or lane mid-type
-    *"copy mode"*|*"synchronize-panes"*) cut_reason='busy'; cut_prompt_holds="${why}"; return 0 ;;
-    *"not a shell"*)
+  case "${kind}" in
+    other_caller) ;;
+    copy_mode|synchronized) cut_reason='busy'; cut_prompt_holds="${why}"; return 0 ;;
+    pane_gone)
+      log::warn "tmux could not read the pane; listing the host's panes, as for a 70 | refused='${refused}'"
+      cut_reason='no_pane'; cut_prompt_holds="${why}"
+      drive --list
+      if (( REPLY_RC == 0 )); then set_candidates "${REPLY_OUT}"; fi
+      return 0 ;;
+    not_a_shell)
       if [[ -n "${pending}" && "${last_cmd}" == "${pending}" ]]; then cut_reason='row_running'; cut_prompt_holds="${last_cmd}"; pending_seen=true; return 0; fi
       if ! own_command_text "${last_cmd}"; then cut_reason='busy'; cut_prompt_holds="${busy_with}"; return 0; fi ;;
-    *"does not end in the prompt"*)
+    not_at_prompt)
       if [[ -n "${pending}" && "${last_cmd}" == "${pending}" ]]; then cut_reason='row_pending'; cut_prompt_holds="${last_line}"; pending_seen=true; return 0; fi
       # the prompt line is the tail's last line: un-entered text, which no wait clears, whoever typed it
       if [[ -n "${last_cmd}" && "${last_line}" == *"${last_cmd}" ]]; then cut_reason='holds_text'; cut_prompt_holds="${last_line}"; return 0; fi
       if ! own_command_text "${last_cmd}"; then cut_reason='holds_text'; cut_prompt_holds="${last_line}"; return 0; fi ;;
-    *) cut_reason='busy'; cut_prompt_holds="${why}"; return 0 ;;
+    *)
+      skill_fix='ari-operator-mode'
+      case "${kind}" in
+        unknown) skill_fix='ari-driving-remote'; log::warn "run.zsh's GATE_REASON_KINDS has no kind for this gate reason; treated as busy | kind='${kind}' refused='${refused}' skill_fix='${skill_fix}'" ;;
+        '') skill_fix='ari-driving-remote'; log::warn "No REFUSED_KIND line follows REFUSED: (a run.zsh from before the kind line, or a --run-zsh that prints none); treated as busy | refused='${refused}' skill_fix='${skill_fix}'" ;;
+        *) log::warn "frontier.zsh's classify_75 does not map this kind; treated as busy | kind='${kind}' refused='${refused}' skill_fix='${skill_fix}'" ;;
+      esac
+      if [[ -n "${pending}" && "${last_cmd}" == "${pending}" ]]; then   # his row decides before busy, as the tail does for a kind it knows
+        pending_seen=true
+        if [[ "${last_line}" == *"${last_cmd}" ]]; then cut_reason='row_pending'; cut_prompt_holds="${last_line}"; else cut_reason='row_running'; cut_prompt_holds="${last_cmd}"; fi
+        return 0
+      fi
+      cut_reason='busy'; cut_prompt_holds="${why}"; return 0 ;;
   esac
   cut_busy_cmd="${last_cmd:-${why}}"
   if [[ -n "${prev_last_cmd}" && "${prev_last_cmd}" == "${cut_busy_cmd}" ]]; then   # the last capture already waited on this agent's command: not clearing, still not his
@@ -438,8 +486,10 @@ classify_75() {
 }
 
 #######################################
-# Turn a run.zsh exit code and its REFUSED line into a cut-off reason, and record it.
-# Globals: sets cut_reason, cut_prompt_holds
+# Turn a run.zsh exit code other than 75 (remote_read classifies every 75 with classify_75) and its
+# REFUSED line into a cut-off reason, and record it. A 70 (the pane closed, before the read or during its
+# gate) carries run.zsh's inventory of the host's panes: those labels are the candidates.
+# Globals: sets cut_reason, cut_prompt_holds, candidates
 # Arguments: $1 = exit code; $2 = run.zsh stdout; $3 = run.zsh stderr
 # Returns: 0 when the code is a cut-off; 1 when it is not
 #######################################
@@ -450,8 +500,7 @@ cut_off_from_rc() {
   case "${rc}" in
     77) cut_reason='not_opted_in' ;;
     76) cut_reason='other_session' ;;
-    75) cut_reason='busy'; cut_prompt_holds="${refused#REFUSED: }" ;;    # classify_75 handles a 75 on a read; this is the fallback
-    70) cut_reason='no_pane'; cut_prompt_holds="${refused#REFUSED: }" ;;
+    70) cut_reason='no_pane'; cut_prompt_holds="${refused#REFUSED: }"; set_candidates "${out}" ;;
     124) cut_reason='read_timed_out'; cut_prompt_holds="${tail_line}" ;;
     255) cut_reason='host_unreachable'; cut_prompt_holds="$(last_line "${err}")" ;;
     1) cut_reason='refused_text'; cut_prompt_holds="$(last_line "${err}")" ;;
@@ -485,8 +534,7 @@ find_pane() {
   lines=("${(@)lines:#}")
   if (( ${#lines} == 0 )); then
     pane_label="${target}" cut_reason='no_pane'
-    candidates=("${(@f)$(print -r -- "${REPLY_OUT}" | awk '/^(machine=[^|]+\|)?ID=%/ { print $1 }')}")
-    candidates=("${(@)candidates:#}")
+    set_candidates "${REPLY_OUT}"
     log::warn "No pane matches the target | target='${target}' panes='${(j:, :)candidates}'"
     return 1
   fi
@@ -531,7 +579,7 @@ remote_read() {
     drive --target "${target}" --no-run-log --lines "${CAPTURE_LINES}" --timeout "${drive_timeout}" --cmd "${cmd_line}"
     (( REPLY_RC == 75 )) || break
     refused="$(refused_line "${REPLY_OUT}" "${REPLY_ERR}")"
-    cls=0; classify_75 "${refused}" "${REPLY_OUT}" || cls=$?
+    cls=0; classify_75 "$(refusal_kind "${REPLY_OUT}" "${REPLY_ERR}")" "${refused}" "${REPLY_OUT}" || cls=$?
     if (( cls != 3 )); then
       log::warn "Cut off | reason='${cut_reason}' rc='75' detail='${cut_prompt_holds}'"
       return 2
@@ -616,7 +664,7 @@ bead_list() {
   if [[ -z "${raw//[[:space:]]/}" ]]; then print -r -- '[]'; return 0; fi
   if trimmed="$(json_part "${raw}" | jq -ce "${scope_jq_args[@]}" "${SCOPE_JQ_DEF}"'
       if type == "array" then [.[] | {id, title, priority, type: (.issue_type // .type // null), parent: (.parent // null), assignee: (.assignee // null), updated_at: (.updated_at // null)}]
-        | if $scoped then map(select(. as $b | .id | inscope($e; $m + {($b.id): {parent: $b.parent}}))) else . end
+        | if $scoped then map(select(. as $b | .id | inscope($e; $m + (if $b.parent then {($b.id): {parent: $b.parent}} else {} end)))) else . end
       else error("not an array") end' 2>/dev/null)"; then
     print -r -- "${trimmed}"
     return 0
@@ -655,7 +703,7 @@ text_section() {
     | ($hits | map(.id) | unique) as $all
     | ([ $blocks[] | select(any($lines[.i:.to][]; test("^\\s*Status:\\s*deferred"))) | .id ] | unique) as $deferred
     | if $count != null and $count != ($all | length)
-      then {error: ("parsed " + ($all | length | tostring) + " ids of " + ($count | tostring) + " listed; the bd text shape changed"), text: $t}
+      then {error: ("parsed " + ($all | length | tostring) + " ids of " + ($count | tostring) + " listed; the bd text shape changed"), text: (if $scoped then null else $t end)}
       elif ($scoped | not) then {text: $t, ids: ($all - $deferred), deferred_ids: $deferred}
       else
         [ $all[] | select(inscope($e; $m)) ] as $keep
@@ -670,7 +718,8 @@ text_section() {
 # {text, ids, blockers}: blockers maps a blocking bead id to how many beads wait on it, from the
 # "blocked by: <id>" or "Blocked by N open dependencies: [<id>]" lines bd blocked prints (a line that
 # opens with those words; a title that mentions them is not one). In scope they are read from the kept
-# blocks only, and a blocker outside the scope is dropped: an edge counts when both its beads are in scope.
+# blocks only, and a blocker outside the scope is dropped: an edge counts when both its beads are in scope;
+# the text names such a blocker "a bead outside the scope", so no section holds another session's id.
 # Globals: scope_jq_args, SCOPE_JQ_DEF
 # Arguments: $1 = raw output; $2 = rc; $3 = why the read failed, if it did
 #######################################
@@ -682,13 +731,17 @@ blocked_section() {
   blockers="$(print -r -- "${base}" | jq -r '.text' \
     | awk 'tolower($0) ~ /^[[:space:]]*blocked by/ { s=$0; sub(/^[[:space:]]*[Bb]locked by[^:\[]*[:\[][[:space:]]*/, "", s); gsub(/[\]\[]/, "", s); n=split(s, ids, /[,[:space:]]+/); for (i=1; i<=n; i++) if (ids[i] ~ /^[a-z]+-[a-z0-9.]+$/) c[ids[i]]++ } END { for (k in c) printf "%s\t%d\n", k, c[k] }' \
     | jq -Rsc 'split("\n") | map(select(length > 0) | split("\t")) | map({key: .[0], value: (.[1] | tonumber)}) | from_entries')"
-  jq -cn --argjson b "${base}" --argjson k "${blockers}" "${scope_jq_args[@]}" "${SCOPE_JQ_DEF}"'
-    $b + {blockers: (if $scoped then ($k | with_entries(select(.key | inscope($e; $m)))) else $k end)}'
+  jq -cn --argjson b "${base}" --argjson k "${blockers}" --arg p "${id_prefix:-${ID_PREFIX_DEFAULT}}" "${scope_jq_args[@]}" "${SCOPE_JQ_DEF}"'
+    if ($scoped | not) then $b + {blockers: $k}
+    else $b + {blockers: ($k | with_entries(select(.key | inscope($e; $m)))),
+               text: ($b.text | split("\n") | map(if test("^\\s*[Bb]locked by") then
+                        gsub("(?<id>" + $p + "-[a-z0-9]+(\\.[0-9]+)*)"; if (.id | inscope($e; $m)) then .id else "a bead outside the scope" end)
+                      else . end) | join("\n"))} end'
 }
 
 #######################################
 # A git section {dirty: [status lines], own: [the dirty lines whose path --own-paths names], log:
-# [{hash, subject}]} from status --short and log --oneline. A path is the text after the two status
+# [{hash, subject}]} from status --porcelain and log --oneline. A path is the text after the two status
 # columns (a rename's new path, quotes stripped); an untracked directory (`?? notes/`) is own when an
 # own path lies under it.
 # Globals: own_paths_json
@@ -698,7 +751,7 @@ git_section() {
   local raw="${1}" rc="${2}" why="${3}"
   if (( rc != 0 )); then json_error "${why:-"git failed (rc ${rc}): $(last_line "${raw}")"}"; return 0; fi
   jq -cn --arg t "${raw}" --argjson own "${own_paths_json}" '($t | split("\n") | map(select(length > 0))) as $l
-    | [$l[] | select(test("^[ MADRCU?!]{2} "))] as $dirty
+    | [$l[] | select(test("^[ MTADRCU?!]{2} "))] as $dirty
     | {dirty: $dirty,
        own: [$dirty[] | select((.[3:] | sub("^.* -> "; "") | ltrimstr("\"") | rtrimstr("\"")) as $p
                                | any($own[]; . == $p or (($p | endswith("/")) and startswith($p))))],
@@ -717,7 +770,7 @@ count_section() {
   if [[ -z "${raw//[[:space:]]/}" ]]; then print -r -- '{"count": 0}'; return 0; fi
   if n="$(json_part "${raw}" | jq -e "${scope_jq_args[@]}" "${SCOPE_JQ_DEF}"'
       if type == "array" then
-        (if $scoped then map(select(. as $b | .id | inscope($e; $m + {($b.id): {parent: ($b.parent // null)}}))) else . end) | length
+        (if $scoped then map(select(. as $b | .id | inscope($e; $m + (if $b.parent then {($b.id): {parent: $b.parent}} else {} end)))) else . end) | length
       else error("not an array") end' 2>/dev/null)"; then
     print -r -- "{\"count\": ${n}}"; return 0
   fi
@@ -742,7 +795,7 @@ read_section() {
     deferred)    cmd="bd -C ${bd_dir} list -s deferred --json" ;;
     host_git)
       if [[ -z "${repo}" ]]; then section_json[$name]='{"skipped": "no --repo"}'; return 0; fi
-      cmd="git -C $(host_path "${repo}") status --short && git -C $(host_path "${repo}") log -3 --oneline" ;;
+      cmd="git -C $(host_path "${repo}") -c core.quotePath=false status --porcelain && git -C $(host_path "${repo}") log -3 --oneline" ;;
   esac
   read_cmd "${cmd}" || rc=$?
   if (( rc == 2 )); then return 2; fi
@@ -765,25 +818,30 @@ read_section() {
 #######################################
 # The first read: every bead in SCOPE_STATUSES as {id: {parent, issue_type}}, so a section can tell this
 # session's beads from another session's in the same workspace. The host keeps only the id, parent and
-# issue_type lines of bd's JSON, so a large workspace still fits one pane capture; the subshell keeps
-# pipefail off his shell and carries bd's own exit code. Sets the globals directly: never call it in a
-# command substitution.
-# Globals: beads_dir; sets scope_beads_json, scope_error, scope_mapped, open_epics, id_prefix, bd_missing
+# issue_type lines of bd's JSON, so a large workspace still fits one pane capture, plus bd's own exit code
+# (__BDRC, in-band, so no pipefail is needed in his shell) and the count of lines bd printed (__LINES, so
+# a JSON shape the filter misses is an error, never an empty workspace). Sets the globals directly: never
+# call it in a command substitution.
+# Globals: beads_dir, scope_ids; sets scope_beads_json, scope_error, scope_mapped, open_epics, id_prefix, bd_missing
 # Returns: 2 when the read was cut off
 #######################################
 read_scope() {
-  local bd_dir rc=0 parsed
+  local bd_dir rc=0 parsed bd_rc lines check
   bd_dir="$(host_path "${beads_dir}")"
-  read_cmd "( set -o pipefail; bd -C ${bd_dir} list -n 0 -s ${SCOPE_STATUSES} --json | awk '/\"(id|parent|issue_type)\": /' )" || rc=$?
+  read_cmd "{ bd -C ${bd_dir} list -n 0 -s ${SCOPE_STATUSES} --json; printf '__BDRC=%s\\n' \$?; } | awk '/\"(id|parent|issue_type)\": *\"/ || /^__BDRC=/ { print } END { print \"__LINES=\" NR }'" || rc=$?
   if (( rc == 2 )); then return 2; fi
-  if (( REPLY_RC == 127 )); then   # no bd on the host: the six bd reads would fail the same way
+  bd_rc="$(print -r -- "${REPLY_OUT}" | awk -F= '/^__BDRC=[0-9]+$/ { r=$2 } END { print (r == "" ? 0 : r) }')"
+  lines="$(print -r -- "${REPLY_OUT}" | awk -F= '/^__LINES=[0-9]+$/ { n=$2 } END { print (n == "" ? 0 : n) }')"
+  (( REPLY_RC != 0 )) && bd_rc="${REPLY_RC}"
+  learn_prefix_from_scope
+  if (( bd_rc == 127 )); then   # no bd on the host: the six bd reads would fail the same way
     bd_missing="bd is not on the host's PATH, or ${beads_dir} is not a bd workspace (rc 127): $(last_line "${REPLY_OUT}")"
     scope_error="${bd_missing}"
     log::warn "bd is missing | detail='${bd_missing}'"
     return 0
   fi
-  if (( REPLY_RC != 0 )); then
-    scope_error="${REPLY_ERR:-"command failed (rc ${REPLY_RC}): $(last_line "${REPLY_OUT}")"}"
+  if (( bd_rc != 0 )); then
+    scope_error="${REPLY_ERR:-"bd failed (rc ${bd_rc})"}"
     log::warn "The bead map could not be read | detail='${scope_error}'"
     return 0
   fi
@@ -791,6 +849,15 @@ read_scope() {
     | reduce .[] as $f ({cur: null, beads: {}};
         if $f[0] == "id" then .cur = $f[1] | .beads[$f[1]] = {} elif .cur == null then . else .beads[.cur][$f[0]] = $f[1] end)
     | .beads')"
+  check="$(print -r -- "${parsed}" | jq -r --argjson lines "${lines}" '
+    if length == 0 and $lines > 3 then "bd printed \($lines) lines but no id field: its JSON shape changed"
+    elif any(keys[]; test("\\.")) and all(.[]; has("parent") | not) then "child ids but no parent field: its JSON shape changed"
+    else "" end')"
+  if [[ -n "${check}" ]]; then
+    scope_error="${check}"
+    log::warn "The bead map could not be read | detail='${scope_error}'"
+    return 0
+  fi
   scope_beads_json="${parsed}"
   scope_mapped=1
   open_epics=("${(@f)$(print -r -- "${parsed}" | jq -r 'to_entries[] | select(.value.issue_type == "epic") | .key' | sort)}")
@@ -803,15 +870,32 @@ read_scope() {
 }
 
 #######################################
-# Whether this capture must be refused: no --scope, bd is there, and the workspace holds an open epic
-# or could not be mapped (so it may hold one); another session's beads would otherwise become his rows.
-# Globals: scope_arg, bd_missing, open_epics, scope_error
+# The id prefix from the first --scope id, when --prefix gave none: the map may not read, and the text
+# sections need the prefix either way.
+# Globals: scope_ids; sets id_prefix
+#######################################
+learn_prefix_from_scope() {
+  if [[ -n "${id_prefix}" ]] || (( ${#scope_ids} == 0 )); then return 0; fi
+  id_prefix="${scope_ids[1]%%-*}"
+  log::info "Id prefix learned from the scope | id_prefix='${id_prefix}'"
+}
+
+#######################################
+# Whether this capture must be refused: no --scope, bd is there, and the workspace holds an open epic;
+# another session's beads would otherwise become his rows. A map that could not be read without --scope
+# is no refusal but the precondition for every bd section: nothing unscoped is shown, and his row is the
+# failing read by hand.
+# Globals: scope_arg, bd_missing, open_epics, scope_error; may set bd_missing
 #######################################
 is_scope_needed() {
   if [[ -n "${scope_arg}" ]]; then return 1; fi
   if [[ -n "${bd_missing}" ]]; then log::info "No --scope, but bd is missing: the capture carries the precondition"; return 1; fi
+  if [[ -n "${scope_error}" ]]; then
+    bd_missing="the bead map could not be read, so no bd section can be shown unscoped: ${scope_error}"   # the precondition path: no bd read is typed
+    log::warn "No --scope and no bead map: every bd section is the precondition | detail='${scope_error}'"
+    return 1
+  fi
   if (( ${#open_epics} > 0 )); then log::warn "No --scope and the workspace holds open epics | open_epics='${(j:,:)open_epics}'"; return 0; fi
-  if [[ -n "${scope_error}" ]]; then log::warn "No --scope and the bead map could not be read, so it may hold epics | detail='${scope_error}'"; return 0; fi
   log::info "No --scope and no open epic: the workspace is read whole"
   return 1
 }
@@ -828,15 +912,15 @@ set_scope_args() {
 }
 
 #######################################
-# Refuse an unscoped capture: nothing is written, and the open epics are printed for the one question.
-# Globals: open_epics, scope_error; sets no_capture
+# Refuse an unscoped capture: nothing is written; the open epics are printed for the log, never for the
+# reply to pick from.
+# Globals: open_epics; sets no_capture
 #######################################
 refuse_unscoped() {
   no_capture=1
   cat <<EOF
 scope=needed
 epics=${(j:,:)open_epics}
-error=${scope_error}
 EOF
   exit "${EXIT_SCOPE_NEEDED}"
 }
@@ -846,7 +930,7 @@ EOF
 # Globals: section_json, local_repo, health
 #######################################
 read_local_sections() {
-  local_read git -C "${local_repo}" status --short
+  local_read git -C "${local_repo}" -c core.quotePath=false status --porcelain
   local st_out="${REPLY_OUT}" st_rc="${REPLY_RC}" st_err="${REPLY_ERR}"
   local_read git -C "${local_repo}" log -3 --oneline
   if (( st_rc != 0 || REPLY_RC != 0 )); then
@@ -1012,6 +1096,7 @@ write_json() {
 dir=${dir}
 json=${json_file}
 cut_off=${cut_reason:-none}
+skill_fix=${skill_fix}
 EOF
 }
 
