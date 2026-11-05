@@ -4,9 +4,11 @@
 #   - gdoc_publish.zsh, gdoc_finish.zsh and gdoc_asides.zsh --rebuild with no flag send no write
 #   - --dry-run, --dry-run with --execute in either order, and an inherited DRY_RUN=1 with --execute
 #     send no write; an inherited DRY_RUN=0 alone sends none either
-#   - gdoc_publish.zsh --execute uploads, then its finish and asides children write: the parent hands
-#     them --execute, since neither acts without it
-# HOME is a throwaway with only the skills these scripts source, so the bookmark step is not installed.
+#   - gdoc_publish.zsh --execute uploads, then its finish, asides and bookmark children write: the
+#     parent hands each --execute, since none writes without it. A dry run only checks the bookmark
+#     setup; a crashed check, a failed apply, or an apply that dry-ran fails the publish
+# HOME is a throwaway with only the skills these scripts source; the bookmark step is a fake, installed
+# for its own cases only.
 # Run: zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/tests/gdoc_dry_run.test.zsh
 
 set -uo pipefail
@@ -179,7 +181,80 @@ check "publish --execute uploads, then finish and the asides rebuild write their
   $'drive files update\ndocs documents batchUpdate\ndocs documents batchUpdate\ndocs documents batchUpdate' "$(writes "${T}/execute")"
 check "the finish batch chips the Drive link" "deleteContentRange,insertRichLink" \
   "$(jq -rs '[.[] | select(.[0:3] == ["docs", "documents", "batchUpdate"])] | first | .[index("--json") + 1] | fromjson | [.requests[] | keys[0]] | join(",")' "${T}/execute/calls.jsonl")"
-contains "with no bookmark skill the step warns and the publish still passes" "Bookmark skill not installed" "$(cat "${T}/execute/err")"
+contains "with no bookmark skill the step warns and the publish still passes" "Bookmarks skipped; the bookmark skill is not installed" "$(cat "${T}/execute/err")"
+
+# --- the bookmark step: gdoc_bookmarks.zsh writes only with --execute, so publish hands it on ---
+
+readonly FAKE_BOOKMARK_SKILL="${T}/home/.claude/skills/ari-hemingway--structure-bookmark"
+mkdir -p "${FAKE_BOOKMARK_SKILL}/bin"
+# The fake bookmark step: every call's argv but --help as one line in bookmarks.calls; FAKE_BOOKMARKS_MODE
+# picks ok (the default), missing (a MISSING setup), crash (exit 1, no MISSING line), old (no --execute
+# in its help), apply_fail, or dry_reply (exits 0 but reports a dry run).
+cat > "${FAKE_BOOKMARK_SKILL}/bin/gdoc_bookmarks.zsh" <<'FAKE'
+#!/usr/bin/env zsh
+mode="${FAKE_BOOKMARKS_MODE:-ok}"
+if [[ "${1}" == "--help" ]]; then
+  [[ "${mode}" == old ]] && { print -r -- "usage: gdoc_bookmarks.py [--dry-run]"; exit 0; }
+  print -r -- "  --execute  write"
+  exit 0
+fi
+print -r -- "${*}" >> "${FAKE_GWS_DIR}/bookmarks.calls"
+if [[ "${1}" == "--check-setup" ]]; then
+  [[ "${mode}" == missing ]] && { print -r -- "MISSING  project: run: gws script projects create"; exit 1; }
+  [[ "${mode}" == crash ]] && { print -ru2 -- "ModuleNotFoundError: No module named 'skill_log'"; exit 1; }
+  print -r -- "OK       scopes"
+  exit 0
+fi
+[[ "${mode}" == apply_fail ]] && exit 1
+[[ "${mode}" == dry_reply ]] && { print -r -- '{"dry_run": 1}'; exit 0; }
+print -r -- '{"dry_run": 0}'
+FAKE
+bookmark_run() {   # <dir> <mode> <args…>: the publish under that fake mode
+  local dir="${1}" mode="${2}"
+  shift 2
+  new_fake "${dir}"
+  out="$(env HOME="${T}/home" FAKE_GWS_DIR="${dir}" FAKE_BOOKMARKS_MODE="${mode}" PATH="${T}/bin:${PATH}" zsh "${PUBLISH}" "${@}" 2>"${dir}/err")"; rc=$?
+}
+bookmark_calls() {   # <dir>: the fake's calls, with the staged draft path elided
+  [[ -f "${1}/bookmarks.calls" ]] || return 0
+  awk '{ sub(/--file [^ ]+/, "--file DRAFT"); print }' "${1}/bookmarks.calls"
+}
+
+bookmark_run "${T}/bm_execute" ok --file "${T}/draft.md" --doc DOC_A --execute
+check "publish --execute with the bookmark skill exits 0" 0 "${rc}"
+check "it checks the setup, then applies with --execute" $'--check-setup\n--apply --execute --doc DOC_A --file DRAFT' "$(bookmark_calls "${T}/bm_execute")"
+bookmark_run "${T}/bm_dry" ok --file "${T}/draft.md" --doc DOC_A
+check "a dry-run publish only checks the setup, never applies" "--check-setup" "$(bookmark_calls "${T}/bm_dry")"
+contains "and says the bookmarks would be applied" "bookmarks='would-apply'" "$(cat "${T}/bm_dry/err")"
+bookmark_run "${T}/bm_missing_dry" missing --file "${T}/draft.md" --doc DOC_A
+contains "a dry run with the setup missing says they would be skipped" "bookmarks='skipped'" "$(cat "${T}/bm_missing_dry/err")"
+contains "and leaves the setup command to the user" "next='offer the one-time setup in /ari-hemingway--structure-bookmark; run nothing from missing= unasked'" "$(cat "${T}/bm_missing_dry/err")"
+bookmark_run "${T}/bm_missing" missing --file "${T}/draft.md" --doc DOC_A --execute
+check "a missing setup skips the apply and the publish still exits 0" "0 --check-setup" "${rc} $(bookmark_calls "${T}/bm_missing")"
+bookmark_run "${T}/bm_crash" crash --file "${T}/draft.md" --doc DOC_A --execute
+check "a setup check that crashes fails the publish, and nothing is applied" "1 --check-setup" "${rc} $(bookmark_calls "${T}/bm_crash")"
+contains "and names the crash" "Bookmark setup check failed | exit_code='1' error='ModuleNotFoundError: No module named 'skill_log''" "$(cat "${T}/bm_crash/err")"
+bookmark_run "${T}/bm_old" old --file "${T}/draft.md" --doc DOC_A --execute
+check "a bookmark skill without --execute is skipped before any call, and the publish exits 0" "0 " "${rc} $(bookmark_calls "${T}/bm_old")"
+contains "and says to update it" "the bookmark skill predates --execute" "$(cat "${T}/bm_old/err")"
+bookmark_run "${T}/bm_fail" apply_fail --file "${T}/draft.md" --doc DOC_A --execute
+check "a failed apply fails the publish, which still prints the URL" "1 https://docs.google.com/document/d/DOC_A/edit" "${rc} ${out}"
+bookmark_run "${T}/bm_dry_reply" dry_reply --file "${T}/draft.md" --doc DOC_A --execute
+check "an apply that reports a dry run fails the publish" 1 "${rc}"
+contains "and says the step did not execute" "Bookmark step did not execute" "$(cat "${T}/bm_dry_reply/err")"
+print -r -- "[🤖 AI generated] Plain
+
+# Intro
+
+Nothing to bookmark." > "${T}/plain.md"
+bookmark_run "${T}/bm_none" ok --file "${T}/plain.md" --doc DOC_A --execute
+check "a draft with no asides and no #bm- or #goto- link never calls the bookmark step" "0 " "${rc} $(bookmark_calls "${T}/bm_none")"
+new_fake "${T}/bm_finish_fail"
+print -r -- '{"error": "refused"}' > "${T}/bm_finish_fail/docs-documents-batchUpdate.1.json"
+jq '.body.content[0].paragraph.elements[0].textRun.textStyle.link.url = "https://docs.google.com/document/d/DOC_B/edit"' "${T}/bm_finish_fail/docs-documents-get.1.json" > "${T}/bm_finish_fail/docs-documents-get.2.json"
+out="$(env HOME="${T}/home" FAKE_GWS_DIR="${T}/bm_finish_fail" FAKE_BOOKMARKS_MODE=ok PATH="${T}/bin:${PATH}" zsh "${PUBLISH}" --file "${T}/draft.md" --doc DOC_A --execute 2>"${T}/bm_finish_fail/err")"; rc=$?
+check "after a failed finish the bookmark step is skipped and the publish fails" "1 " "${rc} $(bookmark_calls "${T}/bm_finish_fail")"
+rm -rf "${FAKE_BOOKMARK_SKILL}"
 
 # --- gdoc_finish.zsh and gdoc_asides.zsh --rebuild alone ---
 

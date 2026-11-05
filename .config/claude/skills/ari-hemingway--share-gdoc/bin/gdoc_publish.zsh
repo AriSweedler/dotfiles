@@ -190,38 +190,126 @@ rebuild_asides() {
 }
 
 #######################################
-# Bookmark the draft's #bm- runs and aside markers when the structure-bookmark setup passes;
-# otherwise warn once with the first missing prerequisite and leave the heading links.
-# Globals: BOOKMARKS
-# Arguments: $1 - doc id, $2 - full draft path
+# Whether the draft gives the bookmark step anything to do: a #bm- or #goto- link, or an aside.
+# Arguments: $1 - full draft path, $2 - aside count
 #######################################
-apply_bookmarks() {
-  local doc="${1}" draft="${2}"
-  if [[ ! -f "${BOOKMARKS}" ]]; then
-    log::warn "Bookmark skill not installed; return links stay on headings | path='${BOOKMARKS}'"
-    return 0
-  fi
-  local setup
-  if ! setup="$(zsh "${BOOKMARKS}" --check-setup 2>/dev/null)"; then
-    local missing
-    missing="$(print -r -- "${setup}" | awk '!found && /^MISSING/ { print; found = 1 }')"
-    log::warn "Bookmarks skipped; return links stay on headings | missing='${missing}'"
-    return 0
-  fi
-  zsh "${BOOKMARKS}" --apply --doc "${doc}" --file "${draft}" > /dev/null
+is_bookmarking_needed() {
+  local draft="${1}" n_asides="${2}"
+  (( n_asides > 0 )) && return 0
+  [[ -n "$(awk '!found && /\]\(#(bm|goto)-/ { print; found = 1 }' "${draft}")" ]]
 }
 
 #######################################
-# Bookmark only over aside tabs this run rebuilt: after a failed rebuild the tabs are empty or stale.
-# Arguments: $1 - doc id, $2 - full draft path, $3 - the asides rebuild's exit code
+# Whether the bookmark step can run: the skill is installed, takes --execute, and its read-only
+# setup check passes. A check that fails with no MISSING line is broken, not a missing setup.
+# Globals: BOOKMARKS
+# Arguments: $1 - what a skip is called in the log ("Bookmarks skipped" or "Bookmarks would be skipped"),
+#            $2 - path for the check's stderr
+# Returns: 0 when it can run, 1 when it is skipped (WARN), 2 when the check itself failed (ERROR)
 #######################################
-bookmark_if_asides_rebuilt() {
-  local doc="${1}" draft="${2}" asides_rc="${3}"
+bookmark_setup_status() {
+  local skipped="${1}" err_file="${2}"
+  if [[ ! -f "${BOOKMARKS}" ]]; then
+    log::warn "${skipped}; the bookmark skill is not installed and return links stay on headings | path='${BOOKMARKS}'"
+    return 1
+  fi
+  # A version from before --execute rejects the flag after the Doc is written; skip it instead.
+  if [[ "$(zsh "${BOOKMARKS}" --help 2>&1 || true)" != *--execute* ]]; then
+    log::warn "${skipped}; the bookmark skill predates --execute and return links stay on headings | path='${BOOKMARKS}' fix='update ari-hemingway--structure-bookmark'"
+    return 1
+  fi
+  local setup exit_code=0
+  setup="$(zsh "${BOOKMARKS}" --check-setup 2>"${err_file}")" || exit_code=$?
+  if (( exit_code == 0 )); then
+    return 0
+  fi
+  local missing
+  missing="$(print -r -- "${setup}" | awk '!found && /^MISSING/ { print; found = 1 }')"
+  if [[ -z "${missing}" ]]; then
+    log::err "Bookmark setup check failed | exit_code='${exit_code}' error='$(tail -n 1 "${err_file}" 2>/dev/null || true)' err='${err_file}'"
+    return 2
+  fi
+  # missing= carries setup commands, some with --execute: they are for the user to choose.
+  log::warn "${skipped}; return links stay on headings | missing='${missing}' next='offer the one-time setup in /ari-hemingway--structure-bookmark; run nothing from missing= unasked'"
+  return 1
+}
+
+#######################################
+# What the bookmark step would do, for the dry run's confirm. Reads only.
+# Arguments: $1 - full draft path, $2 - aside count, $3 - work dir
+# Outputs: "none", "skipped", "check-failed" or "would-apply" on stdout
+#######################################
+preview_bookmarks() {
+  local draft="${1}" n_asides="${2}" work="${3}"
+  if ! is_bookmarking_needed "${draft}" "${n_asides}"; then
+    log::info "Bookmarks: none in the draft"
+    echo none
+    return
+  fi
+  local exit_code=0
+  bookmark_setup_status "Bookmarks would be skipped" "${work}/bookmarks_check.err" || exit_code=$?
+  if (( exit_code == 1 )); then
+    echo skipped
+    return
+  fi
+  if (( exit_code != 0 )); then
+    echo check-failed
+    return
+  fi
+  log::info "Bookmarks would be applied after the asides rebuild | setup='OK'"
+  echo would-apply
+}
+
+#######################################
+# Bookmark the draft's #bm- runs and aside markers when the structure-bookmark setup passes;
+# otherwise warn once with the first missing prerequisite and leave the heading links. Runs only
+# after an executing upload; gdoc_bookmarks.zsh is a dry run without --execute, so this passes it,
+# then reads its closing JSON line to make sure it did not dry-run anyway.
+# Arguments: $1 - doc id, $2 - full draft path, $3 - aside count, $4 - work dir
+# Returns: 1 when the check broke, the apply failed, or the apply did not execute
+#######################################
+apply_bookmarks() {
+  local doc="${1}" draft="${2}" n_asides="${3}" work="${4}"
+  if ! is_bookmarking_needed "${draft}" "${n_asides}"; then
+    log::info "Bookmarks: none in the draft | doc='${doc}'"
+    return 0
+  fi
+  local exit_code=0
+  bookmark_setup_status "Bookmarks skipped" "${work}/bookmarks_check.err" || exit_code=$?
+  if (( exit_code == 1 )); then
+    return 0
+  fi
+  if (( exit_code != 0 )); then
+    return 1
+  fi
+  local reply
+  if ! reply="$(zsh "${BOOKMARKS}" --apply --execute --doc "${doc}" --file "${draft}")"; then
+    log::err "Bookmark apply failed | doc='${doc}' draft='${draft}' fix='SKILL.md § Recover after a failure'"
+    return 1
+  fi
+  if ! print -r -- "${reply}" | tail -n 1 | jq -e '.dry_run == 0' >/dev/null 2>&1; then
+    log::err "Bookmark step did not execute | doc='${doc}' draft='${draft}' reply='$(print -r -- "${reply}" | tail -n 1)'"
+    return 1
+  fi
+}
+
+#######################################
+# Bookmark only a doc this run finished and whose aside tabs it rebuilt: after a failed rebuild the
+# tabs are empty or stale, and a failed finish (a refused revision included) leaves the body unfinished.
+# Arguments: $1 - doc id, $2 - full draft path, $3 - aside count, $4 - work dir, $5 - finish exit code,
+#            $6 - asides rebuild exit code
+#######################################
+bookmark_if_finished_and_rebuilt() {
+  local doc="${1}" draft="${2}" n_asides="${3}" work="${4}" finish_rc="${5}" asides_rc="${6}"
+  if (( finish_rc != 0 )); then
+    log::warn "Bookmarks skipped; the finish step failed | doc='${doc}' rc='${finish_rc}'"
+    return 0
+  fi
   if (( asides_rc != 0 )); then
     log::warn "Bookmarks skipped; the aside rebuild failed | doc='${doc}' rc='${asides_rc}'"
     return 0
   fi
-  apply_bookmarks "${doc}" "${draft}"
+  apply_bookmarks "${doc}" "${draft}" "${n_asides}" "${work}"
 }
 
 # --- Help ---
@@ -239,7 +327,8 @@ ${c_bold}Options:${c_rst}
   --doc ID_OR_URL    Update this existing Doc in place (replaces its whole body)
   --folder ID_OR_URL Create the Doc inside this Drive folder (id or drive.google.com/drive/folders URL); not with --doc
   --first-tab-title T  With asides: rename the first tab (the import resets it to "Tab 1")
-  --execute          Create or update the Doc, then finish it; without it the run is a dry run
+  --execute          Create or update the Doc, then finish it, rebuild its asides and bookmark it;
+                     without it the run is a dry run
   --dry-run          The default made explicit; wins over --execute and exports DRY_RUN=1
   -h, --help         Show this help
 
@@ -249,10 +338,10 @@ ${c_bold}Environment:${c_rst}
   DRY_RUN                    Set and not 0 (a parent's dry run): a dry run, --execute or not; 0 alone never acts
 
 ${c_bold}Output:${c_rst} the Doc URL on stdout after --execute; nothing on a dry run, which validates the
-Drive request and exits 0. Non-zero exit after "Doc created" means finishing failed (e.g. an image
-taller than one page), the aside tabs could not be rebuilt, or the bookmark step failed after its
-setup check passed; fix the draft and re-run with --doc URL --execute. A missing bookmark setup is
-a WARN, not a failure.
+Drive request and exits 0. Non-zero exit after "Doc created" or "Doc updated" means finishing
+failed (e.g. an image taller than one page), the aside tabs could not be rebuilt, or the bookmark
+step failed after its setup check passed; follow SKILL.md § Recover after a failure, which says
+when a re-run with --doc URL may carry --execute. A missing bookmark setup is a WARN, not a failure.
 EOH
 }
 
@@ -333,8 +422,10 @@ main() {
   local action
   action="$(upload_doc "${title}" "${doc}" "${folder}" "${dry_run}" "${work}/drive_reply.json")"
   if [[ "${dry_run}" == "true" ]]; then
+    local bookmarks
+    bookmarks="$(preview_bookmarks "${work}/draft.md" "${n_asides}" "${work}")"
     # The next step is the user's: an unconditional "add --execute" here reads as the next command.
-    log::ok "Dry run valid; nothing written | would='${action%d}' title='${title}' doc='${doc}' folder='${folder}' folder_name='${folder_name}' asides='${n_asides}' next='show the user what would be written; --execute only after they reply'"
+    log::ok "Dry run valid; nothing written | would='${action%d}' title='${title}' doc='${doc}' folder='${folder}' folder_name='${folder_name}' asides='${n_asides}' bookmarks='${bookmarks}' next='show the user what would be written; --execute only after they reply'"
     return 0
   fi
 
@@ -347,13 +438,15 @@ main() {
   local url="https://docs.google.com/document/d/${doc_id}/edit"
   log::ok "Doc ${action} | doc='${doc_id}' url='${url}' parents='$(jq -r '(.parents // []) | join(",")' "${work}/drive_reply.json")'"
 
-  local finish_rc=0 asides_rc=0
+  local finish_rc=0 asides_rc=0 bookmarks_rc=0
   zsh "${SCRIPT_DIR}/gdoc_finish.zsh" --doc "${doc_id}" --execute || finish_rc=$?
   rebuild_asides "${doc_id}" "${work}/draft.md" "${n_asides}" "${first_tab_title}" || asides_rc=$?
-  bookmark_if_asides_rebuilt "${doc_id}" "${work}/draft.md" "${asides_rc}" || finish_rc=$?
+  bookmark_if_finished_and_rebuilt "${doc_id}" "${work}/draft.md" "${n_asides}" "${work}" "${finish_rc}" "${asides_rc}" || bookmarks_rc=$?
   echo "${url}"
-  (( asides_rc == 0 )) || return "${asides_rc}"
-  return "${finish_rc}"
+  local exit_code
+  for exit_code in "${finish_rc}" "${asides_rc}" "${bookmarks_rc}"; do
+    (( exit_code == 0 )) || return "${exit_code}"
+  done
 }
 
 main "${@}"

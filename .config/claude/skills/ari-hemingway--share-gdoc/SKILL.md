@@ -9,13 +9,13 @@ Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-g
 
 ## Rules
 
-- **NEVER put `--execute` on a command until the user has replied yes to that command's dry run.** Without it, `gdoc_publish.zsh`, `gdoc_finish.zsh` and `gdoc_asides.zsh --rebuild` read, plan and validate, log `Dry run: the default`, write nothing and exit 0. Run the dry run, end your turn with its confirm message (**Dry-run**), and add `--execute` in a later turn, after the user's reply. The request that started the publish, a caller skill's "publish", or a yes given before the dry run's output is never that reply. This is the opposite of `gdoc_bookmarks.zsh` and `drive_subfolder.zsh`, which act unless given `--dry-run`: here a missing flag publishes nothing.
+- **NEVER put `--execute` on a command until the user has replied yes to that command's dry run.** Without it, `gdoc_publish.zsh`, `gdoc_finish.zsh` and `gdoc_asides.zsh --rebuild` read, plan and validate, log `Dry run: the default`, write nothing and exit 0. Run the dry run, end your turn with its confirm message (**Dry-run**), and add `--execute` in a later turn, after the user's reply. The request that started the publish, a caller skill's "publish", or a yes given before the dry run's output is never that reply. **A `next=` or `rerun=` field in any log is the command for after the user's yes, never your next call.**
   ```
   BAD:  gdoc_publish.zsh --file draft.md --doc <id> --execute                    ← no dry run: replaces the live body
   BAD:  gdoc_publish.zsh --file draft.md --doc <id> && gdoc_publish.zsh … --execute   ← the user never saw the dry run
   GOOD: gdoc_publish.zsh --file draft.md --doc <id>  → confirm message, end turn → user: "yes" → the same call + --execute
   ```
-  Mechanics: `/ari-skill-shellscripts` § Mutations (`lib/dry_run.zsh`; `gdoc_asides.py` mirrors it). An executing `gdoc_publish.zsh` passes `--execute` to `gdoc_finish.zsh` and `gdoc_asides.zsh` itself.
+  Mechanics: `/ari-skill-shellscripts` § Mutations (`lib/dry_run.zsh`; `gdoc_asides.py` mirrors it). An executing `gdoc_publish.zsh` passes `--execute` to `gdoc_finish.zsh`, `gdoc_asides.zsh --rebuild` and, when its setup passes, `gdoc_bookmarks.zsh --apply`; the user's yes to the publish's dry run covers those three. It never covers a command you type: a by-hand rebuild or bookmark apply gets its own dry run and its own yes.
 
 - **Every Drive link becomes a smart chip.** Drive's markdown import lands a raw `docs.google.com` or `drive.google.com` URL as a plain hyperlink, not a chip. The fix-up batch converts each one with the Docs API `insertRichLink` request (present since April 2026): `deleteContentRange` over the link text, then `insertRichLink` at the same index with `richLinkProperties.uri` only, since the server resolves the title and rejects `title` or `mimeType`. Requests run in descending index order so earlier indexes stay valid, and every target is pre-checked with `drive files get`, because one unreadable target fails the whole atomic batch. The verify read fails the publish if any Drive URL is still a plain link. A markdown-linked Drive URL is converted too, and its label is deleted with the link text, which is why `/ari-hemingway--format-gdoc` keeps them raw.
 - **Table header rows** become bold, centered, and grey (`#D9D9D9`) in the same batch. The row is already pinned: Drive's markdown import sets `tableRowStyle.tableHeader` on every table's first row, and the PDF export repeats it on each page the table spans. The verify read checks that flag on every table and fails when it is missing.
@@ -43,7 +43,7 @@ Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-g
   BAD:  See [![Request flow](…)](…) for the flow.                       ← not alone on its line
   BAD:  ```mermaid                                                       ← publishes as source text; bake it
   ```
-- **Bookmarks come last, when their setup passes.** After a clean asides rebuild (a failed one skips bookmarks with a `WARN`), `gdoc_publish.zsh` runs `/ari-hemingway--structure-bookmark`'s `gdoc_bookmarks.zsh --check-setup`. When every prerequisite is `OK`, it runs `--apply`, which bookmarks every `[text](#bm-<slug>)` run and aside marker through Apps Script and points every `[text](#goto-<slug>)` link and aside return link at the bookmark. Otherwise the publish logs one `WARN` naming the first missing prerequisite, and the doc keeps heading links. Bookmarks die on republish like tabs.
+- **Bookmarks come last, when their setup passes.** After a clean finish and asides rebuild, and only when the draft has an aside or a `#bm-`/`#goto-` link, `gdoc_publish.zsh` runs `/ari-hemingway--structure-bookmark`'s read-only `gdoc_bookmarks.zsh --check-setup`. When every prerequisite is `OK`, it runs `--apply --execute`, which bookmarks every `[text](#bm-<slug>)` run and aside marker through Apps Script and points every `[text](#goto-<slug>)` link and aside return link at the bookmark. The publish's yes covers it because the body replace has already dropped every bookmark. The dry run runs the same setup check and reports `bookmarks='would-apply'`, `'skipped'`, `'check-failed'` or `'none'`. Bookmarks die on republish like tabs.
 
 ## Preconditions
 
@@ -60,9 +60,9 @@ Turn a finished `output.md` (or any draft that follows `/ari-hemingway--format-g
 - `bin/gdoc_table_widths.zsh` (+ `gdoc_table_widths.py`, per `/ari-skill-pythonscripts`) — the column-width planner for tables of any column count: one JSON line per table with the current and best widths, modeled line counts, predicted heights, the widest token per column, and whether the table can fit at all. Read-only; `gdoc_finish.zsh` calls it before the batch and again for the verify read.
 - `bin/gdoc_table_heights.zsh` — measures every table in a PDF exported from Docs from the cell clip rectangles the export draws: rendered height in points per table, summed across pages, with and without the header row Docs repeats on each page. `gdoc_finish.zsh` calls it; run it by hand on a before and after export to judge a change.
 - `bin/gdoc_render_pages.zsh` (+ `gdoc_render_pages.swift`) — renders a PDF export to one PNG per page with PDFKit; needs `swift` from the Xcode command line tools and nothing from brew.
-- `bin/gdoc_asides.zsh` (+ `gdoc_asides.py`, per `/ari-skill-pythonscripts`; the Docs helpers it shares with `/ari-hemingway--structure-bookmark` live in `ari-hemingway--lib/lib/gdoc_api.py`) — `--split` writes the draft without its aside sections after checking markers, sections, references, and tab-title length; `--rebuild` deletes stale `Aside n:` tabs, adds and fills one per section, chips their Drive links, and links every marker and reference. `--doc` takes an id or URL. `gdoc_publish.zsh` runs both; run `--rebuild` by hand after any other body replace. `--rebuild` without `--execute` prints the batches and sends nothing; `--first-tab-title` renames the first tab, which the import resets to `Tab 1`. The bookmark step lives in `/ari-hemingway--structure-bookmark`.
+- `bin/gdoc_asides.zsh` (+ `gdoc_asides.py`, per `/ari-skill-pythonscripts`; the Docs helpers it shares with `/ari-hemingway--structure-bookmark` live in `ari-hemingway--lib/lib/gdoc_api.py`) — `--split` writes the draft without its aside sections after checking markers, sections, references, and tab-title length; `--rebuild` deletes stale `Aside n:` tabs, adds and fills one per section, chips their Drive links, and links every marker and reference. `--doc` takes an id or URL. `gdoc_publish.zsh` runs both; after any other body replace, rebuild per **Re-check an existing doc**. `--rebuild` without `--execute` prints the batches and sends nothing; `--first-tab-title` renames the first tab, which the import resets to `Tab 1`. The bookmark step lives in `/ari-hemingway--structure-bookmark`.
 - `tests/gdoc_asides.test.zsh` — runs `gdoc_asides.zsh` against a fake `gws` on `PATH` (no network, no Doc; needs `jq`, `base64` and `node`): the split's refusals, the fill batch's images, chips, pako re-encoding and code styles, the lookups before any batch, and the verify read's image checks. Its `draft.md` heredoc is a worked diagram aside.
-- `tests/gdoc_dry_run.test.zsh` — runs the three writing scripts against a fake `gws` that records every call, in a throwaway `HOME` (needs `jq` and `python3`): no flag, `--dry-run`, both flags in either order, and an inherited `DRY_RUN` send no write, for an update and a create; `--execute` creates one Doc in the folder or updates the named one, and its children write; a target that is not a Doc, or a title-only draft, fails before any upload; a header-cell Drive link is chipped after every style.
+- `tests/gdoc_dry_run.test.zsh` — runs the three writing scripts against a fake `gws` that records every call, in a throwaway `HOME` (needs `jq` and `python3`): no flag, `--dry-run`, both flags in either order, and an inherited `DRY_RUN` send no write, for an update and a create; `--execute` creates one Doc in the folder or updates the named one, and its children write; a target that is not a Doc, or a title-only draft, fails before any upload; a header-cell Drive link is chipped after every style. A fake bookmark skill shows that an executing publish checks the setup and then applies with `--execute`, that a dry run only checks, and that a missing setup is a skip. A crashed check, a failed apply, an apply that dry-ran, or a failed finish fails the publish; a skill without `--execute` and a draft with nothing to bookmark are never called.
 
 **After ANY change to a `bin/` script or `ari-hemingway--lib/lib/gdoc_api.py`, both tests MUST pass: exit 0 and a last line of `pass=N fail=0`.**
 
@@ -97,7 +97,8 @@ An update's log:
 [INFO] Using first line as title; stripped from body | title='[🤖 AI generated] Request flow'
 [INFO] Staged body | title='[🤖 AI generated] Request flow' body='/tmp/gdoc_publish.Ab12cd/body.md' bytes='8421' asides='1'
 [INFO] Doc to replace; its whole body and every tab but the first go | doc='1AbC' name='Request flow' modified='2026-11-05T09:00:00Z' modified_by='Ari'
-[OK] Dry run valid; nothing written | would='update' title='[🤖 AI generated] Request flow' doc='1AbC' folder='' folder_name='' asides='1' next='…'
+[INFO] Bookmarks would be applied after the asides rebuild | setup='OK'
+[OK] Dry run valid; nothing written | would='update' title='[🤖 AI generated] Request flow' doc='1AbC' folder='' folder_name='' asides='1' bookmarks='would-apply' next='…'
 ```
 
 A create logs `Target folder | folder= name=` in place of `Doc to replace`, and `would='create'`. A create with neither folder source exits non-zero before any Drive call; ask the user for a folder and re-run. **Then end your turn with one confirm message, filled from the log:**
@@ -105,6 +106,7 @@ A create logs `Target folder | folder= name=` in place of `Doc to replace`, and 
 ```
 GOOD (create): Dry run: would create "<title>" in <folder_name> (from <--folder | ARI_HEMINGWAY_SCRATCH_DIR>). Publish it?
 GOOD (update): Dry run: would replace the whole body of "<name>" (<url>), last edited <modified> by <modified_by>; manual edits and every tab but the first are lost. Publish over it?
+GOOD (bookmarks='skipped', added to either): Bookmarks would be skipped (<missing>): #goto- links and aside return links stay on headings.
 BAD:           Doc created (dry run).        ← nothing was created; would= is the plan
 ```
 
@@ -120,11 +122,11 @@ zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_publish.zsh --file <
 zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_publish.zsh --file <path/to/output.md> --doc <id|url> --execute
 ```
 
-The script creates or updates the doc and logs `Doc created` or `Doc updated` with its `url=`, then runs `gdoc_finish.zsh --execute` and `gdoc_asides.zsh --rebuild --execute` on it, and prints the URL on stdout.
+The script creates or updates the doc and logs `Doc created` or `Doc updated` with its `url=`, then runs `gdoc_finish.zsh --execute`, `gdoc_asides.zsh --rebuild --execute` and the bookmark step on it, and prints the URL on stdout.
 
 ### Chip, style, and resize
 
-`gdoc_finish.zsh` runs inside Publish; nothing to emit. Read its log: one `Applied fix-up batch` line (`Nothing to fix up` for a doc with no tables and no Drive links), one `Table columns resized`, `Table columns kept`, or `Table columns overridden` line per table, then the verify lines, ending with one `Rendered table` line per table that carries `predicted_pt` and `drift_pt`. A non-zero exit after "Doc created" means a check failed: an image wider or taller than one page, an image whose link is not the `mermaid.live/view#` form, a Drive link the chip pass could not convert (a target the caller cannot open, or a non-Drive URL styled as one), or a `Table cannot fit the text width` line naming the deficit and the widest token per column. The doc exists at that point; fix the draft per `/ari-hemingway--format-gdoc` (for an unfit table: fold a column, or shorten or split the named token) and follow **Recover after a failure**. A `Rendered table drifts from the model` warning means the layout differs from the prediction by more than one and a half lines; run `gdoc_finish.zsh --doc <url> --check-only --render-pages <dir>` and look at the page before touching widths by hand.
+`gdoc_finish.zsh` runs inside Publish; nothing to emit. Read its log: one `Applied fix-up batch` line (`Nothing to fix up` for a doc with no tables and no Drive links), one `Table columns resized`, `Table columns kept`, or `Table columns overridden` line per table, then the verify lines, ending with one `Rendered table` line per table that carries `predicted_pt` and `drift_pt`. A non-zero exit from `gdoc_finish.zsh` after `Doc created` or `Doc updated` means a check failed: an image wider or taller than one page, an image whose link is not the `mermaid.live/view#` form, a Drive link the chip pass could not convert (a target the caller cannot open, or a non-Drive URL styled as one), or a `Table cannot fit the text width` line naming the deficit and the widest token per column. The doc exists at that point; fix the draft per `/ari-hemingway--format-gdoc` (for an unfit table: fold a column, or shorten or split the named token) and follow **Recover after a failure**. A `Rendered table drifts from the model` warning means the layout differs from the prediction by more than one and a half lines; run `gdoc_finish.zsh --doc <url> --check-only --render-pages <dir>` and look at the page before touching widths by hand.
 
 ### Rebuild asides
 
@@ -153,7 +155,13 @@ The pako line is INFO, not a problem; a stale-tab line appears only on a republi
 
 ### Bookmarks
 
-`gdoc_publish.zsh` then runs `/ari-hemingway--structure-bookmark`'s check and apply; nothing to emit. Read the log: `Bookmarks skipped; return links stay on headings | missing='…'` names the first prerequisite the check found missing and is a `WARN`, not a failure; `Bookmarks skipped; the aside rebuild failed` follows an asides failure, which is the one to fix; otherwise one `bookmark target | key= text= bookmark=` line per target and one `bookmarks applied | targets= relinked_runs= bookmark_links=` line. A draft with no `#bm-` links and no asides logs `nothing to bookmark`. The one-time setup is in that skill.
+`gdoc_publish.zsh` then runs `/ari-hemingway--structure-bookmark`'s check and apply; nothing to emit. Read the log:
+- `bookmark target | key= text= bookmark=` per target, then `bookmarks applied | targets= relinked_runs= bookmark_links=`: done.
+- `Bookmarks: none in the draft`: no aside and no `#bm-`/`#goto-` link; nothing ran.
+- `Bookmarks skipped; return links stay on headings | missing='…'` (WARN, exit 0): quote it to the user and offer the one-time setup in that skill. **NEVER run a command from `missing=` without their reply**; some carry `--execute`.
+- `Bookmarks skipped; the bookmark skill is not installed` or `… predates --execute` (WARN): the doc keeps heading links; say so.
+- `Bookmarks skipped; the finish step failed` or `… the aside rebuild failed`: fix that failure; the re-publish bookmarks.
+- `Bookmark setup check failed`, `Bookmark apply failed` or `Bookmark step did not execute` (ERROR, non-zero exit): follow **Recover after a failure**.
 
 ### Recover after a failure
 
@@ -163,11 +171,11 @@ A non-zero exit after `Doc created` or `Doc updated` leaves the doc in place. **
 zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_publish.zsh --file <path/to/output.md> --doc <url> --execute
 ```
 
-Keep `--title` and `--first-tab-title` as they were and drop `--folder`. The user's yes to the failed run covers this re-run only when `<url>` is the one its `Doc created` or `Doc updated` line named and the fix only re-bakes a diagram or follows a share of the target. A fix that changes what the draft says (drops a link, folds a column) is shown to the user as a draft diff, and waits for their reply. Any other doc starts again at **Dry-run**. A batch refused on `requiredRevisionId` means someone edited the doc during the publish: stop, name it to the user, and re-run only on their reply, since a re-publish replaces their edit.
+Keep `--title` and `--first-tab-title` as they were and drop `--folder`. A Bash timeout counts as a failure: take `url=` from a `Doc created` or `Doc updated` line, and with none, ask the user to check the folder before any re-run. The yes to the failed run's dry run covers this re-run only when `<url>` is the one its `Doc created` or `Doc updated` line named, and either the draft is unchanged (a transient failure: a timeout, a `fill batch` render error, a bookmark apply that failed on Apps Script) or the fix only re-bakes a diagram or follows a share of the target. A fix that changes what the draft says (drops a link, folds a column, lengthens a `#bm-` phrase that occurs twice) is shown to the user as a draft diff and waits for their reply; that yes covers one re-publish. Any other doc starts again at **Dry-run**. A batch refused on `requiredRevisionId` means someone edited the doc during the publish: stop, name it to the user, and re-run only on their reply, since a re-publish replaces their edit.
 
 ### Report
 
-Relay the URL the script printed as a raw `docs.google.com` URL, never as `[text](url)`. On a failure, relay it with the first `[ERROR]` line and the fix. If the draft's directory holds a `scratchpad.md`, write or update one line there, `Published: <url>`, which the next **Dry-run** reads for `--doc`.
+Relay the URL the script printed as a raw `docs.google.com` URL, never as `[text](url)`. On a failure, relay it with the first `[ERROR]` line and the fix. Quote every `[WARN]` line under the URL; for a bookmark skip, add that `#goto-` links and aside return links stay on headings. If the draft's directory holds a `scratchpad.md`, write or update one line there, `Published: <url>`, which the next **Dry-run** reads for `--doc`.
 
 ### Re-check an existing doc
 
@@ -183,7 +191,13 @@ Without `--check-only` it is the fix-up's dry run: show the user its `Table colu
 zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_asides.zsh --rebuild --file <path/to/output.md> --doc <id|url>
 ```
 
-Show the user its `would delete` and `would rebuild` lines; add `--execute` only after their reply. It reads the sections from the draft, so the draft must be the one the doc was published from. A rebuild by hand gives return links the heading target again; re-run the bookmark apply after it, dry run first: `gdoc_bookmarks.zsh --apply` acts unless given `--dry-run` (`/ari-hemingway--structure-bookmark`).
+Show the user its `would delete` and `would rebuild` lines; add `--execute` only after their reply. It reads the sections from the draft, so the draft must be the one the doc was published from. A rebuild by hand gives return links the heading target again, so re-apply the bookmarks after it, in a later turn than the rebuild's `--execute`. Run the dry run:
+
+```zsh
+zsh $HOME/.claude/skills/ari-hemingway--structure-bookmark/bin/gdoc_bookmarks.zsh --apply --doc <id|url> --file <path/to/output.md>
+```
+
+Show the user its plan with the confirm message from `/ari-hemingway--structure-bookmark` (`--execute` deletes every bookmark in the first tab, hand-made ones too), and add `--execute` only after their reply. **NEVER chain the rebuild's `--execute` and the bookmark apply's `--execute` in one turn.**
 
 ### Measure a change
 
