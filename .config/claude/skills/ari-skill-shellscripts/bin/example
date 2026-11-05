@@ -12,6 +12,9 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
+source "${SKILLS_DIR}/ari-skill-shellscripts/lib/dry_run.zsh"
+
+readonly SCRIPT_PATH="${0:a}"   # as invoked, symlinks kept, so the rerun line keeps the $HOME/.claude/skills form
 
 # --- Environment variables ---
 
@@ -31,8 +34,9 @@ readonly VALID_MODES=(registry local compare)
 # Returns: 1 if any are missing
 #######################################
 check_prerequisites() {
-  local missing=()
-  for cmd in jq git; do
+  local cmd
+  local -a missing
+  for cmd in jq git cmp; do
     command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
   done
   if (( ${#missing} > 0 )); then
@@ -51,7 +55,7 @@ check_prerequisites() {
 # Returns: 0 if valid, 1 if not
 #######################################
 is_valid_option() {
-  local val="${1}"; shift
+  local val="${1}" opt; shift
   for opt in "${@}"; do
     [[ "${val}" == "${opt}" ]] && return 0
   done
@@ -62,27 +66,79 @@ is_valid_option() {
 # Business logic
 ########################################################################
 
+#######################################
+# Copy one skill's SKILL.md into the output directory unless an identical copy is already there.
+# The guard runs in a dry run too, so the preview lists only the copies --execute would make.
+# Globals: SKILLS_DIR
+# Arguments: $1 - output directory; $2 - target skill name
+#######################################
+copy_skill_file() {
+  local out_dir="${1}" t="${2}"
+  local src="${SKILLS_DIR}/${t}/SKILL.md" dest="${out_dir}/${t}.SKILL.md"
+  if [[ ! -r "${src}" ]]; then
+    log::warn "Skipping a target with no readable SKILL.md | skill='${t}' src='${src}'"
+    return 0
+  fi
+  if cmp -s "${src}" "${dest}"; then
+    log::info "Already up to date | dest='${dest}'"
+    return 0
+  fi
+  run_mut cp "${src}" "${dest}"
+}
+
+#######################################
+# Copy each target's SKILL.md into --out-dir and write a manifest, every change through run_mut or
+# write_mut so a dry run only logs. Without --out-dir there is nothing to change.
+# Globals: DRY_RUN (via run_mut, write_mut)
+# Arguments: $1 - output directory ("" = none); $2.. - target skill names
+#######################################
+copy_skill_files() {
+  local out_dir="${1}" t; shift
+  if [[ -z "${out_dir}" ]]; then
+    log::debug "No --out-dir; nothing to copy"
+    return 0
+  fi
+  log::info "Copying SKILL.md files | out_dir='${out_dir}' count='${#}'"
+  [[ -d "${out_dir}" ]] || run_mut mkdir -p "${out_dir}"
+  for t in "${@}"; do
+    copy_skill_file "${out_dir}" "${t}"
+  done
+  if [[ "$(print -l -- "${@}")" == "$(cat "${out_dir}/manifest.txt" 2>/dev/null)" ]]; then
+    return 0
+  fi
+  print -l -- "${@}" | write_mut "${out_dir}/manifest.txt"
+}
+
 # --- Help ---
 
 help() {
   cat <<EOF
-${c_green}example${c_rst} — demonstrate skill shell script conventions (does not modify anything)
+${c_green}example${c_rst} — demonstrate skill shell script conventions; with --out-dir it copies files, and only --execute does
 
 ${c_bold}Usage:${c_rst}
   zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example [OPTIONS]
 
 ${c_bold}Options:${c_rst}
   --mode MODE       Operating mode: ${(j:, :)VALID_MODES} (required)
-  --target SKILL    Skill name to operate on (repeatable)
+  --target SKILL    Skill name to operate on (repeatable; required with --out-dir)
+  --out-dir DIR     Copy each target's SKILL.md into DIR and write DIR/manifest.txt (a mutation)
+  --execute         Make the changes. Without it the run is a dry run: it logs each change and makes none
+  --dry-run         The default, said explicitly; overrides --execute and exports DRY_RUN=1 to child scripts
   --verbose         Enable debug logging
-  --dry-run         Show what would happen without doing it
   -h, --help        Show this help
+
+${c_bold}Environment:${c_rst}
+  DRY_RUN           Inherited from a parent: anything but empty or 0 forces a dry run, --execute or not
+
+${c_bold}Output:${c_rst}
+  One JSON record per target between RESULT markers, then dry_run=1|0 and changes=N lines.
+  Confirm a change by dry_run=0, never by the exit code: a dry run exits 0 too.
 
 ${c_bold}Examples:${c_rst}
   zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --help
   zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode registry --target ari-diagram-mermaid
-  zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode reg --target ari-poem-limerick --target ari-diagram-mermaid --verbose
-  zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode compare --dry-run
+  zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode compare --target ari-poem-limerick --out-dir /tmp/example-out
+  zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode compare --target ari-poem-limerick --out-dir /tmp/example-out --execute
 EOF
 }
 
@@ -90,22 +146,26 @@ EOF
 
 main() {
   check_prerequisites || exit 1
+  local -a args=("${@}")
 
   # === PARSE ===
-  local verbose=false dry_run=false mode=""
+  local verbose=false execute=false dry_run=false mode="" out_dir=""
   local -a targets
 
   while (( $# > 0 )); do case "${1}" in
     -h|--help)   help; return 0 ;;
     --verbose)   verbose=true; shift ;;
+    --execute)   execute=true; shift ;;
     --dry-run)   dry_run=true; shift ;;
     --mode)      mode="${2:?--mode requires a value}"; shift 2 ;;
     --target)    targets+=("${2:?--target requires a value}"); shift 2 ;;
+    --out-dir)   out_dir="${2:?--out-dir requires a value}"; shift 2 ;;
     -*)          log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)           log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
   esac; done
 
   export VERBOSE="${verbose}"
+  resolve_dry_run "${execute}" "${dry_run}"
 
   # === MASSAGE ===
 
@@ -123,15 +183,30 @@ main() {
   local -a all_skills
   all_skills=("${(@f)$(ls -1 "${SKILLS_DIR}/" 2>/dev/null)}")
 
-  log::debug "Parsed args | mode='${mode}' targets='${(j: :)targets}' dry_run='${dry_run}'"
+  log::debug "Parsed args | mode='${mode}' targets='${(j: :)targets}' DRY_RUN='${DRY_RUN}'"
   log::debug "Found skills | count='${#all_skills}' dir='${SKILLS_DIR}'"
 
   # === VALIDATE ===
 
-  [[ -n "${mode}" ]] || { log::err "Missing --mode | valid_modes='${(j:, :)VALID_MODES}'"; help; return 1; }
+  if [[ -z "${mode}" ]]; then
+    log::err "Missing --mode | valid_modes='${(j:, :)VALID_MODES}'"
+    help
+    return 1
+  fi
 
   if ! is_valid_option "${mode}" "${VALID_MODES[@]}"; then
     log::err "Invalid --mode | mode='${mode}' valid_modes='${(j:, :)VALID_MODES}'"
+    return 1
+  fi
+
+  # A mutation never widens its scope by default: --out-dir needs the targets named.
+  if [[ -n "${out_dir}" ]] && (( ${#targets} == 0 )); then
+    log::err "--out-dir needs at least one --target | out_dir='${out_dir}'"
+    return 1
+  fi
+
+  if [[ -e "${out_dir}" && ! -d "${out_dir}" ]]; then
+    log::err "--out-dir exists and is not a directory | out_dir='${out_dir}'"
     return 1
   fi
 
@@ -142,7 +217,8 @@ main() {
 
   # === LOGIC ===
 
-  log::info "Starting | mode='${mode}' dry_run='${dry_run}' target_count='${#targets}'"
+  log::info "Starting | mode='${mode}' DRY_RUN='${DRY_RUN}' target_count='${#targets}'"
+  local t
   for t in "${targets[@]}"; do
     if [[ -d "${SKILLS_DIR}/${t}" ]]; then
       log::info "Skill found | skill='${t}'"
@@ -151,25 +227,27 @@ main() {
     log::warn "Skill not found | skill='${t}'"
   done
 
-  if [[ "${dry_run}" == "true" ]]; then
-    log::info "Dry run — no changes made"
-    return 0
-  fi
-
   # Demonstrate run_cmd — default levels (INFO before, ERR on failure)
   run_cmd ls "${SKILLS_DIR}/${targets[1]}/SKILL.md" >/dev/null || true
 
   # Demonstrate run_cmd — quiet on success, loud on failure
   lvl=DEBUG lvl_fail=ERR run_cmd ls "${SKILLS_DIR}/nonexistent/SKILL.md" >/dev/null || true
 
-  # Structured output to stdout (for LLM consumption)
+  copy_skill_files "${out_dir}" "${targets[@]}"
+
+  # Records: one JSON object per line between markers (for LLM consumption)
   echo "=== start RESULT ==="
   for t in "${targets[@]}"; do
-    jq -n --arg skill "${t}" --arg mode "${mode}" '{skill: $skill, mode: $mode, status: "ok"}'
+    jq -nc --arg skill "${t}" --arg mode "${mode}" --arg found "$([[ -d "${SKILLS_DIR}/${t}" ]] && echo ok || echo missing)" \
+      '{skill: $skill, mode: $mode, status: $found}'
   done
   echo "=== end RESULT ==="
 
-  log::info "Done"
+  report_dry_run "${SCRIPT_PATH}" "${args[@]}"
+  cat <<EOF
+dry_run=${DRY_RUN}
+changes=${MUT_COUNT}
+EOF
 }
 
 main "${@}"

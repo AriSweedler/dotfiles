@@ -1,6 +1,6 @@
 ---
 name: ari-skill-shellscripts
-description: Conventions for writing zsh scripts in Claude skills — logging, prereqs, arg parsing, env vars, structure.
+description: Conventions for writing zsh scripts in Claude skills — logging, prereqs, arg parsing, env vars, structure, and mutations that are a dry run unless --execute.
 user_invocable: false
 ---
 
@@ -16,7 +16,7 @@ This skill covers zsh. For Python, use `/ari-skill-pythonscripts` (its mirror). 
 
 ### Shell and safety
 
-- **Use zsh, not bash.** Bash version varies across machines; zsh is consistently modern.
+- **Use zsh, not bash.** macOS ships bash 3.2; zsh is the same modern shell on every machine.
 - **`set -euo pipefail` at the top.** Every script. A command substitution's subshell inherits errexit, so a pipeline that fails inside `$(…)` ends the script with no log.
 - **Under pipefail, `grep` with no match fails the pipeline, and a consumer that stops early kills its producer.** A filter that may legitimately match nothing is `awk`, or `grep … || true` as the line's last command (mid-pipe it must be wrapped, `{ grep … || true; } |`: unwrapped, a match skips the next stage). A consumer that may stop before the producer is done (`head`, `grep -m1`, `sed … q`, `awk … exit`) kills a long producer with SIGPIPE once the pipe buffer is full, exit 141 and no log: latch and read to EOF, or `setopt localoptions nopipefail` for that one pipeline.
   ```zsh
@@ -34,7 +34,7 @@ This skill covers zsh. For Python, use `/ari-skill-pythonscripts` (its mirror). 
 
 ### Naming
 
-- **`readonly` for constants.** `ALL_CAPS` for globals, `snake_case` for locals. An environment prefix `NAME=value cmd` is refused as `read-only variable` when `NAME` is a constant, so a prefix takes a name of its own (`WANT_COMMENT="${COMMENT}" cmd`, never `COMMENT="${COMMENT}" cmd`).
+- **`readonly` for constants, never for `DRY_RUN`.** `ALL_CAPS` for globals, `snake_case` for locals. `DRY_RUN` belongs to `lib/dry_run.zsh` (§ Dry run): a script never declares it. An environment prefix `NAME=value cmd` is refused as `read-only variable` when `NAME` is a constant, so a prefix takes a name of its own (`WANT_COMMENT="${COMMENT}" cmd`, never `COMMENT="${COMMENT}" cmd`).
 - **`snake_case` everywhere.** Functions, variables, file names.
 - **Never name a variable after a zsh special parameter.** `local path=` rebinds `PATH` (`path` is the array tied to it) and `local status=` shadows the last exit code; the failure surfaces far from the assignment as `command not found` or a wrong `$?`. `USERNAME` is the login name and an assignment to it is silently ignored. Off limits: `path`, `status`, `cdpath`, `fpath`, `manpath`, `argv`, `pipestatus`, `reply`, `match`, `MATCH`, `options`, `functions`, `signals`, `prompt`, `watch`, `histchars`, `RANDOM`, `SECONDS`, `LINENO`, `PWD`, `OLDPWD`, `USERNAME`, `TTY`, `HOST`. Use `file`, `dir`, `exit_code`, `result`, `person`, `have_tty` instead.
 - **Always `"${x}"`, and never quotes inside an associative-array subscript.** Never bare `$x`. Never unquoted `${x}`. Every variable expansion gets braces and double quotes, except the key of an associative array: a subscript does not word-split, and zsh keeps quotes there as part of the key, so `m["${id}"]` and `m[$id]` are two different keys and the mismatched read dies `parameter not set` under `set -u`. Write `m[$id]`; `${m[${id}]}` is fine too.
@@ -76,7 +76,7 @@ This skill covers zsh. For Python, use `/ari-skill-pythonscripts` (its mirror). 
 ### Output and errors
 
 - **Stdout for data, stderr for logs.** Structured output (JSON, delimited sections) to stdout. Logging to stderr.
-- **Labeled output via heredoc.** Scripts producing multiple values MUST use `key=value` lines via a `cat <<EOF` heredoc at the end. Do NOT repeat the output format in the header comment.
+- **Labeled output via heredoc.** Scripts producing multiple values MUST end with `key=value` lines from a `cat <<EOF` heredoc; a list of records goes before it, one JSON object per line between `=== start NAME ===` and `=== end NAME ===`. A mutating script's heredoc includes `dry_run=1|0`. Document the output once, in `help()`'s `Output:` section, never in the header comment.
   ```zsh
   cat <<EOF
   owner_repo=${owner_repo}
@@ -117,13 +117,23 @@ This skill covers zsh. For Python, use `/ari-skill-pythonscripts` (its mirror). 
 
 ### Mutations
 
-- **`--dry-run` for any script that mutates state.** Under it, log what would happen (via `run_cmd`) and make no external change. Read-only scripts omit it.
-- **Mutating scripts are idempotent.** Guard each state change with an existence check so a second run is a no-op, not an error.
+A *mutation* changes something the script did not create in this run: a file at a path the caller named (under `/tmp` too), a repo's working tree or index, a commit or push, any remote write (`gh pr create`, `gh api -X POST`, `curl -X POST`, `gws … create|update|batchUpdate`, `kubectl apply`), a send, a delete. Not a mutation: reads (`git fetch`, `gh api` GET), `mktemp` scratch, the script's own investigation folder (`mk_investigation_dir`), its own cache. Unsure → it is a mutation.
+
+- **A script that mutates is a dry run unless `--execute` is on its own command line.** Without `--execute` it runs every read and check, logs each mutation it would make, makes none, and exits 0, or non-zero on the same check failures the real run would hit. A script that never mutates takes neither flag.
+- **The act flag is `--execute`. NEVER `--apply`, `--yes`, `--confirm`, `--force` or `--no-dry-run`.** Moving a script onto this convention renames its act flag and adds `--execute` to every documented invocation of it, in the same change; a call left without it silently becomes a preview.
+- **`--dry-run` is the default said explicitly, and dry run wins.** It overrides `--execute` in either order and exports `DRY_RUN=1`.
+- **`DRY_RUN` is `1` (dry run) or `0` (act), never `true`/`false`, and a script reads it only through `is_dry_run`.** An inherited `DRY_RUN` other than empty or `0` forces a dry run, `--execute` or not. An inherited `DRY_RUN=0` never makes a script act: only `--execute` on its own command line does.
+- **A dry run runs the whole script.** Only the mutations stand in: NEVER branch on `is_dry_run` to skip the reads and checks the real run makes. `is_dry_run` decides a stand-in (a placeholder value, or a tool's own dry run such as `gws … --dry-run` in place of the write) or a closing line, nothing else.
+- **A mutation never widens its scope by default.** A missing target is an error, never "all"; widening takes an explicit flag (`--all`).
+- **Call a mutating child script directly and pass it `--execute`.** The exported `DRY_RUN=1` turns it back into a dry run during the parent's dry run, and the child shows its own preview. A child that does not source `lib/dry_run.zsh` (a Python script, an external CLI, a script not yet on this convention) goes through `run_mut` instead.
+- **Confirm an act by `dry_run=0` in the output, never by exit 0.** A dry run exits 0 too.
+- **A SKILL.md that documents a mutating script shows the dry-run invocation first**, then the `--execute` one, and says whether `--execute` waits for the user's `yes` or runs unattended.
+- **Mutating scripts are idempotent.** Guard each mutation with an existence or equality check (`cmp -s`) so a second run changes nothing; the guard runs in a dry run too, so the preview lists only what `--execute` would change.
 
 ## File layout
 
 - `bin/` — all scripts (per-skill gatherers, utilities, sync/push tools)
-- `lib/` — shared libraries (logging, helpers, await) sourced by other scripts
+- `lib/` — shared libraries (logging, dry run, helpers, await) sourced by other scripts
 - `tests/` — automated checks of the libraries; `lessons/` — ordered interactive walkthroughs for a person
 
 ## Logging
@@ -147,7 +157,7 @@ The sourced lib provides, all colorized to stderr:
 
 - `log::info`, `log::err`, etc. — single-line; one `key='value'` record per call.
 - `log::INFO`, `log::ERR`, etc. — multiline; dump captured multi-line output (one log line per input line, `|` prefixed).
-- `run_cmd` / `run_cmd_cap` — wrap command execution, log before and on failure. Set `lvl`/`lvl_fail` to control levels (default INFO/ERR).
+- `run_cmd` / `run_cmd_cap` — wrap command execution, log before and on failure. Set `lvl`/`lvl_fail` to control levels (default INFO/ERR). A mutation goes through `run_mut` (§ Dry run), never bare `run_cmd`.
 
 Never interpolate values into the message. Separate message from data with `|`. Key name MUST match variable name.
 
@@ -155,6 +165,65 @@ Never interpolate values into the message. Separate message from data with `|`. 
 BAD:  log::err "Invalid mode ${mode}"
 GOOD: log::err "Invalid mode | mode='${mode}' valid_modes='${(j:, :)VALID_MODES}'"
 ```
+
+## Dry run
+
+Every mutating script sources `lib/dry_run.zsh` right after the logging preamble, then:
+
+- `resolve_dry_run "${execute}" "${dry_run}"` — right after the parse loop. Applies § Mutations and exports `DRY_RUN`; WARNs when it overrides an explicit `--execute`.
+- `run_mut <cmd…>` — every mutating command. Logs `would run | cmd=…` (shell-quoted, so the line can be copied) in a dry run, else runs it through `run_cmd`. Until `resolve_dry_run` has run, every call is a dry run.
+- `… | write_mut FILE [--append]` — every file write. In a dry run it drains stdin and logs `would write | file='…' bytes='…'`.
+- `run_mut --dry-out '<placeholder>' <cmd…>` — a mutation whose stdout a later step needs: the placeholder stands in for it in a dry run. Inside `$(…)` the call counts in the subshell only, so add `(( MUT_COUNT += 1 ))` after it.
+- `report_dry_run "${SCRIPT_PATH}" "${args[@]}"` — the closing log line: the exact rerun with `--execute` in the `$HOME` form, `Executed`, or `Nothing to change`. `readonly SCRIPT_PATH="${0:a}"` at the top level (inside a function `$0` is its name); `args` is the original `"$@"`.
+
+**NEVER put a redirect or a pipe on a `run_mut` line.** The shell applies it to `run_mut` itself, so a dry run still truncates the file or kills the producer:
+
+```zsh
+# BAD — out.json is emptied in a dry run; the producer dies of SIGPIPE
+run_mut jq '.x = 1' in.json > out.json
+seq 1 400000 | run_mut tee out.txt
+# GOOD
+jq '.x = 1' in.json | write_mut out.json
+seq 1 400000 | write_mut out.txt
+```
+
+The shape, condensed from `bin/example` (its `copy_skill_file` spells the guard out as a function):
+
+```zsh
+source "${SKILLS_DIR}/ari-skill-shellscripts/lib/dry_run.zsh"
+readonly SCRIPT_PATH="${0:a}"
+
+main() {
+  local -a args=("${@}")
+  local execute=false dry_run=false
+  while (( $# > 0 )); do case "${1}" in
+    --execute) execute=true; shift ;;
+    --dry-run) dry_run=true; shift ;;
+    …
+  esac; done
+  resolve_dry_run "${execute}" "${dry_run}"
+  …
+  cmp -s "${src}" "${dest}" || run_mut cp "${src}" "${dest}"
+  print -l -- "${targets[@]}" | write_mut "${out_dir}/manifest.txt"
+  report_dry_run "${SCRIPT_PATH}" "${args[@]}"
+  cat <<EOF
+dry_run=${DRY_RUN}
+changes=${MUT_COUNT}
+EOF
+}
+```
+
+A dry run of it, on stderr:
+
+```
+[INFO] Dry run: the default; nothing will change | rerun='--execute'
+[INFO] would run | cmd=mkdir -p 'ex dir'
+[INFO] would run | cmd=cp /Users/<you>/.claude/skills/ari-poem-limerick/SKILL.md 'ex dir/ari-poem-limerick.SKILL.md'
+[INFO] would write | file='ex dir/manifest.txt' bytes='18' mode='replace'
+[INFO] Dry run; nothing changed | changes='3' rerun='zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode reg --target ari-poem-limerick --out-dir 'ex dir' --execute'
+```
+
+When the user, not Claude, runs the `--execute` step, hand the `rerun` command to `/ari-driving-tmux`. Python scripts honour the same `DRY_RUN` contract (`/ari-skill-pythonscripts`). The dotfiles kernel's `is_dry_run`/`run_mut` (`~/.config/dotfiles/lib/run.zsh`) read another variable with the opposite default; this lib refuses to load over them.
 
 ## Bounded subprocesses
 
@@ -217,27 +286,39 @@ Validate before use. `${VAR:?message}` for required, `${VAR:-default}` for optio
 
 Four phases: **parse → massage → validate → logic.**
 
-1. **Parse** — `--help` first, then `while (( $# > 0 )); do case` for flags. Never positional args — use repeated flags for arrays (`--target foo --target bar`). Use `${2:?--flag requires a value}` to catch missing values.
+1. **Parse** — `--help` first, then `while (( $# > 0 )); do case` for flags. Never positional args — use repeated flags for arrays (`--target foo --target bar`). Use `${2:?--flag requires a value}` to catch missing values. A mutating script calls `resolve_dry_run` right after the loop.
 2. **Massage** — normalize case (`${mode:l}`), expand shortnames, split comma-separated into arrays (`${(@s/,/)val}`), multiline to array (`${(@f)$(cmd)}`).
 3. **Validate** — check required args, sane values. After massage, not during parse.
-4. **Logic** — the actual work. No more argument handling.
+4. **Logic** — the actual work. No more argument handling. Every mutation through `run_mut` or `write_mut`; a mutating script ends with `report_dry_run` and a heredoc carrying `dry_run=`.
 
 ## Validation
 
-Run `zsh -n script.zsh` to syntax-check — built into zsh, no install. You MUST `zsh -n` a script and run every `tests/*.test.zsh` of this skill before committing, after any update to this skill or to any skill's scripts; each exits 1 on a failure:
+**Before committing a change to this skill or to any skill's zsh scripts, you MUST syntax-check each changed script and run both test files.** Each exits 1 on a failure:
 
 ```zsh
-zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/conventions.test.zsh
+zsh -n <each changed script>
+zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/conventions.test.zsh --skill <each skill you changed>
+zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/await.test.zsh
 ```
 
-`conventions.test.zsh` proves the rules above in a throwaway zsh, then lints every skill's zsh scripts: FAIL is a rule broken for certain (quotes inside an associative-array subscript) and fails the run; WARN is a heuristic match under pipefail (`grep` not last, or `head` / `grep -m` / `sed q` / `awk exit` on a pipeline) to read and fix, or to mark with a trailing `# lint: ok` once reviewed. A mistake a convention here would have prevented, or a convention wrong in use, is a `/ari-skill-update ari-skill-shellscripts` in the same session, unasked: a rule above and an `expect_rc` case in `tests/`.
+`conventions.test.zsh` proves the rules above in a throwaway zsh (`lib/dry_run.zsh` and `bin/example` among them), then lints zsh scripts; without `--skill` it lints every skill. One line per finding, `FAIL  <file>:<line>  <what and the fix>`, then `summary  pass=N fail=N warn=N`:
+
+- **FAIL** — a rule broken for certain; fails the run. Quotes inside an associative-array subscript. A bin/ script with a `--dry-run` arm or a `run_mut` call and no `--execute` arm (its default acts), or no `resolve_dry_run` call. A local `run_mut`/`is_dry_run`/`resolve_dry_run`/`write_mut`/`report_dry_run` definition. `DRY_RUN` compared with or set to `true`/`false`. A redirect or pipe on a `run_mut` line.
+- **WARN** — a heuristic match to read and fix: an `--apply`/`--yes`/`--confirm`/`--no-dry-run` arm; under pipefail, `grep` not last, or `head` / `grep -m` / `sed q` / `awk exit` on a pipeline.
+- A line ending in `# lint: ok` is skipped, FAIL or WARN, once a person has reviewed it.
+- The lint cannot see a script that mutates with no flags at all: the definition in § Mutations is the check there.
+
+A FAIL in a skill you did not change is listed in your report under that skill's name, never fixed unasked and never a reason to hold your own commit; `--skill` scopes the gate to what you changed.
+
+**A convention here broken in use, or wrong, is a `/ari-skill-update ari-skill-shellscripts` in the same session, unasked:** a script exited 141 or died `parameter not set`, a run meant as a dry run acted, or a rule here misled. The update adds the rule and an `expect_rc` case or a lint fixture that fails without it.
 
 ## Example
-
-A runnable reference script lives at `bin/example`:
 
 ```zsh
 zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --help
 zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode reg --target pr --verbose
-zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode compare --dry-run
+zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode compare --target ari-poem-limerick --out-dir /tmp/example-out
+zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode compare --target ari-poem-limerick --out-dir /tmp/example-out --execute
 ```
+
+The first `--out-dir` run logs the copies; the second, with `--execute`, makes them, and a repeat of it changes nothing.
