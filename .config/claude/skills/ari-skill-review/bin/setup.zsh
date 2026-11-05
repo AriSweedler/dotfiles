@@ -3,7 +3,7 @@
 set -euo pipefail
 
 readonly SCRIPT_DIR="${0:A:h}"
-readonly SKILLS_DIR="${SCRIPT_DIR:h:h}"
+readonly SKILLS_DIR="${HOME}/.claude/skills"
 readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
 if [[ ! -r "${LIB_LOGGING}" ]]; then
   print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
@@ -19,7 +19,9 @@ fi
 source "${LIB_INVDIR}"
 
 readonly REVIEW_ROOT="/tmp/skill-review"
-# One file per reviewer in the panel, plus the two deliverables.
+# One file per SKILL.md § Reviewer panel entry, plus spec-questions.md. findings.md
+# is left out: the harness refuses a subagent's Write to it, so only the main
+# thread creates it, and its absence marks a subagent run.
 readonly -a SCAFFOLD_FILES=(
   structure.md
   clarity.md
@@ -29,7 +31,6 @@ readonly -a SCAFFOLD_FILES=(
   examples.md
   kernighan-ritchie.md
   deflake.md
-  findings.md
   spec-questions.md
 )
 
@@ -41,9 +42,8 @@ ${c_bold}Usage:${c_rst}
   zsh $HOME/.claude/skills/ari-skill-review/bin/setup.zsh --skill NAME
 
 ${c_bold}Output:${c_rst}
-  Prints the created folder path to stdout. Creates an empty file per reviewer
-  (structure, clarity, edge-case, reuse, interaction, examples, kernighan-ritchie,
-  deflake) plus findings.md and spec-questions.md.
+  Prints the created folder path to stdout. Creates these empty files:
+  ${(j:, :)SCAFFOLD_FILES}
 
 ${c_bold}Options:${c_rst}
   --skill NAME  Name of the skill being reviewed (required)
