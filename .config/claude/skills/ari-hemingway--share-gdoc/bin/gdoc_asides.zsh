@@ -4,7 +4,8 @@
 # gdoc_asides.py; gdoc_publish.zsh runs both modes on every publish.
 #
 # Usage: zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_asides.zsh --split --file DRAFT.md --body-out BODY.md [--force]
-#        zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_asides.zsh --rebuild --file DRAFT.md --doc ID [--dry-run] [--first-tab-title T]
+#        zsh $HOME/.claude/skills/ari-hemingway--share-gdoc/bin/gdoc_asides.zsh --rebuild --file DRAFT.md --doc ID [--execute] [--first-tab-title T]
+#        (--rebuild without --execute is a dry run: it prints the batches and sends nothing)
 set -euo pipefail
 
 readonly SCRIPT_DIR="${0:A:h}"

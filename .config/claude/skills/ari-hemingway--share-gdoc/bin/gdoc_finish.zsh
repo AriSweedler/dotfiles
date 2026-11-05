@@ -5,7 +5,8 @@
 # token, then verify from one re-read that every inline image fits one page and links to its
 # mermaid.live source in fullscreen view, that no plain Drive link remains, that every table fits the text
 # width, and that every table's first row is a pinned header (Drive's markdown import sets
-# tableHeader; the PDF export repeats that row on every page).
+# tableHeader; the PDF export repeats that row on every page). Without --execute it is a dry run:
+# the batch is built and validated locally, and the checks read the unchanged doc.
 
 set -euo pipefail
 
@@ -19,6 +20,7 @@ fi
 source "${LIB_LOGGING}"
 
 source "${SKILLS_DIR}/ari-hemingway--lib/lib/drive.zsh"
+source "${SKILLS_DIR}/ari-skill-shellscripts/lib/dry_run.zsh"
 
 # --- Constants ---
 
@@ -50,7 +52,7 @@ readonly DRIFT_TOLERANCE_PT="22.7"
 check_prerequisites() {
   local cmd
   local missing=()
-  for cmd in gws jq; do
+  for cmd in gws jq python3 strings; do
     command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
   done
   if (( ${#missing} > 0 )); then
@@ -60,7 +62,7 @@ check_prerequisites() {
 }
 
 #######################################
-# Reduce a Google Doc URL or bare id to the id.
+# Reduce a Google Doc URL (…/d/<id>/edit?tab=…, …/d/<id>?tab=…#heading) or bare id to the id.
 # Arguments: $1 - id or URL
 #######################################
 doc_id_from() {
@@ -69,7 +71,8 @@ doc_id_from() {
     doc="${doc#*/d/}"
     doc="${doc%%/*}"
   fi
-  echo "${doc}"
+  doc="${doc%%\?*}"
+  echo "${doc%%#*}"
 }
 
 #######################################
@@ -86,7 +89,7 @@ fetch_doc() {
 
 #######################################
 # Run one batchUpdate pinned to the revision the requests were built from, or validate it
-# locally under --dry-run.
+# locally on a dry run.
 # Arguments: $1 - doc id, $2 - requests JSON array path, $3 - revision id, $4 - dry_run (true|false), $5 - reply path
 #######################################
 batch_update() {
@@ -304,7 +307,7 @@ check_header_rows_pinned() {
   n_tables="$(jq '[.body.content[] | select(.table)] | length' "${doc_json}")"
   while IFS=$'\t' read -r start; do
     [[ -n "${start}" ]] || continue
-    log::warn "Table header row is not pinned | start='${start}' expected='tableRows[0].tableRowStyle.tableHeader == true'"
+    log::err "Table header row is not pinned | start='${start}' expected='tableRows[0].tableRowStyle.tableHeader == true'"
     rc=1
   done < <(jq -r '.body.content[] | select(.table) | select((.table.tableRows[0].tableRowStyle.tableHeader // false) | not) | [.startIndex] | @tsv' "${doc_json}")
   if (( rc == 0 )); then
@@ -324,7 +327,7 @@ check_tables_fit() {
   local rc=0 start cols deficit widest
   while IFS=$'\t' read -r start cols deficit widest; do
     [[ -n "${start}" ]] || continue
-    log::err "Table cannot fit the text width | start='${start}' cols='${cols}' deficit_pt='${deficit}' widest_tokens='${widest}' fix='fold a column or shorten a token, then re-run with --doc'"
+    log::err "Table cannot fit the text width | start='${start}' cols='${cols}' deficit_pt='${deficit}' widest_tokens='${widest}' fix='fold a column or shorten a token in the draft, then re-publish with gdoc_publish.zsh --doc'"
     rc=1
   done < <(jq -r 'select(.feasible | not) | [.start, .cols, .deficit_pt, (.widest_tokens | join(" | "))] | @tsv' "${plan}")
   if (( rc == 0 )); then
@@ -334,14 +337,16 @@ check_tables_fit() {
 }
 
 #######################################
-# Merge chip, style, and width requests into the one batch. Descending anchor order means every
-# request runs before anything that would shift its indexes; within one anchor a link's delete
-# precedes its insert, and styles come last.
+# Merge chip, style, and width requests into the one batch. Styles and widths (order 2) shift no
+# index, so they all run first, on the ranges the read gave; then the chips in descending anchor
+# order, a link's delete before its insert, so each runs before anything that would shift it. A
+# chip sorted ahead of a style would stretch that style's range: a Drive URL in a header cell
+# would bold and center the next cell too.
 # Arguments: $1 - chip requests path, $2 - style requests path, $3 - width requests path, $4 - output path for the plain requests array
 #######################################
 merge_requests() {
   local chips="${1}" styles="${2}" widths="${3}" out="${4}"
-  jq -cs '.[0] + .[1] + .[2] | sort_by([-.anchor, .order]) | map(.request)' "${chips}" "${styles}" "${widths}" > "${out}"
+  jq -cs '.[0] + .[1] + .[2] | sort_by([(if .order == 2 then 0 else 1 end), -.anchor, .order]) | map(.request)' "${chips}" "${styles}" "${widths}" > "${out}"
 }
 
 #######################################
@@ -443,6 +448,45 @@ run_checks() {
   return "${rc}"
 }
 
+#######################################
+# Send the fix-up batch, or validate it locally on a dry run, then refetch the doc it changed.
+# Arguments: $1 - doc id, $2 - work dir (holds requests.json; doc.json is refetched), $3 - revision id,
+#            $4 - dry_run (true|false), $5 - links in the batch, $6 - tables in the doc
+#######################################
+send_fixup_batch() {
+  local doc="${1}" work="${2}" revision="${3}" dry_run="${4}" n_links="${5}" n_tables="${6}"
+  if (( $(jq 'length' "${work}/requests.json") == 0 )); then
+    log::info "Nothing to fix up"
+    return 0
+  fi
+  batch_update "${doc}" "${work}/requests.json" "${revision}" "${dry_run}" "${work}/batch_reply.json"
+  if [[ "${dry_run}" == "true" ]]; then
+    log::ok "Fix-up batch dry run valid; nothing written | requests='${work}/requests.json' next='show the user the planned fix-up; --execute only after they reply'"
+    return 0
+  fi
+  log::ok "Applied fix-up batch | links='${n_links}' tables='${n_tables}' out='${work}/batch_reply.json'"
+  fetch_doc "${doc}" "${work}/doc.json"
+}
+
+#######################################
+# Run the checks. A dry run's checks read the doc before any fix-up, so a failure there is logged
+# and the exit stays 0: the batch that would fix a plain Drive link has not run.
+# Arguments: $1 - dry_run (true|false), then run_checks' arguments
+# Returns: run_checks' code when acting; 0 on a dry run
+#######################################
+run_final_checks() {
+  local dry_run="${1}"
+  shift
+  local doc="${2}"
+  if [[ "${dry_run}" == "true" ]]; then
+    if ! run_checks "${@}"; then
+      log::warn "Checks fail on the doc as it is, before any fix-up; the ERROR lines above are expected on a dry run | doc='${doc}'"
+    fi
+    return 0
+  fi
+  run_checks "${@}"
+}
+
 # --- Help ---
 
 help() {
@@ -456,9 +500,13 @@ ${c_bold}Options:${c_rst}
   --doc ID_OR_URL              Google Doc id or docs.google.com URL (required)
   --table-widths START:w1,w2   Widths in points for the table at index START, instead of the model (repeatable; logged)
   --render-pages DIR           Also render the PDF export to one PNG per page in DIR (needs swift)
-  --check-only                 Run the checks against the doc as it is; change nothing
-  --dry-run                    Validate the fix-up batch locally; change nothing
+  --check-only                 Run the checks against the doc as it is; build no batch
+  --execute                    Apply the fix-up batch; without it the batch is only validated locally
+  --dry-run                    The default made explicit; wins over --execute and exports DRY_RUN=1
   -h, --help                   Show this help
+
+${c_bold}Environment:${c_rst}
+  DRY_RUN                      Set and not 0 (a parent's dry run): a dry run, --execute or not; 0 alone never acts
 
 ${c_bold}Exit code:${c_rst} non-zero when any inline image exceeds the page content box or lacks a link to its
 mermaid.live source in view form (${IMAGE_LINK_PREFIX}), when any Drive link is still a plain hyperlink, when a table's first row is not a
@@ -473,7 +521,7 @@ main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local doc="" check_only=false dry_run=false render_dir=""
+  local doc="" check_only=false execute=false dry_run_flag=false render_dir=""
   local -a table_widths
   table_widths=()
   while (( $# > 0 )); do case "${1}" in
@@ -482,12 +530,18 @@ main() {
     --table-widths)  table_widths+=("${2:?--table-widths requires a value}"); shift 2 ;;
     --render-pages)  render_dir="${2:?--render-pages requires a value}"; shift 2 ;;
     --check-only)    check_only=true; shift ;;
-    --dry-run)       dry_run=true; shift ;;
+    --execute)       execute=true; shift ;;
+    --dry-run)       dry_run_flag=true; shift ;;
     -*)              log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)               log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
   esac; done
 
   # === MASSAGE ===
+  resolve_dry_run "${execute}" "${dry_run_flag}"
+  local dry_run=false
+  if is_dry_run; then
+    dry_run=true
+  fi
   doc="$(doc_id_from "${doc}")"
   [[ -n "${render_dir}" ]] && render_dir="${render_dir:A}"
 
@@ -529,20 +583,8 @@ main() {
   revision="$(jq -r '.revisionId' "${work}/doc.json")"
   log::info "Built fix-up batch | links='${n_links}' tables='${n_tables}' requests='${n_requests}' file='${work}/requests.json'"
 
-  if (( n_requests > 0 )); then
-    batch_update "${doc}" "${work}/requests.json" "${revision}" "${dry_run}" "${work}/batch_reply.json"
-    if [[ "${dry_run}" == "true" ]]; then
-      log::ok "Fix-up batch dry run valid | out='${work}/batch_reply.json'"
-      log::info "Checks run against the unchanged doc under --dry-run"
-    else
-      log::ok "Applied fix-up batch | links='${n_links}' tables='${n_tables}' out='${work}/batch_reply.json'"
-      fetch_doc "${doc}" "${work}/doc.json"
-    fi
-  else
-    log::info "Nothing to fix up"
-  fi
-
-  run_checks "${work}/doc.json" "${doc}" "${work}" "${render_dir}"
+  send_fixup_batch "${doc}" "${work}" "${revision}" "${dry_run}" "${n_links}" "${n_tables}"
+  run_final_checks "${dry_run}" "${work}/doc.json" "${doc}" "${work}" "${render_dir}"
 }
 
 main "${@}"

@@ -5,7 +5,8 @@
 # page (gdoc_finish.zsh), then rebuild the draft's asides as tabs (gdoc_asides.zsh; the
 # import deletes every tab but the first), then bookmark the draft's #bm- runs and aside
 # markers when the structure-bookmark skill's setup passes. Prints the URL. The draft's first
-# line is the Doc title and is not uploaded as body; --title overrides.
+# line is the Doc title and is not uploaded as body; --title overrides. Without --execute it is a
+# dry run: it stages, splits and validates the Drive request, and writes nothing.
 
 set -euo pipefail
 
@@ -30,6 +31,7 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
 fi
 source "${LIB_LOGGING}"
 source "${SKILLS_DIR}/ari-hemingway--lib/lib/drive.zsh"
+source "${SKILLS_DIR}/ari-skill-shellscripts/lib/dry_run.zsh"
 
 # --- Prerequisites ---
 
@@ -40,7 +42,7 @@ source "${SKILLS_DIR}/ari-hemingway--lib/lib/drive.zsh"
 check_prerequisites() {
   local cmd
   local missing=()
-  for cmd in gws jq; do
+  for cmd in gws jq python3; do
     command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
   done
   [[ -f "${SCRIPT_DIR}/gdoc_finish.zsh" ]] || missing+=("${SCRIPT_DIR}/gdoc_finish.zsh")
@@ -52,7 +54,7 @@ check_prerequisites() {
 }
 
 #######################################
-# Reduce a Google Doc URL or bare id to the id.
+# Reduce a Google Doc URL (…/d/<id>/edit?tab=…, …/d/<id>?tab=…#heading) or bare id to the id.
 # Arguments: $1 - id or URL
 #######################################
 doc_id_from() {
@@ -61,7 +63,36 @@ doc_id_from() {
     doc="${doc#*/d/}"
     doc="${doc%%/*}"
   fi
-  echo "${doc}"
+  doc="${doc%%\?*}"
+  echo "${doc%%#*}"
+}
+
+#######################################
+# Read the Doc an update would replace and log what it is, so the confirm names it. Read-only, so
+# it runs on a dry run too: a wrong id, a non-Doc, or a Doc the caller cannot edit fails here.
+# Globals: DOC_MIME
+# Arguments: $1 - doc id, $2 - reply path
+# Returns: 1 when the target is missing, not a Doc, or not editable
+#######################################
+describe_target_doc() {
+  local doc="${1}" reply_file="${2}"
+  local params mime can_edit
+  params="$(jq -cn --arg id "${doc}" '{fileId: $id, fields: "id,name,mimeType,modifiedTime,lastModifyingUser/displayName,capabilities/canEdit", supportsAllDrives: true}')"
+  if ! drive::gws_call "${reply_file}" drive files get --params "${params}"; then
+    log::err "Doc to replace not found or not readable | doc='${doc}' expected='a Google Doc id or docs.google.com URL the caller can open'"
+    return 1
+  fi
+  mime="$(jq -r '.mimeType // ""' "${reply_file}")"
+  can_edit="$(jq -r '.capabilities.canEdit // false' "${reply_file}")"
+  if [[ "${mime}" != "${DOC_MIME}" ]]; then
+    log::err "Target is not a Google Doc | doc='${doc}' mime_type='${mime}' expected='${DOC_MIME}'"
+    return 1
+  fi
+  if [[ "${can_edit}" != "true" ]]; then
+    log::err "Cannot edit the Doc to replace | doc='${doc}' can_edit='${can_edit}' expected='true'"
+    return 1
+  fi
+  log::info "Doc to replace; its whole body and every tab but the first go | doc='${doc}' name='$(jq -r '.name // ""' "${reply_file}")' modified='$(jq -r '.modifiedTime // ""' "${reply_file}")' modified_by='$(jq -r '.lastModifyingUser.displayName // ""' "${reply_file}")'"
 }
 
 ########################################################################
@@ -155,7 +186,7 @@ rebuild_asides() {
   fi
   local -a flags
   [[ -n "${first_tab_title}" ]] && flags+=(--first-tab-title "${first_tab_title}")
-  zsh "${SCRIPT_DIR}/gdoc_asides.zsh" --rebuild --file "${draft}" --doc "${doc}" "${flags[@]}" > /dev/null
+  zsh "${SCRIPT_DIR}/gdoc_asides.zsh" --rebuild --execute --file "${draft}" --doc "${doc}" "${flags[@]}" > /dev/null
 }
 
 #######################################
@@ -173,11 +204,24 @@ apply_bookmarks() {
   local setup
   if ! setup="$(zsh "${BOOKMARKS}" --check-setup 2>/dev/null)"; then
     local missing
-    missing="$(print -r -- "${setup}" | awk '/^MISSING/ {print; exit}')"
+    missing="$(print -r -- "${setup}" | awk '!found && /^MISSING/ { print; found = 1 }')"
     log::warn "Bookmarks skipped; return links stay on headings | missing='${missing}'"
     return 0
   fi
   zsh "${BOOKMARKS}" --apply --doc "${doc}" --file "${draft}" > /dev/null
+}
+
+#######################################
+# Bookmark only over aside tabs this run rebuilt: after a failed rebuild the tabs are empty or stale.
+# Arguments: $1 - doc id, $2 - full draft path, $3 - the asides rebuild's exit code
+#######################################
+bookmark_if_asides_rebuilt() {
+  local doc="${1}" draft="${2}" asides_rc="${3}"
+  if (( asides_rc != 0 )); then
+    log::warn "Bookmarks skipped; the aside rebuild failed | doc='${doc}' rc='${asides_rc}'"
+    return 0
+  fi
+  apply_bookmarks "${doc}" "${draft}"
 }
 
 # --- Help ---
@@ -195,17 +239,20 @@ ${c_bold}Options:${c_rst}
   --doc ID_OR_URL    Update this existing Doc in place (replaces its whole body)
   --folder ID_OR_URL Create the Doc inside this Drive folder (id or drive.google.com/drive/folders URL); not with --doc
   --first-tab-title T  With asides: rename the first tab (the import resets it to "Tab 1")
-  --dry-run          Validate the Drive request; create/update nothing
+  --execute          Create or update the Doc, then finish it; without it the run is a dry run
+  --dry-run          The default made explicit; wins over --execute and exports DRY_RUN=1
   -h, --help         Show this help
 
 ${c_bold}Environment:${c_rst}
   ARI_HEMINGWAY_SCRATCH_DIR  Drive folder (id or URL) a new Doc lands in when --folder is absent;
                              a create with neither set fails before any Drive call
+  DRY_RUN                    Set and not 0 (a parent's dry run): a dry run, --execute or not; 0 alone never acts
 
-${c_bold}Output:${c_rst} the Doc URL on stdout. Non-zero exit after "Doc created" means finishing failed
-(e.g. an image taller than one page), the aside tabs could not be rebuilt, or the bookmark step
-failed after its setup check passed; fix the draft and re-run with --doc URL. A missing bookmark
-setup is a WARN, not a failure.
+${c_bold}Output:${c_rst} the Doc URL on stdout after --execute; nothing on a dry run, which validates the
+Drive request and exits 0. Non-zero exit after "Doc created" means finishing failed (e.g. an image
+taller than one page), the aside tabs could not be rebuilt, or the bookmark step failed after its
+setup check passed; fix the draft and re-run with --doc URL --execute. A missing bookmark setup is
+a WARN, not a failure.
 EOH
 }
 
@@ -215,7 +262,7 @@ main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local file="" title="" doc="" folder="" first_tab_title="" dry_run=false
+  local file="" title="" doc="" folder="" first_tab_title="" execute=false dry_run_flag=false
   while (( $# > 0 )); do case "${1}" in
     -h|--help)  help; return 0 ;;
     --file)     file="${2:?--file requires a value}"; shift 2 ;;
@@ -223,12 +270,18 @@ main() {
     --doc)      doc="${2:?--doc requires a value}"; shift 2 ;;
     --folder)   folder="${2:?--folder requires a value}"; shift 2 ;;
     --first-tab-title) first_tab_title="${2:?--first-tab-title requires a value}"; shift 2 ;;
-    --dry-run)  dry_run=true; shift ;;
+    --execute)  execute=true; shift ;;
+    --dry-run)  dry_run_flag=true; shift ;;
     -*)         log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)          log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
   esac; done
 
   # === MASSAGE ===
+  resolve_dry_run "${execute}" "${dry_run_flag}"
+  local dry_run=false
+  if is_dry_run; then
+    dry_run=true
+  fi
   doc="$(doc_id_from "${doc}")"
   folder="$(drive::folder_id_from "${folder}")"
   folder="$(choose_folder "${folder}" "${doc}")" || return 1
@@ -262,18 +315,26 @@ main() {
   local n_asides
   n_asides="$(zsh "${SCRIPT_DIR}/gdoc_asides.zsh" --split --file "${work}/draft.md" --body-out "${work}/body.md" --force)" || return 1
   log::info "Staged body | title='${title}' body='${work}/body.md' bytes='$(wc -c < "${work}/body.md" | tr -d ' ')' asides='${n_asides}'"
+  if [[ -z "$(tr -d '[:space:]' < "${work}/body.md")" ]]; then
+    log::err "Empty body; nothing to publish | file='${file}' title='${title}'"
+    return 1
+  fi
 
   local folder_name=""
   if [[ -n "${folder}" ]]; then
     folder_name="$(drive::resolve_folder "${folder}" "${work}/folder_reply.json")" || return 1
     log::info "Target folder | folder='${folder}' name='${folder_name}' drive='$(jq -r '.driveId // "my-drive"' "${work}/folder_reply.json")'"
   fi
+  if [[ -n "${doc}" ]]; then
+    describe_target_doc "${doc}" "${work}/target_reply.json" || return 1
+  fi
 
   cd "${work}"
   local action
   action="$(upload_doc "${title}" "${doc}" "${folder}" "${dry_run}" "${work}/drive_reply.json")"
   if [[ "${dry_run}" == "true" ]]; then
-    log::ok "Dry run valid | action='${action}' folder='${folder}' folder_name='${folder_name}' asides='${n_asides}' reply='${work}/drive_reply.json'"
+    # The next step is the user's: an unconditional "add --execute" here reads as the next command.
+    log::ok "Dry run valid; nothing written | would='${action%d}' title='${title}' doc='${doc}' folder='${folder}' folder_name='${folder_name}' asides='${n_asides}' next='show the user what would be written; --execute only after they reply'"
     return 0
   fi
 
@@ -286,11 +347,12 @@ main() {
   local url="https://docs.google.com/document/d/${doc_id}/edit"
   log::ok "Doc ${action} | doc='${doc_id}' url='${url}' parents='$(jq -r '(.parents // []) | join(",")' "${work}/drive_reply.json")'"
 
-  local finish_rc=0
-  zsh "${SCRIPT_DIR}/gdoc_finish.zsh" --doc "${doc_id}" || finish_rc=$?
-  rebuild_asides "${doc_id}" "${work}/draft.md" "${n_asides}" "${first_tab_title}" || finish_rc=$?
-  apply_bookmarks "${doc_id}" "${work}/draft.md" || finish_rc=$?
+  local finish_rc=0 asides_rc=0
+  zsh "${SCRIPT_DIR}/gdoc_finish.zsh" --doc "${doc_id}" --execute || finish_rc=$?
+  rebuild_asides "${doc_id}" "${work}/draft.md" "${n_asides}" "${first_tab_title}" || asides_rc=$?
+  bookmark_if_asides_rebuilt "${doc_id}" "${work}/draft.md" "${asides_rc}" || finish_rc=$?
   echo "${url}"
+  (( asides_rc == 0 )) || return "${asides_rc}"
   return "${finish_rc}"
 }
 
