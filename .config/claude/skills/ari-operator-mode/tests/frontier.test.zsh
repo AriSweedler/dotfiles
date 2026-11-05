@@ -224,6 +224,9 @@ file="$(capture FAKE_LIST_RC=1 -- "${common[@]}")"
 check "list fails with 1: bad_definition, not the host" bad_definition "$(q "${file}" '.cut_off.reason')"
 contains "bad_definition: mine to fix, not his" "mine to fix, not yours" "$(zsh "${BRIEF}" --json "${file}" --cut-off)"
 lacks "bad_definition: never his to clear" "yours to clear" "$(zsh "${BRIEF}" --json "${file}" --cut-off)"
+check "bad_definition: my fix is said, never offered as a question" 0 "$(zsh "${BRIEF}" --json "${file}" --cut-off | tr -cd '?' | wc -c | tr -d ' ')"
+contains "bad_definition: says his next message reads again, so neither side waits" "I fix the definition now; your next message reads again." "$(zsh "${BRIEF}" --json "${file}" --cut-off)"
+check "brief: --continuing given last is refused with its own message" "requires a value" "$(zsh "${BRIEF}" --json "${file}" --cut-off --continuing 2>&1 | awk '/requires a value/ && !f { print "requires a value"; f = 1 }')"
 file="$(capture -- "${common[@]}" --target %99)"
 check "no_pane: reason" no_pane "$(q "${file}" '.cut_off.reason')"
 check "no_pane: the label tried" '%99' "$(q "${file}" '.cut_off.pane')"
@@ -291,7 +294,7 @@ check "own command never clears: what held the pane" "another caller is typing i
 check "own command never clears: the whole budget was spent, not one read's" 1 "$(( $(q "${file}" '.waited_s') >= 30 ))"
 own_text="$(zsh "${BRIEF}" --json "${file}" --cut-off)"; rc=$?
 check "own command: brief prints the waiting line, exit 3" 3 "${rc}"
-check "own command: the waiting line names the pane, what holds it, and asks" 'Waiting on `machine=personal|ID=%18|pane=3.1|nickname=homelab`, busy with `another caller is typing into it`; an agent'"'"'s command, nothing of yours to clear. Read again?' "${own_text}"
+check "own command: the waiting line names the pane, what holds it, and asks nothing: nothing of his waits" 'Waiting on `machine=personal|ID=%18|pane=3.1|nickname=homelab`, busy with `another caller is typing into it`; an agent'"'"'s command, nothing of yours to clear; your next message reads again.' "${own_text}"
 check "own command: what held the pane is kept for the next capture" "another caller is typing into it" "$(q "${file}" '.cut_off.busy_cmd')"
 lacks "own command: never called his P0" "P0" "${own_text}"
 check "own command: the header is the same line" "${own_text}" "$(zsh "${BRIEF}" --json "${file}" --header)"
@@ -304,7 +307,7 @@ persist_text="$(zsh "${BRIEF}" --json "${file}" --cut-off)"; rc=$?
 check "persisting wait: brief prints a waiting line, exit 3" 3 "${rc}"
 contains "persisting wait: still an agent's, nothing of his" "Still waiting on \`machine=personal|ID=%18|pane=3.1|nickname=homelab\`" "${persist_text}"
 lacks "persisting wait: never his P0" "P0" "${persist_text}"
-check "persisting wait: one question mark" 1 "$(print -rn -- "${persist_text}" | tr -cd '?' | wc -c | tr -d ' ')"
+check "persisting wait: no question mark, nothing of his waits" 0 "$(print -rn -- "${persist_text}" | tr -cd '?' | wc -c | tr -d ' ')"
 file="$(capture FAKE_RC=75 FAKE_KIND=other_caller "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 another caller is typing into it" FRONTIER_RETRY_S=1 -- "${common[@]}" --timeout 5 --previous "${prev_own}")"
 check "--previous names the capture to compare with" own_command_persists "$(q "${file}" '.cut_off.reason')"
 file="$(capture CLAUDE_CODE_SESSION_ID=other-session FAKE_RC=75 FAKE_KIND=other_caller "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 another caller is typing into it" FRONTIER_RETRY_S=1 -- "${common[@]}" --timeout 5)"
@@ -566,7 +569,8 @@ contains "cut-off paragraph: a timed-out read asks for the prompt, not to clear"
 lacks "cut-off paragraph: a timed-out read is not his to clear" "yours to clear" "${timed_text}"
 file="$(capture FAKE_RC=1 "FAKE_REFUSED=" -- "${common[@]}")"
 refused_text_out="$(zsh "${BRIEF}" --json "${file}" --cut-off)"
-contains "cut-off paragraph: refused text asks to retry once" "Shall I rewrite the read on one line and try once?" "${refused_text_out}"
+contains "cut-off paragraph: refused text says what I do, never offers it" "I rewrite the read now; your next message reads again." "${refused_text_out}"
+check "cut-off paragraph: refused text asks nothing" 0 "$(print -rn -- "${refused_text_out}" | tr -cd "?" | wc -c | tr -d " ")"
 lacks "cut-off paragraph: refused text never says it is his to clear" "This is yours to clear" "${refused_text_out}"
 contains "cut-off paragraph: the pane carries its nickname" '`machine=personal|ID=%18|pane=3.1|nickname=homelab`' "${out_text}"
 contains "header: the cut-off line carries the nickname too" "Cut off: machine=personal|ID=%18|pane=3.1|nickname=homelab (holds_text)" "$(zsh "${BRIEF}" --json "${holds_file}" --header)"
@@ -580,13 +584,13 @@ check "away: the reason is still host_unreachable" host_unreachable "$(q "${away
 check "away: the host did not answer, so the absence did not end" false "$(q "${away_file}" '.away_ended')"
 away_text="$(zsh "${BRIEF}" --json "${away_file}" --cut-off)"; rc=$?
 check "away: brief prints the away line, exit 3" 3 "${rc}"
-check "away: the line names the host, not a pane; nothing continues by default" 'Away: the host `laptop` is unreachable, as you said (going to work, back tonight); the tracker is unread, read tried at '"$(q "${away_file}" '.captured_at' | awk '{ sub(/^[0-9-]+T/, ""); sub(/:[0-9][0-9]Z$/, "Z"); print }')"'; nothing of mine runs on from this Mac meanwhile; I read again when you say you are back. Back?' "${away_text}"
+check "away: the line names the host, not a pane; nothing continues by default" 'Away: the host `laptop` is unreachable, as you said (going to work, back tonight); the tracker is unread, read tried at '"$(q "${away_file}" '.captured_at' | awk '{ sub(/^[0-9-]+T/, ""); sub(/:[0-9][0-9]Z$/, "Z"); print }')"'; nothing of mine runs on from this Mac meanwhile; I read again when you say you are back.' "${away_text}"
 lacks "away: never his P0" "P0" "${away_text}"
 lacks "away: never tells him to open ssh" "ssh" "${away_text}"
 lacks "away: never a bare pane target" '`%18`' "${away_text}"
-check "away: one question mark" 1 "$(print -rn -- "${away_text}" | tr -cd '?' | wc -c | tr -d ' ')"
+check "away: no question mark, nothing waits on him" 0 "$(print -rn -- "${away_text}" | tr -cd '?' | wc -c | tr -d ' ')"
 contains "away: the header says Away and names the host" "Away: laptop (host_unreachable); tracker unread; read " "$(zsh "${BRIEF}" --json "${away_file}" --header)"
-contains "away: --continuing names the work that runs on here" "; running on from this Mac: lane beads-he0 (PR open); lane beads-9pb; I read again when you say you are back. Back?" "$(zsh "${BRIEF}" --json "${away_file}" --cut-off --continuing 'lane beads-he0 (PR open); lane beads-9pb')"
+contains "away: --continuing names the work that runs on here" "; running on from this Mac: lane beads-he0 (PR open); lane beads-9pb; I read again when you say you are back." "$(zsh "${BRIEF}" --json "${away_file}" --cut-off --continuing 'lane beads-he0 (PR open); lane beads-9pb')"
 contains "away: --continuing '' is the default line" "; nothing of mine runs on from this Mac meanwhile;" "$(zsh "${BRIEF}" --json "${away_file}" --cut-off --continuing '')"
 check "away: --continuing with a question mark is refused" 1 "$(zsh "${BRIEF}" --json "${away_file}" --cut-off --continuing 'is it done?' >/dev/null 2>&1; print $?)"
 check "away: --continuing with a newline is refused" 1 "$(zsh "${BRIEF}" --json "${away_file}" --cut-off --continuing $'lane a\nlane b' >/dev/null 2>&1; print $?)"
@@ -597,7 +601,7 @@ check "away: --away with --local is refused" 1 "$(zsh "${FRONTIER}" --local --lo
 file="$(capture FAKE_RC_FOR=blocked:124 -- "${common[@]}" --away 'going to work')"
 timed_away="$(zsh "${BRIEF}" --json "${file}" --cut-off)"
 contains "away: a timed-out read is the absence too, and names the pane it resolved" 'Away: the host `laptop` did not answer a read of mine in `machine=personal|ID=%18|pane=3.1|nickname=homelab`, as you said it would not (going to work); I never resend it;' "${timed_away}"
-check "away: a timed-out read keeps one question mark" 1 "$(print -rn -- "${timed_away}" | tr -cd '?' | wc -c | tr -d ' ')"
+check "away: a timed-out read asks nothing either" 0 "$(print -rn -- "${timed_away}" | tr -cd '?' | wc -c | tr -d ' ')"
 file="$(capture FAKE_RC=75 FAKE_KIND=not_at_prompt "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ cd ~/homelab && bin/lab up apps/torrent" -- "${common[@]}" --away 'going to work')"
 contains "away: a pane that answered is not the absence; holds_text stays his P0" "**P0, cut off from the tracker.**" "$(zsh "${BRIEF}" --json "${file}" --cut-off)"
 check "away: a pane that answered ends the absence" true "$(q "${file}" '.away_ended')"
@@ -667,6 +671,30 @@ check "example: the cut-off paragraph is brief.zsh's own output" "$(zsh "${BRIEF
 for id in $({ grep -oE 'beads-[a-z0-9]+(\.[0-9]+)?' "${EXAMPLE_MD}" || true; } | sort -u); do
   check "example: ${id} in the markdown is in the JSON" true "$(jq -e --arg id "${id}" 'tostring | contains($id)' "${EXAMPLE}" >/dev/null 2>&1 && print true || print false)"
 done
+
+# 13. a row is only what Claude cannot do, and nothing he already said is asked again
+row_bd="$(awk '
+  /^Row [0-9]+, / { want = 1; next }
+  want && /^```zsh/ { inb = 1; want = 0; next }
+  want && NF { want = 0 }
+  inb && /^```/ { inb = 0; next }
+  inb && /(^|[^a-z_])bd / { n++ }
+  END { print n + 0 }' "${EXAMPLE_MD}")"
+check "example: no row's command is a bd write; bd is Claude's to run" 0 "${row_bd}"
+contains "spec: an answer row carries no command of his" "An answer row has no command" "$(<"${SPEC_MD}")"
+contains "example: the answer row's question is shown" "other words are your answer" "$(<"${EXAMPLE_MD}")"
+lacks "spec: no question form asks to start an instruction he gave" "Start <the instruction>" "$(<"${SPEC_MD}")"
+check "example: no question asks to start work" 0 "$(grep -cE '^A no is a correction\. Start ' "${EXAMPLE_MD}" || true)"
+for f in "${SPEC_MD}" "${EXAMPLE_MD}"; do
+  lacks "${f:t}: the no-row reply asks nothing" "leaves. Read again?" "$(<"${f}")"
+  check "${f:t}: no table row's form offers Claude's own work" 0 "$(awk '/^\|/ && /Should I|Want me to|Shall I/ { n++ } END { print n + 0 }' "${f}")"
+done
+contains "example: the own_command line is brief.zsh's own output" "${own_text}" "$(<"${EXAMPLE_MD}")"
+headings_fenced="$(awk '
+  /^(```|~~~)/ { t = substr($0, 1, 3); if (open == "") open = t; else if (t == open && $0 ~ /^(```|~~~)$/) open = ""; next }
+  open != "" && /^#/ { n++ }
+  END { print n + 0 }' "${EXAMPLE_MD}")"
+check "example: no heading falls inside a fence (a sample holding a fence uses ~~~ outside)" 0 "${headings_fenced}"
 
 print -- "${pass} passed, ${fail} failed"
 (( fail == 0 ))

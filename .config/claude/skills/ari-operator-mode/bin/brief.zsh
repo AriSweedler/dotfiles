@@ -37,8 +37,8 @@ ${c_bold}Options:${c_rst}
   --header       print the one line every reply in the mode opens with
   --phase TEXT   appended to the header after the capture time, e.g. 'after row 1' (default: fresh read)
   --cut-off      print the cut-off output and exit 3 when the capture was cut off, nothing and exit 0 otherwise:
-                 the P0 paragraph; one waiting line with its question for own_command, own_command_persists,
-                 row_pending and row_running; the away line for host_unreachable and read_timed_out when the capture
+                 the P0 paragraph; one waiting line for own_command and own_command_persists (no question:
+                 nothing of his waits), or with its question for row_pending and row_running; the away line for host_unreachable and read_timed_out when the capture
                  holds away (frontier.zsh --away, or the marker bin/away.zsh set): the host is named, his typed row
                  (the capture's pending) is named when there is one, and the work on this Mac from --continuing
   --continuing TEXT  with --cut-off on an away capture: what runs on from this Mac meanwhile, items separated by '; ',
@@ -61,7 +61,7 @@ while (( $# > 0 )); do
     --header) mode='header'; shift ;;
     --phase) phase="${2:?--phase requires a value}"; shift 2 ;;
     --cut-off) mode='cut_off'; shift ;;
-    --continuing) continuing="${2-}"; shift 2 ;;
+    --continuing) (( $# >= 2 )) || { log::err "--continuing requires a value"; exit 1; }; continuing="${2-}"; shift 2 ;;
     -h|--help) help; exit 0 ;;
     *) log::err "Unknown flag | flag='${1}'"; help; exit 1 ;;
   esac
@@ -73,7 +73,7 @@ if ! command -v jq >/dev/null 2>&1; then log::err "Missing required command | mi
 if [[ -n "${dir}" && -z "${json_file}" ]]; then json_file="${dir}/frontier.json"; fi
 if [[ -z "${json_file}" || ! -r "${json_file}" ]]; then log::err "A readable capture is required | json_file='${json_file}' hint='--dir DIR or --json FILE'"; exit 1; fi
 if [[ -z "${mode}" ]]; then log::err "One of --header or --cut-off is required"; help; exit 1; fi
-if [[ "${continuing}" == *[$'\n?`']* ]]; then log::err "--continuing is one line with no question mark or backtick: the away line has exactly one question mark | continuing='${continuing}'"; exit 1; fi
+if [[ "${continuing}" == *[$'\n?`']* ]]; then log::err "--continuing is one line with no question mark or backtick: the away line holds no question mark | continuing='${continuing}'"; exit 1; fi
 if ! jq -e 'type == "object" and has("cut_off") and has("ready")' "${json_file}" >/dev/null 2>&1; then
   log::err "Not a capture: it must be a JSON object with cut_off and ready | json_file='${json_file}'"
   exit 1
@@ -104,28 +104,30 @@ reason_sentence() {
 }
 
 #######################################
-# The one question that ends the paragraph, by reason: what clears it, or what Claude does next.
+# The sentence that ends the paragraph, by reason: a question only when the clear is his, else what
+# Claude does next, never offered as a question.
 # Arguments: $1 = reason
 #######################################
-closing_question() {
+closing_sentence() {
   case "${1}" in
     read_timed_out)   print -r -- "Tell me when its prompt is back?" ;;
     host_unreachable) print -r -- "Tell me when \`ssh\` to the host works from a pane?" ;;
-    bad_definition)   print -r -- "Shall I fix the definition and read again?" ;;
-    refused_text)     print -r -- "Shall I rewrite the read on one line and try once?" ;;
+    bad_definition)   print -r -- "I fix the definition now; your next message reads again." ;;
+    refused_text)     print -r -- "I rewrite the read now; your next message reads again." ;;
     *)                print -r -- "Tell me when it is clear, or name another pane?" ;;
   esac
 }
 
 #######################################
-# The one line a waiting capture renders: the pane, what holds it, whose it is, and the one question.
+# The one line a waiting capture renders: the pane, what holds it, whose it is; a question only when
+# his row is what waits, since an agent's command needs nothing of his.
 # Arguments: $1 = reason; $2 = pane; $3 = prompt_holds
 #######################################
 waiting_line() {
   local reason="${1}" pane="${2}" holds="${3}"
   case "${reason}" in
-    own_command) print -r -- "Waiting on \`${pane}\`, busy with \`${holds:-a command of mine}\`; an agent's command, nothing of yours to clear. Read again?" ;;
-    own_command_persists) print -r -- "Still waiting on \`${pane}\`, busy with \`${holds:-a command of mine}\`; an agent's command, nothing of yours to clear. Wait, or name another pane?" ;;
+    own_command) print -r -- "Waiting on \`${pane}\`, busy with \`${holds:-a command of mine}\`; an agent's command, nothing of yours to clear; your next message reads again." ;;
+    own_command_persists) print -r -- "Still waiting on \`${pane}\`, busy with \`${holds:-a command of mine}\`; an agent's command, nothing of yours to clear; your next message reads again, or name another pane by its \`ID=%N\`." ;;
     row_running) print -r -- "Your row is running in \`${pane}\` (\`${holds}\`); tell me what it printed when it ends?" ;;
     row_pending) print -r -- "Your row is on your prompt in \`${pane}\`, not entered: press Enter there, or clear it, then tell me?" ;;
   esac
@@ -133,8 +135,8 @@ waiting_line() {
 
 #######################################
 # The one line an announced absence renders: the host did not answer, as he said; what stays unread; his
-# typed row when the capture holds one; what runs on from this Mac (--continuing, else nothing); the one
-# question. The host is named by its definition, the pane only when the capture resolved one (a listing
+# typed row when the capture holds one; what runs on from this Mac (--continuing, else nothing); that he
+# says when he is back, with no question: nothing waits on his yes. The host is named by its definition, the pane only when the capture resolved one (a listing
 # that never answered leaves no label). A timed-out read adds that it is never resent.
 # Globals: continuing, json_file, NOTHING_CONTINUES
 # Arguments: $1 = reason; $2 = his words; $3 = the capture time, HH:MMZ
@@ -151,7 +153,7 @@ away_line() {
   [[ -n "${pending}" ]] && row_clause="; your row \`${pending}\` sits on that prompt, not entered"
   local runs_on="${NOTHING_CONTINUES}"
   [[ -n "${continuing}" ]] && runs_on="running on from this Mac: ${continuing}"
-  print -r -- "${head}; the tracker is unread, read tried at ${at}${row_clause}; ${runs_on}; I read again when you say you are back. Back?"
+  print -r -- "${head}; the tracker is unread, read tried at ${at}${row_clause}; ${runs_on}; I read again when you say you are back."
 }
 
 #######################################
@@ -236,7 +238,7 @@ print_cut_off() {
     holds_sentence=" Its prompt holds, verbatim: \`${holds}\`."
   fi
   if (( ${HIS_TO_CLEAR[(Ie)${reason}]} )); then yours=' This is yours to clear; I do nothing else until it is.'; else yours=' I do nothing else until it is read.'; fi
-  print -r -- "**P0, cut off from the tracker.** The pane \`${pane}\` ${sentence}; I read nothing from the tracker or the host checkout this turn.${holds_sentence} Unread: ${unread_list}.${yours} ${ALTERNATIVES} $(closing_question "${reason}")"
+  print -r -- "**P0, cut off from the tracker.** The pane \`${pane}\` ${sentence}; I read nothing from the tracker or the host checkout this turn.${holds_sentence} Unread: ${unread_list}.${yours} ${ALTERNATIVES} $(closing_sentence "${reason}")"
   return 3
 }
 

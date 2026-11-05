@@ -4,11 +4,11 @@ The briefing runs between the first two `---` lines, rendered from `frontier.exa
 
 ---
 
-Operator mode on. Reading the tracker through `machine=personal|ID=%18|pane=3.1|nickname=homelab`, scoped to this session's `beads-epic`: eight read-only commands, up to 45 s each; the table lists only what you can do, and I type row 1 onto that prompt, un-entered, unless it destroys or ships work; Enter is your yes. Answers: yes, row N, a bead id (I start that bead), no, or `stop operator mode`.
+Operator mode on. Reading the tracker through `machine=personal|ID=%18|pane=3.1|nickname=homelab`, scoped to this session's `beads-epic`: eight read-only commands, up to 45 s each; the table lists only what I cannot do myself, and I type row 1 onto that prompt, un-entered, unless it destroys or ships work; Enter is your yes. Answers: yes, row N, a bead id or an instruction (I start it), no, or `stop operator mode`.
 
 Ready 3, in progress 1, human 1, blocked 2, stale 1; laptop abc1234 dirty 1; read 09:07Z; fresh read
 
-**First principles.** The work is tracked as *beads* (one tracked issue each) in the `bd` workspace `~/beads` on the host `laptop` (shown: the *scope*, this session's epic `beads-epic`), which Claude reaches only by typing into one tmux *pane* (`machine=personal|ID=%18|pane=3.1|nickname=homelab`, the pane's full label); the checkout there is `~/homelab`, on this Mac `/Users/you/homelab`; a bead is *ready* (open, nothing blocks it), *in progress* (claimed), *stale* (untouched fourteen days), a *human gate* (only Ari answers it) or *blocked* (waits on another bead); *doctor* is `bin/doctor.sh`, the project's health command.
+**First principles.** The work is tracked as *beads* (one tracked issue each) in the `bd` workspace `~/beads` on the host `laptop` (shown: the *scope*, this session's epic `beads-epic`), which Claude reaches only by typing into one tmux *pane* (`machine=personal|ID=%18|pane=3.1|nickname=homelab`, the pane's full label); the checkout there is `~/homelab`, on this Mac `/Users/you/homelab`; a bead is *ready* (open, nothing blocks it), *in progress* (claimed), *stale* (untouched fourteen days), a *human gate* (waits on Ari) or *blocked* (waits on another bead); *doctor* is `bin/doctor.sh`, the project's health command.
 
 **State right now**
 - 3 ready; the top is beads-abc "Fix the widget" (P1).
@@ -20,14 +20,10 @@ Ready 3, in progress 1, human 1, blocked 2, stale 1; laptop abc1234 dirty 1; rea
 
 | # | Action | Priority | Why now |
 |---|--------|----------|---------|
-| 1 | beads-h1 "Decide the indexers": record your answer (my recommendation: stop at 1337x and TPB) | P2 | it blocks beads-bl2 |
+| 1 | beads-h1 "Decide the indexers": your answer; I record it (my recommendation: stop at 1337x and TPB) | P2 | it blocks beads-bl2 |
 | 2 | Show the uncommitted edit to `bin/lab` | P2 | `bin/lab` is uncommitted on the host; no bead waits on it |
 
-Row 1, typed into `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not entered:
-```zsh
-bd -C ~/beads human respond beads-h1 -r "stop at 1337x and TPB"
-```
-Records the answer on the bead and closes it. Prints the bead id and `closed`.
+Row 1, your answer, said here; I record it on beads-h1.
 
 Row 2, for `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not typed yet:
 ```zsh
@@ -37,29 +33,64 @@ Shows the uncommitted change to `bin/lab` before you decide its fate. Prints a u
 
 Blocked: 2 (beads-bl1 on beads-abc, beads-bl2 on beads-h1). Deferred: 2. Stale: 1 (beads-ip1, 15d).
 
-A no is a correction. Row 1 is on `machine=personal|ID=%18|pane=3.1|nickname=homelab`: Enter it?
+A no is a correction; other words are your answer. Answer beads-h1 "Decide the indexers" (row 1) with my recommendation, stop at 1337x and TPB?
 
 ---
 
 ## Why the rows sit where they do
 
-Both rows are his: beads-h1 first on blockers (it frees beads-bl2), then the show row, for the edit to `bin/lab` that `host_git.own` lists as this session's. The show row has no bead and no bead waits on it, so it is P2; a row that stood in front of a P1 bead would be P1, said in Why now. The recommendation is the `Recommendation:` line of `human.text`. Everything else is Claude's and only a state bullet: beads-abc and beads-def (ready), beads-ip1 (held by claude), the `bin/doctor.sh` run, and beads-epic (`type` `epic`, the parent of beads-abc), which counts among the 3 ready and is never named.
+Both rows are his: beads-h1 first on blockers (it frees beads-bl2), then the show row, for the edit to `bin/lab` that `host_git.own` lists as this session's. beads-h1 is an answer row: the decision is his, the `bd` write is Claude's, so it carries no command and nothing is typed; only row 1 is ever typed, so the show row waits. The show row has no bead and no bead waits on it, so it is P2; a row that stood in front of a P1 bead would be P1, said in Why now. The recommendation is the `Recommendation:` line of `human.text`. Everything else is Claude's and only a state bullet: beads-abc and beads-def (ready), beads-ip1 (held by claude), the `bin/doctor.sh` run, and beads-epic (`type` `epic`, the parent of beads-abc), which counts among the 3 ready and is never named.
 
-Not this: a row for beads-abc, beads-ip1, the doctor run, or "beads-epic: no write; it closes once its children close"; none is his to do. Not this either: the human row at P1 because what it blocks is P1; a row with a bead keeps that bead's priority.
+Not this: a row for beads-abc, beads-ip1, the doctor run, or "beads-epic: no write; it closes once its children close"; none is his to do. Not this either: beads-h1's row with a `bd` command for him to run or typed onto his prompt; recording an answer is Claude's write. Nor the human row at P1 because what it blocks is P1; a row with a bead keeps that bead's priority.
+
+## After his answer
+
+He said "yes": my recommendation is his answer. `bd -C ~/beads show beads-h1 --json` reports a decision, so Claude records it as `/ari-bead-driven-development` › Ask Ari a decision records one, one `run.zsh` call per write on the pane, then captures:
+
+```zsh
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %18 --cmd 'BEADS_ACTOR=claude bd -C ~/beads update beads-h1 --design "stop at 1337x and TPB"'
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %18 --cmd 'BEADS_ACTOR=claude bd -C ~/beads close beads-h1 --reason "Ari chose stop at 1337x and TPB: his words at 09:11Z"'
+```
+
+The reply:
+
+~~~
+Ready 4, in progress 1, human 0, blocked 1, stale 1; laptop abc1234 dirty 1; read 09:12Z; after beads-h1
+
+beads-h1 closed with your answer: `bd close` printed `✓ Closed beads-h1: Ari chose stop at 1337x and TPB`; the capture no longer lists it under human, and beads-bl2 is ready.
+
+| # | Action | Priority | Why now |
+|---|--------|----------|---------|
+| 1 | Show the uncommitted edit to `bin/lab` | P2 | `bin/lab` is uncommitted on the host; no bead waits on it |
+
+Row 1, typed into `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not entered:
+```zsh
+git -C ~/homelab diff bin/lab
+```
+Shows the uncommitted change to `bin/lab`. Prints a unified diff, or nothing when only the mode changed.
+
+Blocked: 1 (beads-bl1 on beads-abc). Deferred: 2. Stale: 1 (beads-ip1, 15d).
+
+A no is a correction. Row 1 is on `machine=personal|ID=%18|pane=3.1|nickname=homelab`: Enter it?
+~~~
+
+The same holds for an answer he gave before the capture, in words ("stop at those two") or in output he pasted: Claude records it that turn, then captures, and no row ever asks for it.
+
+Not this: the outcome sentence written before the capture ran. Not this either: a row for beads-bl2 now that it is ready; it is Claude's, named only in the outcome sentence.
 
 ## How row 1 was typed
 
-Row 1 is on the capture's pane, neither destroys nor irreversible, and no agent is using the pane, so it is typed before the table is shown; its `TYPED:` line is the key, and `pending.zsh set` records the typed text so the next capture knows the line on his prompt is his row even after a compaction. The block holds the bare command; `run.zsh` wrapped it in `run_log` (the capture's `typed` entries quote paths as `~/"beads"`; that is the script's own quoting, his row is bare):
+Row 1 of that briefing is on the capture's pane, neither destroys nor irreversible, and no agent is using the pane, so it is typed before the table is shown; its `TYPED:` line is the key, and `pending.zsh set` records the typed text so the next capture knows the line on his prompt is his row even after a compaction. The block holds the bare command; `run.zsh` wrapped it in `run_log` (the capture's `typed` entries quote paths as `~/"homelab"`; that is the script's own quoting, his row is bare):
 
 ```zsh
-zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %18 --no-enter --cmd 'bd -C ~/beads human respond beads-h1 -r "stop at 1337x and TPB"'
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %18 --no-enter --cmd 'git -C ~/homelab diff bin/lab'
 ```
 ```
-TYPED: run_log 'bd -C ~/beads human respond beads-h1 -r "stop at 1337x and TPB"'
+TYPED: run_log 'git -C ~/homelab diff bin/lab'
 SENT
 ```
 ```zsh
-zsh $HOME/.claude/skills/ari-operator-mode/bin/pending.zsh set --text 'run_log '"'"'bd -C ~/beads human respond beads-h1 -r "stop at 1337x and TPB"'"'"''
+zsh $HOME/.claude/skills/ari-operator-mode/bin/pending.zsh set --text 'run_log '"'"'git -C ~/homelab diff bin/lab'"'"''
 ```
 
 Not this: typing it with Enter, or typing it again next turn without his word.
@@ -68,37 +99,39 @@ Not this: typing it with Enter, or typing it again next turn without his word.
 
 The same run exited 75 with `REFUSED: machine=personal|ID=%18|pane=3.1 running nvim, not a shell` and, on the next line, `REFUSED_KIND: not_a_shell`; the kind, never the words, makes the reason (`nvim` is no agent's command, so `busy`), the why is the words quoted, and the row is typed once on his yes:
 
-```
+~~~
 Row 1, for `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not typed: running nvim, not a shell; wait, or name another pane:
 ```zsh
-bd -C ~/beads human respond beads-h1 -r "stop at 1337x and TPB"
+git -C ~/homelab diff bin/lab
 ```
-Records the answer on the bead and closes it. Prints the bead id and `closed`.
-```
+Shows the uncommitted change to `bin/lab`. Prints a unified diff, or nothing when only the mode changed.
 
-Not this: typing it anyway into the editor.
+A no is a correction. Free `machine=personal|ID=%18|pane=3.1|nickname=homelab` (running nvim, not a shell) so I can type row 1?
+~~~
+
+Not this: typing it anyway into the editor, or "Type row 1 onto it?", whose yes only starts Claude's own typing.
 
 ## Another agent in the pane
 
-The capture waited 12 s on a fork's `run_log` command (`waited_s: 12`; the header reads `…; read 09:07Z; waited 12s for machine=personal|ID=%18|pane=3.1; fresh read`), so no run was attempted and the row says why; the same key when `waited_s` is 0 but a background agent this session launched for this pane has not reported back:
+The capture waited 12 s on a fork's `run_log` command (`waited_s: 12`; the header reads `…; read 09:07Z; waited 12s for machine=personal|ID=%18|pane=3.1; fresh read`), so no run was attempted and the row says why; the same key when `waited_s` is 0 but a background agent this session launched for this pane has not reported back, or Claude's run of his instruction starts on that pane this turn:
 
-```
+~~~
 Row 1, for `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not typed: another agent is using this pane; typed when it is free:
 ```zsh
-bd -C ~/beads human respond beads-h1 -r "stop at 1337x and TPB"
+git -C ~/homelab diff bin/lab
 ```
-Records the answer on the bead and closes it. Prints the bead id and `closed`.
-```
+Shows the uncommitted change to `bin/lab`. Prints a unified diff, or nothing when only the mode changed.
+~~~
 
-The next capture finds `waited_s: 0` and no agent out on the pane: the Brief types it, and the key becomes "Row 1, typed into `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not entered:".
+Nothing he does frees the pane, so that reply ends with no question. The next capture finds `waited_s: 0` and no agent out on the pane: the Brief types it, and the key becomes "Row 1, typed into `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not entered:".
 
 Not this: typing it anyway, which parks a line on the prompt and makes every command of that fork refuse with 75.
 
 ## A destructive row first
 
-A later capture, after he pasted row 2's diff: the dirty checkout is now row 1 and destroys, so nothing is typed and the question names it:
+A later capture, after he pasted the show row's diff: the dirty checkout is now row 1 and destroys, so nothing is typed and the question names it:
 
-```
+~~~
 | 1 | **destroys:** the uncommitted edit to `bin/lab` | P2 | you pasted its diff; keep or discard |
 
 Row 1, for `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not typed: destroys the edit to `bin/lab`; typed after your yes:
@@ -108,7 +141,7 @@ git -C ~/homelab checkout -- bin/lab
 Discards the uncommitted change to `bin/lab`. Prints nothing.
 
 A no is a correction. Discard the edit to `bin/lab` (row 1)?
-```
+~~~
 
 Not this: "ok" taken as that yes; a destroying row proceeds on "yes", its row number or its name, and the question named it.
 
@@ -128,47 +161,27 @@ Its **destroys:** row, after the diff came back, carries the click-to-type link 
 
 Not this: "Type row 1 onto `local`?" (there is no pane named `local`), or Claude running the discard itself on his yes.
 
-## After row 1 landed
-
-He pressed Enter on his typed row; `pending.zsh clear`, then the capture, then the reply:
-
-```
-Ready 4, in progress 1, human 0, blocked 1, stale 1; laptop abc1234 dirty 1; read 09:12Z; after row 1
-
-Row 1 printed `beads-h1 closed`; the capture no longer lists it under human, and beads-bl2 is ready.
-
-| # | Action | Priority | Why now |
-|---|--------|----------|---------|
-| 1 | Show the uncommitted edit to `bin/lab` | P2 | `bin/lab` is uncommitted on the host; no bead waits on it |
-
-Row 1, typed into `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not entered:
-```zsh
-git -C ~/homelab diff bin/lab
-```
-Shows the uncommitted change to `bin/lab`. Prints a unified diff, or nothing when only the mode changed.
-
-Blocked: 1 (beads-bl1 on beads-abc). Deferred: 2. Stale: 1 (beads-ip1, 15d).
-
-A no is a correction. Row 1 is on `machine=personal|ID=%18|pane=3.1|nickname=homelab`: Enter it?
-```
-
-Not this: the outcome sentence written before the capture ran. Not this either: a row for beads-bl2 now that it is ready; it is Claude's, a state bullet.
-
 ## An instruction with the invocation
 
-He invoked `/ari-operator-mode fix the widget`: an open instruction, so no row; the entry briefing is the one above and only its question changes, while row 1 still waits for his Enter:
+He invoked `/ari-operator-mode fix the widget`: his words are the yes, so there is no row and no question about it. The entry briefing at the top is rendered without its question, then the start line, and the run begins the same turn:
 
 ```
-A no is a correction. Start beads-abc "Fix the widget": claim it, branch, PR; no merge?
+Starting beads-abc "Fix the widget": claim it, branch, PR; the merge waits on your yes.
 ```
 
-Mid-mode, "Fix the widget" (the title verbatim) is its own yes and asks nothing; "the widget stuff" gets "Which row?".
+Its progress lines and its end are the next section; the after-a-run briefing ends on the step that ships, the one question:
 
-Not this: a row 1 "(your instruction)" for work Claude runs; that row is only for an instruction that needs a permission Claude lacks.
+```
+A no is a correction. Merge PR #12 for beads-abc?
+```
+
+Mid-mode, "Fix the widget" (the title verbatim) or "let's proceed with the stack" (an imperative naming no bead, filed as a bead first) starts its run the same way; "the widget stuff" gets "Which bead or row?".
+
+Not this: "A no is a correction. Start beads-abc "Fix the widget": claim it, branch, PR; no merge?"; a question whose yes only starts what he already said. Not this either: a row 1 "(your instruction)" for work Claude runs; that row is only for a step that needs his identity, a permission Claude lacks, or a physical act.
 
 ## Claude's run reports
 
-He said yes to that question; three progress lines, each the newest capture's header and one sentence with no question mark:
+The run his words started; three progress lines, each the newest capture's header and one sentence with no question mark:
 
 ```
 Ready 3, in progress 1, human 1, blocked 2, stale 1; laptop abc1234 dirty 1; read 09:07Z; fresh read
@@ -181,28 +194,30 @@ Then "Committed 8542e79 on abc-widget." and "Opened PR #12 for beads-abc.", each
 ```
 Ready 2, in progress 2, human 1, blocked 2, stale 1; laptop abc1234 dirty 1; read 09:15Z; after beads-abc
 
-beads-abc landed: `gh pr create` printed `…/pull/12`; the capture lists beads-abc in progress.
+beads-abc landed: `gh pr create` printed `…/pull/12`; the capture lists beads-abc in progress. PR #12's CI runs; a watcher reports when it ends.
 ```
 
-Not this: "PR opened for beads-abc" from memory; the end of the run is a Capture, and the outcome sentence names what the new JSON shows plus the command's last printed line, quoted.
+That last sentence holds only because a background watcher was launched that turn; without one it reads "PR #12's CI is not watched."
+
+Not this: "PR opened for beads-abc" from memory; the end of the run is a Capture, and the outcome sentence names what the new JSON shows plus the command's last printed line, quoted. Not this either: "Should I watch PR #12's CI and tell you once it passes?"; Claude's follow-up is done or dropped, never offered.
 
 ## A refused run
 
-He said "run the doctor"; the permission layer refused Claude's `run.zsh` call for `bin/doctor.sh`. The next briefing's row is his until he reports its run:
+He said "run the doctor"; the permission layer refused Claude's `run.zsh` call for `bin/doctor.sh`. A refused step of his instruction is his row, at P0, until he reports its run:
 
-```
-| 1 | Run `bin/doctor.sh` | P2 | my run was refused: "<the refusal, verbatim>" |
+~~~
+| 1 | Run `bin/doctor.sh` | P0 | your instruction; my run was refused: "<the refusal, verbatim>" |
 
 Row 1, typed into `machine=personal|ID=%18|pane=3.1|nickname=homelab`, not entered:
 ```zsh
 bin/doctor.sh
 ```
 Runs the project's health checks. Prints one PASS or FAIL line per check.
-```
+~~~
 
 ## Nothing needs you
 
-A later fresh read: no First principles, and Claude's work stays a state bullet that nothing asks about:
+A later fresh read: no First principles, Claude's work stays a state bullet that nothing asks about, and nothing waits on him, so the reply ends with no question:
 
 ```
 Ready 1, in progress 1, human 0, blocked 1, stale 0; laptop abc1234 clean; read 09:20Z; fresh read
@@ -218,17 +233,17 @@ Nothing needs you.
 
 Blocked: 1 (beads-bl1 on beads-abc). Deferred: 2.
 
-A no is a correction. Nothing needs you; `stop operator mode` leaves. Read again?
+Your next message reads again, and `stop operator mode` leaves.
 ```
 
-Not this: "Nothing needs you." when `human` could not be read; that is "Nothing known to need you; `human` could not be read."
+Not this: "Nothing needs you." when `human` could not be read; that is "Nothing known to need you; `human` could not be read." Not this either: "Read again?"; a re-read is Claude's, never offered.
 
 ## Another session in the same workspace
 
 `~/beads` also holds another session's epics, and that session left `secrets.tf` uncommitted in `~/homelab`. This session had filed no bead yet, so it knew no scope; the capture without `--scope` exited 4 (`scope=needed`) and wrote nothing, and the whole entry reply is:
 
 ```
-Operator mode on. Reading the tracker through `machine=personal|ID=%18|pane=3.1|nickname=homelab`: eight read-only commands, up to 45 s each; the table lists only what you can do, and I type row 1 onto that prompt, un-entered, unless it destroys or ships work; Enter is your yes. Answers: yes, row N, a bead id (I start that bead), no, or `stop operator mode`.
+Operator mode on. Reading the tracker through `machine=personal|ID=%18|pane=3.1|nickname=homelab`: eight read-only commands, up to 45 s each; the table lists only what I cannot do myself, and I type row 1 onto that prompt, un-entered, unless it destroys or ships work; Enter is your yes. Answers: yes, row N, a bead id or an instruction (I start it), no, or `stop operator mode`.
 
 Which epic is this session's?
 ```
@@ -245,19 +260,21 @@ Not this: a row for the other session's human gate because bd lists it, a bullet
 
 ## Asked what the capture cannot answer
 
-Asked "is beads-h1 still open?":
+Asked "is beads-h1 still open?": the JSON answers it, so no read:
 
 ```
-Not in this capture; a fresh capture would read `human`. Or say `stop operator mode` to ask freely. A no is a correction. Row 1 is on `machine=personal|ID=%18|pane=3.1|nickname=homelab`: Enter it?
+beads-h1 "Decide the indexers" waits on you as of 09:07Z. A no is a correction; other words are your answer. Answer beads-h1 "Decide the indexers" (row 1) with my recommendation, stop at 1337x and TPB?
 ```
 
-Asked what beads-abc's body says:
+Asked what beads-abc's body says: no section holds a body, so the question is his instruction to read it; Claude runs `bd -C ~/beads show beads-abc` through `run.zsh` that turn and the reply is its output, verbatim in a fenced block, then the briefing's one question.
+
+Asked "what did the doctor print last week?":
 
 ```
-Not in this capture; no section reads a bead's body. Reading beads-abc is Claude's on your word: `bd -C ~/beads show beads-abc`. Or say `stop operator mode` to ask freely. A no is a correction. Row 1 is on `machine=personal|ID=%18|pane=3.1|nickname=homelab`: Enter it?
+Not in this capture; no read gives it. A no is a correction; other words are your answer. Answer beads-h1 "Decide the indexers" (row 1) with my recommendation, stop at 1337x and TPB?
 ```
 
-Asked "tell me more about blocked": the `blocked.text` pasted verbatim in a fenced block, then the briefing's one question. Not this: a summary of it.
+Asked "tell me more about blocked": the `blocked.text` pasted verbatim in a fenced block, then the briefing's one question. Not this: a summary of it, or "Reading beads-abc is Claude's on your word: …", which offers a read he already asked for.
 
 ## Cut off
 
@@ -275,29 +292,31 @@ The other reasons his to clear share that shape; the ones that differ:
 **P0, cut off from the tracker.** The pane `%99` does not exist on the host; the panes there are machine=personal|ID=%18|pane=3.1, machine=personal|ID=%3|pane=1.1; name one by its ID=%N; I read nothing from the tracker or the host checkout this turn. Unread: ready, in_progress, human, blocked, stale, deferred, host_git. This is yours to clear; I do nothing else until it is. Name another pane by its `ID=%N`, or say `stop operator mode`. Tell me when it is clear, or name another pane?
 ```
 ```
-**P0, cut off from the tracker.** The pane `machine=personal|ID=%18|pane=3.1|nickname=homelab` refused the command text before typing ([ERROR] refused: the command holds a literal newline); a bug in the reader, not yours to clear; I read nothing from the tracker or the host checkout this turn. Unread: ready, in_progress, human, blocked, stale, deferred, host_git. I do nothing else until it is read. Name another pane by its `ID=%N`, or say `stop operator mode`. Shall I rewrite the read on one line and try once?
+**P0, cut off from the tracker.** The pane `machine=personal|ID=%18|pane=3.1|nickname=homelab` refused the command text before typing ([ERROR] refused: the command holds a literal newline); a bug in the reader, not yours to clear; I read nothing from the tracker or the host checkout this turn. Unread: ready, in_progress, human, blocked, stale, deferred, host_git. I do nothing else until it is read. Name another pane by its `ID=%N`, or say `stop operator mode`. I rewrite the read now; your next message reads again.
 ```
 ```
 **P0, cut off from the tracker.** The pane `%18` could not be reached (ssh: connect to host laptop port 22: No route to host); I read nothing from the tracker or the host checkout this turn. Unread: ready, in_progress, human, blocked, stale, deferred, host_git. I do nothing else until it is read. Name another pane by its `ID=%N`, or say `stop operator mode`. Tell me when `ssh` to the host works from a pane?
 ```
 
-The last is `host_unreachable` with no absence announced: his P0, with the `ssh` move. The `refused_text` one is Claude's bug; his yes to its question is one rewritten read.
+The last is `host_unreachable` with no absence announced: his P0, with the `ssh` move. The `refused_text` one is Claude's bug: no question, and it says that his next message is what reads again, so neither side waits on the other.
+
+Not this: "Shall I rewrite the read on one line and try once?"; a fix of Claude's is done, never offered.
 
 ## An agent's command in the pane
 
-The capture ended `own_command`: the whole reply is this one line, and his next message captures again:
+The capture ended `own_command`: the whole reply is this one line, with no question (nothing waits on him), and his next message captures again:
 
 ```
-Waiting on `machine=personal|ID=%18|pane=3.1|nickname=homelab`, busy with `another caller is typing into it`; an agent's command, nothing of yours to clear. Read again?
+Waiting on `machine=personal|ID=%18|pane=3.1|nickname=homelab`, busy with `another caller is typing into it`; an agent's command, nothing of yours to clear; your next message reads again.
 ```
 
 The next capture found the same command still there (`own_command_persists`): still a wait, still not his:
 
 ```
-Still waiting on `machine=personal|ID=%18|pane=3.1|nickname=homelab`, busy with `running curl, not a shell (run_log 'curl -s http://127.0.0.1:8096/Items') since 2026-10-30T09:02:11Z`; an agent's command, nothing of yours to clear. Wait, or name another pane?
+Still waiting on `machine=personal|ID=%18|pane=3.1|nickname=homelab`, busy with `running curl, not a shell (run_log 'curl -s http://127.0.0.1:8096/Items') since 2026-10-30T09:02:11Z`; an agent's command, nothing of yours to clear; your next message reads again, or name another pane by its `ID=%N`.
 ```
 
-Not this: the P0 paragraph, which tells Ari to clear a pane that is busy with Claude's own work; or a second read in the same turn.
+Not this: the P0 paragraph, which tells Ari to clear a pane that is busy with Claude's own work; a second read in the same turn; or "Read again?", which asks him about Claude's own read.
 
 ## His row still on the prompt
 
@@ -310,7 +329,7 @@ Your row is on your prompt in `machine=personal|ID=%18|pane=3.1|nickname=homelab
 Running, the line is this one, and his report of what it printed is the row's result:
 
 ```
-Your row is running in `machine=personal|ID=%18|pane=3.1|nickname=homelab` (`run_log 'bd -C ~/beads human respond beads-h1 -r "stop at 1337x and TPB"'`); tell me what it printed when it ends?
+Your row is running in `machine=personal|ID=%18|pane=3.1|nickname=homelab` (`run_log 'git -C ~/homelab diff bin/lab'`); tell me what it printed when it ends?
 ```
 
 A capture that finds the prompt idle without his row records `pending_seen: false`: the Brief runs `pending.zsh clear` and says "Your typed row is gone from the prompt; the marker is cleared." in one sentence before the table.
@@ -325,10 +344,10 @@ He said "going to work, so I'll be gone for a bit and you'll lose connectivity a
 zsh $HOME/.claude/skills/ari-operator-mode/bin/away.zsh set --text 'going to work, laptop with me'
 ```
 
-`--list` failed with 255 (`host_unreachable`), so no pane was resolved and the line names the host. The whole reply is this one line, rendered with `--continuing 'lane beads-abc (PR #12 open); lane beads-def'` (two lanes this session launched on this Mac, by bead id, the PR by number); his typed row comes from the capture's `pending`, not from `--continuing`:
+`--list` failed with 255 (`host_unreachable`), so no pane was resolved and the line names the host. The whole reply is this one line, with no question (nothing waits on him while he is away), rendered with `--continuing 'lane beads-abc (PR #12 open); lane beads-def'` (two lanes this session launched on this Mac, by bead id, the PR by number); his typed row comes from the capture's `pending`, not from `--continuing`:
 
 ```
-Away: the host `laptop` is unreachable, as you said (going to work, laptop with me); the tracker is unread, read tried at 21:01Z; your row `run_log 'bd -C ~/beads human respond beads-h1 -r "stop at 1337x and TPB"'` sits on that prompt, not entered; running on from this Mac: lane beads-abc (PR #12 open); lane beads-def; I read again when you say you are back. Back?
+Away: the host `laptop` is unreachable, as you said (going to work, laptop with me); the tracker is unread, read tried at 21:01Z; your row `run_log 'git -C ~/homelab diff bin/lab'` sits on that prompt, not entered; running on from this Mac: lane beads-abc (PR #12 open); lane beads-def; I read again when you say you are back.
 ```
 
 The header for that capture, used only by a completion-notice line (below), names the host too: `Away: laptop (host_unreachable); tracker unread; read 21:01Z`.
@@ -336,7 +355,7 @@ The header for that capture, used only by a completion-notice line (below), name
 A read that timed out mid-capture is the absence too; the pane was resolved, so it is named:
 
 ```
-Away: the host `laptop` did not answer a read of mine in `machine=personal|ID=%18|pane=3.1|nickname=homelab`, as you said it would not (going to work, laptop with me); I never resend it; the tracker is unread, read tried at 21:30Z; nothing of mine runs on from this Mac meanwhile; I read again when you say you are back. Back?
+Away: the host `laptop` did not answer a read of mine in `machine=personal|ID=%18|pane=3.1|nickname=homelab`, as you said it would not (going to work, laptop with me); I never resend it; the tracker is unread, read tried at 21:30Z; nothing of mine runs on from this Mac meanwhile; I read again when you say you are back.
 ```
 
 Nothing running on this Mac: `--continuing` is left off, and the line says `nothing of mine runs on from this Mac meanwhile`.
@@ -381,7 +400,11 @@ This: "bin/doctor.sh has not been run this capture."         ← health.ran is f
 Not: (off, to "where did we leave off?") a recap from the transcript
 This: "Want operator mode? `/ari-operator-mode` reads the tracker, the checkouts and your pane and briefs you from scratch."
 Not: (mode on, to "fix the widget") a new task Claude invents
-This: Claude works beads-abc, his instruction and its yes      ← its title verbatim; "the widget stuff" would get "Which row?"
+This: Claude works beads-abc, his instruction and its yes      ← its title verbatim; "the widget stuff" would get "Which bead or row?"
+Not: (to "let's proceed with the stack") "Start the stack: request review, mark ready, check CI; no merge?"
+This: "Starting the stack: request review, mark ready, check CI; the merge waits on your yes." and the run that turn   ← his words were the yes
+Not: (to "stop at 1337x and TPB", said before beads-h1's row) a row asking him to record it
+This: Claude records it on beads-h1 and closes it, then Capture   ← his answer, and a `bd` write is Claude's
 Not: (to "do rows 1 to 3") three rows run
 This: "Rows run one at a time; this yes is row 1's." then row 1   ← one yes, one row
 Not: (to "no, the laptop checkout is clean, I committed it") dropping the dirty row
