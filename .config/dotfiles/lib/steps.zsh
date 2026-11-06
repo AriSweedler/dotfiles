@@ -4,11 +4,15 @@
 #
 #   # step <name> — <summary>       line 1 of the file
 #   step::declare <name> [--group repo|brew|tools] [--needs a,b] [--tools t,u] --desc D
-#                 [--apply "<what the apply changes>"] [--abort]
+#                 [--apply "<what the apply changes>"] [--assist "<what it asks the human>"] [--abort]
 #   step::watches <name> <glob>.. | step::watches <name> --none "<why it reads no repo file>"
 #   check::<name>   pure: writes only under RUN_DIR, prints exactly one verdict line on stdout,
 #                   logs on stderr, returns 0
 #   apply::<name>   optional; mutates only through run_mut; returns the command's rc
+#   assist::<name>  optional; in setup, on a manual (-m) fail at an interactive terminal, the
+#                   runner calls it in its own shell, not isolated, so it may ask (ui::confirm)
+#                   and spin; 0 means the human fixed it and the runner re-checks, else the fail
+#                   stands. Never under --dry-run, launchd or ARI_DOTFILES_ASSIST=off.
 #
 # Adding a file registers the step. steps::load sources the directory, refuses a registry that
 # does not add up (steps::validate), and computes the run order (steps::order): the groups in
@@ -20,9 +24,9 @@ zmodload zsh/mapfile
 zmodload -F zsh/files b:zf_rm
 
 typeset -ga STEPS=() STEPS_DECLARED=()
-typeset -gA STEP_GROUP=() STEP_NEEDS=() STEP_TOOLS=() STEP_DESC=() STEP_FILE=() STEP_PATH=() STEP_APPLY_DOC=()
+typeset -gA STEP_GROUP=() STEP_NEEDS=() STEP_TOOLS=() STEP_DESC=() STEP_FILE=() STEP_PATH=() STEP_APPLY_DOC=() STEP_ASSIST_DOC=()
 # The documentation rule's gaps, filled by steps::validate (steps::doc_gaps): step -> what it lacks
-# (phrases joined by ", "), and step -> the same as short keys (header,--desc,--apply,watches).
+# (phrases joined by ", "), and step -> the same as short keys (header,--desc,--apply,--assist,watches).
 # A gap is never a load error: the dotfiles_docs step flags it.
 typeset -gA STEP_UNDOCUMENTED=() STEP_DOC_KEYS=()
 typeset -ga STEP_GROUPS=(repo brew tools)   # run order of the groups
@@ -33,13 +37,14 @@ typeset -g STEP_ABORT_ON=""                  # in setup, a fail or error here sk
 step::declare() {
   local name="${1:?step::declare needs a name}"; shift
   local group=tools needs="" tools="" desc="" abort=0
-  unset "STEP_APPLY_DOC[${name}]"
+  unset "STEP_APPLY_DOC[${name}]" "STEP_ASSIST_DOC[${name}]"
   while (( $# )); do case "${1}" in
     --group) group="${2}"; shift 2 ;;
     --needs) needs="${2}"; shift 2 ;;
     --tools) tools="${2}"; shift 2 ;;
     --desc)  desc="${2}"; shift 2 ;;
     --apply) STEP_APPLY_DOC[${name}]="${2}"; shift 2 ;;
+    --assist) STEP_ASSIST_DOC[${name}]="${2}"; shift 2 ;;
     --abort) abort=1; shift ;;
     *) print -u2 "[ERROR] step::declare: bad flag | step='${name}' flag='${1}'"; return 64 ;;
   esac; done
@@ -107,6 +112,12 @@ steps::doc_gaps() {
     elif (( ${+STEP_APPLY_DOC[${name}]} )); then
       gaps+=("--apply but no apply::${name}"); keys+=(--apply)
     fi
+    if (( ${+functions[assist::${name}]} )); then
+      doc="${STEP_ASSIST_DOC[${name}]:-}"
+      [[ -n "${doc//[[:space:]]/}" ]] || { gaps+=("no --assist \"<what it asks the human>\""); keys+=(--assist); }
+    elif (( ${+STEP_ASSIST_DOC[${name}]} )); then
+      gaps+=("--assist but no assist::${name}"); keys+=(--assist)
+    fi
     if (( ${+STEP_WATCH_NONE[${name}]} )); then
       if [[ -n "${STEP_WATCHES[${name}]:-}" ]]; then gaps+=("step::watches has both globs and --none"); keys+=(watches)
       elif [[ -z "${STEP_WATCH_NONE[${name}]//[[:space:]]/}" ]]; then gaps+=("step::watches --none without a reason"); keys+=(watches)
@@ -151,6 +162,16 @@ steps::order() {
 step::is_known() { (( ${STEPS[(Ie)${1}]} )); }
 # A step with an apply:: can fix what its check finds.
 step::is_fixable() { (( ${+functions[apply::${1}]} )); }
+# A step with an assist:: walks a human through the manual fail its check finds.
+step::is_assistable() { (( ${+functions[assist::${1}]} )); }
+
+# True when the runner may stop and ask: a serial run (no RUN_BUFFER) on a terminal, not under
+# launchd, not turned off with ARI_DOTFILES_ASSIST=off.
+run::is_interactive() {
+  [[ "${ARI_DOTFILES_ASSIST}" != off && -z "${RUN_BUFFER}" && -z "${ARI_DOTFILES_INVOKED_BY:-}" ]] || return 1
+  run::_has_tty
+}
+run::_has_tty() { [[ -t 0 && -t 2 ]]; }   # its own function so a test can stand in for the terminal
 
 # steps::select [--only a,b] [--group G]: fills the caller's `selected`, in STEPS order. --only names
 # exactly the steps to run (needs are a gate, not an auto-include). Returns 64 on an unknown name.
@@ -360,6 +381,26 @@ step::run() {
         cp "${recheck_file}" "${check_file}"
       fi
       applied=true
+    fi
+  elif [[ "${ARI_DOTFILES_MODE:-check}" == setup && "${step_status}" == fail ]] && step::is_assistable "${name}" \
+       && [[ "$(jq -r '.manual' "${check_file}" 2>/dev/null)" == true ]]; then
+    if is_dry_run; then
+      run::_log info "dry-run, would offer assist::${name} | asks='${STEP_ASSIST_DOC[${name}]:-}'"
+    elif run::is_interactive; then
+      ui::spin_stop
+      run::_log info "assist::${name}"
+      local assist_rc=0
+      "assist::${name}" || assist_rc=$?
+      run::_log info "assist done | step='${name}' rc='${assist_rc}'"
+      if (( assist_rc == 0 )); then
+        local recheck_file="${RUN_DIR}/${name}.recheck.json"
+        run::_spin "${name} · re-checking"
+        out="$(step::run_check "${name}" "${recheck_file}" "${log_file}")"
+        rc_ms="${out%%$'\n'*}"
+        rc="${rc_ms%% *}"; duration_ms=$(( duration_ms + ${rc_ms##* } ))
+        cp "${recheck_file}" "${check_file}"
+        applied=true
+      fi
     fi
   fi
   if [[ "${applied}" == false ]]; then

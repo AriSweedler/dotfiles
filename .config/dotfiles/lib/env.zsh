@@ -67,15 +67,23 @@ typeset -gx ARI_DOTFILES_MACHINE_NAME_FILE="${ARI_DOTFILES_MACHINE_NAME_FILE:-${
 typeset -gx ARI_DOTFILES_CHECK_TIMEOUT_SECS="${ARI_DOTFILES_CHECK_TIMEOUT_SECS:-120}"
 typeset -gx ARI_DOTFILES_APPLY_TIMEOUT_SECS="${ARI_DOTFILES_APPLY_TIMEOUT_SECS:-1800}"
 typeset -gx ARI_DOTFILES_RETRY_SECS="${ARI_DOTFILES_RETRY_SECS:-60}"
+typeset -gx ARI_DOTFILES_ASSIST_WAIT_SECS="${ARI_DOTFILES_ASSIST_WAIT_SECS:-600}"   # how long an assist:: waits for the human's fix; 0: no limit
 typeset -gx ARI_DOTFILES_LOCK_MAX_AGE_SECS="${ARI_DOTFILES_LOCK_MAX_AGE_SECS:-7200}"
 # zsh arithmetic reads a non-numeric string as 0, which would silently disable a watchdog.
-for _seam in ARI_DOTFILES_CHECK_TIMEOUT_SECS ARI_DOTFILES_APPLY_TIMEOUT_SECS ARI_DOTFILES_RETRY_SECS ARI_DOTFILES_LOCK_MAX_AGE_SECS; do
+for _seam in ARI_DOTFILES_CHECK_TIMEOUT_SECS ARI_DOTFILES_APPLY_TIMEOUT_SECS ARI_DOTFILES_RETRY_SECS ARI_DOTFILES_LOCK_MAX_AGE_SECS ARI_DOTFILES_ASSIST_WAIT_SECS; do
   if [[ "${(P)_seam}" != <-> ]]; then
     print -u2 "[ERROR] seam must be a non-negative integer | var='${_seam}' value='${(P)_seam}'"
     return 3
   fi
 done
 unset _seam
+# Whether setup may stop to walk a human through a manual fail (steps.zsh, assist::): auto at a
+# terminal, off never asks.
+typeset -gx ARI_DOTFILES_ASSIST="${ARI_DOTFILES_ASSIST:-auto}"
+if [[ "${ARI_DOTFILES_ASSIST}" != (auto|off) ]]; then
+  print -u2 "[ERROR] seam must be auto or off | var='ARI_DOTFILES_ASSIST' value='${ARI_DOTFILES_ASSIST}'"
+  return 3
+fi
 # How fancy human output is (ui.zsh): auto decides from the streams; plain never draws; fancy
 # draws whenever gum resolves (tmux tests), though NO_COLOR still wins.
 typeset -g ARI_DOTFILES_UI="${ARI_DOTFILES_UI:-auto}"

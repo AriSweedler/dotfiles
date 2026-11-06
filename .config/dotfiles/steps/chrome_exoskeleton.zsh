@@ -2,11 +2,12 @@
 # dependencies, which wire its hooks through npm's prepare script, a built dist/, and that
 # dist/ (or dist-personal/) loaded unpacked and enabled in at least one Chrome profile. Loading
 # it is the one part only a human can do (chrome://extensions, Load unpacked), so it is a manual
-# fail. Node comes from the local tier's env.zsh on a work machine; a personal machine needs it
-# on PATH, hence a warn, not a fail.
+# fail, which init at a terminal offers to walk through (assist::). Node comes from the local
+# tier's env.zsh on a work machine; a personal machine needs it on PATH, hence a warn, not a fail.
 step::declare chrome_exoskeleton --group tools --needs dotfiles_repo \
   --desc "the Chrome Exoskeleton submodule has its dependencies (which wire its hooks), a built dist/, and Chrome loads it, enabled, in at least one profile" \
-  --apply "sets the submodule's commit identity, installs its node dependencies when missing (exo deps ci, which wires its hooks) and builds dist/ (exo build)"
+  --apply "sets the submodule's commit identity, installs its node dependencies when missing (exo deps ci, which wires its hooks) and builds dist/ (exo build)" \
+  --assist "when no profile loads it: asks y/N, then opens chrome://extensions, reveals dist/ in Finder and waits for the load"
 step::watches chrome_exoskeleton '.config/chrome-exoskeleton'   # the submodule pointer
 
 step::chrome_exoskeleton::dir() {
@@ -98,6 +99,147 @@ check::chrome_exoskeleton() {
   local detail="dist version=${version} hooks='${hooks}' loaded in '${(j:, :)reply_loaded}'"
   (( ${#others} )) && detail+=" (not in '${(j:, :)others}')"
   verdict ok built -d "${detail}"
+}
+
+#######################################
+# Whether some Chrome profile loads the framework's dist/, enabled.
+# Arguments: fw: the framework checkout
+# Returns: 0 when one does, 1 otherwise
+#######################################
+step::chrome_exoskeleton::is_loaded() {
+  local fw="${1}"
+  local -a reply_loaded reply_disabled reply_without
+  step::chrome_exoskeleton::profiles "${fw}"
+  (( ${#reply_loaded} > 0 ))
+}
+
+#######################################
+# await::until's probe for the load: success once a profile loads it, else the human's turn.
+# Arguments: fw: the framework checkout; todo: what the human still has to do
+# Outputs: one `<state> <message>` line on stdout
+#######################################
+step::chrome_exoskeleton::load_probe() {
+  local fw="${1}" todo="${2}"
+  if step::chrome_exoskeleton::is_loaded "${fw}"; then
+    print -r -- "success Chrome loads the Chrome Exoskeleton"
+    return 0
+  fi
+  print -r -- "user your turn: ${todo} · Ctrl-C to stop waiting"
+}
+
+#######################################
+# The question and the instruction for the human, by what the profiles show: a card that is
+# loaded but turned off needs only its switch; otherwise it needs Load unpacked.
+# Globals: reply_disabled (read; step::chrome_exoskeleton::profiles fills it)
+# Arguments: fw: the framework checkout
+# Outputs: the question, then the instruction, one per line
+#######################################
+step::chrome_exoskeleton::assist_text() {
+  local fw="${1}"
+  if (( ${#reply_disabled} > 0 )); then
+    log::info "chrome_exoskeleton: loaded but turned off | profiles='${(j:, :)reply_disabled}'"
+    print -r -- "Turn the Chrome Exoskeleton on in Chrome now?"
+    print -r -- "in chrome://extensions, turn the Chrome Exoskeleton card on"
+    return 0
+  fi
+  log::info "chrome_exoskeleton: no profile loads it | dist='${fw}/dist'"
+  print -r -- "Load the Chrome Exoskeleton into Chrome now?"
+  print -r -- "in chrome://extensions, turn on Developer mode, click Load unpacked, pick $(ui::paths "${fw}/dist") (Finder shows it)"
+}
+
+#######################################
+# Make a tab in the front Chrome window (a new window when none is open) and point it at <url>
+# through Chrome's AppleScript dictionary. `open` hands Chrome a URL as an outside link, and
+# Chrome does not open its own chrome:// pages from one; a tab's URL set by script it does.
+# The first run asks to let the terminal control Google Chrome (Privacy & Security › Automation).
+# Arguments: url: what the tab loads
+# Outputs: the tab's URL as Chrome reports it a second later, on stdout
+# Returns: osascript's exit code
+#######################################
+step::chrome_exoskeleton::chrome_new_tab() {
+  local url="${1}"
+  osascript - "${url}" <<'EOF'
+on run argv
+  tell application "Google Chrome"
+    activate
+    if (count of windows) is 0 then
+      make new window
+      set new_tab to active tab of front window
+      set URL of new_tab to (item 1 of argv)
+    else
+      set new_tab to make new tab at end of tabs of front window with properties {URL:(item 1 of argv)}
+    end if
+    delay 1
+    return URL of new_tab
+  end tell
+end run
+EOF
+}
+
+#######################################
+# Open chrome://extensions in Chrome and check that the tab landed there.
+# Returns: 0 when the new tab shows the extensions page, 1 otherwise (logged with the manual fix)
+#######################################
+step::chrome_exoskeleton::open_extensions_tab() {
+  local tab_url exit_code=0
+  tab_url="$(step::chrome_exoskeleton::chrome_new_tab "chrome://extensions" 2>&1)" || exit_code=$?
+  if (( exit_code != 0 )); then
+    log::warn "chrome_exoskeleton: Chrome refused the scripted tab | exit_code='${exit_code}' error='${tab_url}' fix='allow the terminal to control Google Chrome (System Settings › Privacy & Security › Automation), or type chrome://extensions into Chrome'"
+    return 1
+  fi
+  if [[ "${tab_url}" != chrome://extensions* ]]; then
+    log::warn "chrome_exoskeleton: the new tab is not the extensions page | tab_url='${tab_url}' fix='type chrome://extensions into Chrome'"
+    return 1
+  fi
+  log::info "chrome_exoskeleton: opened the extensions page | tab_url='${tab_url}'"
+}
+
+#######################################
+# Show the human where to act: chrome://extensions in Chrome, and dist/ in Finder unless the
+# card is already loaded (then only its switch is missing). A failure to open either is logged
+# and the wait goes on: the instruction on the await line names both places.
+# Globals: reply_disabled (read)
+# Arguments: fw: the framework checkout
+#######################################
+step::chrome_exoskeleton::open_extensions_page() {
+  local fw="${1}"
+  if (( ${#reply_disabled} == 0 )); then
+    open -R "${fw}/dist" || log::warn "chrome_exoskeleton: could not reveal dist in Finder | dist='${fw}/dist'"
+  fi
+  step::chrome_exoskeleton::open_extensions_tab || true
+}
+
+#######################################
+# The one manual part, walked through when init meets it at a terminal: asks y/N; on y opens
+# chrome://extensions (and dist/ in Finder), then waits, on the await line, until a profile
+# loads it enabled; Chrome writes its prefs within seconds of the click. N moves on.
+# Globals: ARI_DOTFILES_CONFIG, ARI_DOTFILES_ASSIST_WAIT_SECS, CLI_NAME (read)
+# Returns: 0 once Chrome loads it (the runner re-checks); 1 on N, Ctrl-C or the deadline
+#######################################
+assist::chrome_exoskeleton() {
+  local fw
+  fw="$(step::chrome_exoskeleton::dir)"
+  if [[ ! -f "${fw}/dist/manifest.json" ]]; then
+    log::warn "chrome_exoskeleton: dist is not built; nothing to load | dist='${fw}/dist'"
+    return 1
+  fi
+  local -a reply_loaded reply_disabled reply_without
+  step::chrome_exoskeleton::profiles "${fw}"
+  local -a text=("${(@f)$(step::chrome_exoskeleton::assist_text "${fw}")}")
+  if ! ui::confirm "${text[1]}"; then
+    log::info "chrome_exoskeleton: not now | fix='${CLI_NAME} init again, or Load unpacked ${fw}/dist by hand'"
+    return 1
+  fi
+  need_lib "${ARI_DOTFILES_CONFIG}/claude/skills/ari-skill-shellscripts/lib/await.zsh" || return 1
+  step::chrome_exoskeleton::open_extensions_page "${fw}"
+  local exit_code=0
+  await::until --interval 1 --timeout "${ARI_DOTFILES_ASSIST_WAIT_SECS}" -- \
+    step::chrome_exoskeleton::load_probe "${fw}" "${text[2]}" || exit_code=$?
+  if (( exit_code != 0 )); then
+    log::warn "chrome_exoskeleton: stopped waiting; Chrome does not load it yet | exit_code='${exit_code}' fix='${CLI_NAME} init again once it is loaded'"
+    return 1
+  fi
+  log::info "chrome_exoskeleton: Chrome loads it"
 }
 
 apply::chrome_exoskeleton() {

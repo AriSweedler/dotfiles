@@ -47,3 +47,4 @@ ssh-agent
 ssh-keygen
 python3
 nix
+mkfifo
