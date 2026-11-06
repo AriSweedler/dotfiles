@@ -39,6 +39,7 @@
       "type": "task",
       "parent": "beads-epic",
       "assignee": null,
+      "holder": "none",
       "updated_at": "2026-10-30T01:00:00Z"
     },
     {
@@ -48,6 +49,7 @@
       "type": "feature",
       "parent": "beads-epic",
       "assignee": null,
+      "holder": "none",
       "updated_at": "2026-10-30T00:00:00Z"
     },
     {
@@ -57,6 +59,7 @@
       "type": "epic",
       "parent": null,
       "assignee": null,
+      "holder": "none",
       "updated_at": "2026-10-29T00:00:00Z"
     }
   ],
@@ -67,7 +70,8 @@
       "priority": 2,
       "type": "task",
       "parent": "beads-epic",
-      "assignee": "claude",
+      "assignee": "claude:6a1f0c2e-3b4d-4e5f-8a9b-0c1d2e3f4a5b",
+      "holder": "self",
       "updated_at": "2026-10-15T00:00:00Z"
     }
   ],

@@ -77,6 +77,15 @@ check "full read: nine sections in order" "ready,in_progress,human,blocked,stale
 check "ready: first id" beads-abc "$(q "${full}" '.ready[0].id')"
 check "ready: type from issue_type" task "$(q "${full}" '.ready[0].type')"
 check "in_progress: holder" claude "$(q "${full}" '.in_progress[0].assignee')"
+check "in_progress: a bare claude claim is another session's" other "$(q "${full}" '.in_progress[0].holder')"
+check "ready: an unassigned bead has no holder" none "$(q "${full}" '.ready[0].holder')"
+mkdir -p "${T}/actors"
+cp "${T}/canned/"* "${T}/actors/"
+print -r -- '[{"id":"beads-mine","title":"Mine","priority":2,"issue_type":"task","assignee":"claude:test-session","updated_at":"2026-10-29T00:00:00Z"},
+ {"id":"beads-theirs","title":"Theirs","priority":2,"issue_type":"task","assignee":"claude:0b8f2c64-7d1e-4c3a-9a55-2f1d6e8b7c10","updated_at":"2026-10-29T00:00:00Z"},
+ {"id":"beads-ari","title":"Ari holds it","priority":2,"issue_type":"task","assignee":"Ari Sweedler","updated_at":"2026-10-29T00:00:00Z"}]' > "${T}/actors/in_progress.json"
+file="$(capture "FAKE_DIR=${T}/actors" -- "${common[@]}")"
+check "holders: this session's actor is self, another session's and a person's are other" "self,other,other" "$(q "${file}" '[.in_progress[].holder] | join(",")')"
 check "human: id parsed" beads-h1 "$(q "${full}" '.human.ids[0]')"
 check "blocked: ids parsed" "beads-bl1,beads-bl2" "$(q "${full}" '.blocked.ids | join(",")')"
 check "blocked: blockers counted" "2 1" "$(q "${full}" '"\(.blocked.blockers["beads-abc"]) \(.blocked.blockers["beads-def"])"')"
@@ -179,6 +188,9 @@ contains "a pane that closed during the gate: brief lists them" "the panes there
 run_cut copy_mode busy FAKE_RC=75 FAKE_KIND=copy_mode "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 in copy mode (press q there)"
 check "copy mode: his to clear" "in copy mode (press q there)" "$(q "${CUT_FILE}" '.cut_off.prompt_holds')"
 check "a kind it maps: skill_fix is empty" "skill_fix=" "$(awk '/^skill_fix=/' "${T}/last.out")"
+run_cut lock_unavailable lock_unavailable FAKE_RC=75 FAKE_KIND=lock_unavailable "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 the lock root /tmp/ari-driving-locks is not writable"
+check "lock_unavailable: the quoted words" "the lock root /tmp/ari-driving-locks is not writable" "$(q "${CUT_FILE}" '.cut_off.prompt_holds')"
+contains "lock_unavailable: brief names the lock root, no pane advice" "the host's lock root is the problem" "$(zsh "${BRIEF}" --json "${CUT_FILE}" --cut-off)"
 run_cut synchronized busy FAKE_RC=75 FAKE_KIND=synchronized "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 synchronize-panes is on"
 run_cut "pane_gone: as for a 70" no_pane FAKE_RC=75 FAKE_KIND=pane_gone "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 no such pane"
 check "pane_gone: the candidates come from a fresh --list" 3 "$(q "${CUT_FILE}" '.cut_off.candidates | length')"
@@ -210,7 +222,7 @@ run_kinds="$(zsh "${HOME}/.claude/skills/ari-driving-remote/bin/run.zsh" --help 
   on { s = s $0 " " }
   on && /does not map/ { done=1 }
   END { sub(/\(.*$/, "", s); n = split(s, a, /[ ,]+/); for (i = 1; i <= n; i++) if (a[i] ~ /^[a-z_]+$/) print a[i] }')"
-check "run.zsh --help names its seven busy kinds" "other_caller copy_mode synchronized not_a_shell not_at_prompt pane_gone unknown" "${(j: :)${(f)run_kinds}}"
+check "run.zsh --help names its eight busy kinds" "other_caller pane_gone copy_mode synchronized not_a_shell not_at_prompt lock_unavailable unknown" "${(j: :)${(f)run_kinds}}"
 for kind in ${(f)run_kinds}; do
   rm -f "${T}/canned/refusals.count"
   capture FAKE_RC=75 FAKE_RC_TIMES=1 "FAKE_KIND=${kind}" "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 any words" FRONTIER_RETRY_S=1 -- "${common[@]}" >/dev/null
@@ -274,6 +286,11 @@ check "own read running (the marker recipe on the prompt line): waited through" 
 rm -f "${T}/canned/refusals.count"
 file="$(capture FAKE_RC=75 FAKE_RC_TIMES=1 FAKE_KIND=not_a_shell "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running bd, not a shell" "FAKE_TAIL=${lane_tail}" FRONTIER_RETRY_S=1 -- "${common[@]}")"
 check "a lane's bd write running: waited through" null "$(q "${file}" '.cut_off')"
+for actor_tail in "BEADS_ACTOR=claude:0b8f2c64-7d1e-4c3a-9a55-2f1d6e8b7c10 bd -C ~/beads update beads-g5l --claim" "BEADS_ACTOR=\"claude:0b8f2c64-7d1e-4c3a-9a55-2f1d6e8b7c10\" bd -C ~/beads close beads-g5l --reason x"; do
+  rm -f "${T}/canned/refusals.count"
+  file="$(capture FAKE_RC=75 FAKE_RC_TIMES=1 FAKE_KIND=not_a_shell "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 running bd, not a shell" "FAKE_TAIL=at 01:00:00 UTC ❯ ${actor_tail}" FRONTIER_RETRY_S=1 -- "${common[@]}")"
+  check "a session-actor bd write running (${actor_tail[1,40]}): waited through" null "$(q "${file}" '.cut_off')"
+done
 rm -f "${T}/canned/refusals.count"
 file="$(capture FAKE_RC=75 FAKE_RC_TIMES=1 FAKE_KIND=not_at_prompt "FAKE_REFUSED=REFUSED: machine=personal|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=${lane_tail}"$'\nsome output still scrolling' FRONTIER_RETRY_S=1 -- "${common[@]}")"
 check "a lane between commands, output still scrolling: waited through, not holds_text" null "$(q "${file}" '.cut_off')"

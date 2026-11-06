@@ -39,7 +39,7 @@ Where the tracker is (`beads_dir` on `host_definition`), the *scope* read from i
 One sentence per bullet, at most six; a section that is empty has no bullet; when more would fill, drop the `health` bullet, then the `blocked` and `deferred` bullet (the header and the trailing line carry its counts), never the `scope` bullet. An empty tracker (every `bd` section empty) is one bullet, "The tracker holds nothing ready, in progress, blocked, deferred or waiting on you.", and the header `**State right now**` is left out:
 
 - `ready`: the count (epics included) and the first bead that is not an epic (`type` `epic`), in Row triage's sort, as id, title and priority; the count alone when every one is an epic.
-- `in_progress`: each bead as id, title and holder; one that `stale` lists says so.
+- `in_progress`: each bead as id, title and holder, "held by this session" for `holder` `self`, "held by another session" for `other` (a bare `claude` or a `claude:<uuid>` that is not this session's) and the assignee itself when it is a person; one that `stale` lists says so.
 - `human`: the count (the header's, "mine" gates included) and each id with its title (the text after the id up to the first `: `), a gate whose act Claude's tools can perform marked "mine"; `deferred_ids` are not counted.
 - `blocked` and `deferred`: one bullet, counts only; the ids go in the trailing line.
 - `host_git` and `local_git`: one bullet. For the host: "clean" when `dirty` is empty; else the `own` paths by name, then the other `dirty` entries as "N uncommitted edits not listed as this session's", never by path. Then its three latest commits as hash and subject. Then this Mac's head and dirt the same way, only when its head differs from the host's or its `dirty` is non-empty.

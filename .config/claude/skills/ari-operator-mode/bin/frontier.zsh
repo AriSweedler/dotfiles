@@ -120,14 +120,16 @@ ${c_bold}Output:${c_rst} key=value lines on stdout: dir= (the folder), json= (it
   (null, or {pane, reason, prompt_holds, busy_cmd, candidates, unread}), then ${(j:, :)SECTIONS}. In scope,
   human, blocked and stale keep only the scope's blocks of bd's text (the summary count rewritten), blockers
   counts only edges whose two beads are in scope, and deferred.count only the scope's beads. host_git and
-  local_git hold {dirty, own, log}: own is the dirty entries --own-paths names. A section that could not be
+  local_git hold {dirty, own, log}: own is the dirty entries --own-paths names. Each ready and in_progress row
+  carries holder: self (its assignee is claude:\$CLAUDE_CODE_SESSION_ID, this session's actor), none (unassigned)
+  or other (another session's claude:<uuid>, a bare claude, anyone else). A section that could not be
   read holds {"error": "<why>"}; one the cut-off kept unread holds {"unread": true}. A crash after the reads
   still writes the JSON, the unfinished sections as errors.
 
 ${c_bold}Cut-off reasons:${c_rst} not_opted_in (77), other_session (76), busy or holds_text (75), no_pane (70),
   ambiguous_pane (the target matched more than one pane), read_timed_out (124: a read is still running
   in the pane), host_unreachable (255 from ssh), bad_definition (--list failed with another code: the
-  definition or the flags, Claude's to fix), refused_text (1). Four more are waits, not his to clear: own_command (the pane ran an agent's command for the whole budget), own_command_persists (the
+  definition or the flags, Claude's to fix), refused_text (1), lock_unavailable (75 of that kind: the host's lock root is unwritable or a stale lock will not clear). Four more are waits, not his to clear: own_command (the pane ran an agent's command for the whole budget), own_command_persists (the
   previous capture by this session on this pane already waited on that same command), row_pending (his
   --pending row sits un-entered on the prompt), row_running (his --pending row is running). The host reads
   stop at the first cut-off; local_git and health still fill.
@@ -137,6 +139,7 @@ ${c_bold}How a 75 is classified${c_rst}: by the ${REFUSED_KIND_PREFIX}line right
     copy_mode, synchronized          -> busy
     pane_gone                        -> no_pane, the candidates from a fresh --list
     other_caller                     -> a wait (another run.zsh holds the pane's lock), as for an agent's command
+    lock_unavailable                 -> lock_unavailable (the host's lock root is unwritable; no retry, not a pane problem)
     not_a_shell, not_at_prompt       -> the pane tail decides, below
     unknown, no kind line, any other -> his --pending row on the tail is row_pending or row_running; else
                                         busy; skill_fix= names the skill to update
@@ -271,6 +274,7 @@ typeset -ga unread=() typed=() candidates=() open_epics=()
 # The bead map {id: {parent, issue_type}} from the first read, and why it could not be read. scope_jq_args
 # carries the scope into every section's jq: $e the scope ids, $m the map, $scoped whether to filter.
 typeset -g scope_beads_json='{}' scope_error='' scope_mapped=0 no_capture=0 own_paths_json='[]'
+readonly SESSION_ACTOR="${CLAUDE_CODE_SESSION_ID:+claude:${CLAUDE_CODE_SESSION_ID}}"
 typeset -ga scope_jq_args=(--argjson e '[]' --argjson m '{}' --argjson scoped false)
 
 # Reads set globals instead of printing: a command substitution would run them in a subshell and lose
@@ -404,8 +408,8 @@ tail_last_line() {
 #######################################
 # Whether a command on the pane is a Claude agent's, not Ari's: one this capture typed, an earlier
 # frontier read (the marker recipe), any command wrapped in run_log (run.zsh wraps every command a
-# session, fork or lane types; Ari types bare), or a BEADS_ACTOR=claude bd write (only Claude writes
-# as claude). A bare bd or git command is Ari's.
+# session, fork or lane types; Ari types bare), or a bd write as BEADS_ACTOR=claude or claude:<session
+# uuid> (only Claude writes as claude). A bare bd or git command is Ari's.
 # Globals: typed
 # Arguments: $1 = the command text from the pane
 #######################################
@@ -417,7 +421,7 @@ own_command_text() {
     [[ -n "${t}" && "${c}" == *"${t}"* ]] && return 0
   done
   case "${c}" in
-    "run_log '"*|"BEADS_ACTOR=claude bd "*) return 0 ;;
+    "run_log '"*|"BEADS_ACTOR=claude bd "*|"BEADS_ACTOR=claude:"*|"BEADS_ACTOR=\"claude:"*) return 0 ;;
   esac
   return 1
 }
@@ -449,6 +453,7 @@ classify_75() {
   case "${kind}" in
     other_caller) ;;
     copy_mode|synchronized) cut_reason='busy'; cut_prompt_holds="${why}"; return 0 ;;
+    lock_unavailable) cut_reason='lock_unavailable'; cut_prompt_holds="${why}"; return 0 ;;
     pane_gone)
       log::warn "tmux could not read the pane; listing the host's panes, as for a 70 | refused='${refused}'"
       cut_reason='no_pane'; cut_prompt_holds="${why}"
@@ -655,15 +660,18 @@ json_part() { print -r -- "${1}" | awk 'f || /^[[:space:]]*[\[{]/ { f=1; print }
 # A bd JSON list trimmed to the fields a briefing uses and kept to the scope (a bead's own parent is a
 # hop even when the map lacks it); [] for empty output; an error object when the command failed or did
 # not print an array. Runs in a command substitution, so it sets no globals.
-# Globals: scope_jq_args, SCOPE_JQ_DEF
+# Each row carries holder: "self" when its assignee is this session's actor, "none" when unassigned, else
+# "other" (another session's claude:<uuid>, a bare claude, anyone else).
+# Globals: scope_jq_args, SCOPE_JQ_DEF, SESSION_ACTOR
 # Arguments: $1 = raw output; $2 = rc; $3 = why the read failed, if it did
 #######################################
 bead_list() {
   local raw="${1}" rc="${2}" why="${3}" trimmed
   if (( rc != 0 )); then json_error "${why:-"command failed (rc ${rc}): $(last_line "${raw}")"}"; return 0; fi
   if [[ -z "${raw//[[:space:]]/}" ]]; then print -r -- '[]'; return 0; fi
-  if trimmed="$(json_part "${raw}" | jq -ce "${scope_jq_args[@]}" "${SCOPE_JQ_DEF}"'
-      if type == "array" then [.[] | {id, title, priority, type: (.issue_type // .type // null), parent: (.parent // null), assignee: (.assignee // null), updated_at: (.updated_at // null)}]
+  if trimmed="$(json_part "${raw}" | jq -ce --arg actor "${SESSION_ACTOR}" "${scope_jq_args[@]}" "${SCOPE_JQ_DEF}"'
+      if type == "array" then [.[] | {id, title, priority, type: (.issue_type // .type // null), parent: (.parent // null), assignee: (.assignee // null), updated_at: (.updated_at // null)}
+          | . + {holder: (if .assignee == null then "none" elif $actor != "" and .assignee == $actor then "self" else "other" end)}]
         | if $scoped then map(select(. as $b | .id | inscope($e; $m + (if $b.parent then {($b.id): {parent: $b.parent}} else {} end)))) else . end
       else error("not an array") end' 2>/dev/null)"; then
     print -r -- "${trimmed}"

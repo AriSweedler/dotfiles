@@ -18,7 +18,7 @@ source "${LIB_LOGGING}"
 # --- Constants ---
 
 readonly WAIT_REASONS=(own_command own_command_persists row_pending row_running)   # not his to clear: one waiting line, never the P0 paragraph
-readonly HIS_TO_CLEAR=(not_opted_in other_session busy holds_text no_pane ambiguous_pane)   # the P0 paragraph says so and asks the clear question
+readonly HIS_TO_CLEAR=(not_opted_in other_session busy holds_text no_pane ambiguous_pane lock_unavailable)   # the P0 paragraph says so and asks the clear question
 readonly AWAY_REASONS=(host_unreachable read_timed_out)   # with away set these are the absence he announced: the away line, never his P0
 readonly NOTHING_CONTINUES='nothing of mine runs on from this Mac meanwhile'
 readonly ALTERNATIVES='Name another pane by its `ID=%N`, or say `stop operator mode`.'
@@ -92,6 +92,7 @@ reason_sentence() {
     not_opted_in)    print -r -- "is not opted in to driving; run \`ari-driving on\` there" ;;
     other_session)   print -r -- "is bound to another Claude session; run \`ari-driving off\` then \`ari-driving on\` there, or name another pane" ;;
     busy)            print -r -- "is not at a shell prompt (${holds:-something is running}); wait for it, or name another pane" ;;
+    lock_unavailable) print -r -- "could not take its lock on the host (${holds:-the lock root is unwritable}); the host's lock root is the problem, not the pane, so another pane there fails too" ;;
     holds_text)      print -r -- "holds un-entered text on its prompt; clear it or run it, then tell me" ;;
     no_pane)         print -r -- "does not exist on the host; the panes there are ${cands:-none}; name one by its ID=%N" ;;
     ambiguous_pane)  print -r -- "matches more than one pane (${cands}); name one by its ID=%N" ;;
@@ -112,6 +113,7 @@ closing_sentence() {
   case "${1}" in
     read_timed_out)   print -r -- "Tell me when its prompt is back?" ;;
     host_unreachable) print -r -- "Tell me when \`ssh\` to the host works from a pane?" ;;
+    lock_unavailable) print -r -- "Tell me when the host's lock root is writable again?" ;;
     bad_definition)   print -r -- "I fix the definition now; your next message reads again." ;;
     refused_text)     print -r -- "I rewrite the read now; your next message reads again." ;;
     *)                print -r -- "Tell me when it is clear, or name another pane?" ;;

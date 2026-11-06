@@ -12,7 +12,7 @@ Ready 3, in progress 1, human 1, blocked 2, stale 1; laptop abc1234 dirty 1; rea
 
 **State right now**
 - 3 ready; the top is beads-abc "Fix the widget" (P1).
-- 1 in progress: beads-ip1 "Half done", held by claude, stale.
+- 1 in progress: beads-ip1 "Half done", held by this session, stale.
 - 1 waits on you: beads-h1 "Decide the indexers".
 - 2 blocked, 2 deferred.
 - Laptop checkout `~/homelab`: `bin/lab` modified by this session and uncommitted; last commits abc1234 first subject, bcd2345 second subject, cde3456 third subject; this Mac's `/Users/you/homelab` is clean at f00ba12.
@@ -39,7 +39,7 @@ A no is a correction; other words are your answer. Answer beads-h1 "Decide the i
 
 ## Why the rows sit where they do
 
-Both rows are his: beads-h1 first on blockers (it frees beads-bl2), then the show row, for the edit to `bin/lab` that `host_git.own` lists as this session's. beads-h1 is an answer row: the decision is his, the `bd` write is Claude's, so it carries no command and nothing is typed; only row 1 is ever typed, so the show row waits. The show row has no bead and no bead waits on it, so it is P2; a row that stood in front of a P1 bead would be P1, said in Why now. The recommendation is the `Recommendation:` line of `human.text`. Everything else is Claude's and only a state bullet: beads-abc and beads-def (ready), beads-ip1 (held by claude), the `bin/doctor.sh` run, and beads-epic (`type` `epic`, the parent of beads-abc), which counts among the 3 ready and is never named.
+Both rows are his: beads-h1 first on blockers (it frees beads-bl2), then the show row, for the edit to `bin/lab` that `host_git.own` lists as this session's. beads-h1 is an answer row: the decision is his, the `bd` write is Claude's, so it carries no command and nothing is typed; only row 1 is ever typed, so the show row waits. The show row has no bead and no bead waits on it, so it is P2; a row that stood in front of a P1 bead would be P1, said in Why now. The recommendation is the `Recommendation:` line of `human.text`. Everything else is Claude's and only a state bullet: beads-abc and beads-def (ready), beads-ip1 (held by this session), the `bin/doctor.sh` run, and beads-epic (`type` `epic`, the parent of beads-abc), which counts among the 3 ready and is never named.
 
 Not this: a row for beads-abc, beads-ip1, the doctor run, or "beads-epic: no write; it closes once its children close"; none is his to do. Not this either: beads-h1's row with a `bd` command for him to run or typed onto his prompt; recording an answer is Claude's write. Nor the human row at P1 because what it blocks is P1; a row with a bead keeps that bead's priority.
 
@@ -48,8 +48,8 @@ Not this: a row for beads-abc, beads-ip1, the doctor run, or "beads-epic: no wri
 He said "yes": my recommendation is his answer. `bd -C ~/beads show beads-h1 --json` reports a decision, so Claude records it as `/ari-bead-driven-development` › Ask Ari a decision records one, one `run.zsh` call per write on the pane, then captures:
 
 ```zsh
-zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %18 --cmd 'BEADS_ACTOR=claude bd -C ~/beads update beads-h1 --design "stop at 1337x and TPB"'
-zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %18 --cmd 'BEADS_ACTOR=claude bd -C ~/beads close beads-h1 --reason "Ari chose stop at 1337x and TPB: his words at 09:11Z"'
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %18 --cmd 'BEADS_ACTOR=claude:6a1f0c2e-3b4d-4e5f-8a9b-0c1d2e3f4a5b bd -C ~/beads update beads-h1 --design "stop at 1337x and TPB"'
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %18 --cmd 'BEADS_ACTOR=claude:6a1f0c2e-3b4d-4e5f-8a9b-0c1d2e3f4a5b bd -C ~/beads close beads-h1 --reason "Ari chose stop at 1337x and TPB: his words at 09:11Z"'
 ```
 
 The reply:
@@ -224,7 +224,7 @@ Ready 1, in progress 1, human 0, blocked 1, stale 0; laptop abc1234 clean; read 
 
 **State right now**
 - 1 ready; the top is beads-def "Polish the frob" (P2).
-- 1 in progress: beads-abc "Fix the widget", held by claude.
+- 1 in progress: beads-abc "Fix the widget", held by this session.
 - 1 blocked, 2 deferred.
 - Laptop checkout `~/homelab` clean; last commits abc1234 first subject, bcd2345 second subject, cde3456 third subject.
 - `bin/doctor.sh` has not been run this capture.
