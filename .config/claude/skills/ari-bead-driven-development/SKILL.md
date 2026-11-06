@@ -60,6 +60,8 @@ Tables show bare syntax; Workflow writes carry the Rules: Write as the session p
 | scope | this session's roots with their descendants (Scope) |
 | frontier | the scope's ready, in progress, blocked, waiting-on-Ari and stale beads as the tracker reports them now: the commands of Read the frontier, never recalled |
 | stated goal | the outcome Ari named in this session for its work, or the claimed bead's title |
+| main work | what Ari is driving now in this session: the stated goal and the beads it waits on, kept and driven in the main thread; a new stated goal replaces it |
+| side work | a tangent main work does not wait on (a skill update, a tool fix, a follow-up that blocks nothing; one main work waits on is main work): filed as a bead labelled `side` (added to the picked label), handed to a background subagent that works it as itself (Rules: Write as the session › Fork or subagent) and reports back in one or two lines, long output going to a file in the scratchpad and never pasted into chat |
 | close reason | the evidence written once at close |
 | actor | the identity a write carries: `claude:` and the full `CLAUDE_CODE_SESSION_ID`, set by `BEADS_ACTOR`; it becomes `created_by` and, on a claim, the assignee. A bare `claude` is the pre-session form |
 | Claude-created | `created_by` is `claude` or starts with `claude:`; *this session's* means it equals the current actor |
