@@ -114,7 +114,7 @@ If user picked (1), print:
 Next steps:
 - Edit: $HOME/.claude/skills/{full_name}/SKILL.md
 - Test locally (skill shows up in your skill index immediately).
-- When ready, adopt into the dotfiles: `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/adopt --skill {full_name} --tier df`, then commit per /ari-dotfiles.
+- When ready, adopt into the dotfiles: `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/adopt --skill {full_name} --tier df --execute` (run `--dry-run` first), then commit per /ari-dotfiles.
 ```
 
 ## Skeleton templates
