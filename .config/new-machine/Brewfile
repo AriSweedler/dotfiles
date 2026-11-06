@@ -83,6 +83,7 @@ brew "terminal-notifier"  # Claude Code notification hook (~/.config/claude) and
 # ── decreed via 'new-machine brew decree'; move into a section when tidying ──
 brew "docker"  # docker runs containers
 brew "gh"  # dotfiles push authenticates by its gh token
+brew "googleworkspace-cli"  # useful to interact with a google account
 brew "rust-analyzer"  # Rust language server for the editor
 brew "rustup"  # Rust toolchain installer (rustc, cargo)
 cask "google-chrome"  # web browser
