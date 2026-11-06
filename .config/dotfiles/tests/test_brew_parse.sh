@@ -36,6 +36,12 @@ assert_json "unlinked: problem conflict" "${FIX}/parsed.json" '.items[0].problem
 assert_json "unlinked: name" "${FIX}/parsed.json" '.items[0].name' jq
 assert_json "unlinked: hint" "${FIX}/parsed.json" '.items[0].hint' "duplicate declaration with differing options"
 
+parse service
+assert_json "service: two items" "${FIX}/parsed.json" '.items|length' 2
+assert_json "service: kind" "${FIX}/parsed.json" '.items[1].kind' service
+assert_json "service: problem" "${FIX}/parsed.json" '.items[1].problem' "needs to be started"
+assert_json "service: nothing unparsed" "${FIX}/parsed.json" '.unparsed' false
+
 parse satisfied
 assert_json "satisfied: no items" "${FIX}/parsed.json" '.items|length' 0
 assert_json "satisfied: nothing unparsed" "${FIX}/parsed.json" '.unparsed' false

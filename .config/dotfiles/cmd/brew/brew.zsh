@@ -317,7 +317,7 @@ brew::_declared_arg() {
 # brew::parse_bundle_check <bundle_check.out> <rc> [<global declared.json|Brewfile> [<local …>]]
 #   → {rc, items: [{kind, name, problem, hint?, tier}], unparsed, unparsed_lines, error_lines}
 # Pure zsh over the captured text (stdout+stderr). Recognized lines:
-#   → (Formula|Cask|Tap|VSCode Extension) <name> needs to be (installed|tapped|unlinked).
+#   → (Formula|Cask|Tap|VSCode Extension|Service) <name> needs to be (installed|tapped|unlinked|started).
 # `unlinked` means two declarations of one formula disagree on options: problem "conflict".
 # Any other `→ ` line is unparsed; `Error:` lines are collected; everything else is chatter.
 # tier: every tier whose declared list has `name` or an entry ending in "/<name>" (bundle check
@@ -337,11 +337,12 @@ brew::parse_bundle_check() {
     fi
     [[ "${line}" == '→ '* ]] || continue
     rest="${line#→ }"
-    if [[ "${rest}" =~ '^(Formula|Cask|Tap|VSCode Extension) (.+) needs to be (installed|tapped|unlinked)\.$' ]]; then
+    if [[ "${rest}" =~ '^(Formula|Cask|Tap|VSCode Extension|Service) (.+) needs to be (installed|tapped|unlinked|started)\.$' ]]; then
       case "${match[1]}" in
         Formula) kind=formula ;;
         Cask) kind=cask ;;
         Tap) kind=tap ;;
+        Service) kind=service ;;
         *) kind=vscode ;;
       esac
       if [[ "${match[3]}" == unlinked ]]; then
