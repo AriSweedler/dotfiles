@@ -24,10 +24,9 @@ fi
 unset prefix
 unset brew_prefix
 
-# Because I ran:
-#
-#     brew tap homebrew/autoupdate
-#     brew autoupdate start
-#
-# I can do this
-HOMEBREW_NO_AUTO_UPDATE=true
+# Keep interactive brew commands fast: no self-update, no upgrading the dependents of whatever
+# an install touches, no cleanup pass. Exported, or brew never sees them. The `brew-update`
+# dotfiles job keeps Homebrew current in the background instead.
+export HOMEBREW_NO_AUTO_UPDATE=1
+export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
+export HOMEBREW_NO_INSTALL_CLEANUP=1
