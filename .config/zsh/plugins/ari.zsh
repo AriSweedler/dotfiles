@@ -1,4 +1,3 @@
-# source_file "$HOME/.config/macos.sh"
 
 # Use nvim by default
 export EDITOR="nvim"

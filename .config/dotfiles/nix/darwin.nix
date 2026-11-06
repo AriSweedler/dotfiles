@@ -1,6 +1,8 @@
 # System layer every machine gets. nix-darwin manages the Nix install itself (nix.enable).
 { config, lib, pkgs, user, ... }:
 {
+  imports = [ ./macos.nix ];
+
   # nix-darwin's /etc/zshenv runs set-environment, whose `export PATH=` replaces the caller's
   # PATH, in every zsh. Keep macOS's contract instead: a non-interactive script keeps the PATH
   # it was given (launchd jobs, the dotfiles test world's shims); only interactive and login
