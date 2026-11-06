@@ -1,14 +1,15 @@
 ---
 name: ari-dotfiles
-description: Edit and commit Ari's two-tier dotfiles — shared (`git df`, ~/.config, every machine) and local (`git ldf`, ~/.local, this machine only) — and review every unpushed public commit for employer-identifying content before recommending a push
+description: Edit and commit Ari's two-tier dotfiles — shared (`git df`, ~/.config, every machine) and local (`git ldf`, ~/.local, this machine only) — and, on the employer laptop only, review every unpushed public commit for employer-identifying content before recommending a push
 ---
 
 # Dotfiles
 
 Ari's dotfiles are two bare git repos, one per tier. Pick the tier by whether
 the content should be identical on every machine or belongs to this one. The
-shared tier and its submodules are public, so no push is recommended until each
-unpushed commit there passes **Review before push**.
+shared tier and its submodules are public; on the employer laptop no push is
+recommended until each unpushed commit there passes **Review before push**, and
+on any other machine a commit is ready to push as soon as it lands.
 
 | Tier | Alias | Bare repo | Worktree | Holds | Remote |
 |---|---|---|---|---|---|
@@ -26,12 +27,15 @@ On this laptop the local `origin` is a private repo
    since tools like `bake` stage files of their own. A path inside a submodule (`~/.config/chrome-exoskeleton/…`) is refused by
    `git df add`: follow **Submodules** instead.
 3. Print `git df log --oneline -1` / `git ldf log --oneline -1` to confirm the tier.
-4. Shared: run **Review before push**. Local: `git ldf push` now. Start the
+4. Shared: run **Review before push** on the employer laptop only (its first
+   step tells the machines apart). Local: `git ldf push` now. Start the
    **Post-change sweep** alongside.
-5. Close with one message: what landed, the review verdicts, the sweep's plan, and
-   any history rewrite the review calls for, ending in one question that covers
-   them all (none when nothing is pending). Once every unpushed shared commit has
-   passed, including any the `yes` just made, end with "Run `dotfiles push` when ready."
+5. Close with one message: what landed, the review verdicts (employer laptop),
+   the sweep's plan, and any history rewrite the review calls for, ending in one
+   question that covers them all (none when nothing is pending). End with "Run
+   `dotfiles push` when ready." once every unpushed shared commit, including any
+   the `yes` just made, has passed the review, or, on any other machine, as soon
+   as it lands.
 
 **Always pass absolute paths to `git df` and `git ldf`.** Relative pathspecs
 resolve against the cwd, and from inside `~/.local` a `share/...` path silently
@@ -81,16 +85,27 @@ cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
   a refused bump blocks the shared push, nothing else blocks anything.
   Each repo's output lands in `~/.local/state/dotfiles/push/<repo>.log`
   (`shared`, `local`, or the submodule path; `.log.bak.1` … `.log.bak.5` = the five runs before).
-  After committing, run **Review before push**; only when it passes, end with
-  "Run `dotfiles push` when ready."
+  After committing on the employer laptop, run **Review before push** and end
+  with "Run `dotfiles push` when ready." only when it passes; on any other
+  machine skip the review and end with that line as soon as the commit lands.
 - **Local: push after every ldf commit.** No confirmation needed and no review
   (the repo is private); `dotfiles push` also picks up a local commit left unpushed.
 
 ### Review before push
 
-Each unpushed shared-tier or submodule commit becomes public on Ari's push, so
-review every one for content that identifies the employer, using the
-identifying-content list in `/ari-skill-update` § Rules:
+Runs only on the employer laptop, the one machine whose local tier holds the
+marker file `~/.local/share/dotfiles/employer-review` (committed to ldf there;
+its content is unused). Check first:
+
+```zsh
+[[ -e ~/.local/share/dotfiles/employer-review ]] && echo review || echo skip
+```
+
+`skip` → dispatch no reviewer: the commit is ready, so end with "Run `dotfiles
+push` when ready." as soon as it lands. `review` → each unpushed shared-tier or
+submodule commit becomes public on Ari's push, so review every one for content
+that identifies the employer, using the identifying-content list in
+`/ari-skill-update` § Rules:
 
 ```zsh
 git df log --reverse --format=%h origin/main..main            # shared tier
@@ -276,9 +291,10 @@ One dotfiles change; never stop after the first commit.
 2. **Commit in the submodule's repo** on `main`, explicit paths:
    `git -C ~/<path> add <files> && git -C ~/<path> commit -m "…"`. Its hooks
    and commit conventions apply, not the tier's.
-3. **Its push, and the bump, are the user's**: run **Review before push** on
-   the submodule's unpushed commits, and only when it passes end with "Run
-   `dotfiles push` when ready." That pushes the submodule, commits the shared tier's pointer
+3. **Its push, and the bump, are the user's**: on the employer laptop run
+   **Review before push** on the submodule's unpushed commits and end with "Run
+   `dotfiles push` when ready." only when it passes; on any other machine end
+   with that line as soon as the commit lands. That pushes the submodule, commits the shared tier's pointer
    bump (`<name>: bump to <sha> (<subject>)`, that path alone) and pushes the
    shared tier with it; `dotfiles push --submodules` alone still commits the
    bump (`--shared`, `--local` and `--no-<part>` narrow the scope the same
@@ -343,6 +359,8 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
   via `source_zsh_dir --optional "${XDG_DATA_HOME}/zsh/plugins"`
 - **Scripts**: `~/.local/bin/` and `~/.local/share/bin/`
 - **Job plugins**: `~/.local/share/dotfiles/jobs/<name>` — see **Cutpoints**
+- **Employer marker**: `~/.local/share/dotfiles/employer-review`, present only on the
+  employer laptop; its presence turns on **Review before push**
 - **Machine name**: one word in `~/.local/share/dotfiles/machine-name`. Read it with
   `dotfiles machine-name`, never the path; `dotfiles machine-name NAME` renames and commits
   it. `dotfiles init` writes a random one.
@@ -353,7 +371,7 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
 ## Post-change sweep
 
 As soon as a dotfiles change is committed, start the sweep without asking, in
-parallel with **Review before push**. A subagent (this agent, when it is one)
+parallel with **Review before push** when it runs. A subagent (this agent, when it is one)
 runs `git df status`, `git ldf status` and `cd ~ && git df submodule status`,
 reads each change (`diff` for modified, `cat` for untracked), and drafts one line
 per commit, grouping tightly related files (a new config plus its include). It
@@ -364,7 +382,7 @@ edits and commits nothing:
       df: ~/.config/foo/bar.zsh → "foo: retry once on timeout" — the retry the last session left uncommitted
 
 The plan goes into Workflow step 5's closing message; its one `yes` commits every
-planned line, pushes local, and runs **Review before push** on anything shared.
+planned line, pushes local, and runs **Review before push** on anything shared (employer laptop only).
 Both tiers clean → the two status lines, nothing to ask. A change the subagent
 cannot explain is listed but left out of the plan.
 
