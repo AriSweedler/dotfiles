@@ -1,0 +1,493 @@
+#!/usr/bin/env zsh
+# tmux-tooltip — a small read-only card over tmux: a title in the border, then content blocks in the
+# order given, then a dim hint. A click anywhere (on the card or off it), Esc, q or Enter closes it. The
+# same card travels as a link: `tmux-tooltip link` prints [label](tmux-tooltip://show?…) for Markdown output
+# (Claude Code renders it as OSC 8), and a click on it in tmux runs `tmux-tooltip open` through the
+# tmux-tooltip:// branch of ~/.config/tmux/plugin/osc8-hyperlinks.conf, which opens the card just above it.
+#
+# The card is a display-menu of disabled items, one per line, not a display-popup: tmux swallows every
+# click outside a popup (no binding underneath fires and the popup stays), while a menu closes on one.
+# Disabled items cannot be selected, so nothing highlights under the mouse; tmux draws them dim, which
+# each line undoes with #[nodim]. Item names are formats, so a value's '#' is doubled.
+#
+# Blocks (repeatable, rendered in the order given):
+#   --text TEXT       a paragraph, word-wrapped to the card width
+#   --field KEY=VALUE a row: the key dim and right-padded to the widest key, the value wrapped beside it
+#   --color NAME      colors the block before it (a text's words, a field's value); names in COLORS
+# tmux-tooltip knows no meanings: a caller that wants open beads cyan maps that itself (the beads skill's
+# bead_link.zsh reads ~/.config/tmux-tooltip/beads.conf). A new block kind is a flag in parse_args, a query
+# key in parse_card_url, and a render_<kind> function.
+#
+# Run: tmux-tooltip --help
+
+set -euo pipefail
+
+readonly LIB_LOGGING="${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
+if [[ ! -r "${LIB_LOGGING}" ]]; then
+  print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
+  exit 1
+fi
+source "${LIB_LOGGING}"
+
+# --- Constants ---
+
+readonly SCHEME='tmux-tooltip://show'
+readonly DEFAULT_MAX_WIDTH=70
+readonly DEFAULT_HINT='click or Esc closes'
+# The menu's border (2) and its one-column item margins (2).
+readonly FRAME_WIDTH=4
+readonly BORDER_LINES=rounded
+readonly KEY_STYLE='fg=default,nobold,dim'
+readonly PLAIN_STYLE='fg=default,nobold,nodim'
+readonly -a SUBCOMMANDS=(show link open)
+# --color names and their tmux colours; a `bold-` or `dim-` prefix (or both) adds that attribute, and a
+# number 0-255 is that 256-colour.
+typeset -grA COLORS=(
+  red red  green green  yellow yellow  blue blue  magenta magenta  cyan cyan  white white
+  light-red colour210  light-green colour120  light-yellow colour228  light-blue colour117
+  light-magenta colour213  light-cyan colour159
+  gray brightblack  orange colour208  dim default
+)
+
+# --- Help ---
+
+help() {
+  cat <<EOF
+${c_green}tmux-tooltip${c_rst} — a read-only card over tmux, shown now or carried by a link
+
+${c_bold}Usage:${c_rst}
+  tmux-tooltip show [CARD] [--client NAME] [--x COL --y ROW]
+  tmux-tooltip link --label TEXT [CARD]
+  tmux-tooltip open --url URL [--client NAME] [--x COL --y ROW]
+
+${c_bold}Subcommands:${c_rst}
+  show   draw the card on a tmux client; a click anywhere, Esc, q or Enter closes it
+  link   print [TEXT](tmux-tooltip://show?…) carrying the card; a click on it in tmux shows it
+  open   the click handler: read the card back out of a tmux-tooltip:// URL and show it
+
+${c_bold}CARD:${c_rst}
+  --title TEXT        the border title
+  --text TEXT         a wrapped paragraph (repeatable)
+  --field KEY=VALUE   an aligned key/value row (repeatable)
+  --color NAME        color the block just before it: ${(j:, :)${(@o)${(@k)COLORS}}},
+                      bold-<name>, dim-<name>, or 0-255
+  --hint TEXT         the dim last line (default '${DEFAULT_HINT}'; '' drops it)
+  --max-width N       widest text line (default ${DEFAULT_MAX_WIDTH}); never wider than the client
+  Blocks render in the order given. Control characters in any value become spaces.
+
+${c_bold}Placement:${c_rst}
+  --client NAME       the client to draw on (default: the current one)
+  --x COL --y ROW     the card's left edge and the row its bottom edge sits on, in client
+                      coordinates; without them the card is centred
+
+${c_bold}Examples:${c_rst}
+  tmux-tooltip show --title beads-o27 --text 'Graph view: Open-only toggle' --field status=open --color cyan
+  tmux-tooltip link --label beads-o27 --title beads-o27 --text 'Graph view: Open-only toggle'
+    → [beads-o27](tmux-tooltip://show?title=beads-o27&text=Graph%20view%3A%20Open-only%20toggle)
+EOF
+}
+
+# --- Encoding ---
+
+#######################################
+# Percent-encode every byte outside the RFC 3986 unreserved set.
+# Arguments: $1 text
+# Outputs: the encoded text on stdout
+#######################################
+percent_encode() {
+  setopt local_options extended_glob no_multibyte
+  local text="${1}" out="" ch i
+  for (( i = 1; i <= ${#text}; i++ )); do
+    ch="${text[i]}"
+    if [[ "${ch}" == [A-Za-z0-9._~-] ]]; then
+      out+="${ch}"
+    else
+      out+="$(printf '%%%02X' "'${ch}")"
+    fi
+  done
+  print -rn -- "${out}"
+}
+
+#######################################
+# Decode a percent-encoded string (%HH only; '+' stays a plus).
+# Arguments: $1 encoded
+# Outputs: the decoded text on stdout
+#######################################
+percent_decode() {
+  local encoded="${1}"
+  print -rn -- "${(g::)${encoded//\%/\\x}}"
+}
+
+#######################################
+# Replace control characters with spaces: a link can come from any program, and an escape sequence in
+# a value would otherwise reach the terminal.
+# Arguments: $1 text
+# Outputs: the cleaned text on stdout
+#######################################
+strip_controls() {
+  local text="${1}"
+  print -rn -- "${text//[[:cntrl:]]/ }"
+}
+
+#######################################
+# Escape text for a tmux format: '#' starts a style or a variable, '##' is a literal '#'.
+# Arguments: $1 text
+# Outputs: the escaped text
+#######################################
+format_escape() {
+  local text="${1}"
+  print -rn -- "${text//\#/##}"
+}
+
+# --- Card model ---
+# A card is the globals below; BLOCK_KINDS[i], BLOCK_VALUES[i] and BLOCK_COLORS[i] (a color name, or '')
+# are its i-th block.
+
+CARD_TITLE=''
+CARD_HINT="${DEFAULT_HINT}"
+CARD_MAX_WIDTH="${DEFAULT_MAX_WIDTH}"
+typeset -a BLOCK_KINDS=() BLOCK_VALUES=() BLOCK_COLORS=()
+
+#######################################
+# Add one block to the card.
+# Globals: BLOCK_KINDS, BLOCK_VALUES, BLOCK_COLORS
+# Arguments: $1 kind (text | field), $2 value
+#######################################
+add_block() {
+  local kind="${1}" value
+  value="$(strip_controls "${2}")"
+  if [[ "${kind}" == field && "${value}" != *=* ]]; then
+    log::err "A field is KEY=VALUE | field='${value}'"
+    return 1
+  fi
+  BLOCK_KINDS+=("${kind}")
+  BLOCK_VALUES+=("${value}")
+  BLOCK_COLORS+=('')
+}
+
+#######################################
+# The tmux style for a color name: a COLORS name or a 256-colour number, after any bold-/dim- prefixes.
+# Globals: COLORS
+# Arguments: $1 color name, or ''
+# Outputs: a full style (fg, bold, dim) to put in #[…]; PLAIN_STYLE for ''; nothing for an unknown name
+#######################################
+color_style() {
+  local name="${1:l}" bold=nobold dim=nodim
+  if [[ -z "${name}" ]]; then
+    print -rn -- "${PLAIN_STYLE}"
+    return
+  fi
+  while [[ "${name}" == (bold|dim)-?* ]]; do
+    case "${name}" in
+      bold-*) bold=bold; name="${name#bold-}" ;;
+      dim-*) dim=dim; name="${name#dim-}" ;;
+    esac
+  done
+  [[ "${name}" == dim ]] && dim=dim
+  if [[ "${name}" == <0-255> ]]; then
+    print -rn -- "fg=colour${name},${bold},${dim}"
+    return
+  fi
+  if [[ -n "${COLORS[$name]:-}" ]]; then
+    print -rn -- "fg=${COLORS[$name]},${bold},${dim}"
+  fi
+}
+
+#######################################
+# Color the block added last.
+# Globals: BLOCK_COLORS
+# Arguments: $1 color name
+#######################################
+set_block_color() {
+  local name="${1}"
+  if (( ${#BLOCK_COLORS} == 0 )); then
+    log::err "--color comes after the block it colors | color='${name}'"
+    return 1
+  fi
+  if [[ -z "${name}" || -z "$(color_style "${name}")" ]]; then
+    log::err "Unknown color | color='${name}' valid='${(j:, :)${(@o)${(@k)COLORS}}}, bold-<name>, dim-<name>, 0-255'"
+    return 1
+  fi
+  BLOCK_COLORS[-1]="${name}"
+}
+
+#######################################
+# Read the card out of a tmux-tooltip:// URL's query, keeping block order.
+# Globals: CARD_TITLE, CARD_HINT, CARD_MAX_WIDTH, BLOCK_KINDS, BLOCK_VALUES, BLOCK_COLORS
+# Arguments: $1 url
+#######################################
+parse_card_url() {
+  local url="${1}"
+  if [[ "${url}" != ${SCHEME}\?* ]]; then
+    log::err "Not a tmux-tooltip link | url='${url}' expected_prefix='${SCHEME}?'"
+    return 1
+  fi
+  local pair key value
+  for pair in "${(@s:&:)${url#${SCHEME}\?}}"; do
+    key="${pair%%=*}"
+    value="$(strip_controls "$(percent_decode "${pair#*=}")")"
+    case "${key}" in
+      title) CARD_TITLE="${value}" ;;
+      hint) CARD_HINT="${value}" ;;
+      max-width) CARD_MAX_WIDTH="${value}" ;;
+      text|field) add_block "${key}" "${value}" ;;
+      color) set_block_color "${value}" || log::warn "Color skipped | color='${value}'" ;;
+      *) log::warn "Unknown key in link, skipped | key='${key}'" ;;
+    esac
+  done
+  if [[ "${CARD_MAX_WIDTH}" != <-> ]] || (( CARD_MAX_WIDTH < 10 )); then
+    CARD_MAX_WIDTH="${DEFAULT_MAX_WIDTH}"
+  fi
+}
+
+# --- Rendering ---
+# A render_<kind> function prints one menu line per output line: tmux format text, every segment led by
+# a full #[…] style so nothing leaks from the segment before it or from the disabled item's dim.
+
+#######################################
+# Wrap text at spaces to a display width; a word wider than the width gets a line of its own.
+# Arguments: $1 text, $2 width
+# Outputs: one wrapped line per output line
+#######################################
+wrap_words() {
+  local text="${1}" width="${2}" line="" word
+  for word in ${(s: :)text}; do
+    if [[ -z "${line}" ]]; then
+      line="${word}"
+    elif (( ${(m)#line} + 1 + ${(m)#word} <= width )); then
+      line+=" ${word}"
+    else
+      print -r -- "${line}"
+      line="${word}"
+    fi
+  done
+  [[ -n "${line}" ]] && print -r -- "${line}"
+  return 0
+}
+
+#######################################
+# Render a text block.
+# Arguments: $1 value, $2 text width, $3 key column width (unused), $4 color name or ''
+# Outputs: menu lines
+#######################################
+render_text() {
+  local style line
+  style="$(color_style "${4}")"
+  wrap_words "${1}" "${2}" | while IFS= read -r line; do
+    print -r -- "#[${style}]$(format_escape "${line}")"
+  done
+}
+
+#######################################
+# Render a field block: the key dim and padded to the key column, the value in its color and wrapped
+# with a hanging indent.
+# Arguments: $1 KEY=VALUE, $2 text width, $3 key column width, $4 color name or ''
+# Outputs: menu lines
+#######################################
+render_field() {
+  local key="${1%%=*}" value="${1#*=}" width="${2}" key_width="${3}"
+  local indent style
+  printf -v indent '%*s' $(( key_width + 2 )) ''
+  style="$(color_style "${4}")"
+  local -a lines=("${(@f)$(wrap_words "${value}" $(( width - key_width - 2 )))}")
+  print -r -- "#[${KEY_STYLE}]$(format_escape "${(r:key_width:: :)key}")#[${PLAIN_STYLE}]  #[${style}]$(format_escape "${lines[1]}")"
+  local line
+  for line in "${(@)lines[2,-1]}"; do
+    print -r -- "#[${PLAIN_STYLE}]${indent}#[${style}]$(format_escape "${line}")"
+  done
+}
+
+#######################################
+# Lay the card out as menu lines for a client width; '' is a separator rule.
+# Globals: CARD_*, BLOCK_*; sets CARD_LINES
+# Arguments: $1 client width
+#######################################
+layout_card() {
+  local client_width="${1}"
+  local text_width=$(( client_width - FRAME_WIDTH ))
+  (( text_width > CARD_MAX_WIDTH )) && text_width="${CARD_MAX_WIDTH}"
+  local key_width=0 i
+  for (( i = 1; i <= ${#BLOCK_KINDS}; i++ )); do
+    if [[ "${BLOCK_KINDS[i]}" == field ]]; then
+      local key="${BLOCK_VALUES[i]%%=*}"
+      (( ${(m)#key} > key_width )) && key_width="${(m)#key}"
+    fi
+  done
+  # A key may take at most a third of the card.
+  (( key_width > text_width / 3 )) && key_width=$(( text_width / 3 ))
+
+  typeset -ga CARD_LINES=()
+  for (( i = 1; i <= ${#BLOCK_KINDS}; i++ )); do
+    CARD_LINES+=("${(@f)$("render_${BLOCK_KINDS[i]}" "${BLOCK_VALUES[i]}" "${text_width}" "${key_width}" "${BLOCK_COLORS[i]}")}")
+  done
+  if [[ -n "${CARD_HINT}" ]]; then
+    (( ${#CARD_LINES} > 0 )) && CARD_LINES+=('')
+    CARD_LINES+=("#[${KEY_STYLE}]$(format_escape "${CARD_HINT}")")
+  fi
+}
+
+#######################################
+# Resolve the client to draw on: the one named, else the current one.
+# Arguments: $1 client name or ''
+# Outputs: the client name
+#######################################
+resolve_client() {
+  local client="${1}"
+  if [[ -n "${client}" ]]; then
+    print -r -- "${client}"
+    return
+  fi
+  tmux display-message -p '#{client_name}'
+}
+
+#######################################
+# Draw the card on a client. display-menu returns at once; the card stays until a click, Esc, q or Enter.
+# Globals: CARD_*, BLOCK_*
+# Arguments: $1 client, $2 x, $3 y (both '' to centre)
+#######################################
+show_card() {
+  local client="${1}" x="${2}" y="${3}"
+  if (( ${#BLOCK_KINDS} == 0 )) && [[ -z "${CARD_TITLE}" ]]; then
+    log::err "Empty card: give --title, --text or --field"
+    return 1
+  fi
+  local client_width
+  client_width="$(tmux display-message -p -c "${client}" '#{client_width}')"
+  layout_card "${client_width}"
+
+  # Each item is NAME KEY COMMAND; a '-' name is disabled, an empty name is a separator.
+  local -a items=()
+  local line
+  for line in "${CARD_LINES[@]}"; do
+    if [[ -z "${line}" ]]; then
+      items+=('' '' '')
+    else
+      items+=("-#[nodim]${line}" '' '')
+    fi
+  done
+  local -a position=(-x C -y C)
+  if [[ -n "${x}" && -n "${y}" ]]; then
+    position=(-x "${x}" -y "${y}")
+  fi
+  local -a title=()
+  [[ -n "${CARD_TITLE}" ]] && title=(-T " $(format_escape "${CARD_TITLE}") ")
+  log::info "Showing card | client='${client}' lines='${#CARD_LINES}' blocks='${#BLOCK_KINDS}'"
+  tmux display-menu -c "${client}" "${position[@]}" -b "${BORDER_LINES}" "${title[@]}" -- "${items[@]}"
+}
+
+#######################################
+# Print the card as a Markdown link.
+# Globals: CARD_*, BLOCK_*
+# Arguments: $1 label
+#######################################
+print_link() {
+  local label="${1}" query="" i
+  [[ -n "${CARD_TITLE}" ]] && query+="&title=$(percent_encode "${CARD_TITLE}")"
+  for (( i = 1; i <= ${#BLOCK_KINDS}; i++ )); do
+    query+="&${BLOCK_KINDS[i]}=$(percent_encode "${BLOCK_VALUES[i]}")"
+    [[ -n "${BLOCK_COLORS[i]}" ]] && query+="&color=$(percent_encode "${BLOCK_COLORS[i]}")"
+  done
+  [[ "${CARD_HINT}" != "${DEFAULT_HINT}" ]] && query+="&hint=$(percent_encode "${CARD_HINT}")"
+  [[ "${CARD_MAX_WIDTH}" != "${DEFAULT_MAX_WIDTH}" ]] && query+="&max-width=${CARD_MAX_WIDTH}"
+  # Brackets would end the Markdown label early.
+  label="${${label//\[/(}//\]/)}"
+  print -r -- "[${label}](${SCHEME}?${query#&})"
+}
+
+#######################################
+# Parse every flag. A value is always the word after its flag, so a value of '-h' is never --help.
+# Globals: CARD_*, BLOCK_*; sets LABEL, URL, PLACE_CLIENT, PLACE_X, PLACE_Y, WANT_HELP
+# Arguments: the arguments after the subcommand
+#######################################
+parse_args() {
+  typeset -g LABEL='' URL='' PLACE_CLIENT='' PLACE_X='' PLACE_Y='' WANT_HELP=false
+  while (( $# > 0 )); do
+    case "${1}" in
+      -h|--help) WANT_HELP=true; shift ;;
+      --title) CARD_TITLE="$(strip_controls "${2?--title requires a value}")"; shift 2 ;;
+      --hint) CARD_HINT="$(strip_controls "${2?--hint requires a value}")"; shift 2 ;;
+      --max-width) CARD_MAX_WIDTH="${2:?--max-width requires a value}"; shift 2 ;;
+      --text) add_block text "${2?--text requires a value}"; shift 2 ;;
+      --field) add_block field "${2:?--field requires KEY=VALUE}"; shift 2 ;;
+      --color) set_block_color "${2:?--color requires a name}"; shift 2 ;;
+      --label) LABEL="${2:?--label requires a value}"; shift 2 ;;
+      --url) URL="${2:?--url requires a value}"; shift 2 ;;
+      --client) PLACE_CLIENT="${2:?--client requires a value}"; shift 2 ;;
+      --x) PLACE_X="${2:?--x requires a value}"; shift 2 ;;
+      --y) PLACE_Y="${2:?--y requires a value}"; shift 2 ;;
+      *) log::err "Unknown argument | arg='${1}'"; return 1 ;;
+    esac
+  done
+}
+
+#######################################
+# Check that the flags given fit the subcommand.
+# Globals: LABEL, URL, PLACE_*, CARD_MAX_WIDTH
+# Arguments: $1 subcommand
+#######################################
+validate_args() {
+  local subcommand="${1}"
+  if [[ "${CARD_MAX_WIDTH}" != <-> ]] || (( CARD_MAX_WIDTH < 10 )); then
+    log::err "--max-width is a number of at least 10 | max_width='${CARD_MAX_WIDTH}'"
+    return 1
+  fi
+  if [[ -n "${PLACE_X}${PLACE_Y}" && ( "${PLACE_X}" != <-> || "${PLACE_Y}" != <-> ) ]]; then
+    log::err "--x and --y go together, as numbers | x='${PLACE_X}' y='${PLACE_Y}'"
+    return 1
+  fi
+  case "${subcommand}" in
+    link)
+      if [[ -z "${LABEL}" || -n "${URL}${PLACE_CLIENT}${PLACE_X}" ]]; then
+        log::err "link takes --label TEXT and card flags only | label='${LABEL}'"
+        return 1
+      fi
+      ;;
+    open)
+      if [[ -z "${URL}" || -n "${LABEL}" || ${#BLOCK_KINDS} -gt 0 || -n "${CARD_TITLE}" ]]; then
+        log::err "open takes --url URL and placement flags only | url='${URL}'"
+        return 1
+      fi
+      ;;
+    show)
+      if [[ -n "${LABEL}${URL}" ]]; then
+        log::err "show takes card and placement flags only | label='${LABEL}' url='${URL}'"
+        return 1
+      fi
+      ;;
+  esac
+}
+
+# --- Main ---
+
+main() {
+  # === PARSE ===
+  local subcommand="${1:-}"
+  case "${subcommand}" in
+    -h|--help|'') help; return 0 ;;
+  esac
+  shift
+  if (( ! ${SUBCOMMANDS[(Ie)${subcommand}]} )); then
+    log::err "Unknown subcommand | subcommand='${subcommand}' valid='${(j:, :)SUBCOMMANDS}'"
+    return 1
+  fi
+  parse_args "$@"
+  if [[ "${WANT_HELP}" == true ]]; then
+    help
+    return 0
+  fi
+
+  # === VALIDATE ===
+  validate_args "${subcommand}"
+
+  # === LOGIC ===
+  case "${subcommand}" in
+    show) show_card "$(resolve_client "${PLACE_CLIENT}")" "${PLACE_X}" "${PLACE_Y}" ;;
+    link) print_link "${LABEL}" ;;
+    open)
+      parse_card_url "${URL}"
+      show_card "$(resolve_client "${PLACE_CLIENT}")" "${PLACE_X}" "${PLACE_Y}"
+      ;;
+  esac
+}
+
+main "$@"
