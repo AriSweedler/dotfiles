@@ -192,7 +192,7 @@ Scratchpad fields appended after `Last phase`:
 - `review-rules.md` — the constraints `/ari-hemingway--review-gdoc` enforces on a scaffold draft (loaded by its Sibling reviewer).
 - `bin/check_definitions_order.zsh` — the mechanical table check (jq program in `lib/check_definitions_order.jq`). Read-only, exits 1 on violations.
 - `bin/cluster_definitions.zsh` (+ `cluster_definitions.py`, per `/ari-skill-pythonscripts`) — clusters the discover graph into subsystems, maps the accepted table onto them, writes `clusters.json`, the cluster-level `graph.mmd`, and the per-Doc `rows/*.json`. Flags: `--alias`, `--merge`, `--rename`, `--universal`, `--min-rows`, `--single-article` (skeleton mode for one article: no cross-article or universal-share WARN lines); `--force` overwrites outputs and removes stale `rows/*.json`.
-- `bin/drive_subfolder.zsh` — chooses the publish folder: the user's folder when empty, else a child named after the topic (reused or created). `--dry-run` validates with Drive and creates nothing. Drive helpers come from `/ari-hemingway--lib`'s `lib/drive.zsh`.
+- `bin/drive_subfolder.zsh` — chooses the publish folder: the user's folder when empty, else a child named after the topic (reused or created). A dry run unless `--execute`: Drive validates the create and nothing is made. Drive helpers come from `/ari-hemingway--lib`'s `lib/drive.zsh`.
 - `tests/check_mention_matchers.zsh` + `tests/mention_matcher_cases.json` — feeds every case through the jq checker, the JS `mentionRe`, and the Python `mention_re`; exits 1 on any disagreement. Run it after touching any of the three.
 - `workflows/definitions_discover.js` — Workflow script: plan angles with their sources (or take `angles`) while a grounding-only sweep runs, two sweeps per angle, batched first-pass definitions with verified doc links, two refuters per batch, completeness critic, dependency graph. Logs an agent and WebSearch estimate before the first sweep. Args: `{topic, grounding, folder, scale?: "small" | "full", angles?: [{key, prompt, sources?}], must_terms?, subsystems_hint?, batch_size?}`; `angles` skips the planner; `scale: "small"` caps the angles at 4, sets `batch_size` 10 and skips the critic's define round except for `must_terms`. The result carries `scale`, `batch_size`, `agents_estimated` and `critic_missing`.
 - `workflows/definitions_refine.js` — Workflow script: judge-panel selection, layered STE100 rewrite by racing rewriters, mechanical ordering check with fix rounds, axiomatic fallback, two factual refuters, recheck. Args: `{topic, grounding, folder?, input_json, terms?, judges?, min_votes?, target_rows?, must_terms?, max_sentences?, max_words?, ste100?, axiomatic?, fix_rounds?, rewriters?}`; `terms` skips the judge panel and keeps exactly those rows; `folder` defaults to the directory of `input_json`.
@@ -289,13 +289,13 @@ Follow the `Present` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL
 
 ### Folder structure
 
-Decide the layout from the count of Docs. One Doc: publish it into the user's folder as it is, even when the folder is not empty; skip the rest of this step. No folder given: single Doc in My Drive; skip the rest of this step. Two or more Docs: emit exactly this one Bash call; it reports the user's folder when it is empty and otherwise the child folder named after the topic that it would reuse or create:
+Decide the layout from the count of Docs. One Doc: publish it into the user's folder as it is, even when the folder is not empty; skip the rest of this step. No folder given: single Doc in My Drive; skip the rest of this step. Two or more Docs: emit exactly this one Bash call; it is a dry run and reports the user's folder when it is empty and otherwise the child folder named after the topic that it would reuse or create:
 
 ```zsh
-zsh $HOME/.claude/skills/ari-hemingway--structure-scaffold/bin/drive_subfolder.zsh --parent <folder id or URL> --name "<Topic>" --dry-run
+zsh $HOME/.claude/skills/ari-hemingway--structure-scaffold/bin/drive_subfolder.zsh --parent <folder id or URL> --name "<Topic>"
 ```
 
-Show `folder_name` and `reason`. When `reason='child_missing'`, wait for the user to approve creating the child folder. Then emit the same call without `--dry-run`. An empty `folder_id` after the real run is an error; stop. Record `folder_id` and `reason` under `Folder` in the scratchpad.
+Show `folder_name` and `reason`. When `reason='child_missing'`, wait for the user to approve creating the child folder. Then emit the same call with `--execute`; `--execute` waits for that approval. An empty `folder_id` or `dry_run=1` after the real run is an error; stop. Record `folder_id` and `reason` under `Folder` in the scratchpad.
 
 Print: `Folder complete — {folder_id} ({reason}). Next: Output.`
 

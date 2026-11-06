@@ -1,8 +1,8 @@
 #!/usr/bin/env zsh
 # Pick the Drive folder a scaffold's Docs are published into: the given parent when it is
 # empty, otherwise a child folder named after the topic (reused when it already exists,
-# created otherwise). Creating that child is the only mutation; --dry-run validates it
-# with Drive without creating anything.
+# created otherwise). Creating that child is the only mutation: a dry run unless --execute,
+# and Drive validates the request in a dry run.
 
 set -euo pipefail
 
@@ -10,6 +10,7 @@ readonly SCRIPT_DIR="${0:A:h}"
 # Shared libs resolve through the symlink farm, not ${SCRIPT_DIR:h:h}: skills are spread
 # across dotfiles tiers, so a relative hop lands in whichever tier this script sits in.
 readonly SKILLS_DIR="${HOME}/.claude/skills"
+readonly SCRIPT_PATH="${0:a}"
 
 # --- Constants ---
 
@@ -23,6 +24,7 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
+source "${SKILLS_DIR}/ari-skill-shellscripts/lib/dry_run.zsh"
 source "${SKILLS_DIR}/ari-hemingway--lib/lib/drive.zsh"
 
 # --- Prerequisites ---
@@ -58,22 +60,22 @@ list_children() {
 }
 
 #######################################
-# Create the child folder under the parent. Under dry-run, Drive validates the request and
+# Create the child folder under the parent. In a dry run, Drive validates the request and
 # nothing is created.
 # Globals: DRIVE_FOLDER_MIME
-# Arguments: $1 - parent id, $2 - child name, $3 - dry_run, $4 - reply path
-# Outputs: the new folder's id on stdout (empty under dry-run)
+# Arguments: $1 - parent id, $2 - child name, $3 - reply path
+# Outputs: the new folder's id on stdout (empty in a dry run)
 #######################################
 create_child() {
-  local parent="${1}" name="${2}" dry_run="${3}" reply_file="${4}"
+  local parent="${1}" name="${2}" reply_file="${3}"
   local meta params
   local -a flags
   meta="$(jq -cn --arg name "${name}" --arg mime "${DRIVE_FOLDER_MIME}" --arg parent "${parent}" '{name: $name, mimeType: $mime, parents: [$parent]}')"
   params="$(jq -cn '{fields: "id,name", supportsAllDrives: true}')"
-  [[ "${dry_run}" == "true" ]] && flags+=(--dry-run)
+  is_dry_run && flags+=(--dry-run)
   drive::gws_call "${reply_file}" drive files create "${flags[@]}" --json "${meta}" --params "${params}" || return 1
-  if [[ "${dry_run}" == "true" ]]; then
-    log::info "Dry run: Drive accepted the create request; nothing created | parent='${parent}' name='${name}'"
+  if is_dry_run; then
+    log::info "would create folder; Drive accepted the dry-run request | parent='${parent}' name='${name}'"
     return 0
   fi
   jq -r '.id // empty' "${reply_file}"
@@ -81,12 +83,12 @@ create_child() {
 
 #######################################
 # Decide where the Docs go. Empty parent: the parent itself. Existing child with the topic
-# name: that child. Otherwise: a new child (validated only under dry-run).
-# Arguments: $1 - parent id, $2 - child name, $3 - dry_run, $4 - children reply path, $5 - work dir
+# name: that child. Otherwise: a new child (validated only in a dry run).
+# Arguments: $1 - parent id, $2 - child name, $3 - children reply path, $4 - work dir
 # Outputs: one line "folder_id|created|reason" on stdout ('|' keeps an empty folder_id in place)
 #######################################
 choose_target() {
-  local parent="${1}" name="${2}" dry_run="${3}" children_file="${4}" work="${5}"
+  local parent="${1}" name="${2}" children_file="${3}" work="${4}"
   local children_count existing folder_id
   children_count="$(jq '.files | length' "${children_file}")"
   if (( children_count == 0 )); then
@@ -100,9 +102,9 @@ choose_target() {
     printf '%s|%s|%s\n' "${existing}" "false" "child_exists"
     return 0
   fi
-  log::info "Parent has children; creating a child folder | parent='${parent}' children='${children_count}' name='${name}' dry_run='${dry_run}'"
-  folder_id="$(create_child "${parent}" "${name}" "${dry_run}" "${work}/create.json")" || return 1
-  if [[ "${dry_run}" == "true" ]]; then
+  log::info "Parent has children; creating a child folder | parent='${parent}' children='${children_count}' name='${name}'"
+  folder_id="$(create_child "${parent}" "${name}" "${work}/create.json")" || return 1
+  if is_dry_run; then
     printf '%s|%s|%s\n' "" "would_create" "child_missing"
     return 0
   fi
@@ -116,16 +118,18 @@ help() {
 ${c_green}drive_subfolder${c_rst} — choose or create the Drive folder a scaffold's Docs are published into
 
 ${c_bold}Usage:${c_rst}
-  zsh $HOME/.claude/skills/ari-hemingway--structure-scaffold/bin/drive_subfolder.zsh --parent ID_OR_URL --name NAME [--dry-run]
+  zsh $HOME/.claude/skills/ari-hemingway--structure-scaffold/bin/drive_subfolder.zsh --parent ID_OR_URL --name NAME [--execute] [--dry-run]
 
 ${c_bold}Options:${c_rst}
   --parent ID_OR_URL  The user's folder: a Drive id or drive.google.com/drive/folders URL (required)
   --name NAME         Child folder name, normally the topic (required)
-  --dry-run           Validate with Drive; create nothing
+  --execute           Create the child folder; without it this is a dry run that Drive validates
+  --dry-run           Explicit no-op: a dry run, and it wins over --execute
   -h, --help          Show this help
 
 ${c_bold}Output:${c_rst} key=value lines. folder_id is the parent when it is empty, else the child named NAME
-(reused if present, created otherwise; empty under --dry-run when it would be created).
+(reused if present, created otherwise; empty in a dry run when it would be created).
+dry_run=1|0 says which run this was.
 EOH
 }
 
@@ -135,11 +139,13 @@ main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local parent="" name="" dry_run=false
+  local -a args=("${@}")
+  local parent="" name="" execute=false dry_run=false
   while (( $# > 0 )); do case "${1}" in
     -h|--help)  help; return 0 ;;
     --parent)   parent="${2:?--parent requires a value}"; shift 2 ;;
     --name)     name="${2:?--name requires a value}"; shift 2 ;;
+    --execute)  execute=true; shift ;;
     --dry-run)  dry_run=true; shift ;;
     -*)         log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)          log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
@@ -153,15 +159,21 @@ main() {
   [[ -n "${name}" ]] || { log::err "Missing --name"; help; return 1; }
 
   # === LOGIC ===
+  resolve_dry_run "${execute}" "${dry_run}" || return 1
   local work parent_name folder_id created reason folder_name children_count
   work="$(mktemp -d)"
   parent_name="$(drive::resolve_folder "${parent}" "${work}/parent.json")" || return 1
   list_children "${parent}" "${work}/children.json" || return 1
   children_count="$(jq '.files | length' "${work}/children.json")"
-  IFS='|' read -r folder_id created reason < <(choose_target "${parent}" "${name}" "${dry_run}" "${work}/children.json" "${work}")
+  IFS='|' read -r folder_id created reason < <(choose_target "${parent}" "${name}" "${work}/children.json" "${work}")
   [[ -n "${reason}" ]] || { log::err "Could not choose a target folder | parent='${parent}' name='${name}'"; return 1; }
+  if ! is_dry_run && [[ -z "${folder_id}" ]]; then
+    log::err "Drive created no folder id | parent='${parent}' name='${name}' reason='${reason}'"
+    return 1
+  fi
   folder_name="${name}"
   [[ "${reason}" == "parent_empty" ]] && folder_name="${parent_name}"
+  [[ "${created}" == "false" ]] || (( MUT_COUNT += 1 ))
   log::ok "Target folder chosen | folder_id='${folder_id}' folder_name='${folder_name}' created='${created}' reason='${reason}'"
 
   cat <<EOF
@@ -172,7 +184,9 @@ folder_id=${folder_id}
 folder_name=${folder_name}
 created=${created}
 reason=${reason}
+dry_run=${DRY_RUN}
 EOF
+  report_dry_run "${SCRIPT_PATH}" "${args[@]}"
 }
 
 main "${@}"
