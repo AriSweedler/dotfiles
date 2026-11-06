@@ -293,11 +293,11 @@ Learn it by watching: `zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/await
 
 ## Investigation folders
 
-Scripts that stage runtime state under `/tmp` MUST use the shared helper, not hand-roll the timestamped path. It creates `<root>/<skill>/<UTC-timestamp>/` (so concurrent sessions never clash) and prints the path. Logging stays with the caller.
+Scripts that stage runtime state under `/tmp` MUST use the shared helper, not hand-roll the timestamped path. It creates `<root>/<skill>/<UTC-timestamp>/` and prints the path. A folder that already exists is never reused: the next call gets `<UTC-timestamp>-2`, then `-3`, e.g. `/tmp/skill-update/foo/20261106T194643Z`, `…Z-2`, `…Z-3`. Treat the leaf as opaque: never glob for it or add your own suffix loop. On failure it prints one `[ERROR]` line and returns 1, so check the call. Logging otherwise stays with the caller.
 
 ```zsh
 source "${SKILLS_DIR}/ari-skill-shellscripts/lib/investigation_folder.zsh"
-dir="$(mk_investigation_dir /tmp/skill-update "${skill}")"
+dir="$(mk_investigation_dir /tmp/skill-update "${skill}")" || exit 1
 ```
 
 ## Prerequisites
@@ -319,12 +319,13 @@ Four phases: **parse → massage → validate → logic.**
 
 ## Validation
 
-**Before committing a change to this skill or to any skill's zsh scripts, you MUST syntax-check each changed script and run both test files.** Each exits 1 on a failure:
+**Before committing a change to this skill or to any skill's zsh scripts, you MUST syntax-check each changed script and run each test file.** Each exits 1 on a failure:
 
 ```zsh
 zsh -n <each changed script>
 zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/conventions.test.zsh --skill <each skill you changed>
 zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/await.test.zsh
+zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/investigation_folder.test.zsh
 ```
 
 `conventions.test.zsh` proves the rules above in a throwaway zsh (`lib/dry_run.zsh` and `bin/example` among them), then lints zsh scripts; without `--skill` it lints every skill. One line per finding, `FAIL  <file>:<line>  <what and the fix>`, then `summary  pass=N fail=N warn=N`:
