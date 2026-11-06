@@ -14,7 +14,7 @@ readonly _ARI_SKILL_UPDATE_BLOBS_ZSH=1
 zmodload -F zsh/stat b:zstat
 zmodload -F zsh/datetime p:EPOCHSECONDS
 
-readonly INVESTIGATION_ROOT="/tmp/skill-update"
+readonly INVESTIGATION_ROOT="${SKILL_UPDATE_ROOT:-/tmp/skill-update}"
 # A sibling driver's folder counts as live when a file in it is newer than both
 # the skill's last commit and this window.
 readonly LIVE_WINDOW_SECONDS=$(( 24 * 3600 ))

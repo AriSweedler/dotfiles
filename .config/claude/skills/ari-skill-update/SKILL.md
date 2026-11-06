@@ -62,6 +62,9 @@ Edit a skill, review it, and end with one *proposal* that a single `yes` commits
         Commit it?"
   ```
 - **MUST confirm before committing, and only after review.** The `yes` that commits answers a diff Ari can open at the proposal path named in that same message. Only the main thread writes **Commit?**, never a driver, a fork or any subagent, and only once **Review** has settled both gates on the files as they stand: the company-information reviewer's latest pass returned `none`, or it was skipped on the personal laptop, or the skill is private (a drafted move to ldf included); and `/ari-skill-review` has run, or was skipped for a small change or for `skip review` (which skips the quality review only). A **Commit?** before that is a defect. Unqualified agreement ("yes", "do it", "lgtm"), or a scope the **Commit?** line offered ("yes, no adoptions"), commits; conditional agreement ("yes, but change X") is an edit request: make it and re-propose. Never commit what the named proposal file does not show: the commit lands the blobs the proposal recorded and nothing else, never through `git add <skill dir>` or `commit -- <path>`, which take the working tree as it stands at commit time (**Commit to dotfiles**).
+- **One driver per skill: the claim.** init.zsh takes the skill's claim for your investigation folder; record_blobs.zsh renews it and, with commit_blobs.zsh, refuses while another live driver holds it. Only commit_blobs.zsh releases it. A claim is stale when its owner's folder is gone, or nothing in it (nor the claim itself) changed for two hours (7200 s, `SKILL_UPDATE_CLAIM_STALE_SECONDS`); init.zsh takes a stale claim itself. The claim also ends, with no commit, when Ari answers `no` or a driver reports `no change` or `stopped`: the main thread then puts `takeover` in the next brief's Flags for that skill, and the driver passes `--takeover`.
+  - init.zsh refusing with `Another driver holds this skill` is not an error to retry or route around: the report's first line is `Proposal: none — skill claimed by <owner folder>` (the `owner=` value of the log line). The main thread then looks for a driver it spawned for that skill in this conversation that has not reported `committed`: found → `SendMessage` it the change (`second line, same skill: <change>; fold it in and re-propose`); not found → one line, `<skill> is claimed by <owner folder>, not a driver of this session; held`, and nothing spawned. `takeover` otherwise only on Ari's word that the holder is dead.
+  - After `claim=taken-stale` or `taken-over` the old owner counts as stopped: if its folder shows in `concurrent=`, the Open question is `assumed: it stopped; its edits stay unless the Change reverts them`, not a hold. Otherwise `claim=` says no other live driver exists, so `concurrent=` and `foreign=` mean an older driver's leftovers or a by-hand edit (**Another session may be editing the skill**): the claim does not cover a session that edits or commits the skill's files by hand, and the commit guard keeps those edits out of a proposal.
 - **Another session may be editing the skill.** Re-read each file right before you edit it, and never revert a change you did not make. Its signs: `concurrent=` not empty (init.zsh, record_blobs.zsh), a file changed since your last Read (the Edit tool refuses it, or a re-read differs), or record_blobs.zsh's `foreign=` naming a changed file you did not edit. Each becomes an Open question: `Concurrent edit: <files> (<folder> | unknown session)? assumed: hold Commit? until that session lands or stops, then re-propose.`
 - **Audit every documented invocation for the `$HOME` form.** On every edit — including prose-only edits — scan the skill for any line that runs a skill script. Each MUST use `$HOME` (never `~`), have no leading `cd`, and not be piped (redirect to a file if you need the output). Fix every non-conforming invocation you find, even ones unrelated to the requested change.
   ```
@@ -78,6 +81,7 @@ Edit a skill, review it, and end with one *proposal* that a single `yes` commits
 ## Investigation folder
 
 ```
+/tmp/skill-update/{skill-name}/.claim            # symlink to the owning driver's folder below
 /tmp/skill-update/{skill-name}/{timestamp}/     # one per invocation
 ├── scratchpad.md
 ├── feedback.md          # harness cause only: product-feedback draft, never sent
@@ -110,6 +114,8 @@ The setup script pre-fills **Skill**; fill **Purpose** at "Read the skill", **Go
 - `bin/record_blobs.zsh` — run with `--execute` at **Report the proposal**: records each changed file's blob, writes their diff and the Commit command.
 - `bin/commit_blobs.zsh` — the Commit command **Commit to dotfiles** runs, with `--execute` as record_blobs.zsh wrote it: commits exactly the recorded blobs, or refuses. Without `--execute` it checks and stages privately, and commits nothing.
 - `lib/blobs.zsh` — shared by the three: the skill's repo, its entries against HEAD, live sibling drivers.
+- `lib/claim.zsh` — shared by the three: the per-skill claim, a symlink `<investigation root>/<skill>/.claim` to the owner's folder.
+- `tests/claim.test.zsh` — run it after any edit to these scripts: `zsh $HOME/.claude/skills/ari-skill-update/tests/claim.test.zsh`.
 
 ## Workflow
 
@@ -148,7 +154,7 @@ Skill: <skill>. Change: <the settled change in one sentence>.
 Origin: <mistake | request>.
 Evidence: "<Ari's words, or the mistake line, quoted>" — <the gap: what was done instead, or what the skill should have done>.
 Cause: <the line from **Diagnose the cause first**; the driver checks it against the skill>.
-Flags: <skip review | new | none>.
+Flags: <skip review | new | takeover | none, comma-separated>.
 Settled: <what the conversation decided the text must say, or none>.
 ````
 
@@ -199,16 +205,18 @@ skill_dir=$HOME/.claude/skills/<name>
 investigation_dir=/tmp/skill-update/<name>/<timestamp>
 scratchpad=/tmp/skill-update/<name>/<timestamp>/scratchpad.md
 proposal=/tmp/skill-update/<name>/<timestamp>/proposal.md
+claim=taken         # taken / taken-stale / taken-over: this folder owns the skill
 concurrent=         # this skill's other live investigation folders, comma-separated (**Another session may be editing the skill**)
 === start FILES ===
 <one absolute path per line>
 === end FILES ===
 ```
 
-Add `--new` only when Flags says `new` (`inline`: the user said the skill is brand-new). `state` `unlinked` or `ignored`, or `is_new=true`: pick its tier now (`/ari-dotfiles` Placement rules), record `**Tier picked**` in the scratchpad (an Open question when the rule does not decide); **Commit to dotfiles** adopts it. Any other non-linked state (`missing`, `dangling`, `shadowed`, `conflict`, `foreign`) → stop: the registry's fix comes first (`/ari-dotfiles-skill-registry` § See where things stand), as the first Open question. On a non-zero exit, do not edit; no folder exists, so the report's first line is `Proposal: none — init.zsh failed: <stderr's last line>`, and:
+Add `--new` only when Flags says `new` (`inline`: the user said the skill is brand-new), and `--takeover` only when Flags says `takeover`. `state` `unlinked` or `ignored`, or `is_new=true`: pick its tier now (`/ari-dotfiles` Placement rules), record `**Tier picked**` in the scratchpad (an Open question when the rule does not decide); **Commit to dotfiles** adopts it. Any other non-linked state (`missing`, `dangling`, `shadowed`, `conflict`, `foreign`) → stop: the registry's fix comes first (`/ari-dotfiles-skill-registry` § See where things stand), as the first Open question. On a non-zero exit, do not edit; no folder exists, so the report's first line is `Proposal: none — init.zsh failed: <stderr's last line>` (a claim refusal is the exception below), and:
 
 - no such skill → stop; the name is wrong, or the skill is brand-new and the user has not said so.
 - `--new` but the skill exists → re-run without it.
+- `Another driver holds this skill` → stop; the report is `Proposal: none — skill claimed by <owner folder>` (**One driver per skill: the claim**).
 - anything else → the script's stderr verbatim, and stop.
 
 ### Read the skill
@@ -274,7 +282,7 @@ zsh $HOME/.claude/skills/ari-skill-update/bin/record_blobs.zsh --skill <skill-na
 - **Flags.** One `--edited` per **Files edited** entry, absolute (`$HOME/.claude/skills/<skill-name>/SKILL.md`, or the tier's real path) or relative to the skill directory (`bin/init.zsh`); an adoption passes none. `--tier` and `--source <source>` as init.zsh printed them. A skill no tier holds yet takes `--adopt`, the tier picked, and the message `claude: adopt the <skill-name> skill into the <shared | local> tier`. A public tier's message says what changed, never what leaked.
 - **What it writes.** With `--execute`, each changed file's blob to the tier's object store, then `<skill>.diff.patch` (the diff of exactly those blobs, untracked files included) and `<skill>.commit.md` (the Commit command that lands them, blob by blob; `none — empty diff` when nothing changed). The Commit command ends in `--execute`: it runs only after `yes`.
 - **What it prints.** Those paths; `files=`, `insertions=` and `deletions=` (the report's Diff counts); `unmatched_edited=`, an `--edited` file with no change against HEAD (a reverted edit: drop it from **Files edited**; else fix the path and re-run); `foreign=` and `concurrent=` (**Another session may be editing the skill**); `dry_run=1|0` (a `1` means nothing was written: add `--execute`; if it was already there, an inherited `DRY_RUN` forced it, so unset that and re-run).
-- **Exit 1.** A log naming `moved_files=` means a file changed while it recorded: re-run once; a second failure stops the run with that as the first Open question. Any other exit 1 names the flag at fault (an `--edited` that is not a file in the skill directory, a `--tier`/`--source` that does not hold the skill): fix it and re-run; it is never an Open question.
+- **Exit 1.** A log naming `moved_files=` means a file changed while it recorded: re-run once; a second failure stops the run with that as the first Open question. A log naming `Another driver holds this skill` stops the run with `Proposal: none — skill claimed by <owner folder>`, never `--takeover`. Any other exit 1 names the flag at fault (an `--edited` that is not a file in the skill directory, a `--tier`/`--source` that does not hold the skill): fix it and re-run; it is never an Open question.
 - **Assemble.** Only after the print shows `dry_run=0`; a dry run leaves the previous run's diff and command files in place. Write each prose part to its own file in the investigation folder and join them in document order with one `cat`, e.g. `cat head.md <skill>.diff.patch mid.md <skill>.commit.md adopt-<other>.md <other>.commit.md tail.md > <proposal>`. **The file's diff MUST be complete: every hunk, every file, no `…`, no `(N lines omitted)`;** an elided diff is not a proposal.
 
 The proposal, in the file:
@@ -307,7 +315,7 @@ Not carried: <recommendation> — <rule name | reason>; …
 The report, the final message — at most 12 lines, each field one line; a list field holds up to 3 items, `; `-separated, and more become `<n> — see proposal`:
 
 ````markdown
-Proposal: <proposal path | none — init.zsh failed: <why>>
+Proposal: <proposal path | none — init.zsh failed: <why> | none — skill claimed by <owner folder>>
 <skill-name> — <what changes, one line | stopped at <step>: <why> | no change: <why>>
 Since last: <what changed; re-proposals only>
 Tier: <as in the proposal>
@@ -372,6 +380,7 @@ Each block is the `commit_blobs.zsh --execute` call record_blobs.zsh wrote, nami
 
 - HEAD changed the skill since the proposal, or the working tree no longer yields the proposed blobs (another session or Ari edited a file) → it commits nothing and prints `result=refused` and `mismatched=<files>`. Stop there: name the files, send the driver `re-propose`, and NEVER commit another way (`git add`, `commit -- <path>`, a hand-edited command). A refusal is never a warning to commit past.
 - Otherwise it stages exactly those blobs in a private index (the shared index, and whatever another session staged in it, stay out of the commit), commits it with the tier's hooks, points the shared index at the committed blobs, and prints `result=committed` (`already-committed` on a re-run) and `sha=`.
+- `result=refused` with `claim_holder=<folder>` → another live driver took the skill after the proposal: it commits nothing. Relay the line, send the driver `re-propose` (**Relay and commit**), and never rerun with `env -u DRY_RUN`.
 - Any other `result=`, `dry-run` included (an inherited `DRY_RUN` beats `--execute`), means nothing was committed: say so in one line, never report a commit without `sha=`, and offer the rerun with `env -u DRY_RUN` for the same block.
 
 Then the SHA per commit, and for a public tier "push is yours (`/ari-dotfiles`)"; for a submodule, Ari's `dotfiles push` pushes it and commits the pointer bump (`/ari-dotfiles` § Submodules). Pushing follows `/ari-dotfiles`'s Pushing rules; this skill never pushes. On any other failure, stop at that commit and say which landed (their SHAs); show the error, diagnose it, and propose the fix with the command that retries; never retry before a `yes`. The edits stay local whatever the answer.

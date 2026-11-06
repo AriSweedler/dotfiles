@@ -6,6 +6,8 @@
 set -euo pipefail
 
 readonly SCRIPT_DIR="${0:A:h}"
+INIT_DONE=false
+INIT_CLAIM_SKILL="" INIT_CLAIM_DIR=""
 readonly SKILLS_DIR="${HOME}/.claude/skills"
 readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
 if [[ ! -r "${LIB_LOGGING}" ]]; then
@@ -28,6 +30,7 @@ if [[ ! -r "${LIB_REGISTRY}" ]]; then
 fi
 source "${LIB_REGISTRY}"
 source "${SCRIPT_DIR:h}/lib/blobs.zsh"
+source "${SCRIPT_DIR:h}/lib/claim.zsh"
 
 # --- Prerequisites ---
 
@@ -121,6 +124,39 @@ check_skill_state() {
   log::warn "Skill is not adopted into a dotfiles tier | skill='${skill}' state='${state}' hint='draft the adopt command in the proposal; it runs only on yes'"
 }
 
+#######################################
+# EXIT trap: a run that dies after taking the claim gives it back, so its own
+# retry is not blocked by it.
+# Globals: INIT_DONE, INIT_CLAIM_SKILL, INIT_CLAIM_DIR
+# Arguments: None
+#######################################
+release_unless_set_up() {
+  [[ "${INIT_DONE}" == "true" ]] && return 0
+  claim_release "${INIT_CLAIM_SKILL}" "${INIT_CLAIM_DIR}"
+}
+
+#######################################
+# Refuse, before anything is created, when another live driver holds the skill.
+# Globals: None
+# Arguments:
+#   $1 - skill name
+#   $2 - takeover (true|false)
+# Returns: 1 when a live driver holds the claim and takeover is false
+#######################################
+require_unclaimed() {
+  local skill="${1}" takeover="${2}" blocker
+  blocker="$(claim_blocker "${skill}" "")"
+  if [[ -z "${blocker}" ]]; then
+    return 0
+  fi
+  if [[ "${takeover}" == "true" ]]; then
+    log::warn "Taking the skill over from a live driver | skill='${skill}' owner='${blocker}'"
+    return 0
+  fi
+  log::err "Another driver holds this skill | skill='${skill}' owner='${blocker}' hint='SendMessage the change to that driver; --takeover only when Ari says it is dead; a claim goes stale after ${CLAIM_STALE_SECONDS}s idle'"
+  return 1
+}
+
 # --- Help ---
 
 help() {
@@ -128,16 +164,21 @@ help() {
 ${c_green}init${c_rst} — set up an /ari-skill-update session (check the skill, make investigation folder, list files)
 
 ${c_bold}Usage:${c_rst}
-  zsh \$HOME/.claude/skills/ari-skill-update/bin/init.zsh --skill <name> [--new]
+  zsh \$HOME/.claude/skills/ari-skill-update/bin/init.zsh --skill <name> [--new] [--takeover]
 
 ${c_bold}Options:${c_rst}
   --skill NAME   Skill to edit (required); a path under \$HOME/.claude/skills/ or a trailing slash is accepted
   --new          Brand-new skill — it must not exist yet
+  --takeover     Take the skill's claim from a live driver (only when Ari says that driver is dead)
   -h, --help     Show this help
 
 ${c_bold}Output:${c_rst}
   key=value lines (skill, is_new, state, tier, source, skill_dir, investigation_dir,
-  scratchpad, proposal, concurrent) plus a FILES section listing the skill's files to read.
+  scratchpad, proposal, claim, concurrent) plus a FILES section listing the skill's files to read.
+  claim is taken, renewed, taken-stale or taken-over: this folder now owns the skill. Another live
+  driver's claim refuses (exit 1, nothing created) and names its folder: send it the change by
+  SendMessage, or pass --takeover. A claim is stale after ${CLAIM_STALE_SECONDS}s with no change in its
+  owner's folder; commit_blobs.zsh releases it.
   concurrent lists, comma-separated, this skill's other investigation folders with a
   file newer than its last commit and the last 24 hours.
   Creates the investigation folder and a pre-filled scratchpad; proposal is the
@@ -153,11 +194,12 @@ main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local raw_skill="" is_new=false
+  local raw_skill="" is_new=false takeover=false
   while (( $# > 0 )); do case "${1}" in
     -h|--help) help; return 0 ;;
     --skill)   raw_skill="${2:?--skill requires a value}"; shift 2 ;;
     --new)     is_new=true; shift ;;
+    --takeover) takeover=true; shift ;;
     -*)        log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)         log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
   esac; done
@@ -197,8 +239,23 @@ main() {
   purpose="$(read_frontmatter_description "${skill_md}")"
   [[ -n "${purpose}" ]] || purpose="<no single-line description field in the frontmatter — synthesize from the heading>"
 
+  require_unclaimed "${skill}" "${takeover}" || return 1
+
   local inv_dir scratchpad proposal
   inv_dir="$(mk_investigation_dir "${INVESTIGATION_ROOT}" "${skill}")"
+  local claim
+  claim="$(claim_take "${skill}" "${inv_dir}" "${takeover}")" || {
+    rmdir "${inv_dir}" 2>/dev/null || true
+    log::err "Another driver took the skill first | skill='${skill}' claim='${claim}'"
+    return 1
+  }
+  if [[ "${claim}" == "renewed" ]]; then
+    log::err "Another driver started this second and shares the investigation folder | skill='${skill}' investigation_dir='${inv_dir}' hint='re-run'"
+    return 1
+  fi
+  INIT_CLAIM_SKILL="${skill}" INIT_CLAIM_DIR="${inv_dir}"
+  trap release_unless_set_up EXIT
+  log::info "Claimed the skill | skill='${skill}' claim='${claim}' investigation_dir='${inv_dir}'"
   scratchpad="${inv_dir}/scratchpad.md"
   proposal="${inv_dir}/proposal.md"
 
@@ -235,6 +292,7 @@ EOF
   fi
   log::info "Enumerated files | skill='${skill}' count='${file_count}'"
 
+  INIT_DONE=true
   cat <<EOF
 skill=${skill}
 is_new=${is_new}
@@ -245,6 +303,7 @@ skill_dir=${skill_dir}
 investigation_dir=${inv_dir}
 scratchpad=${scratchpad}
 proposal=${proposal}
+claim=${claim}
 concurrent=${concurrent}
 EOF
   echo "=== start FILES ==="

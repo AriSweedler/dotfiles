@@ -23,6 +23,7 @@ if [[ ! -r "${LIB_REGISTRY}" ]]; then
 fi
 source "${LIB_REGISTRY}"
 source "${SCRIPT_DIR:h}/lib/blobs.zsh"
+source "${SCRIPT_DIR:h}/lib/claim.zsh"
 
 # --- Prerequisites ---
 
@@ -116,6 +117,43 @@ foreign_paths() {
 }
 
 #######################################
+# Hold the skill's claim for this investigation folder: take it under
+# --execute (a dry run only checks), refuse when another live driver holds it.
+# Prints how it stands: taken, renewed, taken-stale, or in a dry run would-take
+# and would-renew.
+# Globals: None
+# Arguments:
+#   $1 - skill name
+#   $2 - investigation folder
+# Returns: 1 when another live driver holds the claim
+#######################################
+hold_claim() {
+  local skill="${1}" investigation_dir="${2}" blocker
+  blocker="$(claim_blocker "${skill}" "${investigation_dir}")"
+  if [[ -n "${blocker}" ]]; then
+    log::err "Another driver holds this skill; nothing recorded | skill='${skill}' owner='${blocker}' hint='SendMessage the change to that driver, or list it under Open questions'"
+    return 1
+  fi
+  if is_dry_run; then
+    local owner
+    owner="$(claim_owner "${skill}")"
+    if [[ -n "${owner}" && "${owner:A}" == "${investigation_dir:A}" ]]; then
+      print -r -- would-renew
+      return 0
+    fi
+    log::info "would take | what='the skill claim' skill='${skill}'"
+    print -r -- would-take
+    return 0
+  fi
+  local result
+  result="$(claim_take "${skill}" "${investigation_dir}" false)" || {
+    log::err "Could not take the skill claim; nothing recorded | skill='${skill}' result='${result}'"
+    return 1
+  }
+  print -r -- "${result}"
+}
+
+#######################################
 # Print the diff of the recorded files: per file `git diff --no-index` for an
 # adoption; else the tier's `diff HEAD` plus each untracked file, which
 # `diff HEAD` omits.
@@ -205,10 +243,12 @@ ${c_bold}Options:${c_rst}
 
 ${c_bold}Output:${c_rst}
   key=value lines: diff, command, files, insertions, deletions, foreign, unmatched_edited
-  (--edited files with no change against HEAD), concurrent, dry_run (1 | 0). A dry run hashes
-  and diffs but writes no blob and no file, and logs the exact rerun with --execute.
-  Refuses (exit 1) when an --edited path is not a file in the skill dir, when --tier/--source
-  do not hold the skill, or when a file changes while it records (moved_files= in the log).
+  (--edited files with no change against HEAD), concurrent, claim (taken | renewed | taken-stale
+  | would-take | would-renew in a dry run), dry_run (1 | 0). A dry run hashes and diffs but writes no blob and no
+  file, takes no claim, and logs the exact rerun with --execute.
+  Refuses (exit 1) when another live driver holds the skill's claim, when an --edited path is not
+  a file in the skill dir, when --tier/--source do not hold the skill, or when a file changes
+  while it records (moved_files= in the log).
 EOF
 }
 
@@ -293,6 +333,8 @@ main() {
   fi
 
   # === LOGIC ===
+  local claim
+  claim="$(hold_claim "${skill}" "${investigation_dir}")" || return 1
   local skill_rel
   skill_rel="$(repo_skill_rel "${tier}" "${source}" "${skill}")"
   local diff_out="${investigation_dir}/${skill}.diff.patch" command_out="${investigation_dir}/${skill}.commit.md"
@@ -317,7 +359,7 @@ main() {
   local -a leading=(--skill "${skill}" --tier "${tier}")
   [[ -n "${source}" ]] && leading+=(--source "${source}")
   [[ "${adopt}" == "true" ]] && leading+=(--adopt)
-  leading+=(--base-tree "${base}" --message "${message}")
+  leading+=(--base-tree "${base}" --claim-dir "${investigation_dir}" --message "${message}")
   write_command "${before}" "${leading[@]}" | write_mut "${command_out}"
   print -r -- "${diff_text}" | write_mut "${diff_out}"
 
@@ -347,6 +389,7 @@ deletions=${deletions}
 foreign=${(j:,:)foreign}
 unmatched_edited=${(j:,:)unmatched}
 concurrent=${concurrent}
+claim=${claim}
 dry_run=${DRY_RUN}
 EOF
   report_dry_run "${SCRIPT_PATH}" "${ARGS[@]}"

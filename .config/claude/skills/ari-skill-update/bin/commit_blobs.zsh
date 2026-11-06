@@ -25,6 +25,7 @@ if [[ ! -r "${LIB_REGISTRY}" ]]; then
 fi
 source "${LIB_REGISTRY}"
 source "${SCRIPT_DIR:h}/lib/blobs.zsh"
+source "${SCRIPT_DIR:h}/lib/claim.zsh"
 
 readonly ADOPT="${SKILLS_DIR}/ari-dotfiles-skill-registry/bin/adopt"
 
@@ -258,6 +259,44 @@ sync_shared_index() {
   done
 }
 
+#######################################
+# Refuse, committing nothing, while another live driver holds the skill's claim.
+# Without --claim-dir (an older Commit command) there is no claim to check.
+# Globals: None
+# Arguments:
+#   $1 - skill name
+#   $2 - claim-dir (empty when not given)
+# Returns: 1 when another live driver holds the claim
+#######################################
+require_claim_not_held_by_other() {
+  local skill="${1}" claim_dir="${2}" blocker
+  [[ -n "${claim_dir}" ]] || return 0
+  blocker="$(claim_blocker "${skill}" "${claim_dir}")"
+  [[ -n "${blocker}" ]] || return 0
+  log::err "Another driver holds this skill; nothing committed | skill='${skill}' owner='${blocker}' hint='send the driver re-propose once that driver lands or stops'"
+  print -r -- "result=refused"
+  print -r -- "claim_holder=${blocker}"
+  return 1
+}
+
+#######################################
+# Release the claim after a commit; a dry run keeps it.
+# Globals: None
+# Arguments:
+#   $1 - skill name
+#   $2 - claim-dir (empty when not given)
+#######################################
+release_claim() {
+  local skill="${1}" claim_dir="${2}"
+  [[ -n "${claim_dir}" ]] || return 0
+  if is_dry_run; then
+    log::info "would release | what='the skill claim' skill='${skill}'"
+    return 0
+  fi
+  claim_release "${skill}" "${claim_dir}"
+  log::info "Released the skill claim | skill='${skill}'"
+}
+
 # --- Help ---
 
 help() {
@@ -265,13 +304,15 @@ help() {
 ${c_green}commit_blobs${c_rst} — commit exactly the blobs a proposal recorded, or refuse
 
 ${c_bold}Usage:${c_rst}
-  zsh \$HOME/.claude/skills/ari-skill-update/bin/commit_blobs.zsh --skill <name> --tier <df|ldf> --base-tree <tree|none> --message <msg> [--source submodule:<path>] [--adopt] [--blob <mode>:<blob>:<path>]... [--delete <path>]... [--execute] [--dry-run]
+  zsh \$HOME/.claude/skills/ari-skill-update/bin/commit_blobs.zsh --skill <name> --tier <df|ldf> --base-tree <tree|none> --message <msg> [--source submodule:<path>] [--claim-dir <dir>] [--adopt] [--blob <mode>:<blob>:<path>]... [--delete <path>]... [--execute] [--dry-run]
 
 ${c_bold}Options:${c_rst}
   --skill NAME         Skill to commit (required)
   --tier TIER          df or ldf (required)
   --source SOURCE      submodule:<path> when a submodule's repo versions the skill
   --base-tree TREE     HEAD's tree at the skill dir when the proposal was recorded, or none (required)
+  --claim-dir DIR      The investigation folder that owns the skill's claim (record_blobs.zsh writes it):
+                       refuses while another live driver holds the claim, releases it once committed
   --message MSG        Commit message (required)
   --adopt              Adopt the skill into --tier first (registry adopt)
   --blob SPEC          <mode>:<blob>:<path relative to the skill dir>; repeat
@@ -286,7 +327,8 @@ ${c_bold}Output:${c_rst}
   key=value lines: result (committed | already-committed | dry-run | refused), sha, mismatched,
   dry_run (1 | 0). A dry run runs every check and stages in the private index; it adopts and
   commits nothing and logs the exact rerun with --execute.
-  Exit 1 on a refusal or an error; a refusal commits nothing.
+  Exit 1 on a refusal or an error; a refusal commits nothing. A claim held by another live driver
+  is a refusal (result=refused, claim_holder=<its folder>).
 
 ${c_bold}Environment:${c_rst}
   DRY_RUN              Set and not 0 (a parent's dry run): a dry run, --execute or not; 0 alone never acts
@@ -299,7 +341,7 @@ main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local skill="" tier="" source="" proposed_base="" message="" adopt=false execute=false dry_run_flag=false
+  local skill="" tier="" source="" proposed_base="" message="" claim_dir="" adopt=false execute=false dry_run_flag=false
   local -a specs=() deletes=()
   while (( $# > 0 )); do case "${1}" in
     -h|--help)   help; return 0 ;;
@@ -308,7 +350,8 @@ main() {
     --source)    source="${2?--source requires a value}"; shift 2 ;;
     --base-tree) proposed_base="${2:?--base-tree requires a value}"; shift 2 ;;
     --message)   message="${2:?--message requires a value}"; shift 2 ;;
-    --blob)      specs+=("${2:?--blob requires a value}"); shift 2 ;;
+    --claim-dir) claim_dir="${2:?--claim-dir requires a value}"; shift 2 ;;
+    --blob)     specs+=("${2:?--blob requires a value}"); shift 2 ;;
     --delete)    deletes+=("${2:?--delete requires a value}"); shift 2 ;;
     --adopt)     adopt=true; shift ;;
     --execute)   execute=true; shift ;;
@@ -361,6 +404,7 @@ main() {
   # === LOGIC ===
   local skill_rel
   skill_rel="$(repo_skill_rel "${tier}" "${source}" "${skill}")"
+  require_claim_not_held_by_other "${skill}" "${claim_dir}" || return 1
 
   local adopt_pending="${adopt}"
   [[ "${adopt}" == "true" && -L "${SKILLS_DIR}/${skill}" ]] && adopt_pending=false
@@ -369,6 +413,7 @@ main() {
     head="$(repo_git "${tier}" "${source}" rev-parse HEAD)"
     log::info "HEAD already holds the proposal's blobs | head='${head}'"
     sync_shared_index "${tier}" "${source}" "${skill_rel}" "${proposed}" "${head}~1"
+    release_claim "${skill}" "${claim_dir}"
     cat <<EOF
 result=already-committed
 sha=${head}
@@ -424,6 +469,7 @@ EOF
     return 1
   fi
   log::info "Committed exactly the proposal's blobs | sha='${sha}' skill='${skill}'"
+  release_claim "${skill}" "${claim_dir}"
 
   cat <<EOF
 result=committed
