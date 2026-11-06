@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The small steps: bob_neovim, claude, terminal_nerdfont, terminal_config, karabiner,
-# claude_notifications, dotfiles_jobs — each check's verdicts and the dry-run of each apply.
+# The small steps: bob_neovim, claude, terminal_nerdfont, terminal_config, home_strays,
+# karabiner, claude_notifications, dotfiles_jobs — each check's verdicts and the dry-run of each apply.
 set -u
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -153,6 +153,21 @@ assert_eq "after apply → ok" ok "$(status_of terminal_config)"
 assert_eq "reason option_is_meta" option_is_meta "$(reason_of terminal_config)"
 assert_contains "detail names the active profile" "$(step_get terminal_config .detail)" "active: Pro |"
 rm -f "${HOME}/Library/Preferences/com.apple.Terminal.plist"
+
+# ── home_strays ───────────────────────────────────────────────────────────────
+check_step home_strays
+assert_eq "no stray shell files → ok" ok "$(status_of home_strays)"
+printf '. "$HOME/.cargo/env"\n' > "${HOME}/.profile"
+: > "${HOME}/.bash_aliases"
+check_step home_strays
+assert_eq "stray shell files → fail" fail "$(status_of home_strays)"
+assert_eq "reason stray_files" stray_files "$(reason_of home_strays)"
+assert_eq "stray_files is manual" true "$(step_get home_strays .manual)"
+assert_contains "detail names both" "$(step_get home_strays .detail)" "~/.profile, ~/.bash_aliases"
+assert_contains "the fix removes them after porting" "$(step_get home_strays .fix)" "then: rm ~/.profile ~/.bash_aliases"
+dry_step home_strays
+assert_file "a dry run leaves them" "${HOME}/.profile"
+rm -f "${HOME}/.profile" "${HOME}/.bash_aliases"
 
 # ── karabiner ─────────────────────────────────────────────────────────────────
 KJ="${HOME}/.config/karabiner/karabiner.json"
