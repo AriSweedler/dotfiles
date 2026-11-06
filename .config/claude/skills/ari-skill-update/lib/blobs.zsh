@@ -220,3 +220,114 @@ mismatched_paths() {
   { diff <(print -r -- "${expected}") <(print -r -- "${actual}") || true; } \
     | awk '/^[<>] / { sub(/^[<>] [^ ]+ [^ ]+ /, ""); print }' | sort -u | paste -sd, -
 }
+
+# --- Shared files outside a skill directory ---
+# A proposal may also carry files under a tier's shared roots (the tier's
+# `<skills root>/../lib`, ~/.config/claude/lib for df). Their entry lines name
+# the path as `@shared:<path relative to the repo root>` and are guarded like a
+# skill file: the working tree must still yield the blob, and HEAD must still
+# hold the blob the proposal was diffed against.
+
+readonly SHARED_ENTRY_PREFIX="@shared:"
+
+#######################################
+# Print the tier's allowed shared roots, repo-relative, one per line. Only a tier
+# whose skills root is named `skills` has a sibling `lib`; the local tier has no
+# shared directory, so it allows none.
+# Globals: TIER_ROOTS, TIER_WORKTREES
+# Arguments:
+#   $1 - tier
+#######################################
+shared_roots() {
+  local tier="${1}" root="${TIER_ROOTS[${1}]}"
+  [[ "${root:t}" == skills ]] || return 0
+  local lib="${root:h}/lib"
+  print -r -- "${lib#${TIER_WORKTREES[${tier}]}/}"
+}
+
+#######################################
+# True (0) when a repo-relative path names something under an allowed shared root.
+# Arguments:
+#   $1 - tier
+#   $2 - repo-relative path
+#######################################
+is_shared_path() {
+  local tier="${1}" rel="${2}" root
+  [[ -n "${rel}" && "${rel}" != (/*|*..*) ]] || return 1
+  for root in "${(@f)$(shared_roots "${tier}")}"; do
+    [[ -n "${root}" && "${rel}" == "${root}/"?* ]] && return 0
+  done
+  return 1
+}
+
+#######################################
+# Print the entry lines for each named shared path whose working tree differs
+# from HEAD; the path of a line is `@shared:<path>`.
+# Arguments:
+#   $1 - tier
+#   $2 - source
+#   $3 - write (true|false)
+#   $@ - repo-relative shared paths
+#######################################
+shared_entries() {
+  local tier="${1}" source="${2}" write="${3}"
+  shift 3
+  local root rel head_entry now
+  root="$(repo_root "${tier}" "${source}")"
+  for rel in "$@"; do
+    head_entry="$(repo_git "${tier}" "${source}" ls-tree HEAD -- "${rel}" 2>/dev/null | awk '{ print $1, $3 }' || true)"
+    if [[ ! -e "${root}/${rel}" && ! -L "${root}/${rel}" ]]; then
+      [[ -n "${head_entry}" ]] && print -r -- "deleted - ${SHARED_ENTRY_PREFIX}${rel}"
+      continue
+    fi
+    now="$(file_mode_blob "${tier}" "${source}" "${root}/${rel}" "${rel}" "${write}")"
+    [[ "${now}" == "${head_entry}" ]] || print -r -- "${now} ${SHARED_ENTRY_PREFIX}${rel}"
+  done
+}
+
+#######################################
+# Print the blob HEAD holds at a repo-relative path, or `none`.
+# Arguments:
+#   $1 - tier
+#   $2 - source
+#   $3 - repo-relative path
+#######################################
+head_blob() {
+  local blob
+  blob="$(repo_git "${1}" "${2}" rev-parse --verify -q "HEAD:${3}" 2>/dev/null || true)"
+  print -r -- "${blob:-none}"
+}
+
+#######################################
+# Print the repo-relative path an entry's path names: a shared path as it is,
+# anything else under the skill directory.
+# Arguments:
+#   $1 - skill directory, repo-relative
+#   $2 - the entry's path
+#######################################
+entry_repo_path() {
+  local skill_rel="${1}" file="${2}"
+  if [[ "${file}" == "${SHARED_ENTRY_PREFIX}"* ]]; then
+    print -r -- "${file#${SHARED_ENTRY_PREFIX}}"
+    return
+  fi
+  print -r -- "${skill_rel}/${file}"
+}
+
+#######################################
+# Print the repo-relative shared paths the entry lines on stdin name.
+# Arguments: None
+#######################################
+shared_paths_of() {
+  awk -v p="${SHARED_ENTRY_PREFIX}" 'NF { sub(/^[^ ]+ [^ ]+ /, ""); if (index($0, p) == 1) print substr($0, length(p) + 1) }'
+}
+
+#######################################
+# Print two blocks of entry lines as one block, sorted by path (sort -k3).
+# Arguments:
+#   $1 - entry lines
+#   $2 - more entry lines
+#######################################
+merge_entries() {
+  print -r -- "${1}"$'\n'"${2}" | awk 'NF' | sort -k3
+}

@@ -91,6 +91,50 @@ skill_relative_path() {
 }
 
 #######################################
+# Print a --shared value as a path relative to the tier's repo root, or nothing
+# when it is not a file (or a tracked, now-deleted file) under an allowed shared
+# root. Symlinks in the directory part resolve; the file's own name does not.
+# Arguments:
+#   $1 - tier
+#   $2 - source
+#   $3 - the --shared value (absolute, or relative to $HOME)
+#######################################
+shared_relative_path() {
+  local tier="${1}" source="${2}" file="${3}"
+  [[ "${file}" == /* ]] || file="${HOME}/${file}"
+  local real_root real_file
+  real_root="$(repo_root "${tier}" "${source}")"
+  real_root="${real_root:A}"
+  real_file="${file:h:A}/${file:t}"
+  [[ "${real_file}" == "${real_root}/"?* ]] || return 0
+  local rel="${real_file#${real_root}/}"
+  is_shared_path "${tier}" "${rel}" || return 0
+  print -r -- "${rel}"
+}
+
+#######################################
+# Print the diff of each shared path against HEAD, untracked files included.
+# Arguments:
+#   $1 - tier
+#   $2 - source
+#   $@ - repo-relative shared paths
+#######################################
+write_shared_diff() {
+  local tier="${1}" source="${2}"
+  shift 2
+  local rel exit_code
+  for rel in "$@"; do
+    if [[ "$(head_blob "${tier}" "${source}" "${rel}")" == none && -z "$(repo_git "${tier}" "${source}" ls-files --cached -- "${rel}")" ]]; then
+      exit_code=0
+      repo_git "${tier}" "${source}" diff --no-index -- /dev/null "${rel}" || exit_code=$?
+      (( exit_code <= 1 )) || { log::err "git diff --no-index failed | file='${rel}' exit_code='${exit_code}'"; return 1; }
+      continue
+    fi
+    repo_git "${tier}" "${source}" diff HEAD -- "${rel}"
+  done
+}
+
+#######################################
 # Print the path of each entry line on stdin; a path may hold spaces.
 # Arguments: None
 #######################################
@@ -189,24 +233,38 @@ write_diff() {
 # Print the fenced Commit command for the recorded entries (it acts: --execute, run only
 # after the user's yes), or `none — empty diff` when there are none.
 # Arguments:
-#   $1 - entries (newline-separated entry lines)
+#   $1 - tier
+#   $2 - source
+#   $3 - entries (newline-separated entry lines)
 #   $@ - the leading commit_blobs.zsh flags, unquoted words
 #######################################
 write_command() {
-  local entries="${1}"
-  shift
+  local tier="${1}" source="${2}" entries="${3}"
+  shift 3
   if [[ -z "${entries}" ]]; then
     log::info "No changed files; the Commit command is none"
     print -r -- 'none — empty diff'
     return
   fi
-  local line mode blob file spec
+  local line mode blob file spec head
   {
     print -r -- '```zsh'
     print -rn -- "zsh \$HOME/.claude/skills/ari-skill-update/bin/commit_blobs.zsh ${(j: :)${(q-)@}}"
     for line in "${(@f)entries}"; do
       [[ -n "${line}" ]] || continue
       read -r mode blob file <<< "${line}"
+      if [[ "${file}" == "${SHARED_ENTRY_PREFIX}"* ]]; then
+        file="${file#${SHARED_ENTRY_PREFIX}}"
+        head="$(head_blob "${tier}" "${source}" "${file}")"
+        if [[ "${mode}" == "deleted" ]]; then
+          spec="${head}:${file}"
+          print -rn -- " \\"$'\n'"  --shared-delete ${(q-)spec}"
+          continue
+        fi
+        spec="${head}:${mode}:${blob}:${file}"
+        print -rn -- " \\"$'\n'"  --shared ${(q-)spec}"
+        continue
+      fi
       if [[ "${mode}" == "deleted" ]]; then
         print -rn -- " \\"$'\n'"  --delete ${(q-)file}"
         continue
@@ -226,7 +284,7 @@ help() {
 ${c_green}record_blobs${c_rst} — record a proposal's blobs, write its diff and its Commit command
 
 ${c_bold}Usage:${c_rst}
-  zsh \$HOME/.claude/skills/ari-skill-update/bin/record_blobs.zsh --skill <name> --tier <df|ldf> --investigation-dir <dir> --message <msg> [--source submodule:<path>] [--adopt] [--edited <path>]... [--execute] [--dry-run]
+  zsh \$HOME/.claude/skills/ari-skill-update/bin/record_blobs.zsh --skill <name> --tier <df|ldf> --investigation-dir <dir> --message <msg> [--source submodule:<path>] [--adopt] [--edited <path>]... [--shared <path>]... [--execute] [--dry-run]
 
 ${c_bold}Options:${c_rst}
   --skill NAME              Skill whose files are recorded (required)
@@ -237,6 +295,9 @@ ${c_bold}Options:${c_rst}
   --adopt                   The skill is not in a tier yet (state unlinked or ignored, or new)
   --edited PATH             A file you edited: absolute, or relative to the skill dir; repeat.
                             A changed file not named is foreign (never under --adopt)
+  --shared PATH             A shared file outside the skill dir under the tier's lib root (~/.config/claude/lib for df;
+                            the local tier has none): absolute, or relative to $HOME; repeat. Recorded with the skill's
+                            blobs and committed in the same commit_blobs run; refused for a submodule skill
   --execute                 Write the blobs, the diff and the Commit command; without it the run is a dry run
   --dry-run                 The default made explicit; wins over --execute and exports DRY_RUN=1
   -h, --help                Show this help
@@ -259,7 +320,7 @@ main() {
 
   # === PARSE ===
   local skill="" tier="" source="" investigation_dir="" message="" adopt=false execute=false dry_run_flag=false
-  local -a edited=()
+  local -a edited=() shared=()
   while (( $# > 0 )); do case "${1}" in
     -h|--help)           help; return 0 ;;
     --skill)             skill="${2:?--skill requires a value}"; shift 2 ;;
@@ -268,6 +329,7 @@ main() {
     --investigation-dir) investigation_dir="${2:?--investigation-dir requires a value}"; shift 2 ;;
     --message)           message="${2:?--message requires a value}"; shift 2 ;;
     --edited)            edited+=("${2:?--edited requires a value}"); shift 2 ;;
+    --shared)            shared+=("${2:?--shared requires a value}"); shift 2 ;;
     --adopt)             adopt=true; shift ;;
     --execute)           execute=true; shift ;;
     --dry-run)           dry_run_flag=true; shift ;;
@@ -283,10 +345,16 @@ main() {
   local write=true
   is_dry_run && write=false
   local skill_dir="${SKILLS_DIR}/${skill}"
-  local file
+  local file i
   local -a edited_rel=()
   for file in "${edited[@]}"; do
     edited_rel+=("$(skill_relative_path "${skill_dir}" "${file}")")
+  done
+
+  local -a shared_rel=()
+  for (( i = 1; i <= ${#shared}; i += 1 )); do
+    [[ "${shared[i]}" == /* ]] || shared[i]="${HOME}/${shared[i]}"
+    shared_rel+=("$(shared_relative_path "${tier}" "${source}" "${shared[i]}")")
   done
 
   # === VALIDATE ===
@@ -312,7 +380,13 @@ main() {
     log::err "No investigation folder | investigation_dir='${investigation_dir}'"
     return 1
   fi
-  local i
+  for (( i = 1; i <= ${#shared}; i += 1 )); do
+    if [[ -z "${shared_rel[i]}" || -d "${shared[i]}" ]] || { [[ ! -e "${shared[i]}" && ! -L "${shared[i]}" ]] && [[ "$(head_blob "${tier}" "${source}" "${shared_rel[i]}")" == none ]]; }; then
+      log::err "--shared must name a file under an allowed shared root | shared='${shared[i]}' tier='${tier}' source='${source}' allowed_roots='${(j:, :)$(shared_roots "${tier}")}'"
+      return 1
+    fi
+  done
+  shared_rel=("${(@u)shared_rel}")
   for (( i = 1; i <= ${#edited}; i += 1 )); do
     if [[ -z "${edited_rel[i]}" || ( -d "${skill_dir}/${edited_rel[i]}" && ! -L "${skill_dir}/${edited_rel[i]}" ) ]]; then
       log::err "--edited must name a file in the skill directory | edited='${edited[i]}' skill_dir='${skill_dir:A}'"
@@ -341,11 +415,21 @@ main() {
 
   local before after
   before="$(entries_for "${tier}" "${source}" "${skill}" "${skill_rel}" "${adopt}" "${write}")"
+  local skill_before="${before}"
+  if (( ${#shared_rel} > 0 )); then
+    before="$(merge_entries "${before}" "$(shared_entries "${tier}" "${source}" "${write}" "${shared_rel[@]}")")"
+  fi
   (( MUT_COUNT += 1 ))
   is_dry_run && log::info "would write | what='blobs of the recorded files to the tier object store'"
   local diff_text
   diff_text="$(write_diff "${tier}" "${source}" "${skill}" "${skill_rel}" "${adopt}")"
   after="$(entries_for "${tier}" "${source}" "${skill}" "${skill_rel}" "${adopt}" false)"
+  if (( ${#shared_rel} > 0 )); then
+    local shared_diff
+    shared_diff="$(write_shared_diff "${tier}" "${source}" "${shared_rel[@]}")"
+    [[ -z "${shared_diff}" ]] || diff_text="${diff_text}"$'\n'"${shared_diff}"
+    after="$(merge_entries "${after}" "$(shared_entries "${tier}" "${source}" false "${shared_rel[@]}")")"
+  fi
   if [[ "${before}" != "${after}" ]]; then
     local moved_files
     moved_files="$(mismatched_paths "${before}" "${after}")"
@@ -360,16 +444,19 @@ main() {
   [[ -n "${source}" ]] && leading+=(--source "${source}")
   [[ "${adopt}" == "true" ]] && leading+=(--adopt)
   leading+=(--base-tree "${base}" --claim-dir "${investigation_dir}" --message "${message}")
-  write_command "${before}" "${leading[@]}" | write_mut "${command_out}"
+  write_command "${tier}" "${source}" "${before}" "${leading[@]}" | write_mut "${command_out}"
   print -r -- "${diff_text}" | write_mut "${diff_out}"
 
   local -a changed
-  changed=("${(@f)$(print -r -- "${before}" | entry_paths)}")
+  changed=("${(@f)$(print -r -- "${skill_before}" | entry_paths)}")
   changed=("${(@)changed:#}")
   local -a foreign unmatched
   foreign=("${(@f)$(foreign_paths "${adopt}" "${(F)changed}" "${(F)edited_rel}")}")
   foreign=("${(@)foreign:#}")
   unmatched=("${(@)edited_rel:|changed}")
+  local -a shared_changed
+  shared_changed=("${(@f)$(print -r -- "${before}" | shared_paths_of)}")
+  unmatched+=("${(@)shared_rel:|shared_changed}")
 
   local files insertions deletions
   files="$(awk '/^diff --git / { n += 1 } END { print n + 0 }' <<< "${diff_text}")"

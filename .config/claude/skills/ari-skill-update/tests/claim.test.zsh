@@ -171,5 +171,108 @@ refused="$("${commit[@]}" --claim-dir "${inv}" 2>/dev/null || true)"
 expect "commit by another driver is refused" "result=refused" "$(print -r -- "${refused}" | awk 'NR == 1')"
 expect "commit refusal names the holder" "claim_holder=${inv2}" "$(print -r -- "${refused}" | awk 'NR == 2')"
 
+# --- shared lib files in a proposal ---
+# A throwaway HOME holds a dotfiles repo with one skill and two lib files; the real
+# registry and logging libs are linked in. Every script runs against it via env.
+FAKE="${TEST_ROOT}/home"
+mkdir -p "${FAKE}/.claude/skills" "${FAKE}/.config/claude/skills/tskill" "${FAKE}/.config/claude/lib" "${FAKE}/.config/claude/other"
+ln -s "${SKILLS_DIR}/ari-skill-shellscripts" "${FAKE}/.claude/skills/ari-skill-shellscripts"
+ln -s "${SKILLS_DIR}/ari-dotfiles-skill-registry" "${FAKE}/.claude/skills/ari-dotfiles-skill-registry"
+ln -s "${SCRIPT_DIR:h}" "${FAKE}/.claude/skills/ari-skill-update"
+ln -s "${FAKE}/.config/claude/skills/tskill" "${FAKE}/.claude/skills/tskill"
+print -r -- '[user]
+	name = t
+	email = t@example.com
+[alias]
+	df = dotfiles
+	dotfiles = !git --git-dir="$HOME/dotfiles.git/" --work-tree="$HOME"' > "${FAKE}/.gitconfig"
+fenv=(env -u DRY_RUN HOME="${FAKE}" SKILL_UPDATE_ROOT="${TEST_ROOT}")
+"${fenv[@]}" git init -q --bare "${FAKE}/dotfiles.git"
+print -r -- one > "${FAKE}/.config/claude/skills/tskill/SKILL.md"
+print -r -- one > "${FAKE}/.config/claude/lib/a.sh"
+print -r -- one > "${FAKE}/.config/claude/lib/b.sh"
+print -r -- one > "${FAKE}/.config/claude/other/y.sh"
+"${fenv[@]}" git -C "${FAKE}" df add .config/claude
+"${fenv[@]}" git -C "${FAKE}" df commit -q -m init
+
+#######################################
+# Record a proposal for tskill with the given extra record flags; print the
+# recorded Commit command as one line-continued command.
+# Arguments:
+#   $1 - investigation folder
+#   $@ - extra record_blobs.zsh flags
+#######################################
+record_t() {
+  local inv="${1}"
+  shift
+  "${fenv[@]}" zsh "${BIN}/record_blobs.zsh" --skill tskill --tier df --message tmsg --investigation-dir "${inv}" --execute "$@" >/dev/null 2>&1
+  awk '!/^```/' "${inv}/tskill.commit.md"
+}
+
+#######################################
+# Run a recorded command string against the fake home; print its result= line.
+# Arguments:
+#   $1 - the command
+#######################################
+run_cmd() {
+  "${fenv[@]}" zsh -c "${1}" 2>/dev/null | awk -F= '$1 == "result" { print $2 }'
+}
+
+head_of() { "${fenv[@]}" git -C "${FAKE}" df rev-parse HEAD; }
+
+t1="$(mk_driver tskill t1)"
+print -r -- two >> "${FAKE}/.config/claude/skills/tskill/SKILL.md"
+print -r -- two >> "${FAKE}/.config/claude/lib/a.sh"
+cmd1="$(record_t "${t1}" --edited SKILL.md --shared "${FAKE}/.config/claude/lib/a.sh")"
+expect "record: one command per tier, skill and shared blobs both named" "1 1 1" "$(print -r -- "${cmd1}" | awk '/--blob/ { b += 1 } /--shared / { s += 1 } /commit_blobs.zsh/ { c += 1 } END { print c, b, s }')"
+expect "record: the diff names the lib file" "1" "$(grep -c '^diff --git a/.config/claude/lib/a.sh' "${t1}/tskill.diff.patch" || true)"
+before="$(head_of)"
+expect "commit without --execute is a dry run" "dry-run" "$(run_cmd "${cmd1%--execute}")"
+expect "the dry run committed nothing" "${before}" "$(head_of)"
+expect "commit lands skill and lib together" "committed" "$(run_cmd "${cmd1}")"
+expect "one commit holds both files" "2" "$("${fenv[@]}" git -C "${FAKE}" df show --name-only --format= HEAD | wc -l | tr -d ' ')"
+expect "the lib file is committed as recorded" "" "$("${fenv[@]}" git -C "${FAKE}" df status --short -- .config/claude/lib/a.sh .config/claude/skills/tskill)"
+expect "a re-run reports already-committed" "already-committed" "$(run_cmd "${cmd1}")"
+
+t2="$(mk_driver tskill t2)"
+print -r -- three >> "${FAKE}/.config/claude/lib/a.sh"
+cmd2="$(record_t "${t2}" --shared "${FAKE}/.config/claude/lib/a.sh")"
+print -r -- four >> "${FAKE}/.config/claude/lib/a.sh"
+claim_release tskill "${t2}"
+before="$(head_of)"
+expect "a lib file changed after recording is refused" "refused" "$(run_cmd "${cmd2}")"
+expect "the refusal committed nothing" "${before}" "$(head_of)"
+expect "the refusal names the lib file" "1" "$("${fenv[@]}" zsh -c "${cmd2}" 2>/dev/null | grep -c '^mismatched=@shared:.config/claude/lib/a.sh$' || true)"
+
+t3="$(mk_driver tskill t3)"
+"${fenv[@]}" git -C "${FAKE}" df checkout -q -- .config/claude/lib/a.sh
+print -r -- five >> "${FAKE}/.config/claude/lib/b.sh"
+cmd3="$(record_t "${t3}" --shared "${FAKE}/.config/claude/lib/b.sh")"
+print -r -- six > "${FAKE}/.config/claude/lib/b.sh"
+"${fenv[@]}" git -C "${FAKE}" df add .config/claude/lib/b.sh
+"${fenv[@]}" git -C "${FAKE}" df commit -q -m moved
+print -r -- one > "${FAKE}/.config/claude/lib/b.sh"
+print -r -- five >> "${FAKE}/.config/claude/lib/b.sh"
+before="$(head_of)"
+expect "a lib file HEAD changed since recording is refused" "refused" "$(run_cmd "${cmd3}")"
+expect "that refusal committed nothing" "${before}" "$(head_of)"
+
+claim_release tskill "${t3}"
+t4="$(mk_driver tskill t4)"
+print -r -- two >> "${FAKE}/.config/claude/other/y.sh"
+expect "record refuses a shared file outside the allowed roots" "1" "$(rc_of "${fenv[@]}" zsh "${BIN}/record_blobs.zsh" --skill tskill --tier df --message m --investigation-dir "${t4}" --execute --shared "${FAKE}/.config/claude/other/y.sh")"
+expect "record refuses a path that escapes the root" "1" "$(rc_of "${fenv[@]}" zsh "${BIN}/record_blobs.zsh" --skill tskill --tier df --message m --investigation-dir "${t4}" --execute --shared "${FAKE}/.config/claude/lib/../other/y.sh")"
+forged="zsh ${BIN}/commit_blobs.zsh --skill tskill --tier df --base-tree none --message m --shared none:100644:$(printf '1%.0s' {1..40}):.config/claude/other/y.sh --execute"
+expect "commit refuses a hand-written shared path outside the roots" "1" "$(rc_of "${fenv[@]}" zsh -c "${forged}")"
+expect "record refuses --shared for the local tier (it has no shared root)" "1" "$(rc_of "${fenv[@]}" zsh "${BIN}/record_blobs.zsh" --skill tskill --tier ldf --message m --investigation-dir "${t4}" --shared "${FAKE}/.config/claude/lib/b.sh")"
+
+t5="$(mk_driver tskill t5)"
+print -r -- new > "${FAKE}/.config/claude/lib/c.sh"
+cmd5="$(record_t "${t5}" --shared .config/claude/lib/c.sh --shared "${FAKE}/.config/claude/lib/c.sh")"
+expect "record: a HOME-relative new lib file, named twice, becomes one --shared" "1" "$(print -r -- "${cmd5}" | grep -c -- '--shared ' || true)"
+expect "commit lands a new lib file" "committed" "$(run_cmd "${cmd5}")"
+expect "the new lib file is in HEAD" "1" "$("${fenv[@]}" git -C "${FAKE}" df ls-tree HEAD .config/claude/lib/c.sh | wc -l | tr -d ' ')"
+expect "commit refuses a malformed --shared value" "1" "$(rc_of "${fenv[@]}" zsh "${BIN}/commit_blobs.zsh" --skill tskill --tier df --base-tree none --message m --shared .config/claude/lib/c.sh --execute)"
+
 print -- "summary  pass=${PASS} fail=${FAIL}"
 (( FAIL == 0 ))

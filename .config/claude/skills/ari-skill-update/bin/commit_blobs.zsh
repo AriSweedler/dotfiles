@@ -62,10 +62,15 @@ check_prerequisites() {
 is_already_committed() {
   local tier="${1}" source="${2}" skill_rel="${3}" proposed="${4}"
   [[ -z "$(changed_entries "${tier}" "${source}" "${skill_rel}" false)" ]] || return 1
+  local -a shared=("${(@f)$(print -r -- "${proposed}" | shared_paths_of)}")
+  shared=("${(@)shared:#}")
+  if (( ${#shared} > 0 )); then
+    [[ -z "$(shared_entries "${tier}" "${source}" false "${shared[@]}")" ]] || return 1
+  fi
   local line mode blob file held
   for line in "${(@f)proposed}"; do
     read -r mode blob file <<< "${line}"
-    held="$(repo_git "${tier}" "${source}" ls-tree HEAD -- "${skill_rel}/${file}" | awk '{ print $1, $3 }' || true)"
+    held="$(repo_git "${tier}" "${source}" ls-tree HEAD -- "$(entry_repo_path "${skill_rel}" "${file}")" | awk '{ print $1, $3 }' || true)"
     if [[ "${mode}" == "deleted" ]]; then
       [[ -z "${held}" ]] || return 1
       continue
@@ -94,6 +99,11 @@ require_working_tree_match() {
     current="$(adopt_entries "${tier}" "${source}" "${SKILLS_DIR}/${skill}" "${skill_rel}" true)"
   else
     current="$(changed_entries "${tier}" "${source}" "${skill_rel}" true)"
+  fi
+  local -a shared=("${(@f)$(print -r -- "${proposed}" | shared_paths_of)}")
+  shared=("${(@)shared:#}")
+  if (( ${#shared} > 0 )); then
+    current="$(merge_entries "${current}" "$(shared_entries "${tier}" "${source}" true "${shared[@]}")")"
   fi
   if [[ "${current}" == "${proposed}" ]]; then
     log::info "Working tree matches the proposal | skill='${skill}' adopt='${adopt}'"
@@ -128,6 +138,29 @@ require_base_tree() {
   print -r -- "result=refused"
   print -r -- "mismatched=HEAD:${skill_rel}"
   return 1
+}
+
+#######################################
+# Refuse unless HEAD still holds, at each shared path, the blob the proposal was
+# diffed against (the shared files' counterpart of the base tree).
+# Arguments:
+#   $1 - tier
+#   $2 - source
+#   $3 - lines `<head blob|none> <repo-relative path>`
+# Returns: 1 when HEAD moved under the proposal
+#######################################
+require_shared_base() {
+  local tier="${1}" source="${2}" heads="${3}" line recorded rel current
+  for line in "${(@f)heads}"; do
+    [[ -n "${line}" ]] || continue
+    recorded="${line%% *}"; rel="${line#* }"
+    current="$(head_blob "${tier}" "${source}" "${rel}")"
+    [[ "${current}" == "${recorded}" ]] && continue
+    log::err "HEAD changed a shared file since the proposal; nothing committed | file='${rel}' proposed_base='${recorded}' current_base='${current}' hint='send the driver re-propose'"
+    print -r -- "result=refused"
+    print -r -- "mismatched=HEAD:${rel}"
+    return 1
+  done
 }
 
 #######################################
@@ -187,11 +220,12 @@ stage_entries() {
   for line in "${(@f)proposed}"; do
     [[ -n "${line}" ]] || continue
     read -r mode blob file <<< "${line}"
+    file="$(entry_repo_path "${skill_rel}" "${file}")"
     if [[ "${mode}" == "deleted" ]]; then
-      GIT_INDEX_FILE="${index}" repo_git "${tier}" "${source}" update-index --force-remove -- "${skill_rel}/${file}"
+      GIT_INDEX_FILE="${index}" repo_git "${tier}" "${source}" update-index --force-remove -- "${file}"
       continue
     fi
-    GIT_INDEX_FILE="${index}" repo_git "${tier}" "${source}" update-index --add --cacheinfo "${mode},${blob},${skill_rel}/${file}"
+    GIT_INDEX_FILE="${index}" repo_git "${tier}" "${source}" update-index --add --cacheinfo "${mode},${blob},${file}"
   done
 }
 
@@ -213,11 +247,15 @@ entries_of() {
   else
     raw=("${(@f)$(repo_git "${tier}" "${source}" diff-tree -r --no-renames --root --no-commit-id "${what}")}")
   fi
-  print -rl -- "${raw[@]}" | awk -v p="${skill_rel}/" '
+  local roots="${(j.:.)$(shared_roots "${tier}")}"
+  print -rl -- "${raw[@]}" | awk -v p="${skill_rel}/" -v roots="${roots}" -v sp="${SHARED_ENTRY_PREFIX}" '
     NF {
       split($0, tab, "\t"); split(tab[1], f, " "); file = tab[2]
-      if (index(file, p) != 1) { print "outside - " file; next }
-      file = substr(file, length(p) + 1)
+      n = split(roots, rs, ":"); shared = 0
+      for (i = 1; i <= n; i++) if (rs[i] != "" && index(file, rs[i] "/") == 1) shared = 1
+      if (shared) file = sp file
+      else if (index(file, p) != 1) { print "outside - " file; next }
+      else file = substr(file, length(p) + 1)
       if (f[5] == "D") print "deleted - " file
       else print f[2] " " f[4] " " file
     }' | sort -k3
@@ -239,15 +277,16 @@ sync_shared_index() {
   for line in "${(@f)proposed}"; do
     [[ -n "${line}" ]] || continue
     read -r mode blob file <<< "${line}"
-    staged="$(repo_git "${tier}" "${source}" ls-files -s -- "${skill_rel}/${file}" | awk '{ print $1, $2 }')"
-    before="$(repo_git "${tier}" "${source}" ls-tree "${parent}" -- "${skill_rel}/${file}" 2>/dev/null | awk '{ print $1, $3 }' || true)"
+    file="$(entry_repo_path "${skill_rel}" "${file}")"
+    staged="$(repo_git "${tier}" "${source}" ls-files -s -- "${file}" | awk '{ print $1, $2 }')"
+    before="$(repo_git "${tier}" "${source}" ls-tree "${parent}" -- "${file}" 2>/dev/null | awk '{ print $1, $3 }' || true)"
     if [[ "${mode}" == "deleted" ]]; then
       [[ -z "${staged}" ]] && continue
       if [[ "${staged}" != "${before}" ]]; then
         log::warn "Left another session's staged entry | file='${file}' staged='${staged}'"
         continue
       fi
-      run_mut repo_git "${tier}" "${source}" update-index --force-remove -- "${skill_rel}/${file}"
+      run_mut repo_git "${tier}" "${source}" update-index --force-remove -- "${file}"
       continue
     fi
     [[ "${staged}" == "${mode} ${blob}" ]] && continue
@@ -255,7 +294,7 @@ sync_shared_index() {
       log::warn "Left another session's staged entry | file='${file}' staged='${staged}'"
       continue
     fi
-    run_mut repo_git "${tier}" "${source}" update-index --add --cacheinfo "${mode},${blob},${skill_rel}/${file}"
+    run_mut repo_git "${tier}" "${source}" update-index --add --cacheinfo "${mode},${blob},${file}"
   done
 }
 
@@ -304,7 +343,7 @@ help() {
 ${c_green}commit_blobs${c_rst} — commit exactly the blobs a proposal recorded, or refuse
 
 ${c_bold}Usage:${c_rst}
-  zsh \$HOME/.claude/skills/ari-skill-update/bin/commit_blobs.zsh --skill <name> --tier <df|ldf> --base-tree <tree|none> --message <msg> [--source submodule:<path>] [--claim-dir <dir>] [--adopt] [--blob <mode>:<blob>:<path>]... [--delete <path>]... [--execute] [--dry-run]
+  zsh \$HOME/.claude/skills/ari-skill-update/bin/commit_blobs.zsh --skill <name> --tier <df|ldf> --base-tree <tree|none> --message <msg> [--source submodule:<path>] [--claim-dir <dir>] [--adopt] [--blob <mode>:<blob>:<path>]... [--delete <path>]... [--shared <head>:<mode>:<blob>:<path>]... [--shared-delete <head>:<path>]... [--execute] [--dry-run]
 
 ${c_bold}Options:${c_rst}
   --skill NAME         Skill to commit (required)
@@ -317,6 +356,10 @@ ${c_bold}Options:${c_rst}
   --adopt              Adopt the skill into --tier first (registry adopt)
   --blob SPEC          <mode>:<blob>:<path relative to the skill dir>; repeat
   --delete PATH        A file the proposal removes, relative to the skill dir; repeat
+  --shared SPEC        A shared file outside the skill dir (under the tier's lib root, ~/.config/claude/lib for df):
+                       <HEAD's blob when recorded, or none>:<mode>:<blob>:<path relative to the repo root>; repeat.
+                       Refused unless the path is under an allowed root and HEAD and the working tree still match
+  --shared-delete SPEC A shared file the proposal removes: <HEAD's blob when recorded>:<path relative to the repo root>; repeat
   --execute            Adopt (if --adopt) and commit; without it the run is a dry run
   --dry-run            The default made explicit; wins over --execute and exports DRY_RUN=1
   -h, --help           Show this help
@@ -342,7 +385,7 @@ main() {
 
   # === PARSE ===
   local skill="" tier="" source="" proposed_base="" message="" claim_dir="" adopt=false execute=false dry_run_flag=false
-  local -a specs=() deletes=()
+  local -a specs=() deletes=() shared_specs=() shared_deletes=()
   while (( $# > 0 )); do case "${1}" in
     -h|--help)   help; return 0 ;;
     --skill)     skill="${2:?--skill requires a value}"; shift 2 ;;
@@ -353,6 +396,8 @@ main() {
     --claim-dir) claim_dir="${2:?--claim-dir requires a value}"; shift 2 ;;
     --blob)     specs+=("${2:?--blob requires a value}"); shift 2 ;;
     --delete)    deletes+=("${2:?--delete requires a value}"); shift 2 ;;
+    --shared)        shared_specs+=("${2:?--shared requires a value}"); shift 2 ;;
+    --shared-delete) shared_deletes+=("${2:?--shared-delete requires a value}"); shift 2 ;;
     --adopt)     adopt=true; shift ;;
     --execute)   execute=true; shift ;;
     --dry-run)   dry_run_flag=true; shift ;;
@@ -372,6 +417,23 @@ main() {
   done
   for file in "${deletes[@]}"; do
     lines+=("deleted - ${file}")
+  done
+  local head_blob_recorded shared_heads=""
+  for spec in "${shared_specs[@]}"; do
+    [[ "${spec}" == *:*:*:?* ]] || { log::err "--shared needs <head>:<mode>:<blob>:<path> | value='${spec}'"; return 1; }
+    head_blob_recorded="${spec%%:*}"; spec="${spec#*:}"
+    mode="${spec%%:*}"; spec="${spec#*:}"
+    blob="${spec%%:*}"; file="${spec#*:}"
+    [[ "${head_blob_recorded}" =~ '^([0-9a-f]{40,64}|none)$' ]] || { log::err "--shared head must be a blob id or none | head='${head_blob_recorded}'"; return 1; }
+    lines+=("${mode} ${blob} ${SHARED_ENTRY_PREFIX}${file}")
+    shared_heads+="${head_blob_recorded} ${file}"$'\n'
+  done
+  for spec in "${shared_deletes[@]}"; do
+    [[ "${spec}" == *:?* ]] || { log::err "--shared-delete needs <head>:<path> | value='${spec}'"; return 1; }
+    head_blob_recorded="${spec%%:*}"; file="${spec#*:}"
+    [[ "${head_blob_recorded}" =~ '^([0-9a-f]{40,64}|none)$' ]] || { log::err "--shared-delete head must be a blob id or none | head='${head_blob_recorded}'"; return 1; }
+    lines+=("deleted - ${SHARED_ENTRY_PREFIX}${file}")
+    shared_heads+="${head_blob_recorded} ${file}"$'\n'
   done
   local proposed
   proposed="$(print -rl -- "${lines[@]}" | awk 'NF' | sort -k3)"
@@ -395,6 +457,12 @@ main() {
   local line
   for line in "${lines[@]}"; do
     read -r mode blob file <<< "${line}"
+    if [[ "${file}" == "${SHARED_ENTRY_PREFIX}"* ]]; then
+      if [[ -n "${source}" ]] || ! is_shared_path "${tier}" "${file#${SHARED_ENTRY_PREFIX}}"; then
+        log::err "Shared file outside the tier's shared roots; nothing committed | file='${file#${SHARED_ENTRY_PREFIX}}' tier='${tier}' source='${source}' allowed_roots='${(j:, :)$(shared_roots "${tier}")}'"
+        return 1
+      fi
+    fi
     if [[ ! "${mode} ${blob}" =~ '^(100644|100755|120000) [0-9a-f]{40,64}$|^deleted -$' || -z "${file}" || "${file}" == (/*|*..*) ]]; then
       log::err "Invalid entry | line='${line}' expected='<100644|100755|120000>:<blob>:<relative path>, or --delete <relative path>'"
       return 1
@@ -423,6 +491,7 @@ EOF
     return 0
   fi
   require_base_tree "${tier}" "${source}" "${skill_rel}" "${proposed_base}" || return 1
+  require_shared_base "${tier}" "${source}" "${shared_heads}" || return 1
   require_working_tree_match "${tier}" "${source}" "${skill}" "${skill_rel}" "${adopt_pending}" "${proposed}" || return 1
 
   if [[ "${adopt_pending}" == "true" ]]; then
