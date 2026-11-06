@@ -12,7 +12,7 @@
 # A link's ?cmd=/?run= is honoured only when it was clicked in a Claude Code pane: any program can print
 # an OSC 8 link, and a click on one elsewhere only focuses. A payload refused after the click (gate, lock,
 # text, run_log missing) is reported into that Claude Code pane's prompt as ` ari-driving refused: …`.
-# A tmux-pane://?copy=<percent-encoded> link names no pane: the click puts the command, laid out as the link's
+# A tmux-pane://copy?copy=<percent-encoded> link (or the older tmux-pane://?copy=) names no pane: the click puts the command, laid out as the link's
 # code block shows it, on the clipboard (pbcopy), for when no pane can take it. The click is Ari's own action;
 # the same Claude Code pane rule applies, and nothing is typed, focused or run.
 # Clicking a tmux-pane:// link in tmux runs this (the tmux-pane:// branch of
@@ -79,7 +79,7 @@ ${c_green}focus.zsh${c_rst} — focus a tmux pane by ID, and type or run a comma
 
 ${c_bold}Usage:${c_rst}
   zsh $HOME/.claude/skills/ari-driving-tmux/bin/focus.zsh --pane %N[?cmd=…|?run=…[&interactive=1]] [--cmd TEXT | --run TEXT [--interactive]] [--return-pane %M] [--no-activate]
-  zsh $HOME/.claude/skills/ari-driving-tmux/bin/focus.zsh --pane '?copy=…' --return-pane %M
+  zsh $HOME/.claude/skills/ari-driving-tmux/bin/focus.zsh --pane 'copy?copy=…' --return-pane %M
 
 ${c_bold}Options:${c_rst}
   --pane %N        tmux pane ID; a bare number is taken as %N (tmux-pane://301 links carry no %).
@@ -92,7 +92,7 @@ ${c_bold}Options:${c_rst}
                    --return-pane
   --interactive    with --run: TEXT will ask something in the pane, so add --focus-after and stay there;
                    run_log switches back to --return-pane when TEXT finishes
-  --pane ?copy=…   no pane: a link payload; put its text, laid out, on the clipboard, honoured only when
+  --pane copy?copy=…   no pane: a link payload; put its text, laid out, on the clipboard, honoured only when
                    --return-pane runs Claude Code. Link-only: there is no --copy flag. Nothing is typed or focused
   --return-pane %M the pane the link was clicked in (the click handler passes it)
   --no-activate    switch tmux only; leave the frontmost app alone
@@ -385,8 +385,8 @@ main() {
   export PATH="${PATH_PREFIX}:${PATH}"
   # The query is ?cmd=<encoded> or ?run=<encoded>[&interactive=1]; the encoded part holds no '&'.
   local query
-  if [[ "${pane_id}" == \?copy=* ]]; then
-    copy="$(percent_decode "${pane_id#\?copy=}")"
+  if [[ "${pane_id}" == (copy|copy/|)\?copy=* ]]; then
+    copy="$(percent_decode "${pane_id#*\?copy=}")"
     copy_given=true
     pane_id=""
   elif [[ "${pane_id}" == *\?cmd=* ]]; then

@@ -21,6 +21,8 @@ WRAP_LIST_OPERATORS=('|' '|&' '||' '&&' ';' '&' '&!' '&|')
 WRAP_COMPOUND_WORDS=(for foreach while until if case select repeat function coproc '{' '(' '((' '[[' '!')
 # Words before the program that run it (their flags are skipped too): the program is the next word.
 WRAP_COMMAND_WRAPPERS=(env time command builtin exec nohup noglob sudo run_log)
+# run_log flags that take the next word as their value; it is not the program.
+WRAP_RUN_LOG_VALUE_FLAGS=(--deliver-to --name --dir --fd --file)
 # Flags whose value is parsed as JSON; a flag ending in -json counts too. Any other quoted text that looks
 # like JSON (a grep pattern, a jq --arg string) is left as written: its bytes are its meaning.
 WRAP_JSON_FLAGS=(--policy --policy-document --json --data --data-raw --data-binary -d --body --payload --patch
@@ -359,6 +361,9 @@ wrap_word_kinds() {
     if [[ "${words[p]}" == [A-Za-z_][A-Za-z0-9_]#=* ]] || (( ${WRAP_COMMAND_WRAPPERS[(Ie)${words[p]}]} )); then
       in_wrapper=1 p=$(( p + 1 ))
     elif (( in_wrapper )) && [[ "${words[p]}" == -* ]]; then
+      if (( ${WRAP_RUN_LOG_VALUE_FLAGS[(Ie)${words[p]}]} )); then
+        p=$(( p + 1 ))
+      fi
       p=$(( p + 1 ))
     else
       break
@@ -390,14 +395,15 @@ wrap_word_kinds() {
 # Lay out one command (a stage of a pipeline or list): words fill the line from its head; a new line, two
 # steps past the head, starts before a quoted string over WRAP_LONG, before a long flag with its value when
 # the command does not fit on one line, and before anything that would overflow WRAP_WIDTH. A flag and its
-# value, and a redirection and its target, stay together. Program arguments are laid out per wrap_program_word.
+# value, and a redirection and its target, stay together; a wrapper's own flags (`run_log --deliver-to %9 --`)
+# never start a line. Program arguments are laid out per wrap_program_word.
 # Arguments: $1 head (indent and operator)  $2 indent of the head line  $3 whether a compound command (0|1)
 #   $4 word count N  $5.. the command's N words, then their N gaps
 # Outputs: the lines on stdout, NUL-separated
 #######################################
 wrap_stage() {
   local head="${1}" first unit_text
-  local -i indent="${2}" compound="${3}" n="${4}" cont k u fits brk long_flag line_indent
+  local -i indent="${2}" compound="${3}" n="${4}" cont k u fits brk long_flag line_indent in_wrapper_prefix=1
   shift 4
   local -a words=("${(@)argv[1,n]}") gaps=("${(@)argv[n+1,2*n]}") kinds=()
   cont=$(( indent + 2 * WRAP_STEP ))
@@ -436,7 +442,7 @@ wrap_stage() {
     if (( k > 1 )); then
       if wrap_is_long_quoted "${words[k+u-1]}" && ! wrap_program_word "${words[k+u-1]}" 0 "${kinds[k+u-1]:-}" >/dev/null; then
         brk=1
-      elif (( ! fits && long_flag )); then
+      elif (( ! fits && long_flag && ! in_wrapper_prefix )); then
         brk=1
       else
         unit_text="$(wrap_stage_unit 0 "${words[k]}" "${kinds[k]:-}" "${gaps[k+1]:-}" "${words[k+1]:-}" "${kinds[k+1]:-}" "${u}")"
@@ -454,6 +460,10 @@ wrap_stage() {
     first="${line##*$'\n'}"
     line_indent=$(( ${#first} - ${#${first##[[:space:]]#}} ))
     line+="$(wrap_stage_unit "${line_indent}" "${words[k]}" "${kinds[k]:-}" "${gaps[k+1]:-}" "${words[k+1]:-}" "${kinds[k+1]:-}" "${u}")"
+    if (( in_wrapper_prefix )) && ! { [[ "${words[k]}" == [A-Za-z_][A-Za-z0-9_]#=* || "${words[k]}" == -* ]] \
+        || (( ${WRAP_COMMAND_WRAPPERS[(Ie)${words[k]}]} )); }; then
+      in_wrapper_prefix=0
+    fi
     k=$(( k + u ))
   done
   lines+=("${line}")

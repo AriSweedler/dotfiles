@@ -21,14 +21,16 @@ Claude never types into Ari's panes on this machine: it hands him a link to clic
     - **NEVER run `focus.zsh` yourself.** It is the click handler: a `?copy=` payload writes Ari's clipboard, so the guard blocks that call, and only his click may run it.
     - **Claude never sets, clears or releases the opt-in.** Not `ari-driving on`, `ari-remote-tmux on`, `@ari_driving` or `ari-driving release`: typed, linked, chained, in a pane's startup command, through the Bash tool, or through a fork, subagent or other session. Exception: Ari's own `tmux-restart` types `ari-driving on`, without Enter, into panes opted in before the restart; Claude never runs it. An opt-in Claude set anyway is undone at once with `run.zsh … --cmd 'ari-driving off'` there (exit 70: the pane is already gone), Ari is told which pane, and `/ari-skill-update` follows. When Ari says a ✦ stays after a window's last marked pane closed, name the window; he runs `ari-driving release` there.
 - **Every `tmux-pane://` URL is pasted from `link.zsh` stdout produced this turn.** NEVER type one by hand, even focus-only: `link.zsh` re-resolves the pane, encodes the command, and warns when a click would not type.
-- **Hand `link.zsh` the one line; paste its blockquote unchanged.** `link.zsh` lays a long command out (**Command layout**) and the click types that same layout. NEVER reflow, re-indent or re-join the code block by hand, and NEVER pass `--cmd`/`--run` a multi-line command (it refuses the newline). The block shows the bare command: a `--run` click hands it to `run_log`, a `--cmd` click types it as shown. A fenced step shows exactly what Ari types, laid out the same way by `handoff.zsh --print`.
+- **Hand `link.zsh` the one line; paste its blockquote unchanged.** `link.zsh` lays a long command out (**Command layout**) and the click types that same layout. NEVER reflow, re-indent or re-join the code block by hand, and NEVER pass `--cmd`/`--run` a multi-line command (it refuses the newline). A `--run` or `--cmd` block shows the bare command: a `--run` click hands it to `run_log`, a `--cmd` click types it as shown. A `--copy` block shows the text Ari pastes, `link.zsh`'s `--deliver-to` included (**Links**). A fenced step shows exactly what Ari types, laid out the same way by `handoff.zsh --print`.
   ```
-  BAD  (link blockquote)   run_log --deliver-to %301 'kubectl get pods -o wide'
+  BAD  (--run blockquote)  run_log --deliver-to %301 'kubectl get pods -o wide'
   BAD  (link blockquote)   link.zsh's laid-out lines re-joined or re-indented by hand
   BAD  (link.zsh)          --run "op item create \<newline>    --vault Private …"
+  BAD  (link.zsh --copy)   --copy 'run_log --deliver-to %301 -- kubectl get pods'   (hand-typed flag)
   BAD  (paste step)        run_log -- kubectl get pods -o wide    ← that is the capture step
   BAD  (paste step)        ! kubectl get pods -o wide             ← that is the interactive step
-  GOOD (link blockquote)   kubectl get pods -o wide
+  GOOD (--run blockquote)  kubectl get pods -o wide
+  GOOD (--copy blockquote) run_log --deliver-to %301 -- kubectl get pods   (from --copy 'run_log -- kubectl get pods')
   GOOD (capture step)      run_log -- kubectl get pods -o wide
   GOOD (paste step)        kubectl get pods -o wide
   ```
@@ -68,7 +70,11 @@ Terms: the **label** is `machine=<name>|ID=%N|pane=W.P`, what `ari-driving on` a
 - `--cmd`: a blockquote of `[ID=%301|pane=2.4](tmux-pane://301?cmd=…)` and the command in a code block; the click types it, no Enter, no `run_log`;
 - `--run`: the same with `[▶ run in ID=%301|pane=2.4](tmux-pane://301?run=…)`; the click types the command handed to `run_log --deliver-to <Claude's pane>` (**Command layout**), presses Enter, and switches back to Claude's pane. At exit run_log pastes the artifact line into Claude's prompt, without Enter; Ari presses Enter.
 - `--run … --interactive`: `[▶ run (interactive: stays there until it finishes) in ID=%301|pane=2.4](tmux-pane://301?run=…&interactive=1)`, for a command that will ask something in the pane (a password, a 2FA tap, a `[y/N]`, a login). The click adds `--focus-after`: Ari stays in that pane and run_log returns him to Claude's at exit. `link.zsh` assumes it, with `Interactive run … matched='sudo'` on stderr, when the command starts with `sudo`, `su`, `ssh`, `passwd`, `login`, `kinit`, `doas`, `gh auth`, `aws sso`, `gws auth`, `op signin`, `vault login` or `git push` (after any `VAR=value` and `run_log`/`env`/`time`). That list is a floor, not the check (**Pick the handoff**).
-- `bin/link.zsh --copy TEXT` (no `--pane`; it refuses one): `[⧉ copy to clipboard](tmux-pane://?copy=…)` and the command in a code block. The click, from a Claude Code pane only, puts the command on Ari's clipboard laid out exactly as the code block shows it (**Command layout**; it pastes as one command only into zsh), then shows `✦ Copied N characters: <first 60>` on the status line; it types, focuses and runs nothing. The `--cmd` text filters apply. For output back, pass `run_log -- CMD` as TEXT. The existing `tmux-pane://` handler needs no change.
+- `bin/link.zsh --copy TEXT` (no `--pane`; it refuses one): `[⧉ copy to clipboard](tmux-pane://copy?copy=…)` and the command in a code block.
+    - The click, from a Claude Code pane only, puts the code block's text on Ari's clipboard, laid out as shown (**Command layout**; it pastes as one command only into zsh), and shows `✦ Copied N characters: <first 60>` on the status line; it types, focuses and runs nothing. The `--cmd` text filters apply.
+    - **Output back: pass `run_log -- CMD` as TEXT, with no `--deliver-to` or `--focus-after` of your own.** `link.zsh` puts `--deliver-to <Claude's pane>` (`$TMUX_PANE`) before run_log's other flags, so the block and the copy read `run_log --deliver-to %301 -- CMD`; when that finishes in the pane Ari pastes it into, run_log pastes its artifact line into Claude's prompt, as a run link's does. Never `--focus-after`: Ari stays where he pasted.
+    - Copied as given, nothing inserted: TEXT that does not start with `run_log`; TEXT whose run_log flags already hold `--deliver-to`; and every TEXT when `$TMUX_PANE` is unset, which also prints `No Claude pane to deliver to` on stderr. In that last case no artifact line comes back: write `Expected:` as "paste the artifact line here".
+    - The link's host is `copy`. `focus.zsh` still takes the old empty-host `?copy=` form.
 - **A copy link is not a Claude clipboard write.** Claude only prints it; the copy is Ari's own click, so the clipboard rule and the guard stand. A copy click displaces his clipboard like any copy: after one, **Recover a clobbered clipboard** applies.
 
 The link carries the command as one line, as given. Before the link, `link.zsh` warns on stderr when a click would not type: `Pane not opted in; the click will only focus it`, and for `--run` without `$TMUX_PANE`, `Claude is not in a tmux pane; the artifact line has nowhere to return`. It errors with `No such pane` when the hint is gone. It refuses TEXT with a newline, Tab or other control character, a leading `clear`, or any text that spells the opt-in (the three strings in Rules; a text match, case and quotes ignored).
@@ -91,7 +97,7 @@ The click gate (`bin/focus.zsh`): a link's command runs only when the link was c
 `lib/wrap.zsh` lays out a command over 100 characters, or one with a program argument over 40 (its header has the rules); a shorter one stays one line. `link.zsh`'s code block, the text a click types, `handoff.zsh --print`'s step, and the `run_log` text `/ari-driving-remote`'s `run.zsh` types (`wrap_run_log_text`) all use it.
 
 - Each command of a pipeline or list gets its own line, led by its `|`, `&&`, `||` or `;`; a `for`, `while` or `if` stays whole on its line.
-- Within a command, words fill the line, short flags together; ` \` and a new line come only before a quoted string over 40 characters, before a long flag with its value when the command does not fit, or where the line would pass 100.
+- Within a command, words fill the line, short flags together; ` \` and a new line come only before a quoted string over 40 characters, before a long flag with its value when the command does not fit, or where the line would pass 100; a wrapper's own flags (`run_log --deliver-to %12 --`) stay on its line.
 - jq's program, and a JSON value given to a JSON flag (`--policy`, `-d`, `--data`, `--…-json`), is laid out inside its single quotes: one entry per line, jq shorthand keys sharing one. JSON-shaped text anywhere else (a `grep -F` pattern, a `jq --arg` string) stays as written.
 - A command with a `#` word stays one line.
 
@@ -150,7 +156,7 @@ At exit it copies the artifact line to the clipboard unless `--no-copy`, `RUN_LO
 | the credentials or output belong to Claude's own session (a login this session's Bash calls use; a device code or URL to read as it appears) | fenced `! cmd` step, run in Claude's own session |
 | Ari should fill or edit it first (a value Claude cannot resolve: `<record-id>`, `$TOKEN`, a path), or Enter is his call | click-to-type link, `link.zsh --cmd`; NEVER a `--run` link with a placeholder, it runs as typed. For output back, the typed text is `run_log -- CMD` and Ari pastes the artifact line |
 | Ari says he will do the pasting himself ("I'll paste it", "I'll copy-paste it into `ID=%16\|pane=6.2`"); his words pick this row, a pane name alone picks a link | paste step, `handoff.zsh --print --paste`, under its `link.zsh --cmd` blockquote when `link.zsh` prints no warning for the pane (**Hand Ari fenced steps**); "copy-paste" is not a clipboard request |
-| no suitable pane: none named this turn, `link.zsh --pane <hint>` failed, or not opted in | click-to-copy link, `link.zsh --copy 'run_log -- cmd'` (`--copy 'cmd'` when no output is needed back); Ari pastes it into a pane and pastes the artifact line; the paste step alone when he said he will paste it himself |
+| no suitable pane: none named this turn, `link.zsh --pane <hint>` failed, or not opted in | click-to-copy link, `link.zsh --copy 'run_log -- cmd'` (`--copy 'cmd'` when no output is needed back); Ari pastes it into a pane, and the artifact line lands in Claude's prompt (`--deliver-to`); with `$TMUX_PANE` unset it does not, and Ari pastes the artifact line; the paste step alone when he said he will paste it himself |
 | `$TMUX_PANE` unset (no click can reach the handler), or `link.zsh` refuses the text | fenced `run_log -- cmd` step, the last resort; say which |
 | another machine; or several commands into a local pane, each read back, with no click per command | `/ari-driving-remote`'s `run.zsh`, `--host-definition local` for here |
 
@@ -167,7 +173,7 @@ Who runs it, and the precedent line: `/ari-driving` **Who runs a command**. A st
 zsh $HOME/.claude/skills/ari-driving-tmux/bin/link.zsh --pane %301 --run 'kubectl get pods -o wide'
 ```
 
-**Read stderr before pasting.** `Pane not opted in` → NEVER paste a `--cmd` or `--run` link: when more commands will follow, "[ID=%301|pane=2.4](tmux-pane://301) isn't opted in: run `ari-driving on` there and I'll hand you the run link"; for a one-off, a `link.zsh --copy 'run_log -- cmd'` link, or the paste step alone when he said he will paste it himself. `Claude is not in a tmux pane` → fenced steps only this session (a copy link has no click to reach it either). `No such pane` → say which pane is gone and hand a copy link; never the pane now sitting at `2.4`.
+**Read stderr before pasting.** `Pane not opted in` → NEVER paste a `--cmd` or `--run` link: when more commands will follow, "[ID=%301|pane=2.4](tmux-pane://301) isn't opted in: run `ari-driving on` there and I'll hand you the run link"; for a one-off, a `link.zsh --copy 'run_log -- cmd'` link, or the paste step alone when he said he will paste it himself. `Claude is not in a tmux pane` → fenced steps only this session (a copy link has no click to reach it either). `No Claude pane to deliver to` → paste the copy link, but its `Expected:` says Ari pastes the artifact line here. `No such pane` → say which pane is gone and hand a copy link; never the pane now sitting at `2.4`.
 
 Then paste stdout into chat unchanged, and `Expected:` with what success looks like (a `--run` returns Ari to Claude's pane at once, so Claude reads it from the capture); the mechanism ("`run_log artifact: …` lands in my prompt") once per session; for a command that removes or replaces tmux (a `brew uninstall tmux`, a `dotfiles switch`), also "the artifact line may not land; `exec zsh` there after":
 
@@ -229,6 +235,15 @@ A click-to-type link when Ari fills a value (`link.zsh … --cmd 'run_log -- kub
 > ```
 
 Expected: you replace `web-REPLACE` and press Enter; paste the artifact line here (a typed command has no `--deliver-to`, run_log only copies it).
+
+A click-to-copy link when no pane can take the command (`link.zsh --copy 'run_log -- kubectl get pods -o wide'`, run in Claude's pane, so `link.zsh` inserts `--deliver-to %96`):
+
+> [⧉ copy to clipboard](tmux-pane://copy?copy=run_log%20--deliver-to%20%2596%20--%20kubectl%20get%20pods%20-o%20wide)
+> ```zsh
+> run_log --deliver-to %96 -- kubectl get pods -o wide
+> ```
+
+Expected: click, paste once into a zsh pane (never into this prompt), press Enter; `run_log artifact: …` lands in my prompt. This replaces your clipboard; the text is bound to this pane, so I reprint it after a pane move or resume. A mutating command adds `click once; pasting it again runs it again`.
 
 Claude's turn ends there.
 
@@ -400,7 +415,7 @@ dotfiles raycast link clipboard-history
 - `bin/focus.zsh` — what a click runs: focus, gate, type or run.
 - `lib/wrap.zsh` — lays out a long command (**Command layout**) for `link.zsh`, `focus.zsh`, `handoff.zsh`, and `/ari-driving-remote`'s `bin/run.zsh` (`wrap_run_log_text`; its `tests/run-typed-text.test.zsh` covers that use).
 - `bin/handoff.zsh` — renders fenced steps; the sanctioned copy.
-- `tests/copy.test.zsh` — `link.zsh --copy` and the copy click in `focus.zsh`, on a throwaway tmux server with a fake pbcopy.
+- `tests/copy.test.zsh` — `link.zsh --copy` (the `--deliver-to` insertion, the host form) and the copy click in `focus.zsh`, and the copied text run in a shell pane delivering its artifact line, on a throwaway tmux server with a fake pbcopy.
 - `bin/pretooluse_bash_pbcopy_guard.sh` — the pbcopy guard hook.
 - `tests/ari-driving.test.zsh` — `bin/ari-driving` on a throwaway tmux server (`-L`) with a fake pbcopy, and with tmux off PATH; it refuses to run unless its pbcopy shim wins PATH.
 - `tests/link.test.zsh` — layouts, the link's one-line payload, `handoff.zsh`'s fenced-step forms (`--paste` equals the `--cmd` block, one form at a time, the widened fence), and clicks on a throwaway tmux server (`-L`): what the pane shows, and that a capture's output equals the one-line command's; `link.zsh` and `focus.zsh` with tmux off PATH; needs `script` and `~/.config/bin/run_log`.

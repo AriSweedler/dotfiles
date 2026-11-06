@@ -38,6 +38,9 @@ source "${LIB_WRAP}"
 # --- Constants ---
 
 readonly SCHEME='tmux-pane://'
+# A copy link names no pane. Its first click showed the raw URL after the link text, and an empty authority was
+# the one thing it had that run links lack; this host fills it. focus.zsh accepts both forms.
+readonly COPY_HOST=copy
 # tmux's homes, Nix's first: Claude's Bash may run this with a PATH that lacks the Nix profiles.
 readonly PATH_PREFIX="/etc/profiles/per-user/${USERNAME}/bin:/run/current-system/sw/bin:/opt/homebrew/bin:/usr/local/bin"
 # Commands that ask something in the pane (a password, a 2FA tap, a [y/N], a login), by first word, or by
@@ -46,6 +49,8 @@ readonly -a INTERACTIVE_COMMANDS=(sudo su ssh passwd login kinit doas)
 readonly -a INTERACTIVE_COMMAND_PAIRS=('gh auth' 'aws sso' 'gws auth' 'op signin' 'vault login' 'git push')
 # Skipped before the first word: leading VAR=value assignments and these wrappers (with their flags).
 readonly -a COMMAND_WRAPPERS=(run_log env time)
+# run_log flags that take the next word as their value; program_words skips it too.
+readonly -a RUN_LOG_VALUE_FLAGS=(--deliver-to --name --dir --fd --file)
 
 # --- Help ---
 
@@ -64,7 +69,10 @@ ${c_bold}Options:${c_rst}
   --run TEXT    command the click runs there through run_log; the click switches back to the pane the
                 link was clicked in, and run_log types 'run_log artifact: <dir>' into its prompt
   --copy TEXT   no pane (none can take the command): the click copies TEXT, laid out, to the clipboard; takes
-                no --pane. The click is Ari's own action
+                no --pane. The click is Ari's own action. TEXT that starts with 'run_log ' gets
+                '--deliver-to \$TMUX_PANE' (Claude's pane) after run_log, so its artifact line is pasted
+                into Claude's prompt when it finishes; never --focus-after, Ari stays where he pastes it.
+                Without \$TMUX_PANE the text is copied as given, with a warning
   --interactive with --run: TEXT will ask something in the pane (a password, a 2FA tap, a [y/N], a login),
                 so the click stays there and run_log switches back when TEXT finishes. Assumed, with a
                 note on stderr, when TEXT starts with ${(j:, :)INTERACTIVE_COMMANDS}, or
@@ -91,7 +99,7 @@ ${c_bold}Output:${c_rst}
     > kubectl get pods
     > \`\`\`
   Copy on click, no pane (paste as-is into chat):
-    > [⧉ copy to clipboard](tmux-pane://?copy=kubectl%20get%20pods)
+    > [⧉ copy to clipboard](tmux-pane://copy?copy=kubectl%20get%20pods)
     > \`\`\`zsh
     > kubectl get pods
     > \`\`\`
@@ -162,6 +170,9 @@ program_words() {
       in_wrapper=true
       shift words
     elif [[ "${in_wrapper}" == "true" && "${words[1]}" == -* ]]; then
+      if (( ${RUN_LOG_VALUE_FLAGS[(Ie)${words[1]}]} )); then
+        shift words
+      fi
       shift words
     else
       break
@@ -252,6 +263,39 @@ print_block() {
   print -r -- "> ${fence}"
 }
 
+#######################################
+# A copied `run_log …` command with --deliver-to Claude's pane ($TMUX_PANE) after run_log, so the artifact
+# line is pasted into Claude's prompt when it finishes, as a run link's is. Never --focus-after: Ari pastes
+# it into another pane and stays there. Other text, and a run_log that names its own --deliver-to, is
+# returned as given; without $TMUX_PANE the text is returned as given with a warning.
+# Globals: TMUX_PANE
+# Arguments: $1 command text
+# Outputs: the text to copy on stdout
+#######################################
+deliver_to_claude() {
+  local cmd="${1}" word
+  local -a words=("${(z)cmd}")
+  if [[ "${words[1]:-}" != run_log ]]; then
+    print -r -- "${cmd}"
+    return 0
+  fi
+  for word in "${words[@]:1}"; do
+    if [[ "${word}" == -- ]]; then
+      break
+    fi
+    if [[ "${word}" == (--deliver-to|--deliver-to=*|--focus-after) ]]; then
+      print -r -- "${cmd}"
+      return 0
+    fi
+  done
+  if [[ "${TMUX_PANE:-}" != %<0-> ]]; then
+    log::warn "No Claude pane to deliver to; the artifact line will only be copied, not pasted back | TMUX_PANE='${TMUX_PANE:-}' hint='Ari pastes the artifact line'"
+    print -r -- "${cmd}"
+    return 0
+  fi
+  print -r -- "run_log --deliver-to ${TMUX_PANE} ${cmd#run_log }"
+}
+
 # --- Main ---
 
 main() {
@@ -302,7 +346,8 @@ main() {
     if [[ -z "${TMUX_PANE:-}" ]]; then
       log::warn "Claude is not in a tmux pane; no click can reach the handler | TMUX_PANE='' hint='hand a fenced block instead'"
     fi
-    print_block "[⧉ copy to clipboard](${SCHEME}?copy=$(percent_encode "${cmd}"))" "${cmd}"
+    cmd="$(deliver_to_claude "${cmd}")"
+    print_block "[⧉ copy to clipboard](${SCHEME}${COPY_HOST}?copy=$(percent_encode "${cmd}"))" "${cmd}"
     return 0
   fi
   if [[ "${pane}" != (<0->.<0->|%<0->|<0->) ]]; then

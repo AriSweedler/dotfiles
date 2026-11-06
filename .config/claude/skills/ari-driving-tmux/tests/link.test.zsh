@@ -108,6 +108,10 @@ check "layout: a command with a # word stays one line" "${HASH_WORD}" "$(wrap_co
 
 # --- the run_log text a click types, and the fenced step handoff.zsh renders ---
 check "typed: short, no quotes: single-quoted" "run_log --deliver-to %9 'kubectl get pods -o wide -n kube-system'" "$(wrap_run_log_text '--deliver-to %9 ' "${CMD[short]}")"
+WRAPPED_PATH=/private/tmp/claude-502/-Users-me-project/0000-session-0000-0000-000000000000/scratchpad/close-beads.zsh
+check "layout: a wrapper's flag and its pane stay on the wrapper's line" "run_log --deliver-to %96 -- zsh \\
+    ${WRAPPED_PATH}" "$(wrap_command "run_log --deliver-to %96 -- zsh ${WRAPPED_PATH}")"
+check "layout: jq program is found after the --deliver-to value" ",,,,,jq" "$(wrap_word_kinds run_log --deliver-to %1 -- jq "'{a}'" | tr "\0" ,)"
 check "typed: short with quotes: double-quoted, no '\\''" "run_log \"rg 'foo' src\"" "$(wrap_run_log_text '' "rg 'foo' src")"
 check "typed: laid out: a quoted heredoc holding the layout" "run_log --deliver-to %9 \"\$(command cat <<'RUN_LOG'
 ${WANT[create]}
