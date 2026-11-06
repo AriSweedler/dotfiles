@@ -89,6 +89,8 @@ check "local_git: dirty file" "?? dirty.txt" "$(q "${full}" '.local_git.dirty[0]
 check "health: recorded, not run" "bin/doctor.sh false" "$(q "${full}" '"\(.health.command) \(.health.ran)"')"
 typed_log="$(<"${T}/canned/typed.log")"
 contains "reads use bd -C, never cd" 'bd -C ~/"beads" ready' "${typed_log}"
+contains "the in-flight read asks for hooked beads too" "list -s in_progress,hooked --json" "${typed_log}"
+contains "the bead map covers hooked beads" "open,in_progress,hooked,blocked,deferred" "${typed_log}"
 lacks "reads never cd" "cd " "${typed_log}"
 contains "typed lines lead with a space for HIST_IGNORE_SPACE" $'\n M=$(' "${typed_log}"
 contains "the marker is built at run time" "tr Q @" "${typed_log}"
@@ -127,12 +129,12 @@ cat > "${T}/fakebin/bd" <<'B'
 [[ "${1}" == -C ]] && shift 2
 case "$*" in
   "ready --exclude-label human --json") cat "${FAKE_DIR}/ready.json" ;;
-  "list -s in_progress --json") cat "${FAKE_DIR}/in_progress.json" ;;
+  "list -s in_progress,hooked --json") cat "${FAKE_DIR}/in_progress.json" ;;
   "human list") cat "${FAKE_DIR}/human.txt" ;;
   "blocked") cat "${FAKE_DIR}/blocked.txt" ;;
   "stale -d 14 -s in_progress") cat "${FAKE_DIR}/stale.txt" ;;
   "list -s deferred --json") cat "${FAKE_DIR}/deferred.json" ;;
-  "list -n 0 -s open,in_progress,blocked,deferred --json") if [[ -r "${FAKE_DIR}/scope.json" ]]; then cat "${FAKE_DIR}/scope.json"; else print -r -- '[]'; fi ;;
+  "list -n 0 -s open,in_progress,hooked,blocked,deferred --json") if [[ -r "${FAKE_DIR}/scope.json" ]]; then cat "${FAKE_DIR}/scope.json"; else print -r -- '[]'; fi ;;
   "exit7") exit 7 ;;
   *) print -u2 "fake bd: unknown $*"; exit 2 ;;
 esac

@@ -39,11 +39,12 @@ machine=personal|ID=%30|pane=11.1 - bound=none bash 0: superseedr -- laptop}"
 : "${FAKE_SHORT:=}"
 : "${FAKE_STDERR_NOISE:=1}"
 
-action='' cmd=''
+action='' cmd='' execute=0
 while (( $# > 0 )); do
   case "${1}" in
     --list) action=list; shift ;;
     --cmd) action=cmd; cmd="${2-}"; shift 2 ;;
+    --execute) execute=1; shift ;;
     --host-definition|--target|--lines|--timeout) shift 2 ;;
     *) shift ;;
   esac
@@ -63,7 +64,7 @@ if [[ "${action}" == list ]]; then
   exit 0
 fi
 
-print -r -- "PANE: ${${(f)FAKE_LIST}[1]%% *}"
+if (( ! execute )); then print -r -- "DRY RUN: nothing typed"; exit 0; fi
 print -r -- "${cmd}" >> "${FAKE_DIR}/typed.log"
 # the host command sits between '{ ' and '; printf' in the typed line; the marker's nonce after 'Q%sQ'
 host_cmd="${cmd#*\{ }"; host_cmd="${host_cmd%%; printf*}"

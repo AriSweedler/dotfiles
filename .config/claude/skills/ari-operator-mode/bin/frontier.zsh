@@ -37,7 +37,7 @@ readonly RETRY_S="${FRONTIER_RETRY_S:-5}"   # between retries while the pane is 
 readonly PROMPT_GLYPH_DEFAULT='❯'           # what the host's idle prompt line ends with; --prompt-end overrides it per host
 readonly ID_PREFIX_DEFAULT='beads'          # the bead id prefix when no bd JSON list has shown one; --prefix overrides it
 readonly REFUSED_KIND_PREFIX='REFUSED_KIND: '   # run.zsh's 75 or 77 prints it on the line right after REFUSED: (/ari-driving-remote › The gate)
-readonly SCOPE_STATUSES='open,in_progress,blocked,deferred'   # every status a briefing section can list; closed beads are never mapped
+readonly SCOPE_STATUSES='open,in_progress,hooked,blocked,deferred'   # every status a briefing section can list; closed beads are never mapped
 readonly EXIT_SCOPE_NEEDED=4
 # Whether a bead id is one of the scope ids or descends from one: the id itself, a hierarchical child
 # id (beads-xy9.6.1 under beads-xy9, which holds even when a parent between them is closed and so not
@@ -576,7 +576,7 @@ remote_read() {
     remaining=$(( capture_deadline - SECONDS ))
     (( remaining < 5 )) && remaining=5                       # a read always gets its floor
     drive_timeout=$(( remaining < timeout_s ? remaining : timeout_s ))
-    drive --target "${target}" --no-run-log --lines "${CAPTURE_LINES}" --timeout "${drive_timeout}" --cmd "${cmd_line}"
+    drive --target "${target}" --no-run-log --lines "${CAPTURE_LINES}" --timeout "${drive_timeout}" --cmd "${cmd_line}" --execute
     (( REPLY_RC == 75 )) || break
     refused="$(refused_line "${REPLY_OUT}" "${REPLY_ERR}")"
     cls=0; classify_75 "$(refusal_kind "${REPLY_OUT}" "${REPLY_ERR}")" "${refused}" "${REPLY_OUT}" || cls=$?
@@ -788,7 +788,7 @@ read_section() {
   bd_dir="$(host_path "${beads_dir}")"
   case "${name}" in
     ready)       cmd="bd -C ${bd_dir} ready --exclude-label human --json" ;;
-    in_progress) cmd="bd -C ${bd_dir} list -s in_progress --json" ;;
+    in_progress) cmd="bd -C ${bd_dir} list -s in_progress,hooked --json" ;;
     human)       cmd="bd -C ${bd_dir} human list" ;;
     blocked)     cmd="bd -C ${bd_dir} blocked" ;;
     stale)       cmd="bd -C ${bd_dir} stale -d 14 -s in_progress" ;;

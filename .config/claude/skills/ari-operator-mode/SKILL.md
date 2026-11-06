@@ -34,9 +34,9 @@ Every reply in this mode is written for a reader who has read nothing, does not 
 
 | Section | Host command | JSON | Renders in |
 |---|---|---|---|
-| `scope` (top level, read first) | `bd list -n 0 -s open,in_progress,blocked,deferred --json`, cut to its `id`, `parent` and `issue_type` lines, with bd's exit code: the bead map | `{epics, all, unknown, error}`, or null without `--scope` | First principles; `unknown` and `error` a state bullet |
+| `scope` (top level, read first) | `bd list -n 0 -s open,in_progress,hooked,blocked,deferred --json`, cut to its `id`, `parent` and `issue_type` lines, with bd's exit code: the bead map | `{epics, all, unknown, error}`, or null without `--scope` | First principles; `unknown` and `error` a state bullet |
 | `ready` | `bd ready --exclude-label human --json` | `[{id, title, priority, type, parent, assignee, updated_at}]` | state bullet |
-| `in_progress` | `bd list -s in_progress --json` | the same list | state bullet |
+| `in_progress` | `bd list -s in_progress,hooked --json` (a hooked bead counts as in progress; needs a `bd` whose `list` accepts `hooked`, as 1.3.4 does) | the same list | state bullet |
 | `human` | `bd human list` | `{text, ids, deferred_ids}` | state bullet, his rows; `deferred_ids` nowhere |
 | `blocked` | `bd blocked` | `{text, ids, deferred_ids, blockers: {id: count}}` | trailing line; `blockers` ranks rows |
 | `stale` | `bd stale -d 14 -s in_progress` | `{text, ids, deferred_ids}` | the in-progress bullet, trailing line |
@@ -62,11 +62,11 @@ The briefing's two-to-five-word forms of `/ari-bead-driven-development`'s terms,
 | bead | one tracked issue in the `bd` tracker |
 | epic | a bead that holds children; in the JSON, `type` `epic` (being another bead's `parent` does not make one) |
 | ready | open with nothing blocking it |
-| in progress | claimed and being worked |
+| in progress | claimed and being worked, or hooked (`bd` status `hooked`); the header and the bullet count both as in progress |
 | human gate | a bead that waits on Ari |
 | destroys, ships | a step that loses work (a discard, a delete) or puts work where others get it (a merge, a deploy, a push to main); a `bd` write is neither; marked **destroys:** and **irreversible:** |
 | blocked | waiting on another bead |
-| stale | in progress and untouched for fourteen days |
+| stale | in progress and untouched for fourteen days; `bd stale` rejects `hooked`, so a hooked bead is never listed stale |
 | scope | this session's epics and their beads; other sessions' beads are left out |
 | pane label | `machine=personal|ID=%18|pane=3.1|nickname=homelab`: the machine, tmux's fixed pane id, the window.pane on the screen, the window's name; a pane on this Mac has no `machine=` part |
 | doctor | the project's own health command, `health.command` |

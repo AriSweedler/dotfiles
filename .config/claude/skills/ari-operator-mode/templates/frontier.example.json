@@ -20,9 +20,9 @@
   "away": null,
   "away_ended": false,
   "typed": [
-    "{ bd -C ~/\"beads\" list -n 0 -s open,in_progress,blocked,deferred --json; printf '__BDRC=%s\\n' $?; } | awk '/\"(id|parent|issue_type)\": *\"/ || /^__BDRC=/ { print } END { print \"__LINES=\" NR }'",
+    "{ bd -C ~/\"beads\" list -n 0 -s open,in_progress,hooked,blocked,deferred --json; printf '__BDRC=%s\\n' $?; } | awk '/\"(id|parent|issue_type)\": *\"/ || /^__BDRC=/ { print } END { print \"__LINES=\" NR }'",
     "bd -C ~/\"beads\" ready --exclude-label human --json",
-    "bd -C ~/\"beads\" list -s in_progress --json",
+    "bd -C ~/\"beads\" list -s in_progress,hooked --json",
     "bd -C ~/\"beads\" human list",
     "bd -C ~/\"beads\" blocked",
     "bd -C ~/\"beads\" stale -d 14 -s in_progress",
