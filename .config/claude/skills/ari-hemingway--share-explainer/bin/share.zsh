@@ -5,11 +5,12 @@
 # its link-preview card (tools/og-image.mjs), run the CLI gates and npm test, commit in the
 # house shape, push main with the token of the account that owns the remote (gh auth token -u
 # OWNER, never the ambient GITHUB_TOKEN), watch the Pages run for the pushed SHA, then open the
-# short URL. Dry-run by default: prints the card diff, the commit message and the push target.
+# short URL. A dry run unless --execute: prints the card diff, the commit message and the push target.
 
 set -euo pipefail
 
 readonly SCRIPT_DIR="${0:A:h}"
+readonly SCRIPT_PATH="${0:A}"
 readonly SKILLS_DIR="${HOME}/.claude/skills"
 readonly LIB_LOGGING="${SKILLS_DIR}/ari-skill-shellscripts/lib/logging.zsh"
 if [[ ! -r "${LIB_LOGGING}" ]]; then
@@ -17,6 +18,7 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
+source "${SKILLS_DIR}/ari-skill-shellscripts/lib/dry_run.zsh"
 source "${SKILLS_DIR}/ari-skill-shellscripts/lib/run_with_timeout.zsh"
 
 # --- Environment variables ---
@@ -55,19 +57,6 @@ check_prerequisites() {
     log::err "Missing required commands | missing='${(j:, :)missing}'"
     return 1
   fi
-}
-
-#######################################
-# Run a mutating command, or log it under dry-run.
-# Globals: DRY_RUN
-# Arguments: the command and its args
-#######################################
-run_mut() {
-  if [[ "${DRY_RUN}" == "true" ]]; then
-    log::info "would run | cmd='$*'"
-    return 0
-  fi
-  run_cmd "$@"
 }
 
 ########################################################################
@@ -315,6 +304,11 @@ run_read_gates() {
 #######################################
 render_og_image() {
   local repo="${1}" html="${2}"
+  if is_dry_run; then
+    run_mut node "${repo}/tools/og-image.mjs" "${html}"
+    return 0
+  fi
+  (( MUT_COUNT += 1 ))
   local err_file exit_code=0
   err_file="$(mktemp)"
   log::info "Rendering the link-preview card | html='${html}'"
@@ -380,14 +374,15 @@ owner_repo_from() {
 }
 
 #######################################
-# Push main with a one-shot credential helper carrying the owner's gh token. The ambient
-# GITHUB_TOKEN is never consulted.
+# Push main with a one-shot credential helper carrying the owner's gh token (passed in the
+# environment, so a dry run's "would run" line never prints it). The ambient GITHUB_TOKEN is
+# never consulted.
 # Arguments: $1 - repo, $2 - owner, $3 - token
 #######################################
 push_as_owner() {
   local repo="${1}" owner="${2}" token="${3}"
   log::info "Pushing | remote='origin' branch='${BRANCH}' as='${owner}' helper='one-shot, gh auth token -u ${owner}'"
-  TOKEN="${token}" GIT_TERMINAL_PROMPT=0 git -C "${repo}" \
+  TOKEN="${token}" GIT_TERMINAL_PROMPT=0 run_mut git -C "${repo}" \
     -c credential.helper= \
     -c "credential.helper=!f() { echo username=${owner}; echo password=\$TOKEN; }; f" \
     push origin "${BRANCH}"
@@ -456,7 +451,8 @@ ${c_bold}Usage:${c_rst}
 ${c_bold}Options:${c_rst}
   --article DIR    The article directory, articles/<slug> inside the explainers repo (required)
   --message TEXT   Commit subject; default is the house shape (articles/<slug>: <title>, <n> figures)
-  --apply          Do it: build, og-image, gates, npm test, commit, push, watch, open
+  --execute        Do it: build, og-image, gates, npm test, commit, push, watch, open
+  --dry-run        The default made explicit; wins over --execute and exports DRY_RUN=1
   --no-open        Print the short URL instead of opening it (the caller opens it, e.g. with Chrome)
   --verbose        Enable debug logging
   -h, --help       Show this help
@@ -467,9 +463,10 @@ owner, the gh account whose token would be used). Nothing is written, committed 
 
 ${c_bold}Environment:${c_rst}
   EXPLAINERS_SITE_URL  The short-URL origin (default https://explainers.sweedler.com)
+  DRY_RUN              Set and not 0 (a parent's dry run): a dry run, --execute or not; 0 alone never acts
   GITHUB_TOKEN         Ignored for the push and the run watch; the token comes from gh auth token -u <owner>
 
-${c_bold}Output:${c_rst} key=value lines on stdout: slug, action (insert|update), figures, minutes, sha, run_id, url.
+${c_bold}Output:${c_rst} key=value lines on stdout: slug, action (insert|update), figures, minutes, sha, run_id, url, dry_run (1|0).
 EOH
 }
 
@@ -477,14 +474,16 @@ EOH
 
 main() {
   check_prerequisites || exit 1
+  local -a original_args=("${@}")
 
   # === PARSE ===
-  local article="" message="" apply=false no_open=false verbose=false
+  local article="" message="" execute=false dry_run_flag=false no_open=false verbose=false
   while (( $# > 0 )); do case "${1}" in
     -h|--help)  help; return 0 ;;
     --article)  article="${2:?--article requires a value}"; shift 2 ;;
     --message)  message="${2:?--message requires a value}"; shift 2 ;;
-    --apply)    apply=true; shift ;;
+    --execute)  execute=true; shift ;;
+    --dry-run)  dry_run_flag=true; shift ;;
     --no-open)  no_open=true; shift ;;
     --verbose)  verbose=true; shift ;;
     -*)         log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
@@ -492,8 +491,7 @@ main() {
   esac; done
 
   export VERBOSE="${verbose}"
-  if [[ "${apply}" == "true" ]]; then DRY_RUN=false; else DRY_RUN=true; fi
-  typeset -g DRY_RUN
+  resolve_dry_run "${execute}" "${dry_run_flag}" || return 1
 
   # === MASSAGE ===
   [[ -n "${article}" ]] && article="${article:A}"
@@ -551,7 +549,7 @@ main() {
   palette_tokens "${html}" > "${work}/article_tokens.tsv"
   palette_tokens "${front}" > "${work}/front_tokens.tsv"
   local -a swatches
-  swatches=("${(@f)$(awk -F '\t' '{ print $1 }' "${work}/article_tokens.tsv" | head -n "${SWATCH_COUNT}")}")
+  swatches=("${(@f)$(awk -F '\t' '{ print $1 }' "${work}/article_tokens.tsv" | awk -v n="${SWATCH_COUNT}" 'NR <= n')}")
   (( ${#swatches} > 0 )) || { log::err "Article :root declares no --c- tokens | html='${html}'"; return 1; }
   log::info "Swatches | tokens='${(j: :)swatches}'"
   missing_tokens "${work}/article_tokens.tsv" "${work}/front_tokens.tsv" "${swatches[@]}" > "${work}/tokens.css"
@@ -585,21 +583,15 @@ ${CO_AUTHOR}
 EOF
   log::INFO "$(cat "${work}/commit.txt")"
 
-  # Gates. Build, the preview card and npm test change files or take seconds, so only --apply runs them.
-  if [[ "${DRY_RUN}" == "false" ]]; then
-    run_cmd node "${repo}/tools/explainers.cjs" build "${html}" >&2
-    render_og_image "${repo}" "${html}" || return 1
-    cp "${work}/index.html" "${front}"
-    log::ok "Front page written | front='${front}' action='${action}'"
-  else
-    run_mut node "${repo}/tools/explainers.cjs" build "${html}"
-    run_mut node "${repo}/tools/og-image.mjs" "${html}"
-  fi
+  # Build and the preview card write files: a dry run logs them, the run executes them.
+  run_mut node "${repo}/tools/explainers.cjs" build "${html}" >&2
+  render_og_image "${repo}" "${html}" || return 1
+  run_mut cp "${work}/index.html" "${front}"
   run_read_gates "${repo}" "${html}" || return 1
-  if [[ "${DRY_RUN}" == "false" ]]; then
-    run_tests "${repo}" || return 1
-  else
+  if is_dry_run; then
     run_mut npm test
+  else
+    run_tests "${repo}" || return 1
   fi
 
   # Commit. Everything under the article plus the front page; the status shows what that is.
@@ -613,11 +605,13 @@ EOF
   fi
   local sha
   sha="$(git -C "${repo}" rev-parse HEAD)"
-  if [[ "${DRY_RUN}" == "false" && -n "${staged}" ]]; then
-    run_cmd git -C "${repo}" add -A -- index.html "articles/${slug}"
-    run_cmd git -C "${repo}" commit -q -F "${work}/commit.txt"
-    sha="$(git -C "${repo}" rev-parse HEAD)"
-    log::ok "Committed | sha='${sha}'"
+  if [[ -n "${staged}" ]]; then
+    run_mut git -C "${repo}" add -A -- index.html "articles/${slug}"
+    run_mut git -C "${repo}" commit -q -F "${work}/commit.txt"
+    if ! is_dry_run; then
+      sha="$(git -C "${repo}" rev-parse HEAD)"
+      log::ok "Committed | sha='${sha}'"
+    fi
   fi
 
   # Push target. Fetch first so a diverged main fails here, not on the remote.
@@ -634,19 +628,21 @@ EOF
   log::info "Push target | remote='${remote_url}' owner='${owner}' branch='${BRANCH}' account='${owner}' token_source='gh auth token -u ${owner}' commits_ahead='${ahead}'"
 
   local run_id=""
-  if [[ "${DRY_RUN}" == "true" ]]; then
-    log::ok "Dry run; nothing written, committed or pushed | slug='${slug}' action='${action}' url='${url}' rerun='--apply'"
-  elif (( ahead == 0 )); then
+  if (( ahead == 0 )) && [[ -z "${staged}" ]]; then
     log::info "Origin already has HEAD; nothing to push | sha='${sha}'"
   else
     push_as_owner "${repo}" "${owner}" "${token}" || return 1
-    log::ok "Pushed | sha='${sha}' remote='${remote_url}'"
-    run_id="$(GH_TOKEN="${token}" watch_pages_run "${owner_repo}" "${sha}")" || return 1
+    if ! is_dry_run; then
+      log::ok "Pushed | sha='${sha}' remote='${remote_url}'"
+      run_id="$(GH_TOKEN="${token}" watch_pages_run "${owner_repo}" "${sha}")" || return 1
+    fi
   fi
 
   open_url "${url}" "${no_open}"
+  report_dry_run "${SCRIPT_PATH}" "${original_args[@]}"
 
   cat <<EOF
+dry_run=${DRY_RUN}
 slug=${slug}
 action=${action}
 figures=${figures}
