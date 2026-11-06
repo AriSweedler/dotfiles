@@ -3,6 +3,7 @@
 # with the write account, verify MERGED, delete the remote branch, watch the base branch's run and,
 # when --url is given, curl the live page.
 # Run: zsh $HOME/.claude/skills/ari-parallel-play/bin/watch-merge.zsh --help
+# After any edit, run: zsh $HOME/.claude/skills/ari-parallel-play/tests/watch-merge.test.zsh (fail=0).
 
 set -euo pipefail
 
@@ -160,6 +161,7 @@ head_sha() {
 #   $1 - sha
 #######################################
 run_line_for_sha() {
+  [[ -n "${1}" ]] || return 0
   gh_as "${READ_TOKEN}" run list --repo "${REPO}" --workflow "${WORKFLOW}" --commit "${1}" --limit 1 \
     --json databaseId,status,conclusion --jq '.[0] | select(. != null) | "\(.databaseId) \(.status) \(.conclusion)"' 2>/dev/null || true
 }
@@ -235,11 +237,13 @@ run_is_green() {
 # Returns: 0 when MERGED afterwards
 #######################################
 merge_pr() {
-  local pr="${1}"
-  run_mut gh_write pr merge "${pr}" --repo "${REPO}" "--${MERGE_METHOD}" || true
+  local pr="${1}" out=""
   if is_dry_run; then
+    run_mut gh_write pr merge "${pr}" --repo "${REPO}" "--${MERGE_METHOD}"
     return 0
   fi
+  out="$(run_mut gh_write pr merge "${pr}" --repo "${REPO}" "--${MERGE_METHOD}" 2>&1)" || true
+  (( MUT_COUNT += 1 ))
   if [[ "$(pr_state "${pr}")" == "MERGED" ]]; then
     log::info "Merged | pr='${pr}'"
     return 0
