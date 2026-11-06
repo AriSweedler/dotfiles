@@ -58,7 +58,6 @@
 .dolt/
 .gnupg
 .gradle/
-.groot_data/
 .histfile
 .jenv/
 .kube/
