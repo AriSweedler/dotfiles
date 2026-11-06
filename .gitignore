@@ -67,16 +67,12 @@
 .npm/
 .npmrc
 .nvs/
-.opensearch_cookies_*.enc
-.opensearch_mcp_*
-.opensearch_query_state.json
 .opa_history
 .psql_history
 .python_history
 .rustup/
 .rye/
 .spacelift/
-.spinnaker_cookies_*.enc
 .sqlite_history
 .swiftpm/
 .terraform.d/
@@ -104,4 +100,3 @@ bazel-cache
 bazel-repo-cache
 go/
 h/
-non-interactive-bazel-output-base/
