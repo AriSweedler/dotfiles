@@ -38,7 +38,7 @@ One `# Aside n: <title>` section per marker, after `# Useful links`. The title i
 
 ### Body content
 
-Paragraphs, `code` spans, `[text](url)` links (a code span inside the link text stays monospace and linked; bold is dropped), and fenced code blocks (each becomes one shaded Roboto Mono paragraph, like the main tab's native code blocks). A Drive URL is written as a markdown link and becomes a smart chip in the tab. Lists, tables, images, and headings fail the publish by aside number.
+Paragraphs, `code` spans, `[text](url)` links (a code span inside the link text stays monospace and linked; bold is dropped), fenced code blocks (each becomes one shaded Roboto Mono paragraph, like the main tab's native code blocks), and diagrams: a line holding only `[![alt](https://mermaid.ink/img/…?width=620)](https://mermaid.live/view#…)`, as `/ari-diagram-mermaid` bakes it, becomes an inline image linked to its view (alt text is dropped; `/ari-hemingway--format-gdoc` § Diagrams has the authoring). A Drive URL is written as a markdown link and becomes a smart chip in the tab. Lists, tables, headings, any other image, and a `mermaid` fence (it would publish as source text) fail the publish by aside number; the fix for the fence is to bake the diagram and write the image line.
 
 ### References
 
@@ -46,7 +46,7 @@ Refer to an aside from anywhere else (a body sentence, `# Useful links`, another
 
 ### What publishing does
 
-`/ari-hemingway--share-gdoc` moves each section into a tab titled `Aside n: <title>`, points the marker and every reference at the tab, and opens and closes the tab with an italic `← Return to main article` link set off by a rule. The return link lands on the heading above the marker, or on the marker itself when `/ari-hemingway--structure-bookmark` is set up. The publish fails, naming the aside, on: a marker without a section or a section without a marker, an empty section, a reference whose text is not the title, a title over the limit, or unsupported body content. Tabs are rebuilt on every publish, because the markdown re-import deletes every tab but the first; the mechanics are share-gdoc's.
+`/ari-hemingway--share-gdoc` moves each section into a tab titled `Aside n: <title>`, points the marker and every reference at the tab, and opens and closes the tab with an italic `← Return to main article` link set off by a rule. The return link lands on the heading above the marker, or on the marker itself when `/ari-hemingway--structure-bookmark` is set up. The publish fails, naming the aside, on: a marker without a section or a section without a marker, an empty section, a reference whose text is not the title, a title over the limit, or unsupported body content (an image that is not the diagram line included). Tabs are rebuilt on every publish, because the markdown re-import deletes every tab but the first; the mechanics are share-gdoc's.
 
 ### Caveats
 
