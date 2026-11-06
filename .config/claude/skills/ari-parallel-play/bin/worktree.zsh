@@ -14,6 +14,8 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
+source "${SKILLS_DIR}/ari-skill-shellscripts/lib/dry_run.zsh"
+readonly SCRIPT_PATH="${0:a}"
 
 # --- Constants ---
 
@@ -25,8 +27,8 @@ help() {
 ${c_green}worktree${c_rst} — open a lane's worktree, optionally sharing the root's dependency directory, or hand it off keeping the branch
 
 ${c_bold}Usage:${c_rst}
-  zsh $HOME/.claude/skills/ari-parallel-play/bin/worktree.zsh --action open --root DIR --dir DIR --branch NAME [--base REF] [--link NAME] [--dry-run]
-  zsh $HOME/.claude/skills/ari-parallel-play/bin/worktree.zsh --action handoff --root DIR --dir DIR [--link NAME] [--dry-run]
+  zsh $HOME/.claude/skills/ari-parallel-play/bin/worktree.zsh --action open --root DIR --dir DIR --branch NAME [--base REF] [--link NAME] [--execute] [--dry-run]
+  zsh $HOME/.claude/skills/ari-parallel-play/bin/worktree.zsh --action handoff --root DIR --dir DIR [--link NAME] [--execute] [--dry-run]
 
 ${c_bold}Options:${c_rst}
   --action A     ${(j:|:)VALID_ACTIONS}
@@ -35,7 +37,8 @@ ${c_bold}Options:${c_rst}
   --branch NAME  The lane's branch (open: created from --base when it does not exist)
   --base REF     Where a new branch starts (default: ${DEFAULT_BASE}; another lane's branch for a chain lane)
   --link NAME    The root's shared dependency directory to symlink into the worktree (from the repo profile; omit for none)
-  --dry-run      Log what would happen, change nothing
+  --execute      Act; without it the run is a dry run that logs each mutation and changes nothing
+  --dry-run      The default made explicit; wins over --execute and exports DRY_RUN=1
   -h, --help     Show this help
 
 Both actions are idempotent. Handoff never deletes the branch and never removes a linked directory that is not a symlink.
@@ -72,21 +75,7 @@ is_valid_option() {
 }
 
 #######################################
-# Run a mutation, or log it under --dry-run.
-# Globals: DRY_RUN
-# Arguments: the command
-#######################################
-mutate() {
-  if [[ "${DRY_RUN}" == "true" ]]; then
-    log::info "Dry run | command='${*}'"
-    return 0
-  fi
-  run_cmd "${@}"
-}
-
-#######################################
 # Add the worktree unless the directory already is one.
-# Globals: DRY_RUN
 # Arguments:
 #   $1 - root; $2 - dir; $3 - branch; $4 - base
 #######################################
@@ -104,16 +93,15 @@ open_worktree() {
   fi
   if git -C "${root}" show-ref --verify --quiet "refs/heads/${branch}"; then
     log::info "Branch exists; checking it out | branch='${branch}'"
-    mutate git -C "${root}" worktree add "${dir}" "${branch}"
+    run_mut git -C "${root}" worktree add "${dir}" "${branch}"
     return 0
   fi
   log::info "Creating the branch | branch='${branch}' base='${base}'"
-  mutate git -C "${root}" worktree add -b "${branch}" "${dir}" "${base}"
+  run_mut git -C "${root}" worktree add -b "${branch}" "${dir}" "${base}"
 }
 
 #######################################
 # Symlink the root's shared dependency directory into the worktree unless a link is already there.
-# Globals: DRY_RUN
 # Arguments:
 #   $1 - root; $2 - dir; $3 - the directory name to link
 # Returns: 1 when a real directory of that name sits there
@@ -128,14 +116,13 @@ link_shared_dir() {
     log::err "Shared directory is a real path, refusing to replace it | target='${target}'"
     return 1
   fi
-  mutate ln -s "${root}/${link_name}" "${target}"
+  run_mut ln -s "${root}/${link_name}" "${target}"
 }
 
 #######################################
 # Hand a worktree off: refuse a dirty tree or an unpushed submodule commit, unlink the shared dependency
 # symlink (when --link names one), then remove the worktree; the branch stays. The checks run before the
 # unlink so a refused handoff leaves the worktree usable.
-# Globals: DRY_RUN
 # Arguments:
 #   $1 - root; $2 - dir; $3 - the linked directory name, or empty
 # Returns: 1 when refused (dirty, an unpushed submodule, or the linked name is a real directory)
@@ -144,7 +131,7 @@ handoff_worktree() {
   local root="${1}" dir="${2}" link_name="${3}" branch="" dirty
   if [[ ! -d "${dir}" ]]; then
     log::info "Worktree already gone | dir='${dir}'"
-    mutate git -C "${root}" worktree prune
+    run_mut git -C "${root}" worktree prune
     return 0
   fi
   dirty="$(git -C "${dir}" status --porcelain | awk -v link="${link_name}" 'link == "" || ($2 != link && $2 != link "/")' | wc -l | tr -d ' ')"
@@ -156,7 +143,7 @@ handoff_worktree() {
   if [[ -n "${link_name}" ]]; then
     local target="${dir}/${link_name}"
     if [[ -L "${target}" ]]; then
-      mutate unlink "${target}"
+      run_mut unlink "${target}"
     elif [[ -e "${target}" ]]; then
       log::err "Linked name is a real directory; a forced remove would delete it, refusing | target='${target}'"
       return 1
@@ -201,7 +188,6 @@ submodules_are_on_a_remote() {
 # Remove a clean, unlinked worktree: deinit its initialized submodules (without --force, so local
 # changes refuse), try the plain remove, and force only when git refuses it over the submodules, which
 # it does once a submodule has been populated in that worktree.
-# Globals: DRY_RUN
 # Arguments:
 #   $1 - root; $2 - the worktree dir
 # Returns: 1 when a deinit or the remove fails
@@ -211,10 +197,10 @@ remove_worktree() {
   initialized="$(initialized_submodules "${dir}")"
   if [[ -n "${initialized}" ]]; then
     log::info "Deinitializing the worktree's submodules | dir='${dir}' submodules='${(j:, :)${(f)initialized}}'"
-    mutate git -C "${dir}" submodule deinit --all || return 1
+    run_mut git -C "${dir}" submodule deinit --all || return 1
   fi
-  if [[ "${DRY_RUN}" == "true" ]]; then
-    log::info "Dry run | command='git -C ${root} worktree remove ${dir}'"
+  if is_dry_run; then
+    run_mut git -C "${root}" worktree remove "${dir}"
     return 0
   fi
   if refusal="$(git -C "${root}" worktree remove "${dir}" 2>&1)"; then
@@ -225,14 +211,15 @@ remove_worktree() {
     return 1
   fi
   log::warn "git refused the plain remove over the tree's submodules; forcing after the checks above | dir='${dir}' refusal='${refusal}'"
-  run_cmd git -C "${root}" worktree remove --force "${dir}"
+  run_mut git -C "${root}" worktree remove --force "${dir}"
 }
 
 main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local action="" root="" dir="" branch="" base="${DEFAULT_BASE}" link_name="" dry_run=false
+  local -a args=("${@}")
+  local action="" root="" dir="" branch="" base="${DEFAULT_BASE}" link_name="" execute=false dry_run=false
   while (( $# > 0 )); do case "${1}" in
     -h|--help)  help; return 0 ;;
     --action)   action="${2:?--action requires a value}"; shift 2 ;;
@@ -241,6 +228,7 @@ main() {
     --branch)   branch="${2:?--branch requires a value}"; shift 2 ;;
     --base)     base="${2:?--base requires a ref}"; shift 2 ;;
     --link)     link_name="${2:?--link requires a directory name}"; shift 2 ;;
+    --execute)  execute=true; shift ;;
     --dry-run)  dry_run=true; shift ;;
     -*)         log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)          log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
@@ -248,7 +236,7 @@ main() {
 
   # === MASSAGE ===
   action="${action:l}"
-  typeset -g DRY_RUN="${dry_run}"
+  resolve_dry_run "${execute}" "${dry_run}"
 
   # === VALIDATE ===
   is_valid_option "${action}" "${VALID_ACTIONS[@]}" || { log::err "Invalid --action | action='${action}' valid='${(j:, :)VALID_ACTIONS}'"; help; return 1; }
@@ -271,13 +259,16 @@ main() {
     handoff_worktree "${root}" "${dir}" "${link_name}"
   fi
 
+  report_dry_run "${SCRIPT_PATH}" "${args[@]}"
+
   cat <<EOF
 action=${action}
 dir=${dir}
 branch=${branch:-$(git -C "${dir}" branch --show-current 2>/dev/null || true)}
 base=${base}
 link=${link_name:+${root}/${link_name}}
-dry_run=${dry_run}
+dry_run=${DRY_RUN}
+changes=${MUT_COUNT}
 EOF
 }
 

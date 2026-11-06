@@ -14,6 +14,8 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
+source "${SKILLS_DIR}/ari-skill-shellscripts/lib/dry_run.zsh"
+readonly SCRIPT_PATH="${0:a}"
 
 # --- Constants ---
 
@@ -38,7 +40,7 @@ help() {
 ${c_green}watch-merge${c_rst} — follow one branch's PR through CI, merge it on green, watch the base branch and, optionally, the live site
 
 ${c_bold}Usage:${c_rst}
-  zsh $HOME/.claude/skills/ari-parallel-play/bin/watch-merge.zsh --branch BRANCH --read-user USER [--write-user USER] [--url URL] [--bundle-regex RE] [--repo OWNER/NAME] [--base BRANCH] [--workflow NAME] [--gate JOB] [--interval SEC] [--merge-method M] [--keep-branch] [--dry-run]
+  zsh $HOME/.claude/skills/ari-parallel-play/bin/watch-merge.zsh --branch BRANCH --read-user USER [--write-user USER] [--url URL] [--bundle-regex RE] [--repo OWNER/NAME] [--base BRANCH] [--workflow NAME] [--gate JOB] [--interval SEC] [--merge-method M] [--keep-branch] [--execute] [--dry-run]
 
 ${c_bold}Options:${c_rst}
   --branch BRANCH     The PR's head branch
@@ -53,7 +55,8 @@ ${c_bold}Options:${c_rst}
   --interval SEC      Every poll's interval: CI, run lookups, the red wait (default: ${DEFAULT_INTERVAL}; never lower than 60 with many watchers)
   --merge-method M    ${(j:|:)VALID_MERGE_METHODS} (default: ${DEFAULT_MERGE_METHOD})
   --keep-branch       Do not delete the remote branch after the merge
-  --dry-run           Log the merge instead of running it
+  --execute           Act: merge and delete the branch; without it the run is a dry run that follows CI and logs the merge it would make
+  --dry-run           The default made explicit; wins over --execute and exports DRY_RUN=1
   -h, --help          Show this help
 
 The head's newest run is resolved again on every poll, so a "gh run rerun" is seen. A red run waits ${RED_WAIT_POLLS} polls
@@ -89,6 +92,16 @@ is_valid_option() {
     [[ "${val}" == "${opt}" ]] && return 0
   done
   return 1
+}
+
+#######################################
+# gh as the write account, for run_mut: the token stays out of the logged command.
+# Globals: WRITE_TOKEN
+# Arguments:
+#   $1.. - gh arguments
+#######################################
+gh_write() {
+  gh_as "${WRITE_TOKEN}" "${@}"
 }
 
 #######################################
@@ -215,19 +228,18 @@ run_is_green() {
 }
 
 #######################################
-# Merge the PR (or log it under --dry-run) and verify the state.
-# Globals: WRITE_TOKEN REPO DRY_RUN MERGE_METHOD
+# Merge the PR (only logged in a dry run) and verify the state.
+# Globals: WRITE_TOKEN REPO MERGE_METHOD
 # Arguments:
 #   $1 - pr number
 # Returns: 0 when MERGED afterwards
 #######################################
 merge_pr() {
-  local pr="${1}" out=""
-  if [[ "${DRY_RUN}" == "true" ]]; then
-    log::info "Dry run: would merge | pr='${pr}' method='${MERGE_METHOD}'"
+  local pr="${1}"
+  run_mut gh_write pr merge "${pr}" --repo "${REPO}" "--${MERGE_METHOD}" || true
+  if is_dry_run; then
     return 0
   fi
-  out="$(gh_as "${WRITE_TOKEN}" pr merge "${pr}" --repo "${REPO}" "--${MERGE_METHOD}" 2>&1 | tail -1 || true)"
   if [[ "$(pr_state "${pr}")" == "MERGED" ]]; then
     log::info "Merged | pr='${pr}'"
     return 0
@@ -238,19 +250,17 @@ merge_pr() {
 
 #######################################
 # Delete the remote branch, only after a verified merge.
-# Globals: WRITE_TOKEN REPO KEEP_BRANCH DRY_RUN
+# Globals: WRITE_TOKEN REPO KEEP_BRANCH
 # Arguments:
 #   $1 - branch
 #######################################
 delete_branch() {
   local branch="${1}"
-  if [[ "${KEEP_BRANCH}" == "true" || "${DRY_RUN}" == "true" ]]; then
-    log::info "Keeping remote branch | branch='${branch}' keep='${KEEP_BRANCH}' dry_run='${DRY_RUN}'"
+  if [[ "${KEEP_BRANCH}" == "true" ]]; then
+    log::info "Keeping remote branch | branch='${branch}'"
     return 0
   fi
-  gh_as "${WRITE_TOKEN}" api -X DELETE "repos/${REPO}/git/refs/heads/${branch}" >/dev/null 2>&1 \
-    && log::info "Remote branch deleted | branch='${branch}'" \
-    || log::warn "Remote branch not deleted | branch='${branch}'"
+  run_mut gh_write api -X DELETE "repos/${REPO}/git/refs/heads/${branch}" || log::warn "Remote branch not deleted | branch='${branch}'"
 }
 
 #######################################
@@ -302,7 +312,8 @@ main() {
 
   # === PARSE ===
   local branch="" url="" bundle_regex="" read_user="" write_user="" repo="" base="${DEFAULT_BASE}" gate="${DEFAULT_GATE}" workflow="${DEFAULT_WORKFLOW}"
-  local interval="${DEFAULT_INTERVAL}" merge_method="${DEFAULT_MERGE_METHOD}" keep_branch=false dry_run=false
+  local -a args=("${@}")
+  local interval="${DEFAULT_INTERVAL}" merge_method="${DEFAULT_MERGE_METHOD}" keep_branch=false execute=false dry_run=false
   while (( $# > 0 )); do case "${1}" in
     -h|--help)       help; return 0 ;;
     --branch)        branch="${2:?--branch requires a value}"; shift 2 ;;
@@ -317,6 +328,7 @@ main() {
     --interval)      interval="${2:?--interval requires seconds}"; shift 2 ;;
     --merge-method)  merge_method="${2:?--merge-method requires a value}"; shift 2 ;;
     --keep-branch)   keep_branch=true; shift ;;
+    --execute)       execute=true; shift ;;
     --dry-run)       dry_run=true; shift ;;
     -*)              log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)               log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
@@ -336,10 +348,11 @@ main() {
   is_valid_option "${merge_method}" "${VALID_MERGE_METHODS[@]}" || { log::err "Invalid --merge-method | merge_method='${merge_method}' valid='${(j:, :)VALID_MERGE_METHODS}'"; return 1; }
   (( interval >= 60 )) || { log::err "Interval too low | interval='${interval}' minimum='60'"; return 1; }
 
-  typeset -g READ_TOKEN WRITE_TOKEN REPO URL BUNDLE_REGEX WORKFLOW DRY_RUN MERGE_METHOD KEEP_BRANCH INTERVAL
+  resolve_dry_run "${execute}" "${dry_run}"
+  typeset -g READ_TOKEN WRITE_TOKEN REPO URL BUNDLE_REGEX WORKFLOW MERGE_METHOD KEEP_BRANCH INTERVAL
   READ_TOKEN="$(gh auth token --user "${read_user}")" || { log::err "No token for the read user | read_user='${read_user}'"; return 1; }
   WRITE_TOKEN="$(gh auth token --user "${write_user}")" || { log::err "No token for the write user | write_user='${write_user}'"; return 1; }
-  REPO="${repo}"; URL="${url}"; BUNDLE_REGEX="${bundle_regex}"; WORKFLOW="${workflow}"; DRY_RUN="${dry_run}"; MERGE_METHOD="${merge_method}"; KEEP_BRANCH="${keep_branch}"; INTERVAL="${interval}"
+  REPO="${repo}"; URL="${url}"; BUNDLE_REGEX="${bundle_regex}"; WORKFLOW="${workflow}"; MERGE_METHOD="${merge_method}"; KEEP_BRANCH="${keep_branch}"; INTERVAL="${interval}"
 
   # === LOGIC ===
   log::info "Waiting for the PR | branch='${branch}' repo='${REPO}' minutes='${DEFAULT_PR_WAIT_MIN}'"
@@ -383,11 +396,13 @@ main() {
   delete_branch "${branch}"
 
   typeset -g MAIN_RUN="" MAIN_EXIT="skipped" LIVE_STATUS="" LIVE_BUNDLE=""
-  if [[ "${base}" == "${DEFAULT_BASE}" && "${DRY_RUN}" != "true" ]]; then
+  if [[ "${base}" == "${DEFAULT_BASE}" ]] && ! is_dry_run; then
     watch_main_and_live "${base}"
   else
     log::info "Skipping the base run and live check | base='${base}' dry_run='${DRY_RUN}'"
   fi
+
+  report_dry_run "${SCRIPT_PATH}" "${args[@]}"
 
   cat <<EOF
 pr=${pr}
@@ -397,6 +412,8 @@ main_run=${MAIN_RUN}
 main_exit=${MAIN_EXIT}
 live_status=${LIVE_STATUS}
 live_bundle=${LIVE_BUNDLE}
+dry_run=${DRY_RUN}
+changes=${MUT_COUNT}
 EOF
 }
 
