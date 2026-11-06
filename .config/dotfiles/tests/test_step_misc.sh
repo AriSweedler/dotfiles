@@ -124,12 +124,25 @@ assert_eq "no Terminal prefs → skip" skip "$(status_of terminal_config)"
 assert_eq "reason no_profiles" no_profiles "$(reason_of terminal_config)"
 terminal_plist_with_font "Menlo-Regular"
 plutil -insert 'Window Settings.Basic.useOptionAsMetaKey' -bool true "${HOME}/Library/Preferences/com.apple.Terminal.plist"
+TP="${HOME}/Library/Preferences/com.apple.Terminal.plist"
 check_step terminal_config
-assert_eq "one profile without Option as Meta → fail" fail "$(status_of terminal_config)"
-assert_eq "reason option_not_meta" option_not_meta "$(reason_of terminal_config)"
-assert_contains "detail names the profile" "$(step_get terminal_config .detail)" "Meta: Pro |"
+assert_eq "the active profile without Option as Meta → fail" fail "$(status_of terminal_config)"
+assert_eq "reason active_not_meta" active_not_meta "$(reason_of terminal_config)"
+assert_contains "detail names the active profile" "$(step_get terminal_config .detail)" "Meta: Pro |"
 assert_not_contains "detail leaves out the one already set" "$(step_get terminal_config .detail)" "Basic"
 assert_eq "init fixes it" false "$(step_get terminal_config .manual)"
+plutil -replace 'Default Window Settings' -string Basic "${TP}"
+check_step terminal_config
+assert_eq "an inactive profile without Option as Meta → fail" fail "$(status_of terminal_config)"
+assert_eq "reason option_not_meta" option_not_meta "$(reason_of terminal_config)"
+plutil -replace 'Startup Window Settings' -string Homebrew "${TP}"
+check_step terminal_config
+assert_eq "an active built-in never saved → fail" fail "$(status_of terminal_config)"
+assert_eq "reason active_unsaved" active_unsaved "$(reason_of terminal_config)"
+assert_eq "active_unsaved is manual" true "$(step_get terminal_config .manual)"
+assert_contains "the fix is the checkbox" "$(step_get terminal_config .fix)" "Profiles -> Homebrew -> Keyboard"
+plutil -remove 'Startup Window Settings' "${TP}"
+plutil -replace 'Default Window Settings' -string Pro "${TP}"
 dry_step terminal_config
 assert_contains "dry-run logs the apply plan" "${ERR}" "would run apply::terminal_config"
 assert_not_contains "dry-run writes nothing" "$(shim_log defaults)" "import"
@@ -138,6 +151,7 @@ assert_contains "apply imports through defaults" "$(shim_log defaults)" "import 
 check_step terminal_config
 assert_eq "after apply → ok" ok "$(status_of terminal_config)"
 assert_eq "reason option_is_meta" option_is_meta "$(reason_of terminal_config)"
+assert_contains "detail names the active profile" "$(step_get terminal_config .detail)" "active: Pro |"
 rm -f "${HOME}/Library/Preferences/com.apple.Terminal.plist"
 
 # ── karabiner ─────────────────────────────────────────────────────────────────
