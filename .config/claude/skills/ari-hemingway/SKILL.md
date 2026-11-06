@@ -108,7 +108,7 @@ As soon as the findings are applied, print the final draft path and take the des
 | Destination | Share action |
 |---|---|
 | gdoc | Invoke `/ari-hemingway--share-gdoc` — creates (or updates in place) the Doc from the markdown and styles its tables. Pass `--folder` when the user named a Drive folder; otherwise the script uses `ARI_HEMINGWAY_SCRATCH_DIR`, and only when that is unset too do you ask for a folder. |
-| explainer | Invoke `/ari-hemingway--share-explainer`: its dry-run shows the card diff and the commit; `--apply` publishes on the user's confirmation. Under `--autonomous` the run ends at that confirmation. |
+| explainer | Invoke `/ari-hemingway--share-explainer`: its dry-run shows the card diff and the commit; `--execute` publishes on the user's confirmation. Under `--autonomous` the run ends at that confirmation. |
 | slack | "Paste into the target channel / thread. Preserve the formatting — it's already mrkdwn." |
 | pr-description | "Run `gh pr edit {PR} --body-file {path}`." |
 | gist | "Run `gh gist create {path} --desc '{topic}'`." |
@@ -150,7 +150,7 @@ User invocation: `/ari-hemingway --autonomous interactive explainer on the Colle
 3. Review prompt → printed, default taken: `common`, destination=explainer. The draft is the author's `article/body.html` (toolchain article).
 4. Run `/ari-hemingway--review-common --autonomous` with destination=explainer and the body path.
 5. Apply `all` findings to `article/body.html`; re-run `assemble.py` and the four gates.
-6. Share: `/ari-hemingway--share-explainer` dry-run; the run pauses at its publish gate and prints the `--apply` command.
+6. Share: `/ari-hemingway--share-explainer` dry-run; the run pauses at its publish gate and prints the `--execute` command.
 
 ## Rules
 
