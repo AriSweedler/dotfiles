@@ -71,5 +71,5 @@ step::claude_skills::live() {
 }
 
 apply::claude_skills() {
-  run_mut zsh "$(step::claude_skills::registry_bin)/link" --prune
+  run_mut zsh "$(step::claude_skills::registry_bin)/link" --prune --execute
 }

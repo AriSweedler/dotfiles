@@ -54,7 +54,7 @@ dotfiles_repo::undocumented() {
     if [[ ! -f "${skill}" ]]; then
       print -r -- "write ~/${sub}/skills/ari-dotfile--submodule-${name}/SKILL.md (${recipe}, step 5)"$'\t'"${sub} lacks skills/ari-dotfile--submodule-${name}/SKILL.md"
     elif [[ ! -e "${link}" || "${link:A}" != "${skill:h:A}" ]]; then
-      print -r -- "zsh \$HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link (/ari-dotfile--submodule § Layout contract)"$'\t'"~/.claude/skills lacks ari-dotfile--submodule-${name} linked to ~/${sub}/skills/ari-dotfile--submodule-${name}"
+      print -r -- "zsh \$HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link --execute (/ari-dotfile--submodule § Layout contract)"$'\t'"~/.claude/skills lacks ari-dotfile--submodule-${name} linked to ~/${sub}/skills/ari-dotfile--submodule-${name}"
     fi
   done
   return 0
