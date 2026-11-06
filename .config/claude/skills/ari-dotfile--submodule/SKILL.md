@@ -107,7 +107,7 @@ the new repo as `~/dotfiles/.config/<name>`.
    else `ok`) and `apply::<name>` (`tier::submodule_identity_apply`, the hooks,
    the build, every mutation through `run_mut`). Adding the file adds the step.
    Model: `steps/plugged.zsh`. `git df add` it, commit.
-11. **Link and record.** `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link`.
+11. **Link and record.** `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link --execute`.
     Add a row to **Known submodules** below and to `/ari-dotfiles` § Submodules.
 12. **User: `dotfiles push`.** Then **Verify**.
 
@@ -184,9 +184,9 @@ Never `--no-verify`, in any repo. Never edit `denylist.txt` to make a check pass
 | `submodule status` prefix `+` | checkout ahead of the pointer | a bump is pending: `dotfiles push`; on a machine that only pulled, `git df submodule update` |
 | `submodule status` prefix `-` | not initialized | `git df submodule update --init -- .config/<name>` (`dotfiles init` does it) |
 | `~/.config/<name>`: `No such file or directory` | `wholeDirs` in bridge.nix lacks `.config/<name>`, or no switch since it was added | **Creating one**, step 9 |
-| registry `status`: the repo's skill `dangling` or `missing` | skill dir renamed or new | `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link --prune` |
+| registry `status`: the repo's skill `dangling` or `missing` | skill dir renamed or new | `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link --prune --execute` |
 | `dotfiles healthcheck`: `submodule_uninitialized` / `submodule_drift` | pointer vs checkout | the two rows above |
-| `dotfiles healthcheck`: `submodule_undocumented` | the checkout lacks `README.md` or `skills/ari-dotfile--submodule-<name>/SKILL.md`, or the skill is not linked into `~/.claude/skills` | write what the detail names (**Creating one**, steps 1 and 5), commit it in the repo; an unlinked skill: `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link` |
+| `dotfiles healthcheck`: `submodule_undocumented` | the checkout lacks `README.md` or `skills/ari-dotfile--submodule-<name>/SKILL.md`, or the skill is not linked into `~/.claude/skills` | write what the detail names (**Creating one**, steps 1 and 5), commit it in the repo; an unlinked skill: `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link --execute` |
 
 ## Known submodules
 
