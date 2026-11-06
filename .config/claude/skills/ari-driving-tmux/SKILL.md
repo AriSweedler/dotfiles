@@ -404,12 +404,19 @@ dotfiles raycast link clipboard-history
 - `bin/pretooluse_bash_pbcopy_guard.sh` — the pbcopy guard hook.
 - `tests/ari-driving.test.zsh` — `bin/ari-driving` on a throwaway tmux server (`-L`) with a fake pbcopy, and with tmux off PATH; it refuses to run unless its pbcopy shim wins PATH.
 - `tests/link.test.zsh` — layouts, the link's one-line payload, `handoff.zsh`'s fenced-step forms (`--paste` equals the `--cmd` block, one form at a time, the widened fence), and clicks on a throwaway tmux server (`-L`): what the pane shows, and that a capture's output equals the one-line command's; `link.zsh` and `focus.zsh` with tmux off PATH; needs `script` and `~/.config/bin/run_log`.
-- `~/.config/claude/lib/tmux-pane.sh` (shared tier) — the gate, resolve, lock and paste helpers that `link.zsh`, `focus.zsh`, `handoff.zsh` and `run_log` source; `ari-skill-shellscripts/lib/logging.zsh` is the logging shim they all source (`[ERROR] missing shared logging lib` when absent).
+- `tests/tmux-pane-lib.test.zsh` — the lib below on a throwaway tmux server (`-L`): each gate refusal's kind, a gone pane reading `pane_gone`, and the lock terminating on an unwritable root or an unbreakable stale lock.
+- `~/.config/claude/lib/tmux-pane.sh` (shared tier) — the gate, resolve, lock and paste helpers (`tmux_pane_gate_check` sets `ARI_DRIVING_GATE_KIND`, a stable token, beside the prose; `tmux_pane_lock` returns 2 (`ARI_DRIVING_EXIT_LOCK_UNAVAILABLE`, lock-only) when it cannot take or break a lock) that `link.zsh`, `focus.zsh`, `handoff.zsh` and `run_log` source; `ari-skill-shellscripts/lib/logging.zsh` is the logging shim they all source (`[ERROR] missing shared logging lib` when absent).
 
 `--help` on each lists its flags. After an edit to `bin/ari-driving`:
 
 ```zsh
 zsh $HOME/.claude/skills/ari-driving-tmux/tests/ari-driving.test.zsh
+```
+
+After an edit to `~/.config/claude/lib/tmux-pane.sh`:
+
+```zsh
+zsh $HOME/.claude/skills/ari-driving-tmux/tests/tmux-pane-lib.test.zsh
 ```
 
 After an edit to `lib/wrap.zsh`, `bin/link.zsh`, `bin/focus.zsh` or `bin/handoff.zsh` (about a minute: it waits on real runs):

@@ -268,7 +268,13 @@ layout_refusal() {
 #######################################
 gate_and_type() {
   local pane_id="${1}" label="${2}" text="${3}" enter="${4}" return_pane="${5}" reason
-  if ! tmux_pane_lock "${pane_id}"; then
+  local -i lock_status=0
+  local lock_err
+  lock_err="$(tmux_pane_lock "${pane_id}" 2>&1 >/dev/null)" || lock_status=$?
+  if (( lock_status == ARI_DRIVING_EXIT_LOCK_UNAVAILABLE )); then
+    report_refusal "${label}" "cannot take the pane lock: ${lock_err}" "${return_pane}"
+    return 1
+  elif (( lock_status != 0 )); then
     report_refusal "${label}" "another click is typing there" "${return_pane}"
     return 1
   fi
