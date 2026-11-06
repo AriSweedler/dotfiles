@@ -20,7 +20,7 @@ readonly SLUG_MAX_LEN=57
 
 help() {
     cat <<EOF
-${c_green}make-investigation-folder${c_rst} — derive topic-slug + timestamp, detect concurrent sessions, create the folder
+${c_green}make-investigation-folder${c_rst} — derive topic-slug + timestamp, detect concurrent sessions, create the folder (writes only its own investigation folder, so it takes no --dry-run or --execute)
 
 ${c_bold}Usage:${c_rst}
   zsh $HOME/.claude/skills/ari-hemingway--lib/bin/make-investigation-folder --skill-name NAME --subject SUBJECT [--base-path PATH]
@@ -30,7 +30,6 @@ ${c_bold}Options:${c_rst}
   --subject SUBJECT   Subject string (turned into a deterministic topic-slug)
   --base-path PATH    Root for investigation folders (default: ${DEFAULT_BASE}; falls back to \${TMPDIR:-\$HOME/.cache}/hemingway if unwritable)
   --force-new         Skip the concurrent-session check and create a new folder unconditionally
-  --dry-run           Show what would happen without creating any files or folders
   -h, --help          Show this help
 
 ${c_bold}Behavior:${c_rst}
@@ -63,7 +62,6 @@ skill_name=""
 subject=""
 base_path="${DEFAULT_BASE}"
 force_new="false"
-dry_run="false"
 
 while (( $# > 0 )); do
     case "${1}" in
@@ -85,10 +83,6 @@ while (( $# > 0 )); do
             ;;
         --force-new)
             force_new="true"
-            shift
-            ;;
-        --dry-run)
-            dry_run="true"
             shift
             ;;
         *)
@@ -262,19 +256,6 @@ fi
 
 timestamp="$(date +%Y%m%d-%H%M%S)-$(openssl rand -hex 2)"
 investigation_folder="${parent_dir}/${timestamp}"
-
-if [[ "${dry_run}" == "true" ]]; then
-    log::info "Dry run — no folder created | path='${investigation_folder}'"
-    cat <<EOF
-base_path=${(qq)resolved_base}
-topic_slug=${(qq)topic_slug}
-parent_dir=${(qq)parent_dir}
-investigation_folder=${(qq)investigation_folder}
-timestamp=${(qq)timestamp}
-concurrent_sessions=''
-EOF
-    exit 0
-fi
 
 mkdir -p "${investigation_folder}"
 stub_files "${investigation_folder}"

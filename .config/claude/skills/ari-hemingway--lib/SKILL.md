@@ -28,7 +28,7 @@ Siblings MAY:
 
 - **Prints every prompt it would have waited on**, then takes the default: the option the prompt names as default; for a "present X and wait" step with no options, X is accepted as presented once the step's mechanical check passes.
 - **Starts a new timestamp** at Restore context (option 2) and at the concurrent-session check (option 2, `--force-new`); it never resumes another session's folder.
-- **Stops at any confirmation before a visible or destructive action** (Scrap, the permalink Option 3 gate, the Overwrite gate, `gh gist`, a Drive folder creation, a publish `--apply`, any `git push`): it prints the prompt and the command that would run, sets `Last phase`, and ends with `Autonomous run paused at <gate>; rerun to continue`. A local `git commit` is not a pause point.
+- **Stops at any confirmation before a visible or destructive action** (Scrap, the permalink Option 3 gate, the Overwrite gate, `gh gist`, a Drive folder creation, a publish `--execute`, any `git push`): it prints the prompt and the command that would run, sets `Last phase`, and ends with `Autonomous run paused at <gate>; rerun to continue`. A local `git commit` is not a pause point.
 - **Records each default** as one line under a `Defaults taken` field in its scratchpad, after `Last phase`:
 
 ```
@@ -69,7 +69,7 @@ eval "$(zsh $HOME/.claude/skills/ari-hemingway--lib/bin/make-investigation-folde
 # exports: base_path, topic_slug, parent_dir, investigation_folder, timestamp, concurrent_sessions
 ```
 
-Stdout is the six `key='value'` lines; every `[INFO]`/`[WARN]` line goes to stderr (`--help` describes both streams).
+The script writes only its own investigation folder, so it takes neither `--dry-run` nor `--execute`. Stdout is the six `key='value'` lines; every `[INFO]`/`[WARN]` line goes to stderr (`--help` describes both streams).
 
 **Do NOT add `2>/dev/null`:** it hides the WARN that says the folder is not under the default base.
 
