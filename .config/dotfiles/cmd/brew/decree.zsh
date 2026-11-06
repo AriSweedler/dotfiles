@@ -660,7 +660,8 @@ decree::triage_render_rest() {  # <drift.json>
 (( ${+DECREE_TRIAGE_ACTIONS} )) || typeset -gra DECREE_TRIAGE_ACTIONS=(global local ignore-global ignore-local)
 (( ${+DECREE_TRIAGE_LABEL} )) || typeset -grA DECREE_TRIAGE_LABEL=(
   [global]="shared Brewfile" [local]="local Brewfile"
-  [ignore-global]="ignore (shared)" [ignore-local]="ignore (local)" [skip]="skip"
+  [ignore-global]="ignore (shared)" [ignore-local]="ignore (local)"
+  [delete]="uninstall from this machine" [skip]="skip"
 )
 (( ${+DECREE_TRIAGE_WHERE} )) || typeset -grA DECREE_TRIAGE_WHERE=([global]="every machine" [local]="this machine")
 
@@ -761,7 +762,8 @@ decree::triage_interactive() {  # [--dry-run] [--no-push]
     [[ "${new}" != true ]] || header+="  new"
     pick=""
     if ! pick="$(ui::choose --header "${header}" "${DECREE_TRIAGE_LABEL[global]}" "${DECREE_TRIAGE_LABEL[local]}" \
-                   "${DECREE_TRIAGE_LABEL[ignore-global]}" "${DECREE_TRIAGE_LABEL[ignore-local]}" "${DECREE_TRIAGE_LABEL[skip]}")" \
+                   "${DECREE_TRIAGE_LABEL[ignore-global]}" "${DECREE_TRIAGE_LABEL[ignore-local]}" \
+                   "${DECREE_TRIAGE_LABEL[delete]}" "${DECREE_TRIAGE_LABEL[skip]}")" \
        || [[ -z "${pick}" ]]; then
       log::warn "cancelled; nothing decreed"
       return 130
@@ -771,7 +773,7 @@ decree::triage_interactive() {  # [--dry-run] [--no-push]
       [[ "${DECREE_TRIAGE_LABEL[${key}]}" != "${pick}" ]] || action="${key}"
     done
     reason=""
-    if [[ "${action}" != skip ]]; then
+    if [[ "${action}" != (skip|delete) ]]; then
       ask="why does ${DECREE_TRIAGE_WHERE[${action}]} need ${kind}:${name}? (one line, kept as the Brewfile comment)"
       [[ "${action}" != ignore-* ]] || ask="why does ${kind}:${name} stay undeclared? (one line, kept as the ignore comment)"
       while [[ -z "${reason}" ]]; do
