@@ -157,6 +157,12 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
   alone: an ldf component plugs into a df framework at one of the **Cutpoints**.
   Something that should run on a schedule or on screen unlock is a job plugin
   under `~/.local/share/dotfiles/jobs/`.
+- **Some files are placed by Nix.** The dotfiles are being ported to nix-darwin
+  and home-manager, and the port keeps the split (**Cutpoints**). A file
+  home-manager places is a read-only symlink into `/nix/store`: edit its source in
+  the flake, then switch, per `/ari-dotfiles-nix`. Nix places only the few files
+  `/ari-dotfiles-nix` § What Nix owns lists; edit everything else as below.
+  Later the bare repo in `$HOME` becomes a plain clone; until then this workflow is unchanged.
 - **Claude skills follow the same split.** The real directory lives in the tier
   that owns it, `~/.config/claude/skills/<name>/` (df) or
   `~/.local/share/claude-skills/<name>/` (ldf), and `~/.claude/skills/<name>` is a
@@ -230,6 +236,7 @@ Exoskeleton is the model.
 | `dotfiles jobs` (`~/.config/dotfiles/cmd/jobs.zsh`; shared plugins `~/.config/dotfiles/jobs/`, shared deps `~/.config/dotfiles/deps/`) | `~/.local/share/dotfiles/jobs/<name>`, `~/.local/share/dotfiles/deps/<name>` | one launchd job runs both roots' plugins on unlock, login and a 5-minute tick; a plugin's `# deps:` line names deps run as its setup first (local wins); `dotfiles jobs list` |
 | Chrome Exoskeleton, `exo` (`~/.config/chrome-exoskeleton/`) | `~/.local/share/chrome-exoskeleton/plugins/<name>/` | `exo link` mounts both roots; `/ari-dotfile--submodule-chrome-exoskeleton` |
 | Claude skills, `/ari-dotfiles-skill-registry` (`~/.config/claude/skills/`) | `~/.local/share/claude-skills/<name>/` | symlinked into `~/.claude/skills` |
+| Nix flake (`~/.config/dotfiles/nix/`: exports the nix-darwin and home-manager modules, never switched alone) | `~/.local/share/dotfiles/nix/`, this machine's flake | inverted: the local flake takes the shared one as an input and is the one switched (`darwinConfigurations.personal`); `/ari-dotfiles-nix` |
 | `new-machine` Brewfile (`~/.config/new-machine/Brewfile`) | `~/.local/share/new-machine/Brewfile` | merged for `brew bundle` |
 | `open-any` (`~/.config/zsh/plugins/open_any.zsh`) | `~/.local/bin/open-*` | discovered by name across both bin tiers |
 | Starship prompt (`~/.config/starship.toml`, joined by `~/.config/zsh/plugins/starship.zsh`) | `~/.local/share/starship/*.toml`, whole tables only | joined after the base into `~/.local/state/starship/starship.toml` (`STARSHIP_CONFIG`) at shell start; a table in both tiers is a TOML error and the prompt falls back to the base |
@@ -345,6 +352,8 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
   `/ari-dotfile--submodule-chrome-exoskeleton` and `/ari-dotfile--submodule-plugged`
 - **Jobs framework**: `~/.config/dotfiles/lib/jobs.zsh`; shared plugins in `~/.config/dotfiles/jobs/`
   (README = the plugin contract) — see **Cutpoints**
+- **Nix flake**: `~/.config/dotfiles/nix/` (`flake.nix`, `darwin.nix`, `home.nix`), the shared
+  modules — see `/ari-dotfiles-nix`
 - **Harness**: `~/.config/bin/dotfiles` (init, pull, push, status, logs, git, jobs; `dotfiles help`) — see **Pushing**
   and **Bootstrapping a machine**; the push is token-pinned to `ARI_DOTFILES_GITHUB_LOGIN`.
   The file in `bin` is only the entrypoint; the program is `~/.config/dotfiles/lib/*.zsh`,
@@ -356,6 +365,7 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
   via `source_zsh_dir --optional "${XDG_DATA_HOME}/zsh/plugins"`
 - **Scripts**: `~/.local/bin/` and `~/.local/share/bin/`
 - **Job plugins**: `~/.local/share/dotfiles/jobs/<name>` — see **Cutpoints**
+- **Nix flake**: `~/.local/share/dotfiles/nix/`, this machine's flake, the one switched — see `/ari-dotfiles-nix`
 - **Machine name**: one word in `~/.local/share/dotfiles/machine-name`. Read it with
   `dotfiles machine-name`, never the path; `dotfiles machine-name NAME` renames and commits
   it. `dotfiles init` writes a random one. `personal` turns off **Review before push**.
@@ -383,7 +393,8 @@ cannot explain is listed but left out of the plan.
 
 ## Bootstrapping a machine
 
-`dotfiles init` (idempotent, `--dry-run`; what `bootstrap.sh` ends in) converges the whole machine: every step checks, applies only where it finds
+`dotfiles init` (idempotent, `--dry-run`; what `bootstrap.sh` ends in) converges the whole machine but Nix,
+whose installer and first switch are `/ari-dotfiles-nix`'s: every step checks, applies only where it finds
 drift, and re-checks, then `dotfiles status` prints. So a changed Brewfile installs its new
 items, Raycast syncs when it is behind, and a converged machine changes nothing. `dotfiles
 steps` lists the steps and their groups (`repo`, `brew`, `tools`); `init --group repo` or
