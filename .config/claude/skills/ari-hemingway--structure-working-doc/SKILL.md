@@ -1,6 +1,6 @@
 ---
 name: ari-hemingway--structure-working-doc
-description: "Keep a working doc for a session that has piled up many orthogonal asks: one file per ask holding the user's words verbatim, a dependency-ordered table (the DAG flattened so every Needs cites an earlier row, checked mechanically), and per-ask dispatch to subagents or workflows with status tracking. Modes: capture (from this session), resume (an existing folder). Use when a conversation has accumulated several independent requests, when context is about to compact, or when the user asks for a working doc, a task table with dependencies, or to fan the asks out."
+description: "Keep a working doc for a session that has piled up many orthogonal asks: one file per ask holding the user's words verbatim, a dependency-ordered table (the DAG flattened so every Needs cites an earlier row, checked mechanically), and per-ask dispatch to subagents or workflows with status tracking. Modes: capture (from this session), resume (an existing folder). Use when a conversation has accumulated several independent requests, when context is about to compact, or when the user asks for a working doc, a task table with dependencies, or to fan the asks out. Not when the working directory or a parent holds a `.beads/` workspace: that is /ari-bead-driven-development."
 ---
 
 # Working Doc
