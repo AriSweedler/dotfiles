@@ -45,7 +45,9 @@ from urllib.parse import parse_qs, urlsplit
 
 from skill_log import die, log_info, log_warn
 from gdoc_api import (
+    DRIVE_LINK_RE,
     FIRST_TAB,
+    IMAGE_LINK_PREFIX,
     RETURN_TEXT,
     batch_update,
     check_gws,
@@ -53,6 +55,8 @@ from gdoc_api import (
     fetch_doc,
     first_tab,
     gws_json,
+    image_findings,
+    inline_image_elements,
     marker_text,
     paragraphs,
     run_link,
@@ -81,8 +85,6 @@ UNSUPPORTED = (
 )
 IMAGE_LINE_RE = re.compile(r"^\[!\[([^\]]*)\]\((\S+?)\)\]\((\S+?)\)$")
 IMAGE_FORM = "[![alt](https://mermaid.ink/img/…)](https://mermaid.live/view#…)"
-# Same invariant as gdoc_finish.zsh: a diagram opens fullscreen, not in the editor.
-IMAGE_LINK_PREFIX = "https://mermaid.live/view#"
 IMAGE_URI_MAX_BYTES = 2048  # Docs insertInlineImage: "The URI can be at most 2 kB in length"
 IMAGE_WIDTH_MAX_PX = 624  # 468 pt of Letter text width at Docs' 0.75 pt per px; bake's contract is 620
 IMAGE_TYPES = ("jpeg", "png")  # mermaid.ink's ?type= values that insertInlineImage accepts; jpeg is the default
@@ -91,8 +93,6 @@ URLSAFE_TO_STANDARD = str.maketrans("-_", "+/")
 INK_IMG_PREFIX = "https://mermaid.ink/img/"
 INK_BASE64_PREFIX = "https://mermaid.ink/img/base64:"
 INK_PAKO_PREFIX = "https://mermaid.ink/img/pako:"
-# Same allowlist as gdoc_finish.zsh: insertRichLink accepts Drive file and folder URLs only.
-DRIVE_LINK_RE = re.compile(r"^https://(docs|drive)\.google\.com/(.*/d/|drive/folders/)([A-Za-z0-9_-]+)")
 ANCHOR_PREFIX = "#aside-"
 STALE_TAB_RE = re.compile(r"^Aside \d+:")
 MONO_FONT = "Roboto Mono"
@@ -562,36 +562,23 @@ def verify_aside_chips(tab, tab_id, n, expected_chips):
         die(f"aside tab Drive links are not all chips | n='{n}' tab='{tab_id}' plain='{plain}' chips='{chips}' expected='{expected_chips}'")
 
 
-def content_box(tab, tab_id):
-    """The page's text area in points, from the tab's documentStyle."""
-    style = tab.get("documentStyle")
-    if style is None:
-        die(f"aside tab has no documentStyle; image fit unknown | tab='{tab_id}'")
-    width = style["pageSize"]["width"]["magnitude"] - style["marginLeft"]["magnitude"] - style["marginRight"]["magnitude"]
-    height = style["pageSize"]["height"]["magnitude"] - style["marginTop"]["magnitude"] - style["marginBottom"]["magnitude"]
-    return width, height
-
-
 def verify_aside_images(tab, tab_id, n, expected_links):
-    """The main tab's image checks, on an aside tab: the planned images in order, each linked to its own
-    mermaid.live view and inside one page."""
-    elements = [element["inlineObjectElement"] for p in paragraphs(tab) for element in p["paragraph"]["elements"] if "inlineObjectElement" in element]
-    if len(elements) != len(expected_links):
-        die(f"aside tab images missing | n='{n}' tab='{tab_id}' images='{len(elements)}' expected='{len(expected_links)}'")
-    if not elements:
+    """The main tab's image checks (gdoc_api.image_findings), on an aside tab: the planned images in
+    order, each linked to its own mermaid.live view and inside one page."""
+    if not expected_links and not any(True for _ in inline_image_elements(tab.get("body", {}))):
         return
-    max_width, max_height = content_box(tab, tab_id)
-    for element, expected in zip(elements, expected_links):
-        image_id = element["inlineObjectId"]
-        url = element.get("textStyle", {}).get("link", {}).get("url", "")
-        if url != expected:
-            die(f"aside tab image does not link to its mermaid.live view | n='{n}' tab='{tab_id}' image='{image_id}' url='{url[:80]}' expected='{expected[:80]}'")
-        size = tab.get("inlineObjects", {}).get(image_id, {}).get("inlineObjectProperties", {}).get("embeddedObject", {}).get("size")
-        if size is None:
-            die(f"aside tab image has no size; fit unknown | n='{n}' tab='{tab_id}' image='{image_id}'")
-        width, height = size["width"]["magnitude"], size["height"]["magnitude"]
-        if width > max_width or height > max_height:
-            die(f"aside tab image exceeds one page | n='{n}' tab='{tab_id}' image='{image_id}' width_pt='{width}' height_pt='{height}' max_width_pt='{max_width}' max_height_pt='{max_height}'")
+    if "documentStyle" not in tab:
+        die(f"aside tab has no documentStyle; image fit unknown | tab='{tab_id}'")
+    findings = image_findings(tab)
+    if len(findings) != len(expected_links):
+        die(f"aside tab images missing | n='{n}' tab='{tab_id}' images='{len(findings)}' expected='{len(expected_links)}'")
+    for finding, expected in zip(findings, expected_links):
+        if finding["url"] != expected:
+            die(f"aside tab image does not link to its mermaid.live view | n='{n}' tab='{tab_id}' image='{finding['id']}' url='{finding['url'][:80]}' expected='{expected[:80]}'")
+        if finding["width"] is None:
+            die(f"aside tab image has no size; fit unknown | n='{n}' tab='{tab_id}' image='{finding['id']}'")
+        if not finding["fits"]:
+            die(f"aside tab image exceeds one page | n='{n}' tab='{tab_id}' image='{finding['id']}' width_pt='{finding['width']}' height_pt='{finding['height']}' max_width_pt='{finding['max_width']}' max_height_pt='{finding['max_height']}'")
 
 
 def verify_aside_tab(doc_json, tab_id, n, expected_chips, expected_links):

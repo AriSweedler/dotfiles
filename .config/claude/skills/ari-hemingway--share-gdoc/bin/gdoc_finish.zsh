@@ -27,13 +27,13 @@ source "${SKILLS_DIR}/ari-skill-shellscripts/lib/dry_run.zsh"
 readonly HEADER_GREY="0.8509804"   # #D9D9D9, matches Docs' "light grey 1"
 # tabs.* cannot share a field mask with body.content, so only the first tab is processed.
 readonly GET_FIELDS="revisionId,documentStyle,inlineObjects,body.content"
-# A diagram image must open its source fullscreen (/view, not /edit: the reader gets the diagram,
-# not the editor); the markdown form [![alt](ink)](live) lands here.
-readonly IMAGE_LINK_PREFIX="https://mermaid.live/view#"
-# Drive's markdown import lands a raw Drive URL as a plain hyperlink; insertRichLink (Docs API,
-# April 2026) turns it into a chip. It accepts Drive file and folder URLs only, so this is the
-# whole allowlist; the captured id is what the pre-flight files.get validates.
-readonly DRIVE_LINK_RE='^https://(docs|drive)\.google\.com/(.*/d/|drive/folders/)([A-Za-z0-9_-]+)'
+# The image-link prefix and the Drive-link allowlist (insertRichLink takes Drive file and folder URLs
+# only; the captured id is what the pre-flight files.get validates) come from the Python the aside
+# verify read uses, so both judge a link by one definition.
+readonly IMAGE_CHECKS="${SCRIPT_DIR}/gdoc_image_checks.zsh"
+# Resolved in main, after the prerequisite check, so a missing python3 is named and --help forks nothing early.
+IMAGE_LINK_PREFIX=""
+DRIVE_LINK_RE=""
 # Column-width planner for every table (any column count): Arial metrics plus greedy wrap, hard
 # minimum per column at its widest token; see the Python header. Points per modeled line, for
 # the predicted-vs-rendered comparison, match the planner's LINE_HEIGHT_PT.
@@ -109,33 +109,43 @@ batch_update() {
 ########################################################################
 
 #######################################
+# Write one JSON line per inline image to a findings file. A crash of the Python is an error, never
+# "no images": the checks below read this file only after it succeeded.
+# Arguments: $1 - path to doc JSON, $2 - output path (JSON lines)
+# Returns: 1 if the findings could not be computed
+#######################################
+write_image_findings() {
+  local doc_json="${1}" out="${2}"
+  if ! zsh "${IMAGE_CHECKS}" --doc-json "${doc_json}" > "${out}"; then
+    log::err "Image findings failed | doc_json='${doc_json}'"
+    return 1
+  fi
+}
+
+#######################################
 # Log one line per inline image saying whether it fits the page content box.
-# Arguments: $1 - path to doc JSON
-# Returns: 1 if any image exceeds the box
+# Arguments: $1 - findings file (JSON lines)
+# Returns: 1 if any image exceeds the box or has no size
 #######################################
 check_images_fit_one_page() {
-  local doc_json="${1}"
-  local rc=0 id w h maxw maxh verdict
+  local findings="${1}"
+  local rc=0 id w h maxw maxh fits
   local tsv
-  tsv="$(jq -r '
-    .documentStyle as $ds
-    | ($ds.pageSize.height.magnitude - $ds.marginTop.magnitude - $ds.marginBottom.magnitude) as $maxH
-    | ($ds.pageSize.width.magnitude - $ds.marginLeft.magnitude - $ds.marginRight.magnitude) as $maxW
-    | (.inlineObjects // {}) | to_entries[]
-    | .value.inlineObjectProperties.embeddedObject.size as $s
-    | [.key, $s.width.magnitude, $s.height.magnitude, $maxW, $maxH,
-       (if $s.width.magnitude <= $maxW and $s.height.magnitude <= $maxH then "OK" else "FAIL" end)]
-    | @tsv' "${doc_json}")"
+  tsv="$(jq -r '[.id, (.width // "none"), (.height // "none"), .max_width, .max_height, .fits] | @tsv' "${findings}")"
   if [[ -z "${tsv}" ]]; then
     log::info "No inline images in doc"
     return 0
   fi
-  while IFS=$'\t' read -r id w h maxw maxh verdict; do
-    if [[ "${verdict}" == "OK" ]]; then
+  while IFS=$'\t' read -r id w h maxw maxh fits; do
+    if [[ "${fits}" == "true" ]]; then
       log::ok "Image fits one page | id='${id}' width_pt='${w}' height_pt='${h}' max_width_pt='${maxw}' max_height_pt='${maxh}'"
       continue
     fi
-    log::err "Image exceeds one page | id='${id}' width_pt='${w}' height_pt='${h}' max_width_pt='${maxw}' max_height_pt='${maxh}'"
+    if [[ "${w}" == "none" ]]; then
+      log::err "Image has no size; fit unknown | id='${id}'"
+    else
+      log::err "Image exceeds one page | id='${id}' width_pt='${w}' height_pt='${h}' max_width_pt='${maxw}' max_height_pt='${maxh}'"
+    fi
     rc=1
   done <<< "${tsv}"
   return "${rc}"
@@ -144,25 +154,20 @@ check_images_fit_one_page() {
 #######################################
 # Log one line per inline image saying whether it links to its mermaid.live source.
 # Globals: IMAGE_LINK_PREFIX
-# Arguments: $1 - path to doc JSON
+# Arguments: $1 - findings file (JSON lines)
 # Returns: 1 if any image has no link or a link that is not the mermaid.live view form
 #######################################
 check_images_link_to_source() {
-  local doc_json="${1}"
-  local rc=0 id url verdict
+  local findings="${1}"
+  local rc=0 id url linked
   local tsv
-  tsv="$(jq -r --arg prefix "${IMAGE_LINK_PREFIX}" '
-    [.. | objects | select(.inlineObjectElement != null)]
-    | .[]
-    | (.inlineObjectElement.textStyle.link.url // "") as $url
-    | [.inlineObjectElement.inlineObjectId, $url, (if ($url | startswith($prefix)) then "OK" else "FAIL" end)]
-    | @tsv' "${doc_json}")"
+  tsv="$(jq -r '[.id, (.url | if . == "" then "none" else . end), .links_to_view] | @tsv' "${findings}")"
   if [[ -z "${tsv}" ]]; then
     log::info "No inline images in doc"
     return 0
   fi
-  while IFS=$'\t' read -r id url verdict; do
-    if [[ "${verdict}" == "OK" ]]; then
+  while IFS=$'\t' read -r id url linked; do
+    if [[ "${linked}" == "true" ]]; then
       log::ok "Image links to its source | id='${id}' url='${url:0:60}...'"
       continue
     fi
@@ -437,8 +442,12 @@ render_pages_if_requested() {
 run_checks() {
   local doc_json="${1}" doc="${2}" work="${3}" render_dir="${4}"
   local rc=0
-  check_images_fit_one_page "${doc_json}" || rc=1
-  check_images_link_to_source "${doc_json}" || rc=1
+  if write_image_findings "${doc_json}" "${work}/images.jsonl"; then
+    check_images_fit_one_page "${work}/images.jsonl" || rc=1
+    check_images_link_to_source "${work}/images.jsonl" || rc=1
+  else
+    rc=1
+  fi
   check_drive_links_are_chips "${doc_json}" || rc=1
   check_header_rows_pinned "${doc_json}" || rc=1
   plan_table_widths "${doc_json}" "${work}/plan_after.json"
@@ -519,6 +528,8 @@ EOH
 
 main() {
   check_prerequisites || exit 1
+  IMAGE_LINK_PREFIX="$(zsh "${IMAGE_CHECKS}" --constant image-link-prefix)" || { log::err "Cannot read the shared image-link prefix | script='${IMAGE_CHECKS}'"; exit 1; }
+  DRIVE_LINK_RE="$(zsh "${IMAGE_CHECKS}" --constant drive-link-pattern)" || { log::err "Cannot read the shared Drive-link pattern | script='${IMAGE_CHECKS}'"; exit 1; }
 
   # === PARSE ===
   local doc="" check_only=false execute=false dry_run_flag=false render_dir=""

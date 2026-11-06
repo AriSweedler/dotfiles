@@ -310,5 +310,65 @@ check "asides --rebuild --execute under an inherited DRY_RUN=1 calls no batchUpd
 asides_run "${T}/asides_zero" DRY_RUN=0
 check "asides --rebuild under an inherited DRY_RUN=0 alone calls no batchUpdate" 0 "$(calls_of "${T}/asides_zero" "docs documents batchUpdate")"
 
+# --- gdoc_finish.zsh image checks: the shared image_findings judges the main tab ---
+
+image_doc() {   # <width_pt> <link_url>: a read with one inline image
+  jq -n --arg url "${2}" --argjson width "${1}" "{revisionId: \"rev1\", documentStyle: ${style},
+    inlineObjects: {\"kix.img\": {inlineObjectProperties: {embeddedObject: {size: {width: {magnitude: \$width}, height: {magnitude: 200}}}}}},
+    body: {content: [{startIndex: 1, endIndex: 3, paragraph: {elements: [{startIndex: 1, endIndex: 2, inlineObjectElement: {inlineObjectId: \"kix.img\", textStyle: {link: {url: \$url}}}}]}}]}}"
+}
+new_fake "${T}/img_ok"
+image_doc 400 "https://mermaid.live/view#pako:x" > "${T}/img_ok/docs-documents-get.json"
+rm "${T}/img_ok"/docs-documents-get.[0-9].json
+env HOME="${T}/home" FAKE_GWS_DIR="${T}/img_ok" PATH="${T}/bin:${PATH}" zsh "${FINISH}" --doc DOC_A --check-only >/dev/null 2>"${T}/img_ok/err"; rc=$?
+contains "finish: an image inside the page and linked to the view form passes" "Image fits one page | id='kix.img'" "$(cat "${T}/img_ok/err")"
+contains "finish: and links to its source" "Image links to its source | id='kix.img'" "$(cat "${T}/img_ok/err")"
+check "finish: it exits 0 on that doc" 0 "${rc}"
+new_fake "${T}/img_bad"
+image_doc 700 "https://mermaid.live/edit#pako:x" > "${T}/img_bad/docs-documents-get.json"
+rm "${T}/img_bad"/docs-documents-get.[0-9].json
+env HOME="${T}/home" FAKE_GWS_DIR="${T}/img_bad" PATH="${T}/bin:${PATH}" zsh "${FINISH}" --doc DOC_A --check-only >/dev/null 2>"${T}/img_bad/err"; rc=$?
+check "finish: an image wider than the page with an /edit link exits 1" 1 "${rc}"
+contains "finish: and names the overflow" "Image exceeds one page | id='kix.img' width_pt='700'" "$(cat "${T}/img_bad/err")"
+contains "finish: and the wrong link" "Image does not link to its mermaid.live source | id='kix.img'" "$(cat "${T}/img_bad/err")"
+# A crash of the image findings fails the check; it never reads as "no images".
+new_fake "${T}/img_crash"
+image_doc 400 "https://mermaid.live/view#pako:x" | jq 'del(.documentStyle)' > "${T}/img_crash/docs-documents-get.json"
+rm "${T}/img_crash"/docs-documents-get.[0-9].json
+env HOME="${T}/home" FAKE_GWS_DIR="${T}/img_crash" PATH="${T}/bin:${PATH}" zsh "${FINISH}" --doc DOC_A --check-only >/dev/null 2>"${T}/img_crash/err"; rc=$?
+check "finish: images with no documentStyle exit 1" 1 "${rc}"
+contains "finish: and say the findings failed, not that there are no images" "Image findings failed" "$(cat "${T}/img_crash/err")"
+check "finish: and never log no inline images" "" "$(awk '/No inline images/' "${T}/img_crash/err")"
+new_fake "${T}/img_nosize"
+image_doc 400 "" | jq 'del(.inlineObjects)' > "${T}/img_nosize/docs-documents-get.json"
+rm "${T}/img_nosize"/docs-documents-get.[0-9].json
+env HOME="${T}/home" FAKE_GWS_DIR="${T}/img_nosize" PATH="${T}/bin:${PATH}" zsh "${FINISH}" --doc DOC_A --check-only >/dev/null 2>"${T}/img_nosize/err"; rc=$?
+contains "finish: an image with no size says fit unknown" "Image has no size; fit unknown | id='kix.img'" "$(cat "${T}/img_nosize/err")"
+contains "finish: an image with no link names the missing link, not a shifted field" "Image does not link to its mermaid.live source | id='kix.img' url='none'" "$(cat "${T}/img_nosize/err")"
+new_fake "${T}/img_zero_margin"
+image_doc 400 "https://mermaid.live/view#pako:x" | jq '.documentStyle |= del(.marginLeft)' > "${T}/img_zero_margin/docs-documents-get.json"
+rm "${T}/img_zero_margin"/docs-documents-get.[0-9].json
+env HOME="${T}/home" FAKE_GWS_DIR="${T}/img_zero_margin" PATH="${T}/bin:${PATH}" zsh "${FINISH}" --doc DOC_A --check-only >/dev/null 2>"${T}/img_zero_margin/err"; rc=$?
+contains "finish: a documentStyle without a zero-valued margin still checks image fit" "Image fits one page | id='kix.img' width_pt='400' height_pt='200' max_width_pt='540'" "$(cat "${T}/img_zero_margin/err")"
+check "finish and gdoc_asides share one Drive-link pattern" "$(grep -c 'DRIVE_LINK_RE = re.compile' "${SKILL_DIR}/bin/gdoc_asides.py")" "0"
+check "and one image-link prefix" "$(grep -c '^IMAGE_LINK_PREFIX = ' "${SKILL_DIR}/bin/gdoc_asides.py") $(grep -c '^readonly IMAGE_LINK_PREFIX=' "${SKILL_DIR}/bin/gdoc_finish.zsh")" "0 0"
+
+# --- a failed gws call keeps the API's error body, which gws prints on stdout ---
+
+mkdir -p "${T}/bin_err"
+cat > "${T}/bin_err/gws" <<'FAKE'
+#!/usr/bin/env zsh
+print -r -- '{"error": {"code": 400, "message": "Invalid requests[0]: bad range", "reason": "badRequest", "details": [{"field": "requests[0]"}]}}'
+print -ru2 -- "error[api]: Invalid requests[0]: bad range"
+exit 1
+FAKE
+chmod +x "${T}/bin_err/gws"
+new_fake "${T}/err_body"
+env HOME="${T}/home" FAKE_GWS_DIR="${T}/err_body" PATH="${T}/bin_err:${PATH}" zsh "${ASIDES}" --rebuild --file "${T}/draft.md" --doc DOC_A >/dev/null 2>"${T}/err_body/err"; rc=$?
+check "a failing gws call fails the rebuild" 1 "${rc}"
+contains "and the error keeps the API's reason" '"reason": "badRequest"' "$(cat "${T}/err_body/err")"
+contains "and its details" '"details": [{"field": "requests[0]"}]' "$(cat "${T}/err_body/err")"
+contains "and the stderr line" "error[api]: Invalid requests[0]: bad range" "$(cat "${T}/err_body/err")"
+
 print -r -- "pass=${pass} fail=${fail}"
 (( fail == 0 ))
