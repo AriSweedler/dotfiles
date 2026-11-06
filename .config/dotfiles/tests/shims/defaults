@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Fake defaults: export and import copy between a path domain (no .plist) and a file, so a step
+# that writes through cfprefsd edits the world's plist; every call is logged. Anything else fails,
+# the way reading a key that is not set does.
+set -u
+printf '%s\n' "$*" >> "${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/defaults.log"
+case "${1:-}" in
+  export) cp "${2}.plist" "${3}" ;;
+  import) cp "${3}" "${2}.plist" ;;
+  *) exit 1 ;;
+esac

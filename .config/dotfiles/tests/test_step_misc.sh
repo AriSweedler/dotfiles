@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The small steps: bob_neovim, claude, terminal_nerdfont, karabiner, claude_notifications,
-# dotfiles_jobs — each check's verdicts and the dry-run of each apply.
+# The small steps: bob_neovim, claude, terminal_nerdfont, terminal_config, karabiner,
+# claude_notifications, dotfiles_jobs — each check's verdicts and the dry-run of each apply.
 set -u
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -116,6 +116,29 @@ assert_eq "nerd font absent → fail" fail "$(status_of terminal_nerdfont)"
 assert_eq "reason font_missing" font_missing "$(reason_of terminal_nerdfont)"
 assert_contains "fix points at brew_pkgs" "$(step_get terminal_nerdfont .fix)" "dotfiles apply brew_pkgs"
 world_use_fixture satisfied
+
+# ── terminal_config ───────────────────────────────────────────────────────────
+rm -f "${HOME}/Library/Preferences/com.apple.Terminal.plist"
+check_step terminal_config
+assert_eq "no Terminal prefs → skip" skip "$(status_of terminal_config)"
+assert_eq "reason no_profiles" no_profiles "$(reason_of terminal_config)"
+terminal_plist_with_font "Menlo-Regular"
+plutil -insert 'Window Settings.Basic.useOptionAsMetaKey' -bool true "${HOME}/Library/Preferences/com.apple.Terminal.plist"
+check_step terminal_config
+assert_eq "one profile without Option as Meta → fail" fail "$(status_of terminal_config)"
+assert_eq "reason option_not_meta" option_not_meta "$(reason_of terminal_config)"
+assert_contains "detail names the profile" "$(step_get terminal_config .detail)" "Meta: Pro |"
+assert_not_contains "detail leaves out the one already set" "$(step_get terminal_config .detail)" "Basic"
+assert_eq "init fixes it" false "$(step_get terminal_config .manual)"
+dry_step terminal_config
+assert_contains "dry-run logs the apply plan" "${ERR}" "would run apply::terminal_config"
+assert_not_contains "dry-run writes nothing" "$(shim_log defaults)" "import"
+bump_now_secs 60; nm apply terminal_config
+assert_contains "apply imports through defaults" "$(shim_log defaults)" "import ${HOME}/Library/Preferences/com.apple.Terminal "
+check_step terminal_config
+assert_eq "after apply → ok" ok "$(status_of terminal_config)"
+assert_eq "reason option_is_meta" option_is_meta "$(reason_of terminal_config)"
+rm -f "${HOME}/Library/Preferences/com.apple.Terminal.plist"
 
 # ── karabiner ─────────────────────────────────────────────────────────────────
 KJ="${HOME}/.config/karabiner/karabiner.json"
