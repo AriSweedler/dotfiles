@@ -3,8 +3,8 @@
 # one kind per gate reason, and its exit code follows from the kind; no other exit prints one. The REFUSED:
 # words are checked too, for the callers that still read them. The real tmux-pane lib runs under the local
 # definition (and once over a fake ssh) against a fake tmux on PATH whose pane state each case sets; every
-# reason the lib's gate can give is put through the generated case, so a new or reworded reason fails here
-# as 'unknown'. No tmux server, no ssh, no network.
+# kind the lib gate can give is checked against --help; the lib, not run.zsh, decides each kind.
+# No tmux server, no ssh, no network.
 # Run: zsh $HOME/.claude/skills/ari-driving-remote/tests/run-refusal-kind.test.zsh
 
 set -uo pipefail
@@ -178,25 +178,16 @@ out="$(env FAKE_OPT_IN=off FAKE_PID="${FAKE_PID}" FAKE_STATE="${T}" PATH="${T}/b
   zsh "${RUN_ZSH}" --host-definition here --host local --path-prefix '' --target %5 --no-run-log --no-wait --cmd 'echo hi' 2>"${T}/err")"; rc=$?
 check "a dry run still hits the gate: not opted in exits 77" 77 "${rc}"
 
-# --- every reason the lib's gate holds maps to a kind; anything else is unknown ---
+# --- every kind the lib's gate can give is named in --help, and run.zsh holds no reason-to-kind table ---
 
-mkdir -p "${T}/capture"
-printf '%s\n' '#!/usr/bin/env zsh' 'print -r -- "${@[-1]}"' > "${T}/capture/sh"
-chmod +x "${T}/capture/sh"
-script_out="$(PATH="${T}/capture:${PATH}" CLAUDE_CODE_SESSION_ID=test-session XDG_DATA_HOME="${T}/data" XDG_STATE_HOME="${T}/state" XDG_CACHE_HOME="${T}/cache" LOG_COLOR=0 \
-  zsh "${RUN_ZSH}" --host-definition capture --host local --path-prefix '' --target %5 --no-run-log --no-wait --cmd 'echo hi' --execute 2>/dev/null)"
-case_line="${(M)${(f)script_out}:#*case \"\$reason\" in*}"
-case_stmt="case \"\$reason\" in${${case_line#*case \"\$reason\" in}%%esac*}esac"
-kind_of() { sh -c "reason=\$1; ${case_stmt}; printf '%s' \"\$kind\"" _ "${1}"; }
-reasons=("${(@f)$(awk '/^tmux_pane_(gate|input)_refusal\(\) \{/ { f = 1; next } f && /^}/ { f = 0 }
-  f && /echo "/ { s = $0; sub(/^[^"]*echo "/, "", s); sub(/"[^"]*$/, "", s); gsub(/\$_[a-z_]+/, "x", s); print s }' "${LIB_TMUX_PANE}")}")
-check "the lib's gate holds six reasons" 6 "${#reasons}"
-for reason in "${reasons[@]}"; do
-  kind="$(kind_of "${reason}")"
-  check "the lib reason '${reason}' maps to a kind" "known" "${${kind:#unknown}:+known}"
-  contains "--help names the kind '${kind}'" "${kind}" "$(zsh "${RUN_ZSH}" --help 2>/dev/null)"
+help_text="$(zsh "${RUN_ZSH}" --help 2>/dev/null)"
+kinds=(${=$(. "${LIB_TMUX_PANE}"; print -r -- "${ARI_DRIVING_GATE_KINDS}")})
+check "the lib's gate holds six kinds" 6 "${#kinds}"
+for kind in "${kinds[@]}"; do
+  contains "--help names the kind '${kind}'" "${kind}" "${help_text}"
 done
-check "a reason the lib does not give maps to unknown" unknown "$(kind_of 'a reason from a newer lib')"
+contains "--help names the kind 'lock_unavailable'" lock_unavailable "${help_text}"
+lacks "run.zsh keeps no reason-to-kind table" GATE_REASON_KINDS "$(<"${RUN_ZSH}")"
 
 print -- "${pass} passed, ${fail} failed"
 if (( fail > 0 )); then print -u2 -- "--- run.zsh stdout and stderr of the last run:"; print -u2 -r -- "${out}"; cat "${T}/err" >&2; exit 1; fi
