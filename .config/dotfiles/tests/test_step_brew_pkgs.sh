@@ -64,5 +64,19 @@ assert_not_contains "conflict never triggers bundle install" "$(shim_log brew)" 
 assert_eq "conflict stays fail under setup" fail "$(step_get brew_pkgs .status)"
 unset BREW_SHIM_ALLOW_MUTATION
 
+# nix-darwin's generated Brewfile present: the flakes declare Homebrew, both brew steps defer.
+NIX_BREWFILE_SAVED="${ARI_DOTFILES_NIX_BREWFILE}"
+export ARI_DOTFILES_NIX_BREWFILE="${FIX}/etc-dotfiles-Brewfile"
+printf 'brew "jq"\n' > "${ARI_DOTFILES_NIX_BREWFILE}"
+shim_logs_reset
+bump_now_secs 60
+nm check --only brew,brew_pkgs,brew_drift --json
+out_json > /dev/null
+assert_eq "nix Brewfile → brew_pkgs skips" skip "$(step_get brew_pkgs .status)"
+assert_eq "reason nix_declared" nix_declared "$(step_get brew_pkgs .reason)"
+assert_eq "nix Brewfile → brew_drift skips" skip "$(step_get brew_drift .status)"
+assert_not_contains "no bundle check runs" "$(shim_log brew)" "bundle check"
+export ARI_DOTFILES_NIX_BREWFILE="${NIX_BREWFILE_SAVED}"
+
 if (( FAIL > 0 )); then jq -c '.steps[] | {step, status, reason, detail, applied}' "${FIX}/out.json" >&2; fi
 report

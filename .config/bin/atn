@@ -35,15 +35,16 @@ strftime -s ts '%Y-%m-%d %H:%M:%S' "${EPOCHSECONDS}"
   zf_mkdir -p "${log_file:h}" && print -r -- "${ts} ${verb} ${(j: :)${(q-)@}}" >> "${log_file}"
 } 2>/dev/null
 
-# terminal-notifier by PATH, else the brew prefixes, for the callers that run with launchd's PATH.
+# terminal-notifier by PATH, else the Nix profiles and brew prefixes, for the callers that run
+# with launchd's PATH.
 real="${commands[terminal-notifier]:-}"
 if [[ -z "${real}" ]]; then
-  for dir in /opt/homebrew/bin /usr/local/bin; do
+  for dir in "/etc/profiles/per-user/${USER:-$(id -un)}/bin" /run/current-system/sw/bin /opt/homebrew/bin /usr/local/bin; do
     [[ -x "${dir}/terminal-notifier" ]] && { real="${dir}/terminal-notifier"; break; }
   done
 fi
 if [[ -z "${real}" ]]; then
-  log::err "no terminal-notifier to run; logged, posted nothing | fix='brew install terminal-notifier'"
+  log::err "no terminal-notifier to run; logged, posted nothing | fix='add terminal-notifier to the shared flake (/ari-dotfiles-nix)'"
   exit 127
 fi
 exec "${real}" "$@"

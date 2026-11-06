@@ -20,7 +20,14 @@ readonly TMUX_PANE_LIB="${CLAUDE_LIB_DIR}/tmux-pane.sh"
 # may lack it, hence the absolute path.
 readonly NOTIFIER="${HOME}/.config/bin/atn"
 readonly CONTENT_IMAGE="${CLAUDE_SCRIPT_ROOT}/assets/claude-code-mascot.png"
-readonly TMUX_BIN="/opt/homebrew/bin/tmux"
+# tmux by PATH, else the Nix profiles, else Homebrew's: the hooks run with Claude's PATH,
+# which may predate either.
+TMUX_BIN="$(command -v tmux 2>/dev/null || true)"
+for _tmux in "/etc/profiles/per-user/${USER:-$(id -un)}/bin/tmux" /run/current-system/sw/bin/tmux /opt/homebrew/bin/tmux; do
+  [[ -z "${TMUX_BIN}" && -x "${_tmux}" ]] && TMUX_BIN="${_tmux}"
+done
+unset _tmux
+readonly TMUX_BIN
 readonly NOTIFICATION_GROUP="claude-notification"
 readonly LOG_DIR="/tmp/claude-notification"
 

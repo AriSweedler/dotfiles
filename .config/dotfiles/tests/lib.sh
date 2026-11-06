@@ -125,6 +125,8 @@ world_new() {
   export ARI_DOTFILES_LAUNCH_AGENTS_DIR="${HOME}/Library/LaunchAgents"
   # A Nerd Font file the world has, outside HOME so a fresh-home reset keeps it.
   export ARI_DOTFILES_FONT_DIRS="${FIX}/fonts"
+  # No nix-darwin in the world: the brew steps check the tier Brewfiles.
+  export ARI_DOTFILES_NIX_BREWFILE="${FIX}/no-nix-brewfile"
   mkdir -p "${FIX}/fonts" && : > "${FIX}/fonts/CaskaydiaMonoNerdFontMono-Regular.ttf"
   export ARI_DOTFILES_DF_GIT_DIR="${HOME}/dotfiles.git" ARI_DOTFILES_LDF_GIT_DIR="${HOME}/.local/local-dotfiles.git"
   export ARI_DOTFILES_DF_HOOKS="${HOME}/.config/git/dotfiles-hooks" ARI_DOTFILES_LDF_HOOKS="${HOME}/.config/git/local-dotfiles-hooks"

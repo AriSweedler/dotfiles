@@ -59,6 +59,10 @@
     ];
   };
 
+  # The Brewfile a switch applies, at a stable path: the dotfiles brew steps see it and defer
+  # to the flakes, and `brew bundle check --file=/etc/dotfiles/Brewfile` checks by hand.
+  environment.etc."dotfiles/Brewfile".text = config.homebrew.brewfile;
+
   # Nerd Font for the terminal; nix-darwin installs it under /Library/Fonts/Nix Fonts.
   fonts.packages = [ pkgs.nerd-fonts.caskaydia-mono ];
 

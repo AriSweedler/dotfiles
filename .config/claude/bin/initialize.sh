@@ -22,19 +22,23 @@ readonly GUARD_SCRIPT="${CLAUDE_BIN_DIR}/pretooluse-headless-chrome-guard.sh"
 # Claude Code only spawns the hook for Bash commands matching this rule, so
 # ordinary commands pay nothing for it.
 readonly GUARD_IF='Bash(*--headless*)'
-# Homebrew's binary, the one NOTIFIER (the logging shim) execs; the install check looks past the shim.
-readonly NOTIFIER_BREW="/opt/homebrew/bin/terminal-notifier"
+# Where the binary NOTIFIER (the logging shim) execs can live: the Nix profiles, then Homebrew's.
+# The install check looks past the shim.
+readonly NOTIFIER_CANDIDATES=("/etc/profiles/per-user/${USER:-$(id -un)}/bin/terminal-notifier" /run/current-system/sw/bin/terminal-notifier /opt/homebrew/bin/terminal-notifier)
 
 #######################################
-# Installs terminal-notifier via Homebrew if not already present.
+# Installs terminal-notifier via Homebrew if no copy is present (the flakes declare it).
 # Returns:
 #   0 on success, 1 if brew is missing or the install failed.
 #######################################
 ensure_terminal_notifier() {
-  if [[ -x "${NOTIFIER_BREW}" ]]; then
-    log "terminal-notifier present at ${NOTIFIER_BREW}"
-    return 0
-  fi
+  local candidate
+  for candidate in "${NOTIFIER_CANDIDATES[@]}"; do
+    if [[ -x "${candidate}" ]]; then
+      log "terminal-notifier present at ${candidate}"
+      return 0
+    fi
+  done
   log "terminal-notifier missing"
   if ! command -v brew >/dev/null 2>&1; then
     log "brew not found; cannot install terminal-notifier"

@@ -6,6 +6,12 @@ step::declare brew_drift --group brew --needs brew --tools brew \
 step::watches brew_drift '.config/new-machine/Brewfile' '.config/new-machine/Brewfile.ignore'
 
 check::brew_drift() {
+  # Under nix-darwin the flakes declare Homebrew and a switch applies it with cleanup =
+  # uninstall, so the tier Brewfiles are no longer the declared state (/ari-dotfiles-nix).
+  if [[ -r "${ARI_DOTFILES_NIX_BREWFILE}" ]]; then
+    verdict skip nix_declared -d "the flakes declare Homebrew; a darwin-rebuild switch applies them | brewfile='${ARI_DOTFILES_NIX_BREWFILE}'"
+    return 0
+  fi
   need_lib "${ARI_DOTFILES_BREW_LIB}"
   # Cached on everything the brew model reads (cache.zsh). A busy brew that has changed nothing
   # yet leaves the stored verdict true; once it touches a keg, the miss runs the busy check.
