@@ -1,5 +1,5 @@
 # System layer every machine gets. nix-darwin manages the Nix install itself (nix.enable).
-{ config, lib, user, ... }:
+{ config, lib, pkgs, user, ... }:
 {
   # nix-darwin's /etc/zshenv runs set-environment, whose `export PATH=` replaces the caller's
   # PATH, in every zsh. Keep macOS's contract instead: a non-interactive script keeps the PATH
@@ -52,13 +52,15 @@
       "zsh-vi-mode" # zsh/plugins/zsh-vi-mode.zsh sources it from $(brew --prefix)
     ];
     casks = [
-      "font-caskaydia-mono-nerd-font" # Nerd Font for the terminal
       "google-chrome" # web browser
       "karabiner-elements"
       "monitorcontrol" # brightness and volume keys for external displays
       "raycast"
     ];
   };
+
+  # Nerd Font for the terminal; nix-darwin installs it under /Library/Fonts/Nix Fonts.
+  fonts.packages = [ pkgs.nerd-fonts.caskaydia-mono ];
 
   system.stateVersion = 6;
 }

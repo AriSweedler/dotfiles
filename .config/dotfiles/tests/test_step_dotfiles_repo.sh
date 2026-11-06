@@ -102,6 +102,8 @@ printf '[submodule ".config/sub"]\n\tpath = .config/sub\n\turl = https://github.
 df_git update-index --add --cacheinfo "160000,$(git -C "${SUB}" rev-parse HEAD),.config/sub"
 df_git add "${HOME}/.gitmodules"
 df_git -c core.hooksPath=/dev/null commit -q -m "sub"
+# What `git submodule init` records; without it git reports the checkout as uninitialized ('-').
+df_git config submodule..config/sub.url https://github.com/example/sub.git
 check_repo
 assert_eq "undocumented submodule → fail" fail "$(step_get dotfiles_repo .status)"
 assert_eq "reason submodule_undocumented" submodule_undocumented "$(step_get dotfiles_repo .reason)"

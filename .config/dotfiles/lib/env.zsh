@@ -42,6 +42,7 @@ typeset -gx ARI_DOTFILES_STATE_DIR="${ARI_DOTFILES_STATE_DIR:-${XDG_STATE_HOME}/
 typeset -gx ARI_DOTFILES_DESKTOP_DIR="${ARI_DOTFILES_DESKTOP_DIR:-${HOME}/Desktop}"
 typeset -gx ARI_DOTFILES_LAUNCH_AGENTS_DIR="${ARI_DOTFILES_LAUNCH_AGENTS_DIR:-${HOME}/Library/LaunchAgents}"
 typeset -gx ARI_DOTFILES_TERMINAL_PLIST="${ARI_DOTFILES_TERMINAL_PLIST:-${HOME}/Library/Preferences/com.apple.Terminal.plist}"
+typeset -gx ARI_DOTFILES_FONT_DIRS="${ARI_DOTFILES_FONT_DIRS:-${HOME}/Library/Fonts:/Library/Fonts}"   # colon-separated, searched recursively
 typeset -gx ARI_DOTFILES_XCODE_APP="${ARI_DOTFILES_XCODE_APP:-/Applications/Xcode.app}"
 typeset -gx ARI_DOTFILES_CHROME_DIR="${ARI_DOTFILES_CHROME_DIR:-${HOME}/Library/Application Support/Google/Chrome}"   # Chrome's user data dir: Local State and one dir per profile
 typeset -gx ARI_DOTFILES_DF_GIT_DIR="${ARI_DOTFILES_DF_GIT_DIR:-${HOME}/dotfiles.git}"

@@ -5,7 +5,13 @@
 
   home.packages = with pkgs; [
     # Unix essentials
-    nawk # brew's "awk": the one true awk
+    # brew's "awk": the one true awk, second edition (UTF-8 aware). nixpkgs installs it only as
+    # nawk, and macOS's /usr/bin/awk (2020, counts bytes) would answer to `awk` instead.
+    (runCommand "awk" { } ''
+      mkdir -p $out/bin
+      ln -s ${nawk}/bin/nawk $out/bin/awk
+      ln -s ${nawk}/bin/nawk $out/bin/nawk
+    '')
     coreutils-prefixed # g-prefixed, as brew installs it, so BSD ls and friends stay first
     curl
     git

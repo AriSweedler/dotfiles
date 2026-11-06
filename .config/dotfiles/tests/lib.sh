@@ -123,6 +123,9 @@ world_new() {
   export ARI_DOTFILES_STATE_DIR="${XDG_STATE_HOME}/new-machine"
   export ARI_DOTFILES_DESKTOP_DIR="${HOME}/Desktop"
   export ARI_DOTFILES_LAUNCH_AGENTS_DIR="${HOME}/Library/LaunchAgents"
+  # A Nerd Font file the world has, outside HOME so a fresh-home reset keeps it.
+  export ARI_DOTFILES_FONT_DIRS="${FIX}/fonts"
+  mkdir -p "${FIX}/fonts" && : > "${FIX}/fonts/CaskaydiaMonoNerdFontMono-Regular.ttf"
   export ARI_DOTFILES_DF_GIT_DIR="${HOME}/dotfiles.git" ARI_DOTFILES_LDF_GIT_DIR="${HOME}/.local/local-dotfiles.git"
   export ARI_DOTFILES_DF_HOOKS="${HOME}/.config/git/dotfiles-hooks" ARI_DOTFILES_LDF_HOOKS="${HOME}/.config/git/local-dotfiles-hooks"
   export ARI_DOTFILES_REMOTE="${FIX}/remotes/dotfiles.git"

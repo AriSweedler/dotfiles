@@ -1,27 +1,26 @@
-# step terminal_nerdfont — a Nerd Font cask installed and at least one Terminal.app profile
+# step terminal_nerdfont — a Nerd Font file installed and at least one Terminal.app profile
 # using one. Setting the font is a hand step; the verdicts say so.
-step::declare terminal_nerdfont --group brew --needs brew --tools brew \
-  --desc "a Nerd Font cask is installed and at least one Terminal.app profile uses a Nerd Font"
-step::watches terminal_nerdfont --none "reads the installed casks and Terminal.app's preferences, no repo file"
+step::declare terminal_nerdfont --group tools \
+  --desc "a Nerd Font file is installed and at least one Terminal.app profile uses a Nerd Font"
+step::watches terminal_nerdfont --none "reads the font directories and Terminal.app's preferences, no repo file"
 
-# Cached on the casks installed and the Terminal preferences: the two things it reads.
+# Cached on the font directories and the Terminal preferences: the two things it reads.
 check::terminal_nerdfont() {
-  local REPLY
-  if ! cache::brew_prefix; then step::terminal_nerdfont::check; return 0; fi
-  cache::check step::terminal_nerdfont::check "${ARI_DOTFILES_TERMINAL_PLIST}" "${ARI_DOTFILES_BREW}" \
-    "${REPLY}/Caskroom" "${REPLY}/Caskroom/"*(N/)
+  local -a dirs=(${(s.:.)ARI_DOTFILES_FONT_DIRS})
+  cache::check step::terminal_nerdfont::check "${ARI_DOTFILES_TERMINAL_PLIST}" "${dirs[@]}" "${^dirs[@]}"/*(N/)
 }
 
+# A file, not a package, is the test: the font counts however it arrived (nix-darwin's
+# fonts.packages in /Library/Fonts/Nix Fonts, a cask, a restore from backup).
 step::terminal_nerdfont::check() {
-  local casks
-  casks="$("${ARI_DOTFILES_BREW}" list --cask 2>/dev/null || true)"
-  local -a fonts=(${(M)${(f)casks}:#*nerd-font*})
+  local -a dirs=(${(s.:.)ARI_DOTFILES_FONT_DIRS})
+  local -a fonts=(${^dirs[@]}/**/*NerdFont*.(ttf|otf)(N.:t))
   if (( ${#fonts} == 0 )); then
-    verdict fail font_missing -m -d "no *nerd-font* cask installed (the Brewfile lists font-caskaydia-mono-nerd-font)" \
-      -f "${CLI_NAME} apply brew_pkgs"
+    verdict fail font_missing -m -d "no *NerdFont* .ttf or .otf under ${(j:, :)dirs} (the shared flake's fonts.packages installs CaskaydiaMono)" \
+      -f "sudo darwin-rebuild switch (the local flake; /ari-dotfiles-nix)"
     return 0
   fi
-  local howto="Set a Nerd Font in Terminal.app: Settings -> Profiles -> Text -> Font"$'\n'"Installed: ${(j:, :)fonts}"
+  local howto="Set a Nerd Font in Terminal.app: Settings -> Profiles -> Text -> Font"$'\n'"Installed: ${#fonts} Nerd Font files, e.g. ${fonts[1]}"
   if [[ ! -r "${ARI_DOTFILES_TERMINAL_PLIST}" ]]; then
     verdict warn manual_font -m -d "no Terminal.app preferences yet | plist='${ARI_DOTFILES_TERMINAL_PLIST}'"$'\n'"${howto}"
     return 0

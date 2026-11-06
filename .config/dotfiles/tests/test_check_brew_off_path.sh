@@ -24,10 +24,12 @@ assert_eq "check without brew exits 1" 1 "${RC}"
 f="$(out_json)"
 assert_eq "brew fails" fail "$(step_get brew .status)"
 assert_eq "brew reason brew_missing" brew_missing "$(step_get brew .reason)"
-for step in brew_pkgs brew_drift terminal_nerdfont; do
+for step in brew_pkgs brew_drift; do
   assert_eq "${step} skipped" skip "$(step_get "${step}" .status)"
   assert_eq "${step} reason prerequisite_fail" prerequisite_fail "$(step_get "${step}" .reason)"
 done
+# The font check reads font files, not brew: it still runs.
+assert_eq "terminal_nerdfont runs without brew" true "$(step_get terminal_nerdfont .status | grep -qvx skip && echo true)"
 assert_steps_are_registry "every step recorded" "${f}"
 
 if (( FAIL > 0 )); then jq -c '.steps[] | {step, status, reason, detail}' "${f}" >&2; fi

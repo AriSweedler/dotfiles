@@ -96,26 +96,34 @@ EOF
   plutil -lint -s "${dir}/com.apple.Terminal.plist"
 }
 
-check_step brew,terminal_nerdfont
+# The font is a file in a font dir, however it got there: nix-darwin's Nix Fonts subdir here.
+export ARI_DOTFILES_FONT_DIRS="${FIX}/fonts/user:${FIX}/fonts/system"
+mkdir -p "${FIX}/fonts/user" "${FIX}/fonts/system/Nix Fonts"
+: > "${FIX}/fonts/system/Nix Fonts/CaskaydiaMonoNerdFontMono-Regular.ttf"
+check_step terminal_nerdfont
 assert_eq "no Terminal prefs → warn" warn "$(status_of terminal_nerdfont)"
 assert_eq "reason manual_font" manual_font "$(reason_of terminal_nerdfont)"
 assert_eq "manual_font is manual" true "$(step_get terminal_nerdfont .manual)"
 terminal_plist_with_font "Menlo-Regular"
-check_step brew,terminal_nerdfont
+check_step terminal_nerdfont
 assert_eq "no profile uses a Nerd Font → fail" fail "$(status_of terminal_nerdfont)"
 assert_eq "reason font_not_set" font_not_set "$(reason_of terminal_nerdfont)"
 assert_eq "font_not_set is manual" true "$(step_get terminal_nerdfont .manual)"
 terminal_plist_with_font "CaskaydiaMonoNFM-Regular"
-check_step brew,terminal_nerdfont
+check_step terminal_nerdfont
 assert_eq "one profile uses a Nerd Font → ok" ok "$(status_of terminal_nerdfont)"
 assert_eq "reason font_set" font_set "$(reason_of terminal_nerdfont)"
 assert_contains "detail names the font" "$(step_get terminal_nerdfont .detail)" "CaskaydiaMonoNFM-Regular"
-world_use_fixture drift
-check_step brew,terminal_nerdfont
+rm "${FIX}/fonts/system/Nix Fonts/CaskaydiaMonoNerdFontMono-Regular.ttf"
+check_step terminal_nerdfont
 assert_eq "nerd font absent → fail" fail "$(status_of terminal_nerdfont)"
 assert_eq "reason font_missing" font_missing "$(reason_of terminal_nerdfont)"
-assert_contains "fix points at brew_pkgs" "$(step_get terminal_nerdfont .fix)" "dotfiles apply brew_pkgs"
-world_use_fixture satisfied
+assert_contains "fix points at the switch" "$(step_get terminal_nerdfont .fix)" "darwin-rebuild switch"
+# A font restored from a backup into ~/Library/Fonts counts: no package needed.
+: > "${FIX}/fonts/user/CaskaydiaMonoNerdFont-Bold.ttf"
+check_step terminal_nerdfont
+assert_eq "a restored font file → ok" ok "$(status_of terminal_nerdfont)"
+export ARI_DOTFILES_FONT_DIRS="${FIX}/fonts"   # back to the world's font dir
 
 # ── terminal_config ───────────────────────────────────────────────────────────
 rm -f "${HOME}/Library/Preferences/com.apple.Terminal.plist"
