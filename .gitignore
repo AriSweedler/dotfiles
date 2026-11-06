@@ -1,5 +1,6 @@
 .CFUserTextEncoding
 .IdentityService/
+.openclaw/
 .ServiceHub/
 .Trash/
 .android/
@@ -18,12 +19,14 @@
 .claude*
 .codex/
 .config/1Password/
+.config/ari-spotify/
 .config/AWSVPNClient
 .config/Google/
 .config/Microsoft\\VisualStudio Services/
 .config/aws-sso/
 .config/bd/
 .config/cagent/
+.config/concert-mcp/
 .config/containers/
 .config/dlv
 .config/fish/
@@ -44,6 +47,7 @@
 .config/pip/
 .config/raycast
 .config/raycast/extensions/
+.config/superseedr-plus-mcp/
 .config/swiftpm/
 .config/uv/
 .config/zsh/.zcompdump

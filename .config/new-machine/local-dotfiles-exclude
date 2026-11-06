@@ -54,6 +54,8 @@
 *.secret.zsh
 # A symlink into a tool-managed install (the claude version dir).
 /bin/claude
+# A binary compiled from the tracked bin/ocr-image.swift.
+/bin/ocr-image
 # A downloaded third-party CLI binary (about 170 MB), not hand-written.
 /bin/cilium
 # The private-terms denylist the plugged repo's hooks check commits against.
