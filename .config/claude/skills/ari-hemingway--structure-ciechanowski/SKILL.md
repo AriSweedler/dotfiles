@@ -213,6 +213,6 @@ Follow the `Present` procedure in `$HOME/.claude/skills/ari-hemingway--lib/SKILL
 
 ### Output
 
-The article already lives in the repo. Stop the local server. Invoke `/ari-hemingway--share-explainer` on `<repo>/articles/<slug>`: its dry-run shows the card diff, the commit message and the push target; `--apply` commits, pushes and watches the deploy once the user confirms. Record the published URL under `Published` in the scratchpad.
+The article already lives in the repo. Stop the local server. Invoke `/ari-hemingway--share-explainer` on `<repo>/articles/<slug>`: its dry-run shows the card diff, the commit message and the push target; `--execute` commits, pushes and watches the deploy once the user confirms. Record the published URL under `Published` in the scratchpad.
 
 Print: `Output complete — articles/<slug>/index.html, {words} words, {figures} figures, {published URL or 'publish gate pending'}.`
