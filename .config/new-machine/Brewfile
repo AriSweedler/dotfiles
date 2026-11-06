@@ -36,15 +36,6 @@ brew "bash"
 brew "zsh"
 brew "zsh-vi-mode"
 
-# Lang: Go
-brew "go"
-brew "gopls"        # Go language server
-# cask "goland"
-
-# Lang: Java
-brew "jenv"
-# cask "intellij-idea"
-
 # Editor
 brew "bob"          # nvim version manager; the bob_neovim step installs neovim through it
 
@@ -53,39 +44,16 @@ brew "lua"
 brew "lua-language-server"
 brew "tree-sitter"
 brew "tree-sitter-cli"
-brew "pipx"
-brew "uv"           # fast Python package manager
-brew "python"
 # brew "node"       # managed by work tooling; karabiner bake needs npm from it
 brew "shellcheck"
-brew "terraform-ls" # Terraform language server
 # cask "visual-studio-code"
 
-# Data
-brew "redis"
-
-# Infra
-brew "kubectx"      # kx/knx: quick k8s context/namespace switching
-brew "kubectl"
-tap "hashicorp/tap"  # untrusted on purpose: a fresh machine answers brew's prompt once
-brew "hashicorp/tap/terraform"
-
 # Personal
-cask "1password-cli"
-cask "1password"  # the desktop app; 1password-cli above talks to it
 cask "karabiner-elements"
 cask "raycast"
-cask "spotify"
-tap "jurplel/tap", trusted: true
-cask "instant-space-switcher"
 brew "terminal-notifier"  # Claude Code notification hook (~/.config/claude) and git-health
 
 # ── decreed via 'new-machine brew decree'; move into a section when tidying ──
 brew "beads"  # tasks for AI agents
-brew "docker"  # docker runs containers
-brew "gh"  # dotfiles push authenticates by its gh token
-brew "googleworkspace-cli"  # useful to interact with a google account
-brew "rust-analyzer"  # Rust language server for the editor
-brew "rustup"  # Rust toolchain installer (rustc, cargo)
 cask "google-chrome"  # web browser
 cask "monitorcontrol"  # brightness and volume keys for external displays
