@@ -9,17 +9,32 @@ Edit a skill, review it, and end with one *proposal* that a single `yes` commits
 
 ## Rules
 
-- **A mistake is a skill update.** When Claude sees, or Ari points out, that Claude did what a skill forbade, skipped what it required, found its instruction or script wrong in use, or met a case it is silent on: name the skill in chat, state the mistake and its evidence in one line, undo the effect when the undo is local and reversible (else name it as not undoable in the same line), invoke `/ari-skill-update <skill>` with that line as the change, and go on with the work — same session, unasked. The edit starts unasked; the commit still waits for `yes`. Waiting to be asked is the failure this rule removes.
+- **A mistake is a skill update.** When Claude sees, or Ari points out, that Claude did what a skill forbade, skipped what it required, found its instruction or script wrong in use, or met a case it is silent on: diagnose the cause first (**Diagnose the cause first**), then name the skill in chat, state the mistake, its evidence and its `Cause:` line in one line, undo the effect when the undo is local and reversible (else name it as not undoable in the same line), invoke `/ari-skill-update <skill>` with that line as the change, and go on with the work — same session, unasked. The edit starts unasked; the commit still waits for `yes`. Waiting to be asked is the failure this rule removes.
   - The fix is a rule where the behavior belongs and, when the skill has tests, a test that would have caught it.
   - A *background session* (a fork, a driver) does not invoke: the line rides its report under **Surfaced skills**, and the main thread routes it — to the skill's live driver by `SendMessage`, else to a new one. Never two drivers on one skill.
-  - A mistake with no skill behind it goes to Claude's auto-memory, or to a bead when the project has a tracker.
+  - A mistake with no skill that could carry the rule goes to Claude's auto-memory, or to a bead when the project has a tracker.
   ```
   BAD:  "Sorry, I shouldn't have done that." … (work continues)
   BAD:  "Want me to update the skill so this doesn't recur?"
   BAD:  (the main thread runs init.zsh or edits SKILL.md itself — no driver, no review, no proposal)
   GOOD: "ari-driving-remote: I typed into a pane another session was driving; the read came back as its output; not undoable: the keys were already sent.
+         Cause: pending — skill text not read here; the driver classifies.
          /ari-skill-update ari-driving-remote"  → the driver starts; the work resumes
   GOOD (its driver already lives): SendMessage({to: "<driver>", message: "second line, same skill: <line>; fold it in and re-propose"})
+  ```
+- **Diagnose the cause first.** Before you answer Ari's "why did you…?" or "where did that come from?", and before any skill edit, write the `Cause:` line; an answer or edit written before it is a fault in its own right. Treat your recollection of why you acted as a hypothesis to test, never as evidence. A why-question runs the diagnosis and answers; it starts an update only when the finding is a mistake or a gap.
+  ```
+  Cause: <class> — quoted: "<text>" (<source>); inferred: <claim | none>; unknown: <what | none>
+  ```
+  - **Class**, the first that holds: `skill ignored` (the skill's text says the opposite of what you did), `other source` (CLAUDE.md, memory, user message, tool or hook output quotes it), `harness` (visible system-prompt text quotes it), `skill silent` (the skill covers the topic, not this case), `model default` (no source quotes it; list the sources you read, and only a source read this turn counts as `none`).
+  - **Who.** The main thread diagnoses from text already in its context. It writes `other source` or `harness` only with a quote, and otherwise `Cause: pending — skill text not read here`; it never writes `skill ignored`, `skill silent` or `model default`. The driver reads the skill, checks the brief's `Cause:` against it, and its class wins: it writes `Cause (checked):` in the scratchpad and the proposal head, and names a changed class in the report. An undo may precede the `Cause:` line when delay worsens the effect. A request with no mistake writes `Cause: n/a — request`.
+  - **Edit.** The class sets what the edit says, not whether to edit. When the skill is not the cause, write a counter-rule: `Counter-rule (cause: <class>): do not <default>; do <required>.`, so it is not read as the skill's design. When the source is CLAUDE.md or memory, add the Open question `fix at <source> instead? recommended: <answer>`. A public skill names the class and behavior only; the quote stays in the scratchpad and proposal.
+  - **Harness.** Tell Ari in the answer, quoting the text. The driver writes `feedback.md` in the investigation folder from the brief's quote, and its path rides the report under Open questions; never send it. With no text visible, write `Cause: harness — unknown: no instruction visible`; never guess the harness.
+  ```
+  BAD:  "I handed it over so you could decide."          ← reconstruction, answered before looking
+  BAD:  "Cause: model default."                           ← no sources listed
+  GOOD: Cause: skill ignored — quoted: "NEVER Read, cat or paste proposal.md" (ari-skill-update Rules); inferred: I read it to summarize the diff; unknown: none
+  GOOD: Cause: model default — quoted: none (read: the skill, CLAUDE.md, memory); inferred: none; unknown: system prompt (no instruction visible)
   ```
 - **The main thread holds the report, never the proposal or the work behind it.** The main thread NEVER runs `init.zsh`, reads the target skill's files, edits, or reviews: it settles the skill and the change, spawns one driver, relays one report, asks **Commit?**. **NEVER Read, cat or paste `proposal.md`:** its one access is the `awk` print at **Commit to dotfiles**, after `yes`; Ari opens the file to see the diff. Nothing of the driver's run reaches the main thread but the report (**Report the proposal**). An edit request (`drop N`, a spec answer, a change) goes back to the same driver by `SendMessage` and returns as a new report.
 - **Keep skill text short.** One sentence per instruction; no preamble. Cut any sentence that adds no information.
@@ -65,6 +80,7 @@ Edit a skill, review it, and end with one *proposal* that a single `yes` commits
 ```
 /tmp/skill-update/{skill-name}/{timestamp}/     # one per invocation
 ├── scratchpad.md
+├── feedback.md          # harness cause only: product-feedback draft, never sent
 ├── <skill>.diff.patch   # the diff of the recorded blobs (record_blobs.zsh), one per skill proposed
 ├── <skill>.commit.md    # its Commit command, naming each blob (record_blobs.zsh)
 └── proposal.md          # the proposal Ari opens; the only copy of the diff he sees
@@ -91,8 +107,8 @@ The setup script pre-fills **Skill**; fill **Purpose** at "Read the skill", **Go
 ## File storage
 
 - `bin/init.zsh` — run once at **Set up the session**, which holds its output contract.
-- `bin/record_blobs.zsh` — run at **Report the proposal**: records each changed file's blob, writes their diff and the Commit command.
-- `bin/commit_blobs.zsh` — the Commit command **Commit to dotfiles** runs: commits exactly the recorded blobs, or refuses.
+- `bin/record_blobs.zsh` — run with `--execute` at **Report the proposal**: records each changed file's blob, writes their diff and the Commit command.
+- `bin/commit_blobs.zsh` — the Commit command **Commit to dotfiles** runs, with `--execute` as record_blobs.zsh wrote it: commits exactly the recorded blobs, or refuses. Without `--execute` it checks and stages privately, and commits nothing.
 - `lib/blobs.zsh` — shared by the three: the skill's repo, its entries against HEAD, live sibling drivers.
 
 ## Workflow
@@ -131,14 +147,16 @@ You are the driver for /ari-skill-update on `<skill>`. Read $HOME/.claude/skills
 Skill: <skill>. Change: <the settled change in one sentence>.
 Origin: <mistake | request>.
 Evidence: "<Ari's words, or the mistake line, quoted>" — <the gap: what was done instead, or what the skill should have done>.
+Cause: <the line from **Diagnose the cause first**; the driver checks it against the skill>.
 Flags: <skip review | new | none>.
 Settled: <what the conversation decided the text must say, or none>.
 ````
 
-Then one line, no question — `driver <name> spawned for <skill>: <change>; back to <work>`, where `<name>` is the name or agent ID the Agent tool returned (what `SendMessage` takes) — and back to the main work. Never ask whether to wait; the report arrives as a notification. The Evidence and Settled lines for the Rule's GOOD case:
+Then one line, no question — `driver <name> spawned for <skill>: <change>; back to <work>`, where `<name>` is the name or agent ID the Agent tool returned (what `SendMessage` takes) — and back to the main work. Never ask whether to wait; the report arrives as a notification. The Evidence, Cause and Settled lines for the **A mistake is a skill update** GOOD case:
 
 ```
 Evidence: "ari-driving-remote: I typed into a pane another session was driving; the read came back as its output." — the send gate checks idle-at-prompt and the mark, not which session set the mark.
+Cause: pending — quoted: none (read: this session's context only); inferred: the gate checks idle and the mark, not who set it; unknown: skill text not read here
 Settled: the gate refuses a pane whose mark another session set; nothing new to ask Ari.
 ```
 
@@ -247,17 +265,17 @@ For each `unlinked` row other than the target skill, pick its tier (`/ari-dotfil
 
 Driver, or the `inline` thread. Write the proposal to the `proposal=` path, then send the report as your final message. Every driver exit has both, a stop included: the proposal's title is then `## Proposal: <skill> — stopped at <step>` or `— no change`, Diff `none — <why>`, Commit command `none`, and the stop reason is the first Open question with a recommended answer (a stop inside `init.zsh` has no file: **Set up the session**). Neither asks Ari anything — questions carry `assumed:` or `recommended:` answers — or holds anything of the run but what **Commit?** needs: no reviewer reports, no scratchpad contents, no intermediate diffs. A re-proposal overwrites the file, which opens with `Since last: <what changed>`, and the report carries the same line.
 
-**Record the blobs; NEVER print or Read the diff.** Once per skill the proposal commits (the target, then each adoption), after the last edit:
+**Record the blobs; NEVER print or Read the diff.** Once per skill the proposal commits (the target, then each adoption), after the last edit. Without `--execute` the script is a dry run that writes nothing, so every call carries it; this one runs unattended, with no `yes`:
 
 ```zsh
-zsh $HOME/.claude/skills/ari-skill-update/bin/record_blobs.zsh --skill <skill-name> --tier <tier> --investigation-dir <investigation_dir> --message "<skill-name>: <what changed and why>" --edited <file> --edited <file>
+zsh $HOME/.claude/skills/ari-skill-update/bin/record_blobs.zsh --skill <skill-name> --tier <tier> --investigation-dir <investigation_dir> --message "<skill-name>: <what changed and why>" --edited <file> --edited <file> --execute
 ```
 
 - **Flags.** One `--edited` per **Files edited** entry, absolute (`$HOME/.claude/skills/<skill-name>/SKILL.md`, or the tier's real path) or relative to the skill directory (`bin/init.zsh`); an adoption passes none. `--tier` and `--source <source>` as init.zsh printed them. A skill no tier holds yet takes `--adopt`, the tier picked, and the message `claude: adopt the <skill-name> skill into the <shared | local> tier`. A public tier's message says what changed, never what leaked.
-- **What it writes.** Each changed file's blob to the tier's object store, then `<skill>.diff.patch` (the diff of exactly those blobs, untracked files included) and `<skill>.commit.md` (the Commit command that lands them, blob by blob; `none — empty diff` when nothing changed).
-- **What it prints.** Those paths; `files=`, `insertions=` and `deletions=` (the report's Diff counts); `unmatched_edited=`, an `--edited` file with no change against HEAD (a reverted edit: drop it from **Files edited**; else fix the path and re-run); `foreign=` and `concurrent=` (**Another session may be editing the skill**).
+- **What it writes.** With `--execute`, each changed file's blob to the tier's object store, then `<skill>.diff.patch` (the diff of exactly those blobs, untracked files included) and `<skill>.commit.md` (the Commit command that lands them, blob by blob; `none — empty diff` when nothing changed). The Commit command ends in `--execute`: it runs only after `yes`.
+- **What it prints.** Those paths; `files=`, `insertions=` and `deletions=` (the report's Diff counts); `unmatched_edited=`, an `--edited` file with no change against HEAD (a reverted edit: drop it from **Files edited**; else fix the path and re-run); `foreign=` and `concurrent=` (**Another session may be editing the skill**); `dry_run=1|0` (a `1` means nothing was written: add `--execute`; if it was already there, an inherited `DRY_RUN` forced it, so unset that and re-run).
 - **Exit 1.** A log naming `moved_files=` means a file changed while it recorded: re-run once; a second failure stops the run with that as the first Open question. Any other exit 1 names the flag at fault (an `--edited` that is not a file in the skill directory, a `--tier`/`--source` that does not hold the skill): fix it and re-run; it is never an Open question.
-- **Assemble.** Write each prose part to its own file in the investigation folder and join them in document order with one `cat`, e.g. `cat head.md <skill>.diff.patch mid.md <skill>.commit.md adopt-<other>.md <other>.commit.md tail.md > <proposal>`. **The file's diff MUST be complete: every hunk, every file, no `…`, no `(N lines omitted)`;** an elided diff is not a proposal.
+- **Assemble.** Only after the print shows `dry_run=0`; a dry run leaves the previous run's diff and command files in place. Write each prose part to its own file in the investigation folder and join them in document order with one `cat`, e.g. `cat head.md <skill>.diff.patch mid.md <skill>.commit.md adopt-<other>.md <other>.commit.md tail.md > <proposal>`. **The file's diff MUST be complete: every hunk, every file, no `…`, no `(N lines omitted)`;** an elided diff is not a proposal.
 
 The proposal, in the file:
 
@@ -294,6 +312,7 @@ Proposal: <proposal path | none — init.zsh failed: <why>>
 Since last: <what changed; re-proposals only>
 Tier: <as in the proposal>
 Pre-check: <as in the proposal>
+Cause: <the `Cause (checked):` line | n/a — request>
 Diff: <complete — <n> files, +<a> −<b> | none — <why>>
 Changes: <n> (`drop N` reverts one); not carried: <n>
 Spec questions: <`<question>? recommended: <answer>` each | none>
@@ -349,10 +368,11 @@ A git failure's diagnosis is the main thread's; a fix that touches skill files g
 
 Main thread, on `yes`. Print the commands with `awk '/^### Commit command$/{p=1} /^### Surfaced skills$/{p=0} p' <proposal path>` (for `yes, no adoptions`: `awk '/^### Commit command$/{p=1} /^### Adoptions$/{p=0} p' <proposal path>`), and run each fenced block it prints, in order, and nothing else. It prints nothing, or the file is missing → no commit; send the driver `re-propose`. Commit command `none — …` → nothing to commit; skip.
 
-Each block is the `commit_blobs.zsh` call record_blobs.zsh wrote, naming every file's blob; a `--source` one commits in that submodule's repo, which must be on its `main` (`/ari-dotfile--submodule`), and an `--adopt` one runs the registry's `adopt` once its check passes. The gate is *staged content == proposed content*:
+Each block is the `commit_blobs.zsh --execute` call record_blobs.zsh wrote, naming every file's blob (never drop `--execute`: without it the call is a dry run and prints `result=dry-run`, a commit that did not happen); a `--source` one commits in that submodule's repo, which must be on its `main` (`/ari-dotfile--submodule`), and an `--adopt` one runs the registry's `adopt` once its check passes. The gate is *staged content == proposed content*:
 
 - HEAD changed the skill since the proposal, or the working tree no longer yields the proposed blobs (another session or Ari edited a file) → it commits nothing and prints `result=refused` and `mismatched=<files>`. Stop there: name the files, send the driver `re-propose`, and NEVER commit another way (`git add`, `commit -- <path>`, a hand-edited command). A refusal is never a warning to commit past.
 - Otherwise it stages exactly those blobs in a private index (the shared index, and whatever another session staged in it, stay out of the commit), commits it with the tier's hooks, points the shared index at the committed blobs, and prints `result=committed` (`already-committed` on a re-run) and `sha=`.
+- Any other `result=`, `dry-run` included (an inherited `DRY_RUN` beats `--execute`), means nothing was committed: say so in one line, never report a commit without `sha=`, and offer the rerun with `env -u DRY_RUN` for the same block.
 
 Then the SHA per commit, and for a public tier "push is yours (`/ari-dotfiles`)"; for a submodule, Ari's `dotfiles push` pushes it and commits the pointer bump (`/ari-dotfiles` § Submodules). Pushing follows `/ari-dotfiles`'s Pushing rules; this skill never pushes. On any other failure, stop at that commit and say which landed (their SHAs); show the error, diagnose it, and propose the fix with the command that retries; never retry before a `yes`. The edits stay local whatever the answer.
 

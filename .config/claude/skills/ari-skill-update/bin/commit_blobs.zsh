@@ -15,6 +15,8 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
+source "${SKILLS_DIR}/ari-skill-shellscripts/lib/dry_run.zsh"
+readonly SCRIPT_PATH="${0:a}"
 
 readonly LIB_REGISTRY="${SKILLS_DIR}/ari-dotfiles-skill-registry/lib/registry.zsh"
 if [[ ! -r "${LIB_REGISTRY}" ]]; then
@@ -141,7 +143,31 @@ adopt_unless_linked() {
     return 0
   fi
   log::info "Adopting before the commit | skill='${skill}' tier='${tier}'"
-  zsh "${ADOPT}" --skill "${skill}" --tier "${tier}" >&2
+  run_mut run_adopt "${skill}" "${tier}"
+}
+
+#######################################
+# Run the registry adopt with its stdout on stderr. The registry adopt is a dry run unless
+# --execute is on its command line, so this passes it; callers reach this through run_mut.
+# Globals: ADOPT
+# Arguments:
+#   $1 - skill name
+#   $2 - tier
+#######################################
+run_adopt() {
+  zsh "${ADOPT}" --skill "${1}" --tier "${2}" --execute >&2
+}
+
+#######################################
+# Commit the index file's content with the tier's hooks, their stdout on stderr.
+# Arguments:
+#   $1 - tier
+#   $2 - source
+#   $3 - index file
+#   $4 - message
+#######################################
+commit_index() {
+  GIT_INDEX_FILE="${3}" repo_git "${1}" "${2}" commit -q -m "${4}" >&2
 }
 
 #######################################
@@ -220,7 +246,7 @@ sync_shared_index() {
         log::warn "Left another session's staged entry | file='${file}' staged='${staged}'"
         continue
       fi
-      repo_git "${tier}" "${source}" update-index --force-remove -- "${skill_rel}/${file}"
+      run_mut repo_git "${tier}" "${source}" update-index --force-remove -- "${skill_rel}/${file}"
       continue
     fi
     [[ "${staged}" == "${mode} ${blob}" ]] && continue
@@ -228,7 +254,7 @@ sync_shared_index() {
       log::warn "Left another session's staged entry | file='${file}' staged='${staged}'"
       continue
     fi
-    repo_git "${tier}" "${source}" update-index --add --cacheinfo "${mode},${blob},${skill_rel}/${file}"
+    run_mut repo_git "${tier}" "${source}" update-index --add --cacheinfo "${mode},${blob},${skill_rel}/${file}"
   done
 }
 
@@ -239,7 +265,7 @@ help() {
 ${c_green}commit_blobs${c_rst} — commit exactly the blobs a proposal recorded, or refuse
 
 ${c_bold}Usage:${c_rst}
-  zsh \$HOME/.claude/skills/ari-skill-update/bin/commit_blobs.zsh --skill <name> --tier <df|ldf> --base-tree <tree|none> --message <msg> [--source submodule:<path>] [--adopt] [--blob <mode>:<blob>:<path>]... [--delete <path>]... [--dry-run]
+  zsh \$HOME/.claude/skills/ari-skill-update/bin/commit_blobs.zsh --skill <name> --tier <df|ldf> --base-tree <tree|none> --message <msg> [--source submodule:<path>] [--adopt] [--blob <mode>:<blob>:<path>]... [--delete <path>]... [--execute] [--dry-run]
 
 ${c_bold}Options:${c_rst}
   --skill NAME         Skill to commit (required)
@@ -250,14 +276,20 @@ ${c_bold}Options:${c_rst}
   --adopt              Adopt the skill into --tier first (registry adopt)
   --blob SPEC          <mode>:<blob>:<path relative to the skill dir>; repeat
   --delete PATH        A file the proposal removes, relative to the skill dir; repeat
-  --dry-run            Check and stage in the private index; commit nothing
+  --execute            Adopt (if --adopt) and commit; without it the run is a dry run
+  --dry-run            The default made explicit; wins over --execute and exports DRY_RUN=1
   -h, --help           Show this help
 
 record_blobs.zsh writes this command into the proposal; run it as written.
 
 ${c_bold}Output:${c_rst}
-  key=value lines: result (committed | already-committed | dry-run | refused), sha, mismatched.
+  key=value lines: result (committed | already-committed | dry-run | refused), sha, mismatched,
+  dry_run (1 | 0). A dry run runs every check and stages in the private index; it adopts and
+  commits nothing and logs the exact rerun with --execute.
   Exit 1 on a refusal or an error; a refusal commits nothing.
+
+${c_bold}Environment:${c_rst}
+  DRY_RUN              Set and not 0 (a parent's dry run): a dry run, --execute or not; 0 alone never acts
 EOF
 }
 
@@ -267,7 +299,7 @@ main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local skill="" tier="" source="" proposed_base="" message="" adopt=false dry_run=false
+  local skill="" tier="" source="" proposed_base="" message="" adopt=false execute=false dry_run_flag=false
   local -a specs=() deletes=()
   while (( $# > 0 )); do case "${1}" in
     -h|--help)   help; return 0 ;;
@@ -279,10 +311,12 @@ main() {
     --blob)      specs+=("${2:?--blob requires a value}"); shift 2 ;;
     --delete)    deletes+=("${2:?--delete requires a value}"); shift 2 ;;
     --adopt)     adopt=true; shift ;;
-    --dry-run)   dry_run=true; shift ;;
+    --execute)   execute=true; shift ;;
+    --dry-run)   dry_run_flag=true; shift ;;
     -*)          log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)           log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
   esac; done
+  resolve_dry_run "${execute}" "${dry_run_flag}" || return 1
 
   # === MASSAGE ===
   tier="${tier:l}"
@@ -335,22 +369,22 @@ main() {
     head="$(repo_git "${tier}" "${source}" rev-parse HEAD)"
     log::info "HEAD already holds the proposal's blobs | head='${head}'"
     sync_shared_index "${tier}" "${source}" "${skill_rel}" "${proposed}" "${head}~1"
-    print -r -- "result=already-committed"
-    print -r -- "sha=${head}"
+    cat <<EOF
+result=already-committed
+sha=${head}
+dry_run=${DRY_RUN}
+EOF
+    report_dry_run "${SCRIPT_PATH}" "${ARGS[@]}"
     return 0
   fi
   require_base_tree "${tier}" "${source}" "${skill_rel}" "${proposed_base}" || return 1
   require_working_tree_match "${tier}" "${source}" "${skill}" "${skill_rel}" "${adopt_pending}" "${proposed}" || return 1
 
-  if [[ "${dry_run}" == "true" ]]; then
-    log::info "Dry run: would adopt (if pending), stage the proposal's blobs and commit | skill='${skill}' adopt_pending='${adopt_pending}'"
-    print -r -- "result=dry-run"
-    return 0
-  fi
-
   if [[ "${adopt_pending}" == "true" ]]; then
     adopt_unless_linked "${skill}" "${tier}"
-    require_working_tree_match "${tier}" "${source}" "${skill}" "${skill_rel}" false "${proposed}" || return 1
+    if ! is_dry_run; then
+      require_working_tree_match "${tier}" "${source}" "${skill}" "${skill_rel}" false "${proposed}" || return 1
+    fi
   fi
 
   local index_dir
@@ -369,7 +403,16 @@ main() {
     return 1
   fi
 
-  GIT_INDEX_FILE="${index}" repo_git "${tier}" "${source}" commit -q -m "${message}" >&2
+  run_mut commit_index "${tier}" "${source}" "${index}" "${message}"
+  if is_dry_run; then
+    log::info "Dry run: the proposal's blobs stage cleanly | skill='${skill}' adopt_pending='${adopt_pending}'"
+    cat <<EOF
+result=dry-run
+dry_run=${DRY_RUN}
+EOF
+    report_dry_run "${SCRIPT_PATH}" "${ARGS[@]}"
+    return 0
+  fi
   local sha committed
   sha="$(repo_git "${tier}" "${source}" rev-parse HEAD)"
   committed="$(entries_of "${tier}" "${source}" "${skill_rel}" "${sha}")"
@@ -385,7 +428,10 @@ main() {
   cat <<EOF
 result=committed
 sha=${sha}
+dry_run=${DRY_RUN}
 EOF
+  report_dry_run "${SCRIPT_PATH}" "${ARGS[@]}"
 }
 
+readonly -a ARGS=("${@}")
 main "${@}"

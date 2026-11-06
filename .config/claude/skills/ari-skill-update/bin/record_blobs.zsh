@@ -13,6 +13,8 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
+source "${SKILLS_DIR}/ari-skill-shellscripts/lib/dry_run.zsh"
+readonly SCRIPT_PATH="${0:a}"
 
 readonly LIB_REGISTRY="${SKILLS_DIR}/ari-dotfiles-skill-registry/lib/registry.zsh"
 if [[ ! -r "${LIB_REGISTRY}" ]]; then
@@ -114,7 +116,7 @@ foreign_paths() {
 }
 
 #######################################
-# Write the diff of the recorded files: per file `git diff --no-index` for an
+# Print the diff of the recorded files: per file `git diff --no-index` for an
 # adoption; else the tier's `diff HEAD` plus each untracked file, which
 # `diff HEAD` omits.
 # Arguments:
@@ -123,44 +125,41 @@ foreign_paths() {
 #   $3 - skill name
 #   $4 - skill directory, repo-relative
 #   $5 - adopt (true|false)
-#   $6 - output file
 #######################################
 write_diff() {
-  local tier="${1}" source="${2}" skill="${3}" skill_rel="${4}" adopt="${5}" out="${6}"
-  : > "${out}"
+  local tier="${1}" source="${2}" skill="${3}" skill_rel="${4}" adopt="${5}"
   local file exit_code
   if [[ "${adopt}" == "true" ]]; then
     for file in "${(@f)$(adopt_entries "${tier}" "${source}" "${SKILLS_DIR}/${skill}" "${skill_rel}" false | entry_paths)}"; do
       [[ -n "${file}" ]] || continue
       exit_code=0
-      git diff --no-index -- /dev/null "${SKILLS_DIR}/${skill}/${file}" >> "${out}" || exit_code=$?
+      git diff --no-index -- /dev/null "${SKILLS_DIR}/${skill}/${file}" || exit_code=$?
       (( exit_code <= 1 )) || { log::err "git diff --no-index failed | file='${file}' exit_code='${exit_code}'"; return 1; }
     done
     return 0
   fi
-  repo_git "${tier}" "${source}" diff HEAD -- "${skill_rel}" >> "${out}"
+  repo_git "${tier}" "${source}" diff HEAD -- "${skill_rel}"
   for file in "${(@f)$(repo_git "${tier}" "${source}" ls-files --others --exclude-standard -- "${skill_rel}")}"; do
     [[ -n "${file}" ]] || continue
     exit_code=0
-    repo_git "${tier}" "${source}" diff --no-index -- /dev/null "${file}" >> "${out}" || exit_code=$?
+    repo_git "${tier}" "${source}" diff --no-index -- /dev/null "${file}" || exit_code=$?
     (( exit_code <= 1 )) || { log::err "git diff --no-index failed | file='${file}' exit_code='${exit_code}'"; return 1; }
   done
 }
 
 #######################################
-# Write the fenced Commit command for the recorded entries, or `none — empty
-# diff` when there are none.
+# Print the fenced Commit command for the recorded entries (it acts: --execute, run only
+# after the user's yes), or `none — empty diff` when there are none.
 # Arguments:
-#   $1 - output file
-#   $2 - entries (newline-separated entry lines)
+#   $1 - entries (newline-separated entry lines)
 #   $@ - the leading commit_blobs.zsh flags, unquoted words
 #######################################
 write_command() {
-  local out="${1}" entries="${2}"
-  shift 2
+  local entries="${1}"
+  shift
   if [[ -z "${entries}" ]]; then
-    log::info "No changed files; the Commit command is none | out='${out}'"
-    print -r -- 'none — empty diff' > "${out}"
+    log::info "No changed files; the Commit command is none"
+    print -r -- 'none — empty diff'
     return
   fi
   local line mode blob file spec
@@ -177,9 +176,9 @@ write_command() {
       spec="${mode}:${blob}:${file}"
       print -rn -- " \\"$'\n'"  --blob ${(q-)spec}"
     done
-    print
+    print -r -- " \\"$'\n'"  --execute"
     print -r -- '```'
-  } > "${out}"
+  }
 }
 
 # --- Help ---
@@ -189,7 +188,7 @@ help() {
 ${c_green}record_blobs${c_rst} — record a proposal's blobs, write its diff and its Commit command
 
 ${c_bold}Usage:${c_rst}
-  zsh \$HOME/.claude/skills/ari-skill-update/bin/record_blobs.zsh --skill <name> --tier <df|ldf> --investigation-dir <dir> --message <msg> [--source submodule:<path>] [--adopt] [--edited <path>]... [--dry-run]
+  zsh \$HOME/.claude/skills/ari-skill-update/bin/record_blobs.zsh --skill <name> --tier <df|ldf> --investigation-dir <dir> --message <msg> [--source submodule:<path>] [--adopt] [--edited <path>]... [--execute] [--dry-run]
 
 ${c_bold}Options:${c_rst}
   --skill NAME              Skill whose files are recorded (required)
@@ -200,12 +199,14 @@ ${c_bold}Options:${c_rst}
   --adopt                   The skill is not in a tier yet (state unlinked or ignored, or new)
   --edited PATH             A file you edited: absolute, or relative to the skill dir; repeat.
                             A changed file not named is foreign (never under --adopt)
-  --dry-run                 Hash without writing blobs to the object store
+  --execute                 Write the blobs, the diff and the Commit command; without it the run is a dry run
+  --dry-run                 The default made explicit; wins over --execute and exports DRY_RUN=1
   -h, --help                Show this help
 
 ${c_bold}Output:${c_rst}
   key=value lines: diff, command, files, insertions, deletions, foreign, unmatched_edited
-  (--edited files with no change against HEAD), concurrent.
+  (--edited files with no change against HEAD), concurrent, dry_run (1 | 0). A dry run hashes
+  and diffs but writes no blob and no file, and logs the exact rerun with --execute.
   Refuses (exit 1) when an --edited path is not a file in the skill dir, when --tier/--source
   do not hold the skill, or when a file changes while it records (moved_files= in the log).
 EOF
@@ -217,7 +218,7 @@ main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
-  local skill="" tier="" source="" investigation_dir="" message="" adopt=false dry_run=false
+  local skill="" tier="" source="" investigation_dir="" message="" adopt=false execute=false dry_run_flag=false
   local -a edited=()
   while (( $# > 0 )); do case "${1}" in
     -h|--help)           help; return 0 ;;
@@ -228,16 +229,19 @@ main() {
     --message)           message="${2:?--message requires a value}"; shift 2 ;;
     --edited)            edited+=("${2:?--edited requires a value}"); shift 2 ;;
     --adopt)             adopt=true; shift ;;
-    --dry-run)           dry_run=true; shift ;;
+    --execute)           execute=true; shift ;;
+    --dry-run)           dry_run_flag=true; shift ;;
     -*)                  log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)                   log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
   esac; done
+  resolve_dry_run "${execute}" "${dry_run_flag}" || return 1
 
   # === MASSAGE ===
+
   tier="${tier:l}"
   investigation_dir="${investigation_dir%/}"
   local write=true
-  [[ "${dry_run}" == "true" ]] && write=false
+  is_dry_run && write=false
   local skill_dir="${SKILLS_DIR}/${skill}"
   local file
   local -a edited_rel=()
@@ -295,7 +299,10 @@ main() {
 
   local before after
   before="$(entries_for "${tier}" "${source}" "${skill}" "${skill_rel}" "${adopt}" "${write}")"
-  write_diff "${tier}" "${source}" "${skill}" "${skill_rel}" "${adopt}" "${diff_out}"
+  (( MUT_COUNT += 1 ))
+  is_dry_run && log::info "would write | what='blobs of the recorded files to the tier object store'"
+  local diff_text
+  diff_text="$(write_diff "${tier}" "${source}" "${skill}" "${skill_rel}" "${adopt}")"
   after="$(entries_for "${tier}" "${source}" "${skill}" "${skill_rel}" "${adopt}" false)"
   if [[ "${before}" != "${after}" ]]; then
     local moved_files
@@ -311,7 +318,8 @@ main() {
   [[ -n "${source}" ]] && leading+=(--source "${source}")
   [[ "${adopt}" == "true" ]] && leading+=(--adopt)
   leading+=(--base-tree "${base}" --message "${message}")
-  write_command "${command_out}" "${before}" "${leading[@]}"
+  write_command "${before}" "${leading[@]}" | write_mut "${command_out}"
+  print -r -- "${diff_text}" | write_mut "${diff_out}"
 
   local -a changed
   changed=("${(@f)$(print -r -- "${before}" | entry_paths)}")
@@ -322,9 +330,9 @@ main() {
   unmatched=("${(@)edited_rel:|changed}")
 
   local files insertions deletions
-  files="$(awk '/^diff --git / { n += 1 } END { print n + 0 }' "${diff_out}")"
-  insertions="$(awk '/^\+\+\+ / { next } /^\+/ { n += 1 } END { print n + 0 }' "${diff_out}")"
-  deletions="$(awk '/^--- / { next } /^-/ { n += 1 } END { print n + 0 }' "${diff_out}")"
+  files="$(awk '/^diff --git / { n += 1 } END { print n + 0 }' <<< "${diff_text}")"
+  insertions="$(awk '/^\+\+\+ / { next } /^\+/ { n += 1 } END { print n + 0 }' <<< "${diff_text}")"
+  deletions="$(awk '/^--- / { next } /^-/ { n += 1 } END { print n + 0 }' <<< "${diff_text}")"
 
   local concurrent
   concurrent="$(live_sibling_dirs "${skill}" "${investigation_dir}" "$(last_commit_epoch "${tier}" "${source}" "${skill_rel}")")"
@@ -339,7 +347,10 @@ deletions=${deletions}
 foreign=${(j:,:)foreign}
 unmatched_edited=${(j:,:)unmatched}
 concurrent=${concurrent}
+dry_run=${DRY_RUN}
 EOF
+  report_dry_run "${SCRIPT_PATH}" "${ARGS[@]}"
 }
 
+readonly -a ARGS=("${@}")
 main "${@}"
