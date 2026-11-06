@@ -20,14 +20,23 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
+LIB_DRY_RUN="${SKILLS_DIR}/ari-skill-shellscripts/lib/dry_run.zsh"
+[[ -r "${LIB_DRY_RUN}" ]] || LIB_DRY_RUN="${SCRIPT_DIR:h:h}/ari-skill-shellscripts/lib/dry_run.zsh"
+readonly LIB_DRY_RUN
+if [[ ! -r "${LIB_DRY_RUN}" ]]; then
+  print -u2 "[ERROR] missing shared dry-run lib | path='${LIB_DRY_RUN}'"
+  exit 1
+fi
+source "${LIB_DRY_RUN}"
 source "${SCRIPT_DIR:h}/lib/registry.zsh"
+readonly SCRIPT_PATH="${0:a}"
 
 help() {
   cat <<EOF
 ${c_green}adopt${c_rst} — move a skill into a dotfiles tier, symlink it back, stage it (does not commit)
 
 ${c_bold}Usage:${c_rst}
-  zsh \$HOME/.claude/skills/ari-dotfiles-skill-registry/bin/adopt --skill NAME [--skill NAME]... --tier df|ldf [--as NEW_NAME] [--dry-run]
+  zsh \$HOME/.claude/skills/ari-dotfiles-skill-registry/bin/adopt --skill NAME [--skill NAME]... --tier df|ldf [--as NEW_NAME] [--execute] [--dry-run]
 
 ${c_bold}Options:${c_rst}
   --skill NAME   Skill directory under \$HOME/.claude/skills to adopt (repeatable)
@@ -35,13 +44,17 @@ ${c_bold}Options:${c_rst}
   --as NEW_NAME  Adopt under a new directory name; allowed with exactly one --skill.
                  The SKILL.md \`name:\` line and every caller still say the old name: fix them
                  in the same commit (\`rg -n '<old>' \$HOME/.claude/skills\`).
-  --dry-run      Log what would change; touch nothing
+  --execute      Act. Without it the run is a dry run: it logs what would change and touches nothing
+  --dry-run      The default made explicit; wins over --execute and exports DRY_RUN=1
   -h, --help     Show this help
 
 Each skill must be in state ${c_bold}unlinked${c_rst} (or ${c_bold}ignored${c_rst} via .gitignore: naming it is the
 override) and must contain a SKILL.md; a directory without one is not a skill and is refused. A skill
 already ${c_bold}linked${c_rst} to the requested tier is a no-op. Ends with key=value lines per skill and the
 commit the caller should make.
+
+${c_bold}Environment:${c_rst}
+  DRY_RUN        Set and not 0 (a parent's dry run): a dry run, --execute or not; 0 alone never acts
 EOF
 }
 
@@ -100,42 +113,35 @@ check_adoptable() {
 }
 
 #######################################
-# Move, link, and stage one skill, or log the intent under --dry-run.
+# Move, link, and stage one skill; a dry run logs each step.
 # Arguments:
 #   $1 - skill name
 #   $2 - tier
 #   $3 - destination name
-#   $4 - dry_run (true|false)
-#######################################
+########################################
 adopt_skill() {
-  local skill="${1}" tier="${2}" dest="${3}" dry_run="${4}"
+  local skill="${1}" tier="${2}" dest="${3}"
   local src="${SKILLS_DIR}/${skill}"
   local root="$(tier_root "${tier}")"
   local dest_dir="${root}/${dest}"
   local link="${SKILLS_DIR}/${dest}"
 
-  if [[ "${dry_run}" == "true" ]]; then
-    log::info "dry-run: would move | src='${src}' dest_dir='${dest_dir}'"
-    log::info "dry-run: would link | link='${link}' target='${dest_dir}'"
-    log::info "dry-run: would stage | tier='${tier}' path='${dest_dir}'"
-    return 0
-  fi
-
-  mkdir -p "${root}"
-  run_cmd mv "${src}" "${dest_dir}"
-  run_cmd ln -s "${dest_dir}" "${link}"
-  run_cmd git "${tier}" add "${dest_dir}"
+  run_mut mkdir -p "${root}"
+  run_mut mv "${src}" "${dest_dir}"
+  run_mut ln -s "${dest_dir}" "${link}"
+  run_mut git "${tier}" add "${dest_dir}"
 }
 
 main() {
   # === PARSE ===
-  local tier="" as="" dry_run=false
+  local tier="" as="" execute=false dry_run=false
   local -a skills
   while (( $# > 0 )); do case "${1}" in
     -h|--help) help; return 0 ;;
     --skill)   skills+=("${2:?--skill requires a value}"); shift 2 ;;
     --tier)    tier="${2:?--tier requires a value}"; shift 2 ;;
     --as)      as="${2:?--as requires a value}"; shift 2 ;;
+    --execute) execute=true; shift ;;
     --dry-run) dry_run=true; shift ;;
     -*)        log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)         log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
@@ -155,6 +161,8 @@ main() {
     log::err "--as needs exactly one --skill | skill_count='${#skills}'"; return 1
   fi
 
+  resolve_dry_run "${execute}" "${dry_run}"
+
   # === LOGIC ===
   local skill dest rc adopted=0
   local -a rows
@@ -164,16 +172,17 @@ main() {
     check_adoptable "${skill}" "${tier}" "${dest}" || rc=$?
     (( rc == 2 )) && continue
     (( rc != 0 )) && return 1
-    adopt_skill "${skill}" "${tier}" "${dest}" "${dry_run}"
-    rows+=("skill=${skill} tier=${tier} path=$(tier_root "${tier}")/${dest} link=${SKILLS_DIR}/${dest}")
+    adopt_skill "${skill}" "${tier}" "${dest}"
+    rows+=("skill=${skill} tier=${tier} path=$(tier_root "${tier}")/${dest} link=${SKILLS_DIR}/${dest} dry_run=${DRY_RUN}")
     adopted=$(( adopted + 1 ))
   done
 
-  log::info "adopt done | adopted='${adopted}' tier='${tier}' dry_run='${dry_run}'"
+  log::info "adopt done | adopted='${adopted}' tier='${tier}' dry_run='${DRY_RUN}'"
   (( adopted > 0 )) && printf '%s\n' "${rows[@]}"
-  if (( adopted > 0 )) && [[ "${dry_run}" != "true" ]]; then
+  if (( adopted > 0 )) && ! is_dry_run; then
     log::info "staged, not committed | next=\"git ${tier} commit -m 'claude: adopt the <name> skill into the ${tier} tier'\""
   fi
+  report_dry_run "${SCRIPT_PATH}" "$@"
   return 0
 }
 

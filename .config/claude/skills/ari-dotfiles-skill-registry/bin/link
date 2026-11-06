@@ -20,81 +20,89 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
+LIB_DRY_RUN="${SKILLS_DIR}/ari-skill-shellscripts/lib/dry_run.zsh"
+[[ -r "${LIB_DRY_RUN}" ]] || LIB_DRY_RUN="${SCRIPT_DIR:h:h}/ari-skill-shellscripts/lib/dry_run.zsh"
+readonly LIB_DRY_RUN
+if [[ ! -r "${LIB_DRY_RUN}" ]]; then
+  print -u2 "[ERROR] missing shared dry-run lib | path='${LIB_DRY_RUN}'"
+  exit 1
+fi
+source "${LIB_DRY_RUN}"
 source "${SCRIPT_DIR:h}/lib/registry.zsh"
+readonly SCRIPT_PATH="${0:a}"
 
 help() {
   cat <<EOF
 ${c_green}link${c_rst} — symlink tier-held skills into \$HOME/.claude/skills (new-machine step; safe to rerun)
 
 ${c_bold}Usage:${c_rst}
-  zsh \$HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link [--prune] [--dry-run]
+  zsh \$HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link [--prune] [--execute] [--dry-run]
 
 ${c_bold}Options:${c_rst}
   --prune     Also remove symlinks in \$HOME/.claude/skills whose target no longer exists
-  --dry-run   Log what would change; touch nothing
+  --execute   Act. Without it the run is a dry run: it logs what would change and touches nothing
+  --dry-run   The default made explicit; wins over --execute and exports DRY_RUN=1
   -h, --help  Show this help
 
 Only skills in state ${c_bold}missing${c_rst} get a link. ${c_bold}shadowed${c_rst}, ${c_bold}foreign${c_rst}, and
 ${c_bold}conflict${c_rst} rows are reported and left alone; fix those with bin/status in hand.
+
+${c_bold}Environment:${c_rst}
+  DRY_RUN     Set and not 0 (a parent's dry run): a dry run, --execute or not; 0 alone never acts
 EOF
 }
 
 #######################################
-# Create the symlink for one missing skill, or log the intent under --dry-run.
+# Create the symlink for one missing skill.
 # Arguments:
 #   $1 - skill name
 #   $2 - tier
-#   $3 - dry_run (true|false)
 #######################################
 link_skill() {
-  local skill="${1}" tier="${2}" dry_run="${3}"
+  local skill="${1}" tier="${2}"
   local target="$(skill_holder_root "${tier}" "${skill}")/${skill}"
   local link="${SKILLS_DIR}/${skill}"
-  if [[ "${dry_run}" == "true" ]]; then
-    log::info "dry-run: would link | link='${link}' target='${target}'"
-    return 0
-  fi
-  run_cmd ln -s "${target}" "${link}"
+  run_mut ln -s "${target}" "${link}"
 }
 
 #######################################
-# Remove one dangling symlink, or log the intent under --dry-run.
+# Remove one dangling symlink.
 # Arguments:
 #   $1 - skill name
-#   $2 - dry_run (true|false)
 #######################################
 prune_skill() {
-  local skill="${1}" dry_run="${2}"
+  local skill="${1}"
   local link="${SKILLS_DIR}/${skill}"
-  if [[ "${dry_run}" == "true" ]]; then
-    log::info "dry-run: would remove dangling link | link='${link}' target='$(readlink "${link}")'"
-    return 0
-  fi
-  run_cmd rm "${link}"
+  run_mut rm "${link}"
 }
 
 main() {
   # === PARSE ===
-  local prune=false dry_run=false
+  local prune=false execute=false dry_run=false
   while (( $# > 0 )); do case "${1}" in
     -h|--help) help; return 0 ;;
     --prune)   prune=true; shift ;;
+    --execute) execute=true; shift ;;
     --dry-run) dry_run=true; shift ;;
     -*)        log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)         log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
   esac; done
 
+  resolve_dry_run "${execute}" "${dry_run}"
+
   # === LOGIC ===
-  mkdir -p "${SKILLS_DIR}"
+  [[ -d "${SKILLS_DIR}" ]] || run_mut mkdir -p "${SKILLS_DIR}"
   local skill state tier
   local linked=0 pruned=0 skipped=0
-  for skill in "${(@f)$(list_all_skills)}"; do
+  local -a all_skills=("${(@f)$(list_all_skills)}")
+  all_skills=("${(@)all_skills:#}")
+  for skill in "${all_skills[@]}"; do
     skill_state "${skill}" >/dev/null   # leaves '<state> <tier>' in REPLY; no subshell per skill
     state="${REPLY%% *}"
     tier="${REPLY#* }"
     case "${state}" in
       missing)
-        link_skill "${skill}" "${tier}" "${dry_run}"
+        link_skill "${skill}" "${tier}"
         linked=$(( linked + 1 ))
         ;;
       dangling)
@@ -103,7 +111,7 @@ main() {
           skipped=$(( skipped + 1 ))
           continue
         fi
-        prune_skill "${skill}" "${dry_run}"
+        prune_skill "${skill}"
         pruned=$(( pruned + 1 ))
         ;;
       shadowed|foreign|conflict)
@@ -113,12 +121,14 @@ main() {
     esac
   done
 
-  log::info "link done | linked='${linked}' pruned='${pruned}' skipped='${skipped}' dry_run='${dry_run}'"
+  log::info "link done | linked='${linked}' pruned='${pruned}' skipped='${skipped}' dry_run='${DRY_RUN}'"
   cat <<EOF
 linked=${linked}
 pruned=${pruned}
 skipped=${skipped}
+dry_run=${DRY_RUN}
 EOF
+  report_dry_run "${SCRIPT_PATH}" "$@"
 }
 
 main "${@}"

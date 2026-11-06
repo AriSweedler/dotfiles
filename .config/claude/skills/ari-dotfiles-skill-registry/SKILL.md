@@ -63,9 +63,11 @@ submodule add `source=submodule:<path>`). Act per state:
 ### Adopt a skill
 
 ```zsh
-zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/adopt --skill <name> --tier df --dry-run
 zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/adopt --skill <name> --tier df
+zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/adopt --skill <name> --tier df --execute
 ```
+
+Preview, then act. `adopt` and `link` mutate: each is a dry run unless `--execute` is on its command line, and `--execute` runs unattended (no wait for a user `yes`); `--dry-run` wins over `--execute`. Convention: `/ari-skill-shellscripts` § Dry run. `status` is read-only and takes neither flag.
 
 Then commit through the tier with a message that says why it belongs there:
 
@@ -81,11 +83,11 @@ does not cover `share/claude-skills/`; add `!/share/claude-skills/` to
 ### Link on a machine
 
 ```zsh
-zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link --dry-run
 zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link
+zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link --execute
 ```
 
-Idempotent. Creates a symlink for every `missing` skill and touches nothing else;
+Preview, then act (dry-run convention above). Idempotent. Creates a symlink for every `missing` skill and touches nothing else;
 `--prune` also removes `dangling` links. `dotfiles init` runs it as the
 `claude_skills` step (`new-machine check --only claude_skills` reports; `apply` links),
 so on a new machine it happens with the rest of the bootstrap. Run it by hand after
@@ -94,6 +96,6 @@ pulling shared dotfiles that added a skill.
 ## File storage
 
 - `bin/status` — read-only classification
-- `bin/link` — create missing symlinks, prune dangling ones
-- `bin/adopt` — move + link + stage one or more skills into a tier
+- `bin/link` — (dry run unless `--execute`) create missing symlinks, prune dangling ones
+- `bin/adopt` — (dry run unless `--execute`) move + link + stage one or more skills into a tier
 - `lib/registry.zsh` — tier roots (plus every submodule's `skills/`) and `skill_state`, shared by the three scripts
