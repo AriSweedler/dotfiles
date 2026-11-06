@@ -230,6 +230,10 @@ Print the underlying MCP error verbatim before the prompt. NEVER pick autonomous
 
 Siblings MAY add additional options (e.g., "switch to research mode") as option 3's behavior, but options 1 and 2 are required.
 
+## Docs API helpers
+
+`lib/gdoc_api.py` serves the publish scripts (`/ari-hemingway--share-gdoc`, `/ari-hemingway--structure-bookmark`). `gws_json` dies on a failed call with the exit code, the stderr line and `api_error=`, the error object `gws` prints on stdout (code, message, reason, details): the reason and details name the request that failed, so never reduce a failure to stderr alone. Example: `documents.batchUpdate: failed | rc='1' stderr='error[api]: Invalid requests[0]' api_error='{"code": 400, "reason": "badRequest", ...}'`; an empty `stderr=''` with a filled `api_error` is normal. `image_findings`, `IMAGE_LINK_PREFIX` and `DRIVE_LINK_RE` are the one definition of a fitting, linked image and a chip-able Drive link; add a check there, not in a script.
+
 ## Drafting
 
 **Each iteration: overwrite `draft.md` entirely. NEVER append or merge.** Do not carry over sentences verbatim unless they still belong in the new structure. Use the Write tool (full file), not Edit.
