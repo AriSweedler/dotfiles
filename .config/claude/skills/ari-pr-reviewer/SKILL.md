@@ -74,9 +74,10 @@ Write `/tmp/ari-pr-reviewer-<pr>/replies/<comment-id>.md`. One idea per reply; t
 
 ```zsh
 zsh $HOME/.claude/skills/ari-pr-reviewer/bin/post-pending-reply.zsh --pr <number> --comment-id <id> --body-file /tmp/ari-pr-reviewer-<pr>/replies/<id>.md --verdict <verdict>
+zsh $HOME/.claude/skills/ari-pr-reviewer/bin/post-pending-reply.zsh --pr <number> --comment-id <id> --body-file /tmp/ari-pr-reviewer-<pr>/replies/<id>.md --verdict <verdict> --execute
 ```
 
-`review_state=PENDING` in the output is the success condition. Anything else means the reply went public; tell Ari at once. After the batch, run **Gather** again to catch comments Ari added meanwhile.
+The first call is a dry run: it checks the review is still `PENDING`, logs the reply and posts nothing. Ari's request to reply is the go-ahead, so run the second, `--execute`, unattended: the reply stays in his pending review. `dry_run=0` with `review_state=PENDING` in the output is the success condition. `review_state=unchanged` means the comment already had a reply and nothing was posted. An inherited `DRY_RUN` other than 0 turns `--execute` into a dry run, so check `dry_run=0` every time. `review_state` other than `PENDING` means the reply went public; tell Ari at once. After the batch, run **Gather** again to catch comments Ari added meanwhile.
 
 ### Report
 

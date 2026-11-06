@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 # Reply inside the viewer's pending review thread. Nothing publishes until the review is submitted.
-# Run: zsh $HOME/.claude/skills/ari-pr-reviewer/bin/post-pending-reply.zsh --pr <number> --comment-id <id> --body-file <path>
+# Run: zsh $HOME/.claude/skills/ari-pr-reviewer/bin/post-pending-reply.zsh --pr <number> --comment-id <id> --body-file <path> [--verdict <verdict>] [--execute]
 
 set -euo pipefail
 
@@ -12,6 +12,9 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
+source "${SKILLS_DIR}/ari-skill-shellscripts/lib/dry_run.zsh"
+
+readonly SCRIPT_PATH="${0:a}"
 
 # --- Constants ---
 
@@ -26,19 +29,28 @@ help() {
 ${c_green}post-pending-reply${c_rst} — reply under one of the viewer's pending review comments
 
 ${c_bold}Usage:${c_rst}
-  zsh $HOME/.claude/skills/ari-pr-reviewer/bin/post-pending-reply.zsh --pr <number> --comment-id <id> --body-file <path> [--verdict <verdict>] [--dry-run]
+  zsh $HOME/.claude/skills/ari-pr-reviewer/bin/post-pending-reply.zsh --pr <number> --comment-id <id> --body-file <path> [--verdict <verdict>] [--execute]
 
 ${c_bold}Options:${c_rst}
   --pr NUMBER          Pull request number or URL (required)
   --comment-id ID      Numeric id of the viewer's top-level comment (required)
   --body-file PATH     Markdown reply body; no footer allowed (required)
   --verdict VERDICT    Record the fact-check verdict: ${(j:, :)VALID_VERDICTS}
-  --dry-run            Log the reply without posting or writing state
+  --execute            Post the reply and write state. Without it the run is a dry run: it logs the
+                       reply and each change and makes none
+  --dry-run            The default, said explicitly; overrides --execute and exports DRY_RUN=1
   --verbose            Enable debug logging
   -h, --help           Show this help
 
+${c_bold}Environment:${c_rst}
+  DRY_RUN              Inherited from a parent: anything but empty or 0 forces a dry run, --execute or not
+
 ${c_bold}Requires:${c_rst}
   State from gather-pending.zsh under /tmp/ari-pr-reviewer-<pr>/comments/.
+
+${c_bold}Output:${c_rst}
+  comment_id, reply_id, reply_node_id, reply_url, review_state, state_updated, dry_run=1|0.
+  Confirm a real post by dry_run=0 and review_state=PENDING, never by the exit code.
 EOF
 }
 
@@ -128,8 +140,8 @@ mark_addressed() {
         '(.[] | select(.id == $id))
             |= . + {status: "addressed", reply_id: $reply_id, reply_node_id: $reply_node_id}
              + (if $verdict == "" then {} else {verdict: $verdict} end)' \
-        "${state_file}" > "${tmp}"
-    mv "${tmp}" "${state_file}"
+        "${state_file}" | write_mut "${tmp}"
+    run_mut mv "${tmp}" "${state_file}"
 }
 
 # --- GitHub ---
@@ -140,11 +152,12 @@ mark_addressed() {
 #   $1 - thread node id
 #   $2 - review node id
 #   $3 - body file
-# Stdout: raw GraphQL response
+# Stdout: raw GraphQL response; in a dry run a placeholder reply on a PENDING review
 #######################################
 post_reply() {
     local thread_id="${1}" review_node_id="${2}" body_file="${3}"
-    gh api graphql \
+    local placeholder='{"data":{"addPullRequestReviewThreadReply":{"comment":{"id":"dry-run","databaseId":0,"url":"none","pullRequestReview":{"state":"PENDING"}}}}}'
+    run_mut --dry-out "${placeholder}" gh api graphql \
         -f query='mutation($threadId:ID!,$reviewId:ID!,$body:String!) {
           addPullRequestReviewThreadReply(input:{pullRequestReviewThreadId:$threadId, pullRequestReviewId:$reviewId, body:$body}) {
             comment { id databaseId url pullRequestReview { state } }
@@ -153,13 +166,31 @@ post_reply() {
         -f threadId="${thread_id}" -f reviewId="${review_node_id}" -F body="@${body_file}"
 }
 
+#######################################
+# Refuse to post unless GitHub reports the review PENDING right now. A read, so it runs in a dry run too.
+# Arguments:
+#   $1 - review node id
+# Returns: 1 when the state is not PENDING
+#######################################
+require_pending_review() {
+    local review_node_id="${1}" state
+    state="$(gh api graphql \
+        -f query='query($id:ID!) { node(id:$id) { ... on PullRequestReview { state } } }' \
+        -f id="${review_node_id}" --jq '.data.node.state // empty')"
+    if [[ "${state}" != "PENDING" ]]; then
+        log::err "Review is not PENDING; nothing posted | review_node_id='${review_node_id}' state='${state}'"
+        return 1
+    fi
+}
+
 # --- Main ---
 
 main() {
     check_prerequisites || exit 1
+    local -a args=("${@}")
 
     # === PARSE ===
-    local pr="" comment_id="" body_file="" verdict="" dry_run=false verbose=false
+    local pr="" comment_id="" body_file="" verdict="" execute=false dry_run=false verbose=false
 
     while (( $# > 0 )); do case "${1}" in
         -h|--help)     help; return 0 ;;
@@ -167,6 +198,7 @@ main() {
         --comment-id)  comment_id="${2:?--comment-id requires a value}"; shift 2 ;;
         --body-file)   body_file="${2:?--body-file requires a value}"; shift 2 ;;
         --verdict)     verdict="${2:?--verdict requires a value}"; shift 2 ;;
+        --execute)     execute=true; shift ;;
         --dry-run)     dry_run=true; shift ;;
         --verbose)     verbose=true; shift ;;
         -*)            log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
@@ -174,6 +206,7 @@ main() {
     esac; done
 
     export VERBOSE="${verbose}"
+    resolve_dry_run "${execute}" "${dry_run}" || return 1
 
     # === MASSAGE ===
 
@@ -228,28 +261,23 @@ comment_id=${comment_id}
 reply_id=${existing_reply_id}
 review_state=unchanged
 state_updated=false
+dry_run=${DRY_RUN}
 EOF
         return 0
     fi
 
-    if [[ "${dry_run}" == "true" ]]; then
-        log::info "Dry run — would post reply | pr='${pr}' comment_id='${comment_id}' thread_id='${thread_id}' verdict='${verdict:-unset}'"
+    require_pending_review "${review_node_id}" || return 1
+
+    log::info "Posting reply into pending review | pr='${pr}' comment_id='${comment_id}' thread_id='${thread_id}' verdict='${verdict:-unset}'"
+    if is_dry_run; then
         log::INFO "$(cat "${body_file}")"
-        cat <<EOF
-comment_id=${comment_id}
-reply_id=dry-run
-review_state=dry-run
-state_updated=false
-EOF
-        return 0
     fi
-
-    log::info "Posting reply into pending review | pr='${pr}' comment_id='${comment_id}' thread_id='${thread_id}'"
     local response
     if ! response="$(post_reply "${thread_id}" "${review_node_id}" "${body_file}")"; then
         log::err "Reply failed | response='${response}'"
         return 1
     fi
+    (( MUT_COUNT += 1 ))
 
     local reply_id reply_node_id reply_url review_state
     reply_id="$(jq -r '.data.addPullRequestReviewThreadReply.comment.databaseId // empty' <<<"${response}")"
@@ -257,11 +285,15 @@ EOF
     reply_url="$(jq -r '.data.addPullRequestReviewThreadReply.comment.url // empty' <<<"${response}")"
     review_state="$(jq -r '.data.addPullRequestReviewThreadReply.comment.pullRequestReview.state // empty' <<<"${response}")"
     if [[ -z "${reply_id}" ]]; then
-        log::err "Reply response has no comment | response='${response}'"
+        log::err "Reply response has no comment; check the thread before retrying, a reply may exist | response='${response}'"
         return 1
     fi
 
     mark_addressed "${state_file}" "${comment_id}" "${reply_id}" "${reply_node_id}" "${verdict}"
+    local state_updated=true
+    if is_dry_run; then
+        state_updated=dry-run
+    fi
 
     if [[ "${review_state}" != "PENDING" ]]; then
         log::err "Reply is PUBLIC, not pending; tell Ari now | reply_url='${reply_url}' review_state='${review_state}'"
@@ -271,19 +303,22 @@ reply_id=${reply_id}
 reply_node_id=${reply_node_id}
 reply_url=${reply_url}
 review_state=${review_state}
-state_updated=true
+state_updated=${state_updated}
+dry_run=${DRY_RUN}
 EOF
         return 1
     fi
 
-    log::ok "Reply posted, review still pending | reply_id='${reply_id}'"
+    log::ok "Reply step done, review still pending | reply_id='${reply_id}'"
+    report_dry_run "${SCRIPT_PATH}" "${args[@]}"
     cat <<EOF
 comment_id=${comment_id}
 reply_id=${reply_id}
 reply_node_id=${reply_node_id}
 reply_url=${reply_url}
 review_state=${review_state}
-state_updated=true
+state_updated=${state_updated}
+dry_run=${DRY_RUN}
 EOF
 }
 
