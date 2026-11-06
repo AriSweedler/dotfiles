@@ -3,5 +3,3 @@
 #   <kind> <canonical-name>   # reason      kind is formula|cask|tap|vscode; names are full names
 #   include-declared <path>   # reason      every entry of that Brewfile counts as ignored (local tier only)
 # Add entries with `dotfiles brew decree <name> --ignore-global --reason "..."`.
-formula libtiff            # library brew marks on-request; not a tool
-formula python-setuptools  # library shim
