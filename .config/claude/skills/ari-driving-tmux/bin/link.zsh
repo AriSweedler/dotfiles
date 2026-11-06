@@ -5,6 +5,7 @@
 # With --run, the click runs it through run_log in that pane and switches back to the clicked pane; an
 # interactive run (--interactive, or auto-detected: sudo, ssh, logins) keeps Ari in that pane until the
 # command finishes, since it will ask him something there, and run_log switches him back then.
+# With --copy (no pane: none can take the command), the click puts the command on Ari's clipboard instead.
 # Clicking runs focus.zsh through the tmux-pane:// branch of ~/dotfiles/.config/dotfiles/nix/tmux/osc8-hyperlinks.conf,
 # in ~/.config/tmux/tmux.conf after a dotfiles switch.
 # Run: zsh $HOME/.claude/skills/ari-driving-tmux/bin/link.zsh --help
@@ -54,6 +55,7 @@ ${c_green}link.zsh${c_rst} — print a click-to-focus, click-to-type or click-to
 
 ${c_bold}Usage:${c_rst}
   zsh $HOME/.claude/skills/ari-driving-tmux/bin/link.zsh --pane 2.4|%N [--cmd TEXT | --run TEXT [--interactive | --no-interactive]]
+  zsh $HOME/.claude/skills/ari-driving-tmux/bin/link.zsh --copy TEXT
 
 ${c_bold}Options:${c_rst}
   --pane 2.4|%N window.pane as Ari reads it off prefix-q (exact match in his most recently active
@@ -61,6 +63,8 @@ ${c_bold}Options:${c_rst}
   --cmd TEXT    command the click types into the pane, without Enter
   --run TEXT    command the click runs there through run_log; the click switches back to the pane the
                 link was clicked in, and run_log types 'run_log artifact: <dir>' into its prompt
+  --copy TEXT   no pane (none can take the command): the click copies TEXT, laid out, to the clipboard; takes
+                no --pane. The click is Ari's own action
   --interactive with --run: TEXT will ask something in the pane (a password, a 2FA tap, a [y/N], a login),
                 so the click stays there and run_log switches back when TEXT finishes. Assumed, with a
                 note on stderr, when TEXT starts with ${(j:, :)INTERACTIVE_COMMANDS}, or
@@ -83,6 +87,11 @@ ${c_bold}Output:${c_rst}
     > \`\`\`
   Run and return (paste as-is into chat):
     > [▶ run in ID=%301|pane=2.5](tmux-pane://301?run=kubectl%20get%20pods)
+    > \`\`\`zsh
+    > kubectl get pods
+    > \`\`\`
+  Copy on click, no pane (paste as-is into chat):
+    > [⧉ copy to clipboard](tmux-pane://?copy=kubectl%20get%20pods)
     > \`\`\`zsh
     > kubectl get pods
     > \`\`\`
@@ -224,6 +233,25 @@ percent_encode() {
   print -rn -- "${out}"
 }
 
+#######################################
+# Print the blockquote: the link, then the command laid out in a code block.
+# Arguments: $1 markdown link  $2 command (one line)
+# Outputs: the blockquote on stdout
+#######################################
+print_block() {
+  local link="${1}" cmd="${2}" display fence='```' display_line
+  display="$(wrap_command "${cmd}")"
+  if [[ "${display}" == *'```'* ]]; then
+    fence='````'
+  fi
+  print -r -- "> ${link}"
+  print -r -- "> ${fence}zsh"
+  for display_line in "${(@f)display}"; do
+    print -r -- "> ${display_line}"
+  done
+  print -r -- "> ${fence}"
+}
+
 # --- Main ---
 
 main() {
@@ -233,7 +261,7 @@ main() {
   while (( $# > 0 )); do case "${1}" in
     -h|--help)  help; return 0 ;;
     --pane)     pane="${2:?--pane requires a value}"; shift 2 ;;
-    --cmd|--run)
+    --cmd|--run|--copy)
       if [[ -n "${mode}" ]]; then
         log::err "Pick one of --cmd and --run | given='--${mode} ${1}'"
         return 1
@@ -262,9 +290,20 @@ main() {
     log::err "Refusing the command | reason='${refusal}'"
     return 1
   fi
+  if [[ "${mode}" == copy && -n "${pane}" ]]; then
+    log::err "--copy takes no --pane | pane='${pane}' hint='a pane that can take the command gets --run or --cmd'"
+    return 1
+  fi
   if [[ -n "${interactive_flag}" && "${mode}" != run ]]; then
     log::err "--${interactive_flag} needs --run | mode='${mode:-none}'"
     return 1
+  fi
+  if [[ "${mode}" == copy ]]; then
+    if [[ -z "${TMUX_PANE:-}" ]]; then
+      log::warn "Claude is not in a tmux pane; no click can reach the handler | TMUX_PANE='' hint='hand a fenced block instead'"
+    fi
+    print_block "[⧉ copy to clipboard](${SCHEME}?copy=$(percent_encode "${cmd}"))" "${cmd}"
+    return 0
   fi
   if [[ "${pane}" != (<0->.<0->|%<0->|<0->) ]]; then
     log::err "Missing or malformed --pane | pane='${pane}' expected='2.4, %N or N'"
@@ -298,17 +337,7 @@ main() {
     url+="&interactive=1"
     text="▶ run (interactive: stays there until it finishes) in ${label}"
   fi
-  local display fence='```' display_line
-  display="$(wrap_command "${cmd}")"
-  if [[ "${display}" == *'```'* ]]; then
-    fence='````'
-  fi
-  print -r -- "> [${text}](${url})"
-  print -r -- "> ${fence}zsh"
-  for display_line in "${(@f)display}"; do
-    print -r -- "> ${display_line}"
-  done
-  print -r -- "> ${fence}"
+  print_block "[${text}](${url})" "${cmd}"
 }
 
 main "${@}"

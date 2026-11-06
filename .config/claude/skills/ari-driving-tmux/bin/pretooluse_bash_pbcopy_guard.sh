@@ -31,11 +31,16 @@ main() {
   # count, and neither does a fragment of a longer name (xyz-pbcopy-abc, pbcopyish, my.pbcopy).
   local sep='[|;&({`'$'\n'']'
   local pbcopy_cmd="(^|${sep}[[:space:]]*|/|(xargs|sudo|env|command|exec|nohup|time|-exec)[[:space:]]+)pbcopy([[:space:];|&)<>]|\$)"
+  local focus_copy="(^|${sep}[[:space:]]*)(zsh[[:space:]]+)?[^[:space:]]*focus\\.zsh[^"$'\n'"]*\\?copy="
+  if [[ "${command}" =~ ${focus_copy} ]]; then
+    printf '%s\n' "Blocked: focus.zsh is the click handler's script, and a ?copy= payload writes Ari's clipboard. Only his click may run it. Hand him link.zsh --copy 'CMD' and paste its output unchanged." >&2
+    return 2
+  fi
   [[ "${command}" =~ ${pbcopy_cmd} ]] || return 0
   [[ "${command}" == *HANDOFF_CLIP_OK=1* ]] && return 0
 
   cat >&2 <<'MSG'
-Blocked: this command writes Ari's clipboard (pbcopy) and he did not ask for that in this turn. Print the text in the chat message instead, in a fenced code block, so it lives in the conversation history; Ari copies it himself. Do not try another route to the clipboard. If he explicitly asks for a copy, use the sanctioned path; it prints where Raycast's Clipboard History kept the entry it displaces:
+Blocked: this command writes Ari's clipboard (pbcopy) and he did not ask for that in this turn. Hand Ari a link instead and paste its output unchanged: with a pane that can take the command, link.zsh --pane <id> --run 'CMD'; with none, link.zsh --copy 'CMD', whose click copies it on Ari's own action (zsh $HOME/.claude/skills/ari-driving-tmux/bin/link.zsh --help). A bare fenced block is the last resort, only when link.zsh refuses the text. Do not try another route to the clipboard. If he explicitly asked for a copy this turn, use the sanctioned path; it prints where Raycast's Clipboard History kept the entry it displaces:
   zsh $HOME/.claude/skills/ari-driving-tmux/bin/handoff.zsh --copy --text '<text>'
 MSG
   return 2

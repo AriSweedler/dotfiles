@@ -12,6 +12,9 @@
 # A link's ?cmd=/?run= is honoured only when it was clicked in a Claude Code pane: any program can print
 # an OSC 8 link, and a click on one elsewhere only focuses. A payload refused after the click (gate, lock,
 # text, run_log missing) is reported into that Claude Code pane's prompt as ` ari-driving refused: …`.
+# A tmux-pane://?copy=<percent-encoded> link names no pane: the click puts the command, laid out as the link's
+# code block shows it, on the clipboard (pbcopy), for when no pane can take it. The click is Ari's own action;
+# the same Claude Code pane rule applies, and nothing is typed, focused or run.
 # Clicking a tmux-pane:// link in tmux runs this (the tmux-pane:// branch of
 # ~/dotfiles/.config/dotfiles/nix/tmux/osc8-hyperlinks.conf, in ~/.config/tmux/tmux.conf after a dotfiles switch).
 # Run: zsh $HOME/.claude/skills/ari-driving-tmux/bin/focus.zsh --help
@@ -76,6 +79,7 @@ ${c_green}focus.zsh${c_rst} — focus a tmux pane by ID, and type or run a comma
 
 ${c_bold}Usage:${c_rst}
   zsh $HOME/.claude/skills/ari-driving-tmux/bin/focus.zsh --pane %N[?cmd=…|?run=…[&interactive=1]] [--cmd TEXT | --run TEXT [--interactive]] [--return-pane %M] [--no-activate]
+  zsh $HOME/.claude/skills/ari-driving-tmux/bin/focus.zsh --pane '?copy=…' --return-pane %M
 
 ${c_bold}Options:${c_rst}
   --pane %N        tmux pane ID; a bare number is taken as %N (tmux-pane://301 links carry no %).
@@ -88,6 +92,8 @@ ${c_bold}Options:${c_rst}
                    --return-pane
   --interactive    with --run: TEXT will ask something in the pane, so add --focus-after and stay there;
                    run_log switches back to --return-pane when TEXT finishes
+  --pane ?copy=…   no pane: a link payload; put its text, laid out, on the clipboard, honoured only when
+                   --return-pane runs Claude Code. Link-only: there is no --copy flag. Nothing is typed or focused
   --return-pane %M the pane the link was clicked in (the click handler passes it)
   --no-activate    switch tmux only; leave the frontmost app alone
   -h, --help       show this help
@@ -168,7 +174,12 @@ is_payload_trusted() {
 #######################################
 report_refusal() {
   local label="${1}" reason="${2}" return_pane="${3}" paste_refusal
-  notify_status "Not typed into ${label}: ${reason}"
+  if [[ "${label}" == clipboard ]]; then
+    notify_status "Not copied: ${reason}"
+    label="copy:"
+  else
+    notify_status "Not typed into ${label}: ${reason}"
+  fi
   if [[ -z "${return_pane}" ]] || ! is_live_pane "${return_pane}" || ! tmux_pane_is_claude "${return_pane}"; then
     log::info "Refusal not reported to a prompt; the clicked pane is not Claude Code | return_pane='${return_pane}'"
     return 0
@@ -318,11 +329,40 @@ activate_terminal() {
   focus_terminal || true
 }
 
+#######################################
+# Put the text, laid out as the link's code block shows it, on the clipboard: Ari's own click, so it is
+# not the unasked write the PreToolUse guard exists to stop. Trusted only from a Claude Code pane; text the
+# type-click would refuse is refused here too.
+# Arguments: $1 text  $2 return_pane
+# Returns: 1 when nothing was copied (reason on the status line and in the Claude Code pane's prompt)
+#######################################
+copy_to_clipboard() {
+  local text="${1}" return_pane="${2}" refusal laid_out
+  if ! is_live_pane "${return_pane:-%none}" || ! tmux_pane_is_claude "${return_pane}"; then
+    notify_status "Nothing copied: the link was clicked outside a Claude Code pane"
+    return 1
+  fi
+  if ! refusal="$(tmux_text_refusal "${text}")" || ! refusal="$(tmux_opt_in_refusal "${text}")"; then
+    report_refusal "clipboard" "the link's text ${refusal}" "${return_pane}"
+    return 1
+  fi
+  if ! command -v pbcopy >/dev/null 2>&1; then
+    report_refusal "clipboard" "pbcopy is not installed" "${return_pane}"
+    return 1
+  fi
+  laid_out="$(wrap_command "${text}")"
+  if ! print -rn -- "${laid_out}" | pbcopy; then
+    report_refusal "clipboard" "pbcopy failed" "${return_pane}"
+    return 1
+  fi
+  notify_status "✦ Copied ${#laid_out} characters: ${laid_out[1,60]//$'\n'/ }"
+}
+
 # --- Main ---
 
 main() {
   # === PARSE ===
-  local pane_id="" activate=true cmd="" run="" return_pane="" from_link=false interactive=false
+  local pane_id="" activate=true cmd="" run="" copy="" copy_given=false return_pane="" from_link=false interactive=false
   while (( $# > 0 )); do case "${1}" in
     -h|--help)       help; return 0 ;;
     --pane)          pane_id="${2:?--pane requires a value}"; shift 2 ;;
@@ -339,7 +379,11 @@ main() {
   export PATH="${PATH_PREFIX}:${PATH}"
   # The query is ?cmd=<encoded> or ?run=<encoded>[&interactive=1]; the encoded part holds no '&'.
   local query
-  if [[ "${pane_id}" == *\?cmd=* ]]; then
+  if [[ "${pane_id}" == \?copy=* ]]; then
+    copy="$(percent_decode "${pane_id#\?copy=}")"
+    copy_given=true
+    pane_id=""
+  elif [[ "${pane_id}" == *\?cmd=* ]]; then
     query="${pane_id#*\?cmd=}"
     cmd="$(percent_decode "${query%%\&*}")"
     pane_id="${pane_id%%\?*}" from_link=true
@@ -356,6 +400,19 @@ main() {
   fi
 
   # === VALIDATE ===
+  if [[ "${copy_given}" == true ]]; then
+    if [[ -n "${cmd}${run}" ]]; then
+      log::err "A copy link takes no --cmd or --run | cmd='${cmd}' run='${run}'"
+      return 1
+    fi
+    if [[ -z "${copy}" ]]; then
+      report_refusal "clipboard" "the link carries no text" "${return_pane}"
+      return 1
+    fi
+    check_prerequisites || return 1
+    copy_to_clipboard "${copy}" "${return_pane}"
+    return
+  fi
   if [[ "${pane_id}" != ${~PANE_ID_PATTERN} ]]; then
     log::err "Missing or malformed --pane | pane='${pane_id}' expected='%N or N'"
     help

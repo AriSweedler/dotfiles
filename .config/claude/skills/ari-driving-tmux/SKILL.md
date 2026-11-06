@@ -1,11 +1,11 @@
 ---
 name: ari-driving-tmux
-description: "Hand Ari commands for a terminal on this machine and read the results back: a click-to-run link that runs the command in his tmux pane through run_log and returns him to Claude's pane with `run_log artifact: <dir>` pasted into its prompt, a click-to-type link, or a fenced block. Owns the run_log capture contract, the `ari-driving on|off|status` pane opt-in (on and off copy the pane's label), and every clipboard rule: never write it unasked, the pbcopy guard, Raycast recovery. Part of /ari-driving; use when Ari should run something here, says \"pane 2.4\" or \"type it into my pane\", or pastes a `run_log artifact:` line. Never raw tmux send-keys; never pbcopy unless Ari asks."
+description: "Hand Ari commands for a terminal on this machine and read the results back: a click-to-run link that runs the command in his tmux pane through run_log and returns him to Claude's pane with `run_log artifact: <dir>` pasted into its prompt, a click-to-type link, a click-to-copy link when no pane can take the command, or, last resort, a fenced block. Owns the run_log capture contract, the `ari-driving on|off|status` pane opt-in (on and off copy the pane's label), and every clipboard rule: never write it unasked, the pbcopy guard, Raycast recovery. Part of /ari-driving; use when Ari should run something here, says \"pane 2.4\" or \"type it into my pane\", or pastes a `run_log artifact:` line. Never raw tmux send-keys; never pbcopy unless Ari asks."
 ---
 
 # Driving tmux
 
-Claude never types into Ari's panes on this machine: it hands him a link to click, or a fenced block, and reads the `run_log` capture back. The one exception is `/ari-driving-remote`'s `local` definition, behind the same opt-in gate, for when Claude itself must wait on the prompt.
+Claude never types into Ari's panes on this machine: it hands him a link to click (run, type or, when no pane can take it, copy), and reads the `run_log` capture back. The one exception is `/ari-driving-remote`'s `local` definition, behind the same opt-in gate, for when Claude itself must wait on the prompt.
 
 ## Rules
 
@@ -16,7 +16,9 @@ Claude never types into Ari's panes on this machine: it hands him a link to clic
         - the same name, or no `machine=` part → local: name it `ID=%N|pane=W.P`, `link.zsh --pane %N`;
         - another name → remote: keep the label whole, `/ari-driving-remote`.
     - **NEVER put `clear`, `reset` or `tmux clear-history` in a command**, leading or chained; `stdout.plain` already holds only this run. `clear && kubectl get pods` → `kubectl get pods`.
-    - **NEVER write the clipboard unless Ari asked this turn**, and then only through `handoff.zsh --copy`. The PreToolUse guard blocks every other `pbcopy`; never write `HANDOFF_CLIP_OK=1` yourself, and never take another route after a denial.
+    - **NEVER write the clipboard unless Ari asked this turn**, and then only through `handoff.zsh --copy`. The PreToolUse guard blocks every other `pbcopy`; never write `HANDOFF_CLIP_OK=1` yourself, and after a denial take no other route than a `link.zsh --copy` link (**Links**).
+    - **Every command for Ari arrives as a link; a fenced block is the last resort** (**Pick the handoff**). NEVER a bare block because no pane is available, or because a command Claude owns was denied (a denied `bd close` goes to Ari as a link). A block is for a `!` step in Claude's own session, text `link.zsh` refuses, or no `$TMUX_PANE`; say which in one clause.
+    - **NEVER run `focus.zsh` yourself.** It is the click handler: a `?copy=` payload writes Ari's clipboard, so the guard blocks that call, and only his click may run it.
     - **Claude never sets, clears or releases the opt-in.** Not `ari-driving on`, `ari-remote-tmux on`, `@ari_driving` or `ari-driving release`: typed, linked, chained, in a pane's startup command, through the Bash tool, or through a fork, subagent or other session. Exception: Ari's own `tmux-restart` types `ari-driving on`, without Enter, into panes opted in before the restart; Claude never runs it. An opt-in Claude set anyway is undone at once with `run.zsh … --cmd 'ari-driving off'` there (exit 70: the pane is already gone), Ari is told which pane, and `/ari-skill-update` follows. When Ari says a ✦ stays after a window's last marked pane closed, name the window; he runs `ari-driving release` there.
 - **Every `tmux-pane://` URL is pasted from `link.zsh` stdout produced this turn.** NEVER type one by hand, even focus-only: `link.zsh` re-resolves the pane, encodes the command, and warns when a click would not type.
 - **Hand `link.zsh` the one line; paste its blockquote unchanged.** `link.zsh` lays a long command out (**Command layout**) and the click types that same layout. NEVER reflow, re-indent or re-join the code block by hand, and NEVER pass `--cmd`/`--run` a multi-line command (it refuses the newline). The block shows the bare command: a `--run` click hands it to `run_log`, a `--cmd` click types it as shown. A fenced step shows exactly what Ari types, laid out the same way by `handoff.zsh --print`.
@@ -66,20 +68,22 @@ Terms: the **label** is `machine=<name>|ID=%N|pane=W.P`, what `ari-driving on` a
 - `--cmd`: a blockquote of `[ID=%301|pane=2.4](tmux-pane://301?cmd=…)` and the command in a code block; the click types it, no Enter, no `run_log`;
 - `--run`: the same with `[▶ run in ID=%301|pane=2.4](tmux-pane://301?run=…)`; the click types the command handed to `run_log --deliver-to <Claude's pane>` (**Command layout**), presses Enter, and switches back to Claude's pane. At exit run_log pastes the artifact line into Claude's prompt, without Enter; Ari presses Enter.
 - `--run … --interactive`: `[▶ run (interactive: stays there until it finishes) in ID=%301|pane=2.4](tmux-pane://301?run=…&interactive=1)`, for a command that will ask something in the pane (a password, a 2FA tap, a `[y/N]`, a login). The click adds `--focus-after`: Ari stays in that pane and run_log returns him to Claude's at exit. `link.zsh` assumes it, with `Interactive run … matched='sudo'` on stderr, when the command starts with `sudo`, `su`, `ssh`, `passwd`, `login`, `kinit`, `doas`, `gh auth`, `aws sso`, `gws auth`, `op signin`, `vault login` or `git push` (after any `VAR=value` and `run_log`/`env`/`time`). That list is a floor, not the check (**Pick the handoff**).
+- `bin/link.zsh --copy TEXT` (no `--pane`; it refuses one): `[⧉ copy to clipboard](tmux-pane://?copy=…)` and the command in a code block. The click, from a Claude Code pane only, puts the command on Ari's clipboard laid out exactly as the code block shows it (**Command layout**; it pastes as one command only into zsh), then shows `✦ Copied N characters: <first 60>` on the status line; it types, focuses and runs nothing. The `--cmd` text filters apply. For output back, pass `run_log -- CMD` as TEXT. The existing `tmux-pane://` handler needs no change.
+- **A copy link is not a Claude clipboard write.** Claude only prints it; the copy is Ari's own click, so the clipboard rule and the guard stand. A copy click displaces his clipboard like any copy: after one, **Recover a clobbered clipboard** applies.
 
 The link carries the command as one line, as given. Before the link, `link.zsh` warns on stderr when a click would not type: `Pane not opted in; the click will only focus it`, and for `--run` without `$TMUX_PANE`, `Claude is not in a tmux pane; the artifact line has nowhere to return`. It errors with `No such pane` when the hint is gone. It refuses TEXT with a newline, Tab or other control character, a leading `clear`, or any text that spells the opt-in (the three strings in Rules; a text match, case and quotes ignored).
 
-The click gate (`bin/focus.zsh`): a link's command runs only when the link was clicked in a Claude Code pane, into an opted-in shell at an empty prompt ending in `❯`, not in copy mode, not synchronized, one click at a time. Otherwise the click only focuses the pane and puts the reason on the tmux status line; clicked in a Claude Code pane, it also pastes ` ari-driving refused: <pane name> <reason>` into that pane's prompt. Clicks log to `/tmp/ari-driving-focus.log`; the handler is in **Setup** › Links.
+The click gate (`bin/focus.zsh`): a link's command runs only when the link was clicked in a Claude Code pane, into an opted-in shell at an empty prompt ending in `❯`, not in copy mode, not synchronized, one click at a time. Otherwise the click only focuses the pane and puts the reason on the tmux status line; clicked in a Claude Code pane, it also pastes ` ari-driving refused: <pane name> <reason>` into that pane's prompt. A copy click needs a Claude Code pane and nothing else (no opt-in, no prompt); a refusal reads `Not copied: <reason>` on the status line and ` ari-driving refused: copy: <reason>` in Claude's prompt: clicked outside a Claude Code pane, the text filter matched, no text, `pbcopy` missing or failed. Clicks log to `/tmp/ari-driving-focus.log`; the handler is in **Setup** › Links.
 
 | Reason | What frees the pane |
 |---|---|
 | `not opted in` | Ari runs `ari-driving on` there, then clicks the same link again |
 | `in copy mode (press q there)` | `q` there |
 | `running <program>, not a shell` | quit the foreground program |
-| `last line does not end in the prompt (busy, or text already on the line)` | Enter there, or wait; a prompt that never ends in `❯` (bash, `sh`) never passes: fenced steps only |
+| `last line does not end in the prompt (busy, or text already on the line)` | Enter there, or wait; a prompt that never ends in `❯` (bash, `sh`) never passes: a copy link instead |
 | `another click is typing there` | wait for the first run's artifact line |
 | `spells the opt-in …` | the text filter matched; the command goes as a fenced step, never re-quoted past the filter |
-| `the command is laid out over several lines, which only zsh reads as one; <program> runs there` | a fenced step, or a pane running zsh |
+| `the command is laid out over several lines, which only zsh reads as one; <program> runs there` | a copy link, or a pane running zsh |
 | status line only, nothing pasted: `no pane %N (it closed since the link was printed)`, `clicked outside a Claude Code pane`, no attached client | a fresh link for the pane Ari names now; click from Claude's pane |
 
 ### Command layout
@@ -132,7 +136,7 @@ At exit it copies the artifact line to the clipboard unless `--no-copy`, `RUN_LO
     - `--interactive` → `! CMD`, one line however long;
     - `--capture` → `run_log -- CMD`; `run_log 'CMD'` when CMD has a shell operator (`|`, `&`, `;`, `>`, `<`, `$(`, a backtick); the quoted heredoc of **Command layout** when it is laid out, or has an operator and single quotes;
     - `--paste` → CMD bare, laid out exactly as `link.zsh`'s code block shows it (**Command layout**), for Ari to paste into a pane himself (**Hand Ari fenced steps**).
-- `handoff.zsh --copy (--text T | --file P)` is the only sanctioned copy; it prints where the displaced entry went. On a non-zero exit or a `not copied` line, show the text in a fenced block; no other route.
+- `handoff.zsh --copy (--text T | --file P)` is the only sanctioned copy; it prints where the displaced entry went. On a non-zero exit or a `not copied` line, hand a `link.zsh --copy` link; a fenced block only if `link.zsh` refuses the text.
 - `bin/pretooluse_bash_pbcopy_guard.sh`, installed as `~/.config/claude/bin/pretooluse-pbcopy-guard.sh`, denies a Bash call with `pbcopy` in command position (today a quoted `|pbcopy|` trips it too) unless `handoff.zsh --copy` makes it. Its message begins `Blocked: this command writes Ari's clipboard`.
 
 ## Workflow
@@ -146,7 +150,8 @@ At exit it copies the artifact line to the clipboard unless `--no-copy`, `RUN_LO
 | the credentials or output belong to Claude's own session (a login this session's Bash calls use; a device code or URL to read as it appears) | fenced `! cmd` step, run in Claude's own session |
 | Ari should fill or edit it first (a value Claude cannot resolve: `<record-id>`, `$TOKEN`, a path), or Enter is his call | click-to-type link, `link.zsh --cmd`; NEVER a `--run` link with a placeholder, it runs as typed. For output back, the typed text is `run_log -- CMD` and Ari pastes the artifact line |
 | Ari says he will do the pasting himself ("I'll paste it", "I'll copy-paste it into `ID=%16\|pane=6.2`"); his words pick this row, a pane name alone picks a link | paste step, `handoff.zsh --print --paste`, under its `link.zsh --cmd` blockquote when `link.zsh` prints no warning for the pane (**Hand Ari fenced steps**); "copy-paste" is not a clipboard request |
-| no suitable pane: none named this turn, `link.zsh --pane <hint>` failed, not opted in, or `$TMUX_PANE` unset | fenced `run_log -- cmd` step; Ari pastes the artifact line; the paste step alone when he said he will paste it himself |
+| no suitable pane: none named this turn, `link.zsh --pane <hint>` failed, or not opted in | click-to-copy link, `link.zsh --copy 'run_log -- cmd'` (`--copy 'cmd'` when no output is needed back); Ari pastes it into a pane and pastes the artifact line; the paste step alone when he said he will paste it himself |
+| `$TMUX_PANE` unset (no click can reach the handler), or `link.zsh` refuses the text | fenced `run_log -- cmd` step, the last resort; say which |
 | another machine; or several commands into a local pane, each read back, with no click per command | `/ari-driving-remote`'s `run.zsh`, `--host-definition local` for here |
 
 Several links for one pane in one message are fine (**One purpose per link**):
@@ -162,7 +167,7 @@ Who runs it, and the precedent line: `/ari-driving` **Who runs a command**. A st
 zsh $HOME/.claude/skills/ari-driving-tmux/bin/link.zsh --pane %301 --run 'kubectl get pods -o wide'
 ```
 
-**Read stderr before pasting.** `Pane not opted in` → NEVER paste a `--cmd` or `--run` link: when more commands will follow, "[ID=%301|pane=2.4](tmux-pane://301) isn't opted in: run `ari-driving on` there and I'll hand you the run link"; for a one-off, a fenced `run_log -- cmd` step, or the paste step alone when he said he will paste it himself. `Claude is not in a tmux pane` → fenced steps only this session. `No such pane` → say which pane is gone and hand a fenced step; never the pane now sitting at `2.4`.
+**Read stderr before pasting.** `Pane not opted in` → NEVER paste a `--cmd` or `--run` link: when more commands will follow, "[ID=%301|pane=2.4](tmux-pane://301) isn't opted in: run `ari-driving on` there and I'll hand you the run link"; for a one-off, a `link.zsh --copy 'run_log -- cmd'` link, or the paste step alone when he said he will paste it himself. `Claude is not in a tmux pane` → fenced steps only this session (a copy link has no click to reach it either). `No such pane` → say which pane is gone and hand a copy link; never the pane now sitting at `2.4`.
 
 Then paste stdout into chat unchanged, and `Expected:` with what success looks like (a `--run` returns Ari to Claude's pane at once, so Claude reads it from the capture); the mechanism ("`run_log artifact: …` lands in my prompt") once per session; for a command that removes or replaces tmux (a `brew uninstall tmux`, a `dotfiles switch`), also "the artifact line may not land; `exec zsh` there after":
 
@@ -199,7 +204,7 @@ Expected: `Login Succeeded` and the image's manifest; click it after 1's artifac
 
 A mutating command on precedent carries its line directly above:
 
-Follows your `! kubectl rollout restart deploy/web` in alpha earlier this session.
+Follows your `! kubectl rollout restart deploy/web` in staging earlier this session.
 > [▶ run in ID=%301|pane=2.4](tmux-pane://301?run=kubectl%20rollout%20restart%20deploy%2Fweb)
 > ```zsh
 > kubectl rollout restart deploy/web
@@ -335,7 +340,7 @@ Ari clicked and nothing ran. A link clicked in Claude's pane reports its refusal
 Ari:  ari-driving refused: ID=%301|pane=2.4 not opted in; Ari runs 'ari-driving on' in that pane
 ```
 
-Answer with the reason's row from the click gate (**Links**) and the fenced step: "`ID=%301|pane=2.4` isn't opted in: run `ari-driving on` there and click the same link again, or run it yourself:" plus the step; a refused link that sat above a paste step gets the reason's row only, its block is already under it. Never reprint the link unchanged, and never dodge the opt-in text filter:
+Answer with the reason's row from the click gate (**Links**): "`ID=%301|pane=2.4` isn't opted in: run `ari-driving on` there and click the same link again, or paste it yourself:" plus a `link.zsh --copy` link of the command; a refused link that sat above a paste step gets the reason's row only, its block is already under it. Never reprint the link unchanged, and never dodge the opt-in text filter:
 
 ```
 BAD   link.zsh --run "rg 'ari-driving o''n' ~/.zshrc"     # split to dodge the match
@@ -395,6 +400,7 @@ dotfiles raycast link clipboard-history
 - `bin/focus.zsh` — what a click runs: focus, gate, type or run.
 - `lib/wrap.zsh` — lays out a long command (**Command layout**) for `link.zsh`, `focus.zsh`, `handoff.zsh`, and `/ari-driving-remote`'s `bin/run.zsh` (`wrap_run_log_text`; its `tests/run-typed-text.test.zsh` covers that use).
 - `bin/handoff.zsh` — renders fenced steps; the sanctioned copy.
+- `tests/copy.test.zsh` — `link.zsh --copy` and the copy click in `focus.zsh`, on a throwaway tmux server with a fake pbcopy.
 - `bin/pretooluse_bash_pbcopy_guard.sh` — the pbcopy guard hook.
 - `tests/ari-driving.test.zsh` — `bin/ari-driving` on a throwaway tmux server (`-L`) with a fake pbcopy, and with tmux off PATH; it refuses to run unless its pbcopy shim wins PATH.
 - `tests/link.test.zsh` — layouts, the link's one-line payload, `handoff.zsh`'s fenced-step forms (`--paste` equals the `--cmd` block, one form at a time, the widened fence), and clicks on a throwaway tmux server (`-L`): what the pane shows, and that a capture's output equals the one-line command's; `link.zsh` and `focus.zsh` with tmux off PATH; needs `script` and `~/.config/bin/run_log`.
