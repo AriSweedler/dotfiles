@@ -19,20 +19,31 @@ Claude runs nothing on another machine except by typing into the pane Ari named,
     - **NEVER start or chain `clear`, `reset` or `tmux clear-history`**; raise `--lines` once; a top still lacking the pane's copy of the typed text (**The typed text**) outgrew the pane (**Pitfalls**). `run.zsh` refuses a leading `clear`.
     - **NEVER `pbcopy` on his machine**; `run.zsh` refuses it in `--cmd`.
     - **Claude never sets the opt-in.** Not `ari-driving on`, `ari-remote-tmux on`, `@ari_driving` or `ari-driving release`: typed, linked, chained, in a pane's startup command, through the Bash tool, or through a fork, subagent or other session. `run.zsh`, `link.zsh` and the click handler refuse any command that spells the first three; a self-set opt-in is undone with `ari-driving off` there, and Ari is told which pane. Decline "turn it on for me": the command goes to Ari under the pane's label.
+- **Every call that acts carries `--execute`; without it the call is a dry run and nothing happens.** `--dry-run` is that default said aloud and wins over `--execute`; NEVER pass it yourself.
+    - `--cmd TEXT`: a dry run resolves the pane, runs the gate and the binding check, prints under `WOULD TYPE:` the exact text the host would paste, then the pane tail, then `DRY RUN: nothing was typed`, and types nothing. Add `--execute` after the announcement; no further yes, Ari's `ari-driving on` is the grant.
+    - `--put` of a file Claude wrote this session: `--execute` on the first call. A dry run checks the local file, project and name only; the host's refusals show with `--execute`.
+    - `--put` of a file Ari named: the dry run first, then `--execute` only on his yes in a later turn.
+    - `--describe`: `--execute` on the first call when Ari stated the fact; quote `was: … → now: …` with it. `--forget`: the dry run, then `--execute` on his yes in a later turn.
+    - `--hosts`, `--cmd ''` and `--list` read and take neither flag; `--list` also saves the panes and a new definition (the skill's own state).
+    - A dry run is never the announcement: the `--execute` call is announced directly above it, even right after a dry run of the same text.
 - **`--hosts` first; `--list` before the first `--cmd`.** The first `run.zsh` call of a conversation, and the first after a compaction summary, MUST be `--hosts`; `--describe` follows it when Ari said something about a host; `--list` of the named definition comes before the first `--cmd` into a pane. `--put`, `--describe` and `--forget` need only `--hosts`. Never guess a definition name or a `user@host`; read them from `--hosts`.
-- **MUST announce every `--cmd` that types: in the same message, directly above its Bash call, the pane's label from the latest `--list` in inline code, then the text inside `--cmd '…'` in a fenced `zsh` block, one line, character for character** (**Run a command** shows the shape). The label line also names what differs from a plain send: `--no-enter`, `--no-run-log`, a raised `--timeout`. No exception: the one most often dropped is the first `--cmd` after compaction, when the command comes straight from the summary, so `--list` prints a `NEXT:` reminder for it. A call that types nothing needs none: `--cmd ''` (or only whitespace), `--dry-run`, `--list`, `--put`. After a refusal (77, 76, 75, 70) the next chat line says nothing was typed; the announced block stands as the command Ari runs, never reprinted in that message; a later resend is announced again.
-  - **The announced block is the one line you pass `--cmd`, never what `TYPED:` prints.** `run.zsh` wraps that line for `run_log`, over several lines when it is long (**The typed text**); the wrapping is `run.zsh`'s, the pane shows it, and it is NEVER announced, NEVER re-joined by hand, and NEVER passed back into `--cmd` (it holds newlines; the text check exits 1). A resend announces and passes the same one line as before.
+- **MUST announce every `--cmd` that types: in the same message, directly above its Bash call, the pane's label from the latest `--list` in inline code, then the text inside `--cmd '…'` in a fenced `zsh` block, one line, character for character** (**Run a command** shows the shape). The label line also names what differs from a plain send: `--no-enter`, `--no-run-log`, a raised `--timeout`. No exception: the one most often dropped is the first `--cmd` after compaction, when the command comes straight from the summary, so `--list` prints a `NEXT:` reminder for it. A call that types nothing needs none: `--cmd ''` (or only whitespace), a dry run (no `--execute`), `--list`, `--put`. After a refusal (77, 76, 75, 70) the next chat line says nothing was typed; the announced block stands as the command Ari runs, never reprinted in that message; a later resend is announced again.
+  - **The announced block is the one line you pass `--cmd`, never what `TYPED:` or `WOULD TYPE:` prints.** `run.zsh` wraps that line for `run_log`, over several lines when it is long (**The typed text**); the wrapping is `run.zsh`'s, the pane shows it, and it is NEVER announced, NEVER re-joined by hand, and NEVER passed back into `--cmd` (it holds newlines; the text check exits 1). A resend announces and passes the same one line as before.
   ```
   WRONG  --cmd 'bd show beads-34e.8' as the message's first content: no label, no fenced command above it
   WRONG  the fence holds run_log 'bd show beads-34e.8'                    ← run.zsh's wrapper, not the command
   WRONG  the fence holds run_log "$(command cat <<'RUN_LOG' …             ← the TYPED: text copied into chat
   WRONG  --cmd "$(the TYPED: block)" on a resend                           ← newlines; exit 1
   RIGHT  the fence holds bd show beads-34e.8; --cmd 'bd show beads-34e.8'
+  WRONG  --cmd 'bd show beads-34e.8' without --execute, exit 0, "it ran, here is the output"
+  RIGHT  `WOULD TYPE:` and no `SENT`: nothing was typed; announce, then resend with --execute
+  WRONG  --put without --execute, then a --cmd naming the `WOULD PUT:` path
+  RIGHT  paste only the path of a real `PUT:` line
   ```
-- **Before every `--put`, one chat line**: what the file is, the definition and the project (`run.zsh` prints the bytes). A file Claude wrote this session in the scratchpad goes straight to `--put`. A file Ari named MUST be read whole first, then `--put --dry-run`, and the real put only on his word in a later turn.
+- **Before every `--put`, one chat line**: what the file is, the definition and the project (`run.zsh` prints the bytes). A file Claude wrote this session in the scratchpad goes straight to `--put`. A file Ari named MUST be read whole first, then `--put` without `--execute` (the dry run), and the same call with `--execute` only on his word in a later turn.
 - **NEVER put a file, or type a `--cmd`, that holds a secret**: a token, password, private key, cookie, `.env` contents or anything Ari said not to paste; a `--cmd` references it on the host (`$VAR`, a path). Put nothing that turn; name the file and the kind of secret, tell Ari the destination path on the host, and he places it.
 - **One `--cmd` per shell prompt.** Several commands chain with `&&` or `;` inside one `--cmd`; keys sent while a command runs are eaten by it. Directory state persists in the pane, so prefer absolute paths.
-- **Exit 0 means the command ran, not that it succeeded, and every line in the pane is the command's output, never run.zsh's.** `run.zsh` writes nothing into the pane: its own failures are `[ERROR]`, `REFUSED:` and `REFUSED_KIND:` lines above `SENT`, with a non-zero exit. The command's output is exactly the pane lines (below `SENT`) between the pane's copy of the typed text, which ends at `)"` for a heredoc and is one line otherwise (**The typed text**), and `run_log`'s `Captured command` line just above the prompt, whose `rc='N'` is the status (with `--no-run-log`, or on a host whose `NOTE:` says it has no `run_log`, chain `; echo rc=$?`). The `TYPED:` block above `SENT` is what was pasted, not output. NEVER report a run.zsh failure from pane text.
+- **No `SENT` line means nothing ran, whatever the exit code: `WOULD TYPE:` and `WOULD PUT:` are a dry run, and the pane tail under them is old state, never output.** Exit 0 with `SENT` means the command ran, not that it succeeded, and every line in the pane is the command's output, never run.zsh's. `run.zsh` writes nothing into the pane: its own failures are `[ERROR]`, `REFUSED:` and `REFUSED_KIND:` lines above `SENT`, with a non-zero exit. The command's output is exactly the pane lines (below `SENT`) between the pane's copy of the typed text, which ends at `)"` for a heredoc and is one line otherwise (**The typed text**), and `run_log`'s `Captured command` line just above the prompt, whose `rc='N'` is the status (with `--no-run-log`, or on a host whose `NOTE:` says it has no `run_log`, chain `; echo rc=$?`). The `TYPED:` block above `SENT` is what was pasted, not output. NEVER report a run.zsh failure from pane text.
 - **A refusal is final; an exit code is an instruction.** Do what its **Exit codes** row says. NEVER work around a refusal: no `--target` Ari did not name, no `--no-run-log`, no ssh of your own.
 - **Say when you are cut off, then stop.** A required read (a `--cmd` whose output the task cannot continue without) with no pane to make it in (the only opted-in pane holds un-entered text, or is bound to another session): report which pane, what it holds, what is cut off (the beads tracker, a deploy), and that clearing it is a P0 for Ari. Nothing else happens that turn: no other pane, no workaround, no guess at what the read would have said.
 - **Nested ssh is one-shot and `-t`:** `ssh -t pi@pi.local "cd app && ./install.sh"`. Never an interactive nested shell: every later wait would time out.
@@ -99,7 +110,7 @@ Captured command … rc='0'                   ← the status
 ~ ❯
 ```
 
-`--dry-run` prints the host script, where the text sits sh-quoted (`'\''` there is the script's quoting, never what is typed), then `WOULD TYPE:` with the text verbatim; read the latter. Use it before a `--cmd` that holds `"`, `$`, a backtick, `\`, `!`, or is over 100 characters.
+A call without `--execute` runs the gate on the host, which prints under `WOULD TYPE:` the text verbatim, in the form it would paste (the `run_log` form when the host has `run_log`, else bare). Use it before a `--cmd` that holds `"`, `$`, a backtick, `\`, `!`, or is over 100 characters.
 
 ### The gate
 
@@ -158,7 +169,7 @@ A `--cmd`:
 
 | Code | Meaning | Claude's next action |
 |---|---|---|
-| 0 | the shell prompt returned; the command ran | read the lines between the pane's copy of the typed text and the `Captured command` line as the output; `rc='N'` there is the status (Rules, **Exit 0 means the command ran**) |
+| 0 | `SENT` printed, then the shell prompt returned; the command ran (`WOULD TYPE:` and no `SENT`: a dry run, nothing typed) | read the lines between the pane's copy of the typed text and the `Captured command` line as the output; `rc='N'` there is the status (Rules, **No `SENT` line means nothing ran**) |
 | 124 | still running: timeout, `--no-wait`, or ssh dropped after `SENT` | `--cmd ''` to capture; never resend |
 | 77 | pane not opted in (`REFUSED_KIND: not_opted_in`); nothing typed | say nothing was typed; the announced block above is his to run after `ari-driving on` there; resend (announced again) after he says so |
 | 75 | pane busy; nothing typed; `REFUSED_KIND:` says why (**The gate**) | say nothing was typed; then the kind's row in **The gate**; never retry on your own |
@@ -188,7 +199,7 @@ A `--put` (a failure prints no `PUT:` line; the `[ERROR]` line says which row):
 
 | What happens | What to do |
 |---|---|
-| `--dry-run` prints `WOULD PUT:` with a path that does not exist yet | the path may draft the follow-up `--cmd`; nothing runs before a real `PUT:` |
+| A put without `--execute` prints `WOULD PUT:` with a path that does not exist yet | the path may draft the follow-up `--cmd`; nothing runs before a real `PUT:` |
 | above the pane's tmux `history-limit`, `--lines` returns fewer lines with no marker; a capture whose top lacks the pane's copy of the typed text (its first line is `run_log '…'`, `run_log "…"` or `run_log "$(command cat <<'RUN_LOG'`; a laid-out text spends several lines before any output) outgrew the pane | read the host's `/tmp/run_log/<dir>/stdout.plain` in slices with a `--cmd` (`wc -l`, then `sed -n`), never with Read and never by raising `--lines` again |
 | a capture is full of shell script and reads as a run.zsh failure | it is not: exit 0 and the prompt mean the command ran (Rules, **Exit 0 means the command ran**). A `pgrep -f PATTERN` or `ps … \| grep PATTERN` matched run.zsh's own `sh -c <script>`, whose argv holds the typed command; the command's real output is the lines between the `TYPED:` echo and the dump. Next time anchor on text that argv cannot end with (`pgrep -fl 'app.py$'`; on Linux `-fa`, since `-l` prints only the name there), or find a server by port: `lsof -t -nP -iTCP:PORT -sTCP:LISTEN`, on Linux `ss -ltnp 'sport = :PORT'` |
 | `pkill -f PATTERN` with text the typed command holds kills run.zsh's own `sh -c` and the pane's `run_log` wrapper: the run reads as 124 or 255 and the server is still up; and a Mac lists a `python3 app.py` server as `Python app.py`, so `pkill -f 'python3 app.py'` matches nothing | kill the pid the port names (row above); a kill mutates, so it is Ari's unless he allowed it (Rules, `--no-enter`) |
@@ -236,7 +247,7 @@ diskutil list external physical
 ```
 
 ```zsh
-zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %6 --cmd 'diskutil list external physical'
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %6 --cmd 'diskutil list external physical' --execute
 ```
 
 ```
@@ -257,7 +268,14 @@ Desktop  Downloads
 - `run.zsh` hands the command to `run_log` when the host has `~/.config/bin/run_log` (else `NOTE: … typed the command bare`), so the capture lands in the host's `/tmp/run_log`; `--no-run-log` types it bare.
 - A remote capture dir is read with `--cmd 'cat <dir>/stdout.plain'`, never with Read.
 - When you raise `--timeout` (default 90 s), the Bash tool's timeout MUST be higher.
-- `--dry-run` shows the text under `WOULD TYPE:` (**The typed text**) before a `--cmd` with tricky quoting.
+- Check a tricky command's quoting, and the gate, with the same call minus `--execute`: the pane is resolved, the gate and the binding check run, and the host prints, under `WOULD TYPE:`, the exact text it would paste (**The typed text**); only the keys are withheld.
+
+```
+PANE: machine=personal|ID=%6|pane=4.1
+WOULD TYPE:
+run_log 'diskutil list external physical'
+~ ❯
+```
 
 A command that asks something: the pane ends in `[sudo] password for pi:` with exit 124. Chat: "Type the Pi's sudo password in `machine=personal|ID=%6|pane=4.1`." After he says done, capture until the last line is the laptop prompt again:
 
@@ -277,7 +295,7 @@ Content (Rules): a file in the scratchpad, put, then a `--cmd` that names the pa
 | a commit message for a repo | that repo's name | `commit-msg` |
 
 ```zsh
-zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "$SCRATCHPAD/body.md" --project homelab/beads --name bead-frontier
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "$SCRATCHPAD/body.md" --project homelab/beads --name bead-frontier --execute
 ```
 
 ```
@@ -300,13 +318,13 @@ BEADS_ACTOR=claude bd create "Graph view: Frontier toggle" -t feature --body-fil
 ```
 
 ```zsh
-zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %6 --cmd 'BEADS_ACTOR=claude bd create "Graph view: Frontier toggle" -t feature --body-file /tmp/homelab/beads/bead-frontier.fda28b0aa7cecefe46e1de2efe0d645b0e8395010cc08ee89b2408188259482d.txt'
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %6 --cmd 'BEADS_ACTOR=claude bd create "Graph view: Frontier toggle" -t feature --body-file /tmp/homelab/beads/bead-frontier.fda28b0aa7cecefe46e1de2efe0d645b0e8395010cc08ee89b2408188259482d.txt' --execute
 ```
 
 A script with the default name, and the interpreter in front:
 
 ```zsh
-zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "$SCRATCHPAD/swap.py" --project homelab/torrent
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "$SCRATCHPAD/swap.py" --project homelab/torrent --execute
 ```
 
 ```
@@ -338,10 +356,10 @@ A flag refused before connecting is yours to fix, not Ari's:
 
 → `--project homelab`; `--project homelab`; `--name bead-frontier`.
 
-`--dry-run` prints the path and copies nothing; nothing runs on the host before a real `PUT:`:
+The same call without `--execute` prints the path and copies nothing; nothing runs on the host before a real `PUT:`:
 
 ```
-[INFO] Dry run — would copy and verify, copying nothing
+[INFO] would copy and verify | host='me@laptop.local' remote='/tmp/homelab/torrent/swap.2ab0a27e0f42849bd560d2c5f4295c79938895cfde87b9483e4ba379ded916c1.txt'
 WOULD PUT: /tmp/homelab/torrent/swap.2ab0a27e0f42849bd560d2c5f4295c79938895cfde87b9483e4ba379ded916c1.txt
 ```
 
@@ -362,14 +380,14 @@ brew upgrade
 ```
 
 ```zsh
-zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %6 --no-enter --cmd 'brew upgrade'
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %6 --no-enter --cmd 'brew upgrade' --execute
 ```
 
 Chat: "Typed into `machine=personal|ID=%6|pane=4.1`; press Enter when ready." When the `TYPED:` block spans lines: "Typed into `…` over N lines; one Enter runs it all, or clear the line." After he says he did, capture; never resend.
 
 ### Create a pane for yourself
 
-Only on Ari's words this turn ("make yourself a pane"). Another session driving the only pane is a reason to ask him for one, not to create one. `--list` first, so a pane he already made is reused, not doubled. Never with the opt-in in the startup command: `run.zsh` refuses every spelling (Rules). The plain window, in the background so his view stays put:
+Only on Ari's words this turn ("make yourself a pane"). Another session driving the only pane is a reason to ask him for one, not to create one. `--list` first, so a pane he already made is reused, not doubled. This `tmux` runs on this machine, for the `local` definition; on any other host ask Ari for the window, never `ssh HOST tmux new-window`. Never with the opt-in in the startup command: `run.zsh` refuses every spelling (Rules). The plain window, in the background so his view stays put:
 
 `machine=personal|ID=%18|pane=3.1`
 ```zsh
@@ -380,23 +398,23 @@ tmux new-window -d -n claude-homelab -c ~/homelab
 
 ### Poll a long run
 
-`--no-wait` returns right after typing. Then one capture per response, telling Ari the last line each time it changes, until the prompt shows; Ctrl-C is his.
+`--cmd '…' --no-wait --execute` returns right after typing. Then one capture (`--cmd ''`) per response, telling Ari the last line each time it changes, until the prompt shows; Ctrl-C is his.
 
 ### Add or describe a host
 
-A host never driven before: `--host-definition NAME --host user@host`, plus `--path-prefix ''` on Linux (the default is Homebrew's `/opt/homebrew/bin`) and `--prompt-end` when the prompt does not end in `❯` (**Setup** first: Ari accepts the host key once). The first `--describe`, `--list`, `--cmd` or `--put` writes the definition:
+A host never driven before: `--host-definition NAME --host user@host`, plus `--path-prefix ''` on Linux (the default is Homebrew's `/opt/homebrew/bin`) and `--prompt-end` when the prompt does not end in `❯` (**Setup** first: Ari accepts the host key once). The first `--list` writes the definition at once; a `--describe`, `--cmd` or `--put` writes it with `--execute`:
 
 ```zsh
-zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --host pi@pi.local --describe 'Pi 4 B at 192.0.2.94, no tmux; reached from the laptop with a nested ssh -t'
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --host pi@pi.local --describe 'Pi 4 B at 192.0.2.94, no tmux; reached from the laptop with a nested ssh -t' --execute
 ```
 
-`--describe` does not connect, and it replaces the text. It describes the machine, never a window or pane (**Host definitions**). Ari later says "the Pi is on .102 now"; write back the merged text, then quote `was: … → now: …`:
+The same call without `--execute` logs `would write | file=… bytes=… mode='replace'` and saves nothing; an unchanged description logs `nothing to change`. `--describe` does not connect, and it replaces the text. It describes the machine, never a window or pane (**Host definitions**). Ari later says "the Pi is on .102 now"; write back the merged text, then quote `was: … → now: …`:
 
 ```zsh
-zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --describe 'Pi 4 B at 192.0.2.102 (static lease), no tmux; reached from the laptop with a nested ssh -t'
+zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --describe 'Pi 4 B at 192.0.2.102 (static lease), no tmux; reached from the laptop with a nested ssh -t' --execute
 ```
 
-A host Ari says is gone: `--host-definition NAME --forget --dry-run` shows what goes, in chat; `--forget` deletes it on his yes, in a later turn.
+A host Ari says is gone: `--host-definition NAME --forget` (the dry run) shows what goes, in chat; the same call with `--execute` deletes it on his yes, in a later turn.
 
 ## Setup (once per host)
 
@@ -410,7 +428,7 @@ The host needs tmux, `~/.config/bin/ari-driving` (`/ari-driving-tmux` Setup) and
 - On the host: what `--put` lands (**Put a file on the host**), and `/tmp/run_log`, the captures.
 - `tests/` — an edit to `bin/run.zsh` is done when every test below exits 0; an edit to the put path (`put_file`, `validate_put_args`, `host_put_script`, `report_put_exit`, `execute_script`, `local_hash_command`, `PUT_HASH_TOOLS`, the flags) also needs one real `--put` to a known definition printing `PUT:` (it types nothing and needs no pane): the 2026-10-31 fake passed under `/bin/sh` while the laptop's zsh failed the first real put. Each is self-contained, no tmux, no network, a fake `ssh` on PATH where a host is needed.
   - `zsh $HOME/.claude/skills/ari-driving-remote/tests/run-large-capture.test.zsh` — a `--cmd` capture larger than a pipe buffer is printed whole; a failure is the SIGPIPE regression (exit 141, nothing printed) or a sibling of it.
-  - `zsh $HOME/.claude/skills/ari-driving-remote/tests/run-put.test.zsh` — the put path for real, into a throwaway project under `/tmp`, the fake `ssh` running the host script in zsh, a Mac's login shell: the path shape, the default name, every flag and host refusal, the no-op on a file already holding the bytes, the dry run, a put that succeeded with an unwritable hosts dir.
-  - `zsh $HOME/.claude/skills/ari-driving-remote/tests/run-typed-text.test.zsh` — a `--cmd` is pasted whole, in the form `/ari-driving-tmux`'s `wrap_run_log_text` gives, never `'\''`, as a fake `tmux` records; a text over several lines is refused into a non-zsh pane (`not_zsh`, 75); a failed paste is 73, a failed Enter 74; `--dry-run` prints the text under `WOULD TYPE:`; the bare forms (`--no-run-log`, a host without `run_log`); a capture pastes nothing.
-  - `zsh $HOME/.claude/skills/ari-driving-remote/tests/run-refusal-kind.test.zsh` — each gate refusal prints its `REFUSED_KIND:` line right after its `REFUSED:` line, with the kind's exit code, one case per kind, the real `tmux-pane.sh` against a fake `tmux` on PATH (once over a fake `ssh`); every reason in the lib's gate goes through the generated case, so a new or reworded reason fails as `unknown` until it has a pattern in `GATE_REASON_KINDS`; its fake `tmux` answers the buffer commands, so a pane that passes the gate is typed into.
+  - `zsh $HOME/.claude/skills/ari-driving-remote/tests/run-put.test.zsh` — the put path for real, into a throwaway project under `/tmp`, the fake `ssh` running the host script in zsh, a Mac's login shell: the path shape, the default name, every flag and host refusal, the no-op on a file already holding the bytes, the dry run (no flag, and `--dry-run` over `--execute`), a put that succeeded with an unwritable hosts dir.
+  - `zsh $HOME/.claude/skills/ari-driving-remote/tests/run-typed-text.test.zsh` — a `--cmd` is pasted whole, in the form `/ari-driving-tmux`'s `wrap_run_log_text` gives, never `'\''`, as a fake `tmux` records; a text over several lines is refused into a non-zsh pane (`not_zsh`, 75); a failed paste is 73, a failed Enter 74; a call without `--execute` prints the text under `WOULD TYPE:` and pastes nothing; the bare forms (`--no-run-log`, a host without `run_log`); a capture pastes nothing.
+  - `zsh $HOME/.claude/skills/ari-driving-remote/tests/run-refusal-kind.test.zsh` — each gate refusal prints its `REFUSED_KIND:` line right after its `REFUSED:` line, with the kind's exit code, one case per kind, the real `tmux-pane.sh` against a fake `tmux` on PATH (once over a fake `ssh`); every reason in the lib's gate goes through the generated case, so a new or reworded reason fails as `unknown` until it has a pattern in `GATE_REASON_KINDS`; its fake `tmux` answers the buffer commands, so a pane that passes the gate is typed into. A `--cmd` without `--execute` prints `WOULD TYPE:`, types and binds nothing, and still hits the gate.
   - `zsh $HOME/.claude/skills/ari-driving-remote/tests/run-help.test.zsh` — `--help` exits 0 with `SCRATCHPAD` unset and under `env -i`, lists `--put`, `--cmd` and `--list`, and prints its examples literally: in `help()`, every environment variable (`$HOME`, `$SCRATCHPAD`, `$CLAUDE_CODE_SESSION_ID`) is written `\$NAME`; only the script's constants expand.

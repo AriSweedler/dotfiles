@@ -14,6 +14,8 @@ if [[ ! -r "${LIB_LOGGING}" ]]; then
   exit 1
 fi
 source "${LIB_LOGGING}"
+source "${SKILLS_DIR}/ari-skill-shellscripts/lib/dry_run.zsh"
+readonly SCRIPT_PATH="${0:a}"
 
 # Sourced here for the command checks, and prepended to the host script so the gate, the exact pane
 # lookup and the lock run the same on every host as on a click (focus.zsh).
@@ -152,15 +154,15 @@ ${c_green}run.zsh${c_rst} — type a command into a tmux pane (this machine or o
 ${c_bold}Usage:${c_rst}
   zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --hosts
   zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --list
-  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --target %6 --cmd TEXT [OPTIONS]
-  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --put FILE --project DIR [--name NAME] [--dry-run]
-  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF [--host USER@HOST] --describe TEXT
-  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --forget
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --target %6 --cmd TEXT [OPTIONS] [--execute]
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --put FILE --project DIR [--name NAME] [--execute]
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF [--host USER@HOST] --describe TEXT [--execute]
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition DEF --forget [--execute]
 
 A ${c_bold}definition${c_rst} is a file under ${HOSTS_DIR}: the host's user@host (or '${LOCAL_HOST}' for
 this machine, no ssh), PATH prefix, shell-prompt end, the panes seen on the last --list, when it last
 answered, and a description. --host-definition fills --host, --path-prefix and --prompt-end from it;
-an explicit flag wins. The first --describe, --list, --cmd or --put on a new DEF writes it. '${LOCAL_NAME}' is always seeded.
+an explicit flag wins. The first --list on a new DEF writes it at once; --describe, --cmd and --put write it with --execute. '${LOCAL_NAME}' is always seeded.
 Definitions still under ${OLD_HOSTS_DIR} are moved there on the next run.
 
 Before typing, --cmd refuses unless the pane option ${OPT_IN_OPTION} is on (Ari runs '${OPT_IN_COMMAND}' in that
@@ -187,7 +189,7 @@ ${c_bold}Actions${c_rst} (exactly one):
                           (✦ = opted in; bound = which Claude session owns it), save them
   --cmd TEXT              gate, type TEXT into --target, wait for the shell prompt; '' types nothing and only captures
   --put FILE              copy FILE to the host as ${PUT_DIR}/<--project>/<--name>.<sha256 of its bytes>.txt and print
-                          'PUT: <remote path>' once the host's hash matches (--dry-run: 'WOULD PUT: …', nothing copied).
+                          'PUT: <remote path>' once the host's hash matches (a dry run checks the local file, project and name only, prints 'WOULD PUT: …' and copies nothing; the host's own refusals show only with --execute).
                           The one ssh use that is not typing: a copy, never a command; a --cmd then names the path
   --describe TEXT         replace the definition's description without connecting
   --forget                print the definition and delete it
@@ -212,8 +214,11 @@ ${c_bold}Options:${c_rst}
                           set the Bash tool's timeout above it
   --path-prefix DIR       prepended to PATH on the host so tmux resolves (default: ${DEFAULT_PATH_PREFIX}; '' for none)
   --prompt-end STR        what the idle shell-prompt line ends with (default: ${DEFAULT_PROMPT_END})
-  --dry-run               print the host script (for a --cmd, under 'WOULD TYPE:' the text the pane gets, verbatim),
-                          or the definition that would be written, and change nothing
+  --execute               act. Without it --cmd TEXT (not ''), --put, --describe and --forget are a dry run: --cmd resolves
+                          the pane, runs the gate and the binding check, prints under 'WOULD TYPE:' the text the pane would
+                          get, verbatim, and types nothing; --put prints WOULD PUT; --describe and --forget log what they
+                          would write or delete. --hosts, --list and --cmd '' only read and ignore it
+  --dry-run               the default, said explicitly; wins over --execute and an inherited DRY_RUN other than 0
   -h, --help              show this help
 
 ${c_bold}Exit codes:${c_rst}
@@ -237,12 +242,12 @@ ${c_bold}Exit codes:${c_rst}
 
 ${c_bold}Examples:${c_rst}
   zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition local --list
-  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition local --target %6 --no-enter --cmd 'kubectl get pods'
-  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %6 --cmd 'diskutil list external physical'
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition local --target %6 --no-enter --cmd 'kubectl get pods' --execute
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %6 --cmd 'diskutil list external physical' --execute
   zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %7 --cmd ''
-  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "\$SCRATCHPAD/body.md" --project homelab/beads --name bead-frontier
-  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "\$SCRATCHPAD/swap.py" --project homelab/torrent --dry-run
-  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --host pi@pi.local --describe 'Pi 4 B at 192.0.2.94, no tmux; reached from the laptop with a nested ssh -t'
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "\$SCRATCHPAD/body.md" --project homelab/beads --name bead-frontier --execute
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --put "\$SCRATCHPAD/swap.py" --project homelab/torrent
+  zsh \$HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition pi --host pi@pi.local --describe 'Pi 4 B at 192.0.2.94, no tmux; reached from the laptop with a nested ssh -t' --execute
 EOF
 }
 
@@ -306,18 +311,18 @@ load_definition() {
 #######################################
 # Write def to the definition file atomically. Newlines in values are flattened.
 # Globals: HOSTS_DIR, def (read)
-# Arguments: $1 name  $2 dry_run(true|false)
+# Arguments: $1 name  $2 gated(true|false): true for an edit Ari asked for (--describe), a dry run unless --execute;
+#            false for the bookkeeping of a run (last_seen, panes), the skill's own state
 # Returns: 1 when the hosts dir is not writable
 #######################################
 save_definition() {
-  local name="${1}" dry_run="${2}" file tmp key body=""
+  local name="${1}" gated="${2}" file tmp key body=""
   file="$(definition_file "${name}")"
   for key in "${DEFINITION_KEYS[@]}"; do
     body+="${key}=${def[${key}]//$'\n'/ }"$'\n'
   done
-  if [[ "${dry_run}" == "true" ]]; then
-    log::info "Dry run — would write definition | name='${name}' file='${file}'"
-    print -rn -- "${body}"
+  if [[ "${gated}" == "true" ]] && is_dry_run; then
+    print -rn -- "${body}" | write_mut "${file}"
     return 0
   fi
   mkdir -p "${HOSTS_DIR}" 2>/dev/null || { log::err "Hosts dir not writable | dir='${HOSTS_DIR}'"; return 1; }
@@ -326,6 +331,7 @@ save_definition() {
   print -rn -- "${body}" > "${tmp}"
   mv -f "${tmp}" "${file}"
   trap - EXIT
+  if [[ "${gated}" == "true" ]]; then (( MUT_COUNT += 1 )); fi
   log::info "Saved definition | name='${name}' host='${def[host]}' file='${file}'"
 }
 
@@ -431,10 +437,10 @@ resolve_definition() {
 #######################################
 # Fold the resolved flags into def and save; windows and description only when given.
 # Globals: def (updated), host path_prefix prompt_end (read)
-# Arguments: $1 name  $2 dry_run  $3 windows ('' keeps)  $4 description ('' keeps)  $5 touch_last_seen(true|false)
+# Arguments: $1 name  $2 gated (save_definition)  $3 windows ('' keeps)  $4 description ('' keeps)  $5 touch_last_seen(true|false)
 #######################################
 record_definition() {
-  local name="${1}" dry_run="${2}" windows="${3}" description="${4}" touch_last_seen="${5}"
+  local name="${1}" gated="${2}" windows="${3}" description="${4}" touch_last_seen="${5}"
   def[host]="${host}" def[path_prefix]="${path_prefix}" def[prompt_end]="${prompt_end}"
   if [[ -n "${windows}" ]]; then def[windows]="${windows}"; fi
   if [[ -n "${description}" ]]; then
@@ -444,24 +450,19 @@ record_definition() {
     def[description]="${description}"
   fi
   if [[ "${touch_last_seen}" == "true" ]]; then def[last_seen]="$(now_utc)"; fi
-  save_definition "${name}" "${dry_run}"
+  save_definition "${name}" "${gated}"
 }
 
 #######################################
 # Print the definition, then delete its file.
-# Arguments: $1 name  $2 dry_run
+# Arguments: $1 name
 #######################################
 forget_definition() {
-  local name="${1}" dry_run="${2}" file
+  local name="${1}" file
   file="$(definition_file "${name}")"
   print -r -- "name=${name}"
   cat "${file}"
-  if [[ "${dry_run}" == "true" ]]; then
-    log::info "Dry run — would delete definition | name='${name}' file='${file}'"
-    return 0
-  fi
-  rm -f -- "${file}"
-  log::info "Deleted definition | name='${name}' file='${file}'"
+  run_mut rm -f -- "${file}"
 }
 
 # --- Pane bindings ---
@@ -723,12 +724,13 @@ binding_block() {
 # paste-buffer -p), not send-keys: a newline lands as a newline, not an Enter, and a trailing `;` is not a
 # tmux separator; not the lib's tmux_paste_line, which adds a leading space and turns newlines into CRs.
 # Checked by tests/run-typed-text.test.zsh.
+# A dry run stops after the checks: the host prints, under WOULD TYPE:, the exact text it would paste.
 # Globals: HOST_RUN_LOG REFUSED_KIND_PREFIX KIND_NOT_ZSH EXIT_BUSY EXIT_PASTE_FAILED
-# Arguments: $1 cmd  $2 run_log(true|false)  $3 lines
+# Arguments: $1 cmd  $2 run_log(true|false)  $3 lines  $4 dry(true|false)
 # Returns: the script lines on stdout
 #######################################
 type_block() {
-  local cmd="${1}" run_log="${2}" lines="${3}" run_log_text
+  local cmd="${1}" run_log="${2}" lines="${3}" dry="${4:-false}" run_log_text
   print -r -- "typed=${(qq)cmd}"
   if [[ "${run_log}" == "true" ]]; then
     run_log_text="$(wrap_run_log_text '' "${cmd}")"
@@ -736,6 +738,13 @@ type_block() {
   fi
   print -r -- "nl=\$(printf '\\n.'); nl=\${nl%.}"
   print -r -- "case \"\$typed\" in *\"\$nl\"*) program=\$(tmux display-message -p -t \"\$pane\" '#{pane_current_command}'); case \"\$program\" in zsh|-zsh) ;; *) echo \"REFUSED: \$label the command is laid out over several lines, which only zsh reads as one; \$program runs there\"; echo ${(qq)REFUSED_KIND_PREFIX}${KIND_NOT_ZSH}; $(pane_tail_cmd "${lines}"); exit ${EXIT_BUSY} ;; esac ;; esac"
+  if [[ "${dry}" == "true" ]]; then
+    print -r -- "printf 'WOULD TYPE:\\n%s\\n' \"\$typed\""
+    print -r -- "tmux_pane_unlock \"\$pane\"; trap - EXIT"
+    pane_tail_cmd "${lines}"
+    print -r -- "exit 0"
+    return 0
+  fi
   print -r -- "buffer=\"ari-driving-remote-\$\$\""
   print -r -- "printf '%s' \"\$typed\" | tmux load-buffer -b \"\$buffer\" - && tmux paste-buffer -p -r -d -b \"\$buffer\" -t \"\$pane\" || { tmux delete-buffer -b \"\$buffer\" 2>/dev/null; echo \"FAILED: paste into \$label; nothing is on the line\"; exit ${EXIT_PASTE_FAILED}; }"
   print -r -- "printf 'TYPED: %s\\n' \"\$typed\""
@@ -767,12 +776,13 @@ wait_block() {
 # Arguments:
 #   $1 target  $2 cmd  $3 press_enter(true|false)  $4 wait(true|false)
 #   $5 lines   $6 timeout  $7 path_prefix  $8 prompt_end  $9 session  $10 run_log(true|false)
-#   $11 bindings ('%N session since' lines of this definition)
+#   $11 bindings ('%N session since' lines of this definition)  $12 dry(true|false): gate and check the binding, then
+#   print WOULD TYPE and type nothing
 # Returns: the script on stdout
 #######################################
 remote_script() {
   local target="${1}" cmd="${2}" press_enter="${3}" wait="${4}"
-  local lines="${5}" timeout="${6}" path_prefix="${7}" prompt_end="${8}" session="${9}" run_log="${10}" bindings="${11}"
+  local lines="${5}" timeout="${6}" path_prefix="${7}" prompt_end="${8}" session="${9}" run_log="${10}" bindings="${11}" dry="${12}"
   local quoted_prompt_end="${(qq)prompt_end}"
 
   prelude_block "${path_prefix}"
@@ -781,7 +791,8 @@ remote_script() {
   if [[ -n "${cmd}" ]]; then
     gate_block "${quoted_prompt_end}" "${lines}"
     binding_block "${bindings}" "${lines}"
-    type_block "${cmd}" "${run_log}" "${lines}"
+    type_block "${cmd}" "${run_log}" "${lines}" "${dry}"
+    if [[ "${dry}" == "true" ]]; then return 0; fi
   fi
   if [[ "${press_enter}" == "true" ]]; then print -r -- "tmux send-keys -t \"\$pane\" Enter || { echo \"FAILED: Enter to \$label; the text is on the line\"; exit ${EXIT_ENTER_FAILED}; }"; fi
   if [[ -n "${cmd}" ]]; then
@@ -924,7 +935,7 @@ report_put_exit() {
 # directly for the local definition, through one ssh otherwise, the file on stdin), confirm the hash it prints, and print 'PUT: <remote path>'.
 # The only ssh use besides typing: it moves bytes and runs nothing of the caller's. A failure prints no PUT: line.
 # Checked by tests/run-put.test.zsh.
-# Globals: host PUT_DIR put_project put_name dry_run name def
+# Globals: host PUT_DIR put_project put_name name def
 # Arguments: $1 local file
 # Returns: 1 on a missing or empty file, a bad project or name, a refused path, a failed copy or a hash mismatch;
 #          EXIT_SSH when ssh failed
@@ -947,11 +958,13 @@ put_file() {
   remote_dir="${PUT_DIR}/${put_project}"
   remote="${remote_dir}/${put_name}.${sha}.txt"
   log::info "Putting file on the host | host='${host}' file='${file}' bytes='${bytes}' remote='${remote}'"
-  if [[ "${dry_run}" == "true" ]]; then
-    log::info "Dry run — would copy and verify, copying nothing"
+  if is_dry_run; then
+    (( MUT_COUNT += 1 ))
+    log::info "would copy and verify | host='${host}' remote='${remote}'"
     print -r -- "WOULD PUT: ${remote}"
     return 0
   fi
+  (( MUT_COUNT += 1 ))
   # a definition named for the first time is saved before connecting, as --describe saves it, so a retry can drop --host
   if [[ ! -r "$(definition_file "${name}")" ]]; then record_definition "${name}" false "" "" false || true; fi
   # the host's own stderr stays visible: 'Permission denied', 'No space left'
@@ -1025,19 +1038,15 @@ report_exit() {
 
 #######################################
 # List the host's panes, print them, save 'ID=%301|pane=2.4' hints to the definition.
-# Globals: host path_prefix name dry_run WINDOWS_SEPARATOR AWK_WINDOW_NAMES
+# Globals: host path_prefix name WINDOWS_SEPARATOR AWK_WINDOW_NAMES
 # Returns: the host script's exit code
 #######################################
 list_windows() {
   local script output windows exit_code=0
   script="$(list_script "${path_prefix}")"
   log::info "Listing tmux panes | host='${host}'"
-  if [[ "${dry_run}" == "true" ]]; then
-    log::info "Dry run — printing the host script, running nothing"
-    print -r -- "${script}"
-    return 0
-  fi
   output="$(execute_script "${script}")" || exit_code=$?
+  if (( exit_code != 0 )); then print -r -- "${output}"; fi
   report_exit "${exit_code}"
   (( exit_code == 0 )) || return "${exit_code}"
   output="$(list_with_owners "${name}" "${output}")"
@@ -1090,19 +1099,15 @@ refusal_kind() {
 
 #######################################
 # Gate, check the binding, type the command into the pane, record the binding, and print the pane.
-# Globals: host target cmd press_enter wait run_log lines timeout path_prefix prompt_end name dry_run
+# Globals: host target cmd press_enter wait run_log lines timeout path_prefix prompt_end name
 # Returns: 0 prompt back; EXIT_TIMEOUT; EXIT_NO_TARGET; EXIT_NOT_OPTED_IN; EXIT_BOUND_ELSEWHERE; EXIT_BUSY; the host script's code otherwise
 #######################################
 run_command() {
-  local script exit_code=0 bind_line kind
-  script="$(remote_script "${target}" "${cmd}" "${press_enter}" "${wait}" "${lines}" "${timeout}" "${path_prefix}" "${prompt_end}" "${session}" "${run_log}" "$(bindings_of "${name}")")"
+  local script exit_code=0 bind_line kind dry=false
+  if is_dry_run; then dry=true; fi
+  script="$(remote_script "${target}" "${cmd}" "${press_enter}" "${wait}" "${lines}" "${timeout}" "${path_prefix}" "${prompt_end}" "${session}" "${run_log}" "$(bindings_of "${name}")" "${dry}")"
   log::info "Typing into pane | host='${host}' target='${target}' enter='${press_enter}' wait='${wait}' cmd='${cmd}'"
-  if [[ "${dry_run}" == "true" ]]; then
-    log::info "Dry run — printing the host script, sending nothing"
-    print -r -- "${script}"
-    print_would_type
-    return 0
-  fi
+  if [[ -n "${cmd}" ]]; then (( MUT_COUNT += 1 )); fi
   local output
   output="$(execute_script "${script}")" || exit_code=$?
   # The host printed BIND only after the gate and the binding check passed for this session. Keep this
@@ -1113,33 +1118,17 @@ run_command() {
   # ends the run the same way. The first BIND line wins.
   local -a bind_lines=(${(M)${(f)output}:#BIND: *})
   bind_line="${${bind_lines[1]:-}#BIND: }"
-  if [[ -n "${bind_line}" ]]; then write_binding "${name}" "${bind_line%% *}" "${bind_line##* }"; fi
+  if [[ -n "${bind_line}" ]] && ! is_dry_run; then write_binding "${name}" "${bind_line%% *}" "${bind_line##* }"; fi
   print -r -- "${output}"
+  if [[ "${dry}" == "true" && -n "${cmd}" ]] && (( exit_code == 0 )); then print -r -- "DRY RUN: nothing was typed; the pane above is its state, not this command's output"; fi
   exit_code="$(sent_exit_code "${exit_code}" "${output}")"
   kind="$(refusal_kind "${exit_code}" "${output}")"
   report_exit "${exit_code}" "${kind}"
   # The pane answered, even late: the definition is current.
-  if (( exit_code == 0 || exit_code == EXIT_TIMEOUT )); then
+  if (( exit_code == 0 || exit_code == EXIT_TIMEOUT )) && [[ "${dry}" == "false" || -z "${cmd}" ]]; then
     record_definition "${name}" false "" "" true
   fi
   return "${exit_code}"
-}
-
-#######################################
-# What a dry run would paste, verbatim: the host script above shows it sh-quoted, where '\'' is the script's
-# quoting, not the pane's.
-# Globals: cmd run_log HOST_RUN_LOG
-#######################################
-print_would_type() {
-  if [[ -z "${cmd}" ]]; then
-    return 0
-  fi
-  if [[ "${run_log}" == "true" ]]; then
-    print -r -- "WOULD TYPE (when the host has ${HOST_RUN_LOG}):"
-    wrap_run_log_text '' "${cmd}"
-  fi
-  print -r -- "WOULD TYPE (bare):"
-  print -r -- "${cmd}"
 }
 
 #######################################
@@ -1212,6 +1201,8 @@ main() {
   check_prerequisites || exit 1
 
   # === PARSE ===
+  local -a args=("${@}")
+  local execute=false
   local name="" host="" host_set=false re_point=false target="" session="" cmd="" cmd_set=false describe="" describe_set=false
   local put="" put_set=false put_project="" put_name=""
   local press_enter=true wait=true run_log=true dry_run=false list=false hosts=false forget=false
@@ -1241,6 +1232,7 @@ main() {
     --timeout)          timeout="${2:?--timeout requires a value}"; shift 2 ;;
     --path-prefix)      path_prefix="${2?--path-prefix requires a value}"; path_prefix_set=true; shift 2 ;;
     --prompt-end)       prompt_end="${2:?--prompt-end requires a value}"; prompt_end_set=true; shift 2 ;;
+    --execute)          execute=true; shift ;;
     --dry-run)          dry_run=true; shift ;;
     -*)                 log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)                  log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
@@ -1257,6 +1249,10 @@ main() {
     log::info "Empty --cmd captures only; not pressing Enter"
     press_enter=false
   fi
+  # A capture, --list and --hosts only read; the rest type, copy or edit what Ari said about a host.
+  local mutates=false
+  if [[ "${put_set}" == "true" || "${describe_set}" == "true" || "${forget}" == "true" || -n "${cmd}" ]]; then mutates=true; fi
+  if [[ "${mutates}" == "true" ]]; then resolve_dry_run "${execute}" "${dry_run}" || return 1; fi
 
   # === VALIDATE ===
   if [[ "${put_set}" == "false" && ( -n "${put_project}" || -n "${put_name}" ) ]]; then
@@ -1281,12 +1277,18 @@ main() {
   [[ "${name}" != *[^A-Za-z0-9_-]* ]] || { log::err "Invalid --host-definition | name='${name}' expected='letters, digits, _ or -'"; return 1; }
   if [[ "${forget}" == "true" ]]; then
     load_definition "${name}" || { log::err "Unknown host definition | name='${name}' known='$(known_names)'"; return 1; }
-    forget_definition "${name}" "${dry_run}"
+    forget_definition "${name}"
+    report_dry_run "${SCRIPT_PATH}" "${args[@]}"
     return 0
   fi
   resolve_definition "${name}" || return 1
   if [[ "${describe_set}" == "true" ]]; then
-    record_definition "${name}" "${dry_run}" "" "${describe}" false
+    if [[ "${def[description]:-}" == "${describe}" ]]; then
+      log::info "Description already current; nothing to change | name='${name}'"
+      return 0
+    fi
+    record_definition "${name}" true "" "${describe}" false
+    report_dry_run "${SCRIPT_PATH}" "${args[@]}"
     return 0
   fi
   if [[ -z "${host}" ]]; then
@@ -1299,12 +1301,16 @@ main() {
     list_windows
     return
   fi
+  local exit_code=0
   if [[ "${put_set}" == "true" ]]; then
-    put_file "${put}"
-    return
+    put_file "${put}" || exit_code=$?
+    if (( exit_code == 0 )); then report_dry_run "${SCRIPT_PATH}" "${args[@]}"; fi
+    return "${exit_code}"
   fi
   validate_run_args || return 1
-  run_command
+  run_command || exit_code=$?
+  if [[ "${mutates}" == "true" ]] && (( exit_code == 0 )); then report_dry_run "${SCRIPT_PATH}" "${args[@]}"; fi
+  return "${exit_code}"
 }
 
 main "${@}"

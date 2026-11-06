@@ -81,7 +81,7 @@ run() {   # <home> [VAR=value…] <run.zsh flags…>; stdout on $out, exit code 
   out="$(env "${env_args[@]}" HOME="${home}" XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-${HOME}/.config}" FAKE_PID="${FAKE_PID}" FAKE_STATE="${T}" \
     PATH="${T}/bin:${PATH}" CLAUDE_CODE_SESSION_ID=test-session \
     XDG_DATA_HOME="${T}/data" XDG_STATE_HOME="${T}/state" XDG_CACHE_HOME="${T}/cache" LOG_COLOR=0 \
-    zsh "${RUN_ZSH}" --host-definition here --host local --path-prefix '' --target %5 --no-wait "$@" 2>"${T}/err")"; rc=$?
+    zsh "${RUN_ZSH}" --host-definition here --host local --path-prefix '' --target %5 --no-wait --execute "$@" 2>"${T}/err")"; rc=$?
 }
 
 pasted() { cat "${T}/pasted" 2>/dev/null; }
@@ -178,8 +178,9 @@ contains "a failed Enter: the log says to tell Ari" "tell Ari, as for --no-enter
 run "${T}/home" --dry-run --cmd "${heredoc_cmd}"
 check "a dry run: exits 0" 0 "${rc}"
 check "a dry run: pastes nothing" "" "$(pasted)"
-check "a dry run: WOULD TYPE holds the text verbatim" "$(wrap_run_log_text '' "${heredoc_cmd}")" "$(print -r -- "${out}" | awk '/^WOULD TYPE \(bare\):/ {f = 0} f {print} /^WOULD TYPE \(when/ {f = 1}')"
-contains "a dry run: WOULD TYPE holds the bare command last" $'WOULD TYPE (bare):\n'"${heredoc_cmd}" "${out}"
+contains "a dry run: the host prints the text it would paste, verbatim, under WOULD TYPE" $'WOULD TYPE:\n'"$(wrap_run_log_text '' "${heredoc_cmd}")" "${out}"
+contains "a dry run: says nothing was typed" "DRY RUN: nothing was typed" "${out}"
+check "a dry run: no TYPED line" "" "$(typed_lines)"
 
 # --- a capture pastes nothing ---
 

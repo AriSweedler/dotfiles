@@ -41,7 +41,7 @@ chmod +x "${T}/bin/ssh"
 
 # Every XDG dir points into the temp tree: run.zsh migrates an old hosts dir on each run, and the real one must stay put.
 out="$(PATH="${T}/bin:${PATH}" XDG_DATA_HOME="${T}/data" XDG_STATE_HOME="${T}/state" XDG_CACHE_HOME="${T}/cache" CLAUDE_CODE_SESSION_ID=test-session LOG_COLOR=0 \
-  zsh "${RUN_ZSH}" --host-definition fake --host fake@host --target %5 --no-run-log --cmd 'echo hi' 2>"${T}/err")"; rc=$?
+  zsh "${RUN_ZSH}" --host-definition fake --host fake@host --target %5 --no-run-log --cmd 'echo hi' --execute 2>"${T}/err")"; rc=$?
 check "run.zsh exits 0" 0 "${rc}"
 contains "run.zsh prints line 1" $'\nline 1 ' "${out}"
 contains "run.zsh prints line ${CAPTURE_LINES}" "line ${CAPTURE_LINES} " "${out}"

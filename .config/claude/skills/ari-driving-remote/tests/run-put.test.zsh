@@ -53,6 +53,11 @@ for tool in mkdir cat mv rm awk shasum; do ln -s "$(command -v "${tool}")" "${T}
 
 run() {   # <args…>; stdout on $out, exit code on $rc
   out="$(PATH="${T}/bin:${PATH}" XDG_DATA_HOME="${T}/data" XDG_STATE_HOME="${T}/state" XDG_CACHE_HOME="${T}/cache" LOG_COLOR=0 \
+    zsh "${RUN_ZSH}" "$@" --execute 2>"${T}/err")"; rc=$?
+}
+
+run_plain() {   # <args…>: no --execute, so the default dry run
+  out="$(PATH="${T}/bin:${PATH}" XDG_DATA_HOME="${T}/data" XDG_STATE_HOME="${T}/state" XDG_CACHE_HOME="${T}/cache" LOG_COLOR=0 \
     zsh "${RUN_ZSH}" "$@" 2>"${T}/err")"; rc=$?
 }
 
@@ -89,6 +94,26 @@ run --host-definition fake --dry-run --put "${T}/swap.py" --project "${PROJECT}/
 check "dry run exits 0" 0 "${rc}"
 check "dry run prints WOULD PUT" "WOULD PUT: /tmp/${PROJECT}/dry/plan.${SHA}.txt" "${out}"
 check "dry run copies nothing" "" "$(ls "/tmp/${PROJECT}/dry" 2>/dev/null)"
+
+run_plain --host-definition fake --put "${T}/swap.py" --project "${PROJECT}/dry" --name plan
+check "no flag is a dry run: exits 0" 0 "${rc}"
+check "no flag prints WOULD PUT" "WOULD PUT: /tmp/${PROJECT}/dry/plan.${SHA}.txt" "${out}"
+check "no flag copies nothing" "" "$(ls "/tmp/${PROJECT}/dry" 2>/dev/null)"
+contains "no flag names the rerun with --execute" "--execute" "$(<"${T}/err")"
+
+run --host-definition fake --dry-run --put "${T}/swap.py" --project "${PROJECT}/dry" --name plan
+check "--dry-run wins over --execute: copies nothing" "" "$(ls "/tmp/${PROJECT}/dry" 2>/dev/null)"
+
+run --host-definition scratch --host fake@host --describe 'first text'
+run_plain --host-definition scratch --host fake@host --describe 'second text'
+check "a dry --describe exits 0" 0 "${rc}"
+check "a dry --describe leaves the description alone" "first text" "$(awk -F= '$1 == "description" {print $2}' "${T}/data/ari-driving-remote/hosts/scratch")"
+run --host-definition scratch --describe 'second text'
+check "--execute --describe replaces the description" "second text" "$(awk -F= '$1 == "description" {print $2}' "${T}/data/ari-driving-remote/hosts/scratch")"
+run_plain --host-definition scratch --forget
+check "a dry --forget keeps the definition" 1 "$([[ -r "${T}/data/ari-driving-remote/hosts/scratch" ]] && print 1)"
+run --host-definition scratch --forget
+check "--execute --forget deletes the definition" "" "$([[ -r "${T}/data/ari-driving-remote/hosts/scratch" ]] && print 1)"
 
 # --- the flag refusals, before any connection ---
 

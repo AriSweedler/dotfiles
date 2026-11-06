@@ -78,7 +78,7 @@ run() {   # <env…> -- [run.zsh flags…]; stdout on $out, exit code on $rc; a 
   out="$(env "${env_args[@]}" FAKE_PID="${FAKE_PID}" FAKE_STATE="${T}" PATH="${T}/bin:${PATH}" CLAUDE_CODE_SESSION_ID=test-session \
     XDG_DATA_HOME="${T}/data" XDG_STATE_HOME="${T}/state" XDG_CACHE_HOME="${T}/cache" LOG_COLOR=0 \
     zsh "${RUN_ZSH}" --host-definition "${DEF:-here}" --host "${DEF_HOST:-local}" --path-prefix '' --target %5 --no-run-log --no-wait \
-    --cmd 'echo hi' "$@" 2>"${T}/err")"; rc=$?
+    --cmd 'echo hi' --execute "$@" 2>"${T}/err")"; rc=$?
 }
 
 line_after_refused() {   # the line right after the first REFUSED: line of $out, or ''
@@ -160,10 +160,32 @@ check "an idle pane: exits 0" 0 "${rc}"
 check "an idle pane: no REFUSED_KIND line" 0 "$(line_count 'REFUSED_KIND: *')"
 check "an idle pane: the command was typed" 1 "$(line_count 'TYPED: echo hi')"
 
+# --- no --execute: the gate runs, the keys do not go ---
+
+rm -rf "${T}/state/ari-driving-remote/bindings"
+out="$(env FAKE_PID="${FAKE_PID}" FAKE_STATE="${T}" PATH="${T}/bin:${PATH}" CLAUDE_CODE_SESSION_ID=test-session XDG_DATA_HOME="${T}/data" XDG_STATE_HOME="${T}/state" XDG_CACHE_HOME="${T}/cache" LOG_COLOR=0 \
+  zsh "${RUN_ZSH}" --host-definition here --host local --path-prefix '' --target %5 --no-run-log --no-wait --cmd 'echo hi' 2>"${T}/err")"; rc=$?
+check "a dry run exits 0" 0 "${rc}"
+check "a dry run prints WOULD TYPE" 1 "$(line_count 'WOULD TYPE:')"
+contains "a dry run prints the text under WOULD TYPE" $'WOULD TYPE:\necho hi' "${out}"
+check "a dry run types nothing: no TYPED line" 0 "$(line_count 'TYPED: *')"
+check "a dry run ends with the DRY RUN line" 1 "$(line_count 'DRY RUN: nothing was typed*')"
+check "a dry run leaves no pane lock" "no" "$([[ -e "${LOCK_DIR}" ]] && print yes || print no)"
+check "a dry run binds no pane" "" "$(ls "${T}/state/ari-driving-remote/bindings" 2>/dev/null)"
+contains "a dry run names the rerun with --execute" "--execute" "$(<"${T}/err")"
+
+out="$(env FAKE_OPT_IN=off FAKE_PID="${FAKE_PID}" FAKE_STATE="${T}" PATH="${T}/bin:${PATH}" CLAUDE_CODE_SESSION_ID=test-session XDG_DATA_HOME="${T}/data" XDG_STATE_HOME="${T}/state" XDG_CACHE_HOME="${T}/cache" LOG_COLOR=0 \
+  zsh "${RUN_ZSH}" --host-definition here --host local --path-prefix '' --target %5 --no-run-log --no-wait --cmd 'echo hi' 2>"${T}/err")"; rc=$?
+check "a dry run still hits the gate: not opted in exits 77" 77 "${rc}"
+
 # --- every reason the lib's gate holds maps to a kind; anything else is unknown ---
 
-run -- --dry-run
-case_line="${(M)${(f)out}:#*case \"\$reason\" in*}"
+mkdir -p "${T}/capture"
+printf '%s\n' '#!/usr/bin/env zsh' 'print -r -- "${@[-1]}"' > "${T}/capture/sh"
+chmod +x "${T}/capture/sh"
+script_out="$(PATH="${T}/capture:${PATH}" CLAUDE_CODE_SESSION_ID=test-session XDG_DATA_HOME="${T}/data" XDG_STATE_HOME="${T}/state" XDG_CACHE_HOME="${T}/cache" LOG_COLOR=0 \
+  zsh "${RUN_ZSH}" --host-definition capture --host local --path-prefix '' --target %5 --no-run-log --no-wait --cmd 'echo hi' --execute 2>/dev/null)"
+case_line="${(M)${(f)script_out}:#*case \"\$reason\" in*}"
 case_stmt="case \"\$reason\" in${${case_line#*case \"\$reason\" in}%%esac*}esac"
 kind_of() { sh -c "reason=\$1; ${case_stmt}; printf '%s' \"\$kind\"" _ "${1}"; }
 reasons=("${(@f)$(awk '/^tmux_pane_(gate|input)_refusal\(\) \{/ { f = 1; next } f && /^}/ { f = 0 }
