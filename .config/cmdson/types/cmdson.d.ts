@@ -105,7 +105,7 @@ export interface Choice {
 }
 
 /** Opaque bags namespaced by frontend id; unknown namespaces are ignored.
- *  Known: "tmux-oneshot" {autodismiss, menuName, menuText}, "karabiner" {omitChoices, skipKey}. */
+ *  Known: "tmux-oneshot" {autodismiss, key, menuName, menuText, window}, "karabiner" {omitChoices, skipKey}. */
 export type Meta = Record<string, Record<string, unknown>>
 
 // ── Assembly & SDK contracts (docs/01-spec.md, normative) ──────────────────

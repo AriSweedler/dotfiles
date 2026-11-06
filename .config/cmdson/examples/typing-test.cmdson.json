@@ -1,4 +1,5 @@
 {
+  "$schema": "../schema/cmdson.schema.json",
   "cmdson": "1",
   "name": "typing-test",
   "exec": ["karabiner-typing-test"],

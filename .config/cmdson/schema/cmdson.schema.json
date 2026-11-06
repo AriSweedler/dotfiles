@@ -16,6 +16,10 @@
       "description": "The root Command plus the two root-only fields: the version tag and cwd.",
       "allOf": [{ "$ref": "#/$defs/commandCore" }],
       "properties": {
+        "$schema": {
+          "type": "string",
+          "description": "Editor hint pointing at this schema. Root only; carries no meaning."
+        },
         "cmdson": {
           "const": "1",
           "description": "Spec major version. Root only. Loaders reject unknown majors."
@@ -212,7 +216,7 @@
     "meta": {
       "type": "object",
       "additionalProperties": { "type": "object" },
-      "description": "Opaque bags namespaced by frontend id (OpenAPI x- convention); unknown namespaces are ignored. Known: \"tmux-oneshot\" {autodismiss, menuName, menuText}, \"karabiner\" {omitChoices, skipKey}."
+      "description": "Opaque bags namespaced by frontend id (OpenAPI x- convention); unknown namespaces are ignored. Known: \"tmux-oneshot\" {autodismiss, key, menuName, menuText, window}, \"karabiner\" {omitChoices, skipKey}."
     }
   }
 }

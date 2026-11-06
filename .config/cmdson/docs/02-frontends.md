@@ -38,7 +38,7 @@ means a logged bake/load-time exclusion per §4 — never a runtime surprise.
 | `params` (ordered) | one `ArgGroup` per surviving param, in document order (see 1.2) | flag-bound optionals → the flags multiselect; required params, positionals, env params → unconditional prompts, in document order |
 | `subcommands` (required choice) | all branches bare (no params/children) → **flatten** to one synthetic choice group over branch `name`/`key`; any non-bare branch → verdict: that branch excluded (no RECURSION), survivors still offered; zero survivors → command excluded | recursive fzf pick (today's `subcommands`); esc aborts the whole entry, matching "exactly one MUST be chosen" |
 | `meta.karabiner` | consumed: `omitChoices` (curation), and proposed homes for key auto-assignment overrides and quick-fire bindings (§5) | ignored |
-| `meta.tmux-oneshot` | ignored | consumed: `autodismiss`, `menuName`, `menuText` — byte-for-byte today's `autodismiss` and `menu.{name,text}` |
+| `meta.tmux-oneshot` | ignored | consumed: `autodismiss`, `key`, `menuName`, `menuText`, `window` — byte-for-byte today's `autodismiss` and `menu.{name,text}` |
 | `cmdson` version | loader rejects unknown major | loader rejects unknown major |
 
 ### 1.2 Param + Bind
