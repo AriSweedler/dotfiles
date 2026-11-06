@@ -5,7 +5,7 @@ description: Edit a skill, review it, and end with one proposal that a single 'y
 
 # Skill Update
 
-Edit a skill, review it, and end with one *proposal* that a single `yes` commits to the dotfiles tier that owns it, adopting it first if it is not yet versioned. It runs when Ari asks, and unasked on a mistake (**A mistake is a skill update**). The *main thread* (the session Ari talks to) settles which skill and what change; one subagent, the *driver*, does the rest and writes the proposal to a file Ari opens (**Driver by default**). `/ari-skill-review` owns the quality review; `/ari-skill-shellscripts` and `/ari-skill-pythonscripts` own script conventions.
+Edit a skill, review it, and end with one *proposal* that a single `yes` commits to the dotfiles tier that owns it, adopting it first if it is not yet versioned. It runs when Ari asks, and unasked on a mistake (**A mistake is a skill update**). The *main thread* (the session Ari talks to) settles which skill and what change; one subagent, the *driver*, does the rest and writes the proposal to a file Ari opens (**Driver by default**). The update is *side work* in the sense `/ari-bead-driven-development` defines (Terms: main work / side work): the main thread stays on main work, and by default the update is handed to the driver, which reports in a line or two. `/ari-skill-review` owns the quality review; `/ari-skill-shellscripts` and `/ari-skill-pythonscripts` own script conventions.
 
 ## Rules
 
