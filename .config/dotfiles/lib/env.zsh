@@ -199,9 +199,10 @@ typeset -g JOBS_INTERVAL_SECONDS=300          # the tick; cron schedules are che
 typeset -g JOBS_TIMEOUT_SECONDS=900           # a plugin's run is killed after this unless its '# timeout:' line says otherwise
 typeset -g JOBS_HUD_SECONDS=2                 # how long the engine's "job ok" banner stays up
 typeset -g JOBS_NOTIFIER_TIMEOUT_SECONDS=10   # terminal-notifier occasionally never returns (seen on -remove); a banner is never worth a hang
-# launchd's PATH has no Homebrew; plugins shell out to jq, atn (the terminal-notifier shim, in
-# ~/.config/bin), python3.
-typeset -g JOBS_LAUNCHD_PATH="${HOME}/.config/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+# launchd's PATH has neither Homebrew nor Nix; plugins shell out to jq, git, atn (the
+# terminal-notifier shim, in ~/.config/bin), python3. Same order as an interactive shell:
+# Homebrew, then the home-manager and nix-darwin profiles.
+typeset -g JOBS_LAUNCHD_PATH="${HOME}/.config/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/etc/profiles/per-user/${USERNAME}/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 # The per-plugin jobs this framework replaced; install boots them out and removes their plists.
 typeset -ga JOBS_LEGACY_LABELS=("com.${USERNAME}.git-health" "com.${USERNAME}.aws-sso-autologin" "com.${USERNAME}.new-machine-verify")
 typeset -gA JOB_PATH=() JOB_TIER=()         # name → executable, name → df | ldf; filled by jobs_discover
