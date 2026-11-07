@@ -5,23 +5,45 @@ description: Edit and commit Ari's two-tier dotfiles — shared (`git df`, ~/.co
 
 # Dotfiles
 
-Ari's dotfiles are two bare git repos, one per tier. Pick the tier by whether
+Ari's dotfiles are two git repos, one per tier: a plain clone for the shared tier, a bare repo
+for the local one. Pick the tier by whether
 the content should be identical on every machine or belongs to this one. The
 shared tier and its submodules are public; no push is recommended until each unpushed commit passes **Review before
 push**, except on the personal laptop, where a commit is ready to push as soon as it lands.
 
-| Tier | Alias | Bare repo | Worktree | Holds | Remote |
+| Tier | Alias | Repo | Worktree | Holds | Remote |
 |---|---|---|---|---|---|
-| Shared | `git dotfiles` / `git df` | `~/dotfiles.git` | `$HOME` | Generic, every-machine config under `~/.config` | One shared repo; only Ari pushes |
-| Local | `git local-dotfiles` / `git ldf` | `~/.local/local-dotfiles.git` | `~/.local` | Company- and machine-specific code under `~/.local` | One private repo per machine; the agent pushes |
+| Shared | `git dotfiles` / `git df` | plain clone `~/dotfiles` (git dir `~/dotfiles/.git`) | `~/dotfiles`; home-manager links its files into `$HOME` (`/ari-dotfiles-nix`) | Generic, every-machine config under `~/.config` | One shared repo; only Ari pushes |
+| Local | `git local-dotfiles` / `git ldf` | bare `~/.local/local-dotfiles.git` | `~/.local` | Company- and machine-specific code under `~/.local` | One private repo per machine; the agent pushes |
 
-On this laptop the local `origin` is a private repo
+`git df` is `~/.config/git/bin/git-dotfiles` (the alias is in
+`~/.config/git/plugin/dotfiles.gitconfig`). It runs git on the clone and turns a `$HOME` path that
+resolves into the clone (a linked file, or a file under a linked directory) into its clone path, so
+`git df add ~/.config/bin/foo` works for a file that is already tracked. A real directory in
+`$HOME`, one that holds per-file links such as `~/.config/zsh/plugins`, does not resolve into the
+clone. git refuses it as `outside repository`, so name it by its clone path. A relative path is
+relative to the caller's directory. A machine without `~/dotfiles/.git` falls back to the bare repo
+`~/dotfiles.git` with `$HOME` as its work tree. There, read every `~/dotfiles/<path>` in this skill
+as `~/<path>` and run `git df submodule …` from `$HOME`. `dotfiles --dir` prints which layout the
+machine has. On the personal laptop the bare repo was retired to `~/dotfiles.git.retired`.
+
+On the personal laptop the local `origin` is a private repo
 (`git ldf remote get-url origin`). State (`~/.local/state`) and cache (`~/.cache`) are never versioned.
 
 ## Workflow
 
-1. Edit the file. Pick its tier with **Placement rules**.
-2. `git df add <abs path>` or `git ldf add <abs path>`; commit with a descriptive
+1. Edit the file. Pick its tier with **Placement rules**. An existing shared file can be edited
+   through `$HOME` or the clone, and the change is live at once.
+   - **Create a new shared file at its clone path, `~/dotfiles/<path>`, NEVER at `~/<path>`.** A
+     file created at `~/<path>` is not in the repo, and git cannot see it. A new clone file appears
+     in `$HOME` only after it is committed and the next `dotfiles switch` runs, because the bridge
+     links only what git tracks. Ari runs the switch; Claude may run `dotfiles switch --build`
+     (`/ari-dotfiles-nix`).
+   - The exception is a directory linked whole, where either path works and the new file is live at
+     once. Test it with `[[ -L ~/<dir> ]]`. Today these are `.config/nvim`, `.config/karabiner`,
+     `.config/claude` and the submodules.
+2. `git df add <abs path>` or `git ldf add <abs path>`. Give a new shared file its clone path:
+   its `$HOME` path does not exist yet. Commit with a descriptive
    message and the same paths after `--` (`git df commit -m "…" -- <abs paths>`),
    since tools like `bake` stage files of their own. A path inside a submodule (`~/.config/chrome-exoskeleton/…`) is refused by
    `git df add`: follow **Submodules** instead.
@@ -33,8 +55,8 @@ On this laptop the local `origin` is a private repo
    the sweep's plan, and any history rewrite the review calls for, ending in one
    question that covers them all (none when nothing is pending). End with "Run
    `dotfiles push` when ready." once every unpushed shared commit, including any
-   the `yes` just made, has passed the review, or, on any other machine, as soon
-   as it lands.
+   the `yes` just made, has passed the review. On the personal laptop
+   (`dotfiles machine-name` prints `personal`), end with it as soon as the commit lands.
 
 **Always pass absolute paths to `git df` and `git ldf`.** Relative pathspecs
 resolve against the cwd, and from inside `~/.local` a `share/...` path silently
@@ -42,17 +64,19 @@ matches nothing.
 
 ```zsh
 git df status
-git df add ~/.config/bin/my-script && git df commit -m "Add my-script"
+git df add ~/dotfiles/.config/bin/my-script && git df commit -m "Add my-script" -- ~/dotfiles/.config/bin/my-script
+git df add ~/.config/zsh/plugins/fzf.zsh && git df commit -m "fzf: preview files with bat" -- ~/.config/zsh/plugins/fzf.zsh   # tracked: mapped
 
 git ldf status
-git ldf add ~/.local/share/zsh/plugins/foo.zsh && git ldf commit -m "Add foo plugin"
+git ldf add ~/.local/share/zsh/plugins/foo.zsh && git ldf commit -m "Add foo plugin" -- ~/.local/share/zsh/plugins/foo.zsh
 git ldf add -A        # safe: info/exclude is an allowlist of hand-written dirs
 git ldf push
 ```
 
-The harness spells the same two things without the aliases: `dotfiles git <args…>` is
-`git df …`, `dotfiles --local git <args…>` is `git ldf …`, and `dotfiles [--local] --dir`
-prints the tier's bare repo path.
+The harness spells the same two things without the aliases: `dotfiles git <args…>` runs git on
+the shared tier, `dotfiles --local git <args…>` is `git ldf …`, and `dotfiles [--local] --dir`
+prints the tier's git dir (`ARI_DOTFILES_DF_GIT_DIR`; `~/dotfiles/.git` on a clone). `dotfiles git`
+passes its arguments untouched, so it needs clone paths. Only `git df` maps `$HOME` paths.
 
 `~/.local/local-dotfiles.git/info/exclude` is the allowlist. Read it; do not
 restate it. `git ldf add -A` is safe because of it.
@@ -114,8 +138,8 @@ For each commit, dispatch a fresh reviewer with the Agent tool, one per commit.
 Give it `git df show <sha>` (or `git -C ~/<path> show <sha>`), the full text of
 every file the commit touches as of that commit (`git df show <sha>:<path>`),
 and that list. It reports `<file>:<line> — <what identifies the employer> —
-<neutral rewrite | move to ldf>`, or `none`, and edits nothing. Commits made
-through `/ari-skill-update` get a pass too.
+<neutral rewrite | move to ldf>`, or `none`, and edits nothing. **Commits made
+through `/ari-skill-update` are reviewed here too**: its own review does not replace this one.
 
 Recommend the push only when every unpushed commit's latest pass returned `none`.
 A fix in a later commit does not help: the earlier commit would still publish
@@ -160,11 +184,13 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
 - **Some files are placed by Nix.** The dotfiles are being ported to nix-darwin
   and home-manager, and the port keeps the split (**Cutpoints**). A file
   home-manager places is a read-only symlink into `/nix/store`: edit its source in
-  the flake, then switch, per `/ari-dotfiles-nix`. Nix places only the few files
-  `/ari-dotfiles-nix` § What Nix owns lists; edit everything else as below.
-  Later the bare repo in `$HOME` becomes a plain clone; until then this workflow is unchanged.
+  the flake, then `dotfiles switch`, per `/ari-dotfiles-nix`. Nix places only the few files
+  `/ari-dotfiles-nix` § What Nix owns lists. Every other shared file in `$HOME` is an
+  out-of-store link into `~/dotfiles`, made by the bridge (`~/.config/dotfiles/nix/bridge.nix`):
+  `readlink -f` ends in the clone. Edit it in place, as below.
 - **Claude skills follow the same split.** The real directory lives in the tier
-  that owns it, `~/.config/claude/skills/<name>/` (df) or
+  that owns it, `~/dotfiles/.config/claude/skills/<name>/` (df, also at
+  `~/.config/claude/skills/<name>/` through the directory link) or
   `~/.local/share/claude-skills/<name>/` (ldf), and `~/.claude/skills/<name>` is a
   symlink to it. Edit through either path; commit through the tier. Linking,
   adopting, and drift are `/ari-dotfiles-skill-registry`'s job.
@@ -210,15 +236,17 @@ shared `get secrets` helper exists yet; do not assume one.
 
 ### Moving a file between tiers
 
-Show the block and the `rg` hits before running.
+Run the `rg` line first. Show Ari its hits and the block, and run the block only after his `yes`.
 
 ```zsh
-git df rm --cached ~/.config/zsh/plugins/work.zsh
-mv ~/.config/zsh/plugins/work.zsh ~/.local/share/zsh/plugins/work.zsh
-git df commit -m "Move work.zsh to local tier"
-git ldf add ~/.local/share/zsh/plugins/work.zsh && git ldf commit -m "Add work.zsh from shared tier"
-rg -n 'plugins/work.zsh' ~/.config ~/.local/share   # edit every hit; re-run until empty
+rg -n 'plugins/work.zsh' ~/dotfiles/.config ~/.local/share   # edit every hit; re-run until empty
+git df rm --cached ~/dotfiles/.config/zsh/plugins/work.zsh
+mv ~/dotfiles/.config/zsh/plugins/work.zsh ~/.local/share/zsh/plugins/work.zsh
+git df commit -m "Move work.zsh to local tier" -- ~/dotfiles/.config/zsh/plugins/work.zsh
+git ldf add ~/.local/share/zsh/plugins/work.zsh && git ldf commit -m "Add work.zsh from shared tier" -- ~/.local/share/zsh/plugins/work.zsh
 ```
+
+Move the clone's file, never the `$HOME` link. The link to it dangles until the next `dotfiles switch` removes it.
 
 ## Cutpoints
 
@@ -270,7 +298,7 @@ table edit changed.
 Some `~/.config` directories are git submodules of the shared repo: their files
 belong to another repo, and the shared tier records only a commit hash for the
 directory, the **pointer**, which is what every other machine checks out.
-`cd ~ && git df submodule status` lists them. Today: `.config/chrome-exoskeleton`
+`git df submodule status` lists them. Today: `.config/chrome-exoskeleton`
 (upstream `github.com/AriSweedler/chrome-exoskeleton`, public;
 `/ari-dotfile--submodule-chrome-exoskeleton`) and `.config/plugged` (upstream
 `github.com/AriSweedler/plugged`, public; `/ari-dotfile--submodule-plugged`).
@@ -279,8 +307,11 @@ The layout every submodule follows and the recipe for a new one:
 
 `git df add` refuses a file inside a submodule (`fatal: Pathspec '…' is in
 submodule '…'`); the only path it accepts there is the directory itself, the
-pointer. `git submodule` runs only from `$HOME`: plain `git submodule`
-elsewhere targets whatever repo the cwd is in.
+pointer. Each checkout lives at `~/dotfiles/.config/<name>`, with its git dir under
+`~/dotfiles/.git/modules/.config/<name>`. `~/.config/<name>` is a link to the checkout, so
+`git -C ~/.config/<name> …` and `git df add ~/.config/<name>` still work. `git df submodule …`
+runs from any directory: the wrapper moves into the clone for it, and its path arguments are the
+clone's (`.config/<name>`).
 
 ### Changing something inside a submodule
 
@@ -306,7 +337,7 @@ One dotfiles change; never stop after the first commit.
 4. **Bump by hand only when the submodule was pushed some other way** and no
    `dotfiles push` is coming (`git df status --short -- ~/<path>` shows ` M`):
    ```zsh
-   git df add ~/<path> && git df commit -m "<name>: bump to $(git -C ~/<path> rev-parse --short HEAD) (<what it carries>)"
+   git df add ~/<path> && git df commit -m "<name>: bump to $(git -C ~/<path> rev-parse --short HEAD) (<what it carries>)" -- ~/<path>
    ```
    The df pre-commit hook refuses a pointer not on the submodule's
    `origin/main` (checked locally, fetched only on a miss): push first, re-run
@@ -315,7 +346,7 @@ One dotfiles change; never stop after the first commit.
 ### After `git df pull` on any machine
 
 The pull moves the pointer and detaches the checkout onto it; a never-initialized
-submodule stays an empty directory until `cd ~ && git df submodule update --init`.
+submodule stays an empty directory until `git df submodule update --init`.
 Then the repo's own refresh (chrome-exoskeleton: `exo link && exo build`), and
 step 1 before committing in it again. `dotfiles apply dotfiles_repo` runs
 the `--init` on a fresh machine; `dotfiles healthcheck` reports
@@ -324,9 +355,9 @@ the `--init` on a fresh machine; `dotfiles healthcheck` reports
 ### Verify
 
 ```
-git -C ~/<path> status -sb          → ## main...origin/main
-cd ~ && git df submodule status      →  <sha> <path> (heads/main)    leading space, not +
-git df status --short -- <path>      → (empty)
+git -C ~/<path> status -sb                  → ## main...origin/main
+git df submodule status                    →  <sha> <path> (heads/main)    leading space, not +
+git df status --short -- ~/<path>           → (empty)
 ```
 
 Prefixes: space = checkout matches the pointer; `+` = checkout ahead of the
@@ -335,8 +366,10 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
 ## Key locations
 
 ### Ignore files
-- `~/.config/git/ignore` — global `core.excludesFile`, every repo on the machine;
-  this is what hides `dotfiles.git` and `.local` from the shared repo.
+- `~/.config/git/ignore` — global `core.excludesFile`, every repo on the machine. Its
+  `dotfiles.git` and `.local` lines matter only to the bare-repo fallback, whose work tree is `$HOME`.
+- `~/dotfiles/.gitignore` — the shared repo's own ignore list. It also keeps out files that tools
+  write into linked directories, such as `.config/nvim/lazy-lock.json`.
 - `~/.local/local-dotfiles.git/info/exclude` — the local repo's allowlist.
 
 ### Shared (df)
@@ -346,7 +379,7 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
 - **Zsh plugins**: `~/.config/zsh/plugins/`, sourced first
 - **Nvim**: `~/.config/nvim/`, lazy.nvim specs in `lua/plugins/`, `lazy = true` by default
 - **Claude skills**: `~/.config/claude/skills/<name>/`, symlinked from `~/.claude/skills/<name>`
-- **Submodules**: declared in `~/.gitmodules`; today `~/.config/chrome-exoskeleton/`
+- **Submodules**: declared in `~/dotfiles/.gitmodules`; today `~/.config/chrome-exoskeleton/`
   (with `~/.config/bin/exo`) and `~/.config/plugged/` (with `~/.config/bin/plugged`) — see
   **Submodules**, `/ari-dotfile--submodule` (layout, creating one),
   `/ari-dotfile--submodule-chrome-exoskeleton` and `/ari-dotfile--submodule-plugged`
@@ -377,7 +410,7 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
 
 As soon as a dotfiles change is committed, start the sweep without asking, in
 parallel with **Review before push** when it runs. A subagent (this agent, when it is one)
-runs `git df status`, `git ldf status` and `cd ~ && git df submodule status`,
+runs `git df status`, `git ldf status` and `git df submodule status`,
 reads each change (`diff` for modified, `cat` for untracked), and drafts one line
 per commit, grouping tightly related files (a new config plus its include). It
 edits and commits nothing:
@@ -403,10 +436,11 @@ does `dotfiles help <verb>`; a bare `dotfiles` lists the verbs.
 
 The `repo` group is the dotfiles themselves:
 
-- `dotfiles_repo`: the shared bare repo cloned (a pre-harness repo still at `~/dotfiles` is
-  renamed to `~/dotfiles.git` first; both present is a manual conflict), tracking
-  `origin/main` with an ssh push url (`ARI_DOTFILES_PUSH_URL`), checked out into `$HOME`,
-  hooks wired, submodules initialized, `origin/main` fetched.
+- `dotfiles_repo`: the shared repo tracking `origin/main` with an ssh push url
+  (`ARI_DOTFILES_PUSH_URL`), hooks wired, submodules initialized, `origin/main` fetched. That is
+  the plain clone `~/dotfiles` when `~/dotfiles/.git` exists. Without it, the step clones the bare
+  repo `~/dotfiles.git` and checks it out into `$HOME`. A pre-harness bare repo at `~/dotfiles` is
+  renamed to `~/dotfiles.git` first, and having both is a manual conflict.
 - `local_dotfiles_repo`: the local bare repo with the allowlist from
   `~/.config/new-machine/local-dotfiles-exclude` and its hooks. A remote is optional: without
   one the step is `ok`, the local tier stays on this machine and `dotfiles push` skips it.
