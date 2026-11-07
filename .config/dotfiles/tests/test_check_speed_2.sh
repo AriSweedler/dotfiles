@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Check speed, part 2: the checks of a group run side by side and a run reads exactly as a serial
 # one (stdout, stderr, run.log, summary.json); claude_skills is cached on its links and misses
-# when one changes; bob_neovim and raycast_sync never cache behind a seam (a shim, a bindings
+# when one changes; neovim and raycast_sync never cache behind a seam (a shim, a bindings
 # command), whose state the fingerprint cannot see.
 set -u
 # shellcheck source=lib.sh
@@ -64,8 +64,8 @@ assert_contains "names the dangling link" "$(step_get claude_skills .detail)" "d
 
 # ── seams are never cached ───────────────────────────────────────────────────
 bump_now_secs 60
-nm check --only bob_neovim --json
-assert_no_file "bob shim → no cache entry" "${ARI_DOTFILES_STATE_DIR}/cache/bob_neovim.fp"
+nm check --only neovim --json
+assert_no_file "nvim shim → no cache entry" "${ARI_DOTFILES_STATE_DIR}/cache/neovim.fp"
 mkdir -p "${FIX}/Raycast.app"
 printf '{"bindings":[]}\n' > "${FIX}/bindings.json"
 ARI_DOTFILES_RAYCAST_APP="${FIX}/Raycast.app" ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="cat ${FIX}/bindings.json" nm check --only raycast_sync --json

@@ -127,6 +127,8 @@ world_new() {
   export ARI_DOTFILES_FONT_DIRS="${FIX}/fonts"
   # No nix-darwin in the world: the brew steps check the tier Brewfiles.
   export ARI_DOTFILES_NIX_BREWFILE="${FIX}/no-nix-brewfile"
+  # The nvim shim is the world's "Nix" nvim.
+  export ARI_DOTFILES_NVIM_STORE="${FIX}/shims"
   mkdir -p "${FIX}/fonts" && : > "${FIX}/fonts/CaskaydiaMonoNerdFontMono-Regular.ttf"
   export ARI_DOTFILES_DF_GIT_DIR="${HOME}/dotfiles.git" ARI_DOTFILES_LDF_GIT_DIR="${HOME}/.local/local-dotfiles.git"
   export ARI_DOTFILES_DF_HOOKS="${HOME}/.config/git/dotfiles-hooks" ARI_DOTFILES_LDF_HOOKS="${HOME}/.config/git/local-dotfiles-hooks"
@@ -361,7 +363,7 @@ shim_log() { local f="${BREW_SHIM_LOG_DIR}/$1.log"; if [[ -f "${f}" ]]; then cat
 hermetic_env() {
   HERMETIC_ENV=("HOME=${HOME}" "PATH=${PATH}" "TZ=${TZ:-UTC}" "GIT_CONFIG_NOSYSTEM=1")
   local v
-  for v in "${!XDG_@}" "${!ARI_DOTFILES_@}" "${!BREW_SHIM_@}" "${!BOB_SHIM_@}" "${!LAUNCHCTL_SHIM_@}" "${!XCODE_SELECT_SHIM_@}" "${!OP_SHIM_@}"; do
+  for v in "${!XDG_@}" "${!ARI_DOTFILES_@}" "${!BREW_SHIM_@}" "${!BOB_SHIM_@}" "${!NVIM_SHIM_@}" "${!LAUNCHCTL_SHIM_@}" "${!XCODE_SELECT_SHIM_@}" "${!OP_SHIM_@}"; do
     HERMETIC_ENV+=("${v}=${!v}")
   done
   # The ssh agent a test started for itself; the real one never reaches the code.

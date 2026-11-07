@@ -13,7 +13,7 @@ seed_fake_repos
 seed_ldf_remote
 seed_home_baseline
 export BOB_SHIM_LS="Installed: v0.11.2 Used"
-ONLY="dotfiles_repo,local_dotfiles_repo,bob_neovim,claude,karabiner"
+ONLY="dotfiles_repo,local_dotfiles_repo,neovim,claude,karabiner"
 
 # Timestamps, run ids and durations are the only bytes allowed to differ between two renderings.
 mask() { /usr/bin/sed -E 's/\[[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z\]/[TS]/g; s/[0-9]{8}T[0-9]{6}/RUNID/g'; }
@@ -63,7 +63,7 @@ assert_not_contains "a plain run has no glyphs" "${OUT}" "✓"
 
 # ── Plain init --dry-run: the table first, then status; the dry-run warning still on stderr ──
 bump_now_secs 60
-nm init --dry-run --only bob_neovim,claude
+nm init --dry-run --only neovim,claude
 RUN="$(newest_run_dir)"
 assert_eq "plain init --dry-run exits 0" 0 "${RC}"
 TABLE="$(old_table "${RUN}/summary.json")"
@@ -104,7 +104,7 @@ assert_eq "gum is only ever a spinner" "" "$(grep -E '^(style|join|choose|format
 # Side by side, a check already done when its turn comes has its spinner stopped (gum TERMed)
 # before a fake gum can log, so here it is at most one per check; the serial run below counts.
 assert_eq "side by side: every spinner names a check" "" \
-  "$(grep '^spin ' <<< "${GUMS}" | grep -v -E -- '--title (dotfiles_repo|local_dotfiles_repo|bob_neovim|claude|karabiner) · checking ')"
+  "$(grep '^spin ' <<< "${GUMS}" | grep -v -E -- '--title (dotfiles_repo|local_dotfiles_repo|neovim|claude|karabiner) · checking ')"
 assert_eq "side by side: no more than a spinner per check" 1 "$(( $(grep -c '^spin ' <<< "${GUMS}") <= 5 ))"
 cp "${RUN}/summary.json" "${FIX}/fancy-summary.json"
 assert_json "summary.json unchanged in shape" "${FIX}/fancy-summary.json" '.steps|length' 5
@@ -133,7 +133,7 @@ assert_no_file "--json runs no gum" "${FIX}/gum.log"
 
 # init --dry-run under the fancy seam: the header names the dry run.
 bump_now_secs 60
-nm init --dry-run --only bob_neovim,claude
+nm init --dry-run --only neovim,claude
 PLAIN_OUT="$(printf '%s' "${OUT}" | strip_ansi)"
 assert_eq "fancy init header says dry-run" "init · 2 steps · dry-run" "$(head -n 1 <<< "${PLAIN_OUT}")"
 unset ARI_DOTFILES_UI ARI_DOTFILES_GUM

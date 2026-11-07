@@ -13,7 +13,7 @@ world_use_fixture satisfied
 seed_fake_repos
 seed_ldf_remote
 seed_home_baseline
-unset BOB_SHIM_LS   # bob_neovim fails, with an apply; terminal_nerdfont warns, manual
+shim_remove claude   # claude fails, with an apply; terminal_nerdfont warns, manual
 PLAN="${ARI_DOTFILES_STATE_DIR}/healthcheck-plan.dfcheck"
 SEEN="${FIX}/seen.dfcheck"
 LOCKSEEN="${FIX}/lockseen"
@@ -26,7 +26,7 @@ editor() {
   chmod +x "${EDITORS}/$1"
 }
 editor noop '{ print }'
-editor apply_bob '{ sub(/^skip +bob_neovim /, "apply  bob_neovim ") } { print }'
+editor apply_bob '{ sub(/^skip +claude /, "apply  claude ") } { print }'
 editor skip_bob '/^skip/ { print "# dropped: " $0; next } { print }'
 editor manual 'END { print "apply terminal_nerdfont" } { print }'
 
@@ -81,7 +81,7 @@ assert_eq "--edit with two files: usage error" 64 "${RC}"
 nm check extra
 assert_eq "no --edit: a positional is still a usage error" 64 "${RC}"
 mkdir -p "${ARI_DOTFILES_STATE_DIR}"
-printf 'apply  bob_neovim\n' > "${PLAN}"
+printf 'apply  claude\n' > "${PLAN}"
 ed noop healthcheck --edit "${PLAN}"
 assert_eq "FILE before any check: exit 1" 1 "${RC}"
 assert_contains "FILE before any check: says so" "${ERR}" "no check to read the plan against"
@@ -90,16 +90,16 @@ rm -f "${PLAN}"
 # ── the table, then a plan where every line is skip; unchanged applies nothing ──
 tty noop "" healthcheck --edit
 assert_eq "unchanged: the healthcheck's exit code" 1 "${RC}"
-assert_contains "the table as healthcheck prints it" "${OUT}" "fail   bob_neovim             nvim_missing"
+assert_contains "the table as healthcheck prints it" "${OUT}" "fail   claude                 claude_missing"
 assert_contains "the roll-up" "${OUT}" "status: fail (fail=1"
 plan="$(cat "${SEEN}")"
 assert_eq "the plan: line 1 names its kind and actions (the dotfilesplan filetype reads it)" "# dotfiles-plan: healthcheck · actions: apply | skip" "$(head -n 1 "${SEEN}")"
 assert_contains "the plan: the actionable step starts as skip" "${plan}" \
-  "$(pl skip)bob_neovim            # nvim_missing: installs the latest neovim with bob and makes it the one in use"
+  "$(pl skip)claude                # claude_missing: runs the Claude Code installer (curl https://claude.ai/install.sh | sh)"
 assert_contains "the plan: a manual fix is a comment" "${plan}" "#   warn   terminal_nerdfont     manual_font:"
 assert_contains "the plan: says the healthcheck applies nothing by itself" "${plan}" "every line starts as skip"
 assert_contains "unchanged: says so" "${OUT}" "healthcheck: no change; nothing applied"
-assert_contains "unchanged: the apply for later" "${OUT}" "next: dotfiles apply bob_neovim"
+assert_contains "unchanged: the apply for later" "${OUT}" "next: dotfiles apply claude"
 assert_eq "the editor ran without the lock" "" "$(cat "${LOCKSEEN}" 2>/dev/null)"
 assert_eq "unchanged: nothing applied" "" "$(last_setup_steps)"
 
@@ -113,7 +113,7 @@ assert_file "bad plan: kept" "${PLAN}"
 
 # ── chosen, declined at the confirm: the plan stays ──
 tty apply_bob "" healthcheck --edit
-assert_contains "the confirm names the apply" "${OUT}" "Run dotfiles apply bob_neovim? [y/N]"
+assert_contains "the confirm names the apply" "${OUT}" "Run dotfiles apply claude? [y/N]"
 assert_contains "declined: says so" "${OUT}" "healthcheck: not confirmed; nothing applied"
 assert_contains "declined: the resume" "${OUT}" "next: dotfiles healthcheck --edit ${PLAN}"
 assert_eq "declined: nothing applied" "" "$(last_setup_steps)"
@@ -121,9 +121,9 @@ assert_file "declined: kept" "${PLAN}"
 
 # ── chosen and confirmed: a fresh apply of exactly those steps ──
 tty apply_bob y healthcheck --edit
-assert_contains "confirmed: hands over" "${OUT}" "running: dotfiles apply bob_neovim"
-assert_eq "confirmed: the apply ran bob_neovim" bob_neovim "$(last_setup_steps)"
-assert_contains "confirmed: bob's apply ran" "$(shim_log bob)" "install latest"
+assert_contains "confirmed: hands over" "${OUT}" "running: dotfiles apply claude"
+assert_eq "confirmed: the apply ran claude" claude "$(last_setup_steps)"
+assert_contains "confirmed: claude's apply ran" "$(shim_log curl)" "claude.ai/install.sh"
 assert_no_file "confirmed: the plan is gone" "${PLAN}"
 assert_no_file "lock released" "${ARI_DOTFILES_STATE_DIR}/lock.d"
 
@@ -134,16 +134,16 @@ assert_contains "no step line: says so" "${OUT}" "healthcheck: the plan has no s
 assert_eq "no step line: nothing applied" "" "$(last_setup_steps)"
 
 # ── FILE: no checks, read against last-check.json; off a terminal no confirm ──
-printf 'apply  bob_neovim  # resumed\n' > "${PLAN}"
+printf 'apply  claude      # resumed\n' > "${PLAN}"
 before="$(run_count)"
 ed noop healthcheck --dry-run --edit "${PLAN}"
 assert_eq "resumed: exit as the apply does" 1 "${RC}"
 assert_eq "resumed: the apply is the only new run" "$(( before + 1 ))" "$(run_count)"
-assert_contains "resumed, --dry-run: the apply is a dry run" "${OUT}" "running: dotfiles apply --dry-run bob_neovim"
+assert_contains "resumed, --dry-run: the apply is a dry run" "${OUT}" "running: dotfiles apply --dry-run claude"
 assert_json "resumed, --dry-run: would apply" "${ARI_DOTFILES_STATE_DIR}/last-setup.json" '.steps[0].applied' would_apply
 
 # ── nothing actionable: no plan, no editor, the healthcheck's exit ──
-export BOB_SHIM_LS="Installed: v0.11.2 Used"
+shim_add claude
 tty noop "" healthcheck --edit
 assert_eq "nothing actionable: exit 0" 0 "${RC}"
 assert_contains "nothing actionable: says so" "${OUT}" "healthcheck: nothing to apply"

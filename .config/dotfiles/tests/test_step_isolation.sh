@@ -8,13 +8,13 @@ world_new
 world_use_fixture satisfied
 seed_fake_repos
 seed_home_baseline
-export BOB_SHIM_RC=3
+export NVIM_SHIM_RC=3
 shim_remove claude
 
 nm check --json
 assert_eq "check exits 1" 1 "${RC}"
 f="$(out_json)"
-assert_eq "bob_neovim fails" fail "$(step_get bob_neovim .status)"
+assert_eq "neovim fails" fail "$(step_get neovim .status)"
 assert_eq "claude fails" fail "$(step_get claude .status)"
 assert_eq "claude reason claude_missing" claude_missing "$(step_get claude .reason)"
 for step in terminal_nerdfont karabiner claude_notifications claude_skills dotfiles_jobs; do
@@ -24,7 +24,7 @@ for step in terminal_nerdfont karabiner claude_notifications claude_skills dotfi
 done
 assert_steps_are_registry "every step recorded" "${f}"
 
-unset BOB_SHIM_RC
+unset NVIM_SHIM_RC
 world_bundle_check garbage
 bump_now_secs 60
 nm check --only brew,brew_pkgs --json

@@ -55,7 +55,7 @@ for step in brew_pkgs brew_drift; do
 done
 # The font check reads font files, not brew: it still runs.
 assert_eq "terminal_nerdfont runs without brew" true "$(step_get terminal_nerdfont .status | grep -qvx skip && echo true)"
-assert_json "non-brew steps still ran" "${f}" '[.steps[] | select(.step=="claude" or .step=="bob_neovim" or .step=="dotfiles_repo" or .step=="local_dotfiles_repo") | .status] | all(. != "skip")' true
+assert_json "non-brew steps still ran" "${f}" '[.steps[] | select(.step=="claude" or .step=="neovim" or .step=="dotfiles_repo" or .step=="local_dotfiles_repo") | .status] | all(. != "skip")' true
 
 shim_add brew
 bump_now_secs 60

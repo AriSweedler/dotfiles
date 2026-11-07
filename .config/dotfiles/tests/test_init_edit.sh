@@ -13,8 +13,8 @@ world_use_fixture satisfied
 seed_fake_repos
 seed_ldf_remote
 seed_home_baseline
-# No neovim in use: bob_neovim fails with an apply. terminal_nerdfont warns, manual.
-unset BOB_SHIM_LS
+# No claude in use: claude fails with an apply. terminal_nerdfont warns, manual.
+shim_remove claude
 PLAN="${ARI_DOTFILES_STATE_DIR}/init-plan.dfinit"
 SEEN="${FIX}/seen.dfinit"
 LOCKSEEN="${FIX}/lockseen"
@@ -32,7 +32,7 @@ editor() {
 editor noop '{ print }'
 editor skip_all '{ sub(/^apply/, "skip ") } { print }'
 editor skip_brew '{ sub(/^apply +brew /, "skip  brew ") } { print }'
-editor bad 'END { print "frobnicate bob_neovim"; print "apply nosuch"; print "apply bob_neovim extra"; print "skip bob_neovim"; print "apply brew" } { print }'
+editor bad 'END { print "frobnicate claude"; print "apply nosuch"; print "apply claude extra"; print "skip claude"; print "apply brew" } { print }'
 
 # ed ED ARGS...: `dotfiles ARGS` with EDITOR=ED, no terminal; OUT, ERR, RC.
 ed() {
@@ -81,18 +81,18 @@ assert_eq "unchanged: exit 1 (bob's apply does not converge under the shim)" 1 "
 plan="$(cat "${SEEN}")"
 assert_eq "the plan: line 1 names its kind and actions (the dotfilesplan filetype reads it)" "# dotfiles-plan: init · actions: apply | skip" "$(head -n 1 "${SEEN}")"
 assert_contains "the plan: the actionable step, apply, with its reason and what the apply does" "${plan}" \
-  "$(pl apply)bob_neovim            # nvim_missing: installs the latest neovim with bob and makes it the one in use"
+  "$(pl apply)claude                # claude_missing: runs the Claude Code installer (curl https://claude.ai/install.sh | sh)"
 assert_contains "the plan: names the actions" "${plan}" "#   skip    leave it as it is"
 assert_contains "the plan: a manual step is a comment with its fix" "${plan}" "#   warn   terminal_nerdfont     manual_font:"
 assert_contains "the plan: the ok steps for reference" "${plan}" "#   ok     brew                  present"
 assert_not_contains "the plan: a manual step is never a line" "${plan}" $'\napply  terminal_nerdfont'
 assert_eq "the editor ran without the lock" "" "$(cat "${LOCKSEEN}" 2>/dev/null)"
-assert_contains "the checks printed first" "${OUT}" "fail   bob_neovim             nvim_missing"
-assert_contains "then the setup run" "${OUT}" "fail   bob_neovim             apply_did_not_converge"
+assert_contains "the checks printed first" "${OUT}" "fail   claude                 claude_missing"
+assert_contains "then the setup run" "${OUT}" "fail   claude                 apply_did_not_converge"
 assert_contains "then status" "${OUT}" "tiers"
-assert_eq "the setup ran exactly the chosen step" bob_neovim "$(last_setup_steps)"
+assert_eq "the setup ran exactly the chosen step" claude "$(last_setup_steps)"
 assert_json "the setup applied it" "${ARI_DOTFILES_STATE_DIR}/last-setup.json" '.steps[0].applied' true
-assert_contains "bob's apply ran" "$(shim_log bob)" "install latest"
+assert_contains "claude's apply ran" "$(shim_log curl)" "claude.ai/install.sh"
 assert_steps_are_registry "the checks were every step" "${ARI_DOTFILES_STATE_DIR}/last-check.json"
 check_id="$(jq -r .run_id "${ARI_DOTFILES_STATE_DIR}/last-check.json")"
 setup_id="$(jq -r .run_id "${ARI_DOTFILES_STATE_DIR}/last-setup.json")"
@@ -117,7 +117,7 @@ clear_last_setup
 ed skip_all init --edit
 assert_eq "all skipped: the checks' exit code" 1 "${RC}"
 assert_contains "all skipped: says so" "${OUT}" "init: every step skipped; nothing applied"
-assert_contains "all skipped: the apply for later" "${OUT}" "next: dotfiles apply bob_neovim"
+assert_contains "all skipped: the apply for later" "${OUT}" "next: dotfiles apply claude"
 assert_eq "all skipped: nothing applied" "" "$(last_setup_steps)"
 assert_no_file "all skipped: the plan is not kept" "${PLAN}"
 
@@ -125,22 +125,22 @@ assert_no_file "all skipped: the plan is not kept" "${PLAN}"
 ed bad init --edit
 assert_eq "bad plan: exit 1" 1 "${RC}"
 n="$(grep -c '' "${SEEN}")"
-assert_contains "bad plan: an unknown action" "${ERR}" "line $(( n + 1 )): unknown action; use apply, skip | line='frobnicate bob_neovim'"
+assert_contains "bad plan: an unknown action" "${ERR}" "line $(( n + 1 )): unknown action; use apply, skip | line='frobnicate claude'"
 assert_contains "bad plan: an unknown step" "${ERR}" "line $(( n + 2 )): not a step here (dotfiles steps) | item='nosuch'"
 assert_contains "bad plan: two words after the action" "${ERR}" "line $(( n + 3 )): expected one step after 'apply'"
-assert_contains "bad plan: a step twice" "${ERR}" "line $(( n + 4 )): listed twice | item='bob_neovim'"
+assert_contains "bad plan: a step twice" "${ERR}" "line $(( n + 4 )): listed twice | item='claude'"
 assert_contains "bad plan: a step with nothing to apply" "${ERR}" "line $(( n + 5 )): nothing to apply for brew in this check (ok present)"
 assert_contains "bad plan: the resume" "${ERR}" "fix='dotfiles init --edit ${PLAN}'"
 assert_file "bad plan: kept" "${PLAN}"
 assert_eq "bad plan: nothing applied" "" "$(last_setup_steps)"
 
 # Resumed: no checks, read against last-check.json; the setup is the only new run.
-printf 'apply  bob_neovim  # resumed\n' > "${PLAN}"
+printf 'apply  claude      # resumed\n' > "${PLAN}"
 before="$(run_count)"
 ed noop init --edit "${PLAN}"
 assert_eq "resumed: the setup is the only new run" "$(( before + 1 ))" "$(run_count)"
-assert_not_contains "resumed: no checks first" "${OUT}" "nvim_missing"
-assert_eq "resumed: the chosen step ran" bob_neovim "$(last_setup_steps)"
+assert_not_contains "resumed: no checks first" "${OUT}" "claude_missing"
+assert_eq "resumed: the chosen step ran" claude "$(last_setup_steps)"
 assert_no_file "resumed: the plan is gone" "${PLAN}"
 
 # ── on a terminal, a bad plan is offered for another edit ──
@@ -159,7 +159,7 @@ assert_contains "need skipped: an error naming the need" "${ERR}" "line ${line}:
 shim_add brew
 
 # ── nothing to apply: no plan, no editor ──
-export BOB_SHIM_LS="Installed: v0.11.2 Used"
+shim_add claude
 ed noop init --edit
 assert_contains "nothing actionable: says so" "${OUT}" "init: nothing to apply"
 assert_no_file "nothing actionable: the editor never opened" "${SEEN}"

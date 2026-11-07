@@ -7,9 +7,9 @@
   "status": "fail",
   "counts": {"fail": 2, "ok": 7, "warn": 3},
   "steps": [
-    {"step": "bob_neovim", "status": "ok", "reason": "installed", "detail": "neovim installed via bob", "fix": null,
+    {"step": "neovim", "status": "ok", "reason": "installed", "detail": "neovim installed via bob", "fix": null,
      "manual": false, "actionable": false, "items": [], "rc": 0, "duration_ms": 41,
-     "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/bob_neovim.log", "applied": false},
+     "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/neovim.log", "applied": false},
     {"step": "brew", "status": "ok", "reason": "present", "detail": "Homebrew 6.0.22 | brew='/tmp/nmtest/shims/brew'", "fix": null,
      "manual": false, "actionable": false, "items": [], "rc": 0, "duration_ms": 88,
      "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/brew.log", "applied": false},

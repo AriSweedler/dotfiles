@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The small steps: bob_neovim, claude, terminal_nerdfont, terminal_config, home_strays,
+# The small steps: neovim, claude, terminal_nerdfont, terminal_config, home_strays,
 # karabiner, claude_notifications, dotfiles_jobs — each check's verdicts and the dry-run of each apply.
 set -u
 # shellcheck source=lib.sh
@@ -13,25 +13,35 @@ dry_step() { bump_now_secs 60; nm init --only "$1" --dry-run; }
 status_of() { step_get "$1" .status; }
 reason_of() { step_get "$1" .reason; }
 
-# ── bob_neovim ────────────────────────────────────────────────────────────────
-export BOB_SHIM_LS="Installed: v0.11.2 Used"
-check_step bob_neovim
-assert_eq "bob Used → ok" ok "$(status_of bob_neovim)"
-export BOB_SHIM_LS="v0.11.2"
-check_step bob_neovim
-assert_eq "bob not used → fail" fail "$(status_of bob_neovim)"
-assert_eq "reason nvim_missing" nvim_missing "$(reason_of bob_neovim)"
-dry_step bob_neovim
-assert_contains "dry-run logs the bob apply plan" "${ERR}" "would run apply::bob_neovim"
-assert_contains "dry-run plan names bob install" "$(cat "$(newest_run_dir)/bob_neovim.log")" "cmd='bob install latest'"
-assert_not_contains "dry-run installs nothing" "$(shim_log bob)" "install"
-shim_remove bob
-check_step bob_neovim
-assert_eq "no bob → fail" fail "$(status_of bob_neovim)"
-assert_eq "reason bob_missing" bob_missing "$(reason_of bob_neovim)"
-assert_eq "bob_missing is manual" true "$(step_get bob_neovim .manual)"
-assert_contains "fix points at brew_pkgs" "$(step_get bob_neovim .fix)" "dotfiles apply brew_pkgs"
-shim_add bob
+# ── neovim ────────────────────────────────────────────────────────────────
+# The shim stands in for the flake's build: the world's "store" is its shim dir.
+export ARI_DOTFILES_NVIM_STORE="${FIX}/shims"
+check_step neovim
+assert_eq "nix nvim, clean headless start → ok" ok "$(status_of neovim)"
+assert_contains "detail names the version" "$(step_get neovim .detail)" "v0.13.0-dev"
+assert_contains "the start was headless" "$(shim_log nvim)" "--headless"
+export NVIM_SHIM_STDERR="Error detected while processing init.lua: E5113: module 'oops' not found"
+check_step neovim
+assert_eq "start prints an error → fail" fail "$(status_of neovim)"
+assert_eq "reason nvim_start_errors" nvim_start_errors "$(reason_of neovim)"
+assert_eq "nvim_start_errors is manual" true "$(step_get neovim .manual)"
+assert_contains "detail quotes the error" "$(step_get neovim .detail)" "E5113"
+assert_contains "the error is logged" "$(cat "${HOME}/.local/state/nvim/headless-start.log")" "E5113"
+unset NVIM_SHIM_STDERR
+export NVIM_SHIM_RC=1
+check_step neovim
+assert_eq "start exits non-zero → fail" fail "$(status_of neovim)"
+unset NVIM_SHIM_RC
+export ARI_DOTFILES_NVIM_STORE="/nix/store"
+check_step neovim
+assert_eq "nvim outside the store → fail" fail "$(status_of neovim)"
+assert_eq "reason nvim_not_nix" nvim_not_nix "$(reason_of neovim)"
+shim_remove nvim
+check_step neovim
+assert_eq "no nvim → fail" fail "$(status_of neovim)"
+assert_eq "reason nvim_missing" nvim_missing "$(reason_of neovim)"
+shim_add nvim
+export ARI_DOTFILES_NVIM_STORE="${FIX}/shims"
 
 # ── claude ────────────────────────────────────────────────────────────────────
 check_step claude

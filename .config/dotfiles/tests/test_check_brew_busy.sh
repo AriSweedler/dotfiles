@@ -20,7 +20,7 @@ done
 assert_json "every step has a status" "${f}" '[.steps[] | select((.status // "") == "")] | length' 0
 assert_steps_are_registry "every step ran" "${f}"
 assert_eq "brew itself is ok" ok "$(step_get brew .status)"
-assert_json "other steps still ran" "${f}" '[.steps[] | select(.step=="dotfiles_repo" or .step=="claude" or .step=="bob_neovim") | .status] | all(. != "skip" and . != "error")' true
+assert_json "other steps still ran" "${f}" '[.steps[] | select(.step=="dotfiles_repo" or .step=="claude" or .step=="neovim") | .status] | all(. != "skip" and . != "error")' true
 assert_no_mutation "busy check is read-only"
 
 if (( FAIL > 0 )); then jq -c '.steps[] | {step, status, reason, detail}' "${f}" >&2; fi

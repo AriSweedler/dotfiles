@@ -1,5 +1,20 @@
 # User layer every machine gets: packages and the files home-manager places.
 { pkgs, ... }:
+let
+  # Neovim pinned to the exact commit Ari ran under bob (v0.13.0-dev-853+g7945732ed7, 2026-06-29),
+  # built with nixpkgs' recipe. The version moves only when rev and hash are edited here; a
+  # nixpkgs update never bumps it. The source tarball has no .git, so `nvim --version` prints
+  # v0.13.0-dev without the commit suffix.
+  neovim-pinned = pkgs.neovim-unwrapped.overrideAttrs (_: {
+    version = "0.13.0-dev";
+    src = pkgs.fetchFromGitHub {
+      owner = "neovim";
+      repo = "neovim";
+      rev = "7945732ed7bb211f91112292a13b51fc3182599b";
+      hash = "sha256-DrGUyUf93fzovmHmMDUKfYERkrtA/+laGhQCOWEtnTw=";
+    };
+  });
+in
 {
   home.stateVersion = "26.05";
 
@@ -35,6 +50,9 @@
     # Shells. /bin/bash is 3.2; the local-dotfiles pre-commit hook needs bash 5 (mapfile).
     bashInteractive
     zsh
+
+    # Editor
+    neovim-pinned
 
     # Lang: misc
     lua

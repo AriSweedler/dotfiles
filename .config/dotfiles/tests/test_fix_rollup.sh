@@ -13,8 +13,8 @@ world_use_fixture satisfied
 seed_fake_repos
 seed_ldf_remote
 seed_home_baseline
-export BOB_SHIM_LS="Installed: v0.11.2 Used"
-ONLY="dotfiles_repo,local_dotfiles_repo,bob_neovim,claude"
+printf 'test-machine\n' > "${XDG_DATA_HOME}/dotfiles/machine-name"
+ONLY="dotfiles_repo,local_dotfiles_repo,machine_name,claude"
 
 strip_ansi() { /usr/bin/sed -E $'s/\x1b\\[[0-9;?]*[a-zA-Z]//g'; }
 # Paths as human lines show them (ui::paths, in this world): each XDG base, then the home directory.
@@ -49,7 +49,7 @@ assert_eq "all-ok: stdout is main's table, nothing added" "$(old_table "${RUN}/s
 assert_eq "all-ok: no fix line" "" "$(fix_lines)"
 
 # ── A fail with a fix and a warn with a fix: one line each, after the status line, in run order ──
-export BOB_SHIM_LS="v0.11.2"
+rm -f "${XDG_DATA_HOME}/dotfiles/machine-name"
 TRACKED="${HOME}/$(df_git ls-files | head -n 1)"
 printf '\n# local edit\n' >> "${TRACKED}"
 bump_now_secs 60
@@ -57,8 +57,8 @@ nm healthcheck --only "${ONLY}"
 RUN="$(newest_run_dir)"
 assert_eq "a fail exits 1" 1 "${RC}"
 assert_eq "plain stdout is main's table, then the fix lines" \
-  "$(old_table "${RUN}/summary.json")"$'\n'"fix    dotfiles_repo  git df status"$'\n'"fix    bob_neovim  dotfiles apply bob_neovim" "${OUT}"
-assert_contains "the fail's fix is its verdict's" "$(fix_lines)" "fix    bob_neovim  dotfiles apply bob_neovim"
+  "$(old_table "${RUN}/summary.json")"$'\n'"fix    dotfiles_repo  git df status"$'\n'"fix    machine_name  dotfiles apply machine_name" "${OUT}"
+assert_contains "the fail's fix is its verdict's" "$(fix_lines)" "fix    machine_name  dotfiles apply machine_name"
 assert_contains "a warn with a fix gets a line" "$(fix_lines)" "fix    dotfiles_repo  git df status"
 assert_not_contains "an ok step gets none" "$(fix_lines)" "claude"
 assert_not_contains "fix lines are stdout only" "${ERR}" "fix    "
@@ -71,14 +71,14 @@ assert_eq "--json is summary.json, byte for byte" "$(cat "${RUN}/summary.json")"
 
 # ── init --dry-run: the fix lines come before the status output init prints last ──
 bump_now_secs 60
-nm init --dry-run --only bob_neovim,claude
+nm init --dry-run --only machine_name,claude
 RUN="$(newest_run_dir)"
 TABLE="$(old_table "${RUN}/summary.json")"
 N="$(printf '%s\n' "${TABLE}" | wc -l | tr -d ' ')"
-assert_eq "init: main's table, then the fix line" "${TABLE}"$'\n'"fix    bob_neovim  dotfiles apply bob_neovim" "$(head -n $((N + 1)) "${FIX}/nm.out")"
+assert_eq "init: main's table, then the fix line" "${TABLE}"$'\n'"fix    machine_name  dotfiles apply machine_name" "$(head -n $((N + 1)) "${FIX}/nm.out")"
 assert_contains "init still ends with status" "${OUT}" "tiers"
 df_git checkout -q -- "${TRACKED}"
-export BOB_SHIM_LS="Installed: v0.11.2 Used"
+printf 'test-machine\n' > "${XDG_DATA_HOME}/dotfiles/machine-name"
 
 # ── A manual item without a fix: done by hand, its WARN block still on stderr ──
 bump_now_secs 60
@@ -93,18 +93,18 @@ FAKE_GUM="${FIX}/fakegum"
 printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s/gum.log"\n' "${FIX}" > "${FAKE_GUM}"
 chmod +x "${FAKE_GUM}"
 export ARI_DOTFILES_UI=fancy ARI_DOTFILES_GUM="${FAKE_GUM}"
-export BOB_SHIM_LS="v0.11.2"
+rm -f "${XDG_DATA_HOME}/dotfiles/machine-name"
 rm -f "${FIX}/gum.log"
 bump_now_secs 60
-nm healthcheck --only "brew,terminal_nerdfont,bob_neovim,claude"
+nm healthcheck --only "brew,terminal_nerdfont,machine_name,claude"
 RUN="$(newest_run_dir)"
 BOX="$(grep '^style ' "${FIX}/gum.log" 2>/dev/null | strip_ansi)"
 assert_eq "fancy: one box" 1 "$(grep -c '^style ' <<< "${BOX}")"
 assert_contains "the box is rounded" "${BOX}" "--border rounded"
 assert_contains "bordered in the roll-up colour (fail = red 196)" "${BOX}" "--border-foreground 196"
 assert_contains "titled with the count" "${BOX}" "2 need attention"
-assert_contains "an entry: glyph, step, reason" "${BOX}" "✗ bob_neovim  nvim_missing"
-assert_contains "its fix" "${BOX}" "fix: dotfiles apply bob_neovim"
+assert_contains "an entry: glyph, step, reason" "${BOX}" "✗ machine_name  name_missing"
+assert_contains "its fix" "${BOX}" "fix: dotfiles apply machine_name"
 assert_contains "the manual item is in the box" "${BOX}" "! terminal_nerdfont  manual_font"
 assert_contains "with its detail lines" "${BOX}" "no Terminal.app preferences yet"
 RUN_SHOWN="run: \$XDG_STATE_HOME${RUN#"${XDG_STATE_HOME}"}"
@@ -115,7 +115,7 @@ assert_not_contains "fancy: no plain fix lines" "${OUT}" "fix    "
 assert_contains "fancy still ends with the status line" "$(printf '%s' "${OUT}" | strip_ansi)" "status: fail"
 
 # ── Fancy, all ok: one green line, no box ──
-export BOB_SHIM_LS="Installed: v0.11.2 Used"
+printf 'test-machine\n' > "${XDG_DATA_HOME}/dotfiles/machine-name"
 rm -f "${FIX}/gum.log"
 bump_now_secs 60
 nm healthcheck --only "${ONLY}"

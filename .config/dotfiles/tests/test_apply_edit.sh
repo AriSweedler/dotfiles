@@ -12,7 +12,7 @@ world_use_fixture satisfied
 seed_fake_repos
 seed_ldf_remote
 seed_home_baseline
-unset BOB_SHIM_LS   # bob_neovim fails, with an apply
+rm -f "${XDG_DATA_HOME}/dotfiles/machine-name"   # machine_name fails, with an apply
 PLAN="${ARI_DOTFILES_STATE_DIR}/apply-plan.dfapply"
 SEEN="${FIX}/seen.dfapply"
 LOCKSEEN="${FIX}/lockseen"
@@ -78,8 +78,8 @@ assert_eq "unchanged, none named: nothing applied" "" "$(last_setup_steps)"
 registry_load
 assert_eq "the plan: line 1 names its kind and actions (the dotfilesplan filetype reads it)" "# dotfiles-plan: apply · actions: apply | skip" "$(head -n 1 "${SEEN}")"
 assert_eq "the plan: every step, in run order" "$(registry_steps | tr '\n' ',')" "$(grep -E '^(apply|skip) ' "${SEEN}" | awk '{ printf "%s,", $2 }')"
-assert_contains "the plan: a failing step with an apply starts as apply, with its newest result" "$(plan_line bob_neovim)" \
-  "$(pl apply)bob_neovim            # neovim installed through bob · tools · last fail nvim_missing (2m ago)"
+assert_contains "the plan: a failing step with an apply starts as apply, with its newest result" "$(plan_line machine_name)" \
+  "$(pl apply)machine_name          # this machine's everyday name is set: one word in ~/.local/share/dotfiles/machine-name ('dotfiles machine-name NAME' or an edit renames it) · repo · last fail name_missing (2m ago)"
 assert_contains "the plan: the newest result is each step's own, not last-check.json's" "$(plan_line claude)" "last ok present (1m ago)"
 assert_contains "the plan: a manual warn without an apply stays skip, check-only" "$(plan_line terminal_nerdfont)" "$(pl skip)terminal_nerdfont"
 assert_contains "the plan: check-only" "$(plan_line terminal_nerdfont)" " · check-only"
@@ -89,7 +89,7 @@ assert_no_file "unchanged: no plan left" "${PLAN}"
 
 # ── edited: the apply lines run as one setup, off a terminal without a confirm ──
 ed add_claude apply --edit
-assert_eq "edited: the chosen steps ran" "bob_neovim,claude" "$(last_setup_steps)"
+assert_eq "edited: the chosen steps ran" "machine_name,claude" "$(last_setup_steps)"
 assert_json "edited: a setup" "${ARI_DOTFILES_STATE_DIR}/last-setup.json" .mode setup
 assert_no_file "edited: the plan is gone" "${PLAN}"
 
@@ -98,7 +98,7 @@ clear_last_setup
 ed noop apply --edit claude
 assert_eq "named: exit 0" 0 "${RC}"
 assert_contains "named: apply" "$(plan_line claude)" "$(pl apply)claude"
-assert_contains "named: the failing ones are not prefilled" "$(plan_line bob_neovim)" "$(pl skip)bob_neovim"
+assert_contains "named: the failing ones are not prefilled" "$(plan_line machine_name)" "$(pl skip)machine_name"
 assert_eq "named, unchanged: runs" claude "$(last_setup_steps)"
 
 clear_last_setup
