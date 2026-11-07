@@ -11,7 +11,6 @@ world_empty_home
 seed_df_remote
 export ARI_DOTFILES_REMOTE="${FIX}/remotes/dotfiles.git"
 export BREW_SHIM_ALLOW_MUTATION=1
-export BOB_SHIM_LS="Installed: v0.11.2 Used"
 TEMPLATE="${ARI_DOTFILES_SHARED_DIR}/local-dotfiles-exclude"
 rules() { grep -vE '^[[:space:]]*(#|$)' "$1" || true; }
 

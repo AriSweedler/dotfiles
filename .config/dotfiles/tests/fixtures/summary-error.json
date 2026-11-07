@@ -7,7 +7,7 @@
   "status": "error",
   "counts": {"error": 2, "ok": 8, "warn": 2},
   "steps": [
-    {"step": "neovim", "status": "ok", "reason": "installed", "detail": "neovim installed via bob", "fix": null,
+    {"step": "neovim", "status": "ok", "reason": "installed", "detail": "nvim started", "fix": null,
      "manual": false, "actionable": false, "items": [], "rc": 0, "duration_ms": 41,
      "log": "/tmp/nmtest/home/.local/state/new-machine/runs/20260910T002640/neovim.log", "applied": false},
     {"step": "brew", "status": "ok", "reason": "present", "detail": "Homebrew 6.0.22 | brew='/tmp/nmtest/shims/brew'", "fix": null,

@@ -568,96 +568,24 @@ jobs_notify_finish() {
 # --- the launchd job ---
 
 #######################################
-# Write and compile the agent, the job's program, which launchd keeps alive. macOS posts the
-# screen-unlock event only as a distributed notification (NSDistributedNotificationCenter),
-# which launchd's LaunchEvents cannot subscribe to and notifyutil never sees, so a resident
-# observer is the only way to hear it. The agent also owns the timer and the load run, and
-# serializes every run. Compiled only when the source changed.
-# Globals: JOBS_AGENT_BIN
+# Compile the agent, the job's program, which launchd keeps alive, from its source in the shared
+# flake (nix-darwin builds the same file). macOS posts the screen-unlock event only as a
+# distributed notification (NSDistributedNotificationCenter), which launchd's LaunchEvents
+# cannot subscribe to and notifyutil never sees, so a resident observer is the only way to hear
+# it. The agent also owns the timer and the load run, and serializes every run. Compiled only
+# when the source changed.
+# Globals: JOBS_AGENT_BIN, JOBS_AGENT_SRC
 #######################################
 jobs_write_agent() {
-  local src="${JOBS_AGENT_BIN}.c" rendered
-  mkdir -p "${JOBS_AGENT_BIN:h}"
-  rendered="$(mktemp)"
-  cat >"${rendered}" <<'CSRC'
-// dotfiles-jobs-agent <harness> <interval-seconds> <unlock-notification>
-// Generated and compiled by `dotfiles jobs install` (see dotfiles/lib/jobs.zsh); launchd keeps
-// it alive as the dotfiles jobs job's program. It runs
-//     /bin/zsh <harness> jobs tick --trigger <tag>
-// once at start (load), on every <unlock-notification> from the distributed notification
-// center (screenIsUnlocked), every <interval-seconds> (tick), and on SIGUSR1 (screenIsUnlocked
-// again, so `dotfiles jobs unlock` can simulate an unlock). Runs are serialized: an event that
-// arrives during a run is delivered after it. A timer missed asleep fires once on wake.
-#include <CoreFoundation/CoreFoundation.h>
-#include <dispatch/dispatch.h>
-#include <errno.h>
-#include <signal.h>
-#include <spawn.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
-extern char **environ;
-static const char *g_harness;
-
-static void run(const char *tag) {
-    char *argv[] = {"/bin/zsh", (char *)g_harness, "jobs", "tick", "--trigger", (char *)tag, NULL};
-    pid_t pid;
-    int rc = posix_spawn(&pid, "/bin/zsh", NULL, NULL, argv, environ);
-    if (rc != 0) {
-        fprintf(stderr, "dotfiles-jobs-agent: spawn failed: %s\n", strerror(rc));
-        return;
-    }
-    int status = 0;
-    while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {
-    }
-}
-
-static void on_unlock(CFNotificationCenterRef c, void *o, CFNotificationName n, const void *obj, CFDictionaryRef ui) {
-    (void)c; (void)o; (void)n; (void)obj; (void)ui;
-    run("screenIsUnlocked");
-}
-
-static void on_timer(CFRunLoopTimerRef t, void *info) {
-    (void)t; (void)info;
-    run("tick");
-}
-
-int main(int argc, char **argv) {
-    if (argc != 4) {
-        fprintf(stderr, "usage: %s <harness> <interval-seconds> <unlock-notification>\n", argv[0]);
-        return 2;
-    }
-    g_harness = argv[1];
-    double interval = atof(argv[2]);
-    if (interval < 1) {
-        interval = 300;
-    }
-    CFStringRef name = CFStringCreateWithCString(NULL, argv[3], kCFStringEncodingUTF8);
-    CFNotificationCenterAddObserver(CFNotificationCenterGetDistributedCenter(), NULL, on_unlock, name, NULL,
-                                    CFNotificationSuspensionBehaviorDeliverImmediately);
-    CFRunLoopTimerRef timer = CFRunLoopTimerCreate(NULL, CFAbsoluteTimeGetCurrent() + interval, interval, 0, 0, on_timer, NULL);
-    CFRunLoopAddTimer(CFRunLoopGetCurrent(), timer, kCFRunLoopDefaultMode);
-    // SIGUSR1 simulates an unlock; the handler runs on the main queue, which the run loop drains.
-    signal(SIGUSR1, SIG_IGN);
-    dispatch_source_t usr1 = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGUSR1, 0, dispatch_get_main_queue());
-    dispatch_source_set_event_handler(usr1, ^{ run("screenIsUnlocked"); });
-    dispatch_resume(usr1);
-    run("load");
-    CFRunLoopRun();
-    return 0;
-}
-CSRC
-  if [[ -x "${JOBS_AGENT_BIN}" ]] && cmp -s "${rendered}" "${src}"; then
-    rm -f "${rendered}"; jobs_agent_changed=0; log::info "agent current | bin='${JOBS_AGENT_BIN}'"; return 0
+  local src="${JOBS_AGENT_BIN}.c"
+  if [[ -x "${JOBS_AGENT_BIN}" ]] && cmp -s "${JOBS_AGENT_SRC}" "${src}"; then
+    jobs_agent_changed=0; log::info "agent current | bin='${JOBS_AGENT_BIN}'"; return 0
   fi
   if ! command -v cc >/dev/null 2>&1; then
-    rm -f "${rendered}"
     log::err "no C compiler; the jobs agent needs the Command Line Tools | fix='xcode-select --install'"; return 1
   fi
-  mv "${rendered}" "${src}"
+  mkdir -p "${JOBS_AGENT_BIN:h}"
+  cp "${JOBS_AGENT_SRC}" "${src}"
   cc -O2 -Wall -Wextra -framework CoreFoundation -o "${JOBS_AGENT_BIN}" "${src}"
   jobs_agent_changed=1
   log::info "compiled agent | bin='${JOBS_AGENT_BIN}'"
@@ -694,6 +622,15 @@ jobs_write_plist() {
   jobs_plist_changed=1
 }
 
+# The plist runs an agent from the Nix store: nix-darwin's launchd.user.agents wrote it, so a
+# switch owns the job and an install here would only fight it.
+jobs_nix_managed() {
+  [[ -f "${JOBS_PLIST}" ]] || return 1
+  local program
+  program="$(plutil -extract ProgramArguments.0 raw -o - "${JOBS_PLIST}" 2>/dev/null)" || return 1
+  [[ "${program}" == "${ARI_DOTFILES_NIX_STORE}"/* ]]
+}
+
 #######################################
 # Idempotent, and an init step: the per-plugin jobs this framework replaced are booted out
 # and their plists removed; the agent is compiled and the plist written only on change; the
@@ -710,6 +647,9 @@ jobs_install() {
     rm -f "${plist}"
     log::info "removed legacy job | label='${label}' plist='${plist}'"
   done
+  if jobs_nix_managed; then
+    log::info "jobs launchd job managed by nix-darwin; a switch installs it | label='${JOBS_LABEL}' plist='${JOBS_PLIST}'"; return 0
+  fi
   if is_dry_run; then
     log::info "dry-run, would compile the agent, write the plist and bootstrap, each only if changed | label='${JOBS_LABEL}' plist='${JOBS_PLIST}'"; return 0
   fi

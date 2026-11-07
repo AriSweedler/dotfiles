@@ -77,7 +77,7 @@ assert_eq "no --edit: a positional is still a usage error" 64 "${RC}"
 
 # ── an unchanged plan runs as written ──
 ed noop init --edit
-assert_eq "unchanged: exit 1 (bob's apply does not converge under the shim)" 1 "${RC}"
+assert_eq "unchanged: exit 1 (claude's apply does not converge under the shim)" 1 "${RC}"
 plan="$(cat "${SEEN}")"
 assert_eq "the plan: line 1 names its kind and actions (the dotfilesplan filetype reads it)" "# dotfiles-plan: init · actions: apply | skip" "$(head -n 1 "${SEEN}")"
 assert_contains "the plan: the actionable step, apply, with its reason and what the apply does" "${plan}" \

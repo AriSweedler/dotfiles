@@ -13,7 +13,6 @@ green_world() {
   seed_fake_repos
   seed_ldf_remote
   seed_home_baseline
-  export BOB_SHIM_LS="Installed: v0.11.2 Used"
   export ARI_DOTFILES_INVOKED_BY=launchd
   export ARI_DOTFILES_RETRY_SECS=0
   REPORT="${ARI_DOTFILES_DESKTOP_DIR}/${REPORT_NAME}"

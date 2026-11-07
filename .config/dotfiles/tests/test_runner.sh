@@ -9,7 +9,6 @@ world_new
 world_use_fixture satisfied
 world_empty_home
 seed_df_remote
-export BOB_SHIM_LS="Installed: v0.11.2 Used"
 
 export ARI_DOTFILES_REMOTE="${FIX}/remotes/no-such-remote.git"
 export BREW_SHIM_ALLOW_MUTATION=1

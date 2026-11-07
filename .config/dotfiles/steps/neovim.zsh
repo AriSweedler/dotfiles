@@ -10,7 +10,7 @@ check::neovim() {
   local bin="${commands[nvim]:-}" conf="${XDG_CONFIG_HOME:-${HOME}/.config}/nvim"
   [[ "${bin:A}" == /nix/store/* ]] || { step::neovim::live; return 0; }
   local -a inputs=("${bin}" "${bin:A}" "${conf}" "${conf}"/**/*(N.))
-  CACHE_ENV=(XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME ARI_DOTFILES_NVIM_STORE)
+  CACHE_ENV=(XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME ARI_DOTFILES_NIX_STORE)
   cache::check step::neovim::live "${inputs[@]}"
 }
 
@@ -21,7 +21,7 @@ step::neovim::live() {
       -f "sudo darwin-rebuild switch (the local flake; /ari-dotfiles-nix)"
     return 0
   fi
-  if [[ "${bin:A}" != "${ARI_DOTFILES_NVIM_STORE}"/* ]]; then
+  if [[ "${bin:A}" != "${ARI_DOTFILES_NIX_STORE}"/* ]]; then
     verdict fail nvim_not_nix -m -d "nvim on PATH is not the flake's | path='${bin}' resolved='${bin:A}'" \
       -f "remove what puts '${bin:h}' ahead of the Nix profile on PATH"
     return 0

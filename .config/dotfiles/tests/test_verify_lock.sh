@@ -10,7 +10,6 @@ world_use_fixture satisfied
 seed_fake_repos
 seed_ldf_remote
 seed_home_baseline
-export BOB_SHIM_LS="Installed: v0.11.2 Used"
 export ARI_DOTFILES_INVOKED_BY=launchd
 STATE="${ARI_DOTFILES_STATE_DIR}"
 LOCK="${STATE}/lock.d"

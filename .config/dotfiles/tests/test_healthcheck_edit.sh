@@ -26,8 +26,8 @@ editor() {
   chmod +x "${EDITORS}/$1"
 }
 editor noop '{ print }'
-editor apply_bob '{ sub(/^skip +claude /, "apply  claude ") } { print }'
-editor skip_bob '/^skip/ { print "# dropped: " $0; next } { print }'
+editor apply_claude '{ sub(/^skip +claude /, "apply  claude ") } { print }'
+editor skip_all '/^skip/ { print "# dropped: " $0; next } { print }'
 editor manual 'END { print "apply terminal_nerdfont" } { print }'
 
 ed() {
@@ -112,7 +112,7 @@ assert_contains "terminal: another edit offered" "${OUT}" "Edit the plan again? 
 assert_file "bad plan: kept" "${PLAN}"
 
 # ── chosen, declined at the confirm: the plan stays ──
-tty apply_bob "" healthcheck --edit
+tty apply_claude "" healthcheck --edit
 assert_contains "the confirm names the apply" "${OUT}" "Run dotfiles apply claude? [y/N]"
 assert_contains "declined: says so" "${OUT}" "healthcheck: not confirmed; nothing applied"
 assert_contains "declined: the resume" "${OUT}" "next: dotfiles healthcheck --edit ${PLAN}"
@@ -120,7 +120,7 @@ assert_eq "declined: nothing applied" "" "$(last_setup_steps)"
 assert_file "declined: kept" "${PLAN}"
 
 # ── chosen and confirmed: a fresh apply of exactly those steps ──
-tty apply_bob y healthcheck --edit
+tty apply_claude y healthcheck --edit
 assert_contains "confirmed: hands over" "${OUT}" "running: dotfiles apply claude"
 assert_eq "confirmed: the apply ran claude" claude "$(last_setup_steps)"
 assert_contains "confirmed: claude's apply ran" "$(shim_log curl)" "claude.ai/install.sh"
@@ -129,7 +129,7 @@ assert_no_file "lock released" "${ARI_DOTFILES_STATE_DIR}/lock.d"
 
 # ── every step line dropped: nothing to run ──
 clear_last_setup
-tty skip_bob "" healthcheck --edit
+tty skip_all "" healthcheck --edit
 assert_contains "no step line: says so" "${OUT}" "healthcheck: the plan has no step line; nothing applied"
 assert_eq "no step line: nothing applied" "" "$(last_setup_steps)"
 

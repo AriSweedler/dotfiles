@@ -64,6 +64,41 @@
   # to the flakes, and `brew bundle check --file=/etc/dotfiles/Brewfile` checks by hand.
   environment.etc."dotfiles/Brewfile".text = config.homebrew.brewfile;
 
+  # The dotfiles jobs framework's one launchd job (screen unlock, login, every 5 minutes), under
+  # the label `dotfiles jobs` reads; a switch replaces a plist `dotfiles jobs install` wrote, and
+  # that command then defers here. The values mirror JOBS_* in dotfiles/lib/env.zsh.
+  launchd.user.agents.dotfiles-jobs.serviceConfig =
+    let
+      home = "/Users/${user}";
+      agent = pkgs.callPackage ./pkgs/dotfiles-jobs-agent { };
+    in
+    {
+      Label = "com.${user}.dotfiles-jobs";
+      ProgramArguments = [
+        "${agent}/bin/dotfiles-jobs-agent"
+        "${home}/.config/bin/dotfiles"
+        "300"
+        "com.apple.screenIsUnlocked"
+      ];
+      RunAtLoad = true;
+      KeepAlive = true;
+      EnvironmentVariables.PATH = lib.concatStringsSep ":" [
+        "${home}/.config/bin"
+        "/opt/homebrew/bin"
+        "/opt/homebrew/sbin"
+        "/etc/profiles/per-user/${user}/bin"
+        "/run/current-system/sw/bin"
+        "/nix/var/nix/profiles/default/bin"
+        "/usr/local/bin"
+        "/usr/bin"
+        "/bin"
+        "/usr/sbin"
+        "/sbin"
+      ];
+      StandardOutPath = "${home}/.local/state/dotfiles/jobs/launchd.out.log";
+      StandardErrorPath = "${home}/.local/state/dotfiles/jobs/launchd.err.log";
+    };
+
   # Nerd Font for the terminal; nix-darwin installs it under /Library/Fonts/Nix Fonts.
   fonts.packages = [ pkgs.nerd-fonts.caskaydia-mono ];
 

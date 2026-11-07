@@ -12,7 +12,6 @@ world_use_fixture satisfied
 seed_fake_repos
 seed_ldf_remote
 seed_home_baseline
-export BOB_SHIM_LS="Installed: v0.11.2 Used"
 ONLY="dotfiles_repo,local_dotfiles_repo,neovim,claude,karabiner"
 
 # Timestamps, run ids and durations are the only bytes allowed to differ between two renderings.

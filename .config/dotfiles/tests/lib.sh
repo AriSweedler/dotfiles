@@ -128,7 +128,7 @@ world_new() {
   # No nix-darwin in the world: the brew steps check the tier Brewfiles.
   export ARI_DOTFILES_NIX_BREWFILE="${FIX}/no-nix-brewfile"
   # The nvim shim is the world's "Nix" nvim.
-  export ARI_DOTFILES_NVIM_STORE="${FIX}/shims"
+  export ARI_DOTFILES_NIX_STORE="${FIX}/shims"
   mkdir -p "${FIX}/fonts" && : > "${FIX}/fonts/CaskaydiaMonoNerdFontMono-Regular.ttf"
   export ARI_DOTFILES_DF_GIT_DIR="${HOME}/dotfiles.git" ARI_DOTFILES_LDF_GIT_DIR="${HOME}/.local/local-dotfiles.git"
   export ARI_DOTFILES_DF_HOOKS="${HOME}/.config/git/dotfiles-hooks" ARI_DOTFILES_LDF_HOOKS="${HOME}/.config/git/local-dotfiles-hooks"
@@ -141,7 +141,7 @@ world_new() {
   export XCODE_SELECT_SHIM_STATE="${FIX}/xcode-select"
   export GIT_CONFIG_NOSYSTEM=1
   mkdir -p "${BREW_SHIM_LOG_DIR}" "${LAUNCHCTL_SHIM_STATE}"
-  unset ARI_DOTFILES_INVOKED_BY BREW_SHIM_ALLOW_MUTATION BREW_SHIM_FIXTURE BOB_SHIM_LS BOB_SHIM_RC
+  unset ARI_DOTFILES_INVOKED_BY BREW_SHIM_ALLOW_MUTATION BREW_SHIM_FIXTURE
   unset ARI_DOTFILES_BREW ARI_DOTFILES_NOTIFIER ARI_DOTFILES_CODE ARI_DOTFILES_CHECK_TIMEOUT_SECS
   # The local tier exports the ssh key's names into interactive shells; a world has no key unless a test says so.
   unset ARI_DOTFILES_SSH_KEY_OP_ITEM ARI_DOTFILES_SSH_KEY_OP_VAULT ARI_DOTFILES_SSH_KEY_PATH OP_SHIM_PASSPHRASE TEST_SSH_AUTH_SOCK
@@ -363,7 +363,7 @@ shim_log() { local f="${BREW_SHIM_LOG_DIR}/$1.log"; if [[ -f "${f}" ]]; then cat
 hermetic_env() {
   HERMETIC_ENV=("HOME=${HOME}" "PATH=${PATH}" "TZ=${TZ:-UTC}" "GIT_CONFIG_NOSYSTEM=1")
   local v
-  for v in "${!XDG_@}" "${!ARI_DOTFILES_@}" "${!BREW_SHIM_@}" "${!BOB_SHIM_@}" "${!NVIM_SHIM_@}" "${!LAUNCHCTL_SHIM_@}" "${!XCODE_SELECT_SHIM_@}" "${!OP_SHIM_@}"; do
+  for v in "${!XDG_@}" "${!ARI_DOTFILES_@}" "${!BREW_SHIM_@}" "${!NVIM_SHIM_@}" "${!LAUNCHCTL_SHIM_@}" "${!XCODE_SELECT_SHIM_@}" "${!OP_SHIM_@}"; do
     HERMETIC_ENV+=("${v}=${!v}")
   done
   # The ssh agent a test started for itself; the real one never reaches the code.

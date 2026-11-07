@@ -44,7 +44,7 @@ typeset -gx ARI_DOTFILES_LAUNCH_AGENTS_DIR="${ARI_DOTFILES_LAUNCH_AGENTS_DIR:-${
 typeset -gx ARI_DOTFILES_TERMINAL_PLIST="${ARI_DOTFILES_TERMINAL_PLIST:-${HOME}/Library/Preferences/com.apple.Terminal.plist}"
 typeset -gx ARI_DOTFILES_FONT_DIRS="${ARI_DOTFILES_FONT_DIRS:-${HOME}/Library/Fonts:/Library/Fonts}"   # colon-separated, searched recursively
 typeset -gx ARI_DOTFILES_NIX_BREWFILE="${ARI_DOTFILES_NIX_BREWFILE:-/etc/dotfiles/Brewfile}"   # nix-darwin's generated Brewfile; present = the flakes declare Homebrew
-typeset -gx ARI_DOTFILES_NVIM_STORE="${ARI_DOTFILES_NVIM_STORE:-/nix/store}"   # where the flake's nvim resolves; the neovim step fails one outside it
+typeset -gx ARI_DOTFILES_NIX_STORE="${ARI_DOTFILES_NIX_STORE:-/nix/store}"   # what a flake installs resolves here: the neovim step fails an nvim outside it, `jobs install` defers to a plist whose agent is in it
 typeset -gx ARI_DOTFILES_XCODE_APP="${ARI_DOTFILES_XCODE_APP:-/Applications/Xcode.app}"
 typeset -gx ARI_DOTFILES_CHROME_DIR="${ARI_DOTFILES_CHROME_DIR:-${HOME}/Library/Application Support/Google/Chrome}"   # Chrome's user data dir: Local State and one dir per profile
 typeset -gx ARI_DOTFILES_DF_GIT_DIR="${ARI_DOTFILES_DF_GIT_DIR:-${HOME}/dotfiles.git}"
@@ -197,6 +197,7 @@ typeset -g JOBS_ROOT_DF="${HOME}/.config/dotfiles/jobs"                         
 typeset -g JOBS_ROOT_LDF="${XDG_DATA_HOME}/dotfiles/jobs"                             # the local tier's
 typeset -g JOBS_STATE_DIR="${STATE_DIR}/jobs"                                         # logs, success stamps, the agent
 typeset -g JOBS_AGENT_BIN="${JOBS_STATE_DIR}/bin/dotfiles-jobs-agent"   # the job's program; launchd keeps it alive
+typeset -g JOBS_AGENT_SRC="${ARI_DOTFILES_ROOT}/nix/pkgs/dotfiles-jobs-agent/agent.c"   # its source; nix-darwin builds the same file
 typeset -g JOBS_UNLOCK_NOTIFICATION="com.apple.screenIsUnlocked"          # a distributed notification, hence the agent
 typeset -g JOBS_INTERVAL_SECONDS=300          # the tick; cron schedules are checked on it, so it is their resolution
 typeset -g JOBS_TIMEOUT_SECONDS=900           # a plugin's run is killed after this unless its '# timeout:' line says otherwise

@@ -9,7 +9,6 @@ world_use_fixture satisfied
 seed_fake_repos
 seed_ldf_remote
 seed_home_baseline
-export BOB_SHIM_LS="Installed: v0.11.2 Used"
 
 nm check --json
 assert_eq "check exits 0" 0 "${RC}"

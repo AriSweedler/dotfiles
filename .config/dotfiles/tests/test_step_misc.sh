@@ -15,7 +15,7 @@ reason_of() { step_get "$1" .reason; }
 
 # ── neovim ────────────────────────────────────────────────────────────────
 # The shim stands in for the flake's build: the world's "store" is its shim dir.
-export ARI_DOTFILES_NVIM_STORE="${FIX}/shims"
+export ARI_DOTFILES_NIX_STORE="${FIX}/shims"
 check_step neovim
 assert_eq "nix nvim, clean headless start → ok" ok "$(status_of neovim)"
 assert_contains "detail names the version" "$(step_get neovim .detail)" "v0.13.0-dev"
@@ -32,7 +32,7 @@ export NVIM_SHIM_RC=1
 check_step neovim
 assert_eq "start exits non-zero → fail" fail "$(status_of neovim)"
 unset NVIM_SHIM_RC
-export ARI_DOTFILES_NVIM_STORE="/nix/store"
+export ARI_DOTFILES_NIX_STORE="/nix/store"
 check_step neovim
 assert_eq "nvim outside the store → fail" fail "$(status_of neovim)"
 assert_eq "reason nvim_not_nix" nvim_not_nix "$(reason_of neovim)"
@@ -41,7 +41,7 @@ check_step neovim
 assert_eq "no nvim → fail" fail "$(status_of neovim)"
 assert_eq "reason nvim_missing" nvim_missing "$(reason_of neovim)"
 shim_add nvim
-export ARI_DOTFILES_NVIM_STORE="${FIX}/shims"
+export ARI_DOTFILES_NIX_STORE="${FIX}/shims"
 
 # ── claude ────────────────────────────────────────────────────────────────────
 check_step claude
@@ -258,6 +258,19 @@ check_step dotfiles_jobs
 assert_eq "plist present but unloaded → fail" fail "$(status_of dotfiles_jobs)"
 assert_eq "reason not_loaded" not_loaded "$(reason_of dotfiles_jobs)"
 assert_no_mutation "misc checks and dry-runs are read-only"
+
+# A plist whose agent is in the Nix store is nix-darwin's: the apply leaves it and the job alone.
+jq -n --arg label "${JOBS_LABEL}" --arg agent "${ARI_DOTFILES_NIX_STORE}/abc-dotfiles-jobs-agent-1/bin/dotfiles-jobs-agent" \
+  '{Label: $label, ProgramArguments: [$agent, "dotfiles", "300", "com.apple.screenIsUnlocked"], KeepAlive: true}' \
+  | plutil -convert xml1 - -o "${JOBS_PLIST}"
+cp "${JOBS_PLIST}" "${FIX}/nix-plist"
+: > "${BREW_SHIM_LOG_DIR}/launchctl.log"
+bump_now_secs 60
+nm init --only dotfiles_jobs
+assert_contains "nix-managed: the apply defers" "$(cat "$(newest_run_dir)/dotfiles_jobs.log")" "managed by nix-darwin"
+assert_eq "nix-managed: the plist is untouched" "" "$(cmp "${JOBS_PLIST}" "${FIX}/nix-plist" 2>&1)"
+assert_eq "nix-managed: no bootstrap" "" "$(grep bootstrap "${BREW_SHIM_LOG_DIR}/launchctl.log")"
+assert_no_file "nix-managed: nothing compiled" "${XDG_STATE_HOME}/dotfiles/jobs/bin/dotfiles-jobs-agent"
 
 if (( FAIL > 0 )); then jq -c '.steps[] | {step, status, reason, detail}' "${FIX}/out.json" >&2; fi
 report
