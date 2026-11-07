@@ -21,11 +21,11 @@ function zvm_after_init() {
   # TODO: Can we configure changing the cursor when we enter 'menu select' mode?
 }
 
-# The shared flake installs it (home.packages); Homebrew's copy is the fallback on a machine
-# not on Nix yet.
+# The shared flake places it (home.nix); Homebrew's copy is the fallback on a machine not on
+# Nix yet.
 () {
   local f
-  for f in "/etc/profiles/per-user/${USER}/share/zsh-vi-mode" /opt/homebrew/opt/zsh-vi-mode/share/zsh-vi-mode; do
+  for f in "${XDG_DATA_HOME:-${HOME}/.local/share}/zsh-vi-mode" /opt/homebrew/opt/zsh-vi-mode/share/zsh-vi-mode; do
     [[ -r "${f}/zsh-vi-mode.plugin.zsh" ]] && { source "${f}/zsh-vi-mode.plugin.zsh"; return; }
   done
 }

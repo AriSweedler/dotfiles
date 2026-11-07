@@ -51,7 +51,6 @@ in
     # Shells. /bin/bash is 3.2; the local-dotfiles pre-commit hook needs bash 5 (mapfile).
     bashInteractive
     zsh
-    zsh-vi-mode # zsh/plugins/zsh-vi-mode.zsh sources it from the profile's share/
 
     # Editor
     neovim-pinned
@@ -65,6 +64,10 @@ in
     nix-tree
     nvd
   ];
+
+  # zsh/plugins/zsh-vi-mode.zsh sources the plugin from here: the profile links only some of
+  # share/, never share/zsh-vi-mode.
+  home.file.".local/share/zsh-vi-mode".source = "${pkgs.zsh-vi-mode}/share/zsh-vi-mode";
 
   # Marker that a home-manager generation is live; the dotfiles healthcheck can read it.
   home.file.".local/state/dotfiles/nix-managed".text = "placed by home-manager from ~/.config/dotfiles/nix\n";
