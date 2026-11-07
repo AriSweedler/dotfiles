@@ -30,6 +30,7 @@ in
     coreutils-prefixed # g-prefixed, as brew installs it, so BSD ls and friends stay first
     curl
     git
+    poppler-utils # pdftotext: the astound function parses invoices with it
     watch
     wget
 

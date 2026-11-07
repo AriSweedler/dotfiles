@@ -26,7 +26,7 @@ function astound::_file() {
   echo "$invoice"
 }
 
-# Comma separated tuple: service_start,service_end,amount,autopay_credit
+# Comma separated tuple: service_start,service_end,amount,autopay_credit (dates MM/DD/YY)
 # To be consumed with `IFS=',' read ...`
 #
 # IFS=',' read date_start_mdy date_end_mdy amount autopay_credit <<< "$(astound::_extract_from_pdf "$invoice")"
@@ -43,40 +43,39 @@ function astound::_extract_from_pdf() {
     return 1
   fi
 
-  if ! which pdftotext &>/dev/null; then
-    log::err "Dependency not installed | dependency='pdftotext'"
-    log::WARN "Install with
-
-    brew install poppler
-"
+  if ! (( ${+commands[pdftotext]} )); then
+    log::err "pdftotext not on PATH; it comes from poppler-utils in the shared flake | fix='dotfiles switch'"
     return 1
   fi
 
-  local invoice_txt="${invoice%.pdf}.txt"
-  if ! pdftotext -layout "$invoice"; then
-    log::err "failed to convert pdf to txt | invoice='$invoice'"
+  local layout
+  if ! layout="$(pdftotext -layout "$invoice" -)"; then
+    log::err "failed to convert pdf to text | invoice='$invoice'"
     return 1
   fi
-  if ! [ -f "$invoice_txt" ]; then
-    log::err "Could not find invoice txt file | invoice_txt='$invoice_txt'"
-    return 1
-  fi
+  astound::_parse_layout <<< "$layout"
+}
 
+# The tuple from pdftotext -layout text on stdin. The year is the statement date's; a service
+# period that runs past December ends in the next year.
+function astound::_parse_layout() {
   awk '
+/Statement Date:/ && !year { if (match($0, /[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9][0-9][0-9]/)) year=substr($0, RSTART+8, 2) }
 $2 == "Internet" && $3 == "Service" { dates=$1; amount=$NF }
 /Autopay Credit/ { autopay_credit=$(NF-1) }
 END {
-  year=26
+  if (!year || !dates) exit 1
   split(dates, ds, "-")
-  date_start=ds[1] "/" year
-  date_end=ds[2] "/" year
+  end_year = year
+  if (substr(ds[2], 1, 2) + 0 < substr(ds[1], 1, 2) + 0) end_year = sprintf("%02d", year + 1)
   amount = amount + autopay_credit
-  print date_start "," date_end "," amount "," autopay_credit
+  print ds[1] "/" year "," ds[2] "/" end_year "," amount "," autopay_credit
 }
-' "$invoice_txt"
+'
+}
 
-  rm "$invoice_txt"
-}
+# The helpers alone, for astound.test.zsh.
+[[ "${ASTOUND_DEFINE_ONLY:-0}" == 1 ]] && return 0
 
 # Manage filesystem stuff
 local invoice

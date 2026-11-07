@@ -27,6 +27,8 @@
 !/share/kuber/
 # The AWS profiles this machine uses, one file each, with notes.
 !/share/aws_profile/
+# Golden tuples for the astound test suite, read from this machine's real invoices.
+!/share/astound/
 # tmux: only the local plugins below; TPM's installs beside them are not ours.
 !/share/tmux/
 /share/tmux/*
