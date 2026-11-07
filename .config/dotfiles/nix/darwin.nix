@@ -54,7 +54,6 @@
       "tmux" # the running server and several scripts use /opt/homebrew/bin/tmux
       "tree-sitter" # nixpkgs lags (0.26 vs 0.27)
       "tree-sitter-cli"
-      "zsh-vi-mode" # zsh/plugins/zsh-vi-mode.zsh sources it from $(brew --prefix)
     ];
     casks = [
       "google-chrome" # web browser

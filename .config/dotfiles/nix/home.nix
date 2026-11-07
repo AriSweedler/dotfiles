@@ -51,6 +51,7 @@ in
     # Shells. /bin/bash is 3.2; the local-dotfiles pre-commit hook needs bash 5 (mapfile).
     bashInteractive
     zsh
+    zsh-vi-mode # zsh/plugins/zsh-vi-mode.zsh sources it from the profile's share/
 
     # Editor
     neovim-pinned
