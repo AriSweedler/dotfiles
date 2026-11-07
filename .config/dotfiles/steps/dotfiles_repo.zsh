@@ -1,5 +1,6 @@
-# step dotfiles_repo — the shared tier: bare repo at ~/dotfiles.git (renamed from the pre-harness
-# ~/dotfiles), tracking origin, HOME checked out, hooks wired, submodules initialized,
+# step dotfiles_repo — the shared tier: the plain clone ~/dotfiles (home-manager links its files
+# into HOME), or the bare repo ~/dotfiles.git with HOME checked out (renamed from the pre-harness
+# bare ~/dotfiles); either tracking origin, hooks wired, submodules initialized,
 # origin/main known, every checked-out submodule documented (README.md and its linked skill),
 # nothing dirty. Every fix but the docs (a human writes them) is idempotent: `dotfiles init`
 # runs this after every pull.

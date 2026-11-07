@@ -1,7 +1,8 @@
 # dotfiles/lib/tiers.zsh — git for the two tiers and the submodules: which repo, its hooks, its
 # checkout, its identity, and the one commit routine the brew model uses.
 #
-#   shared  ~/dotfiles.git              work tree $HOME         committed here, pushed by `dotfiles push`
+#   shared  ~/dotfiles/.git             work tree ~/dotfiles    committed here, pushed by `dotfiles push`
+#           (before the Nix port: ~/dotfiles.git, work tree $HOME; ARI_DOTFILES_DF_* pick either)
 #   local   ~/.local/local-dotfiles.git work tree $HOME/.local  committed and pushed
 #
 # Explicit --git-dir/--work-tree throughout: the `git df`/`git ldf` aliases sit behind a config
