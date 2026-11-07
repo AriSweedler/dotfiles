@@ -30,7 +30,13 @@
           {
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-            home-manager.users.${user}.imports = [ self.homeModules.default ] ++ homeModules;
+            # The repo root for bridge.nix: the whole repo under a git+file input, only this
+            # directory under a path: one.
+            home-manager.extraSpecialArgs.src = self.sourceInfo.outPath;
+            # A file in HOME where a link goes is moved aside, never overwritten: the first
+            # switch after the clone, or a tool that replaced a link with a file of its own.
+            home-manager.backupFileExtension = "before-nix";
+            home-manager.users.${user}.imports = [ self.homeModules.default ./bridge.nix ] ++ homeModules;
           }
         ] ++ modules;
       };

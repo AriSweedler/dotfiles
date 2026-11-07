@@ -1,0 +1,20 @@
+#!/bin/zsh
+# `git dotfiles` / `git df`: git for the shared tier. The plain clone at ~/dotfiles when it exists
+# (home-manager links its files into HOME), else the bare repo ~/dotfiles.git with HOME as its
+# work tree. A path argument under HOME that resolves into the clone (a linked file) becomes its
+# clone path, so `git df add ~/.config/zsh/plugins/x.zsh` names the file git tracks.
+emulate -L zsh
+cd -q -- "${GIT_PREFIX:-.}"   # git runs a ! alias from the repo top; arguments are relative to the caller's dir
+if [[ -d "${HOME}/dotfiles/.git" ]]; then
+  local tree="${HOME}/dotfiles" arg
+  local -a args=()
+  for arg in "$@"; do
+    if [[ "${arg}" == "${HOME}"/* && "${arg}" != "${tree}"/* && -e "${arg}" && "${arg:A}" == "${tree}"/* ]]; then
+      args+=("${arg:A}")
+    else
+      args+=("${arg}")
+    fi
+  done
+  exec git --git-dir="${tree}/.git" --work-tree="${tree}" "${args[@]}"
+fi
+exec git --git-dir="${HOME}/dotfiles.git/" --work-tree="${HOME}" "$@"

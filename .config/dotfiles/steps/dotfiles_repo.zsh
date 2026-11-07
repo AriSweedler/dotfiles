@@ -34,7 +34,7 @@ dotfiles_repo::is_bare_repo() { [[ -f "${1}/HEAD" && ! -d "${1}/.git" ]]; }
 dotfiles_repo::is_origin_main_known() { git --git-dir="${1}" rev-parse -q --verify refs/remotes/origin/main >/dev/null 2>&1; }
 # Submodule paths from ~/.gitmodules, read now: env.zsh's SUBMODULES predates a checkout this apply makes.
 dotfiles_repo::submodules() {
-  git config -f "${HOME}/.gitmodules" --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}' || true
+  git config -f "${GITMODULES}" --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}' || true
 }
 
 # A checked-out submodule is documented when it has README.md and its skill,
@@ -44,7 +44,7 @@ dotfiles_repo::submodules() {
 dotfiles_repo::undocumented() {
   local sub name dir skill link recipe='/ari-dotfile--submodule § Creating one'
   for sub in "${SUBMODULES[@]}"; do
-    dir="${HOME}/${sub}" name="${sub:t}"
+    dir="${ARI_DOTFILES_DF_WORK_TREE}/${sub}" name="${sub:t}"
     [[ -e "${dir}/.git" ]] || continue
     skill="${dir}/skills/ari-dotfile--submodule-${name}/SKILL.md"
     link="${HOME}/.claude/skills/ari-dotfile--submodule-${name}"
@@ -60,7 +60,7 @@ dotfiles_repo::undocumented() {
 }
 
 check::dotfiles_repo() {
-  local git_dir="${ARI_DOTFILES_DF_GIT_DIR}" legacy="${LEGACY_SHARED_GIT_DIR}"
+  local git_dir="${ARI_DOTFILES_DF_GIT_DIR}" work_tree="${ARI_DOTFILES_DF_WORK_TREE}" legacy="${LEGACY_SHARED_GIT_DIR}"
   if [[ -d "${legacy}" ]] && dotfiles_repo::is_bare_repo "${legacy}"; then
     if [[ -e "${git_dir}" ]]; then
       verdict fail legacy_conflict -m -d "a bare repo at the pre-harness path and at the current one; keep one | legacy='${legacy}' current='${git_dir}'" -f "compare ${legacy} and ${git_dir}; remove one"
@@ -82,17 +82,17 @@ check::dotfiles_repo() {
   # status may refresh the index under an optional lock, so submodule status runs with optional
   # locks off and the two never contend for index.lock.
   local -i sub_fd=-1 dirty_fd
-  if [[ -f "${HOME}/.gitmodules" ]]; then
-    exec {sub_fd}< <(GIT_OPTIONAL_LOCKS=0 git -C "${HOME}" --git-dir="${git_dir}" --work-tree="${HOME}" submodule status 2>/dev/null || true)
+  if [[ -f "${GITMODULES}" ]]; then
+    exec {sub_fd}< <(GIT_OPTIONAL_LOCKS=0 git -C "${work_tree}" --git-dir="${git_dir}" --work-tree="${work_tree}" submodule status 2>/dev/null || true)
   fi
-  exec {dirty_fd}< <(git --git-dir="${git_dir}" --work-tree="${HOME}" status --porcelain --untracked-files=no 2>/dev/null || true)
+  exec {dirty_fd}< <(git --git-dir="${git_dir}" --work-tree="${work_tree}" status --porcelain --untracked-files=no 2>/dev/null || true)
   local -a missing=("${(@f)$(dotfiles_repo::tracking_missing "${git_dir}")}")
   missing=("${(@)missing:#}")
   if (( ${#missing} )); then
     verdict fail tracking -d "tracking config missing | keys='${(j:, :)${(@)missing%%=*}}'" -f "${CLI_NAME} apply dotfiles_repo"
     return 0
   fi
-  if tier::is_worktree_unpopulated "${git_dir}" "${HOME}" \
+  if tier::is_worktree_unpopulated "${git_dir}" "${work_tree}" \
      && [[ -n "$(git --git-dir="${git_dir}" ls-tree -r --name-only HEAD 2>/dev/null | head -n 1)" ]]; then
     verdict fail not_checked_out -d "bare repo exists but HOME was never checked out | git_dir='${git_dir}'" -f "${CLI_NAME} apply dotfiles_repo"
     return 0
@@ -148,7 +148,7 @@ check::dotfiles_repo() {
 # checkout, hooks, submodules, the first fetch. The checkout fails, listing the conflicting files
 # in the log, when HOME already holds files it would overwrite; nothing is moved on the user's behalf.
 apply::dotfiles_repo() {
-  local git_dir="${ARI_DOTFILES_DF_GIT_DIR}" legacy="${LEGACY_SHARED_GIT_DIR}" kv
+  local git_dir="${ARI_DOTFILES_DF_GIT_DIR}" work_tree="${ARI_DOTFILES_DF_WORK_TREE}" legacy="${LEGACY_SHARED_GIT_DIR}" kv
   if [[ -d "${legacy}" ]] && dotfiles_repo::is_bare_repo "${legacy}"; then
     if [[ -e "${git_dir}" ]]; then
       log::err "legacy and current bare repo both exist; keep one | legacy='${legacy}' current='${git_dir}'"
@@ -169,9 +169,9 @@ apply::dotfiles_repo() {
     local -a keys=("${(@f)$(dotfiles_repo::tracking "${git_dir}")}")
     log::info "dry-run, would set tracking config | keys='${(j:, :)${(@)keys%%=*}}'"
   fi
-  if tier::is_worktree_unpopulated "${git_dir}" "${HOME}"; then
-    if ! run_mut git --git-dir="${git_dir}" --work-tree="${HOME}" checkout; then
-      log::err "checkout failed; move the listed files aside and re-run | work_tree='${HOME}'"
+  if tier::is_worktree_unpopulated "${git_dir}" "${work_tree}"; then
+    if ! run_mut git --git-dir="${git_dir}" --work-tree="${work_tree}" checkout; then
+      log::err "checkout failed; move the listed files aside and re-run | work_tree='${work_tree}'"
       return 1
     fi
   fi
@@ -182,10 +182,10 @@ apply::dotfiles_repo() {
   local -a submodules=("${(@f)$(dotfiles_repo::submodules)}") uninit=()
   local sub
   for sub in "${(@)submodules:#}"; do
-    [[ -e "${HOME}/${sub}/.git" ]] || uninit+=("${sub}")
+    [[ -e "${work_tree}/${sub}/.git" ]] || uninit+=("${sub}")
   done
   if (( ${#uninit} )); then
-    run_mut git -C "${HOME}" --git-dir="${git_dir}" --work-tree="${HOME}" submodule update --init -- "${uninit[@]}" || return 1
+    run_mut git -C "${work_tree}" --git-dir="${git_dir}" --work-tree="${work_tree}" submodule update --init -- "${uninit[@]}" || return 1
   fi
   if dotfiles_repo::has_origin "${git_dir}" && ! dotfiles_repo::is_origin_main_known "${git_dir}"; then
     if ! run_mut git --git-dir="${git_dir}" fetch -q origin; then

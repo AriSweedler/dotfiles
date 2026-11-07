@@ -16,11 +16,11 @@
 #######################################
 repo_git() {
   local repo="${1}"; shift
-  if [[ -z "${TIER_GIT_DIR[${repo}]:-}" ]]; then git -C "${HOME}/${repo}" "${@}"; return; fi
+  if [[ -z "${TIER_GIT_DIR[${repo}]:-}" ]]; then git -C "${ARI_DOTFILES_DF_WORK_TREE}/${repo}" "${@}"; return; fi
   git -C "${TIER_WORK_TREE[${repo}]}" --git-dir="${TIER_GIT_DIR[${repo}]}" --work-tree="${TIER_WORK_TREE[${repo}]}" "${@}"
 }
 # True (0) when the repo exists here: the tier's bare repo, or the submodule's checkout (its .git is a file).
-is_repo_present() { [[ -e "${TIER_GIT_DIR[${1}]:-${HOME}/${1}/.git}" ]]; }
+is_repo_present() { [[ -e "${TIER_GIT_DIR[${1}]:-${ARI_DOTFILES_DF_WORK_TREE}/${1}/.git}" ]]; }
 # A repo's push log: shared.log, local.log, or the path minus its leading dot, slashes as dashes.
 log_file() { print -r -- "${LOG_DIR}/${${1#.}//\//-}.log"; }
 

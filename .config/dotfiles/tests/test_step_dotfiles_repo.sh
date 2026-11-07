@@ -145,6 +145,26 @@ assert_eq "reason legacy_conflict" legacy_conflict "$(step_get dotfiles_repo .re
 assert_eq "legacy_conflict is manual" true "$(step_get dotfiles_repo .manual)"
 rm -rf "${HOME}/dotfiles"
 
+# The Nix port's layout: a plain clone at ~/dotfiles, its own work tree (home-manager links its
+# files into HOME). Not the pre-harness bare repo at that path; repaired and checked like the bare one.
+world_empty_home
+git clone -q "${ARI_DOTFILES_REMOTE}" "${HOME}/dotfiles"
+bare_git_dir="${ARI_DOTFILES_DF_GIT_DIR}"
+export ARI_DOTFILES_DF_GIT_DIR="${HOME}/dotfiles/.git"
+apply_repo
+assert_eq "clone apply exits 0" 0 "${RC}"
+assert_no_file "clone: no bare repo made" "${bare_git_dir}"
+assert_no_file "clone: nothing checked out into HOME" "${HOME}/.zshenv"
+assert_eq "clone: hooksPath set" "${ARI_DOTFILES_DF_HOOKS}" "$(git -C "${HOME}/dotfiles" config --local --get core.hooksPath)"
+check_repo
+assert_eq "clone → ok" ok "$(step_get dotfiles_repo .status)"
+printf '\n# local edit\n' >> "${HOME}/dotfiles/.zshenv"
+check_repo
+assert_eq "clone: an edit in the clone → warn uncommitted" uncommitted "$(step_get dotfiles_repo .reason)"
+git -C "${HOME}/dotfiles" checkout -q -- .zshenv
+export ARI_DOTFILES_DF_GIT_DIR="${bare_git_dir}"
+rm -rf "${HOME}/dotfiles"
+
 world_empty_home
 bump_now_secs 60
 nm init --only dotfiles_repo --dry-run

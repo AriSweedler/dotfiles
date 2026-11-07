@@ -47,7 +47,15 @@ typeset -gx ARI_DOTFILES_NIX_BREWFILE="${ARI_DOTFILES_NIX_BREWFILE:-/etc/dotfile
 typeset -gx ARI_DOTFILES_NIX_STORE="${ARI_DOTFILES_NIX_STORE:-/nix/store}"   # what a flake installs resolves here: the neovim step fails an nvim outside it, `jobs install` defers to a plist whose agent is in it
 typeset -gx ARI_DOTFILES_XCODE_APP="${ARI_DOTFILES_XCODE_APP:-/Applications/Xcode.app}"
 typeset -gx ARI_DOTFILES_CHROME_DIR="${ARI_DOTFILES_CHROME_DIR:-${HOME}/Library/Application Support/Google/Chrome}"   # Chrome's user data dir: Local State and one dir per profile
-typeset -gx ARI_DOTFILES_DF_GIT_DIR="${ARI_DOTFILES_DF_GIT_DIR:-${HOME}/dotfiles.git}"
+# The shared tier is a plain clone at ~/dotfiles, its files linked into HOME by home-manager (the
+# Nix port), or else the bare repo ~/dotfiles.git with HOME as its work tree. A git dir named .git
+# is a clone's: its work tree is its parent.
+[[ -d "${HOME}/dotfiles/.git" ]] && typeset -g _df_git_dir="${HOME}/dotfiles/.git" || typeset -g _df_git_dir="${HOME}/dotfiles.git"
+typeset -gx ARI_DOTFILES_DF_GIT_DIR="${ARI_DOTFILES_DF_GIT_DIR:-${_df_git_dir}}"
+unset _df_git_dir
+[[ "${ARI_DOTFILES_DF_GIT_DIR:t}" == .git ]] && typeset -g _df_work_tree="${ARI_DOTFILES_DF_GIT_DIR:h}" || typeset -g _df_work_tree="${HOME}"
+typeset -gx ARI_DOTFILES_DF_WORK_TREE="${ARI_DOTFILES_DF_WORK_TREE:-${_df_work_tree}}"
+unset _df_work_tree
 typeset -gx ARI_DOTFILES_LDF_GIT_DIR="${ARI_DOTFILES_LDF_GIT_DIR:-${HOME}/.local/local-dotfiles.git}"
 typeset -gx ARI_DOTFILES_DF_HOOKS="${ARI_DOTFILES_DF_HOOKS:-${HOME}/.config/git/dotfiles-hooks}"
 typeset -gx ARI_DOTFILES_LDF_HOOKS="${ARI_DOTFILES_LDF_HOOKS:-${HOME}/.config/git/local-dotfiles-hooks}"
@@ -154,12 +162,12 @@ typeset -gx ARI_DOTFILES_BREW_LIB="${ARI_DOTFILES_CMD}/brew/brew.zsh"
 
 # --- The two tiers, by repo name; a submodule needs no row: its git is its checkout, ~/<path> ---
 typeset -gA TIER_GIT_DIR=(shared "${ARI_DOTFILES_DF_GIT_DIR}" local "${ARI_DOTFILES_LDF_GIT_DIR}")
-typeset -gA TIER_WORK_TREE=(shared "${HOME}" local "${HOME}/.local")
+typeset -gA TIER_WORK_TREE=(shared "${ARI_DOTFILES_DF_WORK_TREE}" local "${HOME}/.local")
 typeset -gA TIER_HOOKS=(shared "${ARI_DOTFILES_DF_HOOKS}" local "${ARI_DOTFILES_LDF_HOOKS}")
 typeset -gA TIER_ALIAS=(shared df local ldf)   # the git alias a human types
 # The pre-harness layout kept the shared bare repo at ~/dotfiles; the dotfiles_repo step renames it.
 typeset -g LEGACY_SHARED_GIT_DIR="${HOME}/dotfiles"
-typeset -g GITMODULES="${HOME}/.gitmodules"
+typeset -g GITMODULES="${ARI_DOTFILES_DF_WORK_TREE}/.gitmodules"
 typeset -g STATE_DIR="${XDG_STATE_HOME}/dotfiles"
 typeset -g LOG_DIR="${STATE_DIR}/push"
 typeset -g KEEP_BACKUPS=5
