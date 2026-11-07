@@ -73,7 +73,7 @@ function tmux::_slice_history() {
   local prompt_re="${3:-❮|❯}"
   local extra_lines=$(($(tmux::_prompt_line_count) - 1))
 
-  # After tac, structure is: output, prompt, [extra lines], blank, (repeat)
+  # After the reversal (tail -r), structure is: output, prompt, [extra lines], blank, (repeat)
   # Print all commands whose prompt_count falls within [from, to] inclusive
   local output
   output=$(cat | awk -v re="$prompt_re" -v from="$from" -v to="$to" -v skip_count="$extra_lines" '
@@ -156,9 +156,9 @@ function tmux::cap() {
   local slice_to=$((to + 1))
 
   tmux capture-pane -p -J -S - \
-    | tac \
+    | tail -r \
     | tmux::_slice_history "$slice_from" "$slice_to" "$prompt_re" \
-    | tac \
+    | tail -r \
     | pbcopy
 
   local label

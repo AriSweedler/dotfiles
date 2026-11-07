@@ -114,7 +114,7 @@ function histrm::recent::lines() {
   # The command to invoke this adds a line to the history file - so if we ask to
   # delete N entries, we need to remove N+1 lines (assuming none are multiline!)
   log::info "Removing the last N lines from history | N='$lines'"
-  tac "${HISTFILE}" | sed "1,${lines}d" | tac > "${HISTFILE}.tmp"
+  tail -r "${HISTFILE}" | sed "1,${lines}d" | tail -r > "${HISTFILE}.tmp"
   histrm::_commit "${lines}"
 }
 

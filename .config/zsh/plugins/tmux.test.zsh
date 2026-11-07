@@ -60,12 +60,12 @@ function _t_rc() {
   _t "$name" "$expected_rc" "$?"
 }
 
-# Helper: build mock scrollback (already tac'd — most recent at top)
+# Helper: build mock scrollback (already reversed — most recent at top)
 # Each command block in the reversed stream is: output line(s), prompt line, [extra prompt lines]
 function _mock() { print -r -- "$1" | tmux::_slice_history "$2" "$3" "$4" }
 
 # ---------------------------------------------------------------------------
-# Mock data: 4 commands, 1-line prompt, already reversed (as if after tac)
+# Mock data: 4 commands, 1-line prompt, already reversed (as if after tail -r)
 #
 # In the reversed stream, output appears BEFORE its prompt line:
 #   "four"           ← output of cmd4
@@ -306,7 +306,7 @@ unset -f _orig_slice_history tmux 2>/dev/null
 eval "$_orig_cap_body"
 
 # ---------------------------------------------------------------------------
-# End-to-end: simulate the full tac → slice → tac pipeline
+# End-to-end: simulate the full reverse → slice → reverse pipeline
 # This verifies the final output has prompt BEFORE output (natural order)
 # ---------------------------------------------------------------------------
 function tmux::_prompt_line_count() { echo 1 }
@@ -321,10 +321,10 @@ three
 ❯ echo four
 four"
 
-# Helper: run the full tac→slice→tac pipeline on raw scrollback
+# Helper: run the full reverse→slice→reverse pipeline on raw scrollback
 function _e2e() {
   local scrollback="$1" from="$2" to="$3" re="${4:-❯}"
-  print -r -- "$scrollback" | tac | tmux::_slice_history "$from" "$to" "$re" | tac
+  print -r -- "$scrollback" | tail -r | tmux::_slice_history "$from" "$to" "$re" | tail -r
 }
 
 # Most recent command (index 1 in the reversed stream)
@@ -337,7 +337,7 @@ _t "e2e: 2nd most recent" \
   "$(printf '❯ echo three\nthree')" \
   "$(_e2e "$_SCROLLBACK" 2 2)"
 
-# Range: 2 most recent — output is chronological (oldest first) after final tac
+# Range: 2 most recent — output is chronological (oldest first) after the final reversal
 _t "e2e: 2 most recent" \
   "$(printf '❯ echo three\nthree\n❯ echo four\nfour')" \
   "$(_e2e "$_SCROLLBACK" 1 2)"
@@ -434,7 +434,7 @@ _t "div: separate commands, slice 2..2 lands on divider" \
 
 # Compound: `echo hi; tcap_div; echo bye` is ONE prompt; divider lands
 # mid-output. Slice 1..1 returns post-divider body ("bye") + the divider
-# line. After the outer tac in tmux::cap, the user sees "<divider>\nbye".
+# line. After the outer reversal in tmux::cap, the user sees "<divider>\nbye".
 _REV_DIV_COMPOUND="bye
 ❮ ----------
 hi
