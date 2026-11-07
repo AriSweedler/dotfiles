@@ -27,7 +27,7 @@ if [[ ! -r "${file}" ]]; then
 fi
 
 tmux_bin="$(command -v tmux 2>/dev/null || true)"
-for candidate in /opt/homebrew/bin/tmux /usr/local/bin/tmux; do
+for candidate in "/etc/profiles/per-user/${USER:-$(id -un)}/bin/tmux" /run/current-system/sw/bin/tmux /opt/homebrew/bin/tmux /usr/local/bin/tmux; do
   if [[ -z "${tmux_bin}" && -x "${candidate}" ]]; then
     tmux_bin="${candidate}"
   fi

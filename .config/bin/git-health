@@ -330,13 +330,14 @@ do_unregister() {
 
 #######################################
 # The notifier for the alert below: atn, the terminal-notifier logging shim beside this script,
-# else Homebrew's binary bare. Absolute paths, since launchd's PATH may carry neither; without
-# either there is no banner at all — an osascript banner cannot be removed and would sit in
-# Notification Center forever.
+# else terminal-notifier bare, from the Nix profile or Homebrew. Absolute paths, since launchd's
+# PATH may carry none of them; without one there is no banner at all — an osascript banner
+# cannot be removed and would sit in Notification Center forever.
 #######################################
 notifier_bin() {
     local tn="" p
-    for p in "${0:A:h}/atn" /opt/homebrew/bin/terminal-notifier /usr/local/bin/terminal-notifier; do
+    for p in "${0:A:h}/atn" "/etc/profiles/per-user/${USER:-$(id -un)}/bin/terminal-notifier" \
+        /run/current-system/sw/bin/terminal-notifier /opt/homebrew/bin/terminal-notifier /usr/local/bin/terminal-notifier; do
         [[ -x "${p}" ]] && { tn="${p}"; break; }
     done
     [[ -n "${tn}" ]] || return 1
@@ -355,7 +356,10 @@ alert() {
     tn="$(notifier_bin)" || return 0
     local sock="/private/tmp/tmux-$(id -u)/default" tmux_bin editor_bin
     tmux_bin="$(command -v tmux 2>/dev/null || true)"
-    [[ -z "${tmux_bin}" && -x /opt/homebrew/bin/tmux ]] && tmux_bin=/opt/homebrew/bin/tmux
+    local p
+    for p in "/etc/profiles/per-user/${USER:-$(id -un)}/bin/tmux" /run/current-system/sw/bin/tmux /opt/homebrew/bin/tmux; do
+        [[ -z "${tmux_bin}" && -x "${p}" ]] && tmux_bin="${p}"
+    done
     editor_bin="$(command -v "${${EDITOR:-vi}%% *}" 2>/dev/null || command -v vi)"
     if [[ -S "${sock}" && -n "${tmux_bin}" ]]; then
         click="${(q)tmux_bin} -S ${(q)sock} new-window -n git-health-error ${(q)editor_bin} + ${(q)LOG_FILE}"
