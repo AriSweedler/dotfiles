@@ -68,6 +68,7 @@ QUERY_RE = re.compile(
     rb"|\x1b\[1[468]t"  # window and cell size reports
     rb"|\x1bP\+q[0-9A-Fa-f;]*\x1b\\"  # termcap queries (XTGETTCAP)
 )
+BARE_LF_RE = re.compile(rb"(?<!\r)\n")
 # An escape cut off at the end of a read: held until the next read completes it.
 PARTIAL_ESCAPE_RE = re.compile(rb"\x1b(?:\][^\x07\x1b]*\x1b?|P[^\x1b]*\x1b?|\[[0-?]*[ -/]*)?\Z")
 
@@ -81,6 +82,7 @@ class Stream:
         link_named(capture_dir, alias + PLAIN_SUFFIX, file_name + PLAIN_SUFFIX)
         self.is_tty = os.isatty(real_fd)
         self.echo_open = True
+        self.echo_last_cr = False
         self.pending = b""
         self.winsize = None
         if self.is_tty:
@@ -143,7 +145,12 @@ class Stream:
             partial = PARTIAL_ESCAPE_RE.search(data)
             if partial:
                 data, self.pending = data[: partial.start()], data[partial.start() :]
-        view = memoryview(QUERY_RE.sub(b"", data))
+        data = QUERY_RE.sub(b"", data)
+        if self.is_tty and data and not self.real_tty_translates_newlines():
+            data = self.crlf(data)
+        elif data:
+            self.echo_last_cr = data.endswith(b"\r")
+        view = memoryview(data)
         while self.echo_open and view:
             try:
                 view = view[os.write(self.real_fd, view):]
@@ -151,6 +158,23 @@ class Stream:
                 self.echo_open = False
             except InterruptedError:
                 continue
+
+    def real_tty_translates_newlines(self):
+        """False while another program holds the real terminal in raw mode (sudo's use_pty does,
+        for as long as its command runs): the child pty's bare \\n would then stair-step."""
+        try:
+            oflag = termios.tcgetattr(self.real_fd)[1]
+        except termios.error:
+            return True
+        return bool(oflag & termios.OPOST and oflag & termios.ONLCR)
+
+    def crlf(self, data):
+        """Bare \\n to \\r\\n, counting a \\r that ended the previous echo."""
+        out = BARE_LF_RE.sub(b"\r\n", data)
+        if data.startswith(b"\n") and self.echo_last_cr:
+            out = out[1:]
+        self.echo_last_cr = data.endswith(b"\r")
+        return out
 
     def read(self):
         """Returns the next chunk, or b"" at end of stream (a pty master reports EOF as EIO)."""
