@@ -133,6 +133,8 @@ kubectl() { print -rl -- kubectl "$@"; }
 curl() { cat >/dev/null; print -r -- '{"tokens":[{"token_id":"t1","description":"pull","subject":"robot","scope":"repo:pull","issued_at":1700000000,"expiry":null,"extra":1}]}'; }
 EOF
 readonly PANE_PATH="${HOME}/.config/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+# The pane's own PATH: nix-darwin's /etc/zshenv resets the one -e PATH passes, and run_log is then not found.
+print -r -- "PATH=${(q)PANE_PATH}" >> "${T}/zdot/.zshrc"
 tm() { tmux -L "${L}" -f /dev/null "$@"; }
 tm new-session -d -s t -x 250 -y 80 -e "ZDOTDIR=${T}/zdot" -e "LOG_DIR=${T}/logs" -e RUN_LOG_COPY=0 \
   -e ARI_TOKEN=secret-token -e "PATH=${PANE_PATH}" zsh || { print -u2 "cannot start a test tmux server"; exit 1; }

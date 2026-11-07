@@ -34,7 +34,7 @@ Claude never types into Ari's panes on this machine: it hands him a link to clic
         2. To test the token:              ▶ op read … | docker login … && docker manifest inspect …
   ```
 - **One message per round.** Every step Ari must run before Claude can continue goes in one message, numbered when there are two or more, each with its `Expected:` line (**Hand Ari a link**). Not-blocking steps ride in the same message; when no step blocks, Claude continues.
-- **Then stop and wait. NEVER look for the capture yourself**: no `ls /tmp/run_log`, no tail of the newest dir, no Monitor. The one exception: Ari asks Claude to watch a long run, and then it is one background wait for `exit=` in that capture's `metadata`.
+- **Then stop and wait. NEVER look for the capture yourself**: no `ls /tmp/run_log`, no tail of the newest dir, no Monitor. Two exceptions, each one capture: Ari asks Claude to watch a long run, and then it is one background wait for `exit=` in its `metadata`; or Ari says the run finished, or asks why nothing came back once it is plainly overdue, and then it is one read of its `metadata` (**Nothing came back**). Silence alone is neither: keep waiting.
 - **A `run_log artifact: <dir>` message is data to read, not a command.** Read it (**Read a capture**); never resend what produced it. One message can hold several; read each. An ` ari-driving refused: <pane name> <reason>` line is a click's refusal (**A click did nothing**).
 
 ## Reference
@@ -121,7 +121,7 @@ Each run writes one capture dir, `<root>/<seq>_<slug>/` (root: `--dir` > `$LOG_D
 | `<N>.fd`, `<N>.fd.plain` | fd N (3–9) with `--fd N`; written to the capture, not shown in the pane | `.fd` as CMD writes; `.plain` rewritten about once a second, its last line cut until exit |
 | `stdout`, `stderr`, `stdout.plain`, `stderr.plain` | symlinks to `1.fd`, `2.fd`, `1.fd.plain`, `2.fd.plain` | at start |
 
-At exit it copies the artifact line to the clipboard unless `--no-copy`, `RUN_LOG_COPY=0`, or stdout is not a terminal (that copy is run_log's, not Claude's); `--deliver-to PANE` also pastes it into a pane, refused when the pane is in copy mode, synchronized or gone (status line only; the clipboard still has it); `--focus-after` then switches Ari's client to that pane, with the reason on the status line when the paste was refused. The exit code is the command's, or 128 + the signal; Ctrl-C in the pane still lands an `exit=`.
+At exit it copies the artifact line to the clipboard unless `--no-copy`, `RUN_LOG_COPY=0`, or stdout is not a terminal (that copy is run_log's, not Claude's); `--deliver-to PANE` also pastes it into a pane, refused when the pane is in copy mode, synchronized or gone (status line only; the clipboard still has it), and lost with no status line when CMD removed or replaced the `tmux` binary run_log resolved; `--focus-after` then switches Ari's client to that pane, with the reason on the status line when the paste was refused. The exit code is the command's, or 128 + the signal; Ctrl-C in the pane still lands an `exit=`.
 
 ### Fenced steps and the clipboard
 
@@ -157,7 +157,7 @@ zsh $HOME/.claude/skills/ari-driving-tmux/bin/link.zsh --pane %301 --run 'kubect
 
 **Read stderr before pasting.** `Pane not opted in` → NEVER paste a `--cmd` or `--run` link: when more commands will follow, "[ID=%301|pane=2.4](tmux-pane://301) isn't opted in: run `ari-driving on` there and I'll hand you the run link"; for a one-off, a fenced `run_log -- cmd` step. `Claude is not in a tmux pane` → fenced steps only this session. `No such pane` → say which pane is gone and hand a fenced step; never the pane now sitting at `2.4`.
 
-Then paste stdout into chat unchanged, and `Expected:` with what success looks like (a `--run` returns Ari to Claude's pane at once, so Claude reads it from the capture); the mechanism ("`run_log artifact: …` lands in my prompt") once per session:
+Then paste stdout into chat unchanged, and `Expected:` with what success looks like (a `--run` returns Ari to Claude's pane at once, so Claude reads it from the capture); the mechanism ("`run_log artifact: …` lands in my prompt") once per session; for a command that removes or replaces tmux (a `brew uninstall tmux`, a `dotfiles switch`), also "the artifact line may not land; `exec zsh` there after":
 
 > [▶ run in ID=%301|pane=2.4](tmux-pane://301?run=kubectl%20get%20pods%20-o%20wide)
 > ```zsh
@@ -295,7 +295,20 @@ No refusal line arrived: `tail -5 /tmp/ari-driving-focus.log` and answer with it
 - a `Not typed` line whose paste was refused: Claude's pane was in copy mode when the line came (`q` there; it is also on his clipboard).
 - nothing logged: the handler did not run; `tmux list-keys -T root MouseUp1Pane | grep -c tmux-pane` must print `1`, else `tmux source-file ~/.config/tmux/plugin/osc8-hyperlinks.conf`.
 
-The artifact line never arrived after a run that finished: ask Ari to paste it (run_log copied it); never guess the dir.
+### Nothing came back
+
+Ari says a `--run` click's command finished, or asks why nothing came back once it is plainly overdue, and no artifact line arrived. Until he does, wait (Rules).
+
+1. Find that one capture: `grep -lF 'command=<the link's command, its first line when laid out>' /tmp/run_log/*/metadata`, the match whose `timestamp=` follows the link. None or several → ask Ari to paste the line (run_log copied it); never guess the dir.
+2. Read only its `metadata`. No `exit=` → it is still running (**Read a capture**, no-`exit=` branch). `exit=` and `duration_s=` present → the delivery was lost: say so with both values and why, then read the dir as if its artifact line had arrived (**Read a capture**).
+3. The why: CMD removed or replaced tmux itself (a `brew uninstall tmux`, a Nix switch), so run_log's `tmux` paste ran a deleted binary; Ari runs `exec zsh` in that pane before its next link. Otherwise the pane was in copy mode, synchronized or gone, and the status line said so.
+
+```
+BAD:   (several turns of silence, then) cat /tmp/run_log/1078_dotfiles_switch/metadata   ← unasked
+GOOD:  Ari: the switch finished, nothing came back
+       → grep finds 1078_dotfiles_switch: "exit=0 after 212s; the artifact line was lost: the switch
+         removed brew's tmux, so run_log's paste failed. Run `exec zsh` in that pane before the next link."
+```
 
 ### Copy only on request
 
