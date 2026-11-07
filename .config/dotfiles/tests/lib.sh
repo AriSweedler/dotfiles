@@ -363,7 +363,7 @@ shim_log() { local f="${BREW_SHIM_LOG_DIR}/$1.log"; if [[ -f "${f}" ]]; then cat
 hermetic_env() {
   HERMETIC_ENV=("HOME=${HOME}" "PATH=${PATH}" "TZ=${TZ:-UTC}" "GIT_CONFIG_NOSYSTEM=1")
   local v
-  for v in "${!XDG_@}" "${!ARI_DOTFILES_@}" "${!BREW_SHIM_@}" "${!NVIM_SHIM_@}" "${!LAUNCHCTL_SHIM_@}" "${!XCODE_SELECT_SHIM_@}" "${!OP_SHIM_@}"; do
+  for v in "${!XDG_@}" "${!ARI_DOTFILES_@}" "${!BREW_SHIM_@}" "${!NVIM_SHIM_@}" "${!LAUNCHCTL_SHIM_@}" "${!XCODE_SELECT_SHIM_@}" "${!OP_SHIM_@}" "${!NIX_SHIM_@}"; do
     HERMETIC_ENV+=("${v}=${!v}")
   done
   # The ssh agent a test started for itself; the real one never reaches the code.

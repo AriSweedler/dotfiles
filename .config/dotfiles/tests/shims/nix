@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Fake nix: logs every call. `flake lock` appends the overridden input to the flake's flake.lock
+# (so the lock "moves" when the rev does); `eval` prints NIX_SHIM_HOSTS one per line; `build`
+# prints a store path. NIX_SHIM_FAIL=<subcommand> makes that one exit 1.
+set -u
+printf '%s\n' "$*" >> "${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/nix.log"
+sub="${1:-}"
+[[ "${sub}" == flake ]] && sub="flake ${2:-}"
+if [[ "${sub}" == "${NIX_SHIM_FAIL:-}" ]]; then echo "nix shim: ${sub} failed" >&2; exit 1; fi
+case "${sub}" in
+  "flake lock")
+    input="" flake=""
+    shift 2
+    while (( $# )); do
+      case "$1" in
+        --override-input) input="$3"; shift 3 ;;
+        path:*) flake="${1#path:}"; shift ;;
+        *) shift ;;
+      esac
+    done
+    lock="${flake}/flake.lock"
+    grep -qxF "${input}" "${lock}" 2>/dev/null || printf '%s\n' "${input}" > "${lock}"
+    ;;
+  eval) printf '%s' "${NIX_SHIM_HOSTS-testhost}" ;;
+  build) echo "/nix/store/00000000000000000000000000000000-darwin-system" ;;
+esac

@@ -45,6 +45,8 @@ typeset -gx ARI_DOTFILES_TERMINAL_PLIST="${ARI_DOTFILES_TERMINAL_PLIST:-${HOME}/
 typeset -gx ARI_DOTFILES_FONT_DIRS="${ARI_DOTFILES_FONT_DIRS:-${HOME}/Library/Fonts:/Library/Fonts}"   # colon-separated, searched recursively
 typeset -gx ARI_DOTFILES_NIX_BREWFILE="${ARI_DOTFILES_NIX_BREWFILE:-/etc/dotfiles/Brewfile}"   # nix-darwin's generated Brewfile; present = the flakes declare Homebrew
 typeset -gx ARI_DOTFILES_NIX_STORE="${ARI_DOTFILES_NIX_STORE:-/nix/store}"   # what a flake installs resolves here: the neovim step fails an nvim outside it, `jobs install` defers to a plist whose agent is in it
+typeset -gx ARI_DOTFILES_NIX_FLAKE="${ARI_DOTFILES_NIX_FLAKE:-${XDG_DATA_HOME}/dotfiles/nix}"   # the local flake `dotfiles switch` locks and switches to
+typeset -gx ARI_DOTFILES_NIX_HOST="${ARI_DOTFILES_NIX_HOST:-}"   # its darwinConfigurations entry; empty: the only one
 typeset -gx ARI_DOTFILES_XCODE_APP="${ARI_DOTFILES_XCODE_APP:-/Applications/Xcode.app}"
 typeset -gx ARI_DOTFILES_CHROME_DIR="${ARI_DOTFILES_CHROME_DIR:-${HOME}/Library/Application Support/Google/Chrome}"   # Chrome's user data dir: Local State and one dir per profile
 # The shared tier is a plain clone at ~/dotfiles, its files linked into HOME by home-manager (the

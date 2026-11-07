@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Fake sudo: nothing in a test runs as root. Every call is logged and runs nothing.
+set -u
+printf '%s\n' "$*" >> "${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/sudo.log"
