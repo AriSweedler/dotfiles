@@ -44,6 +44,8 @@ in
     mas # Mac App Store from the terminal: mas install 497799835 is Xcode (alttab builds with it)
     ripgrep
     starship # shell prompt
+    terminal-notifier # the Claude Code notification hook and git-health
+    tmux # the same 3.8 brew had, so a server brew started still talks to this client
     tmuxinator
     tree
     yq-go

@@ -50,8 +50,6 @@
     global.autoUpdate = false;
     brews = [
       "beads" # tasks for AI agents; nixpkgs lags, and an older bd risks schema skew
-      "terminal-notifier" # the Claude Code notification hook and git-health call its brew path
-      "tmux" # the running server and several scripts use /opt/homebrew/bin/tmux
       "tree-sitter" # nixpkgs lags (0.26 vs 0.27)
       "tree-sitter-cli"
     ];
