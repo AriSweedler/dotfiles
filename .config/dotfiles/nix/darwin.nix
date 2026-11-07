@@ -74,7 +74,7 @@
       inherit (config.homebrew) prefix;
       bundle = config.homebrew.onActivation.brewBundleCmd { onlyCheck = false; };
       stamp = "/var/db/dotfiles-brew-bundle.stamp";
-      state = ''printf '%s %s\n' ${builtins.hashString "sha256" bundle} "$(stat -f %m ${prefix}/Cellar ${prefix}/Caskroom ${prefix}/Library/Taps 2>/dev/null | tr '\n' ' ')"'';
+      state = ''printf '%s %s\n' ${builtins.hashString "sha256" bundle} "$(/usr/bin/stat -f %m ${prefix}/Cellar ${prefix}/Caskroom ${prefix}/Library/Taps 2>/dev/null | tr '\n' ' ')"'';
     in
     lib.mkForce ''
       echo >&2 "Homebrew bundle..."
