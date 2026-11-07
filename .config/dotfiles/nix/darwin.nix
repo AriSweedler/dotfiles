@@ -28,6 +28,10 @@
 
   nix.enable = true;
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  # Activation reloads the daemon when /etc/nix/machines differs from the new system's, and
+  # with no build machines neither file exists, so the diff failed and every switch reloaded it
+  # and waited for it to come back. An empty file is no build machines.
+  environment.etc."nix/machines".text = "";
   nixpkgs.hostPlatform = "aarch64-darwin";
 
   system.primaryUser = user;
@@ -63,6 +67,31 @@
   # The Brewfile a switch applies, at a stable path: the dotfiles brew steps see it and defer
   # to the flakes, and `brew bundle check --file=/etc/dotfiles/Brewfile` checks by hand.
   environment.etc."dotfiles/Brewfile".text = config.homebrew.brewfile;
+
+  # `brew bundle` takes seconds even when it has nothing to do. Skip it when the bundle command
+  # (the Brewfile's store path and its flags) and Homebrew's install directories are what they
+  # were after the last bundle that succeeded: a brew install or uninstall by hand changes a
+  # directory's mtime, so the next switch bundles again.
+  system.activationScripts.homebrew.text =
+    let
+      inherit (config.homebrew) prefix;
+      bundle = config.homebrew.onActivation.brewBundleCmd { onlyCheck = false; };
+      stamp = "/var/db/dotfiles-brew-bundle.stamp";
+      state = ''printf '%s %s\n' ${builtins.hashString "sha256" bundle} "$(stat -f %m ${prefix}/Cellar ${prefix}/Caskroom ${prefix}/Library/Taps 2>/dev/null | tr '\n' ' ')"'';
+    in
+    lib.mkForce ''
+      echo >&2 "Homebrew bundle..."
+      if [ ! -f "${prefix}/bin/brew" ]; then
+        echo -e "\e[1;31merror: Homebrew is not installed, skipping...\e[0m" >&2
+      elif [ "$(${state})" = "$(cat ${stamp} 2>/dev/null)" ]; then
+        echo >&2 "Homebrew bundle: nothing changed since the last bundle; skipped"
+      elif ${bundle}; then
+        ${state} > ${stamp}
+      else
+        rm -f ${stamp}
+        exit 1 # as a failed bundle stops the activation without the skip
+      fi
+    '';
 
   # The dotfiles jobs framework's one launchd job (screen unlock, login, every 5 minutes), under
   # the label `dotfiles jobs` reads; a switch replaces a plist `dotfiles jobs install` wrote, and
