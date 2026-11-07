@@ -5,7 +5,7 @@
 # nothing dirty. Every fix but the docs (a human writes them) is idempotent: `dotfiles init`
 # runs this after every pull.
 step::declare dotfiles_repo --group repo \
-  --desc "shared dotfiles bare repo cloned, tracking origin, checked out into HOME, hooks wired" \
+  --desc "shared dotfiles repo cloned (the ~/dotfiles clone, or the legacy bare repo checked out into HOME), tracking origin, hooks wired" \
   --apply "clones the bare repo (or renames the legacy one), sets its tracking config, checks it out into HOME, wires the hooks, initializes new submodules and fetches origin"
 step::watches dotfiles_repo '.gitmodules' '.config/git/dotfiles-hooks/**'
 
