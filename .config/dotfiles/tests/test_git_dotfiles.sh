@@ -32,6 +32,8 @@ assert_eq "clone: the edit through the link is the clone's" " M .config/zsh/a.zs
 (cd /tmp && gdf add "${HOME}/.config/zsh/a.zsh")
 assert_eq "clone: add by the HOME path stages the clone's file" "M  .config/zsh/a.zsh" "$(cd /tmp && gdf status --short)"
 assert_eq "clone: a relative path from a subdirectory" ".config/zsh/a.zsh" "$(cd "${HOME}/dotfiles/.config" && gdf diff --cached --name-only -- zsh)"
+(cd /tmp && PATH="${PATH}:/usr/bin:/bin" gdf submodule status > /dev/null)   # git-submodule is a sh script: it needs sed
+assert_eq "clone: submodule runs from outside the clone" 0 "$?"
 assert_eq "clone: the bare repo is left alone" "" "$(git --git-dir="${HOME}/dotfiles.git" --work-tree="${HOME}" diff --cached --name-only)"
 
 report

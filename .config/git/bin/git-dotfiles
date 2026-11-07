@@ -15,6 +15,8 @@ if [[ -d "${HOME}/dotfiles/.git" ]]; then
       args+=("${arg}")
     fi
   done
+  # git-submodule refuses a cwd outside its work tree; its path arguments are the clone's anyway.
+  [[ "${args[1]-}" == submodule && "${PWD:A}/" != "${tree}"/* ]] && cd -q -- "${tree}"
   exec git --git-dir="${tree}/.git" --work-tree="${tree}" "${args[@]}"
 fi
 exec git --git-dir="${HOME}/dotfiles.git/" --work-tree="${HOME}" "$@"
