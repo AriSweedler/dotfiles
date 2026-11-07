@@ -1,14 +1,19 @@
 ---
 name: ari-dotfile--submodule
-description: Create and work in a dotfiles submodule — one of Ari's public repos checked out at ~/.config/<name>, recorded in the shared tier as a pointer, with its own hooks, driver, check and skills. The layout every submodule follows, the recipe for a new one, how commits, pushes and pointer bumps flow, and what refuses when. Per-repo specifics live in ari-dotfile--submodule-<name>.
+description: Create and work in a dotfiles submodule — one of Ari's public repos checked out in the shared-tier clone at ~/dotfiles/.config/<name> and linked to ~/.config/<name>, recorded in the shared tier as a pointer, with its own hooks, driver, check and skills. The layout every submodule follows, the recipe for a new one, how commits, pushes and pointer bumps flow, and what refuses when. Per-repo specifics live in ari-dotfile--submodule-<name>.
 ---
 
 # Dotfiles submodules
 
-A submodule is a directory under `~/.config` whose files belong to another git
-repo. The shared tier (`git df`, `/ari-dotfiles`) records only a commit hash
-for it, the **pointer**; every other machine checks that hash out.
-`~/.gitmodules` declares them; `cd ~ && git df submodule status` lists them.
+A submodule is a directory of the shared-tier clone `~/dotfiles` (`git df`,
+`/ari-dotfiles`) whose files belong to another git repo. The clone records only
+a commit hash for it, the **pointer**; every other machine checks that hash out.
+The checkout is `~/dotfiles/.config/<name>`, its git dir
+`~/dotfiles/.git/modules/.config/<name>`; `~/.config/<name>` is a symlink that
+resolves (through `/nix/store`) to the checkout, placed by home-manager's
+bridge (`~/.config/dotfiles/nix/bridge.nix`, `/ari-dotfiles-nix`).
+`~/dotfiles/.gitmodules` declares them; `git df submodule status` lists them,
+from any directory.
 
 **Warranted when** the code has its own toolchain, tests and release cadence,
 stands as a public repo on its own, and would drown the dotfiles log: a
@@ -21,9 +26,10 @@ from the local tier at the submodule's local root (`/ari-dotfiles` Cutpoints).
 
 | Piece | Path | Tier | Notes |
 |---|---|---|---|
-| Repo | `~/.config/<name>/`, upstream `github.com/AriSweedler/<name>`, public | df holds the pointer | on `main`; `.git` is a file after `submodule update`, a directory after an in-place add; both work |
-| Declaration | `~/.gitmodules`: `[submodule ".config/<name>"]`, `path`, an https `url` | df | what `dotfiles push`, `dotfiles init`, `dotfiles status` and the skill registry enumerate |
-| Driver | `~/.config/bin/<name> -> ../<name>/bin/<name>` | df | one entry point with subcommands; `~/.config/bin` is on `PATH` |
+| Repo | `~/dotfiles/.config/<name>/`, upstream `github.com/AriSweedler/<name>`, public | df holds the pointer | on `main`; `.git` is a file (`gitdir: ../../.git/modules/.config/<name>`) after `git df submodule update`, a directory after an in-place add; both work |
+| Link | `~/.config/<name>` → (through `/nix/store`) `~/dotfiles/.config/<name>` | df | `.config/<name>` in `wholeDirs` of `~/.config/dotfiles/nix/bridge.nix`; exists only after a switch that includes it |
+| Declaration | `~/dotfiles/.gitmodules`: `[submodule ".config/<name>"]`, `path`, an https `url` | df | what `dotfiles push`, `dotfiles init`, `dotfiles status` and the skill registry enumerate |
+| Driver | `~/dotfiles/.config/bin/<name> -> ../<name>/bin/<name>` | df | one entry point with subcommands; the bridge links it to `~/.config/bin/<name>`, and `~/.config/bin` is on `PATH` |
 | Check, build | `<name> check`, `<name> build` (or the repo's `bin/<name>-dev …`) | repo | each ends in one `[OK]` line; anything else is a failure |
 | Hooks | `.githooks/pre-commit` runs the check; `.githooks/commit-msg` greps the message against the denylist | repo | `core.hooksPath=.githooks` is local config: a fresh checkout has no hooks until `dotfiles apply <name>` wires it |
 | Denylist | `~/.local/share/<name>/denylist.txt`: one regex per line, `#` comments | ldf | what the public repo must never contain; absent → both hooks are no-ops, review by eye |
@@ -44,46 +50,56 @@ identity twice.
 
 ## Creating one
 
-Claude does 1–5 and 8–10; the user does 6, 7 and 11. Nothing here pushes.
+Claude does 1–5, the declare in 7, 8, the edit and build in 9, 10 and 11; the
+user does 6, the push in 7, the switch in 9, and 12. Nothing here pushes.
+Until step 9's switch, `~/.config/<name>` does not exist, so steps 1–8 address
+the new repo as `~/dotfiles/.config/<name>`.
 
-1. **Repo.** `git init -b main ~/.config/<name>`;
-   `git -C ~/.config/<name> config user.name "Ari Sweedler"`;
-   `git -C ~/.config/<name> config user.email ari@sweedler.com`;
-   `git -C ~/.config/<name> remote add origin https://github.com/AriSweedler/<name>.git`.
+1. **Repo.** `git init -b main ~/dotfiles/.config/<name>`;
+   `git -C ~/dotfiles/.config/<name> config user.name "Ari Sweedler"`;
+   `git -C ~/dotfiles/.config/<name> config user.email ari@sweedler.com`;
+   `git -C ~/dotfiles/.config/<name> remote add origin https://github.com/AriSweedler/<name>.git`.
    Write `bin/<name>`, its `check` and `build`, `README.md`, `.gitignore`.
 2. **Hooks.** `.githooks/pre-commit` (`exec` the check) and `.githooks/commit-msg`
    (denylist grep; `exit 0` when `~/.local/share/<name>/denylist.txt` is
    unreadable), both `chmod +x`; then
-   `git -C ~/.config/<name> config core.hooksPath .githooks`.
+   `git -C ~/dotfiles/.config/<name> config core.hooksPath .githooks`.
    Model: `~/.config/chrome-exoskeleton/.githooks/`.
 3. **Local tier.** `~/.local/share/<name>/denylist.txt` (copy
    `~/.local/share/chrome-exoskeleton/denylist.txt`). A local plug-in root also
    needs `!/share/<name>/` in `~/.local/local-dotfiles.git/info/exclude` and in
    `~/.config/new-machine/local-dotfiles-exclude`. `git ldf add <abs paths>`,
    commit, `git ldf push`.
-4. **Driver.** `ln -s ../<name>/bin/<name> ~/.config/bin/<name>`;
-   `git df add ~/.config/bin/<name>`, commit.
-5. **Skill and first commit.** `~/.config/<name>/skills/ari-dotfile--submodule-<name>/SKILL.md`;
-   `git -C ~/.config/<name> add <files> && git -C ~/.config/<name> commit -m "feat: …"`.
+4. **Driver.** `ln -s ../<name>/bin/<name> ~/dotfiles/.config/bin/<name>`;
+   `git df add ~/dotfiles/.config/bin/<name>`, commit. `~/.config/bin/<name>`
+   appears at step 9's switch.
+5. **Skill and first commit.** `~/dotfiles/.config/<name>/skills/ari-dotfile--submodule-<name>/SKILL.md`;
+   `git -C ~/dotfiles/.config/<name> add <files> && git -C ~/dotfiles/.config/<name> commit -m "feat: …"`.
    The hooks run; the check must be green.
 6. **User: the remote.** An empty public `github.com/AriSweedler/<name>`:
    github.com/new, or
    `GH_TOKEN="$(env -u GITHUB_TOKEN gh auth token -u AriSweedler)" gh repo create AriSweedler/<name> --public`.
 7. **Declare, then the user pushes.**
-   `cd ~ && git df submodule add https://github.com/AriSweedler/<name>.git .config/<name>`:
-   the path is already a repo, so nothing is cloned; `.gitmodules` and the
-   gitlink are staged. The user runs `dotfiles push --submodules`: it pushes the
-   repo as the personal account and sets its `origin/main`. It bumps nothing for
-   a brand-new submodule (HEAD holds no pointer to compare), so both stay staged.
+   `git df submodule add https://github.com/AriSweedler/<name>.git .config/<name>`,
+   from outside the clone or at `~/dotfiles` (the path is the clone's). It is
+   already a repo, so nothing is cloned; `.gitmodules` and the gitlink are
+   staged. The user runs `dotfiles push --submodules`: it pushes the repo as the
+   personal account and sets its `origin/main`. It bumps nothing for a brand-new
+   submodule (HEAD holds no pointer to compare), so both stay staged.
    Until step 8 lands, any plain `git df commit` sweeps them in: commit by
    pathspec meanwhile, or do step 8 at once.
 8. **Declaration commit**, the "init" commit: `.gitmodules` and the gitlink together.
-   `git df commit -m "<name>: declare the submodule (<what it is>)" -- ~/.gitmodules ~/.config/<name>`.
+   `git df commit -m "<name>: declare the submodule (<what it is>)" -- ~/dotfiles/.gitmodules ~/dotfiles/.config/<name>`.
    The df pre-commit checks the gitlink against the repo's `origin/main`, which the push
    just set. Later pushes bump the pointer in their own commits; a new submodule is
    two commits by design (the user's call: "we aren't guarding commits as a rare
    resource"), never folded into one.
-9. **Bootstrap.** One file, `~/.config/dotfiles/steps/<name>.zsh`:
+9. **Bridge.** Add `".config/<name>"` to `wholeDirs` in
+   `~/.config/dotfiles/nix/bridge.nix`, `git df add` it and commit; then
+   `/ari-dotfiles-nix` **Switch** (Claude updates the `dotfiles` input and
+   builds, the user switches). Only then do `~/.config/<name>` and
+   `~/.config/bin/<name>` exist.
+10. **Bootstrap.** One file, `~/.config/dotfiles/steps/<name>.zsh`:
    `step::declare <name> --group tools --needs dotfiles_repo --desc "…"`, then
    `check::<name>` (`skip` when `~/.config/<name>/bin/<name>` is missing, fix
    `dotfiles apply dotfiles_repo`; `fail` when the identity, `core.hooksPath`
@@ -91,9 +107,9 @@ Claude does 1–5 and 8–10; the user does 6, 7 and 11. Nothing here pushes.
    else `ok`) and `apply::<name>` (`tier::submodule_identity_apply`, the hooks,
    the build, every mutation through `run_mut`). Adding the file adds the step.
    Model: `steps/plugged.zsh`. `git df add` it, commit.
-10. **Link and record.** `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link`.
+11. **Link and record.** `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link`.
     Add a row to **Known submodules** below and to `/ari-dotfiles` § Submodules.
-11. **User: `dotfiles push`.** Then **Verify**.
+12. **User: `dotfiles push`.** Then **Verify**.
 
 ## Working in one
 
@@ -110,10 +126,13 @@ Claude does 1–5 and 8–10; the user does 6, 7 and 11. Nothing here pushes.
   the message; the check greps the tracked files.
 - **No branch, no PR.** Commits land on `main`; the user's push publishes them.
 - **Skills under `skills/` are files of the repo**: same steps, then `link`.
-- **`git submodule` only from `$HOME`** (`cd ~ && git df submodule …`);
-  anywhere else it targets whatever repo the cwd is in.
-- **Any other checkout of the repo is history only.** Never edit, commit or
-  build there.
+- **Submodule commands through `git df`** (`git df submodule …`, from any
+  directory); outside the clone its path arguments are the clone's
+  (`.config/<name>`), inside it (`~/.config/<name>` included) they are relative
+  to the cwd. A plain `git submodule` targets whatever repo the cwd is in.
+- **One checkout.** `~/.config/<name>` and `~/dotfiles/.config/<name>` are the
+  same directory; any other checkout of the repo is history only. Never edit,
+  commit or build there.
 
 ## Pushing
 
@@ -135,7 +154,8 @@ refuses `push shared` while a submodule whose pointer it would bump is skipped. 
 git -C ~/.config/<name> status -sb              → ## main...origin/main
 git -C ~/.config/<name> config --local --get-regexp '^user\.'
                                                 → user.email ari@sweedler.com / user.name Ari Sweedler
-cd ~ && git df submodule status                 →  <sha> .config/<name> (heads/main)   leading space, not +
+realpath ~/.config/<name>                       → $HOME/dotfiles/.config/<name>
+git df submodule status                         →  <sha> .config/<name> (heads/main)   leading space, not +
 git df status --short -- ~/.config/<name>       → (empty)
 <name> check                                    → … [OK] …
 zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/status --all | grep <name>
@@ -161,8 +181,9 @@ Never `--no-verify`, in any repo. Never edit `denylist.txt` to make a check pass
 | `dotfiles push` log: `Detached HEAD: nothing to push` | committed while detached | **Working in one**, first rule; push again |
 | `dotfiles push` log: `submodule not checked out` | never initialized here | `dotfiles init` |
 | `dotfiles push` log: `No such remote` | step 1's `remote add` missing | `git -C ~/.config/<name> remote add origin https://github.com/AriSweedler/<name>.git` |
-| `submodule status` prefix `+` | checkout ahead of the pointer | a bump is pending: `dotfiles push`; on a machine that only pulled, `cd ~ && git df submodule update` |
-| `submodule status` prefix `-` | not initialized | `cd ~ && git df submodule update --init -- .config/<name>` (`dotfiles init` does it) |
+| `submodule status` prefix `+` | checkout ahead of the pointer | a bump is pending: `dotfiles push`; on a machine that only pulled, `git df submodule update` |
+| `submodule status` prefix `-` | not initialized | `git df submodule update --init -- .config/<name>` (`dotfiles init` does it) |
+| `~/.config/<name>`: `No such file or directory` | `wholeDirs` in bridge.nix lacks `.config/<name>`, or no switch since it was added | **Creating one**, step 9 |
 | registry `status`: the repo's skill `dangling` or `missing` | skill dir renamed or new | `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link --prune` |
 | `dotfiles healthcheck`: `submodule_uninitialized` / `submodule_drift` | pointer vs checkout | the two rows above |
 | `dotfiles healthcheck`: `submodule_undocumented` | the checkout lacks `README.md` or `skills/ari-dotfile--submodule-<name>/SKILL.md`, or the skill is not linked into `~/.claude/skills` | write what the detail names (**Creating one**, steps 1 and 5), commit it in the repo; an unlinked skill: `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link` |
