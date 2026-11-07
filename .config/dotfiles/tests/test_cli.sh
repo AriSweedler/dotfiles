@@ -14,7 +14,7 @@ done
 
 nm --help
 assert_eq "--help exits 0" 0 "${RC}"
-for sub in init check apply verify steps brew test; do
+for sub in init check apply verify steps test; do
   assert_contains "--help lists ${sub}" "${OUT}${ERR}" "${sub}"
 done
 
@@ -22,8 +22,6 @@ nm --no-such-flag
 assert_eq "unknown flag exits 64" 64 "${RC}"
 nm check --only nosuch
 assert_eq "check --only nosuch exits 64" 64 "${RC}"
-nm brew decree gh
-assert_eq "decree without a tier flag exits 64" 64 "${RC}"
 
 nm steps
 assert_eq "steps exits 0" 0 "${RC}"
@@ -43,7 +41,7 @@ assert_steps_are_registry "steps|length matches the registry" "${f}"
 
 nm --help
 assert_eq "--help exits 0" 0 "${RC}"
-for verb in healthcheck apply steps verify brew push init jobs; do
+for verb in healthcheck apply steps verify push init jobs; do
   if grep -qE "^  ${verb}[[:space:]]+[a-z]" <<< "${OUT}"; then pass "--help lists ${verb} with a description"
   else fail "--help lists ${verb} with a description" "${OUT}"; fi
 done

@@ -38,8 +38,6 @@
 !/share/tmux_oneshot/
 # The c<name> jump-to-directory shortcuts for this machine.
 !/share/double_cd/
-# This machine's Brewfile and Brewfile.ignore (the local half of the brew model).
-!/share/new-machine/
 # This machine's dotfiles job plugins and deps.
 !/share/dotfiles/
 # The Claude skills that belong to this machine's tier.

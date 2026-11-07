@@ -709,18 +709,14 @@ run::summarize() {
       result_files+=("${RUN_DIR}/${name}.result.json")
     fi
   done
-  local -a brew_arg=(--argjson brew '[null]')
-  if [[ -s "${RUN_DIR}/drift.json" ]]; then
-    brew_arg=(--slurpfile brew "${RUN_DIR}/drift.json")
-  fi
   jq -n --arg run_id "${RUN_ID}" --arg host "${ARI_DOTFILES_HOST}" --arg mode "${ARI_DOTFILES_MODE}" --arg ts "${ts}" \
-        --slurpfile steps <(cat -- "${result_files[@]}") "${brew_arg[@]}" '
+        --slurpfile steps <(cat -- "${result_files[@]}") '
     ($steps | map(.status)) as $s
     | {schema: 1, run_id: $run_id, ts: $ts, host: $host, mode: $mode,
        status: (if any($s[]; .=="error") then "error" elif any($s[]; .=="fail") then "fail"
                 elif any($s[]; .=="warn") then "warn" else "ok" end),
        counts: ($steps | group_by(.status) | map({(.[0].status): length}) | add // {}),
-       steps: $steps, brew: ($brew[0] // null)}' > "${RUN_DIR}/summary.json"
+       steps: $steps}' > "${RUN_DIR}/summary.json"
   cp "${RUN_DIR}/summary.json" "${ARI_DOTFILES_STATE_DIR}/last-${ARI_DOTFILES_MODE}.json"
   local -a runs=("${ARI_DOTFILES_STATE_DIR}"/runs/*(N/On))
   local dir

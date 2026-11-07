@@ -54,24 +54,24 @@ assert_eq "reason allowlist_differs" allowlist_differs "$(step_get local_dotfile
 assert_contains "fix is a diff" "$(step_get local_dotfiles_repo .fix)" "diff "
 assert_eq "allowlist_differs is manual" true "$(step_get local_dotfiles_repo .manual)"
 
-# What fires on this machine until its info/exclude learns the new-machine rule.
-grep -vF '!/share/new-machine/' "${TEMPLATE}" > "${EXCLUDE}"
+# What fires on a machine whose info/exclude has not learned a rule the template gained.
+grep -vF '!/share/dotfiles/' "${TEMPLATE}" > "${EXCLUDE}"
 check_ldf
-assert_eq "live copy lacking !/share/new-machine/ → warn" warn "$(step_get local_dotfiles_repo .status)"
+assert_eq "live copy lacking !/share/dotfiles/ → warn" warn "$(step_get local_dotfiles_repo .status)"
 assert_eq "reason allowlist_differs (migration)" allowlist_differs "$(step_get local_dotfiles_repo .reason)"
 cp "${TEMPLATE}" "${EXCLUDE}"
 
 seed_ldf_remote
-mkdir -p "${HOME}/.local/share/new-machine"
-printf '# local tier\n' > "${HOME}/.local/share/new-machine/Brewfile"
-ldf_git add -- "${HOME}/.local/share/new-machine/Brewfile"
+mkdir -p "${HOME}/.local/share/dotfiles/jobs"
+printf '# local tier\n' > "${HOME}/.local/share/dotfiles/jobs/sync"
+ldf_git add -- "${HOME}/.local/share/dotfiles/jobs/sync"
 ldf_git commit -q -m "first local commit"
 ldf_git push -q origin main
 check_ldf
 assert_eq "remote set, nothing unpushed → ok" ok "$(step_get local_dotfiles_repo .status)"
 
-printf 'brew "x"\n' >> "${HOME}/.local/share/new-machine/Brewfile"
-ldf_git add -- "${HOME}/.local/share/new-machine/Brewfile"
+printf '# more\n' >> "${HOME}/.local/share/dotfiles/jobs/sync"
+ldf_git add -- "${HOME}/.local/share/dotfiles/jobs/sync"
 ldf_git commit -q -m "second local commit"
 check_ldf
 assert_eq "one unpushed commit → warn" warn "$(step_get local_dotfiles_repo .status)"

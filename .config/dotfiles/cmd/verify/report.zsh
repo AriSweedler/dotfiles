@@ -17,7 +17,7 @@
 #        weeks_failing, consecutive_errors, report_path, report_sha256, previous_date,
 #        old_reports: [{action: archive|rename_edited|leave_edited|leave_foreign|collision, from, to}],
 #        hud: {message, seconds (null = persistent), open (file:// URL or null)},
-#        brew_undeclared, undeclared_count, problems, checks, error_reasons, force}
+#        problems, checks, error_reasons, force}
 #   report::write <summary.json> <log.txt> <decision.json>
 #       Applies a decision: moves the old report aside, renders and writes the new one plus its
 #       archive copy, stamps last-ok on a pass, rewrites last_result.json. Prints the decision
@@ -82,11 +82,7 @@ typeset -gr REPORT_JQ_PRELUDE='
 fi
 
 report::_rows_failed() {
-  jq -r --arg prev "${2}" "${REPORT_JQ_PRELUDE}"'
-    (.brew.undeclared // []) as $und
-    | def new_suffix($k; $n):
-        if any($und[]; .kind == $k and .name == $n and .new == true)
-        then (if $prev == "" then " (new)" else " (new since " + $prev + ")" end) else "" end;
+  jq -r "${REPORT_JQ_PRELUDE}"'
       [ .steps[] | select(.status == "fail") | . as $st
         | if ((.items // []) | length) == 0 then
             { step: .step, item: "—", k: 9, n: "",
@@ -94,10 +90,9 @@ report::_rows_failed() {
               tier: "—", fix: (.fix | code) }
           else .items[]
             | { step: $st.step, item: (.kind + " " + .name), k: (.kind | kind_rank), n: .name,
-                problem: ((.problem // "") + (if (.hint // "") == "" then "" else ": " + .hint end)
-                          + new_suffix(.kind; .name)),
+                problem: ((.problem // "") + (if (.hint // "") == "" then "" else ": " + .hint end)),
                 tier: (.tier // "—"),
-                fix: (if .problem == "orphaned" then "see below" else ($st.fix | code) end) }
+                fix: ($st.fix | code) }
           end ]
     | sort_by([.step, .k, .n])[]
     | "| \(.step | cell) | \(.item | cell) | \(.problem | cell) | \(.tier | cell) | \(.fix | cell) |"' "${1}"
@@ -109,63 +104,14 @@ report::_rows_errors() {
     | "| \(.step) | \(.reason | cell) | \((.detail // "") | if . == "" then "—" else . end | cell) |"' "${1}"
 }
 
-report::_rows_undeclared() {
-  jq -r --arg cli "${CLI_NAME}" "${REPORT_JQ_PRELUDE}"'
-    (.brew.undeclared // []) | sort_by([(.kind | kind_rank), .name])[]
-    | "| \(.kind) | \(.name | cell) | \((.tap // "—") | cell)"
-      + " | `\($cli) brew decree \(.kind):\(.name) --global --reason \"…\"`"
-      + " | `\($cli) brew decree \(.kind):\(.name) --local --reason \"…\"`"
-      + " | `\($cli) brew decree \(.kind):\(.name) --ignore-local --reason \"…\"` |"' "${1}"
-}
-
-report::_line_new_since() {
-  jq -r --arg prev "${2}" "${REPORT_JQ_PRELUDE}"'
-    [ (.brew.undeclared // []) | sort_by([(.kind | kind_rank), .name])[] | select(.new == true) | .kind + " " + .name ]
-    | if length == 0 then empty
-      else (if $prev == "" then "New since the last run: " else "New since the last run (" + $prev + "): " end) + join(", ") + "."
-      end' "${1}"
-}
-
-report::_bullets_human() {
-  jq -r --arg cli "${CLI_NAME}" "${REPORT_JQ_PRELUDE}"'
-    def keg: split("/") | last;
-    def tap: split("/") | if length >= 3 then (.[0:2] | join("/")) else "" end;
-    def tiers: (.tiers // (if (.tier // "") == "" then [] else [.tier] end));
-    [ (.brew.orphan_keg // [])[]
-      | .name as $n | ($n | keg) as $keg | ($n | tap) as $tap | (.hint // "") as $h
-      | if ($h | startswith("the tap now ships cask")) then
-          "- `\($n)` is an orphaned keg: the tap converted the formula to a cask. Run\n  `brew uninstall \($keg) && brew tap \($tap) && brew install --cask \($n)`,\n  then `\($cli) brew decree cask:\($n) --local --reason \"…\"`."
-        elif $h == "tap not tapped" then
-          "- `\($n)` is an orphaned keg: its tap \($tap) is not tapped. Run `brew tap \($tap)` to restore it, or\n  `brew uninstall \($keg)` if it is no longer wanted."
-        else
-          "- `\($n)` is an orphaned keg (\(if $h == "" then "formula removed from tap" else $h end)): a fresh machine cannot install it. Run\n  `brew uninstall \($keg)` if it is no longer wanted; otherwise find where the formula moved and declare that."
-        end ]
-    + [ (.brew.declared_orphan // [])[]
-        | "- \(.kind) `\(.name)` is declared\(if (tiers | length) > 0 then " in " + (tiers | join(", ")) else "" end) but its keg is orphaned (see above): a fresh machine cannot install it. Repair the keg, then\n  `\($cli) brew undecree \(.kind):\(.name)` and decree the replacement." ]
-    + [ (.brew.duplicate // [])[]
-        | "- \(.kind) `\(.name)` is declared twice (\(tiers | join(", "))): remove one line by hand, or `\($cli) brew undecree \(.kind):\(.name)` if decree wrote it." ]
-    | .[]' "${1}"
-}
-
 report::_bullets_noted() {
   jq -r --arg cli "${CLI_NAME}" "${REPORT_JQ_PRELUDE}"'
     def oneline: gsub("\n"; "; ");
-    def amb: nm + (if (type == "object" and (.candidates // []) != []) then " → " + (.candidates | join(", ")) else "" end);
     [ .steps[] | select(.status == "warn" and .reason != "manual_font") | . as $st
       | if ((.items // []) | length) == 0 then
           "- \(.step): \((if (.detail // "") == "" then .reason else .detail end) | oneline)\($st.fix | fixsfx)"
-        else .items[]
-          | if .kind == "tap" and .problem == "needs to be tapped" then
-              "- \($st.step): tap \(.name) needs to be tapped (`\($cli) init` taps it; or delete the line)"
-            else "- \($st.step): \(.kind) \(.name) \(.problem // "")\($st.fix | fixsfx)" end
+        else .items[] | "- \($st.step): \(.kind) \(.name) \(.problem // "")\($st.fix | fixsfx)"
         end ]
-    + [ (.brew.untrusted_taps // [])[] | "- brew_drift: declared tap \(nm) lacks `trusted: true`" ]
-    + [ (.brew.unresolvable_ignore // [])[] | "- brew_drift: ignore entry \(nm) matches nothing installed" ]
-    + [ (.brew.include_declared_missing // [])[]
-        | "- brew_drift: include-declared Brewfile missing, its items are not ignored: \(if type == "string" then . else (.path // tostring) end)" ]
-    + [ (.brew.ambiguous_alias // [])[] | "- brew_drift: ambiguous alias \(amb)" ]
-    + [ (.brew.inventory_note // empty) | select(. != null and . != "") | "- brew_drift: \(.)" ]
-    + (if .brew.vscode_skipped == true then ["- brew_drift: VS Code inventory skipped (`code` not found)"] else [] end)
     | .[]' "${1}"
 }
 
@@ -199,11 +145,8 @@ report::render() {
   counts=("${(@f)$(jq -r '[(.steps | length),
       ([.steps[] | select(.status == "fail")] | length),
       ([.steps[] | select(.status == "warn")] | length),
-      ([.steps[] | select(.status == "error")] | length),
-      ((.brew.undeclared // []) | length),
-      (((.brew.orphan_keg // []) + (.brew.declared_orphan // []) + (.brew.duplicate // [])) | length)] | .[]' "${summary}")}")
+      ([.steps[] | select(.status == "error")] | length)] | .[]' "${summary}")}")
   local total="${counts[1]}" fails="${counts[2]}" warns="${counts[3]}" errors="${counts[4]}"
-  local undeclared="${counts[5]}" human="${counts[6]}"
   local log_path="${state_dir}/verify/log.txt"
 
   local lead
@@ -245,28 +188,6 @@ report::render() {
     print -r -- ""
   fi
 
-  if (( undeclared > 0 )); then
-    print -r -- "## Undeclared brew items (decree each one; I decide the tier)"
-    print -r -- ""
-    print -r -- "| kind | name | from | every machine | this machine | never declare |"
-    print -r -- "|---|---|---|---|---|---|"
-    report::_rows_undeclared "${summary}"
-    print -r -- ""
-    local new_since
-    new_since="$(report::_line_new_since "${summary}" "${previous}")"
-    if [[ -n "${new_since}" ]]; then
-      print -r -- "${new_since}"
-      print -r -- ""
-    fi
-  fi
-
-  if (( human > 0 )); then
-    print -r -- "## Needs a human (the tool never uninstalls or reinstalls)"
-    print -r -- ""
-    report::_bullets_human "${summary}"
-    print -r -- ""
-  fi
-
   local noted
   noted="$(report::_bullets_noted "${summary}")"
   if [[ -n "${noted}" ]]; then
@@ -286,7 +207,7 @@ report::render() {
   fi
   print -r -- '```'
   print -r -- "Full log: ${log_path}"
-  print -r -- "Run dir:  ${state_dir}/runs/${run_id}/  (summary.json, Brewfile.merged, bundle_check.out, drift.json)"
+  print -r -- "Run dir:  ${state_dir}/runs/${run_id}/  (summary.json)"
   print -r -- "Trail:    ${state_dir}/verify.log"
   print -r -- ""
 
@@ -294,7 +215,7 @@ report::render() {
   if [[ "${kind}" == error ]]; then
     task="Diagnose why '${CLI_NAME} healthcheck' cannot run on this machine and fix it; do not silence the check."
   else
-    task="Fix every row under 'What failed', following the rules below it (check prior fixes with git df log first; commit with the fix(new-machine/<step>) header). For brew items run '${CLI_NAME} brew triage' and propose one '${CLI_NAME} brew decree ...' per item; I decide the tier."
+    task="Fix every row under 'What failed', following the rules below it (check prior fixes with git df log first; commit with the fix(new-machine/<step>) header)."
   fi
   cat <<EOF
 ## How to feed this to Claude
@@ -304,12 +225,9 @@ report::render() {
     claude "Read ${report_path} and ${log_path}. Load the /ari-dotfiles skill first and follow its two-tier rules: shared tier (~/.config, git df) commit and NEVER push, end with 'Run dotfiles push when ready'; local tier (~/.local, git ldf) commit and then git ldf push. ${task} Finish with '${CLI_NAME} healthcheck --json' and show me the output."
 
 2. Rules for the fix (the /ari-dotfiles skill is canonical):
-   - Declared brew state is the two Brewfiles: ${HOME}/.config/new-machine/Brewfile (global, df) and
-     ${local_dir}/Brewfile (local, ldf), plus \`Brewfile.ignore\` beside each.
-     Undeclared items are settled with \`${CLI_NAME} brew decree …\`, never by editing brew's state and never with
-     \`brew bundle cleanup\`, \`brew upgrade\`, or \`brew bundle add\`.
-   - Do not install anything to make the check pass except \`${CLI_NAME} apply <step>\`, which installs only what
-     the Brewfiles declare. Orphaned kegs need a human: propose the command, do not run it.
+   - Homebrew is declared in the Nix flakes (~/.config/dotfiles/nix/darwin.nix and the local flake in
+     ${local_dir:h}/dotfiles/nix); a \`${CLI_NAME} switch\` applies them and uninstalls anything undeclared.
+     Never \`brew install\` by hand; edit a flake and build it with \`${CLI_NAME} switch --build\`. The switch is mine.
    - Never \`--no-verify\`; never commit a \`*.secret.zsh\`.
    - If a finding is a false alarm, fix the checker in ${HOME}/.config/dotfiles/steps/<step>.zsh and add a
      tests/test_*.sh case that reproduces it; \`${CLI_NAME} test\` must pass.
@@ -417,7 +335,7 @@ report::decide() {
       last='null'
     fi
   fi
-  local last_fp last_sha last_first_seen last_weeks last_errors last_report_path last_ts last_undeclared
+  local last_fp last_sha last_first_seen last_weeks last_errors last_report_path last_ts
   last_fp="$(jq -r '.fingerprint // ""' <<< "${last}")"
   last_sha="$(jq -r '.report_sha256 // ""' <<< "${last}")"
   last_first_seen="$(jq -r '.first_seen // ""' <<< "${last}")"
@@ -425,7 +343,6 @@ report::decide() {
   last_errors="$(jq -r '.consecutive_errors // 0' <<< "${last}")"
   last_report_path="$(jq -r '.report_path // ""' <<< "${last}")"
   last_ts="$(jq -r '.ts // ""' <<< "${last}")"
-  last_undeclared="$(jq -c '.brew_undeclared // []' <<< "${last}")"
   local previous_date=""
   if [[ "${last_ts}" =~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' ]]; then previous_date="${last_ts[1,10]}"; fi
 
@@ -439,15 +356,13 @@ report::decide() {
   local -a stats
   stats=("${(@f)$(jq -r '[(.steps | length),
       ([.steps[] | select(.status == "fail") | ((.items // []) | length) | if . == 0 then 1 else . end] | add // 0),
-      ([.steps[] | select(.status == "error")] | length),
-      ((.brew.undeclared // []) | length)] | .[]' "${summary}")}")
-  local checks="${stats[1]}" problems=$(( stats[2] + stats[3] )) undeclared_count="${stats[4]}"
-  local error_reasons transient run_undeclared
+      ([.steps[] | select(.status == "error")] | length)] | .[]' "${summary}")}")
+  local checks="${stats[1]}" problems=$(( stats[2] + stats[3] ))
+  local error_reasons transient
   error_reasons="$(jq -c '[.steps[] | select(.status == "error") | .reason] | unique' "${summary}")"
-  transient="$(jq -r 'all(.[]; . == "brew_busy" or . == "timed_out")' <<< "${error_reasons}")"
-  run_undeclared="$(jq -c '[(.brew.undeclared // [])[] | .kind + "/" + .name]' "${summary}")"
+  transient="$(jq -r 'all(.[]; . == "timed_out")' <<< "${error_reasons}")"
 
-  local action first_seen="" weeks=0 consecutive_errors=0 report_path="" report_sha="" undeclared="${run_undeclared}"
+  local action first_seen="" weeks=0 consecutive_errors=0 report_path="" report_sha=""
   local hud_message hud_seconds=null hud_open=""
   local -a old_actions=()
   local -a candidates=("${report}")
@@ -466,10 +381,9 @@ report::decide() {
       if [[ -n "${act}" ]]; then old_actions+=("${act}"); fi
     done
   elif [[ "${kind}" == error && "${transient}" == true && "${force}" == false ]] && (( consecutive_errors < 2 )); then
-    # A transient error is not a verdict: carry the previous fingerprint and undeclared set untouched.
+    # A transient error is not a verdict: carry the previous fingerprint untouched.
     action=suppress
     fp="${last_fp}"
-    undeclared="${last_undeclared}"
     first_seen="${last_first_seen}"
     weeks="${last_weeks}"
     report_path="${last_report_path}"
@@ -534,7 +448,6 @@ report::decide() {
          --argjson weeks "${weeks}" --argjson errors "${consecutive_errors}" --arg report_path "${report_path}" \
          --arg report_sha "${report_sha}" --arg previous_date "${previous_date}" --argjson old "${old_json}" \
          --arg hud_message "${hud_message}" --argjson hud_seconds "${hud_seconds}" --arg hud_open "${hud_open}" \
-         --argjson undeclared "${undeclared}" --argjson undeclared_count "${undeclared_count}" \
          --argjson problems "${problems}" --argjson checks "${checks}" --argjson error_reasons "${error_reasons}" \
          --argjson force "${force}" --arg status "${run_status}" '
     def nullable: if . == "" then null else . end;
@@ -542,7 +455,7 @@ report::decide() {
      weeks_failing: $weeks, consecutive_errors: $errors, report_path: ($report_path | nullable),
      report_sha256: ($report_sha | nullable), previous_date: ($previous_date | nullable), old_reports: $old,
      hud: {message: $hud_message, seconds: $hud_seconds, open: ($hud_open | nullable)},
-     brew_undeclared: $undeclared, undeclared_count: $undeclared_count, problems: $problems, checks: $checks,
+     problems: $problems, checks: $checks,
      error_reasons: $error_reasons, force: $force}'
 }
 
@@ -555,7 +468,7 @@ report::write() {
   local state_dir="${ARI_DOTFILES_STATE_DIR}"
   mkdir -p "${state_dir}/reports"
 
-  local action kind fp first_seen weeks report_path report_sha previous run_id ts run_status errors undeclared
+  local action kind fp first_seen weeks report_path report_sha previous run_id ts run_status errors
   action="$(jq -r .action "${decision}")"
   kind="$(jq -r .kind "${decision}")"
   fp="$(jq -r .fingerprint "${decision}")"
@@ -565,7 +478,6 @@ report::write() {
   report_sha="$(jq -r '.report_sha256 // ""' "${decision}")"
   previous="$(jq -r '.previous_date // ""' "${decision}")"
   errors="$(jq -r .consecutive_errors "${decision}")"
-  undeclared="$(jq -c .brew_undeclared "${decision}")"
   run_id="$(jq -r '.run_id // "unknown"' "${summary}")"
   ts="$(jq -r '.ts // ""' "${summary}")"
   run_status="$(jq -r '.status // ""' "${summary}")"
@@ -627,11 +539,11 @@ report::write() {
   local last_file="${state_dir}/last_result.json"
   jq -n --arg run_id "${run_id}" --arg ts "${ts}" --arg status "${run_status}" --arg fp "${fp}" \
         --arg first_seen "${first_seen}" --argjson weeks "${weeks}" --arg report_path "${report_path}" \
-        --arg sha "${report_sha}" --argjson errors "${errors}" --argjson undeclared "${undeclared}" '
+        --arg sha "${report_sha}" --argjson errors "${errors}" '
     def nullable: if . == "" then null else . end;
     {schema: 1, run_id: $run_id, ts: $ts, status: $status, fingerprint: $fp, first_seen: ($first_seen | nullable),
      weeks_failing: $weeks, report_path: ($report_path | nullable), report_sha256: ($sha | nullable),
-     consecutive_errors: $errors, brew_undeclared: $undeclared}' > "${last_file}.tmp"
+     consecutive_errors: $errors}' > "${last_file}.tmp"
   mv -f "${last_file}.tmp" "${last_file}"
 
   jq -c --arg report "${report_result}" --slurpfile lr "${last_file}" '. + {report: $report, last_result: $lr[0]}' "${decision}"

@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 # Fake nvim: --version prints a version line; any other call is a headless start that prints
-# $NVIM_SHIM_STDERR to stderr and exits ${NVIM_SHIM_RC:-0}.
+# $NVIM_SHIM_STDERR to stderr and exits ${NVIM_SHIM_RC:-0}. NVIM_SHIM_HANG=1 hangs the start
+# itself; NVIM_SHIM_HANG=deep hangs a subshell of it, so only a tree kill reaches the sleeper.
 set -u
 printf '%s\n' "$*" >> "${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/nvim.log"
 if [[ "${1:-}" == --version ]]; then
   printf 'NVIM v0.13.0-dev\n'
   exit 0
 fi
+case "${NVIM_SHIM_HANG-}" in
+  1) exec sleep 30 ;;
+  deep) (sleep 30); exit 0 ;;
+esac
 [[ -n "${NVIM_SHIM_STDERR-}" ]] && printf '%s\n' "${NVIM_SHIM_STDERR}" >&2
 exit "${NVIM_SHIM_RC:-0}"

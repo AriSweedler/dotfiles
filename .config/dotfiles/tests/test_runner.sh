@@ -48,19 +48,15 @@ assert_eq "check without brew exits 1" 1 "${RC}"
 f="$(out_json)"
 assert_eq "brew fails" fail "$(step_get brew .status)"
 assert_eq "brew reason brew_missing" brew_missing "$(step_get brew .reason)"
-for step in brew_pkgs brew_drift; do
-  assert_eq "${step} skip" skip "$(step_get "${step}" .status)"
-  assert_eq "${step} reason prerequisite_fail" prerequisite_fail "$(step_get "${step}" .reason)"
-done
 # The font check reads font files, not brew: it still runs.
 assert_eq "terminal_nerdfont runs without brew" true "$(step_get terminal_nerdfont .status | grep -qvx skip && echo true)"
 assert_json "non-brew steps still ran" "${f}" '[.steps[] | select(.step=="claude" or .step=="neovim" or .step=="dotfiles_repo" or .step=="local_dotfiles_repo") | .status] | all(. != "skip")' true
 
 shim_add brew
 bump_now_secs 60
-nm check --only brew_drift,claude --json
+nm check --only brew,claude --json
 f="$(out_json)"
-assert_json "--only runs exactly the named steps" "${f}" '[.steps[].step] | sort | join(",")' "brew_drift,claude"
+assert_json "--only runs exactly the named steps" "${f}" '[.steps[].step] | sort | join(",")' "brew,claude"
 
 if (( FAIL > 0 )); then jq -c '.steps[] | {step, status, reason, detail, applied}' "${f}" >&2; fi
 report

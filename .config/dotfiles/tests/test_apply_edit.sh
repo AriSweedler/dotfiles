@@ -83,7 +83,7 @@ assert_contains "the plan: a failing step with an apply starts as apply, with it
 assert_contains "the plan: the newest result is each step's own, not last-check.json's" "$(plan_line claude)" "last ok present (1m ago)"
 assert_contains "the plan: a manual warn without an apply stays skip, check-only" "$(plan_line terminal_nerdfont)" "$(pl skip)terminal_nerdfont"
 assert_contains "the plan: check-only" "$(plan_line terminal_nerdfont)" " · check-only"
-assert_contains "the plan: needs" "$(plan_line brew_pkgs)" " · brew · needs brew · last ok satisfied"
+assert_contains "the plan: needs" "$(plan_line claude_skills)" " · repo · needs dotfiles_repo · last skip no_registry"
 assert_eq "the editor ran without the lock" "" "$(cat "${LOCKSEEN}" 2>/dev/null)"
 assert_no_file "unchanged: no plan left" "${PLAN}"
 
@@ -115,20 +115,20 @@ assert_file "terminal, declined: the plan kept" "${PLAN}"
 assert_eq "terminal, declined: nothing applied" "" "$(last_setup_steps)"
 
 # ── bad lines; a need whose newest result failed ──
-shim_remove brew
-nm check --only brew
-ed bad apply --edit brew_pkgs
+mv "${ARI_DOTFILES_DF_GIT_DIR}" "${FIX}/df.away"
+nm check --only dotfiles_repo
+ed bad apply --edit claude_skills
 assert_eq "bad plan: exit 1" 1 "${RC}"
 n="$(grep -c '' "${SEEN}")"
 assert_contains "bad plan: an action alone" "${ERR}" "line $(( n + 1 )): expected one step after 'apply'"
 assert_contains "bad plan: a step twice" "${ERR}" "line $(( n + 2 )): listed twice | item='claude'"
-line="$(grep -nE '^apply +brew_pkgs ' "${SEEN}" | cut -d: -f1)"
-assert_contains "bad plan: an applied step whose need failed" "${ERR}" "line ${line}: brew_pkgs needs brew, which ended fail brew_missing and is not applied here; apply brew too, or skip brew_pkgs"
+line="$(grep -nE '^apply +claude_skills ' "${SEEN}" | cut -d: -f1)"
+assert_contains "bad plan: an applied step whose need failed" "${ERR}" "line ${line}: claude_skills needs dotfiles_repo, which ended fail missing_bare_repo and is not applied here; apply dotfiles_repo too, or skip claude_skills"
 assert_contains "bad plan: the resume" "${ERR}" "fix='dotfiles apply --edit ${PLAN}'"
 assert_file "bad plan: kept" "${PLAN}"
-shim_add brew
+mv "${FIX}/df.away" "${ARI_DOTFILES_DF_GIT_DIR}"
 
-printf 'skip   brew_pkgs\napply  claude  # resumed\n' > "${PLAN}"
+printf 'skip   claude_skills\napply  claude  # resumed\n' > "${PLAN}"
 ed noop apply --edit "${PLAN}"
 assert_eq "resumed: exit 0" 0 "${RC}"
 assert_eq "resumed: the plan's apply steps" claude "$(last_setup_steps)"

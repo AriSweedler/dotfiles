@@ -61,8 +61,8 @@
     ];
   };
 
-  # The Brewfile a switch applies, at a stable path: the dotfiles brew steps see it and defer
-  # to the flakes, and `brew bundle check --file=/etc/dotfiles/Brewfile` checks by hand.
+  # The Brewfile a switch applies, at a stable path: `brew bundle check --file=/etc/dotfiles/Brewfile`
+  # checks by hand.
   environment.etc."dotfiles/Brewfile".text = config.homebrew.brewfile;
 
   # `brew bundle` takes seconds even when it has nothing to do. Skip it when the bundle command

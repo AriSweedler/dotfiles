@@ -1,2 +1,0 @@
-# local tier: extension id in a different case than `code --list-extensions` reports
-vscode "Golang.Go"

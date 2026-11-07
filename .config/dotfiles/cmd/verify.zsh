@@ -67,7 +67,7 @@ verify::decide_and_notify() {
   if [[ -n "${message}" ]]; then
     hud "${message}" "${seconds}" "${open_url}"
   fi
-  note "status='$(jq -r '.status' "${summary}")' fingerprint='$(jq -r '.fingerprint // ""' "${decision}")' report='$(jq -r '.report // "none"' "${applied}")' undeclared='$(jq -r '.undeclared_count // 0' "${decision}")'"
+  note "status='$(jq -r '.status' "${summary}")' fingerprint='$(jq -r '.fingerprint // ""' "${decision}")' report='$(jq -r '.report // "none"' "${applied}")'"
 }
 
 # --show: the report a human would open, read-only. No lock, run dir, log, banner or state write;

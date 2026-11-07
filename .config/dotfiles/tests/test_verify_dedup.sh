@@ -6,11 +6,17 @@ set -u
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 world_new
-world_use_fixture drift
-world_bundle_check mixed
+world_use_fixture satisfied
 seed_fake_repos
 seed_ldf_remote
 seed_home_baseline
+NAME_FILE="${XDG_DATA_HOME}/dotfiles/machine-name"
+NAME="$(cat "${NAME_FILE}")"
+# The failing set: claude missing, then the machine name unset, then nvim erroring at start.
+drift() { shim_remove claude; }
+unset_name() { rm -f "${NAME_FILE}"; }
+heal() { shim_add claude; printf '%s\n' "${NAME}" > "${NAME_FILE}"; unset NVIM_SHIM_RC; }
+drift
 export ARI_DOTFILES_INVOKED_BY=launchd
 REPORT="${ARI_DOTFILES_DESKTOP_DIR}/new-machine-FAILED.md"
 STATE="${ARI_DOTFILES_STATE_DIR}"
@@ -44,21 +50,20 @@ verify --force-report
 assert_file "--force-report recreates it" "${REPORT}"
 assert_eq "fingerprint unchanged after force" "${fp1}" "$(lr .fingerprint)"
 
-fixture_add_formula cowsay2
+unset_name
 verify
 fp2="$(lr .fingerprint)"
-if [[ "${fp2}" != "${fp1}" ]]; then pass "new undeclared item changes the fingerprint"; else fail "new undeclared item changes the fingerprint" "unchanged ${fp1}"; fi
+if [[ "${fp2}" != "${fp1}" ]]; then pass "a new failure changes the fingerprint"; else fail "a new failure changes the fingerprint" "unchanged ${fp1}"; fi
 # Every render is archived: the first, the forced re-render, the Desktop copy moved aside (its
 # first_seen name was taken by a different render, so it got a numbered one), and the new one.
 assert_eq "four archived reports" 4 "$(count_reports)"
-assert_contains "new report names the new item" "$(cat "${REPORT}")" "cowsay2"
-assert_contains "new report has the new-since line" "$(cat "${REPORT}")" "New since the last run"
+assert_contains "new report names the new failure" "$(cat "${REPORT}")" "| machine_name |"
 assert_json "weeks_failing reset to 1" "${LR}" '.weeks_failing' 1
 assert_json "first_seen is the new run's day" "${LR}" '.first_seen' "$(TZ=UTC date -r "${ARI_DOTFILES_NOW}" '+%Y-%m-%d')"
 assert_contains "notifier announces the new report" "$(shim_log atn)" "problems"
 
 printf '\nmy notes\n' >> "${REPORT}"
-fixture_add_formula cowsay3
+export NVIM_SHIM_RC=3
 verify
 edited=("${ARI_DOTFILES_DESKTOP_DIR}"/new-machine-FAILED.*.edited.md)
 assert_eq "edited report renamed aside" 1 "${#edited[@]}"
@@ -66,10 +71,10 @@ if [[ "$(basename "${edited[0]}")" =~ ^new-machine-FAILED\.[0-9]{4}-[0-9]{2}-[0-
 else fail "edited file named new-machine-FAILED.<date>-<fp8>.edited.md" "${edited[0]}"; fi
 assert_contains "edited file keeps the notes" "$(cat "${edited[0]}")" "my notes"
 assert_file "new report written" "${REPORT}"
-assert_contains "new report names cowsay3" "$(cat "${REPORT}")" "cowsay3"
+assert_contains "new report names neovim" "$(cat "${REPORT}")" "| neovim |"
 rm -f "${edited[0]}"
 
-world_use_fixture satisfied
+heal
 verify
 assert_eq "pass exits 0" 0 "${RC}"
 assert_no_file "report moved off the Desktop on pass" "${REPORT}"
@@ -79,20 +84,18 @@ assert_json "fingerprint cleared" "${LR}" '.fingerprint' ""
 assert_json "status ok or warn" "${LR}" '.status == "ok" or .status == "warn"' true
 assert_contains "notifier says verified OK" "$(shim_log atn)" "verified OK"
 
-world_use_fixture drift
-world_bundle_check mixed
+drift
 verify
 assert_file "report back after drift returns" "${REPORT}"
 printf '\nmore notes\n' >> "${REPORT}"
-world_use_fixture satisfied
+heal
 verify
 assert_eq "pass with an edited report exits 0" 0 "${RC}"
 assert_file "edited report left on the Desktop" "${REPORT}"
 assert_contains "trail notes the edited report" "$(cat "${STATE}/verify.log")${ERR}" "left edited report"
 rm -f "${REPORT}"
 
-world_use_fixture drift
-world_bundle_check mixed
+drift
 verify
 sha_a="$(sha256 "${REPORT}")"
 first_seen_a="$(lr .first_seen)"
@@ -106,7 +109,7 @@ assert_eq "first_seen unchanged by a warn-only change" "${first_seen_a}" "$(lr .
 # fingerprint recurs; the new report takes a numbered name instead.
 rm -f "${REPORT}"
 printf 'not ours\n' > "${REPORT}"
-fixture_add_formula cowsay4
+unset_name
 verify
 assert_eq "foreign file left at the canonical path" "not ours" "$(cat "${REPORT}")"
 fp8="$(lr .fingerprint | cut -c1-8)"
@@ -115,9 +118,9 @@ assert_file "report written beside the foreign file" "${COLL}"
 assert_eq "last_result points at the collision copy" "${COLL}" "$(lr .report_path)"
 { printf 'my triage\n'; tail -n +2 "${COLL}"; printf '\ncollision notes\n'; } > "${COLL}.tmp"
 mv "${COLL}.tmp" "${COLL}"
-fixture_add_formula cowsay5
+export NVIM_SHIM_RC=3
 verify
-fixture_remove_formula cowsay5
+unset NVIM_SHIM_RC
 verify
 assert_contains "marker-edited collision report keeps its notes" "$(cat "${COLL}")" "collision notes"
 assert_file "recurring fingerprint writes a numbered copy" "${ARI_DOTFILES_DESKTOP_DIR}/new-machine-FAILED.${fp8}.2.md"

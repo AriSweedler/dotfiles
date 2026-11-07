@@ -33,7 +33,7 @@ hermetic() {
     "$1" "$2" > "${SUITES}/test_$1.sh"
 }
 hermetic bar 0
-hermetic step_brew_drift 0
+hermetic step_machine_name 0
 hermetic alttab_step 0
 hermetic verify_lock 4
 printf '#!/usr/bin/env bash\n# the runner\n' > "${SUITES}/run.sh"
@@ -106,8 +106,8 @@ assert_eq "edit: a target that does not exist opens the suite alone" "${PLUG}/gh
 t record --edit broken
 assert_eq "edit: the suite's status is the exit" 7 "${RC}"
 assert_contains "edit: a failure names the re-edit" "${OUT}" "next: dotfiles test --edit broken"
-t record --edit step_brew_drift
-assert_eq "edit test_step_X: steps/X.zsh" "$(lines "${SUITES}/test_step_brew_drift.sh" "${STEPS}/brew_drift.zsh")" "$(opened)"
+t record --edit step_machine_name
+assert_eq "edit test_step_X: steps/X.zsh" "$(lines "${SUITES}/test_step_machine_name.sh" "${STEPS}/machine_name.zsh")" "$(opened)"
 t record --edit alttab_step
 assert_eq "edit test_X_step: steps/X.zsh" "$(lines "${SUITES}/test_alttab_step.sh" "${STEPS}/alttab.zsh")" "$(opened)"
 t record --edit verify_lock

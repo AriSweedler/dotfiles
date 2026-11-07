@@ -29,11 +29,10 @@ bindkey "^X^E" edit-command-line
 # Ctrl+X Ctrl+_ to redo
 bindkey '^X^_' redo
 
-# Edit the shared Brewfile: everything every machine gets. Applied by `dotfiles setup`
-# together with ~/.local/share/new-machine/Brewfile (this machine only). Add lines with
-# `dotfiles brew decree <name> --global|--local --reason why`.
+# Edit the shared Homebrew list (the brews and casks every machine gets) in the shared flake;
+# this machine's own are in ~/.local/share/dotfiles/nix. `dotfiles switch` applies both.
 function vi_::new_machine_brewfile() {
-  "${EDITOR}" "${HOME}/.config/new-machine/Brewfile"
+  "${EDITOR}" "${HOME}/.config/dotfiles/nix/darwin.nix"
 }
 alias vi_newmachbrew=vi_::new_machine_brewfile
 

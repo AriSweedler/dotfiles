@@ -26,7 +26,7 @@ mkdir -p "${FIX}/cwd"
 snapshot() { find "${FIX}" -mindepth 1 -not -name 'source.out' -not -name 'source.err' | sort; }
 before="$(snapshot)"
 hermetic_env
-for lib in "${ORIG_CONFIG_DIR}"/dotfiles/lib/*.zsh "${ORIG_CONFIG_DIR}"/dotfiles/cmd/brew/*.zsh "${ORIG_CONFIG_DIR}"/dotfiles/cmd/verify/*.zsh; do
+for lib in "${ORIG_CONFIG_DIR}"/dotfiles/lib/*.zsh "${ORIG_CONFIG_DIR}"/dotfiles/cmd/verify/*.zsh; do
   name="$(basename "${lib}")"
   if env -i "${HERMETIC_ENV[@]}" "${FIX}/tools/zsh" -c 'cd "$2" && source "$1"' _ "${lib}" "${FIX}/cwd" \
        > "${FIX}/source.out" 2> "${FIX}/source.err"; then pass "source ${name} exits 0"

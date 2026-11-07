@@ -43,7 +43,6 @@ typeset -gx ARI_DOTFILES_DESKTOP_DIR="${ARI_DOTFILES_DESKTOP_DIR:-${HOME}/Deskto
 typeset -gx ARI_DOTFILES_LAUNCH_AGENTS_DIR="${ARI_DOTFILES_LAUNCH_AGENTS_DIR:-${HOME}/Library/LaunchAgents}"
 typeset -gx ARI_DOTFILES_TERMINAL_PLIST="${ARI_DOTFILES_TERMINAL_PLIST:-${HOME}/Library/Preferences/com.apple.Terminal.plist}"
 typeset -gx ARI_DOTFILES_FONT_DIRS="${ARI_DOTFILES_FONT_DIRS:-${HOME}/Library/Fonts:/Library/Fonts}"   # colon-separated, searched recursively
-typeset -gx ARI_DOTFILES_NIX_BREWFILE="${ARI_DOTFILES_NIX_BREWFILE:-/etc/dotfiles/Brewfile}"   # nix-darwin's generated Brewfile; present = the flakes declare Homebrew
 typeset -gx ARI_DOTFILES_NIX_STORE="${ARI_DOTFILES_NIX_STORE:-/nix/store}"   # what a flake installs resolves here: the neovim step fails an nvim outside it, `jobs install` defers to a plist whose agent is in it
 typeset -gx ARI_DOTFILES_NIX_FLAKE="${ARI_DOTFILES_NIX_FLAKE:-${XDG_DATA_HOME}/dotfiles/nix}"   # the local flake `dotfiles switch` locks and switches to
 typeset -gx ARI_DOTFILES_NIX_HOST="${ARI_DOTFILES_NIX_HOST:-}"   # its darwinConfigurations entry; empty: the only one
@@ -69,7 +68,6 @@ typeset -gx ARI_DOTFILES_CHECK_TIMEOUT_SECS="${ARI_DOTFILES_CHECK_TIMEOUT_SECS:-
 typeset -gx ARI_DOTFILES_APPLY_TIMEOUT_SECS="${ARI_DOTFILES_APPLY_TIMEOUT_SECS:-1800}"
 typeset -gx ARI_DOTFILES_RETRY_SECS="${ARI_DOTFILES_RETRY_SECS:-60}"
 typeset -gx ARI_DOTFILES_LOCK_MAX_AGE_SECS="${ARI_DOTFILES_LOCK_MAX_AGE_SECS:-7200}"
-typeset -gx ARI_DOTFILES_BREW_BUSY_PATTERN="${ARI_DOTFILES_BREW_BUSY_PATTERN:-Homebrew/Library/Homebrew/brew.rb}"
 # zsh arithmetic reads a non-numeric string as 0, which would silently disable a watchdog.
 for _seam in ARI_DOTFILES_CHECK_TIMEOUT_SECS ARI_DOTFILES_APPLY_TIMEOUT_SECS ARI_DOTFILES_RETRY_SECS ARI_DOTFILES_LOCK_MAX_AGE_SECS; do
   if [[ "${(P)_seam}" != <-> ]]; then
@@ -151,16 +149,11 @@ if [[ -d "${HOME}/.config/new-machine" ]]; then
 else
   typeset -gx ARI_DOTFILES_GLOBAL_DIR="${ARI_DOTFILES_GLOBAL_DIR:-${ARI_DOTFILES_SHARED_DIR}}"
 fi
-typeset -gx GLOBAL_BREWFILE="${ARI_DOTFILES_GLOBAL_DIR}/Brewfile"
-typeset -gx GLOBAL_BREWFILE_IGNORE="${ARI_DOTFILES_GLOBAL_DIR}/Brewfile.ignore"
-typeset -gx LOCAL_BREWFILE="${ARI_DOTFILES_LOCAL_DIR}/Brewfile"
-typeset -gx LOCAL_BREWFILE_IGNORE="${ARI_DOTFILES_LOCAL_DIR}/Brewfile.ignore"
 typeset -gx LDF_EXCLUDE_TEMPLATE="${ARI_DOTFILES_GLOBAL_DIR}/local-dotfiles-exclude"
 typeset -gx LAST_RESULT_FILE="${ARI_DOTFILES_STATE_DIR}/last_result.json"
 typeset -gx VERIFY_TRAIL="${ARI_DOTFILES_STATE_DIR}/verify.log"
 typeset -gx REPORT_PATH="${ARI_DOTFILES_DESKTOP_DIR}/new-machine-FAILED.md"
 # The brew model, a domain library steps and verbs load on demand.
-typeset -gx ARI_DOTFILES_BREW_LIB="${ARI_DOTFILES_CMD}/brew/brew.zsh"
 
 # --- The two tiers, by repo name; a submodule needs no row: its git is its checkout, ~/<path> ---
 typeset -gA TIER_GIT_DIR=(shared "${ARI_DOTFILES_DF_GIT_DIR}" local "${ARI_DOTFILES_LDF_GIT_DIR}")

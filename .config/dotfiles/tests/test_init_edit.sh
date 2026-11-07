@@ -31,7 +31,7 @@ editor() {
 }
 editor noop '{ print }'
 editor skip_all '{ sub(/^apply/, "skip ") } { print }'
-editor skip_brew '{ sub(/^apply +brew /, "skip  brew ") } { print }'
+editor skip_repo '{ sub(/^apply +dotfiles_repo /, "skip  dotfiles_repo ") } { print }'
 editor bad 'END { print "frobnicate claude"; print "apply nosuch"; print "apply claude extra"; print "skip claude"; print "apply brew" } { print }'
 
 # ed ED ARGS...: `dotfiles ARGS` with EDITOR=ED, no terminal; OUT, ERR, RC.
@@ -150,13 +150,13 @@ assert_contains "terminal: another edit offered" "${OUT}" "Edit the plan again? 
 assert_file "terminal: the plan kept" "${PLAN}"
 
 # ── a need that failed: its dependent cannot run without it ──
-shim_remove brew
-ed skip_brew init --edit
+mv "${ARI_DOTFILES_DF_GIT_DIR}" "${FIX}/df.away"
+ed skip_repo init --edit
 assert_eq "need skipped: exit 1" 1 "${RC}"
-assert_contains "need skipped: the plan offers the unchecked step" "$(cat "${SEEN}")" "$(pl apply)brew_pkgs             # not checked (prerequisite_fail):"
-line="$(grep -nE '^apply +brew_pkgs ' "${SEEN}" | cut -d: -f1)"
-assert_contains "need skipped: an error naming the need" "${ERR}" "line ${line}: brew_pkgs needs brew, which ended fail brew_missing and is not applied here; apply brew too, or skip brew_pkgs"
-shim_add brew
+assert_contains "need skipped: the plan offers the unchecked step" "$(cat "${SEEN}")" "$(pl apply)claude_skills         # not checked (prerequisite_fail):"
+line="$(grep -nE '^apply +claude_skills ' "${SEEN}" | cut -d: -f1)"
+assert_contains "need skipped: an error naming the need" "${ERR}" "line ${line}: claude_skills needs dotfiles_repo, which ended fail missing_bare_repo and is not applied here; apply dotfiles_repo too, or skip claude_skills"
+mv "${FIX}/df.away" "${ARI_DOTFILES_DF_GIT_DIR}"
 
 # ── nothing to apply: no plan, no editor ──
 shim_add claude

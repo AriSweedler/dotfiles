@@ -7,17 +7,17 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 world_new
 seed_fake_repos
-mkdir -p "${XDG_DATA_HOME}/new-machine"
-printf 'brew "jq"\n' > "${XDG_DATA_HOME}/new-machine/Brewfile"
+mkdir -p "${XDG_DATA_HOME}/dotfiles/jobs"
+printf '#!/usr/bin/env zsh\n' > "${XDG_DATA_HOME}/dotfiles/jobs/jq-sync"
 
 hermetic_env
 RC=0
 env -i "${HERMETIC_ENV[@]}" "${FIX}/tools/zsh" -c '
   for f in "$1"/lib/*.zsh(N); do source "${f}"; done
-  tier::commit local "add jq" "$2"' _ "${ORIG_CONFIG_DIR}/dotfiles" "${XDG_DATA_HOME}/new-machine/Brewfile" \
+  tier::commit local "add jq-sync" "$2"' _ "${ORIG_CONFIG_DIR}/dotfiles" "${XDG_DATA_HOME}/dotfiles/jobs/jq-sync" \
   > "${FIX}/out" 2> "${FIX}/err" || RC=$?
 assert_eq "no remote: exit 0" 0 "${RC}"
-assert_eq "no remote: committed" "add jq" "$(ldf_git log -1 --format=%s)"
+assert_eq "no remote: committed" "add jq-sync" "$(ldf_git log -1 --format=%s)"
 assert_contains "no remote: says there is nothing to push" "$(cat "${FIX}/err")" "local tier has no remote; committed here, nothing to push"
 assert_not_contains "no remote: no push failure" "$(cat "${FIX}/err")" "push failed"
 report

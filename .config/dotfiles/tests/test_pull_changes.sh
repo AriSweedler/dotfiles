@@ -31,12 +31,6 @@ assert_eq "nothing changed: registry valid" 0 "${RC}"
 assert_eq "nothing changed: no lines" "" "${OUT}"
 
 map_paths "${STEPS_DIR}" <<'EOF'
-M	.config/new-machine/Brewfile
-EOF
-assert_eq "Brewfile: both brew steps, registry order" "step brew_drift .config/new-machine/Brewfile
-step brew_pkgs .config/new-machine/Brewfile" "${OUT}"
-
-map_paths "${STEPS_DIR}" <<'EOF'
 M	.config/karabiner/karabiner.ts
 M	.config/claude/skills/ari-dotfiles/SKILL.md
 M	.config/plugged
@@ -61,13 +55,13 @@ removed old_step .config/dotfiles/steps/old_step.zsh" "${OUT}"
 
 map_paths "${STEPS_DIR}" <<'EOF'
 M	.config/dotfiles/lib/ui.zsh
-A	.config/dotfiles/cmd/brew/new.zsh
+A	.config/dotfiles/cmd/verify/new.zsh
 M	.config/bin/dotfiles
 M	README.md
 EOF
-assert_eq "harness: live, and only a step that watches it (dotfiles_docs reads cmd/)" "step dotfiles_docs .config/dotfiles/cmd/brew/new.zsh
+assert_eq "harness: live, and only a step that watches it (dotfiles_docs reads cmd/)" "step dotfiles_docs .config/dotfiles/cmd/verify/new.zsh
 harness .config/dotfiles/lib/ui.zsh
-harness .config/dotfiles/cmd/brew/new.zsh
+harness .config/dotfiles/cmd/verify/new.zsh
 harness .config/bin/dotfiles" "${OUT}"
 
 map_paths "${STEPS_DIR}" <<'EOF'
@@ -140,7 +134,7 @@ nm pull
 assert_eq "up to date: exit 0" 0 "${RC}"
 assert_eq "up to date: one line after git's" "up to date: nothing to pull" "${OUT##*$'\n'}"
 
-remote_append .config/new-machine/Brewfile '# a pulled comment'
+remote_append .config/karabiner/karabiner.ts '// a pulled comment'
 remote_append .config/raycast-snippets/snippets.json '[]'
 git -C "${CLONE}" push -q origin main
 head_before="$(df_git rev-parse HEAD)"
@@ -150,18 +144,18 @@ assert_eq "dry-run: exit 0" 0 "${RC}"
 assert_eq "dry-run: HEAD unchanged" "${head_before}" "$(df_git rev-parse HEAD)"
 assert_eq "dry-run: origin fetched" "$(git -C "${CLONE}" rev-parse HEAD)" "$(df_git rev-parse origin/main)"
 assert_contains "dry-run: says would" "${OUT}" "would pull 2 changed paths"
-assert_contains "dry-run: names the apply" "${OUT}" "run: dotfiles apply brew_drift brew_pkgs raycast_sync"
+assert_contains "dry-run: names the apply" "${OUT}" "run: dotfiles apply karabiner raycast_sync"
 
 shim_logs_reset
 nm --timing pull
 assert_eq "pull: exit 0 with steps affected" 0 "${RC}"
 assert_eq "pull: at origin" "$(git -C "${CLONE}" rev-parse HEAD)" "$(df_git rev-parse HEAD)"
 assert_contains "pull: counts the paths" "${OUT}" "pulled 2 changed paths"
-assert_contains "pull: warns per step with its paths" "${OUT}" "  brew_pkgs     .config/new-machine/Brewfile"
-assert_contains "pull: raycast_sync for its snippets" "${OUT}" "  raycast_sync  .config/raycast-snippets/snippets.json"
-assert_contains "pull: the one command" "${OUT}" "run: dotfiles apply brew_drift brew_pkgs raycast_sync"
-assert_contains "pull: the warning says what changed, steps plural" "${OUT}" "the pull changed files 3 steps read; check this machine still matches:"
-assert_contains "pull: logged as a warning" "${ERR}" "pulled changes affect steps | steps='brew_drift,brew_pkgs,raycast_sync'"
+assert_contains "pull: warns per step with its paths" "${OUT}" "  karabiner     .config/karabiner/karabiner.ts"
+assert_contains "pull: raycast_sync for both its paths" "${OUT}" "  raycast_sync  .config/karabiner/karabiner.ts, .config/raycast-snippets/snippets.json"
+assert_contains "pull: the one command" "${OUT}" "run: dotfiles apply karabiner raycast_sync"
+assert_contains "pull: the warning says what changed, steps plural" "${OUT}" "the pull changed files 2 steps read; check this machine still matches:"
+assert_contains "pull: logged as a warning" "${ERR}" "pulled changes affect steps | steps='karabiner,raycast_sync'"
 assert_no_file "pull: no init run" "${ARI_DOTFILES_STATE_DIR}/runs"
 assert_no_file "pull: no init result" "${ARI_DOTFILES_STATE_DIR}/last_result.json"
 assert_eq "pull: brew never called" "" "$(shim_log brew)"
@@ -176,14 +170,14 @@ assert_eq "pull: the analysis within 0.5 s (took ${took:-?}s)" 1 "$(awk -v t="${
 FAKE_GUM="${FIX}/fakegum"
 printf '#!/bin/sh\nexit 0\n' > "${FAKE_GUM}"
 chmod +x "${FAKE_GUM}"
-remote_append .config/new-machine/Brewfile '# another pulled comment'
+remote_append .config/karabiner/karabiner.ts '// another pulled comment'
 git -C "${CLONE}" push -q origin main
 export ARI_DOTFILES_UI=fancy ARI_DOTFILES_GUM="${FAKE_GUM}"
 nm pull --dry-run
 unset ARI_DOTFILES_UI ARI_DOTFILES_GUM
 assert_eq "fancy, stderr a file: exit 0" 0 "${RC}"
-assert_contains "fancy, stderr a file: the block names the apply" "$(printf '%s' "${OUT}" | /usr/bin/sed -E $'s/\x1b\\[[0-9;]*m//g')" "run: dotfiles apply brew_drift brew_pkgs"
-assert_contains "fancy, stderr a file: the record is logged" "${ERR}" "pulled changes affect steps | steps='brew_drift,brew_pkgs'"
+assert_contains "fancy, stderr a file: the block names the apply" "$(printf '%s' "${OUT}" | /usr/bin/sed -E $'s/\x1b\\[[0-9;]*m//g')" "run: dotfiles apply karabiner raycast_sync"
+assert_contains "fancy, stderr a file: the record is logged" "${ERR}" "pulled changes affect steps | steps='karabiner,raycast_sync'"
 
 # One step: the warning in the singular (the dry run above left its pull to take first).
 nm pull

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The local-dotfiles allowlist template admits share/new-machine/ but still excludes secrets.
+# The local-dotfiles allowlist template admits share/dotfiles/ but still excludes secrets.
 set -u
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -8,24 +8,24 @@ world_new
 BARE="${FIX}/ldf.git"
 WORK="${FIX}/ldfwork"
 git init -q --bare --initial-branch=main "${BARE}"
-mkdir -p "${BARE}/info" "${WORK}/share/new-machine"
+mkdir -p "${BARE}/info" "${WORK}/share/dotfiles/jobs" "${WORK}/share/dotfiles/deps"
 cp "${REPO_DIR}/local-dotfiles-exclude" "${BARE}/info/exclude"
-printf 'brew "gh"\n' > "${WORK}/share/new-machine/Brewfile"
-printf 'formula libtiff  # library\n' > "${WORK}/share/new-machine/Brewfile.ignore"
-printf 'export TOKEN=nope\n' > "${WORK}/share/new-machine/x.secret.zsh"
+printf '#!/usr/bin/env zsh\n' > "${WORK}/share/dotfiles/jobs/sync"
+printf '#!/usr/bin/env zsh\n' > "${WORK}/share/dotfiles/deps/vpn"
+printf 'export TOKEN=nope\n' > "${WORK}/share/dotfiles/x.secret.zsh"
 g() { git --git-dir="${BARE}" --work-tree="${WORK}" "$@"; }
 
-rc=0; (cd "${WORK}" && g check-ignore -q share/new-machine/Brewfile) || rc=$?
-assert_eq "share/new-machine/Brewfile is tracked-eligible" 1 "${rc}"
-rc=0; (cd "${WORK}" && g check-ignore -q share/new-machine/Brewfile.ignore) || rc=$?
-assert_eq "share/new-machine/Brewfile.ignore is tracked-eligible" 1 "${rc}"
-rc=0; (cd "${WORK}" && g check-ignore -q share/new-machine/x.secret.zsh) || rc=$?
-assert_eq "share/new-machine/x.secret.zsh stays excluded" 0 "${rc}"
+rc=0; (cd "${WORK}" && g check-ignore -q share/dotfiles/jobs/sync) || rc=$?
+assert_eq "share/dotfiles/jobs/sync is tracked-eligible" 1 "${rc}"
+rc=0; (cd "${WORK}" && g check-ignore -q share/dotfiles/deps/vpn) || rc=$?
+assert_eq "share/dotfiles/deps/vpn is tracked-eligible" 1 "${rc}"
+rc=0; (cd "${WORK}" && g check-ignore -q share/dotfiles/x.secret.zsh) || rc=$?
+assert_eq "share/dotfiles/x.secret.zsh stays excluded" 0 "${rc}"
 
 (cd "${WORK}" && g add -A .)
 staged="$(g diff --cached --name-only | sort)"
-assert_eq "git add -A stages exactly the two Brewfiles" "share/new-machine/Brewfile
-share/new-machine/Brewfile.ignore" "${staged}"
+assert_eq "git add -A stages exactly the job plugin and the dep" "share/dotfiles/deps/vpn
+share/dotfiles/jobs/sync" "${staged}"
 
 # Every directory the template admits by name keeps a secret beside it out, as the edit checks.
 admitted="$(awk '/^!\/[^*?[]*\/$/ { print substr($0, 3, length($0) - 3) }' "${REPO_DIR}/local-dotfiles-exclude")"
@@ -36,7 +36,7 @@ while IFS= read -r d; do
   printf 'export TOKEN=nope\n' > "${WORK}/${d}/x.secret.zsh"
   (cd "${WORK}" && g check-ignore -q "${d}/x.secret.zsh") || leaks+=" ${d}/x.secret.zsh"
 done <<< "${admitted}"
-assert_contains "the template admits directories" "${admitted}" "share/new-machine"
+assert_contains "the template admits directories" "${admitted}" "share/dotfiles"
 assert_eq "no admitted directory lets a *.secret.zsh in" "" "${leaks}"
 
 # The template is an allowlist (its first rule excludes everything), and every '!' entry says

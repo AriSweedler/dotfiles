@@ -15,8 +15,9 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/AriSweedler/dotfiles/main/
 `git.io/.ari` lands on this page. [`bootstrap.sh`](.config/new-machine/bin/bootstrap.sh)
 installs the Command Line Tools if they are missing and clones the bare repo
 into `~/dotfiles.git`. Then it checks the files out into `~` and hands off to
-`dotfiles setup`. `dotfiles setup` installs Homebrew, the packages in the
-Brewfiles, and the tools, one step each under [`steps/`](.config/dotfiles/steps).
+`dotfiles setup`. `dotfiles setup` installs Homebrew and the tools, one step
+each under [`steps/`](.config/dotfiles/steps); the packages are the Nix flakes',
+which `dotfiles switch` applies.
 It asks for your password once, for Homebrew. `bootstrap.sh` and
 `dotfiles setup` are both safe to run again.
 

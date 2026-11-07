@@ -1,5 +1,5 @@
 # dotfiles/cmd/init.zsh — `dotfiles init`: converge the machine. Every step checks, applies only
-# where it finds drift (a changed Brewfile, Raycast behind), re-checks; then status. What
+# where it finds drift (Raycast behind, a submodule not built), re-checks; then status. What
 # bootstrap ends in.
 
 verb::define init 'converge this machine: check every step, apply where one drifted, then status'
@@ -7,9 +7,9 @@ verb::usage init 'init [--only STEP,..] [--group GROUP] [--dry-run] [--json]'
 verb::about init <<'EOF'
 The healthcheck, then for every step that failed and has an apply, the apply
 and a second check; a step still failing afterwards is reported as
-apply_did_not_converge. A converged machine changes nothing, so a changed
-Brewfile installs its new items, Raycast syncs when it is behind, and the
-rest is a check. When the brew step fails, the later groups are skipped:
+apply_did_not_converge. A converged machine changes nothing, so Raycast
+syncs when it is behind and the rest is a check; packages are the Nix
+flakes', applied by 'dotfiles switch'. When the brew step fails, the later groups are skipped:
 their tools come from it. Ends with 'dotfiles status'.
 
 With --edit, the checks run first, side by side as the healthcheck runs them,

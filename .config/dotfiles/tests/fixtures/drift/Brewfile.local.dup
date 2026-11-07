@@ -1,3 +1,0 @@
-# local tier: the same formula declared twice within one tier
-brew "jq"
-brew "jq"

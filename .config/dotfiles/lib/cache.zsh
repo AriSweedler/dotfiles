@@ -9,7 +9,7 @@
 # and the value of every variable it names in CACHE_ENV (a seam that changes what the check reads). A hit
 # prints the stored verdict with `cached: true | fp='<sha>' at='<ts>'` as the detail's last
 # line; the status, reason and items are the stored run's. Files the check wrote into RUN_DIR
-# (drift.json, say) are stored beside it and restored on a hit, so a run's summary is whole.
+# are stored beside it and restored on a hit, so a run's summary is whole.
 #
 # Never stored: an error verdict; a run where an input's mtime is this second or the last
 # (a same-second, same-size rewrite would look unchanged: git's racy-index rule). Never used:
@@ -110,41 +110,4 @@ cache::check() {
 cache::brew_prefix() {
   REPLY="${ARI_DOTFILES_BREW:h:h}"
   [[ -n "${ARI_DOTFILES_BREW}" && -d "${REPLY}/Cellar" ]]
-}
-
-# reply: what the brew model reads besides the tier files: every keg and its receipt, every
-# cask and its metadata, every tap's checkout head, Homebrew's own head and API cache, the
-# trust file, and the VS Code extensions the inventory lists. 1 as cache::brew_prefix.
-cache::brew_inputs() {
-  reply=()
-  local prefix repo tap REPLY
-  cache::brew_prefix || return 1
-  for prefix in "${REPLY}"; do
-    reply+=("${prefix}/Cellar" "${prefix}/Cellar/"*(N/) "${prefix}/Cellar/"*/*(N/) "${prefix}/Cellar/"*/*/INSTALL_RECEIPT.json(N)
-            "${prefix}/Caskroom" "${prefix}/Caskroom/"*(N/) "${prefix}/Caskroom/"*/*(N) "${prefix}/Caskroom/"*/.metadata/*(N/)
-            "${prefix}/var/homebrew/pinned" "${prefix}/var/homebrew/linked")
-    for repo in "${prefix}" "${prefix}/Homebrew"; do
-      [[ -d "${repo}/Library" ]] || continue
-      reply+=("${repo}/.git/HEAD" "${repo}/.git/packed-refs" "${repo}/.git/refs/tags" "${repo}/.git/refs/heads/"*(N) "${repo}/Library/Taps" "${repo}/Library/Taps/"*(N/))
-      for tap in "${repo}/Library/Taps/"*/*(N/); do
-        reply+=("${tap}" "${tap}/.git/HEAD" "${tap}/.git/index" "${tap}/.git/FETCH_HEAD" "${tap}/.git/packed-refs" "${tap}/.git/refs/heads/"*(N))
-      done
-    done
-  done
-  local api="${HOMEBREW_CACHE:-${HOME}/Library/Caches/Homebrew}/api"
-  reply+=("${api}" "${api}/"*(N) "${XDG_CONFIG_HOME}/homebrew/trust.json"
-          "${HOME}/.vscode/extensions" "${HOME}/.vscode/extensions/extensions.json" "${ARI_DOTFILES_CODE:-/nonexistent}")
-  return 0
-}
-
-# reply: the tier files the brew model merges. 1 when a Brewfile includes another file, whose
-# path this does not follow: the caller then runs uncached.
-cache::brew_tier_inputs() {
-  reply=("${GLOBAL_BREWFILE}" "${GLOBAL_BREWFILE_IGNORE}" "${LOCAL_BREWFILE}" "${LOCAL_BREWFILE_IGNORE}" "${LAST_RESULT_FILE}"
-         "${ARI_DOTFILES_GLOBAL_DIR}" "${ARI_DOTFILES_LOCAL_DIR}" "${ARI_DOTFILES_BREW_LIB}" "${ARI_DOTFILES_BREW_LIB:h}/"*(N.))
-  local f
-  for f in "${GLOBAL_BREWFILE}" "${LOCAL_BREWFILE}"; do
-    [[ -r "${f}" && "${mapfile[${f}]}" == *include* ]] && return 1
-  done
-  return 0
 }

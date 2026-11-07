@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One failing or crashing check never hides the others; garbage output is a loud error.
+# One failing or crashing check never hides the others.
 set -u
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -23,16 +23,6 @@ for step in terminal_nerdfont karabiner claude_notifications claude_skills dotfi
   else fail "${step} ran after the failures" "status='${status}'"; fi
 done
 assert_steps_are_registry "every step recorded" "${f}"
-
-unset NVIM_SHIM_RC
-world_bundle_check garbage
-bump_now_secs 60
-nm check --only brew,brew_pkgs --json
-assert_eq "garbage bundle check exits 2" 2 "${RC}"
-f="$(out_json)"
-assert_eq "brew_pkgs is error" error "$(step_get brew_pkgs .status)"
-assert_eq "brew_pkgs reason bundle_check_unparsed" bundle_check_unparsed "$(step_get brew_pkgs .reason)"
-assert_contains "detail quotes the unparsed line" "$(step_get brew_pkgs .detail)" "→ Something odd happened to foo."
 
 if (( FAIL > 0 )); then jq -c '.steps[] | {step, status, reason, detail}' "${f}" >&2; fi
 report

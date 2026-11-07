@@ -14,7 +14,7 @@ seed_home_baseline
 nm init
 assert_eq "init exits 0" 0 "${RC}"
 assert_contains "init prints the run table" "${OUT}" "dotfiles_repo"
-assert_contains "init runs the brew group" "${OUT}" "brew_pkgs"
+assert_contains "init runs the brew group" "${OUT}" "brew"
 assert_contains "init runs the tools group" "${OUT}" "raycast_sync"
 assert_contains "init ends with status" "${OUT}" "tiers"
 assert_contains "status shows the shared tier" "${OUT}" "shared:"

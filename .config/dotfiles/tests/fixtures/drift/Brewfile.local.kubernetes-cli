@@ -1,2 +1,0 @@
-# local tier: canonical name of what the global tier declares as its alias kubectl
-brew "kubernetes-cli"

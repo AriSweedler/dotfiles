@@ -7,7 +7,7 @@
 # shellcheck disable=SC2034  # used by the sourcing test files
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORIG_CONFIG_DIR="$(cd "${TESTS_DIR}/../.." && pwd)"     # the ~/.config under test (dotfiles/, bin/, zsh/, …)
-REPO_DIR="${ORIG_CONFIG_DIR}/new-machine"                # the data dir: Brewfile, Brewfile.ignore, local-dotfiles-exclude, bin/bootstrap.sh
+REPO_DIR="${ORIG_CONFIG_DIR}/new-machine"                # the data dir: local-dotfiles-exclude, bin/bootstrap.sh
 ORIG_HOME="$(cd "${HOME}" && pwd -P)"
 ORIG_PATH="${PATH}"
 PASS=0
@@ -125,8 +125,6 @@ world_new() {
   export ARI_DOTFILES_LAUNCH_AGENTS_DIR="${HOME}/Library/LaunchAgents"
   # A Nerd Font file the world has, outside HOME so a fresh-home reset keeps it.
   export ARI_DOTFILES_FONT_DIRS="${FIX}/fonts"
-  # No nix-darwin in the world: the brew steps check the tier Brewfiles.
-  export ARI_DOTFILES_NIX_BREWFILE="${FIX}/no-nix-brewfile"
   # The nvim shim is the world's "Nix" nvim.
   export ARI_DOTFILES_NIX_STORE="${FIX}/shims"
   mkdir -p "${FIX}/fonts" && : > "${FIX}/fonts/CaskaydiaMonoNerdFontMono-Regular.ttf"
@@ -145,9 +143,6 @@ world_new() {
   unset ARI_DOTFILES_BREW ARI_DOTFILES_NOTIFIER ARI_DOTFILES_CODE ARI_DOTFILES_CHECK_TIMEOUT_SECS
   # The local tier exports the ssh key's names into interactive shells; a world has no key unless a test says so.
   unset ARI_DOTFILES_SSH_KEY_OP_ITEM ARI_DOTFILES_SSH_KEY_OP_VAULT ARI_DOTFILES_SSH_KEY_PATH OP_SHIM_PASSPHRASE TEST_SSH_AUTH_SOCK
-  # The default busy pattern would see a real brew running on this machine; start_busy_brew
-  # points it at a sleeper the test owns.
-  export ARI_DOTFILES_BREW_BUSY_PATTERN="nm-tests-no-such-process-$$"
   # The Raycast step probes the app bundle; the world has none, so the step skips.
   export ARI_DOTFILES_RAYCAST_APP="${FIX}/no-raycast"
 
@@ -176,15 +171,13 @@ world_new() {
   printf '[user]\n\tname = new-machine tests\n\temail = tests@example.invalid\n[init]\n\tdefaultBranch = main\n' > "${HOME}/.config/git/config"
 }
 
-# Populate <dir>/new-machine (Brewfile, ignore, exclude template, lib/ + bin/ symlinks) and
+# Populate <dir>/new-machine (exclude template, lib/ + bin/ symlinks) and
 # <dir>/zsh/plugins (log libs) from the repo under test.
 world_install_config() {
   local dir="$1"
   _assert_in_fix "${dir}"
   mkdir -p "${dir}/new-machine" "${dir}/zsh/plugins"
-  cp "${REPO_DIR}/Brewfile" "${dir}/new-machine/Brewfile"
   cp "${REPO_DIR}/local-dotfiles-exclude" "${dir}/new-machine/local-dotfiles-exclude"
-  if [[ -f "${REPO_DIR}/Brewfile.ignore" ]]; then cp "${REPO_DIR}/Brewfile.ignore" "${dir}/new-machine/Brewfile.ignore"; fi
   rm -f "${dir}/new-machine/bin"
   ln -s "${REPO_DIR}/bin" "${dir}/new-machine/bin"
   # The program (kernel, verbs, steps): code by symlink, from the same checkout.
@@ -243,8 +236,7 @@ world_empty_home() {
 }
 
 # Materialize tests/fixtures/NAME into $FIX/brew; receipts get the fake prefix spliced into
-# source.path. Also installs the fixture's global Brewfile as the machine's and clears every
-# ignore list and the local tier, so each test starts from "empty local/ignores".
+# source.path.
 world_use_fixture() {
   local name="$1" src="${TESTS_DIR}/fixtures/$1" dst="${FIX}/brew"
   [[ -d "${src}" ]] || abort "no fixture ${name}"
@@ -258,97 +250,6 @@ world_use_fixture() {
     mv "${receipt}.tmp" "${receipt}"
   done < <(find "${dst}/prefix" -name INSTALL_RECEIPT.json 2>/dev/null)
   export BREW_SHIM_FIXTURE="${dst}"
-  if [[ -f "${dst}/Brewfile.global" ]]; then
-    mkdir -p "${ARI_DOTFILES_SHARED_DIR}"
-    cp "${dst}/Brewfile.global" "${ARI_DOTFILES_SHARED_DIR}/Brewfile"
-    if [[ -d "${HOME}/.config/new-machine" ]]; then cp "${dst}/Brewfile.global" "${HOME}/.config/new-machine/Brewfile"; fi
-  fi
-  rm -f "${ARI_DOTFILES_SHARED_DIR}/Brewfile.ignore" "${HOME}/.config/new-machine/Brewfile.ignore"
-  rm -f "${ARI_DOTFILES_LOCAL_DIR}/Brewfile" "${ARI_DOTFILES_LOCAL_DIR}/Brewfile.ignore"
-}
-
-# Select which canned `brew bundle check` transcript the shim replays.
-world_bundle_check() {
-  local variant="$1"
-  [[ -f "${BREW_SHIM_FIXTURE}/bundle_check.${variant}.out" ]] || abort "no bundle_check variant ${variant}"
-  cp "${BREW_SHIM_FIXTURE}/bundle_check.${variant}.out" "${BREW_SHIM_FIXTURE}/bundle_check.out"
-  cp "${BREW_SHIM_FIXTURE}/bundle_check.${variant}.rc" "${BREW_SHIM_FIXTURE}/bundle_check.rc"
-}
-
-# Copy a fixture text file, expanding the __FIX__ placeholder (used for include-declared paths).
-fixture_file_subst() {
-  local src="$1" dst="$2" line
-  [[ -f "${src}" ]] || abort "no fixture file ${src}"
-  mkdir -p "$(dirname "${dst}")"
-  : > "${dst}"
-  while IFS= read -r line || [[ -n "${line}" ]]; do
-    printf '%s\n' "${line//__FIX__/${FIX}}" >> "${dst}"
-  done < "${src}"
-}
-
-world_local_brewfile() {
-  mkdir -p "${ARI_DOTFILES_LOCAL_DIR}"
-  fixture_file_subst "${BREW_SHIM_FIXTURE}/Brewfile.local.$1" "${ARI_DOTFILES_LOCAL_DIR}/Brewfile"
-}
-
-# world_ignore <global|local> <variant>: install a Brewfile.ignore variant into one tier.
-world_ignore() {
-  local tier="$1" variant="$2"
-  case "${tier}" in
-    global)
-      fixture_file_subst "${BREW_SHIM_FIXTURE}/Brewfile.ignore.${variant}" "${ARI_DOTFILES_SHARED_DIR}/Brewfile.ignore"
-      if [[ -d "${HOME}/.config/new-machine" ]]; then
-        fixture_file_subst "${BREW_SHIM_FIXTURE}/Brewfile.ignore.${variant}" "${HOME}/.config/new-machine/Brewfile.ignore"
-      fi ;;
-    local)
-      mkdir -p "${ARI_DOTFILES_LOCAL_DIR}"
-      fixture_file_subst "${BREW_SHIM_FIXTURE}/Brewfile.ignore.${variant}" "${ARI_DOTFILES_LOCAL_DIR}/Brewfile.ignore" ;;
-    *) abort "world_ignore: bad tier ${tier}" ;;
-  esac
-}
-
-# Add an on-request core formula to the materialized fixture (receipt, list line, info entry).
-fixture_add_formula() {
-  local name="$1" tap="${2:-homebrew/core}" full="$1"
-  [[ "${tap}" == homebrew/core ]] || full="${tap}/${name}"
-  local dir="${BREW_SHIM_FIXTURE}/prefix/Cellar/${name}/1.0"
-  mkdir -p "${dir}"
-  jq -n --arg tap "${tap}" --arg p "${BREW_SHIM_FIXTURE}/prefix/api/formula.jws.json" \
-    '{installed_on_request: true, installed_as_dependency: false, source: {tap: $tap, path: $p}}' > "${dir}/INSTALL_RECEIPT.json"
-  printf '%s\n' "${full}" >> "${BREW_SHIM_FIXTURE}/list_formula.txt"
-  jq --arg name "${name}" --arg full "${full}" --arg tap "${tap}" \
-    '.formulae += [{name: $name, full_name: $full, tap: $tap, aliases: [], oldnames: []}]' \
-    "${BREW_SHIM_FIXTURE}/info_installed.json" > "${BREW_SHIM_FIXTURE}/info_installed.json.tmp"
-  mv "${BREW_SHIM_FIXTURE}/info_installed.json.tmp" "${BREW_SHIM_FIXTURE}/info_installed.json"
-}
-
-# Add an on-request cask to the materialized fixture.
-fixture_add_cask() {
-  local token="$1" tap="${2:-homebrew/cask}"
-  local dir="${BREW_SHIM_FIXTURE}/prefix/Caskroom/${token}/.metadata"
-  mkdir -p "${dir}"
-  jq -n --arg tap "${tap}" --arg p "${BREW_SHIM_FIXTURE}/prefix/api/cask.jws.json" \
-    '{installed_on_request: true, installed_as_dependency: false, source: {tap: $tap, path: $p}}' > "${dir}/INSTALL_RECEIPT.json"
-  printf '%s\n' "${token}" >> "${BREW_SHIM_FIXTURE}/list_cask.txt"
-  jq --arg token "${token}" --arg tap "${tap}" \
-    '.casks += [{token: $token, full_token: $token, tap: $tap, old_tokens: []}]' \
-    "${BREW_SHIM_FIXTURE}/info_installed.json" > "${BREW_SHIM_FIXTURE}/info_installed.json.tmp"
-  mv "${BREW_SHIM_FIXTURE}/info_installed.json.tmp" "${BREW_SHIM_FIXTURE}/info_installed.json"
-}
-
-# Remove a keg from the materialized fixture (receipt dir + list line + info entry).
-fixture_remove_formula() {
-  local keg="$1" full="${2:-$1}" list="${BREW_SHIM_FIXTURE}/list_formula.txt" line
-  _assert_in_fix "${BREW_SHIM_FIXTURE}/prefix/Cellar/${keg}"
-  rm -rf "${BREW_SHIM_FIXTURE}/prefix/Cellar/${keg}"
-  : > "${list}.tmp"
-  while IFS= read -r line || [[ -n "${line}" ]]; do
-    [[ "${line}" == "${full}" ]] || printf '%s\n' "${line}" >> "${list}.tmp"
-  done < "${list}"
-  mv "${list}.tmp" "${list}"
-  jq --arg keg "${keg}" '.formulae |= map(select(.name != $keg))' \
-    "${BREW_SHIM_FIXTURE}/info_installed.json" > "${BREW_SHIM_FIXTURE}/info_installed.json.tmp"
-  mv "${BREW_SHIM_FIXTURE}/info_installed.json.tmp" "${BREW_SHIM_FIXTURE}/info_installed.json"
 }
 
 shim_add() { cp "${TESTS_DIR}/shims/$1" "${FIX}/shims/$1"; chmod +x "${FIX}/shims/$1"; }
@@ -423,11 +324,11 @@ bs_run_stdin() {
 
 # zfn LIB FN ARGS...: one pure lib function, in the same hermetic environment as the CLI. The
 # kernel (dotfiles/lib/*.zsh) is sourced first because every lib reads the env contract it
-# defines; LIB is a kernel module, or a domain lib under cmd/brew or cmd/verify, by basename.
+# defines; LIB is a kernel module, or a domain lib under cmd/verify, by basename.
 zfn() {
   local lib="$1" fn="$2"; shift 2
   local lib_path candidate
-  for candidate in "${ORIG_CONFIG_DIR}/dotfiles/lib/${lib}" "${ORIG_CONFIG_DIR}/dotfiles/cmd/brew/${lib}" "${ORIG_CONFIG_DIR}/dotfiles/cmd/verify/${lib}"; do
+  for candidate in "${ORIG_CONFIG_DIR}/dotfiles/lib/${lib}" "${ORIG_CONFIG_DIR}/dotfiles/cmd/verify/${lib}"; do
     if [[ -f "${candidate}" ]]; then lib_path="${candidate}"; break; fi
   done
   [[ -n "${lib_path:-}" ]] || abort "zfn: no such lib ${lib}"
@@ -527,8 +428,7 @@ seed_df_remote() {
   cp -R "${config}/dotfiles/." "${work}/.config/dotfiles/"
   cp "${config}/claude/skills/ari-skill-shellscripts/lib/logging.zsh" "${work}/.config/claude/skills/ari-skill-shellscripts/lib/"
   cp "${config}/zsh/plugins/strip_ansi.zsh" "${work}/.config/zsh/plugins/"
-  cp "${shared}/Brewfile" "${shared}/local-dotfiles-exclude" "${work}/.config/new-machine/"
-  if [[ -f "${shared}/Brewfile.ignore" ]]; then cp "${shared}/Brewfile.ignore" "${work}/.config/new-machine/"; fi
+  cp "${shared}/local-dotfiles-exclude" "${work}/.config/new-machine/"
   cp -R "${shared}/bin/." "${work}/.config/new-machine/bin/"
   cp "${shared}/../zsh/plugins/log.zsh" "${shared}/../zsh/plugins/log_rotate.zsh" "${work}/.config/zsh/plugins/"
   printf '[user]\n\tname = new-machine tests\n\temail = tests@example.invalid\n[init]\n\tdefaultBranch = main\n' > "${work}/.config/git/config"
@@ -599,23 +499,6 @@ seed_home_baseline() {
     | plutil -convert xml1 - -o "${plist}"
   touch "${LAUNCHCTL_SHIM_STATE}/${label}"
   shim_logs_reset
-}
-
-# A brew that is busy: a long sleeper whose argv carries a unique marker for pgrep -f.
-start_busy_brew() {
-  local marker="nm-busy-brew-$$-${RANDOM}"
-  # Two commands, so bash keeps the marker in its own argv instead of exec'ing sleep directly;
-  # its stderr is dropped so the eventual kill does not print "Terminated" into the test output.
-  bash -c "sleep 300; true # ${marker}" 2>/dev/null &
-  WORLD_PIDS+=("$!")
-  export ARI_DOTFILES_BREW_BUSY_PATTERN="${marker}"
-  # pgrep must see it before the CLI runs.
-  local i
-  for i in 1 2 3 4 5 6 7 8 9 10; do
-    pgrep -f "${marker}" >/dev/null 2>&1 && return 0
-    sleep 0.1
-  done
-  abort "busy sleeper did not start"
 }
 
 # Write a karabiner healthcheck double into the fake HOME: exit code $1, degraded output.

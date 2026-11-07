@@ -47,12 +47,9 @@ assert_contains "fail: marker line" "$(head -n 1 "${FIX}/render.out")" "<!-- new
 assert_contains "fail: marker kind" "$(head -n 1 "${FIX}/render.out")" "kind=fail"
 assert_contains "fail: title" "${out}" "# new-machine weekly check FAILED — testhost, 2026-09-10 00:26"
 assert_contains "fail: What failed" "${out}" "## What failed"
-assert_contains "fail: brew_pkgs row" "${out}" "| brew_pkgs | formula cowsay | needs to be installed | global |"
-assert_contains "fail: undeclared table" "${out}" "## Undeclared brew items"
-assert_contains "fail: decree command" "${out}" "dotfiles brew decree formula:gh --global"
-assert_contains "fail: new since line" "${out}" "New since the last run: formula gh, cask codex."
-assert_contains "fail: needs a human" "${out}" "## Needs a human"
-assert_contains "fail: orphan recipe" "${out}" "brew uninstall spacectl && brew tap spacelift-io/spacelift && brew install --cask spacelift-io/spacelift/spacectl"
+assert_contains "fail: a row per item" "${out}" "| dotfiles_jobs | job sync | no description line | local |"
+assert_contains "fail: a row for a step without items" "${out}" "| claude | — | claude_missing — claude not on PATH | — |"
+assert_not_contains "fail: no brew sections" "${out}" "brew items"
 assert_contains "fail: also noted" "${out}" "## Also noted"
 assert_contains "fail: raw log tail" "${out}" "## Raw log (last 40 lines)"
 assert_contains "fail: feed to Claude" "${out}" "## How to feed this to Claude"
@@ -62,20 +59,8 @@ assert_contains "fail: commit header rule" "${out}" 'fix(new-machine/<step>): <w
 assert_contains "fail: the Claude line points at the rules" "${out}" 'check prior fixes with git df log first'
 assert_contains "fail: fixed section" "${out}" '## What "fixed" looks like'
 
-# The previous run's date reaches the render as -p; only the wording changes, never the rows.
-render "${FX}/summary-fail.json" "${FX}/log.txt" -p 2026-09-03
-assert_eq "fail (-p): render exits 0" 0 "${RC}"
-assert_contains "fail (-p): new since carries the date" "$(cat "${FIX}/render.out")" "New since the last run (2026-09-03): formula gh, cask codex."
-
-# A tap-only brew_pkgs warn is noted with the spec's literal suffix (§4.7), and the manual font
-# instructions never reach the weekly notes.
-jq '(.steps[] | select(.step == "brew_pkgs")) |= (.status = "warn" | .reason = "missing_tap" | .detail = "1 declared tap not tapped"
-    | .items = [{kind: "tap", name: "homebrew/autoupdate", problem: "needs to be tapped", tier: "global"}])' \
-  "${FX}/summary-fail.json" > "${FIX}/tapwarn.json"
-render "${FIX}/tapwarn.json" "${FX}/log.txt"
-assert_eq "tap warn: render exits 0" 0 "${RC}"
-assert_contains "tap warn: spec wording" "$(cat "${FIX}/render.out")" '- brew_pkgs: tap homebrew/autoupdate needs to be tapped (`dotfiles init` taps it; or delete the line)'
-assert_not_contains "manual_font never reaches the weekly notes" "$(cat "${FIX}/render.out")" "terminal_nerdfont:"
+# The manual font instructions never reach the weekly notes.
+assert_not_contains "manual_font never reaches the weekly notes" "${out}" "terminal_nerdfont:"
 
 render "${FX}/summary-error.json" "${FX}/log.txt"
 check_golden "error report" "${FX}/report-error-golden.md"
@@ -83,7 +68,7 @@ out="$(cat "${FIX}/render.out")"
 assert_contains "error: marker kind" "$(head -n 1 "${FIX}/render.out")" "kind=error"
 assert_contains "error: title" "${out}" "# new-machine weekly check COULD NOT RUN — testhost, 2026-09-10 00:26"
 assert_contains "error: section" "${out}" "## The check itself could not run"
-assert_contains "error: brew_drift row" "${out}" "| brew_drift | timed_out |"
+assert_contains "error: neovim row" "${out}" "| neovim | timed_out |"
 assert_contains "error: Claude task" "${out}" "Diagnose why 'dotfiles healthcheck' cannot run on this machine and fix it; do not silence the check."
 
 # ── fingerprint ───────────────────────────────────────────────────────────────
@@ -94,7 +79,7 @@ if [[ "${base}" =~ ^[0-9a-f]{16}$ ]]; then pass "fingerprint is 16 hex chars"; e
 jq '.steps |= reverse | .steps[].items |= (if . == null then . else reverse end)' "${FX}/summary-fail.json" > "${FIX}/permuted.json"
 assert_eq "identical under permuted steps and items" "${base}" "$(fp "${FIX}/permuted.json")"
 
-jq '(.steps[] | select(.step=="brew_pkgs") | .items[0].name) = "cowsay2"' "${FX}/summary-fail.json" > "${FIX}/changed.json"
+jq '(.steps[] | select(.step=="dotfiles_jobs") | .items[0].name) = "sync2"' "${FX}/summary-fail.json" > "${FIX}/changed.json"
 changed="$(fp "${FIX}/changed.json")"
 if [[ "${changed}" != "${base}" && -n "${changed}" ]]; then pass "changes when one item changes"; else fail "changes when one item changes" "'${changed}'"; fi
 
@@ -107,7 +92,7 @@ assert_eq "empty when nothing failed" "" "$(fp "${FIX}/passing.json")"
 
 error_fp="$(fp "${FX}/summary-error.json" error)"
 if [[ "${error_fp}" =~ ^[0-9a-f]{16}$ ]]; then pass "error fingerprint is 16 hex chars"; else fail "error fingerprint is 16 hex chars" "'${error_fp}'"; fi
-jq '(.steps[] | select(.step=="brew_pkgs") | .reason) = "brew_busy"' "${FX}/summary-error.json" > "${FIX}/error2.json"
+jq '(.steps[] | select(.step=="neovim") | .reason) = "crashed"' "${FX}/summary-error.json" > "${FIX}/error2.json"
 if [[ "$(fp "${FIX}/error2.json" error)" != "${error_fp}" ]]; then pass "error fingerprint follows the reason"; else fail "error fingerprint follows the reason" "unchanged"; fi
 
 report
