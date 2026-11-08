@@ -26,7 +26,7 @@ assert_eq "bare layout: nix never called" "" "$(shim_log nix)"
 git clone -q "${ARI_DOTFILES_DF_GIT_DIR}" "${HOME}/dotfiles"
 export ARI_DOTFILES_DF_GIT_DIR="${HOME}/dotfiles/.git"
 REV="$(git -C "${HOME}/dotfiles" rev-parse HEAD)"
-INPUT="git+file://${HOME}/dotfiles?dir=.config/dotfiles/nix&rev=${REV}"
+INPUT="git+file://${HOME}/dotfiles?dir=.config/dotfiles/nix&submodules=1&rev=${REV}"
 
 nm switch --dry-run
 assert_eq "dry-run: exit 0" 0 "${RC}"

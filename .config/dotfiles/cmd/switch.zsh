@@ -47,7 +47,8 @@ cmd_switch() {
     || log::warn "uncommitted under the nix directory; not in this switch | paths='${(j:, :)${(f)dirty}#???}'"
   local rev
   rev="$(repo_git shared rev-parse HEAD)" || return 1
-  local input="git+file://${clone}?dir=.config/dotfiles/nix&rev=${rev}"
+  # submodules=1: claude-skills.nix links the skills the submodules carry.
+  local input="git+file://${clone}?dir=.config/dotfiles/nix&submodules=1&rev=${rev}"
   if is_dry_run; then
     print -r -- "would run: nix flake lock --override-input dotfiles '${input}' (in ${flake})"
   else
