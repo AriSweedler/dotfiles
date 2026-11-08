@@ -33,12 +33,14 @@
   # and waited for it to come back. An empty file is no build machines.
   environment.etc."nix/machines".text = "";
   nixpkgs.hostPlatform = "aarch64-darwin";
+  # Chrome, Spotify, Zoom and the like are unfree; a tier names each one it wants.
+  nixpkgs.config.allowUnfree = true;
 
   system.primaryUser = user;
   users.users.${user}.home = "/Users/${user}";
 
-  # Homebrew keeps what nixpkgs lacks or lags on, and what config still finds by a brew path;
-  # every other package is in home.nix. A switch installs what is listed here and in the local
+  # Homebrew keeps what nixpkgs lacks or lags on, what has to live in /Applications, and what
+  # config still finds by a brew path; every other package, GUI apps included, is in home.nix. A switch installs what is listed here and in the local
   # flake, and uninstalls what is not.
   homebrew = {
     enable = true;
@@ -54,9 +56,7 @@
       "tree-sitter-cli"
     ];
     casks = [
-      "google-chrome" # web browser
       "karabiner-elements"
-      "monitorcontrol" # brightness and volume keys for external displays
       "raycast"
     ];
   };

@@ -65,6 +65,9 @@ in
     # Ari's own tools, built from their submodules
     (callPackage ./pkgs/plugged { inherit src; })
 
+    # Apps: home-manager copies them into ~/Applications/Home Manager Apps
+    monitorcontrol # brightness and volume keys for external displays
+
     # Nix
     nix-tree
     nvd
