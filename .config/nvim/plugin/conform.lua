@@ -1,5 +1,3 @@
-vim.pack.add({ "https://github.com/stevearc/conform.nvim" })
-
 local prettier = { "prettierd", "prettier", stop_after_first = true }
 require("conform").setup({
 	notify_on_error = false,

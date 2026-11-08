@@ -1,8 +1,3 @@
-vim.pack.add({
-	"https://github.com/nvim-treesitter/nvim-treesitter",
-	"https://github.com/nvim-treesitter/nvim-treesitter-textobjects",
-})
-
 local ts = require("nvim-treesitter")
 
 local ensure_installed = {

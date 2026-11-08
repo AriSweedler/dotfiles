@@ -1,5 +1,3 @@
-vim.pack.add({ "https://github.com/folke/todo-comments.nvim" })
-
 ---@type table<string, fun(opts?: table)>
 local p = require("snacks").picker
 local tc = require("todo-comments")

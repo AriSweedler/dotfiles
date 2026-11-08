@@ -1,8 +1,3 @@
-vim.pack.add({
-	"https://github.com/yochem/jq-playground.nvim",
-	"https://github.com/phelipetls/jsonpath.nvim",
-})
-
 require("jq-playground").setup({})
 require("jsonpath").setup({ show_on_winbar = true })
 

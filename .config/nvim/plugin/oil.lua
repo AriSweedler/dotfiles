@@ -1,8 +1,3 @@
-vim.pack.add({
-	"https://github.com/nvim-tree/nvim-web-devicons",
-	"https://github.com/stevearc/oil.nvim",
-})
-
 local desc = "[ari] [lazyload] Oil file browser"
 local show_detail = false
 local detail_permissions = { "permissions", highlight = "Special" }

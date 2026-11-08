@@ -20,16 +20,18 @@ local function tes_mappings()
 	}
 
 	local ft = "<C-r>=&filetype<Enter>"
+	-- The editable config: ~/.config/nvim is Nix's read-only copy of it, placed by `dotfiles switch`.
+	local src = vim.env.HOME .. "/dotfiles/.config/nvim"
 	local mappings_cmd = {
 		{
 			key = "f",
 			desc = "filetype plugin",
-			path = vim.fn.stdpath("config") .. "/after/ftplugin/" .. ft .. ".lua",
+			path = src .. "/after/ftplugin/" .. ft .. ".lua",
 		},
 		{
 			key = "v",
 			desc = "my init.vim file",
-			path = "$MYVIMRC",
+			path = src .. "/init.lua",
 		},
 		{
 			key = "o",
@@ -98,7 +100,7 @@ local function ts_mappings()
 			local files = vim.api.nvim_get_runtime_file(stub, true)
 
 			-- Ensure there is a local file in this list.
-			local my_file = vim.fn.stdpath("config") .. "/" .. stub
+			local my_file = vim.env.HOME .. "/dotfiles/.config/nvim/" .. stub
 			if not vim.tbl_contains(files, my_file) then
 				table.insert(files, my_file)
 			end

@@ -17,7 +17,7 @@ let
 in
 {
   # Tools configured as modules rather than linked files: their config is in the store.
-  imports = [ ./claude-skills.nix ./gh.nix ./git.nix ./karabiner.nix ./starship.nix ./tmux.nix ];
+  imports = [ ./claude-skills.nix ./gh.nix ./git.nix ./karabiner.nix ./nvim.nix ./starship.nix ./tmux.nix ];
 
   home.stateVersion = "26.05";
 
