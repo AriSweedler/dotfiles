@@ -246,6 +246,23 @@ check_step claude_notifications
 assert_eq "all three hooks wired → ok" ok "$(status_of claude_notifications)"
 assert_json "guard hook wired" "${HOME}/.claude/settings.json" '[.hooks.PreToolUse[].hooks[].command] | map(select(endswith("pretooluse-headless-chrome-guard.sh"))) | length' "1"
 assert_json "stop hook wired" "${HOME}/.claude/settings.json" '.hooks.Stop[0].hooks[0].command' "${HOME}/.config/claude/bin/stop-fire.sh"
+# macOS's per-app switch: usernoted keeps it as bit 25 of the app's flags.
+_nc="${HOME}/usernoted.plist"
+export ARI_DOTFILES_USERNOTED_PLIST="${_nc}"
+hermetic_env
+_nc_write() { python3 -I -c 'import plistlib,sys; plistlib.dump({"apps": [{"bundle-id": sys.argv[2], "flags": int(sys.argv[3])}]}, open(sys.argv[1], "wb"))' "${_nc}" "$@"; }
+_nc_write fr.julienxx.oss.terminal-notifier $(( 1 << 25 | 12 ))
+check_step claude_notifications
+assert_eq "terminal-notifier allowed in macOS → ok" ok "$(status_of claude_notifications)"
+_nc_write fr.julienxx.oss.terminal-notifier 12
+check_step claude_notifications
+assert_eq "terminal-notifier switched off in macOS → fail" fail "$(status_of claude_notifications)"
+assert_eq "reason notifications_off" notifications_off "$(reason_of claude_notifications)"
+_nc_write com.example.other $(( 1 << 25 ))
+check_step claude_notifications
+assert_eq "terminal-notifier never registered → warn" warn "$(status_of claude_notifications)"
+unset ARI_DOTFILES_USERNOTED_PLIST
+hermetic_env
 
 # ── dotfiles_jobs ────────────────────────────────────────────────────────────────
 JOBS_LABEL="com.$(id -un).dotfiles-jobs"

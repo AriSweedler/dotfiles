@@ -2,9 +2,24 @@
 # notification-fire.sh, Stop → stop-fire.sh (a banner at the end of every turn) and the
 # PreToolUse headless-Chrome guard; terminal-notifier resolves.
 step::declare claude_notifications --group tools \
-  --desc "Claude Code hooks wired: Notification → notification-fire.sh, Stop → stop-fire.sh, PreToolUse guard → pretooluse-headless-chrome-guard.sh; terminal-notifier resolves" \
+  --desc "Claude Code hooks wired: Notification → notification-fire.sh, Stop → stop-fire.sh, PreToolUse guard → pretooluse-headless-chrome-guard.sh; terminal-notifier resolves and macOS allows its notifications" \
   --apply "runs ~/.config/claude/bin/initialize.sh: installs terminal-notifier and writes the three hooks into ~/.claude/settings.json"
 step::watches claude_notifications '.config/claude/bin/**'
+
+readonly CLAUDE_NOTIFIER_BUNDLE='fr.julienxx.oss.terminal-notifier'
+
+# Prints on, off, unregistered (no entry for the bundle) or unknown (no usernoted prefs file, as in
+# the test world, or an unreadable one).
+step::claude_notifications::allowed() {
+  local plist="${ARI_DOTFILES_USERNOTED_PLIST:-${HOME}/Library/Group Containers/group.com.apple.usernoted/Library/Preferences/group.com.apple.usernoted.plist}"
+  [[ -r "${plist}" ]] || { print -r -- unknown; return 0; }
+  python3 -I - "${plist}" "${CLAUDE_NOTIFIER_BUNDLE}" 2>/dev/null <<'PY' || print -r -- unknown
+import plistlib, sys
+apps = plistlib.load(open(sys.argv[1], "rb")).get("apps", [])
+hit = [a for a in apps if a.get("bundle-id") == sys.argv[2]]
+print("unregistered" if not hit else ("on" if hit[0].get("flags", 0) >> 25 & 1 else "off"))
+PY
+}
 
 check::claude_notifications() {
   local init="${HOME}/.config/claude/bin/initialize.sh" expected="${HOME}/.config/claude/bin/notification-fire.sh"
@@ -38,6 +53,19 @@ check::claude_notifications() {
     verdict fail notifier_missing -d "atn (the terminal-notifier shim, ~/.config/bin) not found" -f "${CLI_NAME} apply claude_notifications"
     return 0
   fi
+  # macOS can switch terminal-notifier off (System Settings > Notifications); then every banner is
+  # dropped silently. usernoted keeps the switch as bit 25 of the app's flags; the file is read
+  # only (macOS does not support writing it), so this is a manual fix.
+  local allowed
+  allowed="$(step::claude_notifications::allowed)"
+  case "${allowed}" in
+    off)
+      verdict fail notifications_off -d "terminal-notifier's notifications are switched off in macOS | bundle='${CLAUDE_NOTIFIER_BUNDLE}'" -f "System Settings > Notifications > terminal-notifier > Allow Notifications" -m
+      return 0 ;;
+    unregistered)
+      verdict warn notifier_unregistered -d "macOS has no notification setting for terminal-notifier yet; it appears after the first banner | bundle='${CLAUDE_NOTIFIER_BUNDLE}'" -f "~/.config/claude/bin/notification-fire.sh test, then allow it when macOS asks" -m
+      return 0 ;;
+  esac
   verdict ok configured -d "hook='${current}' stop='${stop}' guard='${guard}' notifier='${ARI_DOTFILES_NOTIFIER}'"
 }
 

@@ -45,3 +45,4 @@ awk
 ssh-add
 ssh-agent
 ssh-keygen
+python3
