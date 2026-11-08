@@ -36,7 +36,11 @@ readonly MIN_CONTRAST="3.0"   # WCAG AA for large or bold text; node labels are 
 readonly DARK_CANVAS="1e1e1e" # mermaid.live's dark-mode view background, for --dark-check
 readonly CURL_TIMEOUT="30"
 readonly CHROME_TIMEOUT="90"  # a first-run headless profile once hung without a cap
-readonly CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+# Chrome binaries to try, in order: home-manager's app folder, then the system one. No override.
+readonly CHROME_CANDIDATES=(
+  "${HOME}/Applications/Home Manager Apps/Google Chrome.app/Contents/MacOS/Google Chrome"
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+)
 readonly INK_BASE="https://mermaid.ink/img/base64:"
 # /view renders the diagram alone; /edit would land a Docs reader in the editor. Same pako payload.
 readonly LIVE_BASE="https://mermaid.live/view#pako:"
@@ -78,7 +82,8 @@ ${c_bold}Options:${c_rst}
                     fallback). Pass it only when the user asked for the link on the clipboard this turn.
   --dark-check      Also save <name>.dark.jpg (mermaid.ink on a #${DARK_CANVAS} canvas: site dark, OS light)
                     and, when Chrome is installed, <name>.dark-scheme.png (the view URL under a dark
-                    color scheme: site dark, OS dark), for a legibility look
+                    color scheme: site dark, OS dark), for a legibility look. Chrome is the first
+                    executable of: ${(j:, then :)CHROME_CANDIDATES}
   -h, --help        Show this help
 
 ${c_bold}Gates:${c_rst}
@@ -217,6 +222,7 @@ save_dark_canvas_check() {
   local url="${1}" file="${2}"
   local dark_file="${file%.mmd}.dark.jpg"
   local http_code
+  rm -f "${dark_file}"
   http_code="$(curl -s --max-time "${CURL_TIMEOUT}" -o "${dark_file}" -w '%{http_code}' "${url}?bgColor=${DARK_CANVAS}")"
   if [[ "${http_code}" != "200" ]]; then
     log::err "Dark-canvas render failed | http_code='${http_code}' dark_file='${dark_file}'"
@@ -226,24 +232,45 @@ save_dark_canvas_check() {
 }
 
 #######################################
+# Find the Chrome binary: the first executable file in CHROME_CANDIDATES.
+# Globals: CHROME_CANDIDATES
+# Arguments: none
+# Returns: the binary's path on stdout; 1 when no candidate is executable
+#######################################
+resolve_chrome() {
+  local chrome_bin
+  for chrome_bin in "${CHROME_CANDIDATES[@]}"; do
+    if [[ -f "${chrome_bin}" && -x "${chrome_bin}" ]]; then
+      log::info "Chrome found | chrome_bin='${chrome_bin}'"
+      echo "${chrome_bin}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+#######################################
 # Screenshot the view URL in headless Chrome under a dark color scheme: the case
 # where site and OS are both dark, so the media query flips free-standing text light.
-# Skipped with a log line when Chrome is not installed.
-# Globals: CHROME_BIN, CHROME_TIMEOUT
+# A screenshot from an earlier run is removed first, so any file left is this run's.
+# When resolve_chrome finds no binary, warns with every candidate path and returns 0.
+# Globals: CHROME_CANDIDATES, CHROME_TIMEOUT
 # Arguments: $1 = mermaid.live view URL, $2 = path to the .mmd
-# Returns: 1 when Chrome ran but produced no screenshot
+# Returns: 0 when saved or skipped; 1 when Chrome ran but wrote no screenshot
 #######################################
 save_dark_scheme_check() {
   local live_url="${1}" file="${2}"
   local shot_file="${file%.mmd}.dark-scheme.png"
-  if [[ ! -x "${CHROME_BIN}" ]]; then
-    log::info "Dark-scheme screenshot skipped; Chrome not installed | chrome_bin='${CHROME_BIN}'"
+  local chrome_bin
+  rm -f "${shot_file}"
+  if ! chrome_bin="$(resolve_chrome)"; then
+    log::warn "Dark-scheme screenshot skipped; Chrome not found | chrome_candidates='${(j:', ':)CHROME_CANDIDATES}'"
     return 0
   fi
   local profile_dir err_file exit_code=0
   profile_dir="$(mktemp -d)"
   err_file="$(mktemp)"
-  run_with_timeout "${CHROME_TIMEOUT}" "${err_file}" "${CHROME_BIN}" --headless=new --disable-gpu --force-dark-mode \
+  run_with_timeout "${CHROME_TIMEOUT}" "${err_file}" "${chrome_bin}" --headless=new --disable-gpu --force-dark-mode \
     --hide-scrollbars --window-size=1400,900 --user-data-dir="${profile_dir}" --virtual-time-budget=8000 \
     --screenshot="${shot_file}" "${live_url}" >/dev/null || exit_code=$?
   rm -rf "${profile_dir}"

@@ -25,10 +25,12 @@ Create, validate, and share Mermaid.js diagrams with a fixed palette that stay l
    - Start with the color theme block below; its first line pins the theme, sizes sequence text, and makes free-standing text follow the viewer's color scheme
    - Apply classes to nodes using `class` directives
    - Style a subgraph as `style ID fill:#F5F5F5,stroke:#666666,color:#333`
-3. **Bake**: `zsh $HOME/.claude/skills/ari-diagram-mermaid/bin/bake <diagram_file>`
+3. **Bake**: `zsh $HOME/.claude/skills/ari-diagram-mermaid/bin/bake --file <diagram_file>`
    - Runs the directive and contrast gates, confirms the render, mints the embed URL, prints it, and writes the `.url` sidecar in one step
-   - On a gate failure it names the expected line 1, or lists every offending line as `line|directive|name|fill|color|ratio|reason`; fix the source and re-run until valid
-   - Add `--dark-check` to also save `<name>.dark.jpg` (the diagram on a `#1e1e1e` canvas, where only the glow helps) and, with Chrome installed, `<name>.dark-scheme.png` (the view URL under a dark color scheme, where the text flips light); look at both before handing the link over
+   - On a gate failure it names the expected line 1, or lists every offending line as `line|directive|name|fill|color|ratio|reason`; fix the source and re-run until valid. It stops at the first gate that fails, so a fixed line 1 can surface contrast errors on the next run
+   - Add `--dark-check` to also save `<name>.dark.jpg` (the diagram on a `#1e1e1e` canvas, where only the glow helps) and, when bake finds Chrome, `<name>.dark-scheme.png` (the view URL under a dark color scheme, where the text flips light); look at both before handing the link over
+   - **On `Dark-scheme screenshot skipped; Chrome not found`, look at `.dark.jpg` alone and tell the user the site-dark, OS-dark case went unchecked, naming the paths the warning lists.** NEVER install Chrome, run a browser by hand, or edit `CHROME_CANDIDATES` mid-task: a new Chrome location is a `/ari-skill-update ari-diagram-mermaid`
+   - `Dark-scheme screenshot failed` or `Dark-canvas render failed` is not a source problem: leave the `.mmd` alone, re-run once without `--dark-check` for the link, and report the error's `exit_code=` or `http_code=`
    - Add `--clipboard` only when the user asked for the link on the clipboard this turn; it copies through `/ari-driving-tmux` and prints where the displaced entry went
 4. **Present** to user:
    - Paste the markdown link into the message in a fenced block, verbatim from `bake`'s output or the `url_file` sidecar — never retype it (see Rules). If `--clipboard` ran, repeat its `previous clipboard:` line.
@@ -60,8 +62,8 @@ Every pair clears 3:1. White on blue 3.7, red 3.8, pink 3.5, purple 4.2, gray 5.
 Two things can swallow text: its own fill, and the canvas the viewer's page paints behind the transparent SVG.
 
 ```mermaid
-%% GOOD — line 1 from the theme block; the subgraph's light fill carries a dark text color
 %%{init: {'theme':'default', 'sequence': {'messageFontSize': 18, 'actorFontSize': 18, 'noteFontSize': 16}, 'themeCSS': '.messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 2px #fff) drop-shadow(0 0 3px #fff); } @media (prefers-color-scheme: dark) { .messageText, text.text, .loopText, .titleText, text.actor-man { fill: #eeeeee; } .messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 2px #000) drop-shadow(0 0 3px #000); } }'}}%%
+%% GOOD — line 1 from the theme block; the subgraph's light fill carries a dark text color
 flowchart LR
     subgraph OAUTH["OAuth 2.0"]
         AS["Authorization server"]
@@ -77,13 +79,13 @@ flowchart LR
     style OAUTH fill:#F5F5F5,stroke:#666666
 ```
 
-`bake` rejects the BAD source twice over: `No init directive`, then `31|style|OAUTH|#F5F5F5|-|-|fill without color`.
+`bake` stops the BAD source at `No init directive on line 1`; with line 1 added, the next run stops at `<line>|style|OAUTH|#F5F5F5|-|-|fill without color`.
 
 ```mermaid
+%%{init: {'theme':'default', 'sequence': {'messageFontSize': 18, 'actorFontSize': 18, 'noteFontSize': 16}, 'themeCSS': '.messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 2px #fff) drop-shadow(0 0 3px #fff); } @media (prefers-color-scheme: dark) { .messageText, text.text, .loopText, .titleText, text.actor-man { fill: #eeeeee; } .messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 2px #000) drop-shadow(0 0 3px #000); } }'}}%%
 %% GOOD — line 1 from the theme block: under a dark color scheme the message text
 %% turns light; on a dark canvas with a light scheme it keeps a soft white glow; on
 %% the white Doc image nothing shows
-%%{init: {'theme':'default', 'sequence': {'messageFontSize': 18, 'actorFontSize': 18, 'noteFontSize': 16}, 'themeCSS': '.messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 2px #fff) drop-shadow(0 0 3px #fff); } @media (prefers-color-scheme: dark) { .messageText, text.text, .loopText, .titleText, text.actor-man { fill: #eeeeee; } .messageText, text.text, .loopText, .titleText { filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 2px #000) drop-shadow(0 0 3px #000); } }'}}%%
 sequenceDiagram
     participant C as Client
     participant AS as Authorization server
@@ -112,7 +114,7 @@ sequenceDiagram
 | `--format FORMAT` | One of the formats below (default: `markdown_link`). `MERMAID_FORMAT=` in the environment is the fallback. |
 | `--validate-only` | Gate and render-check only; mint no URL. `MERMAID_VALIDATE_ONLY=1` is the fallback. |
 | `--clipboard` | Also copy the link to the clipboard, through `/ari-driving-tmux`'s `handoff.zsh --copy --file <sidecar>`. `MERMAID_CLIPBOARD=1` is the fallback. Only when the user asked this turn. |
-| `--dark-check` | Also save `<name>.dark.jpg` (mermaid.ink on a `#1e1e1e` canvas: site dark, OS light, exercises the glow) and, when Chrome is installed, `<name>.dark-scheme.png` (headless Chrome on the view URL with `--force-dark-mode`: site dark, OS dark, exercises the color flip). Both land next to the sidecars; legibility is judged by eye, not by the script. |
+| `--dark-check` | Also save `<name>.dark.jpg` (mermaid.ink on a `#1e1e1e` canvas: site dark, OS light, exercises the glow) and `<name>.dark-scheme.png` (headless Chrome on the view URL with `--force-dark-mode`: site dark, OS dark, exercises the color flip), both next to the sidecars. Chrome is the first executable in `CHROME_CANDIDATES`: `~/Applications/Home Manager Apps/Google Chrome.app`, then `/Applications/Google Chrome.app`; there is no override. With neither, `bake` warns naming both and skips the PNG. |
 
 | Format | Output |
 | --- | --- |
