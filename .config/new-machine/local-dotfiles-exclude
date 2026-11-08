@@ -29,10 +29,10 @@
 !/share/aws_profile/
 # Golden tuples for the astound test suite, read from this machine's real invoices.
 !/share/astound/
-# tmux: only the local plugins below; TPM's installs beside them are not ours.
+# tmux: only the plugin working copies below; TPM's old installs beside them are not ours.
 !/share/tmux/
 /share/tmux/*
-# tmux plugins that exist only here, one directory each, tracked instead of installed by TPM.
+# tmux plugin working copies, loaded in place of the pinned store copy (dotfiles/nix/tmux.nix).
 !/share/tmux/local-plugins/
 # Entries for the tmux one-shot menu that only make sense here.
 !/share/tmux_oneshot/
@@ -63,8 +63,6 @@
 # Raycast snippets: the private tier is versioned; the import manifest is machine state.
 !/share/raycast-snippets/
 /share/raycast-snippets/manifest.json
-# Starship tables joined after the shared ~/.config/starship.toml (zsh/plugins/starship.zsh).
-!/share/starship/
 # tmuxinator projects found through TMUXINATOR_CONFIG (zsh/plugins/tmux.zsh).
 !/share/tmuxinator/
 # nvim loads site/plugin/*.lua from its data dir; the rest of share/nvim is tool state.

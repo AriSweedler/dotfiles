@@ -3,7 +3,7 @@
 # order given, then a dim hint. A click anywhere (on the card or off it), Esc, q or Enter closes it. The
 # same card travels as a link: `tmux-tooltip link` prints [label](tmux-tooltip://show?…) for Markdown output
 # (Claude Code renders it as OSC 8), and a click on it in tmux runs `tmux-tooltip open` through the
-# tmux-tooltip:// branch of ~/.config/tmux/plugin/osc8-hyperlinks.conf, which opens the card just above it.
+# tmux-tooltip:// branch of ~/.config/dotfiles/nix/tmux/osc8-hyperlinks.conf, which opens the card just above it.
 #
 # The card is a display-menu of disabled items, one per line, not a display-popup: tmux swallows every
 # click outside a popup (no binding underneath fires and the popup stays), while a menu closes on one.

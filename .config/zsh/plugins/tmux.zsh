@@ -1,8 +1,4 @@
-# Change the install location of tpm. Keep these in sync with
-# ~/.config/tmux/plugin/tpm.conf and ~/.config/tmux/tmux.conf
-export TMUX_DATA_DIR="$XDG_DATA_HOME/tmux"
-export TMUX_PLUGIN_MANAGER_ROOT="$TMUX_DATA_DIR/tpm"
-export TMUX_PLUGIN_MANAGER_PATH="$TMUX_DATA_DIR/tpm_plugins"
+# tmux's config is ~/.config/dotfiles/nix/tmux.nix; its plugin loads from the store, no TPM.
 
 # The local tier's tmuxinator projects. `tmuxinator start <name>` looks in
 # $TMUXINATOR_CONFIG first, then ~/.config/tmuxinator, so shared projects still
@@ -10,27 +6,6 @@ export TMUX_PLUGIN_MANAGER_PATH="$TMUX_DATA_DIR/tpm_plugins"
 if [[ -d "$XDG_DATA_HOME/tmuxinator" ]]; then
   export TMUXINATOR_CONFIG="$XDG_DATA_HOME/tmuxinator"
 fi
-
-function ensure_tpm_installed() {
-  [ -d "$TMUX_PLUGIN_MANAGER_ROOT" ] && return
-
-  function install_tpm() {
-    log::info "Installing the Tmux Plugin Manager (tpm) | TMUX_PLUGIN_MANAGER_ROOT='$TMUX_PLUGIN_MANAGER_ROOT'"
-    git clone https://github.com/tmux-plugins/tpm "$TMUX_PLUGIN_MANAGER_ROOT"
-  }
-  if ! install_tpm; then
-    log::err "Failed to install tpm"
-  fi
-  unset -f install_tpm
-
-  # Install tpm plugins
-  if ! "${TMUX_PLUGIN_MANAGER_ROOT}/bindings/install_plugins"; then
-    log::err "Failed to install tpm plugins. Try 'Prefix' + 'Capital I'"
-    return 1
-  fi
-}
-ensure_tpm_installed
-unset -f ensure_tpm_installed
 
 function tmux::rename-window() {
   [ -z "$TMUX" ] && return

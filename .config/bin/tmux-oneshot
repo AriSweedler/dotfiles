@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 #
 # tmux-oneshot — pick a oneshot command from JSON entry files via fzf and run
-# it. Bound to <Prefix>C-k (see ~/.config/tmux/plugin/macros.conf), which
+# it. Bound to <Prefix>C-k (see ~/.config/dotfiles/nix/tmux/macros.conf), which
 # opens this in a tmux popup; Hyper+O (Karabiner, src/scripts/bin/oneshot-popup)
 # opens the same popup from any app.
 #

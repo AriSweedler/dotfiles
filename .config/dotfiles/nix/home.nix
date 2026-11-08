@@ -16,6 +16,9 @@ let
   });
 in
 {
+  # Tools configured as modules rather than linked files: their config is in the store.
+  imports = [ ./gh.nix ./git.nix ./starship.nix ./tmux.nix ];
+
   home.stateVersion = "26.05";
 
   home.packages = with pkgs; [
@@ -29,23 +32,20 @@ in
     '')
     coreutils-prefixed # g-prefixed, as brew installs it, so BSD ls and friends stay first
     curl
-    git
     poppler-utils # pdftotext: the astound function parses invoices with it
     watch
     wget
 
     # Nicer CLI
     bat
-    delta
+    delta # git's pager (git.nix)
     fd
     fzf
     gum # shell UI: the dotfiles harness's spinners and boxes
     jq
     mas # Mac App Store from the terminal: mas install 497799835 is Xcode (alttab builds with it)
     ripgrep
-    starship # shell prompt
     terminal-notifier # the Claude Code notification hook and git-health
-    tmux # the same 3.8 brew had, so a server brew started still talks to this client
     tmuxinator
     tree
     yq-go
