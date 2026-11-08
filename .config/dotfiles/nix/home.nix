@@ -1,5 +1,5 @@
 # User layer every machine gets: packages and the files home-manager places.
-{ pkgs, ... }:
+{ pkgs, src, ... }:
 let
   # Neovim pinned to the exact commit Ari ran under bob (v0.13.0-dev-853+g7945732ed7, 2026-06-29),
   # built with nixpkgs' recipe. The version moves only when rev and hash are edited here; a
@@ -61,6 +61,9 @@ in
     lua
     lua-language-server
     shellcheck
+
+    # Ari's own tools, built from their submodules
+    (callPackage ./pkgs/plugged { inherit src; })
 
     # Nix
     nix-tree

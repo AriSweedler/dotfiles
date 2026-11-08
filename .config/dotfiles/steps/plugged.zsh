@@ -10,10 +10,13 @@ step::plugged::dir() {
   print -r -- "${HOME}/.config/plugged"
 }
 
-# Where bin/plugged's build lands: the shared Swift cache through swift-pkg, else SwiftPM's .build/.
+# The release binary: Nix's (nix/pkgs/plugged, on PATH from the profile) when it is installed, else
+# where bin/plugged's build lands: the shared Swift cache through swift-pkg, else SwiftPM's .build/.
 step::plugged::binary() {
-  local dir="${1}" swift_pkg="${HOME}/.config/bin/swift-pkg"
-  if [[ -x "${swift_pkg}" ]]; then
+  local dir="${1}" swift_pkg="${HOME}/.config/bin/swift-pkg" nix="/etc/profiles/per-user/${USER}/bin/plugged"
+  if [[ -x "${nix}" ]]; then
+    print -r -- "${nix}"
+  elif [[ -x "${swift_pkg}" ]]; then
     zsh "${swift_pkg}" --path "${dir}"
   else
     print -r -- "${dir}/.build/release/plugged"
