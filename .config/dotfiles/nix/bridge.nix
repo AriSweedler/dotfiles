@@ -10,17 +10,21 @@ let
   clone = "${config.home.homeDirectory}/dotfiles";
 
   # Linked as whole directories, not file by file: tools write files into them (nvim's
-  # lazy-lock.json, Karabiner's karabiner.json, Claude Code's skills), and the submodules are
+  # lazy-lock.json, Claude Code's skills), and the submodules are
   # repos of their own.
   wholeDirs = [
     ".config/nvim"
-    ".config/karabiner"
     ".config/claude"
     ".config/chrome-exoskeleton"
     ".config/plugged"
   ];
-  # The repo's own files, not config HOME reads.
-  skipped = [ "README.md" ".gitmodules" ".gitignore" ];
+  # The repo's own files, not config HOME reads, and files a module places from the store.
+  skipped = [
+    "README.md"
+    ".gitmodules"
+    ".gitignore"
+    ".config/karabiner/karabiner.json" # karabiner.nix
+  ];
 
   # Repo-relative paths of every tracked file (a tracked symlink included) outside wholeDirs.
   walk = rel:

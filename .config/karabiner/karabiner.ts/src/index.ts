@@ -8,7 +8,9 @@ import { windowDirectRules } from "./modes/window.ts"
 import { raycastRules } from "./raycast.ts"
 import { shortcuts } from "./shortcuts.ts"
 
-writeToProfile("Default", [
+// bake sets KARABINER_JSON to the clone's karabiner.json; Nix places that committed file into
+// ~/.config/karabiner at the next switch, so the live one is read-only.
+writeToProfile({ name: "Default", karabinerJsonPath: process.env.KARABINER_JSON }, [
   ...homeRow,
   applicationMode,
   karabinerMode,
