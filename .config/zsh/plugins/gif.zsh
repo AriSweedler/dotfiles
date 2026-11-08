@@ -38,7 +38,7 @@ function convert_to_gif() {
   local output="${input_dir}/${output_basename}"
 
   # log success and open the gif
-  local gif_viewer="/Applications/Google Chrome.app"
+  local gif_viewer="Google Chrome" # by name: Launch Services finds it in /Applications or ~/Applications/Home Manager Apps
   run_cmd open -a "${gif_viewer}" "${output}"
   log::info "Created gif at {output} | output='${output}'"
 }
