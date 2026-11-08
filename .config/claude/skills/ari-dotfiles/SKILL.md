@@ -16,8 +16,8 @@ push**, except on the personal laptop, where a commit is ready to push as soon a
 | Shared | `git dotfiles` / `git df` | plain clone `~/dotfiles` (git dir `~/dotfiles/.git`) | `~/dotfiles`; home-manager links its files into `$HOME` (`/ari-dotfiles-nix`) | Generic, every-machine config under `~/.config` | One shared repo; only Ari pushes |
 | Local | `git local-dotfiles` / `git ldf` | bare `~/.local/local-dotfiles.git` | `~/.local` | Company- and machine-specific code under `~/.local` | One private repo per machine; the agent pushes |
 
-`git df` is `~/.config/git/bin/git-dotfiles` (the alias is in
-`~/.config/git/plugin/dotfiles.gitconfig`). It runs git on the clone and turns a `$HOME` path that
+`git df` is `~/.config/git/bin/git-dotfiles` (the alias is the `dotfiles` block of
+`~/.config/dotfiles/nix/git.nix`). It runs git on the clone and turns a `$HOME` path that
 resolves into the clone (a linked file, or a file under a linked directory) into its clone path, so
 `git df add ~/.config/bin/foo` works for a file that is already tracked. A real directory in
 `$HOME`, one that holds per-file links such as `~/.config/zsh/plugins`, does not resolve into the
@@ -53,7 +53,9 @@ On the personal laptop the local `origin` is a private repo
    **Post-change sweep** alongside.
 5. Close with one message: what landed, the review verdicts (if it ran),
    the sweep's plan, and any history rewrite the review calls for, ending in one
-   question that covers them all (none when nothing is pending). End with "Run
+   question that covers them all (none when nothing is pending). When the change touched a
+   Nix module or added a shared file outside a directory linked whole, say it is live only
+   after Ari runs `dotfiles switch`. End with "Run
    `dotfiles push` when ready." once every unpushed shared commit, including any
    the `yes` just made, has passed the review. On the personal laptop
    (`dotfiles machine-name` prints `personal`), end with it as soon as the commit lands.
@@ -82,14 +84,16 @@ passes its arguments untouched, so it needs clone paths. Only `git df` maps `$HO
 restate it. `git ldf add -A` is safe because of it.
 
 **When `git ldf status` fails:**
-- `git: 'ldf' is not a git command` → the alias is missing: `~/.gitconfig` does not
-  `[include] path = ~/.config/git/plugin/dotfiles.gitconfig`. Fix the include, do not add the alias elsewhere.
+- `git: 'ldf' is not a git command` → `~/.config/git/config` lacks the alias, which
+  `~/.config/dotfiles/nix/git.nix` writes there at a `dotfiles switch`. The fix is the switch
+  (Ari's), never an alias added elsewhere.
 - `fatal: not a git repository` (or `.../local-dotfiles.git` does not exist) → no
   local repo yet. Say the edit is untracked and point at **Bootstrapping a machine**.
 
 **When the ldf pre-commit hook rejects** (exit 1, one `[ERROR]` line), fix the
 cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
-- `bash 5 required; this is macOS /bin/bash without mapfile` → `brew install bash`, retry.
+- `bash 5 required; this is macOS /bin/bash without mapfile` → bash 5 comes from Nix
+  (`/ari-dotfiles-nix`). Ari runs `dotfiles switch`, then retry. NEVER `brew install bash`.
 - `refusing to commit a secret file | path='...'` → `git ldf rm --cached <abs path>`; the file stays untracked.
 - `staged content looks like a credential | path='...'` → move the literal to the
   plugin's `*.secret.zsh` sibling (recipe under **Secrets**), leave a pointer
@@ -183,9 +187,12 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
   under `~/.local/share/dotfiles/jobs/`.
 - **Some files are placed by Nix.** The dotfiles are being ported to nix-darwin
   and home-manager, and the port keeps the split (**Cutpoints**). A file
-  home-manager places is a read-only symlink into `/nix/store`: edit its source in
-  the flake, then `dotfiles switch`, per `/ari-dotfiles-nix`. Nix places only the few files
-  `/ari-dotfiles-nix` § What Nix owns lists. Every other shared file in `$HOME` is an
+  home-manager places is a read-only symlink into `/nix/store`, among them git's config and
+  ignore, tmux, Starship and gh's `config.yml`. **NEVER run `git config --global` or `gh config
+  set`, or edit `~/.config/starship.toml` or `~/.config/tmux/tmux.conf`: edit the module, then
+  `dotfiles switch --build`; Ari switches.** **NEVER `brew install`:** a new tool goes in a flake.
+  Which module writes what, and how to edit, verify, build and switch: `/ari-dotfiles-nix`
+  (§ Modules, § What Nix owns). Every other shared file in `$HOME` is an
   out-of-store link into `~/dotfiles`, made by the bridge (`~/.config/dotfiles/nix/bridge.nix`):
   `readlink -f` ends in the clone. Edit it in place, as below.
 - **Claude skills follow the same split.** The real directory lives in the tier
@@ -199,13 +206,9 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
   everything else is a file of the framework repo at `~/.config/chrome-exoskeleton/`,
   a submodule (see **Submodules**). Building, testing and the framework's own
   push are `/ari-dotfile--submodule-chrome-exoskeleton`'s job.
-- **Starship follows the same split, by whole table.** Generic modules go in
-  `~/.config/starship.toml` (df); a work-only module is one table in its own
-  `~/.local/share/starship/<module>.toml` (ldf, e.g. `kubernetes.toml`). A table
-  lives in one tier only. **Never edit `$STARSHIP_CONFIG`**
-  (`~/.local/state/starship/starship.toml`, what `starship config` opens): it is
-  generated at shell start and rewritten. Open a new shell to see the change; a
-  `[ERROR] starship: the joined config is not valid TOML` line names the clash.
+- **Starship and tmux follow the same split.** Generic config goes in `starship.nix`, `tmux.nix`
+  and `nix/tmux/*.conf` (df); a work-only Starship table or tmux line goes in the local flake
+  (ldf), at the plug-in points their **Cutpoints** rows name.
 - **Split mixed files.** Keep the generic mechanism in config and parameterize
   the company detail from local:
   ```zsh
@@ -265,9 +268,9 @@ Exoskeleton is the model.
 | Chrome Exoskeleton, `exo` (`~/.config/chrome-exoskeleton/`) | `~/.local/share/chrome-exoskeleton/plugins/<name>/` | `exo link` mounts both roots; `/ari-dotfile--submodule-chrome-exoskeleton` |
 | Claude skills, `/ari-dotfiles-skill-registry` (`~/.config/claude/skills/`) | `~/.local/share/claude-skills/<name>/` | symlinked into `~/.claude/skills` |
 | Nix flake (`~/.config/dotfiles/nix/`: exports the nix-darwin and home-manager modules, never switched alone) | `~/.local/share/dotfiles/nix/`, this machine's flake | inverted: the local flake takes the shared one as an input and is the one switched (`darwinConfigurations.personal`); `/ari-dotfiles-nix` |
-| `new-machine` Brewfile (`~/.config/new-machine/Brewfile`) | `~/.local/share/new-machine/Brewfile` | merged for `brew bundle` |
 | `open-any` (`~/.config/zsh/plugins/open_any.zsh`) | `~/.local/bin/open-*` | discovered by name across both bin tiers |
-| Starship prompt (`~/.config/starship.toml`, joined by `~/.config/zsh/plugins/starship.zsh`) | `~/.local/share/starship/*.toml`, whole tables only | joined after the base into `~/.local/state/starship/starship.toml` (`STARSHIP_CONFIG`) at shell start; a table in both tiers is a TOML error and the prompt falls back to the base |
+| Starship prompt (`~/.config/dotfiles/nix/starship.nix`) | the local flake's `programs.starship.settings` tables | merged by the module system at a `dotfiles switch`; a key set in both tiers fails the build |
+| tmux (`~/.config/dotfiles/nix/tmux.nix`, `nix/tmux/*.conf`) | the local flake's `programs.tmux.extraConfig`; a typhon working copy at `~/.local/share/tmux/local-plugins/tmux-typhon` | the module system appends the local lines at a `dotfiles switch`; the working copy loads instead of the pinned typhon |
 | tmuxinator (`~/.config/tmuxinator/*.yml`) | `~/.local/share/tmuxinator/*.yml` | `TMUXINATOR_CONFIG`, set by `~/.config/zsh/plugins/tmux.zsh` when the dir exists; searched before the shared dir |
 | Neovim (`~/.config/nvim/`) | `~/.local/share/nvim/site/plugin/*.lua` | nvim's own data-dir runtimepath (kept by lazy.nvim's rtp reset) |
 | `/ari-gsw-calendar-add` event types | `~/.local/share/gsw-calendar-add/event-types.md` | the skill reads it beside its own **Event types** sections |
@@ -366,7 +369,8 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
 ## Key locations
 
 ### Ignore files
-- `~/.config/git/ignore` — global `core.excludesFile`, every repo on the machine. Its
+- `~/.config/git/ignore` — global `core.excludesFile`, every repo on the machine, written by
+  the git module (`/ari-dotfiles-nix` § Modules). Its
   `dotfiles.git` and `.local` lines matter only to the bare-repo fallback, whose work tree is `$HOME`.
 - `~/dotfiles/.gitignore` — the shared repo's own ignore list. It also keeps out files that tools
   write into linked directories, such as `.config/nvim/lazy-lock.json`.
@@ -374,8 +378,9 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
 
 ### Shared (df)
 - **Scripts**: `~/.config/bin/` on `$PATH`
-- **Git config plugins**: `~/.config/git/plugin/` (aliases live in `dotfiles.gitconfig`)
-- **Git hooks**: `~/.config/git/dotfiles-hooks/` (df), `~/.config/git/local-dotfiles-hooks/` (ldf; needs brew bash 5)
+- **Git, tmux, Starship and gh config**: home-manager modules in `~/.config/dotfiles/nix/`; where
+  each lives and what a switch writes: `/ari-dotfiles-nix` § Modules
+- **Git hooks**: `~/.config/git/dotfiles-hooks/` (df), `~/.config/git/local-dotfiles-hooks/` (ldf; needs bash 5)
 - **Zsh plugins**: `~/.config/zsh/plugins/`, sourced first
 - **Nvim**: `~/.config/nvim/`, lazy.nvim specs in `lua/plugins/`, `lazy = true` by default
 - **Claude skills**: `~/.config/claude/skills/<name>/`, symlinked from `~/.claude/skills/<name>`
@@ -428,9 +433,8 @@ cannot explain is listed but left out of the plan.
 
 `dotfiles init` (idempotent, `--dry-run`; what `bootstrap.sh` ends in) converges the whole machine but Nix,
 whose installer and first switch are `/ari-dotfiles-nix`'s: every step checks, applies only where it finds
-drift, and re-checks, then `dotfiles status` prints. So a changed Brewfile installs its new
-items, Raycast syncs when it is behind, and a converged machine changes nothing. `dotfiles
-steps` lists the steps and their groups (`repo`, `brew`, `tools`); `init --group repo` or
+drift, and re-checks, then `dotfiles status` prints; a converged machine changes nothing.
+`dotfiles steps` lists the steps and their groups (`repo`, `brew`, `tools`); `init --group repo` or
 `init --only a,b` (= `dotfiles apply a b`) narrows it. Every verb answers `--help`, and so
 does `dotfiles help <verb>`; a bare `dotfiles` lists the verbs.
 
@@ -454,8 +458,8 @@ The `repo` group is the dotfiles themselves:
   every 5 minutes) that runs the job plugins of both tiers, booting out the per-plugin jobs
   it replaced. The plugin contract is `~/.config/dotfiles/jobs/README.md`; see **Cutpoints**.
 
-`brew` is Homebrew and `~/.config/new-machine/Brewfile` (includes `bash`; the ldf hook needs
-bash 5); `tools` is the rest (`raycast_sync`, `chrome_exoskeleton`: `exo deps ci`, `exo build`,
+`brew` is Homebrew itself; the flakes declare the brews, casks and packages (machine-only ones
+in the local flake), and a `dotfiles switch` installs them (`/ari-dotfiles-nix`). `tools` is the rest (`raycast_sync`, `chrome_exoskeleton`: `exo deps ci`, `exo build`,
 `plugged`, `karabiner`, …).
 
 To back the local tier up, give it a remote:
