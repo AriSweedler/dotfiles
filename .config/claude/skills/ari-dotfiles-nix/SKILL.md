@@ -1,11 +1,11 @@
 ---
 name: ari-dotfiles-nix
-description: Edit, switch, roll back and commit Ari's dotfiles under the Nix port (nix-darwin + home-manager): how to tell a file the bridge links into the ~/dotfiles clone from a store-placed or an unmanaged one, the shared and local flakes, where a new tool goes (never a bare brew install), `dotfiles switch` (Claude builds with --build, Ari switches), what Nix owns today versus the open phases, and the install, first-switch, uninstall and troubleshooting facts. Use whenever a change touches ~/.config/dotfiles/nix, ~/.local/share/dotfiles/nix, a file linked into /nix/store, dotfiles switch, darwin-rebuild, brew install, or a Nix-managed package. Tiers, commits, review and pushing stay with /ari-dotfiles.
+description: Edit, switch, roll back and commit Ari's dotfiles under the Nix port (nix-darwin + home-manager): how to tell a file the bridge links into the ~/dotfiles clone from a store-placed or an unmanaged one, the shared and local flakes, where a new tool goes (never a bare brew install), `dotfiles switch` (Claude builds with --build, Ari switches), what Nix owns (packages, Homebrew, and the git, tmux, starship and gh configs home-manager writes), how to edit and verify a module-written config, how to build a worktree, and the install, first-switch, uninstall and troubleshooting facts. Use whenever a change touches ~/.config/dotfiles/nix, ~/.local/share/dotfiles/nix, a file linked into /nix/store, dotfiles switch, darwin-rebuild, brew install, or a Nix-managed package. Tiers, commits, review and pushing stay with /ari-dotfiles.
 ---
 
 # Dotfiles under Nix
 
-Ari's dotfiles run on nix-darwin and home-manager: the local flake takes the shared one from the plain clone `~/dotfiles`, `dotfiles switch` activates the generation they build, and home-manager links the clone's files into `$HOME`. Here: changing a file or a tool, switching, rolling back, what Nix owns today, and installing or removing Nix; `/ari-dotfiles` stays the authority for tiers, commits, review and pushing.
+Ari's dotfiles run on nix-darwin and home-manager: the local flake takes the shared one from the plain clone `~/dotfiles`, `dotfiles switch` activates the generation they build, and home-manager links the clone's files into `$HOME`. Here: changing a file, a module-written config or a tool, verifying and switching, rolling back, what Nix owns, and installing or removing Nix; `/ari-dotfiles` stays the authority for tiers, commits, review and pushing.
 
 ## Rules
 
@@ -14,17 +14,23 @@ Ari's dotfiles run on nix-darwin and home-manager: the local flake takes the sha
   BAD:  Ari's pane says `darwin-rebuild: command not found` → Claude runs `sudo /run/current-system/sw/bin/darwin-rebuild switch …`
   GOOD: Claude hands Ari `sudo /run/current-system/sw/bin/darwin-rebuild switch --flake ~/.local/share/dotfiles/nix#personal` per /ari-driving
   ```
-- **Claude's**: `dotfiles switch --build`, `nix build`, `nix eval`, `nvd diff` and read-only checks. `--build` is not read-only: it commits **and pushes** a moved `flake.lock` in ldf; `--build --no-commit` leaves the tiers untouched, for a trial build.
-- **Prefix every Bash call that runs `nix`, `nvd`, `dotfiles` or `env bash` with the Nix PATH**: shell state does not carry between calls, and a Claude session started before the last switch lacks it. The Nix dirs must come before `/usr/bin`, or `env bash` finds `/bin/bash` 3.2:
+- **Claude's**: `dotfiles switch --build`, `nix build`, `nix eval`, `nvd diff` and read-only checks. `--build` is not read-only: it commits **and pushes** a moved `flake.lock` in ldf; `--build --no-commit` moves the lock but leaves it uncommitted (undo: `git ldf checkout -- ~/.local/share/dotfiles/nix/flake.lock`). A trial build that writes nothing is **Verify a module change**'s or **Build a worktree**'s `nix build`.
+- **Prefix every Bash call that runs `nix`, `nvd`, `dotfiles`, `env bash`, or the Nix-provided `git` or `tmux`, with the Nix PATH**: shell state does not carry between calls, and a Claude session started before the last switch lacks it. The Nix dirs must come before `/usr/bin`, or `env bash` finds `/bin/bash` 3.2:
   ```zsh
   [[ "$(command -v bash)" == /etc/profiles/* ]] || export PATH=/etc/profiles/per-user/$USER/bin:/run/current-system/sw/bin:$PATH; command -v nix >/dev/null || echo 'nix not installed: see Install and first switch'
   ```
-- **Nix sees only what git committed in the clone.** `dotfiles switch` locks the shared input at the clone's HEAD, so an uncommitted change under `.config/dotfiles/nix`, or an uncommitted new file anywhere in the clone, is not in the switch.
+- **Nix sees only what git committed in the clone.** `dotfiles switch` locks the shared input at the clone's HEAD, so an uncommitted change under `.config/dotfiles/nix`, or an uncommitted new file anywhere in the clone, is not in the switch. A trial `nix build --override-input dotfiles git+file://…` sees uncommitted edits to tracked files; the switch never does.
 - **NEVER run `nix flake update`, `nix flake lock --update-input`, or edit `flake.lock` by hand.** To pick up a new shared commit, run `dotfiles switch --build`. Re-pin nixpkgs, nix-darwin or home-manager only when Ari asks. The header comment of `~/.local/share/dotfiles/nix/flake.nix` that says otherwise predates `dotfiles switch`.
-- **When an edit fails read-only, NEVER `chmod`, `sudo`, `rm` or replace the link**: the file is store-placed. Find its source with `grep -rn '<path relative to $HOME>' ~/.config/dotfiles/nix ~/.local/share/dotfiles/nix` (a `home.file` entry), edit that, commit, then **Switch**.
+- **When an edit fails read-only, NEVER `chmod`, `sudo`, `rm` or replace the link**: the file is store-placed; edit its source per **Change a file**.
+- **NEVER run `git config --global` or `gh config set`** (nor `gh alias set`): a module writes those files into the store, and the write fails. Set the value where **Change a file** says.
+  ```
+  BAD:  git config --global pull.rebase true   → error: could not lock config file …/.config/git/config
+  GOOD: every machine → the `base` block of git.nix, Verify, commit, Switch
+  GOOD: this machine only → git config --file ~/.local/share/git/config pull.rebase true
+  ```
 - **NEVER `brew install`, `brew uninstall` or `nix profile install` alone**: a switch uninstalls every undeclared formula and cask. Declare the tool (**Add a tool**).
-- **NEVER delete or edit a harness step that Nix also covers** (`dotfiles steps`) until Ari decides between deleting them and keeping them as skip-on-nix (`beads-2ly.7.6`); a change that needs one asks him.
-- **Keep this skill current, through `/ari-skill-update`, in the same session** when a switch adds or removes a `home.packages`, `brews`, `casks` or `home.file` entry, a `programs.*` module replaces a bridge link, or a `beads-2ly.7.*` bead closes: **What Nix owns**, the Phase plan, the frontmatter description, and any step that changed. **When What Nix owns and `readlink -f` disagree, tell Ari and propose the fix the same way.**
+- **NEVER delete or edit a harness step that Nix also covers** (`dotfiles steps`) until Ari decides between deleting them and keeping them as skip-on-nix (**Open work**); a change that needs one asks him.
+- **Keep this skill current, through `/ari-skill-update`, in the same session** when a switch adds or removes a `home.packages`, `brews`, `casks`, `home.file` or `xdg.configFile` entry, a `programs.*` module is added or removed, or a phase bead of the Nix port epic closes: **What Nix owns** (the **Modules** table included), **Open work**, the Flakes table, the frontmatter description, and any step that changed. **When What Nix owns and `readlink -f` disagree, tell Ari and propose the fix the same way.**
 - **NEVER put a flake or module in `~/.config/nix` or `~/.local/share/nix`.** Nix owns them (user `nix.conf`; repl history and trusted settings). Shared code goes in `~/.config/dotfiles/nix`, machine-only code in `~/.local/share/dotfiles/nix`.
 
 ## Layout
@@ -33,7 +39,7 @@ Ari's dotfiles run on nix-darwin and home-manager: the local flake takes the sha
 
 | Flake | Path | Tier | Holds |
 |---|---|---|---|
-| Shared | `~/.config/dotfiles/nix` (the clone's `~/dotfiles/.config/dotfiles/nix`) | df | `darwin.nix` (imports `macos.nix`) as `darwinModules.default`, `home.nix` as `homeModules.default`, `bridge.nix`, `lib.darwinSystem { user; modules; homeModules; }`; its `flake.lock` pins nixpkgs (nixpkgs-unstable), nix-darwin, home-manager |
+| Shared | `~/.config/dotfiles/nix` (the clone's `~/dotfiles/.config/dotfiles/nix`) | df | `darwin.nix` (imports `macos.nix`) as `darwinModules.default`, `home.nix` (imports `git.nix`, `tmux.nix`, `starship.nix`, `gh.nix`) as `homeModules.default`, `bridge.nix`, `lib.darwinSystem { user; modules; homeModules; }`; its `flake.lock` pins nixpkgs (nixpkgs-unstable), nix-darwin, home-manager |
 | Local | `~/.local/share/dotfiles/nix` | ldf | `darwinConfigurations.personal`, built by the shared `lib.darwinSystem` from the local `darwin.nix` (this machine's brews, casks, system packages) and `home.nix` (this machine's packages); takes the shared flake as the `git+file:` input `dotfiles`. `dotfiles switch` reads it as a `path:` flake, so its own uncommitted edits build |
 
 `personal` is this machine's configuration (`nix flake show ~/.local/share/dotfiles/nix` names it elsewhere). `~/dotfiles.git` is retired (`~/dotfiles.git.retired`): `$HOME` is not a work tree, and `git df` runs on the clone.
@@ -49,7 +55,7 @@ Decide by `readlink -f <file>` alone:
 | `readlink -f` ends in | Kind | Example |
 |---|---|---|
 | `~/dotfiles/…` | Linked: the clone's file | `~/.zshenv -> /nix/store/…-home-manager-files/.zshenv -> ~/dotfiles/.zshenv`; `~/.config/nvim/init.lua` (no link itself; its directory is one) |
-| `/nix/store/…` | Store-placed: a read-only copy | `~/.local/state/dotfiles/nix-managed`, from `home.file` in the shared `home.nix` |
+| `/nix/store/…` | Store-placed: a read-only copy | `~/.config/git/config -> /nix/store/…-hm_gitconfig`, from `git.nix` (**Modules**); `~/.local/state/dotfiles/nix-managed`, from `home.file` in the shared `home.nix` |
 | anything else | Not managed | every other file under `~/.local` (the local tier) |
 
 ### Backup suffixes
@@ -62,44 +68,78 @@ Decide by `readlink -f <file>` alone:
 
 ## What Nix owns
 
-Phases 1–3 and 5 landed (2026-11-07).
-
-- **Packages**: CLI tools from nixpkgs, in `home.packages` of the shared `home.nix` (git, starship, jq, bash 5, zsh, nvd, poppler-utils, …) or the local `home.nix` (machine-only: gh, go, kubectl, …). `environment.systemPackages` in the local `darwin.nix` is for a tool root or launchd needs.
-- **Homebrew**: nix-darwin's `homebrew` module; shared `brews` and `casks` in the shared `darwin.nix`, this machine's taps, brews and casks in the local `darwin.nix`, applied from `/etc/dotfiles/Brewfile`. `cleanup = "uninstall"`: **a switch uninstalls every formula and cask not declared.** A switch skips `brew bundle` when the bundle command and the mtimes of Homebrew's `Cellar`, `Caskroom` and `Library/Taps` match `/var/db/dotfiles-brew-bundle.stamp`.
+- **Packages**: CLI tools from nixpkgs, in `home.packages` of the shared `home.nix` (jq, delta, terminal-notifier, bash 5, zsh, nvd, poppler-utils, …) or the local `home.nix` (machine-only: go, kubectl, …); git, tmux, starship and gh come from their modules (**Modules**). `environment.systemPackages` in the local `darwin.nix` is for a tool root or launchd needs.
+- **Homebrew**: nix-darwin's `homebrew` module; shared `brews` and `casks` in the shared `darwin.nix`, this machine's taps, brews and casks in the local `darwin.nix`, applied from the Brewfile nix-darwin writes to `/etc/dotfiles/Brewfile` (no tier holds a Brewfile). `cleanup = "uninstall"`: **a switch uninstalls every formula and cask not declared.** A switch skips `brew bundle` when the bundle command and the mtimes of Homebrew's `Cellar`, `Caskroom` and `Library/Taps` match `/var/db/dotfiles-brew-bundle.stamp`.
 - **Fonts, neovim, the jobs agent**: `fonts.packages`, neovim pinned in the flake, and the `dotfiles-jobs` launchd agent, in the shared `darwin.nix`.
 - **macOS defaults**: `macos.nix`, one user script in `postActivation`; it writes a default only when it differs, and restarts the Dock or Finder only when one of its keys changed.
 - **System files**: `/etc/zshenv` runs set-environment, which replaces PATH, only in interactive or login shells; a non-interactive script (a launchd job, the test world) keeps the PATH it was given. `/etc/nix/machines` is empty, so a switch does not reload nix-daemon.
-- **Files**: every file the clone tracks, linked by the bridge; store-placed, only the marker `~/.local/state/dotfiles/nix-managed`.
-- **Planned modules** (`beads-2ly.7.12`): `programs.git`, `programs.starship`, `programs.tmux` and gh replace their bridge links one tool at a time; tmux and terminal-notifier leave brew once nothing hardcodes their brew path.
+- **Files**:
+  - Linked by the bridge: every file the clone tracks.
+  - Store-placed: the configs in **Modules**; `~/.config/tmux/typhon.d` and `~/.config/tmux/typhon-help` (`xdg.configFile` in `tmux.nix`); `~/.local/share/zsh-vi-mode` and the marker `~/.local/state/dotfiles/nix-managed` (`home.file` in the shared `home.nix`).
 
-### Phase plan
+### Modules
 
-Epic `beads-2ly.7` in Ari's beads workspace `~/beads` holds the decisions and the plan; each phase is a child bead and lands when it closes. Read them per `/ari-bead-driven-development` (`bd show beads-2ly.7`).
+These `programs.*` modules in the shared flake write their configs into the store. The local flake adds to one through the same option, e.g. `programs.starship.settings.kubernetes.disabled = false;` or `programs.tmux.extraConfig = "set -g status-position top";` in its `home.nix`. **Set each `settings` key in one tier only**: a key both tiers set fails evaluation (`conflicting definition values`); ask Ari which tier keeps it, and use `lib.mkForce` only when he says so. `extraConfig` does not conflict: the local lines come after the shared ones, so a repeated `set` there silently wins.
 
-- **4** (`beads-2ly.7.4`, every config file placed by home-manager): the bridge meets it; it waits only on `beads-2ly.7.11`, the clone and the bridge.
-- **6** (`beads-2ly.7.6`): `dotfiles switch` landed and the bare repo is retired; retiring the harness steps Nix covers waits on Ari (Rules).
+| Module | Writes | After a switch | Notes |
+|---|---|---|---|
+| `git.nix` | `~/.config/git/config`, `~/.config/git/ignore` | nothing: read on each run | Includes `~/.local/share/git/config` last, for repos under `$HOME` only (`gitdir:~/`), so that file wins. It is not managed. delta is a plain package with `core.pager = delta`, not `programs.delta`, whose integration pages only diff, log, show and blame. `~/.config/git/bin`, the hooks and `git/template` stay linked. |
+| `tmux.nix` | `~/.config/tmux/tmux.conf` | `<Prefix>C-s` in each running server | Typed options, then `~/.config/dotfiles/nix/tmux/*.conf` in the order `tmux.nix` lists them, concatenated into `extraConfig`. typhon is pinned from GitHub (`AriSweedler/tmux-typhon`, `mkTmuxPlugin`) and runs last; no TPM. A working copy at `~/.local/share/tmux/local-plugins/tmux-typhon` loads instead of the pin. |
+| `starship.nix` | `~/.config/starship.toml` | nothing: the next prompt reads it | `~/.config/zsh/plugins/starship.zsh` runs `starship init`. |
+| `gh.nix` | `~/.config/gh/config.yml` | nothing | `hosts.yml` stays gh's. `gitCredentialHelper` is off: git keeps osxkeychain. |
+
+### Open work
+
+Phases 1–5 landed (2026-11-07). The plan and its decisions are the Nix port epic in Ari's beads workspace `~/beads` (title "Mac feels like NixOS without replacing macOS …"); read it per `/ari-bead-driven-development`, and ask Ari when `~/beads` is missing.
+
+- **Phase 6**: `dotfiles switch` landed and the bare repo is retired; retiring the harness steps Nix covers waits on Ari (Rules).
 
 ## Workflow
 
 ### Change a file
 
-Take the first bullet that matches:
+Take the first item that matches:
 
-1. **Under `.config/dotfiles/nix`**, or a store-placed file's source (linked too, but read only at a switch): edit, commit in df per `/ari-dotfiles`, then **Switch**.
-2. **A new file**: create it at `~/dotfiles/<path>`, NEVER at `$HOME/<path>` (a switch moves that aside to `.before-nix`). Inside a whole directory (**The bridge**) it is live at once: commit, no switch. Elsewhere: commit, then **Switch**.
-3. **Linked**: edit it through `$HOME` or the clone; it is live at once, with no generation to roll back to. After editing a shell startup file, test a clean login (`env -i HOME=$HOME TERM=xterm-256color USER=$USER /bin/zsh -lic true`); on failure, `git df checkout -- <file>`. Commit per `/ari-dotfiles`.
-4. **The local flake** (`~/.local/share/dotfiles/nix`): edit, then **Switch**; commit in ldf per `/ari-dotfiles`.
-5. **Not managed**: edit in place and commit per `/ari-dotfiles`.
+1. **A git setting for this machine only**: `git config --file ~/.local/share/git/config <key> <value>`. Live at once, no switch, repos under `$HOME` only; the file is not managed.
+2. **A config a module writes** (**Modules**), or a file it reads (`~/dotfiles/.config/dotfiles/nix/tmux/*`): edit the module or that file, **Verify a module change**, commit in df per `/ari-dotfiles`, then **Switch**. A gh setting for this machine only goes in the local `home.nix` (`programs.gh.settings`).
+3. **Anything else under `.config/dotfiles/nix`**, or a store-placed file's source (linked too, but read only at a switch): find the source with `readlink -f <file>`, then `grep -rn '<path>' ~/dotfiles/.config/dotfiles/nix ~/.local/share/dotfiles/nix` (grep the clone: `grep -r` skips the bridge's symlinks under `~/.config`). A `home.file` path is relative to `$HOME`, an `xdg.configFile` path to `~/.config`: `~/.config/tmux/typhon.d` → `grep -rn 'tmux/typhon.d'` → `tmux.nix: xdg.configFile."tmux/typhon.d".source = ./tmux/typhon.d;`. Edit, commit in df, **Switch**.
+4. **A new file**: create it at `~/dotfiles/<path>`, NEVER at `$HOME/<path>` (a switch moves that aside to `.before-nix`). Inside a whole directory (**The bridge**) it is live at once: commit, no switch. Elsewhere: commit, then **Switch**.
+5. **Linked**: edit it through `$HOME` or the clone; it is live at once, with no generation to roll back to. After editing a shell startup file, test a clean login (`env -i HOME=$HOME TERM=xterm-256color USER=$USER /bin/zsh -lic true`); on failure, `git df checkout -- <file>`. Commit per `/ari-dotfiles`.
+6. **The local flake** (`~/.local/share/dotfiles/nix`): edit, then **Switch**; commit in ldf per `/ari-dotfiles`.
+7. **Not managed**: edit in place and commit per `/ari-dotfiles`.
 
 ### Add a tool
 
 Pick its place in this order, then edit, commit, **Switch**:
 
 1. A GUI app, a service, or a tap's formula → `casks` or `brews` (a browser: a cask).
-2. `grep -rn '/opt/homebrew/bin/<tool>' ~/dotfiles` finds a hardcoded brew path → `brews`, with a comment saying why (terminal-notifier).
-3. `nix search nixpkgs#<tool>` finds it at the version Ari needs → `home.packages` (ripgrep). Older than he needs → `brews`, with the version gap in a comment (tree-sitter).
+2. `grep -rn '/opt/homebrew/bin/<tool>' ~/dotfiles` finds a brew path the code needs → `brews`, with a comment saying why. A hit is not a need when the code first tries a Nix path or `command -v`: `for p in /etc/profiles/per-user/$USER/bin/tmux … /opt/homebrew/bin/tmux` is a fallback list, and the tool goes in `home.packages`.
+3. `nix search nixpkgs#<tool>` finds it at the version Ari needs → `home.packages` (ripgrep). Older than he needs → `brews`, with the version gap in a comment (tree-sitter). A home-manager `programs.<tool>` option exists → still `home.packages`; moving its config from the bridge into a module is Ari's call.
 
 Every machine wants it → the shared module; else the local one. Ari decides when unclear.
+
+### Verify a module change
+
+**Run it on every edit under item 2 of Change a file, before the commit.** It builds the clone's working tree (tracked files, uncommitted edits included) with `--override-input`, because the local `flake.lock` still pins the old shared commit until `dotfiles switch --build` moves it; a build without the override compares the running config with itself. Run it as one Bash call, so `$H` survives, from `~` so git's `gitdir:~/` include resolves:
+
+```zsh
+[[ "$(command -v bash)" == /etc/profiles/* ]] || export PATH=/etc/profiles/per-user/$USER/bin:/run/current-system/sw/bin:$PATH; cd ~
+H=$(nix build --no-link --print-out-paths --no-write-lock-file --override-input dotfiles "git+file://$HOME/dotfiles?dir=.config/dotfiles/nix" "path:$HOME/.local/share/dotfiles/nix#darwinConfigurations.personal.config.home-manager.users.$USER.home-files") && [[ -d $H ]] || exit 1
+diff <(git config --global --list --includes) <(GIT_CONFIG_GLOBAL=$H/.config/git/config git config --global --list --includes)
+diff ~/.config/git/ignore $H/.config/git/ignore
+tmux -L nixold kill-server 2>/dev/null; tmux -L nixtest kill-server 2>/dev/null
+tmux -L nixold -f ~/.config/tmux/tmux.conf new-session -d; tmux -L nixtest -f $H/.config/tmux/tmux.conf new-session -d
+diff <(tmux -L nixold show -g; tmux -L nixold show -gw) <(tmux -L nixtest show -g; tmux -L nixtest show -gw)
+tmux -L nixold kill-server; tmux -L nixtest kill-server
+diff ~/.config/starship.toml $H/.config/starship.toml; diff ~/.config/gh/config.yml $H/.config/gh/config.yml
+```
+
+- The two test servers keep a running server's runtime `set`s out of the tmux diff. tmux 3.8 made the `display-panes-*` options window options: they show in `show -gw`, not `show -g`.
+- For starship and gh, a change in quoting, key order or indentation is formatting; ignore it.
+- **The build fails** → handle it as Switch step 2's errors do.
+- **Every diff is empty, but the change was meant to alter the config** → `$H` is not your edit (a file not `git add`ed, the wrong flake): stop; do not report it verified.
+- **A difference the change did not intend** → NEVER hand over the switch: fix the source and verify again. After two failed fixes, show Ari the diff.
+- **Only intended differences** → carry them, one line each, into Switch step 3's preview.
 
 ### Switch
 
@@ -113,11 +153,12 @@ Every machine wants it → the shared module; else the local one. Ari decides wh
    - **The path equals `readlink /run/current-system`** → nothing changed: say so, and skip steps 3 and 4.
 3. **Preview**, then hand over, all in one message:
    - `nvd diff /run/current-system <path>`.
+   - **Module configs**, when the build changes a module (**Modules**): the intended differences **Verify a module change** found, one line each; not yet run → run it now. No module changed → omit the line.
    - The source diff: the df commits after the running system's lock rev, the newest `nix: lock the shared flake at <rev>` in `git ldf log --format=%s -- ~/.local/share/dotfiles/nix/flake.lock` older than this build's, plus local-flake edits.
    - **Brew removals, which a rollback does not undo**: `export HOMEBREW_NO_AUTO_UPDATE=1; B=<path>/etc/dotfiles/Brewfile; comm -23 <(brew leaves --installed-on-request | sort) <(brew bundle list --formula --file=$B | sed 's|.*/||' | sort); comm -23 <(brew list --cask -1 | sort) <(brew bundle list --cask --file=$B | sed 's|.*/||' | sort)`. Each name printed is uninstalled by the switch: ask Ari, per name, to declare it (**Add a tool**, then rebuild) or let it go. None → say `no brew removals`.
-   - **A tool leaving brew** (a `brews` entry removed, the package added to `home.packages`): `grep -rn '<tool>' ~/dotfiles/.config/zsh ~/dotfiles/.zshenv | grep -E 'init|eval|/opt/homebrew'`; name each match. Tell Ari to `exec zsh` in every open pane afterwards (or re-run that init, e.g. `eval "$(starship init zsh)"`), and to restart a Claude session started before it with `claude --continue`: each keeps the old `/opt/homebrew/bin` path.
+   - **A tool leaving brew** (a `brews` entry removed, the tool now from `home.packages` or a `programs.*` module): `grep -rn '<tool>' ~/dotfiles/.config/zsh ~/dotfiles/.zshenv | grep -E 'init|eval|/opt/homebrew'`; name each match. Tell Ari to `exec zsh` in every open pane afterwards (or re-run that init, e.g. `eval "$(starship init zsh)"`), and to restart a Claude session started before it with `claude --continue`: each keeps the old `/opt/homebrew/bin` path.
 4. **Ari**: `dotfiles switch`, handed per `/ari-driving`. Read the result back:
-   - Exit 0 and `readlink /run/current-system` equals the built path → done. Tell Ari: shell config changed → a new shell; an app's config → reload that app, by name.
+   - Exit 0 and `readlink /run/current-system` equals the built path → done. Tell Ari: shell config changed → a new shell; a module's config → its **After a switch** cell in **Modules**; another app's config → reload that app, by name.
    - Exit 0, another path → HEAD moved since the build: show `nvd diff <built path> /run/current-system` and `git -C ~/dotfiles log --oneline <recorded rev>..HEAD`, the part he did not preview.
    - Non-zero → show the first error, then route it: **Troubleshooting**, or offer **Roll back**. NEVER re-hand the same switch unchanged.
    - Sudo cancelled → nothing activated; say so.
@@ -130,6 +171,17 @@ Every machine wants it → the shared module; else the local one. Ari decides wh
 - **Debug first**: Claude reads the source and the diff; Ari runs `sudo darwin-rebuild --list-generations` only when dates matter.
 
 One generation only → nothing to roll back to: offer to fix forward, or **Uninstall**.
+
+### Build a worktree
+
+A trial build of shared changes in a git worktree of the clone, without committing them on `main`. **NEVER hand Ari a switch from it**: a switch builds the clone's HEAD, so merge to `main`, then **Switch**.
+
+1. `git -C <worktree> add` every new file: a `git+file:` input sees only tracked files (uncommitted edits to them included).
+2. Build:
+   ```zsh
+   nix build "path:$HOME/.local/share/dotfiles/nix#darwinConfigurations.personal.system" --override-input dotfiles 'git+file://<worktree>?dir=.config/dotfiles/nix' --no-write-lock-file --no-link --print-out-paths
+   ```
+   For **Verify a module change** on the worktree, use its build with `$HOME/dotfiles` replaced by `<worktree>`. Nix rejects the worktree URL → stop and show the error; do not commit to `main` to get around it.
 
 ## Install and first switch
 
@@ -147,7 +199,9 @@ Ari, in order: restore each `/etc/*.before-nix-darwin`; `sudo nix --extra-experi
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Editing a file fails: read-only | It is store-placed | Rules: find the source; commit; **Switch** |
+| Editing a file fails: read-only | It is store-placed | **Change a file**, items 2–3 |
+| `git config --global` fails (`could not lock config file …/.config/git/config`), or `gh config set` / `gh alias set` fails | A module writes that config into the store | **Change a file**, items 1–2 |
+| `git maintenance register` fails to write the config | It writes the global config by default | `git maintenance register --config-file ~/.local/share/git/config` |
 | A shared edit or a new clone file has no effect after a switch | Not committed when the switch locked HEAD | Commit per `/ari-dotfiles`, then **Switch** |
 | A `<file>.before-nix` appears in `$HOME` | A file stood where the bridge links; home-manager moved it aside | Show Ari `diff <file>.before-nix ~/dotfiles/<path>`; move into the clone only what he approves, and delete the backup only after he says so |
 | A switch fails: a file would be clobbered by backing it up | `<file>.before-nix` already exists | Resolve the old backup as above, then **Switch** |
