@@ -237,10 +237,15 @@ jq -n --arg cmd "${HOME}/.config/claude/bin/notification-fire.sh" '{hooks: {Noti
 check_step claude_notifications
 assert_eq "notification wired but no PreToolUse guard → fail" fail "$(status_of claude_notifications)"
 assert_eq "reason guard_mismatch" guard_mismatch "$(reason_of claude_notifications)"
+jq --arg cmd "${HOME}/.config/claude/bin/pretooluse-headless-chrome-guard.sh" '.hooks.PreToolUse = [{matcher: "Bash", hooks: [{type: "command", command: $cmd}]}]' "${HOME}/.claude/settings.json" > "${HOME}/.claude/settings.json.tmp" && mv "${HOME}/.claude/settings.json.tmp" "${HOME}/.claude/settings.json"
+check_step claude_notifications
+assert_eq "notification and guard wired but no Stop hook → fail" fail "$(status_of claude_notifications)"
+assert_eq "reason stop_mismatch" stop_mismatch "$(reason_of claude_notifications)"
 "${HOME}/.config/claude/bin/initialize.sh"
 check_step claude_notifications
-assert_eq "both hooks wired → ok" ok "$(status_of claude_notifications)"
-assert_json "guard hook wired" "${HOME}/.claude/settings.json" '.hooks.PreToolUse[0].hooks[0].command' "${HOME}/.config/claude/bin/pretooluse-headless-chrome-guard.sh"
+assert_eq "all three hooks wired → ok" ok "$(status_of claude_notifications)"
+assert_json "guard hook wired" "${HOME}/.claude/settings.json" '[.hooks.PreToolUse[].hooks[].command] | map(select(endswith("pretooluse-headless-chrome-guard.sh"))) | length' "1"
+assert_json "stop hook wired" "${HOME}/.claude/settings.json" '.hooks.Stop[0].hooks[0].command' "${HOME}/.config/claude/bin/stop-fire.sh"
 
 # ── dotfiles_jobs ────────────────────────────────────────────────────────────────
 JOBS_LABEL="com.$(id -un).dotfiles-jobs"

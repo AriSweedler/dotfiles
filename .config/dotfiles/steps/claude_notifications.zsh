@@ -1,8 +1,9 @@
 # step claude_notifications — the Claude Code hooks initialize.sh wires: Notification →
-# notification-fire.sh and the PreToolUse headless-Chrome guard; terminal-notifier resolves.
+# notification-fire.sh, Stop → stop-fire.sh (a banner at the end of every turn) and the
+# PreToolUse headless-Chrome guard; terminal-notifier resolves.
 step::declare claude_notifications --group tools \
-  --desc "Claude Code hooks wired: Notification → notification-fire.sh, PreToolUse guard → pretooluse-headless-chrome-guard.sh; terminal-notifier resolves" \
-  --apply "runs ~/.config/claude/bin/initialize.sh: installs terminal-notifier and writes both hooks into ~/.claude/settings.json"
+  --desc "Claude Code hooks wired: Notification → notification-fire.sh, Stop → stop-fire.sh, PreToolUse guard → pretooluse-headless-chrome-guard.sh; terminal-notifier resolves" \
+  --apply "runs ~/.config/claude/bin/initialize.sh: installs terminal-notifier and writes the three hooks into ~/.claude/settings.json"
 step::watches claude_notifications '.config/claude/bin/**'
 
 check::claude_notifications() {
@@ -27,11 +28,17 @@ check::claude_notifications() {
     verdict fail guard_mismatch -d "PreToolUse guard hooks=${guard_hooks} expected=1 | guard='${guard}' settings='${settings}'" -f "${CLI_NAME} apply claude_notifications"
     return 0
   fi
+  local stop="${HOME}/.config/claude/bin/stop-fire.sh" stop_hooks
+  stop_hooks="$(jq -r --arg cmd "${stop}" '[.hooks.Stop // [] | .[].hooks[]? | select(.command == $cmd)] | length' "${settings}" 2>/dev/null || echo 0)"
+  if [[ "${stop_hooks}" != 1 ]]; then
+    verdict fail stop_mismatch -d "Stop hooks=${stop_hooks} expected=1 | stop='${stop}' settings='${settings}'" -f "${CLI_NAME} apply claude_notifications"
+    return 0
+  fi
   if [[ -z "${ARI_DOTFILES_NOTIFIER}" ]] || ! command -v "${ARI_DOTFILES_NOTIFIER}" >/dev/null 2>&1; then
     verdict fail notifier_missing -d "atn (the terminal-notifier shim, ~/.config/bin) not found" -f "${CLI_NAME} apply claude_notifications"
     return 0
   fi
-  verdict ok configured -d "hook='${current}' guard='${guard}' notifier='${ARI_DOTFILES_NOTIFIER}'"
+  verdict ok configured -d "hook='${current}' stop='${stop}' guard='${guard}' notifier='${ARI_DOTFILES_NOTIFIER}'"
 }
 
 apply::claude_notifications() {
