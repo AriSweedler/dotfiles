@@ -16,6 +16,8 @@ let
     ".config/chrome-exoskeleton"
     ".config/plugged"
   ];
+  # Linked whole before, file by file now (karabiner.json became karabiner.nix's).
+  formerWholeDirs = [ ".config/karabiner" ];
   # The repo's own files, not config HOME reads, and files a module places from the store.
   skipped = [
     "README.md"
@@ -42,4 +44,15 @@ let
 in
 lib.mkIf (builtins.pathExists "${src}/.config/dotfiles/nix/bridge.nix") {
   home.file = lib.listToAttrs (map link (walk "" ++ wholeDirs));
+
+  # A directory once linked whole and now filled file by file: home-manager would place the new
+  # links through the old directory link, into the clone, replacing its files. Remove that link
+  # first so the directory is created for real.
+  home.activation.bridgeUnlinkFormerDirs = lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
+    for dir in ${lib.escapeShellArgs formerWholeDirs}; do
+      if [[ -L "${config.home.homeDirectory}/$dir" ]]; then
+        run rm "${config.home.homeDirectory}/$dir"
+      fi
+    done
+  '';
 }
