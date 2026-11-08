@@ -12,6 +12,9 @@ setopt extended_glob
 
 readonly HERE="${0:A:h}"
 readonly SKILL="${HERE:h}"
+# tmux's homes, Nix's first, as link.zsh and focus.zsh try them: Claude's Bash may lack the Nix profiles.
+readonly TMUX_DIRS="/etc/profiles/per-user/${USERNAME}/bin:/run/current-system/sw/bin:/opt/homebrew/bin"
+export PATH="${PATH}:${TMUX_DIRS}"
 readonly T="${TMPDIR:-/tmp}/ari-driving-link-test-$$"
 readonly L="ari-driving-link-test-$$"
 mkdir -p "${T}/zdot" "${T}/logs"
@@ -132,7 +135,7 @@ aws() { print -rl -- aws "${@[1,-2]}"; print -r -- "${@[-1]}" | jq -cS .; }
 kubectl() { print -rl -- kubectl "$@"; }
 curl() { cat >/dev/null; print -r -- '{"tokens":[{"token_id":"t1","description":"pull","subject":"robot","scope":"repo:pull","issued_at":1700000000,"expiry":null,"extra":1}]}'; }
 EOF
-readonly PANE_PATH="${HOME}/.config/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+readonly PANE_PATH="${HOME}/.config/bin:${TMUX_DIRS}:/usr/local/bin:/usr/bin:/bin"
 # The pane's own PATH: nix-darwin's /etc/zshenv resets the one -e PATH passes, and run_log is then not found.
 print -r -- "PATH=${(q)PANE_PATH}" >> "${T}/zdot/.zshrc"
 tm() { tmux -L "${L}" -f /dev/null "$@"; }
@@ -165,6 +168,18 @@ for c in "${CASES[@]}"; do
   encoded="${${out%%$'\n'*}#*\?run=}"; encoded="${encoded%%[\&\)]*}"
   check "link payload: ${c} is the one-line command" "${CMD[$c]}" "${(g::)${encoded//\%/\\x}}"
 done
+
+# --- tmux off PATH (a Claude Bash without the Nix profiles): link.zsh and focus.zsh still find it ---
+readonly BARE_PATH=/usr/bin:/bin
+if [[ -n "$(PATH="${BARE_PATH}" command -v tmux)" ]]; then
+  print -- "skip    tmux off PATH: ${BARE_PATH} holds a tmux"
+else
+  out="$(PATH="${BARE_PATH}" /bin/zsh "${SKILL}/bin/link.zsh" --pane "${P}" 2>"${T}/link.err")"
+  check "tmux off PATH: link.zsh rc 0" 0 "$?"
+  contains "tmux off PATH: link.zsh prints the focus link" "(tmux-pane://${P#%})" "${out}"
+  PATH="${BARE_PATH}" /bin/zsh "${SKILL}/bin/focus.zsh" --no-activate --pane "${P}" >/dev/null 2>"${T}/focus.err"
+  check "tmux off PATH: focus.zsh rc 0" 0 "$?"
+fi
 
 # --- a --cmd types the layout, no Enter; a trailing ; survives (tmux's own parser would eat it) ---
 typed_line() {   # <cmd>: click --cmd, read back the pane's last lines, then cancel the line

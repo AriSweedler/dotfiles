@@ -12,7 +12,8 @@
 # A link's ?cmd=/?run= is honoured only when it was clicked in a Claude Code pane: any program can print
 # an OSC 8 link, and a click on one elsewhere only focuses. A payload refused after the click (gate, lock,
 # text, run_log missing) is reported into that Claude Code pane's prompt as ` ari-driving refused: …`.
-# Clicking a tmux-pane:// link in tmux runs this (the tmux-pane:// branch of ~/.config/tmux/plugin/osc8-hyperlinks.conf).
+# Clicking a tmux-pane:// link in tmux runs this (the tmux-pane:// branch of
+# ~/dotfiles/.config/dotfiles/nix/tmux/osc8-hyperlinks.conf, in ~/.config/tmux/tmux.conf after a dotfiles switch).
 # Run: zsh $HOME/.claude/skills/ari-driving-tmux/bin/focus.zsh --help
 
 set -euo pipefail
@@ -51,8 +52,8 @@ readonly RUN_GLANCE_SECONDS=0.2
 # Long enough for the shell to echo typed keys, so a second click waiting on the lock sees them.
 readonly TYPE_SETTLE_SECONDS=0.2
 readonly STATUS_MS=4000
-# A click from tmux runs this without a login shell, so Homebrew's tmux may be off PATH.
-readonly PATH_PREFIX=/opt/homebrew/bin
+# tmux's homes, Nix's first: a click runs this without a login shell, and Claude's Bash may lack the Nix profiles.
+readonly PATH_PREFIX="/etc/profiles/per-user/${USERNAME}/bin:/run/current-system/sw/bin:/opt/homebrew/bin:/usr/local/bin"
 
 # --- Prerequisites ---
 

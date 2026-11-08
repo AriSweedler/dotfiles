@@ -5,7 +5,8 @@
 # With --run, the click runs it through run_log in that pane and switches back to the clicked pane; an
 # interactive run (--interactive, or auto-detected: sudo, ssh, logins) keeps Ari in that pane until the
 # command finishes, since it will ask him something there, and run_log switches him back then.
-# Clicking runs focus.zsh through the tmux-pane:// branch of ~/.config/tmux/plugin/osc8-hyperlinks.conf.
+# Clicking runs focus.zsh through the tmux-pane:// branch of ~/dotfiles/.config/dotfiles/nix/tmux/osc8-hyperlinks.conf,
+# in ~/.config/tmux/tmux.conf after a dotfiles switch.
 # Run: zsh $HOME/.claude/skills/ari-driving-tmux/bin/link.zsh --help
 
 set -euo pipefail
@@ -36,7 +37,8 @@ source "${LIB_WRAP}"
 # --- Constants ---
 
 readonly SCHEME='tmux-pane://'
-readonly PATH_PREFIX=/opt/homebrew/bin
+# tmux's homes, Nix's first: Claude's Bash may run this with a PATH that lacks the Nix profiles.
+readonly PATH_PREFIX="/etc/profiles/per-user/${USERNAME}/bin:/run/current-system/sw/bin:/opt/homebrew/bin:/usr/local/bin"
 # Commands that ask something in the pane (a password, a 2FA tap, a [y/N], a login), by first word, or by
 # first two words; a --run of one is interactive unless --no-interactive says otherwise.
 readonly -a INTERACTIVE_COMMANDS=(sudo su ssh passwd login kinit doas)

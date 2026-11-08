@@ -66,7 +66,7 @@ Terms: the **label** is `machine=<name>|ID=%N|pane=W.P`, what `ari-driving on` a
 
 The link carries the command as one line, as given. Before the link, `link.zsh` warns on stderr when a click would not type: `Pane not opted in; the click will only focus it`, and for `--run` without `$TMUX_PANE`, `Claude is not in a tmux pane; the artifact line has nowhere to return`. It errors with `No such pane` when the hint is gone. It refuses TEXT with a newline, Tab or other control character, a leading `clear`, or any text that spells the opt-in (the three strings in Rules; a text match, case and quotes ignored).
 
-The click gate (`bin/focus.zsh`): a link's command runs only when the link was clicked in a Claude Code pane, into an opted-in shell at an empty prompt ending in `❯`, not in copy mode, not synchronized, one click at a time. Otherwise the click only focuses the pane and puts the reason on the tmux status line; clicked in a Claude Code pane, it also pastes ` ari-driving refused: <pane name> <reason>` into that pane's prompt. Clicks log to `/tmp/ari-driving-focus.log`; the handler is the `tmux-pane://` branch of `~/.config/tmux/plugin/osc8-hyperlinks.conf`.
+The click gate (`bin/focus.zsh`): a link's command runs only when the link was clicked in a Claude Code pane, into an opted-in shell at an empty prompt ending in `❯`, not in copy mode, not synchronized, one click at a time. Otherwise the click only focuses the pane and puts the reason on the tmux status line; clicked in a Claude Code pane, it also pastes ` ari-driving refused: <pane name> <reason>` into that pane's prompt. Clicks log to `/tmp/ari-driving-focus.log`; the handler is in **Setup** › Links.
 
 | Reason | What frees the pane |
 |---|---|
@@ -293,7 +293,7 @@ No refusal line arrived: `tail -5 /tmp/ari-driving-focus.log` and answer with it
 - `no pane %N`: the pane closed; a fresh link for the pane Ari names now.
 - `clicked outside a Claude Code pane`, or `No attached tmux client`: ask him to click from Claude's pane.
 - a `Not typed` line whose paste was refused: Claude's pane was in copy mode when the line came (`q` there; it is also on his clipboard).
-- nothing logged: the handler did not run; `tmux list-keys -T root MouseUp1Pane | grep -c tmux-pane` must print `1`, else `tmux source-file ~/.config/tmux/plugin/osc8-hyperlinks.conf`.
+- nothing logged: the handler did not run; `tmux list-keys -T root MouseUp1Pane | grep -c tmux-pane` must print `1`, else Ari presses `<Prefix> C-s` (it re-reads `~/.config/tmux/tmux.conf`); still `0` → the handler is not in that file yet, and Ari runs `dotfiles switch` first (**Setup**).
 
 ### Nothing came back
 
@@ -332,7 +332,7 @@ dotfiles raycast link clipboard-history
 
 - **run_log:** the dotfiles shared tier puts `run_log` and `run_log-capture.py` in `~/.config/bin` (python3 required); without it `focus.zsh` refuses with `run_log is not installed at ~/.config/bin/run_log`.
 - **Command:** `ln -sfn ../claude/skills/ari-driving-tmux/bin/ari-driving ~/.config/bin/ari-driving`; `readlink` it to verify.
-- **Links:** `~/.config/tmux/plugin/osc8-hyperlinks.conf` carries the handler; `tmux source-file` it after a change, then `tmux list-keys -T root MouseUp1Pane | grep -c tmux-pane` prints `1`.
+- **Links:** `~/dotfiles/.config/dotfiles/nix/tmux/osc8-hyperlinks.conf` carries the handler; `tmux.nix` appends it to the store-placed `~/.config/tmux/tmux.conf`, so a change takes Ari's `dotfiles switch` (`/ari-dotfiles-nix`) and then `<Prefix> C-s` in the running server, after which `tmux list-keys -T root MouseUp1Pane | grep -c tmux-pane` prints `1`.
 - **Guard:** `ln -sfn ../skills/ari-driving-tmux/bin/pretooluse_bash_pbcopy_guard.sh ~/.config/claude/bin/pretooluse-pbcopy-guard.sh`, then via `/update-config` a `PreToolUse` entry `{"matcher": "Bash", "hooks": [{"type": "command", "command": "$HOME/.config/claude/bin/pretooluse-pbcopy-guard.sh", "if": "Bash(*pbcopy*)", "timeout": 5}]}` with `$HOME` replaced by the literal home directory. Verify with the Bash call `false && pbcopy`: the guard must deny it.
 
 ## File storage
@@ -343,8 +343,8 @@ dotfiles raycast link clipboard-history
 - `lib/wrap.zsh` — lays out a long command (**Command layout**) for `link.zsh`, `focus.zsh` and `handoff.zsh`.
 - `bin/handoff.zsh` — renders fenced steps; the sanctioned copy.
 - `bin/pretooluse_bash_pbcopy_guard.sh` — the pbcopy guard hook.
-- `tests/ari-driving.test.zsh` — `bin/ari-driving` on a throwaway tmux server (`-L`) with a fake pbcopy; it refuses to run unless its pbcopy shim wins PATH.
-- `tests/link.test.zsh` — layouts, the link's one-line payload, and clicks on a throwaway tmux server (`-L`): what the pane shows, and that a capture's output equals the one-line command's; needs `script` and `~/.config/bin/run_log`.
+- `tests/ari-driving.test.zsh` — `bin/ari-driving` on a throwaway tmux server (`-L`) with a fake pbcopy, and with tmux off PATH; it refuses to run unless its pbcopy shim wins PATH.
+- `tests/link.test.zsh` — layouts, the link's one-line payload, and clicks on a throwaway tmux server (`-L`): what the pane shows, and that a capture's output equals the one-line command's; `link.zsh` and `focus.zsh` with tmux off PATH; needs `script` and `~/.config/bin/run_log`.
 - `~/.config/claude/lib/tmux-pane.sh` (shared tier) — the gate, resolve, lock and paste helpers that `link.zsh`, `focus.zsh`, `handoff.zsh` and `run_log` source; `ari-skill-shellscripts/lib/logging.zsh` is the logging shim they all source (`[ERROR] missing shared logging lib` when absent).
 
 `--help` on each lists its flags. After an edit to `bin/ari-driving`:

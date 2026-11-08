@@ -56,14 +56,15 @@ typeset -g REPLY=""
 # --- Prerequisites ---
 
 #######################################
-# Check that tmux is installed; a hook's run-shell may carry a PATH without Homebrew.
+# Check that tmux is installed; a hook's run-shell, or Claude's Bash, may carry a PATH without it, so try
+# tmux's homes, Nix's first.
 # Returns: 1 when missing
 #######################################
 check_tmux() {
   if command -v tmux >/dev/null 2>&1; then
     return 0
   fi
-  export PATH="${PATH}:/opt/homebrew/bin:/usr/local/bin"
+  export PATH="${PATH}:/etc/profiles/per-user/${USERNAME}/bin:/run/current-system/sw/bin:/opt/homebrew/bin:/usr/local/bin"
   if ! command -v tmux >/dev/null 2>&1; then
     log::err "Missing required command | missing='tmux'"
     return 1

@@ -11,6 +11,8 @@ set -uo pipefail
 readonly HERE="${0:A:h}"
 readonly SKILL="${HERE:h}"
 readonly SCRIPT="${SKILL}/bin/ari-driving"
+# tmux's homes, Nix's first, as bin/ari-driving tries them: Claude's Bash may lack the Nix profiles.
+export PATH="${PATH}:/etc/profiles/per-user/${USERNAME}/bin:/run/current-system/sw/bin:/opt/homebrew/bin"
 readonly T="${TMPDIR:-/tmp}/ari-driving-test-$$"
 readonly L="ari-driving-test-$$"
 mkdir -p "${T}/bin" "${T}/failbin" "${T}/sp ace"
@@ -184,6 +186,16 @@ check "no clipboard: pane on" on "$(pane_opt "${E}")"
 contains "no clipboard: warned" "label not copied" "$(<"${T}/err")"
 contains "no dotfiles: label has no machine part" "label='ID=${E}|pane=" "$(<"${T}/err")"
 check "no clipboard: clipboard untouched" "" "$(clip)"
+
+# --- tmux off PATH (a Claude Bash without the Nix profiles): check_tmux still finds it ---
+readonly BARE_PATH=/usr/bin:/bin
+if [[ -n "$(PATH="${BARE_PATH}" command -v tmux)" ]]; then
+  print -- "skip    tmux off PATH: ${BARE_PATH} holds a tmux"
+else
+  out="$(PATH="${BARE_PATH}" TMUX_PANE="${E}" /bin/zsh "${SCRIPT}" status 2>"${T}/err")"
+  check "tmux off PATH: status rc 0" 0 "$?"
+  contains "tmux off PATH: status names the pane" "pane=ID=${E}|" "${out}"
+fi
 
 # --- errors ---
 TMUX_PANE= zsh "${SCRIPT}" on 2>"${T}/err"; check "no TMUX_PANE: rc 1" 1 "$?"
