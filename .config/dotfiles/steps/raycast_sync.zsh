@@ -18,7 +18,7 @@ step::watches raycast_sync '.config/raycast-snippets/**' '.config/karabiner/**' 
 step::raycast_sync::inputs() {
   [[ -z "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD:-}" && "${commands[defaults]:-}" == /usr/bin/defaults ]] || return 1
   local cfg="${XDG_CONFIG_HOME:-${HOME}/.config}" d
-  local ts="${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS:-${cfg}/karabiner/karabiner.ts}"
+  local ts="${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS:-${HOME}/dotfiles/.config/karabiner/karabiner.ts}"
   local -a dirs=(${(s.:.)${ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS:-${cfg}/raycast-snippets:${HOME}/.local/share/raycast-snippets}})
   reply=("${ARI_DOTFILES_CONFIG}/zsh/plugins" "${ARI_DOTFILES_CONFIG}/zsh/plugins/"raycast*.zsh(N)
          "${ts}" "${ts}/package.json" "${ts}/package-lock.json" "${ts}/node_modules" "${ts}/node_modules/.package-lock.json"

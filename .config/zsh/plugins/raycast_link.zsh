@@ -42,7 +42,7 @@
 
 (( ${+functions[log::info]} )) || source "${${(%):-%x}:A:h}/log.zsh"
 
-: "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS:=${XDG_CONFIG_HOME:-${HOME}/.config}/karabiner/karabiner.ts}"
+: "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS:=${HOME}/dotfiles/.config/karabiner/karabiner.ts}" # the clone: bake installs node_modules there
 : "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON:=${XDG_CONFIG_HOME:-${HOME}/.config}/karabiner/karabiner.json}"
 : "${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN:=com.raycast.macos}"
 : "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD:=}"
