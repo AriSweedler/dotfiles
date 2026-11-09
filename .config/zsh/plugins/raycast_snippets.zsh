@@ -2,14 +2,16 @@
 # Raycast Snippets from versioned files, one direction: the files are the source and Raycast the
 # mirror. Two tiers, the same split the rest of the dotfiles use, and one rule: personal data
 # stays in the local tier; the shared tier is for snippets safe in a public repo.
-#   shared  ~/.config/raycast-snippets/snippets.json       git df, public remote
-#   local   ~/.local/share/raycast-snippets/snippets.json  git ldf, private remote: addresses, phone
-#                                                          numbers, emails
-# Every tier's snippets.json (Raycast's import format, an array of {name, text, keyword?}, plus
-# the files' own `description`, which never reaches Raycast) is
-# loaded in ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS order and merged by name: a later file's entry replaces an
-# earlier one, so local always wins over shared. After the merge two names may not share a
-# keyword. Canonical order in every file: by keyword in byte order (one prefix's expansions sit
+#   shared  ~/dotfiles/.config/raycast-snippets/snippets.json        git df, public remote
+#   local   ~/.local/share/dotfiles/nix/raycast-snippets.json        git ldf, private remote:
+#                                                                    addresses, phone numbers, emails
+# Each file is Raycast's import format, an array of {name, text, keyword?}, plus the files' own
+# `description`, which never reaches Raycast. Nix merges them (~/.config/dotfiles/nix/
+# raycast-snippets.nix): a local entry replaces a shared one of the same name, and a keyword two
+# snippets share fails the switch. This plugin never merges: sync, list, check, diff, adopt, pull
+# and move read Nix's ~/.config/raycast-snippets/merged.json, and refuse when a tier file changed
+# since the switch that wrote it (commit a shared change first: a switch builds the clone's HEAD).
+# Canonical order in every file: by keyword in byte order (one prefix's expansions sit
 # together), entries without a keyword last by name; keys sorted by json-sort.
 #
 # A local-only snippet is a valid end state: it needs nothing in the shared file and raises no
@@ -55,19 +57,22 @@
 #                 | --pull FILE [--dry-run] | --diff FILE | --move NAME --to TIER [--dry-run]
 #                 | --fmt [--dry-run] | --reset-manifest [NAME...] [--dry-run]
 #                 | --edit [--local|--shared] | --undocumented
-# Env: ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS (colon list; the LAST dir is the local tier, every other is shared,
-#      placeholders go to the first), ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST, ARI_DOTFILES_RAYCAST_SNIPPETS_URL_FORM
+# Env: ARI_DOTFILES_RAYCAST_SNIPPETS_SHARED_FILE, ARI_DOTFILES_RAYCAST_SNIPPETS_LOCAL_FILE (the tier files),
+#      ARI_DOTFILES_RAYCAST_SNIPPETS_MERGED (Nix's merge of them), ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST,
+#      ARI_DOTFILES_RAYCAST_SNIPPETS_URL_FORM
 #      (params: one `snippet=` per snippet, Raycast's documented form; array: one `snippet=[…]`).
 
 (( ${+functions[log::info]} )) || source "${${(%):-%x}:A:h}/log.zsh"
 (( ${+functions[json_sort]} )) || source "${${(%):-%x}:A:h}/json_sort.zsh"
 
-: "${ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS:=${XDG_CONFIG_HOME:-${HOME}/.config}/raycast-snippets:${HOME}/.local/share/raycast-snippets}"
-: "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST:=${${(s.:.)ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS}[-1]}/manifest.json}"
+: "${ARI_DOTFILES_RAYCAST_SNIPPETS_SHARED_FILE:=${HOME}/dotfiles/.config/raycast-snippets/snippets.json}"
+: "${ARI_DOTFILES_RAYCAST_SNIPPETS_LOCAL_FILE:=${HOME}/.local/share/dotfiles/nix/raycast-snippets.json}"
+: "${ARI_DOTFILES_RAYCAST_SNIPPETS_MERGED:=${XDG_CONFIG_HOME:-${HOME}/.config}/raycast-snippets/merged.json}"
+: "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST:=${HOME}/.local/share/raycast-snippets/manifest.json}"
+: "${ARI_DOTFILES_RAYCAST_SNIPPETS_MERGE_NIX:=${HOME}/dotfiles/.config/dotfiles/nix/lib/raycast-snippets-merge.nix}"
 : "${ARI_DOTFILES_RAYCAST_SNIPPETS_URL_FORM:=params}"
 # Guarded so re-sourcing (plugin loader plus the dispatcher) never trips "read-only variable".
 (( ${+ARI_DOTFILES_RAYCAST_SNIPPETS_IMPORT_URL} )) || typeset -gr ARI_DOTFILES_RAYCAST_SNIPPETS_IMPORT_URL="raycast://snippets/import"
-(( ${+ARI_DOTFILES_RAYCAST_SNIPPETS_BASENAME} )) || typeset -gr ARI_DOTFILES_RAYCAST_SNIPPETS_BASENAME="snippets.json"
 # A shared entry whose text starts with this is a placeholder for a local snippet.
 (( ${+ARI_DOTFILES_RAYCAST_SNIPPETS_PLACEHOLDER_PREFIX} )) || typeset -gr ARI_DOTFILES_RAYCAST_SNIPPETS_PLACEHOLDER_PREFIX='OVERRIDE WITH A '
 
@@ -91,28 +96,24 @@
 
 # --- tiers ---
 
-# Output: "label\tdir" per tier, in ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS order; the last dir is `local`.
+# Output: "label\tfile" per tier, shared then local.
 function raycast_snippets::tiers() {
-  local -a dirs=("${(@s.:.)ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS}")
-  local -i i
-  for (( i = 1; i <= ${#dirs}; i++ )); do
-    if (( i == ${#dirs} )); then print -r -- "local"$'\t'"${dirs[i]}"; else print -r -- "shared"$'\t'"${dirs[i]}"; fi
-  done
+  print -r -- "shared"$'\t'"${ARI_DOTFILES_RAYCAST_SNIPPETS_SHARED_FILE}"
+  print -r -- "local"$'\t'"${ARI_DOTFILES_RAYCAST_SNIPPETS_LOCAL_FILE}"
 }
 
 # Output: every tier's snippets file, one per line, in tier order (the last is local).
 function raycast_snippets::tier_files() {
-  local line
-  for line in "${(@f)$(raycast_snippets::tiers)}"; do print -r -- "${line#*$'\t'}/${ARI_DOTFILES_RAYCAST_SNIPPETS_BASENAME}"; done
+  raycast_snippets::tiers | cut -f2
 }
 
 # Input: tier label. Output: that tier's snippets file; exit 1 for an unknown label.
 function raycast_snippets::tier_file() {
   local wanted="${1}" line
   for line in "${(@f)$(raycast_snippets::tiers)}"; do
-    [[ "${line%%$'\t'*}" == "${wanted}" ]] && { print -r -- "${line#*$'\t'}/${ARI_DOTFILES_RAYCAST_SNIPPETS_BASENAME}"; return 0; }
+    [[ "${line%%$'\t'*}" == "${wanted}" ]] && { print -r -- "${line#*$'\t'}"; return 0; }
   done
-  log::err "Unknown tier | tier='${wanted}' valid='$(raycast_snippets::tiers | cut -f1 | sort -u | paste -sd, -)'"
+  log::err "Unknown tier | tier='${wanted}' valid='shared,local'"
   return 1
 }
 
@@ -196,38 +197,65 @@ function raycast_snippets::write_tier() {
   raycast_snippets::write_file "${file}" "${canonical}" "${3:-0}"
 }
 
-# Input: allow_empty (default 0: refuse when no tier has a file, so a wrong ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS
-# cannot read as "everything removed"; pull passes 1 to seed a machine). stdout: one JSON object:
-# {entries: [merged, canonical order], tiers: {name: label}, files: {name: file}}. A later tier's
-# entry replaces an earlier one of the same name (local wins); the label then reads winner>loser
-# (local>shared) and the file is the winner's. Exit 1 on an invalid file, or when two names share
-# a keyword after the merge, naming both and their files.
+# Input: allow_empty (1: no merged file yet reads as empty instead of failing, so pull can seed a
+# machine). stdout: Nix's merge, {entries: [canonical order], tiers: {name: "local>shared"…},
+# files: {name: winning file}}. Exit 1 when the merged file is missing, or when a tier file no
+# longer hashes to what Nix merged (it changed since the switch).
 function raycast_snippets::source() {
-  local allow_empty="${1:-0}" line label dir file arr merged='{"by_name":{},"tiers":{},"files":{}}' collisions
-  local -i present=0
-  for line in "${(@f)$(raycast_snippets::tiers)}"; do
-    label="${line%%$'\t'*}"; dir="${line#*$'\t'}"; file="${dir}/${ARI_DOTFILES_RAYCAST_SNIPPETS_BASENAME}"
-    [[ -e "${file}" ]] && present+=1
-    arr="$(raycast_snippets::read_tier "${file}")" || return 1
-    merged="$(jq -cn --argjson m "${merged}" --argjson a "${arr}" --arg label "${label}" --arg file "${file}" '
-      reduce $a[] as $e ($m;
-        .by_name[$e.name] = $e
-        | .tiers[$e.name] = (if .tiers[$e.name] == null then $label else "\($label)>\(.tiers[$e.name])" end)
-        | .files[$e.name] = $file)')"
+  local allow_empty="${1:-0}" merged_file="${ARI_DOTFILES_RAYCAST_SNIPPETS_MERGED}" file want have
+  local -a stale
+  if [[ ! -r "${merged_file}" ]]; then
+    if (( allow_empty )); then
+      print -r -- '{"entries":[],"tiers":{},"files":{}}'
+      return 0
+    fi
+    log::err "No merged snippets file | file='${merged_file}' fix='dotfiles switch (raycast-snippets.nix writes it)'"
+    return 1
+  fi
+  for file in "${(@f)$(raycast_snippets::tier_files)}"; do
+    want="$(jq -r --arg f "${file}" '.hashes[$f] // ""' "${merged_file}")"
+    have=""
+    [[ -e "${file}" ]] && have="$(shasum -a 256 "${file}" | cut -d' ' -f1)"
+    [[ "${want}" == "${have}" ]] || stale+=("${file}")
   done
-  if (( present == 0 && allow_empty == 0 )); then
-    log::err "No snippets file in any tier | files='$(raycast_snippets::tier_files | paste -sd, -)' fix='dotfiles raycast snippets pull <Raycast export>'"
+  if (( ${#stale} )); then
+    log::err "Snippet files changed since the last switch | files='${(j:, :)stale}' fix='commit a shared change, then dotfiles switch'"
     return 1
   fi
-  collisions="$(print -r -- "${merged}" | jq -r '
-    . as $m
-    | [$m.by_name[] | select(.keyword != null)] | group_by(.keyword) | map(select(length > 1))
-    | map("\(.[0].keyword): " + (map("\(.name) (\($m.files[.name]))") | join(" and "))) | join("; ")')"
-  if [[ -n "${collisions}" ]]; then
-    log::err "Two snippets share a keyword | collisions='${collisions}' fix='change one keyword'"
+  raycast_snippets::canonical < "${merged_file}"
+}
+
+# stdin: a merge object. stdout: {entries, tiers, files}, the entries in this plugin's canonical
+# form (Nix writes keys in its own order).
+function raycast_snippets::canonical() {
+  local merged entries
+  merged="$(cat)"
+  entries="$(print -r -- "${merged}" | jq -c .entries | raycast_snippets::normalize)" || return 1
+  print -r -- "${merged}" | jq -c --argjson e "${entries}" '{entries: $e, tiers, files}'
+}
+
+# stdout: Nix's merge of the tier files as they are now (lib/raycast-snippets-merge.nix, the code a
+# switch runs): the object merged.json would hold. Exit 1 with each refusal the switch would give.
+function raycast_snippets::nix_merge() {
+  local line label file src expr="" out
+  for line in "${(@f)$(raycast_snippets::tiers)}"; do
+    label="${line%%$'\t'*}"; file="${line#*$'\t'}"; src=null
+    [[ -e "${file}" ]] && src="${file:A}"
+    expr+="{ label = \"${label}\"; path = \"${file}\"; source = ${src}; } "
+  done
+  local errf
+  errf="$(mktemp "${TMPDIR:-/tmp}/raycast-snippets-nix.XXXXXX")" || return 1
+  if ! out="$("${ARI_DOTFILES_RAYCAST_SNIPPETS_NIX:-nix}" eval --impure --json --expr "import ${ARI_DOTFILES_RAYCAST_SNIPPETS_MERGE_NIX:A} { tiers = [ ${expr}]; }" 2>"${errf}")"; then
+    log::err "The snippets merge did not evaluate | merge='${ARI_DOTFILES_RAYCAST_SNIPPETS_MERGE_NIX}' error='${${$(<"${errf}")//$'\n'/ }[-300,-1]}'"
+    rm -f "${errf}"
     return 1
   fi
-  print -r -- "${merged}" | jq -c "{entries: ([.by_name[]] | ${ARI_DOTFILES_RAYCAST_SNIPPETS_JQ_ORDER}), tiers, files}"
+  rm -f "${errf}"
+  if [[ "$(print -r -- "${out}" | jq '.errors | length')" != 0 ]]; then
+    print -r -- "${out}" | jq -r '.errors[]' | while IFS= read -r line; do log::err "${line}"; done
+    return 1
+  fi
+  print -r -- "${out}" | jq -c .value
 }
 
 # stdout: the manifest object; a missing file is {}. Exit 1 when the file is not JSON.
@@ -598,7 +626,6 @@ function raycast_snippets::fmt() {
   local dry_run="${1:-0}" file arr next verdict local_arr
   local -a files labels report
   local -i rewritten=0 fixed=0 i
-  raycast_snippets::source >/dev/null || return 1
   files=("${(@f)$(raycast_snippets::tier_files)}")
   labels=("${(@f)$(raycast_snippets::tiers | cut -f1)}")
   local_arr="$(raycast_snippets::read_tier "${files[-1]}")" || return 1
@@ -650,13 +677,14 @@ function raycast_snippets::confirm() {
 
 # Input: the tier just edited. Every problem on stderr; 1 when there is any: the file must read
 # as a snippets array (read_tier: JSON, string name and text, no duplicate name), the tiers must
-# merge (no two names on one keyword), and every name this tier wins must be documented.
+# merge as the switch would merge them (nix_merge: no two names on one keyword), and every name
+# this tier wins must be documented.
 function raycast_snippets::edit_check() {
   local tier="${1}" file merged line
   local -a undoc
   file="$(raycast_snippets::tier_file "${tier}")" || return 1
   raycast_snippets::read_tier "${file}" >/dev/null || return 1
-  merged="$(raycast_snippets::source)" || return 1
+  merged="$(raycast_snippets::nix_merge | raycast_snippets::canonical)" || return 1
   undoc=("${(@f)$(raycast_snippets::undocumented_lines "${merged}" "${tier}")}"); [[ -z "${undoc[1]:-}" ]] && undoc=()
   (( ${#undoc} == 0 )) && return 0
   for line in "${undoc[@]}"; do
@@ -701,7 +729,7 @@ function raycast_snippets::edit() {
   done
   rm -f "${orig}"
   raycast_snippets::fmt 0 || return 1
-  print -r -- "next: dotfiles raycast snippets sync"
+  print -r -- "next: commit it, dotfiles switch, then dotfiles raycast snippets sync"
 }
 
 # --reset-manifest [dry_run] [NAME...]: forget names (all when none) so the next sync re-imports
@@ -761,7 +789,8 @@ dotfiles raycast snippets — Raycast Snippets from the versioned files, shared 
   One rule: personal data stays in the local tier; the shared tier is for snippets safe in a public repo.
   Tiers: shared $(raycast_snippets::tier_file shared 2>/dev/null) (git df, public remote)
          local  $(raycast_snippets::tier_file local 2>/dev/null) (git ldf, private remote)
-  Merge: files load in that order and a later entry replaces an earlier one of the same name, so local wins.
+  Merge: Nix's (raycast-snippets.nix): a local entry replaces a shared one of the same name, so local wins;
+         a keyword two snippets share fails the switch. After an edit: commit, dotfiles switch, then sync.
   Local-only: a local snippet needs nothing in shared and raises no warning.
   Placeholders (optional, added by hand): shared holds {name, keyword, text: "$(raycast_snippets::placeholder_text 2>/dev/null)"};
          here local overrides it, on a machine without the local file Raycast imports the reminder (check warns). Nothing

@@ -46,9 +46,9 @@ Usage:
   dotfiles raycast <subsystem> help               that subsystem's usage
 
 Subsystems: ${(j:, :)ARI_DOTFILES_RAYCAST_SUBSYSTEMS}. Bindings live in karabiner.ts's tables and compile
-through bake. Snippets live in two files, merged with local winning by name:
-  shared  ~/.config/raycast-snippets/snippets.json (git df, public remote)
-  local   ~/.local/share/raycast-snippets/snippets.json (git ldf, private remote), manifest beside it
+through bake. Snippets live in two files, merged by Nix with local winning by name:
+  shared  ~/dotfiles/.config/raycast-snippets/snippets.json (git df, public remote)
+  local   ~/.local/share/dotfiles/nix/raycast-snippets.json (git ldf, private remote); the manifest is ~/.local/share/raycast-snippets/manifest.json
 One rule: personal data stays in the local tier; shared is for snippets safe in a public repo;
 a local-only snippet is fine. Every binding and snippet says what it does in a one-line
 "description" (a deeplink option in karabiner.ts; a field of the snippet's winning entry); the
@@ -137,8 +137,8 @@ function ari_raycast::sync() {
 
 # The edit targets: label, then the words after `ari_raycast`.
 typeset -ga ARI_DOTFILES_RAYCAST_EDIT_TARGETS=(
-  "snippets local: ~/.local/share/raycast-snippets (private)"  "snippets edit --local"
-  "snippets shared: ~/.config/raycast-snippets (public)"        "snippets edit --shared"
+  "snippets local: ~/.local/share/dotfiles/nix/raycast-snippets.json (private)"  "snippets edit --local"
+  "snippets shared: ~/dotfiles/.config/raycast-snippets (public)"      "snippets edit --shared"
   "bindings: karabiner.ts, raycast_shortcuts.ts"                "link edit"
 )
 

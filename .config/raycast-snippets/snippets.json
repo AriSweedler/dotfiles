@@ -3,37 +3,37 @@
     "description": "Full name (a placeholder: the local tier holds the value)",
     "keyword": "~!",
     "name": "Name",
-    "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
+    "text": "OVERRIDE WITH A ~/.local/share/dotfiles/nix/raycast-snippets.json file"
   },
   {
     "description": "Phone number (a placeholder: the local tier holds the value)",
     "keyword": "~#",
     "name": "Phone number",
-    "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
+    "text": "OVERRIDE WITH A ~/.local/share/dotfiles/nix/raycast-snippets.json file"
   },
   {
     "description": "Home city (a placeholder: the local tier holds the value)",
     "keyword": "~&",
     "name": "City",
-    "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
+    "text": "OVERRIDE WITH A ~/.local/share/dotfiles/nix/raycast-snippets.json file"
   },
   {
     "description": "Home ZIP code (a placeholder: the local tier holds the value)",
     "keyword": "~*",
     "name": "Zip code",
-    "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
+    "text": "OVERRIDE WITH A ~/.local/share/dotfiles/nix/raycast-snippets.json file"
   },
   {
     "description": "Email address (a placeholder: the local tier holds the value)",
     "keyword": "~@",
     "name": "email",
-    "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
+    "text": "OVERRIDE WITH A ~/.local/share/dotfiles/nix/raycast-snippets.json file"
   },
   {
     "description": "Home street address (a placeholder: the local tier holds the value)",
     "keyword": "~^",
     "name": "Home",
-    "text": "OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"
+    "text": "OVERRIDE WITH A ~/.local/share/dotfiles/nix/raycast-snippets.json file"
   },
   {
     "description": "Reply asking a recruiter to take a work email off their recruiting lists and confirm",

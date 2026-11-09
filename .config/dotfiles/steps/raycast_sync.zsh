@@ -12,22 +12,24 @@ step::watches raycast_sync '.config/raycast-snippets/**' '.config/karabiner/**' 
 
 # Machine inputs: what `raycast sync --dry-run` reads. reply: the raycast plugins, karabiner.ts's
 # sources, package files, tsx and node (the bindings generator), karabiner.json, Raycast's
-# preferences plist (the allow-list `defaults` reads), the app, and both snippets trees with the
-# manifest. 1 when a seam replaces what is read (a bindings command, a `defaults` that is not
+# preferences plist (the allow-list `defaults` reads), the app, both snippet tier files, Nix's
+# merge of them and the manifest. 1 when a seam replaces what is read (a bindings command, a `defaults` that is not
 # /usr/bin/defaults): its state is not on disk where the cache can see it, so uncached.
 step::raycast_sync::inputs() {
   [[ -z "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD:-}" && "${commands[defaults]:-}" == /usr/bin/defaults ]] || return 1
-  local cfg="${XDG_CONFIG_HOME:-${HOME}/.config}" d
+  local cfg="${XDG_CONFIG_HOME:-${HOME}/.config}"
   local ts="${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS:-${HOME}/dotfiles/.config/karabiner/karabiner.ts}"
-  local -a dirs=(${(s.:.)${ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS:-${cfg}/raycast-snippets:${HOME}/.local/share/raycast-snippets}})
   reply=("${ARI_DOTFILES_CONFIG}/zsh/plugins" "${ARI_DOTFILES_CONFIG}/zsh/plugins/"raycast*.zsh(N)
          "${ts}" "${ts}/package.json" "${ts}/package-lock.json" "${ts}/node_modules" "${ts}/node_modules/.package-lock.json"
          "${ts}/node_modules/.bin/tsx" "${commands[node]:-/nonexistent/node}"
          "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON:-${cfg}/karabiner/karabiner.json}"
          "${HOME}/Library/Preferences/${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN:-com.raycast.macos}.plist"
          "${ARI_DOTFILES_RAYCAST_APP:-/Applications/Raycast.app}"
-         "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST:-${dirs[-1]}/manifest.json}")
-  cache::tree "${ts}/src" "${dirs[@]}"
+         "${ARI_DOTFILES_RAYCAST_SNIPPETS_SHARED_FILE:-${HOME}/dotfiles/.config/raycast-snippets/snippets.json}"
+         "${ARI_DOTFILES_RAYCAST_SNIPPETS_LOCAL_FILE:-${HOME}/.local/share/dotfiles/nix/raycast-snippets.json}"
+         "${ARI_DOTFILES_RAYCAST_SNIPPETS_MERGED:-${cfg}/raycast-snippets/merged.json}"
+         "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST:-${HOME}/.local/share/raycast-snippets/manifest.json}")
+  cache::tree "${ts}/src"
   CACHE_ENV=(XDG_CONFIG_HOME ARI_DOTFILES_CONFIG ${(ok)parameters[(I)ARI_DOTFILES_RAYCAST_*]})
 }
 

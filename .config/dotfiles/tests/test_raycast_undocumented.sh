@@ -17,16 +17,20 @@ printf '#!/bin/sh\nexit 0\n' > "${FIX}/shims/defaults"; chmod +x "${FIX}/shims/d
 mkdir -p "${FIX}/Raycast.app" "${FIX}/shared" "${FIX}/local"
 export ARI_DOTFILES_RAYCAST_APP="${FIX}/Raycast.app"
 export ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="cat ${FIX}/bindings.json"
-export ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS="${FIX}/shared:${FIX}/local"
+export ARI_DOTFILES_RAYCAST_SNIPPETS_SHARED_FILE="${FIX}/shared/snippets.json"
+export ARI_DOTFILES_RAYCAST_SNIPPETS_LOCAL_FILE="${FIX}/local/snippets.json"
+export ARI_DOTFILES_RAYCAST_SNIPPETS_MERGED="${FIX}/merged.json"
+export ARI_DOTFILES_RAYCAST_SNIPPETS_MERGE_NIX="${ORIG_CONFIG_DIR}/dotfiles/nix/lib/raycast-snippets-merge.nix"
+export ARI_DOTFILES_RAYCAST_SNIPPETS_NIX="${FIX}/tools/nix" # the real one: the world's nix is a shim
 export ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST="${FIX}/local/manifest.json"
 # The direct chord is no allow-list work: the binding has no allowId.
 printf '%s\n' '{"bindings":[{"path":"extensions/raycast/window-management/left-half","title":"Left Half","chords":["ctrl+opt+h"]}]}' > "${FIX}/bindings.json"
-printf '%s\n' '[{"name":"Home","keyword":"~^","text":"OVERRIDE WITH A ~/.local/share/raycast-snippets/snippets.json file"},{"name":"pub","keyword":";pub","text":"public"}]' > "${FIX}/shared/snippets.json"
+printf '%s\n' '[{"name":"Home","keyword":"~^","text":"OVERRIDE WITH A ~/.local/share/dotfiles/nix/raycast-snippets.json file"},{"name":"pub","keyword":";pub","text":"public"}]' > "${FIX}/shared/snippets.json"
 printf '%s\n' '[{"name":"Home","keyword":"~^","text":"1 Main St"}]' > "${FIX}/local/snippets.json"
-nm raycast snippets adopt
+snippets_merge; nm raycast snippets adopt
 assert_eq "adopt rc 0" 0 "${RC}"
 
-check_step() { bump_now_secs 60; nm check --only raycast_sync --json; out_json > /dev/null; }
+check_step() { snippets_merge; bump_now_secs 60; nm check --only raycast_sync --json; out_json > /dev/null; }
 
 check_step
 assert_eq "undocumented → fail" fail "$(step_get raycast_sync .status)"
@@ -56,7 +60,7 @@ assert_eq "everything documented → ok" ok "$(step_get raycast_sync .status)"
 assert_eq "reason in_sync" in_sync "$(step_get raycast_sync .reason)"
 
 # A description is not something Raycast holds: adding them left nothing to import.
-nm raycast snippets sync --dry-run
+snippets_merge; nm raycast snippets sync --dry-run
 assert_contains "no import pending after documenting" "${OUT}" "pending=0"
 
 # Pending work outranks docs: the actionable verdict comes first.

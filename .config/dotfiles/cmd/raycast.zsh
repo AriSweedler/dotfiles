@@ -20,8 +20,9 @@ Bindings live in karabiner.ts's tables and compile through bake; 'link'
 renders a Raycast action as a link with its Karabiner key and keeps
 Raycast's deeplink allow-list current. Snippets live in two files, merged
 with local winning by name:
-  shared  ~/.config/raycast-snippets/snippets.json (git df, public)
-  local   ~/.local/share/raycast-snippets/snippets.json (git ldf, private)
+  shared  ~/dotfiles/.config/raycast-snippets/snippets.json (git df, public)
+  local   ~/.local/share/dotfiles/nix/raycast-snippets.json (git ldf, private)
+  Nix merges them into ~/.config/raycast-snippets/merged.json; after an edit: commit, dotfiles switch, sync.
 One rule: personal data stays in the local tier; shared is for snippets
 safe in a public repo. A local-only snippet is fine. 'sync' runs every
 subsystem's sync in order; the raycast_sync step is its --dry-run.
@@ -63,8 +64,10 @@ verb::flag raycast '--shared' 'edit: open the shared tier file'
 verb::env raycast ARI_DOTFILES_RAYCAST_APP "Raycast's app bundle; absent = sync skips" '/Applications/Raycast.app'
 verb::env raycast ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS 'the karabiner.ts checkout whose generator prints the bindings' '~/dotfiles/.config/karabiner/karabiner.ts'
 verb::env raycast ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON "the compiled karabiner.json that 'link check' verifies against" '~/.config/karabiner/karabiner.json'
-verb::env raycast ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS 'colon-separated snippet tiers, the last one local' '~/.config/raycast-snippets:~/.local/share/raycast-snippets'
-verb::env raycast ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST 'what has been imported, by name' '<local tier>/manifest.json'
+verb::env raycast ARI_DOTFILES_RAYCAST_SNIPPETS_SHARED_FILE 'the shared snippets file' '~/dotfiles/.config/raycast-snippets/snippets.json'
+verb::env raycast ARI_DOTFILES_RAYCAST_SNIPPETS_LOCAL_FILE 'the local snippets file, in the local flake' '~/.local/share/dotfiles/nix/raycast-snippets.json'
+verb::env raycast ARI_DOTFILES_RAYCAST_SNIPPETS_MERGED "Nix's merge of the two, what sync imports" '~/.config/raycast-snippets/merged.json'
+verb::env raycast ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST 'what has been imported, by name' '~/.local/share/raycast-snippets/manifest.json'
 
 # raycast::load: the plugins, which need jq and defaults.
 raycast::load() {

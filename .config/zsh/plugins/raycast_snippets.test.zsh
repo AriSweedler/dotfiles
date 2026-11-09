@@ -1,4 +1,4 @@
-# Tests for raycast_snippets.zsh. Two fixture tier dirs (ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS), a temp manifest,
+# Tests for raycast_snippets.zsh. Two fixture tier files, the merge Nix would write from them, a temp manifest,
 # and a stub `open` that records the deeplink stand in for the real ones; nothing reaches Raycast
 # and the real tiers and manifest are never touched. Only runs when
 # OTTO_TEST__ZSH_PLUGINS_RAYCAST_SNIPPETS=true
@@ -32,10 +32,20 @@ print -r -- "\$1" >> "${_log}"
 EOF
 chmod +x "${_dir}/bin/open"
 export PATH="${_dir}/bin:${PATH}"
-export ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS="${_dir}/shared:${_dir}/local"
+export ARI_DOTFILES_RAYCAST_SNIPPETS_SHARED_FILE="${_dir}/shared/snippets.json"
+export ARI_DOTFILES_RAYCAST_SNIPPETS_LOCAL_FILE="${_dir}/local/snippets.json"
+export ARI_DOTFILES_RAYCAST_SNIPPETS_MERGED="${_dir}/merged.json"
 export ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST="${_dir}/state/manifest.json"
-_shared="${_dir}/shared/snippets.json"
-_local="${_dir}/local/snippets.json"
+_shared="${ARI_DOTFILES_RAYCAST_SNIPPETS_SHARED_FILE}"
+_local="${ARI_DOTFILES_RAYCAST_SNIPPETS_LOCAL_FILE}"
+
+# A switch writes merged.json from the tier files with lib/raycast-snippets-merge.nix. Here every
+# read is preceded by that same merge, as if a switch had just run; its errors are what the
+# switch would refuse with.
+export ARI_DOTFILES_RAYCAST_SNIPPETS_MERGE_NIX="${${(%):-%x}:A:h}/../../dotfiles/nix/lib/raycast-snippets-merge.nix"
+function _merge() { raycast_snippets::nix_merge > "${ARI_DOTFILES_RAYCAST_SNIPPETS_MERGED}"; }
+functions[_source_after_switch]="${functions[raycast_snippets::source]}"
+function raycast_snippets::source() { _merge || return 1; _source_after_switch "$@"; }
 zmodload -F zsh/stat b:zstat
 
 # stub open records one URL per call; the snippet payloads are decoded back to JSON for asserting.
@@ -62,11 +72,11 @@ cat > "${_shared}" <<'EOF'
 EOF
 
 # --- tiers / normalize / source ---
-_t "tiers: first dir is shared, last is local" $'shared\t'"${_dir}/shared"$'\nlocal\t'"${_dir}/local" "$(raycast_snippets::tiers)"
+_t "tiers: shared then local, by file" $'shared\t'"${_shared}"$'\nlocal\t'"${_local}" "$(raycast_snippets::tiers)"
 _t "tier_file: local" "${_local}" "$(raycast_snippets::tier_file local)"
 raycast_snippets::tier_file bogus >/dev/null 2>&1; _rc=$?
 _t "tier_file: unknown label rc 1" "1" "${_rc}"
-_t "placeholder_text: names the local file with HOME as ~" "OVERRIDE WITH A ~/x/y/snippets.json file" "$(ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS="${HOME}/x:${HOME}/x/y" raycast_snippets::placeholder_text)"
+_t "placeholder_text: names the local file with HOME as ~" "OVERRIDE WITH A ~/x/y/snippets.json file" "$(ARI_DOTFILES_RAYCAST_SNIPPETS_LOCAL_FILE="${HOME}/x/y/snippets.json" raycast_snippets::placeholder_text)"
 _t "normalize: only name/text/keyword, keyword order then keyword-less by name, empty keyword dropped" \
   '[{"name":"addr","text":"1 Main St","keyword":";addr"},{"name":"sig","text":"Ari\nAcme","keyword":";sig"},{"name":"shrug","text":"¯\\_(ツ)_/¯"}]' \
   "$(raycast_snippets::source | jq -c .entries)"
@@ -169,17 +179,25 @@ _t "reset all: forgotten=3" "forgotten=3" "${_out}"
 _t "reset all: manifest empty" "{}" "$(jq -c . "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 _t "reset all: everything pending again" "pending=3" "$(raycast_snippets --sync --dry-run 2>/dev/null | grep '^pending=')"
 
-# --- duplicate names in one file refused; no file anywhere refused ---
+# --- duplicate names in one file refused (the switch's merge); no merged file, or a stale one, refused ---
 mkdir -p "${_dir}/dupes" "${_dir}/empty"
 cat > "${_dir}/dupes/snippets.json" <<'EOF'
 [{"name":"a","text":"1"},{"name":"a","text":"2"},{"name":"b","text":"3"}]
 EOF
-ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS="${_dir}/dupes:${_dir}/empty" raycast_snippets --sync --dry-run > /dev/null 2>"${_dir}/dupes.err"; _rc=$?
+ARI_DOTFILES_RAYCAST_SNIPPETS_SHARED_FILE="${_dir}/dupes/snippets.json" ARI_DOTFILES_RAYCAST_SNIPPETS_LOCAL_FILE="${_dir}/empty/snippets.json" \
+  raycast_snippets --sync --dry-run > /dev/null 2>"${_dir}/dupes.err"; _rc=$?
 _t "duplicate names: sync refuses, rc 1" "1" "${_rc}"
 _t "duplicate names: named with the file" "1" "$(grep -c "Duplicate snippet names in one file | names='a' file='${_dir}/dupes/snippets.json'" "${_dir}/dupes.err")"
-ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS="${_dir}/nope:${_dir}/empty" raycast_snippets --sync >/dev/null 2>"${_dir}/nofile.err"; _rc=$?
-_t "no file in any tier: rc 1" "1" "${_rc}"
-_t "no file in any tier: names both files" "1" "$(grep -c "No snippets file in any tier | files='${_dir}/nope/snippets.json,${_dir}/empty/snippets.json'" "${_dir}/nofile.err")"
+ARI_DOTFILES_RAYCAST_SNIPPETS_MERGED="${_dir}/nope.json" _source_after_switch >/dev/null 2>"${_dir}/nomerged.err"; _rc=$?
+_t "no merged file: rc 1" "1" "${_rc}"
+_t "no merged file: names the switch" "1" "$(grep -c "No merged snippets file | file='${_dir}/nope.json' fix='dotfiles switch" "${_dir}/nomerged.err")"
+_merge
+cp "${_shared}" "${_dir}/shared.bak"
+jq '. + [{"name":"later","text":"t"}]' "${_dir}/shared.bak" > "${_shared}"
+_source_after_switch >/dev/null 2>"${_dir}/stale.err"; _rc=$?
+_t "stale merge: a tier file changed since the switch, rc 1" "1" "${_rc}"
+_t "stale merge: names the file and the fix" "1" "$(grep -c "Snippet files changed since the last switch | files='${_shared}' fix='commit a shared change, then dotfiles switch'" "${_dir}/stale.err")"
+cp "${_dir}/shared.bak" "${_shared}"
 
 # --- list ---
 _t "list: state, tier, name, keyword, first line, canonical order" \
@@ -465,7 +483,7 @@ _t "edit: valid change rc 0" "0" "${_rc}"
 _t "edit: defaults to the local tier, which gained the entry" '["Phone","Home"]' "$(jq -c 'map(.name)' "${_local}")"
 _t "edit: shared content untouched by a local edit (fmt only sorts it)" '[{"description":"p","keyword":";pub","name":"pub","text":"public"}]' "$(jq -c . "${_shared}")"
 _t "edit: fmt ran, the file is canonical json-sort output" $'  {\n    "description": "ph",\n    "keyword": "~#",\n    "name": "Phone",\n    "text": "555"\n  },' "$(sed -n '2,7p' "${_local}")"
-_t "edit: fmt report then the next command" $'snippets: formatted\nshared=changed\nlocal=changed\nkeywords_fixed=0\nrewritten=2\nnext: dotfiles raycast snippets sync' "${_out}"
+_t "edit: fmt report then the next command" $'snippets: formatted\nshared=changed\nlocal=changed\nkeywords_fixed=0\nrewritten=2\nnext: commit it, dotfiles switch, then dotfiles raycast snippets sync' "${_out}"
 _out="$(EDITOR="${_dir}/ed/valid" raycast_snippets --edit --shared 2>/dev/null)"; _rc=$?
 _t "edit --shared: the shared file is the one opened" "0 Phone" "${_rc} $(jq -r 'map(.name) | map(select(. == "Phone")) | join(",")' "${_shared}")"
 _t "edit --shared: local untouched" '["Phone","Home"]' "$(jq -c 'map(.name)' "${_local}")"
@@ -497,7 +515,7 @@ _t "edit: no next command after an undocumented save" "" "$(cat "${_dir}/edit.ou
 cp "${_dir}/local.before" "${_local}"
 print -r -- '[{"name":"pub","text":"public","keyword":";pub"}]' > "${_shared}"
 _out="$(EDITOR="${_dir}/ed/valid" raycast_snippets --edit 2>/dev/null)"; _rc=$?
-_t "edit: another tier's undocumented name does not block a local edit" "0 next: dotfiles raycast snippets sync" "${_rc} $(print -r -- "${_out}" | tail -n 1)"
+_t "edit: another tier's undocumented name does not block a local edit" "0 next: commit it, dotfiles switch, then dotfiles raycast snippets sync" "${_rc} $(print -r -- "${_out}" | tail -n 1)"
 print -r -- '[{"name":"pub","text":"public","keyword":";pub","description":"p"}]' > "${_shared}"
 cp "${_dir}/local.before" "${_local}"
 EDITOR="${_dir}/ed/fail" raycast_snippets --edit >/dev/null 2>"${_dir}/edit.err"; _rc=$?
@@ -517,9 +535,9 @@ raycast_snippets >/dev/null 2>&1; _rc=$?
 _t "no mode rc 1" "1" "${_rc}"
 _t "help mentions the two seeding steps" "1" "$(raycast_snippets --help 2>&1 | grep -c 'Export Snippets.*dotfiles raycast snippets pull')"
 _t "help states the one rule" "1" "$(raycast_snippets --help 2>&1 | grep -c 'personal data stays in the local tier; the shared tier is for snippets safe in a public repo')"
-_t "help names both tier files" "2" "$(raycast_snippets --help 2>&1 | grep -c -e "shared ${_dir}/shared/snippets.json" -e "local  ${_dir}/local/snippets.json")"
+_t "help names both tier files" "2" "$(raycast_snippets --help 2>&1 | grep -c -e "shared ${_shared}" -e "local  ${_local}")"
 
-unset ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST
+unset ARI_DOTFILES_RAYCAST_SNIPPETS_MERGE_NIX ARI_DOTFILES_RAYCAST_SNIPPETS_SHARED_FILE ARI_DOTFILES_RAYCAST_SNIPPETS_LOCAL_FILE ARI_DOTFILES_RAYCAST_SNIPPETS_MERGED ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST
 export PATH="${_saved_path}"
 rm -rf "${_dir}"
 

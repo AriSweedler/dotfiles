@@ -135,7 +135,15 @@ _t "bin: --plain" \
   "$(ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="cat ${_dir}/bindings.json" ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON="${_dir}/karabiner.json" _bin link clipboard-history --plain 2>/dev/null)"
 mkdir -p "${_dir}/shared" "${_dir}/local"
 print -r -- '[]' > "${_dir}/shared/snippets.json"
-local _env=(ARI_DOTFILES_RAYCAST_SNIPPETS_DIRS="${_dir}/shared:${_dir}/local" ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST="${_dir}/m.json")
+local _env=(ARI_DOTFILES_RAYCAST_SNIPPETS_SHARED_FILE="${_dir}/shared/snippets.json" ARI_DOTFILES_RAYCAST_SNIPPETS_LOCAL_FILE="${_dir}/local/snippets.json"
+            ARI_DOTFILES_RAYCAST_SNIPPETS_MERGED="${_dir}/merged.json" ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST="${_dir}/m.json"
+            ARI_DOTFILES_RAYCAST_SNIPPETS_MERGE_NIX="${${(%):-%x}:A:h}/../../dotfiles/nix/lib/raycast-snippets-merge.nix")
+# What a switch would write from these tier files: the same Nix merge. Run after a tier file changes.
+local _plugins="${${(%):-%x}:A:h}"
+function _snippets_merge() {
+  env "${_env[@]}" zsh -c 'source "$1/log.zsh"; source "$1/raycast_snippets.zsh"; raycast_snippets::nix_merge' _ "${_plugins}" > "${_dir}/merged.json"
+}
+_snippets_merge
 env "${_env[@]}" "${_dotfiles}" raycast snippets sync >/dev/null 2>&1; _rc=$?
 _t "bin: snippets sync without a manifest proceeds" "0" "${_rc}"
 _t "bin: snippets adopt then sync is a no-op" $'snippets: nothing to import | unchanged=0\npending=0' \
@@ -152,7 +160,7 @@ _t "bin: the raycast help lists edit, --edit, link edit and undocumented" "4" \
 _t "bin: the raycast help lists the --edit flag" "1" "$("${_dotfiles}" help raycast 2>&1 | grep -c '^  --edit ')"
 _bin help >/dev/null 2>&1; _rc=$?; _t "bin: help rc 0" "0" "${_rc}"
 _t "bin: help lists the subsystems" "1" "$(_bin help 2>&1 | grep -c 'Subsystems:.*link, snippets')"
-_t "bin: help names both tier files" "2" "$(_bin help 2>&1 | grep -c -e 'shared  ~/.config/raycast-snippets/snippets.json' -e 'local   ~/.local/share/raycast-snippets/snippets.json')"
+_t "bin: help names both tier files" "2" "$(_bin help 2>&1 | grep -c -e 'shared  ~/dotfiles/.config/raycast-snippets/snippets.json' -e 'local   ~/.local/share/dotfiles/nix/raycast-snippets.json')"
 _t "bin: help states the one rule" "1" "$(_bin help 2>&1 | grep -c 'personal data stays in the local tier')"
 _bin link help >/dev/null 2>&1; _rc=$?; _t "bin: link help rc 0" "0" "${_rc}"
 _bin snippets help >/dev/null 2>&1; _rc=$?; _t "bin: snippets help rc 0" "0" "${_rc}"
@@ -168,7 +176,7 @@ _bin snippets move Phone --to attic >/dev/null 2>&1; _rc=$?; _t "bin: move to an
 _bin snippets move --to local >/dev/null 2>&1; _rc=$?; _t "bin: move without NAME rc 1" "1" "${_rc}"
 _bin snippets list --to local >/dev/null 2>&1; _rc=$?; _t "bin: --to on another verb rc 1" "1" "${_rc}"
 _t "bin: move --dry-run reaches the plugin with --to" "name=nobody" \
-  "$(print -r -- '[{"name":"nobody","text":"x"}]' > "${_dir}/local/snippets.json"; env "${_env[@]}" "${_dotfiles}" raycast snippets move nobody --to shared --dry-run 2>/dev/null | grep '^name=')"
+  "$(print -r -- '[{"name":"nobody","text":"x"}]' > "${_dir}/local/snippets.json"; _snippets_merge; env "${_env[@]}" "${_dotfiles}" raycast snippets move nobody --to shared --dry-run 2>/dev/null | grep '^name=')"
 _t "bin: sync --dry-run skips without Raycast" "skip raycast not installed | app='${_dir}/nope.app'" "$(ARI_DOTFILES_RAYCAST_APP="${_dir}/nope.app" _bin sync --dry-run 2>/dev/null | grep '^skip')"
 
 unset ARI_DOTFILES_RAYCAST_APP

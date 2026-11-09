@@ -97,6 +97,13 @@ _assert_in_fix() {
   [[ "${p}" == "${FIX}/"* ]] || abort "path escapes the world: ${p}"
 }
 
+# The Raycast snippet tier files merged as a switch would (the plugin's nix_merge, raycast-snippets.nix's
+# own lib) into ARI_DOTFILES_RAYCAST_SNIPPETS_MERGED. Run it after a fixture tier file changes.
+snippets_merge() {
+  zsh -c 'source "$1/zsh/plugins/log.zsh"; source "$1/zsh/plugins/raycast_snippets.zsh"; raycast_snippets::nix_merge' \
+    _ "${ORIG_CONFIG_DIR}" > "${ARI_DOTFILES_RAYCAST_SNIPPETS_MERGED}"
+}
+
 world_new() {
   [[ -z "${FIX}" ]] || abort "world_new without world_teardown"
   local tmp_root fix_real home_real
