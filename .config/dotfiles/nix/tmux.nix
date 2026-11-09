@@ -34,6 +34,10 @@ in
     historyLimit = 5000; # for long output, tee to a file and `less +F` it
     escapeTime = 0;
     extraConfig = ''
+      # The server's shell commands (run-shell, if-shell, typhon) run with the PATH it was started
+      # with, which can lack the Nix profiles: put them first, once.
+      run-shell 'case ":$PATH:" in *:/etc/profiles/per-user/$USER/bin:*) ;; *) /etc/profiles/per-user/$USER/bin/tmux set-environment -g PATH "/etc/profiles/per-user/$USER/bin:/run/current-system/sw/bin:$PATH" ;; esac'
+
       # <Prefix>C-s re-reads this file; <Prefix>C-e edits its source, which a switch applies
       bind-key C-s source-file "$XDG_CONFIG_HOME/tmux/tmux.conf" \; display-message "Sourced tmux.conf"
       bind-key C-e new-window -c ~/dotfiles/.config/dotfiles/nix \; send-keys "\$EDITOR tmux.nix" Enter
