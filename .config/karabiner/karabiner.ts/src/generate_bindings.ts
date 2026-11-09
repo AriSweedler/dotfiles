@@ -39,7 +39,6 @@ export type BindingEntry = {
   description?: string
   chords: string[]
   keepFocus?: boolean
-  allowId?: string
 }
 
 const keyName = (key: string): string => String(to_key_code(key.toLowerCase()))
@@ -66,7 +65,6 @@ export const collectBindings = (): BindingEntry[] => {
       ...(d.description ? { description: d.description } : {}),
       chords: [chord],
       ...(d.keepFocus ? { keepFocus: true } : {}),
-      ...(d.allowId ? { allowId: d.allowId } : {}),
     })
   }
   for (const mode of MODES) {

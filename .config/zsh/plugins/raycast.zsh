@@ -1,6 +1,6 @@
 # raycast — the router behind `dotfiles raycast`, and the interactive function `ari_raycast`:
 #   dotfiles raycast link <slug|path> [--plain]   the widget: <[Raycast: Title | key: '✦4'](raycast://…)>
-#   dotfiles raycast link list | check | allow [--dry-run]
+#   dotfiles raycast link list | check | prime [<slug>...]
 #   dotfiles raycast snippets sync [--dry-run] [--deleted] | list | check | adopt | pull FILE | diff FILE
 #                             | move NAME --to shared|local | fmt | reset-manifest [NAME...]
 #                             | edit [--local|--shared] | undocumented
@@ -12,7 +12,7 @@
 # Each subsystem is its own plugin (raycast_link.zsh, raycast_snippets.zsh) with a function that is
 # callable on its own; this file only routes, and holds the one array `sync` walks, so adding a
 # subsystem is a line here plus its plugin. The raycast_sync step runs `sync --dry-run` and
-# `undocumented`; bake calls `link allow`, because a bindings change only touches the allow-list.
+# `undocumented`.
 # `edit` with no target picks one on a terminal (the dotfiles ui::choose) and otherwise lists them.
 # Env: ARI_DOTFILES_RAYCAST_APP (Raycast's app bundle; absent = `sync` skips, exit 0).
 
@@ -25,7 +25,7 @@
 # What `ari-raycast sync` runs, in order. Each step accepts --dry-run and prints its work as
 # key=value counters (would_add=, pending=, added=, imported=, changed=), which sync reports and
 # sums, plus `warn <text>` lines, which sync forwards (the raycast_sync step shows them as a warn).
-typeset -ga ARI_DOTFILES_RAYCAST_SYNC_STEPS=("link allow" "snippets sync")
+typeset -ga ARI_DOTFILES_RAYCAST_SYNC_STEPS=("snippets sync")
 : "${ARI_DOTFILES_RAYCAST_APP:=/Applications/Raycast.app}"
 
 function ari_raycast::help() {
@@ -34,7 +34,7 @@ dotfiles raycast — keep Raycast in parity with the dotfiles
 
 Usage:
   dotfiles raycast link <slug|path> [--plain]     a Raycast action as a link with its Karabiner key
-  dotfiles raycast link list | check | allow [--dry-run]
+  dotfiles raycast link list | check | prime [<slug>...]   prime: each bound command once, to click "Always allow"
   dotfiles raycast snippets sync [--dry-run] [--deleted] | list | check | adopt | pull FILE | diff FILE
                           | move NAME --to shared|local | fmt | reset-manifest [NAME...]
                           | edit [--local|--shared]
@@ -65,10 +65,10 @@ function ari_raycast::link() {
     help|-h|--help) raycast_link --help ;;
     list)           raycast_link --list "$@" ;;
     check)          raycast_link --check "$@" ;;
-    allow)          raycast_link --allow "$@" ;;
+    prime)          raycast_link --prime "$@" ;;
     edit|--edit)    raycast_link --edit "$@" ;;
     undocumented)   raycast_link --undocumented "$@" ;;
-    -*)             log::err "Unknown link verb | verb='${verb}' valid='<slug|path> [--plain], list, check, allow [--dry-run], edit [<slug>], undocumented, help'"; return 1 ;;
+    -*)             log::err "Unknown link verb | verb='${verb}' valid='<slug|path> [--plain], list, check, prime [<slug>...], edit [<slug>], undocumented, help'"; return 1 ;;
     *)              raycast_link "${verb}" "$@" ;;
   esac
 }

@@ -12,13 +12,6 @@ import type { Meta } from "../utils/mode.ts"
 // TODO: On my 34 inch monitor, I may want a different set of entries for this.
 // For example, 'h' should maybe mean "left-third" instead of "left-half"
 
-// Raycast's allow-list id for a window-management command is the slug in CamelCase after a
-// fixed prefix, except where Raycast's own enum names it differently.
-const WM_ALLOW_ID_IRREGULARS: Record<string, string> = { "almost-maximize": "MaximizeAlmost" }
-const camel = (slug: string) => slug.split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join("")
-export const windowManagementAllowId = (slug: string) =>
-  `builtin_command_windowManagement${WM_ALLOW_ID_IRREGULARS[slug] ?? camel(slug)}`
-
 // What each command does to the front window, one line: the binding's documentation (the
 // title is a name, not documentation). Every slug in the dict below needs a line here; the
 // raycast_sync healthcheck step fails on one without, and `dotfiles raycast link edit <slug>`
@@ -65,7 +58,6 @@ const wm = (slug: string) =>
     keepFocus: true,
     title: titleCase(slug),
     description: WM_DESCRIPTIONS[slug],
-    allowId: windowManagementAllowId(slug),
   })
 
 const meta: Meta = {

@@ -1,6 +1,7 @@
 #!/bin/bash
 # bake — compile karabiner.ts into karabiner.json (and raycast_bindings.json), canonicalise,
-# stage, and sync Raycast's deeplink allow-list. Commit the result, then `dotfiles switch` makes it live.
+# and stage. A new Raycast binding asks "Always allow" on first use: `dotfiles raycast link prime
+# <slug>` opens it once. Commit the result, then `dotfiles switch` makes it live.
 #
 # Every generated JSON in the repo goes through json-sort (~/.config/bin/json-sort, the one
 # place JSON canonicalisation lives), so a regenerated file diffs only where the data moved.
@@ -28,7 +29,6 @@ function main() {
 	bake::parameters
 	bake::sort
 	bake::stage
-	bake::allow
 }
 
 function bake::generate() (
@@ -84,30 +84,6 @@ function bake::stage() {
 	fi
 	git df add "${OUT_RAW}" "${OUT_BINDINGS}"
 	git df diff --staged "${OUT_RAW}" "${OUT_BINDINGS}"
-}
-
-function bake::allow() {
-	# Every Raycast binding compiled above is launched by deeplink, and Raycast asks "Always
-	# allow" once per command unless its id is already in the plist. `dotfiles raycast link allow`
-	# writes the missing ids from the same tables, so an edit here never leaves a prompt behind.
-	# Only the allow-list: snippets belong to `dotfiles raycast sync`, the raycast_sync step.
-	# Advisory: a failure is logged and the bake still succeeds.
-	local dotfiles_bin="${XDG_CONFIG_HOME}/bin/dotfiles"
-	if [[ ! -x "${dotfiles_bin}" ]]; then
-		echo "dotfiles harness not installed, skipping Raycast allow-list sync | path='${dotfiles_bin}'" >&2
-		return
-	fi
-	if [[ ! -d "${ARI_DOTFILES_RAYCAST_APP:-/Applications/Raycast.app}" ]]; then
-		echo "Raycast not installed, skipping allow-list sync" >&2
-		return
-	fi
-	if ! command -v defaults &>/dev/null; then
-		echo "defaults not found, skipping Raycast allow-list sync" >&2
-		return
-	fi
-	if ! "${dotfiles_bin}" raycast link allow >/dev/null; then
-		echo "Raycast allow-list sync failed; the bake is still good, run 'dotfiles raycast link allow' by hand" >&2
-	fi
 }
 
 main "$@"

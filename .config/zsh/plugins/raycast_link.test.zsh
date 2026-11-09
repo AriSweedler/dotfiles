@@ -38,8 +38,8 @@ export PATH="${_dir}/bin:${PATH}"
 # and a layer-only entry. Entries are addressed by the path's last segment.
 cat > "${_dir}/bindings.json" <<'EOF'
 {"$generated":"fixture","bindings":[
-  {"path":"extensions/raycast/clipboard-history/clipboard-history","title":"Clipboard History","chords":["hyper+4"],"allowId":"builtin_command_clipboardHistory"},
-  {"path":"extensions/raycast/raycast/confetti","title":"Confetti","chords":["hyper+k d"],"allowId":"builtin_command_confetti"},
+  {"path":"extensions/raycast/clipboard-history/clipboard-history","title":"Clipboard History","chords":["hyper+4"]},
+  {"path":"extensions/raycast/raycast/confetti","title":"Confetti","chords":["hyper+k d"]},
   {"path":"extensions/raycast/window-management/left-half","title":"Left Half","chords":["ctrl+opt+h"],"keepFocus":true}
 ]}
 EOF
@@ -57,7 +57,6 @@ cat > "${_dir}/karabiner.json" <<'EOF'
 EOF
 export ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="cat ${_dir}/bindings.json"
 export ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON="${_dir}/karabiner.json"
-export ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN="${_dir}/raycast.plist"
 
 # --- chord parsing ---
 _t "parse: hyper+4 → key 4, the Hyper set in canonical order" $'4\ncontrol option shift command' "$(raycast_link::parse_chord hyper+4)"
@@ -132,11 +131,11 @@ _t "list: one line per binding: slug, chords, title, deeplink" \
   $'clipboard-history  ✦4  Clipboard History  raycast://extensions/raycast/clipboard-history/clipboard-history\nconfetti  ✦K D  Confetti  raycast://extensions/raycast/raycast/confetti\nleft-half  ⌃⌥H  Left Half  raycast://extensions/raycast/window-management/left-half' \
   "$(raycast_link --list)"
 _out="$(raycast_link --check 2>/dev/null)"; _rc=$?
-_t "check: OK for direct chords, layer for layer-only, allow column" \
-  $'OK clipboard-history ✦4 NOT-ALLOWED\nlayer confetti ✦K D NOT-ALLOWED\nOK left-half ⌃⌥H no-allow-id' "${_out}"
-_t "check: rc 0 when nothing is MISSING (layer and allow state do not fail)" "0" "${_rc}"
+_t "check: OK for direct chords, layer for layer-only" \
+  $'OK clipboard-history ✦4\nlayer confetti ✦K D\nOK left-half ⌃⌥H' "${_out}"
+_t "check: rc 0 when nothing is MISSING (layer does not fail)" "0" "${_rc}"
 jq '.profiles[0].complex_modifications.rules[1].manipulators[0].to[0].shell_command = "open raycast://extensions/raycast/window-management/left-half"' "${_dir}/karabiner.json" > "${_dir}/k3.json"
-_t "check: keepFocus entry compiled without -g is MISSING" "1" "$(ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON="${_dir}/k3.json" raycast_link --check 2>/dev/null | grep -c '^MISSING left-half ⌃⌥H no-allow-id$')"
+_t "check: keepFocus entry compiled without -g is MISSING" "1" "$(ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON="${_dir}/k3.json" raycast_link --check 2>/dev/null | grep -c '^MISSING left-half ⌃⌥H$')"
 ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON="${_dir}/k3.json" raycast_link --check >/dev/null 2>&1; _rc=$?
 _t "check: rc 1 on a MISSING" "1" "${_rc}"
 jq '.profiles[0].complex_modifications.rules[0].manipulators[0].from.modifiers.mandatory = ["command","option"]' "${_dir}/karabiner.json" > "${_dir}/k2.json"
@@ -150,22 +149,10 @@ _t "--set is gone: unknown flag rc 1" "1" "${_rc}"
 raycast_link --keep-focus >/dev/null 2>&1; _rc=$?
 _t "--keep-focus is gone: unknown flag rc 1" "1" "${_rc}"
 
-# --- allow-list (temp plist) ---
-_t "allowed_ids: empty domain reads as no ids, rc 0" "" "$(raycast_link::allowed_ids)"
-defaults write "${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN}" alwaysAllowCommandDeeplinking -dict-add builtin_command_clipboardHistory -bool true
-_t "allowed_ids: parses the defaults read dict" "builtin_command_clipboardHistory" "$(raycast_link::allowed_ids)"
-_out="$(raycast_link --allow --dry-run 2>/dev/null)"; _rc=$?
-_t "allow --dry-run: reports what it would add, writes nothing" $'dry_run=1\nwould_add=1\nalready=1\nno_allow_id=1\nwould_add_aliases=confetti\nwould_add_ids=builtin_command_confetti\nno_allow_id_aliases=left-half' "${_out}"
-_t "allow --dry-run: plist unchanged" "builtin_command_clipboardHistory" "$(raycast_link::allowed_ids)"
-_out="$(raycast_link --allow 2>/dev/null)"; _rc=$?
-_t "allow: writes only the missing id" $'added=1\nalready=1\nno_allow_id=1\nadded_aliases=confetti\nno_allow_id_aliases=left-half' "${_out}"
-_t "allow: rc 0" "0" "${_rc}"
-_t "allow: plist now holds both ids" $'builtin_command_clipboardHistory\nbuiltin_command_confetti' "$(raycast_link::allowed_ids | sort)"
-_out="$(raycast_link --allow 2>/dev/null)"; _rc=$?
-_t "allow: second run adds nothing" $'added=0\nalready=2\nno_allow_id=1\nadded_aliases=\nno_allow_id_aliases=left-half' "${_out}"
-_t "check: allow column after --allow" \
-  $'OK clipboard-history ✦4 allowed\nlayer confetti ✦K D allowed\nOK left-half ⌃⌥H no-allow-id' \
-  "$(raycast_link --check 2>/dev/null)"
+# --- prime ---
+_out="$(raycast_link --prime left-half </dev/null 2>&1)"; _rc=$?
+_t "prime: refuses without a terminal, rc 64" "64" "${_rc}"
+_t "prime: says why" "1" "$(print -r -- "${_out}" | grep -c 'prime waits for Enter')"
 
 # --- documentation: a description per binding, listed with its fix ---
 _t "undocumented: every fixture binding lacks one, in generator order, rc 0" \
@@ -268,7 +255,7 @@ if [[ -x "${_kts}/node_modules/.bin/tsx" ]]; then
   _t "generated: parses, has a bindings array, no alias field" "true" "$(print -r -- "${_gen}" | jq '(.bindings | type == "array") and ([.bindings[] | has("alias")] | any | not)')"
   _t "generated: 33 entries (26 window management + 5 shortcuts + confetti + typing practice)" "33" "$(print -r -- "${_gen}" | jq '.bindings | length')"
   _t "generated: paths unique and sorted, slugs unique" "true" "$(print -r -- "${_gen}" | jq '([.bindings[].path] | (length == (unique | length)) and (. == sort)) and ([.bindings[].path | split("/") | last] | length == (unique | length))')"
-  _t "generated: every wm entry has keepFocus, an allowId, and exactly one direct ⌃⌥ chord (no layer)" "26" "$(print -r -- "${_gen}" | jq '[.bindings[] | select(.path | startswith("extensions/raycast/window-management/")) | select(.keepFocus == true and (.allowId | startswith("builtin_command_windowManagement")) and (.chords | length == 1) and (.chords[0] | startswith("ctrl+opt+")))] | length')"
+  _t "generated: every wm entry has keepFocus and exactly one direct ⌃⌥ chord (no layer)" "26" "$(print -r -- "${_gen}" | jq '[.bindings[] | select(.path | startswith("extensions/raycast/window-management/")) | select(.keepFocus == true and (.chords | length == 1) and (.chords[0] | startswith("ctrl+opt+")))] | length')"
   _t "generated: no hyper+w chord anywhere" "0" "$(print -r -- "${_gen}" | jq '[.bindings[].chords[] | select(startswith("hyper+w "))] | length')"
   _t "generated: sixths on a s d / z x v, c stays Center" $'bottom-center-sixth ctrl+opt+x\nbottom-left-sixth ctrl+opt+z\nbottom-right-sixth ctrl+opt+v\ncenter ctrl+opt+c\ntop-center-sixth ctrl+opt+s\ntop-left-sixth ctrl+opt+a\ntop-right-sixth ctrl+opt+d' "$(print -r -- "${_gen}" | jq -r '.bindings[] | (.path | split("/") | last) as $s | select(($s | endswith("-sixth")) or $s == "center") | "\($s) \(.chords[0])"')"
   _t "generated: shortcut chords canonical (snippets uses the key name)" "hyper+grave_accent_and_tilde" "$(print -r -- "${_gen}" | jq -r '.bindings[] | select(.path | endswith("/search-snippets")) | .chords[0]')"
@@ -279,7 +266,7 @@ else
   log::warn "raycast_link: karabiner.ts not built, skipping the generated-contract checks | tsx='${_kts}/node_modules/.bin/tsx'"
 fi
 
-unset ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN
+unset ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON
 ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE="" ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE_KEY=""
 export PATH="${_saved_path}"
 rm -rf "${_dir}"

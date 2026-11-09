@@ -2,8 +2,8 @@
 # raycast_sync and the documentation rule: a binding (its deeplink description) or a snippet (the
 # description of the entry that wins its name) without a one-line description fails the step as
 # manual `undocumented`, one detail line per finding with the edit that fixes it, the first as
-# the fix. A local override documents its placeholder's name. Raycast is a directory, `defaults`
-# a shim that reads nothing, the bindings a fixture; nothing reaches the real app or tiers.
+# the fix. A local override documents its placeholder's name. Raycast is a directory, the
+# bindings a fixture; nothing reaches the real app or tiers.
 set -u
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -13,7 +13,6 @@ world_new
 for p in json_sort raycast raycast_link raycast_snippets; do
   ln -s "${ORIG_CONFIG_DIR}/zsh/plugins/${p}.zsh" "${HOME}/.config/zsh/plugins/${p}.zsh"
 done
-printf '#!/bin/sh\nexit 0\n' > "${FIX}/shims/defaults"; chmod +x "${FIX}/shims/defaults"
 mkdir -p "${FIX}/Raycast.app" "${FIX}/shared" "${FIX}/local"
 export ARI_DOTFILES_RAYCAST_APP="${FIX}/Raycast.app"
 export ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="cat ${FIX}/bindings.json"
@@ -23,7 +22,7 @@ export ARI_DOTFILES_RAYCAST_SNIPPETS_MERGED="${FIX}/merged.json"
 export ARI_DOTFILES_RAYCAST_SNIPPETS_MERGE_NIX="${ORIG_CONFIG_DIR}/dotfiles/nix/lib/raycast-snippets-merge.nix"
 export ARI_DOTFILES_RAYCAST_SNIPPETS_NIX="${FIX}/tools/nix" # the real one: the world's nix is a shim
 export ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST="${FIX}/local/manifest.json"
-# The direct chord is no allow-list work: the binding has no allowId.
+# One direct-chord binding, documented.
 printf '%s\n' '{"bindings":[{"path":"extensions/raycast/window-management/left-half","title":"Left Half","chords":["ctrl+opt+h"]}]}' > "${FIX}/bindings.json"
 printf '%s\n' '[{"name":"Home","keyword":"~^","text":"OVERRIDE WITH A ~/.local/share/dotfiles/nix/raycast-snippets.json file"},{"name":"pub","keyword":";pub","text":"public"}]' > "${FIX}/shared/snippets.json"
 printf '%s\n' '[{"name":"Home","keyword":"~^","text":"1 Main St"}]' > "${FIX}/local/snippets.json"

@@ -1,29 +1,26 @@
 # step raycast_sync — Raycast in parity with the dotfiles. `dotfiles raycast sync` walks every
-# Raycast subsystem (link allow: the deeplink allow-list; snippets sync: the versioned snippets),
-# each idempotent. The check is its --dry-run: pending work fails the step, a subsystem that
+# Raycast subsystem's sync (snippets sync: the versioned snippets), each idempotent. The check is its --dry-run: pending work fails the step, a subsystem that
 # errors fails it with its tail, a binding or snippet without a description fails it as manual
 # (`undocumented`, one line per finding with the edit that fixes it), and a `warn` line (a
 # snippets placeholder this machine has not filled in) makes it a warn. Compile state of the
 # bindings is the karabiner step's verdict.
 step::declare raycast_sync --group tools --needs dotfiles_repo \
-  --desc "Raycast in parity with the dotfiles: every Karabiner-bound command on its deeplink allow-list, the versioned snippets imported (dotfiles raycast sync), every binding and snippet described" \
-  --apply "runs dotfiles raycast sync: puts the bound commands on the deeplink allow-list and imports the snippets"
+  --desc "Raycast in parity with the dotfiles: the versioned snippets imported (dotfiles raycast sync), every binding and snippet described" \
+  --apply "runs dotfiles raycast sync: imports the snippets"
 step::watches raycast_sync '.config/raycast-snippets/**' '.config/karabiner/**' '.config/zsh/plugins/raycast*.zsh'
 
 # Machine inputs: what `raycast sync --dry-run` reads. reply: the raycast plugins, karabiner.ts's
-# sources, package files, tsx and node (the bindings generator), karabiner.json, Raycast's
-# preferences plist (the allow-list `defaults` reads), the app, both snippet tier files, Nix's
-# merge of them and the manifest. 1 when a seam replaces what is read (a bindings command, a `defaults` that is not
-# /usr/bin/defaults): its state is not on disk where the cache can see it, so uncached.
+# sources, package files, tsx and node (the bindings generator), karabiner.json, the app, both
+# snippet tier files, Nix's merge of them and the manifest. 1 when a bindings command replaces
+# the generator: its state is not on disk where the cache can see it, so uncached.
 step::raycast_sync::inputs() {
-  [[ -z "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD:-}" && "${commands[defaults]:-}" == /usr/bin/defaults ]] || return 1
+  [[ -z "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD:-}" ]] || return 1
   local cfg="${XDG_CONFIG_HOME:-${HOME}/.config}"
   local ts="${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS:-${HOME}/dotfiles/.config/karabiner/karabiner.ts}"
   reply=("${ARI_DOTFILES_CONFIG}/zsh/plugins" "${ARI_DOTFILES_CONFIG}/zsh/plugins/"raycast*.zsh(N)
          "${ts}" "${ts}/package.json" "${ts}/package-lock.json" "${ts}/node_modules" "${ts}/node_modules/.package-lock.json"
          "${ts}/node_modules/.bin/tsx" "${commands[node]:-/nonexistent/node}"
          "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON:-${cfg}/karabiner/karabiner.json}"
-         "${HOME}/Library/Preferences/${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN:-com.raycast.macos}.plist"
          "${ARI_DOTFILES_RAYCAST_APP:-/Applications/Raycast.app}"
          "${ARI_DOTFILES_RAYCAST_SNIPPETS_SHARED_FILE:-${HOME}/dotfiles/.config/raycast-snippets/snippets.json}"
          "${ARI_DOTFILES_RAYCAST_SNIPPETS_LOCAL_FILE:-${HOME}/.local/share/dotfiles/nix/raycast-snippets.json}"
@@ -54,7 +51,7 @@ step::raycast_sync::live() {
   step::raycast_sync::load
   local out docs rc=0 drc=0
   # One generator run: both subshells below inherit the loaded bindings. A failure here is
-  # reported by `link allow` inside sync.
+  # reported by `undocumented`, which reads the bindings.
   raycast_link::load_bindings >/dev/null 2>&1
   out="$(ari_raycast sync --dry-run 2>/dev/null)" || rc=$?
   docs="$(ari_raycast undocumented 2>/dev/null)" || drc=$?

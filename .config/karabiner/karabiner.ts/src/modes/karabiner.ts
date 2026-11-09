@@ -10,7 +10,6 @@ const dict = {
   d: deeplink("extensions/raycast/raycast/confetti", {
     title: "Confetti",
     description: "Throw Raycast's confetti: a quick check that a layer key reaches Raycast",
-    allowId: "builtin_command_confetti",
   }),
   s: script("script-example"),
   e: script("karabiner-edit-index"),

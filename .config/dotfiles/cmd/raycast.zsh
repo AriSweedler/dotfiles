@@ -3,9 +3,9 @@
 # which the interactive shell also loads; this verb declares the help, loads them and hands over:
 # the plugins parse their own words (they run in shells without the harness libraries).
 
-verb::define raycast 'Raycast in parity with the dotfiles: allow-list, snippets'
+verb::define raycast 'Raycast in parity with the dotfiles: bindings, snippets'
 verb::usage raycast 'raycast link <slug|path> [--plain]' \
-  'raycast link list | check | allow [--dry-run] | undocumented' \
+  'raycast link list | check | prime [<slug>..] | undocumented' \
   'raycast link edit [<slug>]' \
   'raycast snippets sync [--dry-run] [--deleted] | list | check | adopt' \
   'raycast snippets pull FILE | diff FILE | fmt' \
@@ -17,8 +17,8 @@ verb::usage raycast 'raycast link <slug|path> [--plain]' \
   'raycast <subsystem> help'
 verb::about raycast <<'EOF'
 Bindings live in karabiner.ts's tables and compile through bake; 'link'
-renders a Raycast action as a link with its Karabiner key and keeps
-Raycast's deeplink allow-list current. Snippets live in two files, merged
+renders a Raycast action as a link with its Karabiner key; 'link prime'
+opens each bound command once so its "Always allow" is clicked. Snippets live in two files, merged
 with local winning by name:
   shared  ~/dotfiles/.config/raycast-snippets/snippets.json (git df, public)
   local   ~/.local/share/dotfiles/nix/raycast-snippets.json (git ldf, private)
@@ -38,7 +38,7 @@ EOF
 verb::sub raycast 'link <slug|path>' "the widget <[Raycast: Title | key: '✦4'](raycast://…)>"
 verb::sub raycast 'link list' 'every binding: slug, chords, title, deeplink'
 verb::sub raycast 'link check' 'OK/MISSING per binding against the compiled karabiner.json'
-verb::sub raycast 'link allow' "write the missing allow-list ids to Raycast's plist"
+verb::sub raycast 'link prime' 'open each bound command (or the slugs given) in turn, Enter between, to click "Always allow" once each; needs a terminal'
 verb::sub raycast 'link edit' "the table holding the slug's deeplink in \\\$EDITOR at its line (no slug: raycast_shortcuts.ts); on save the generator and every chord are checked; no commit, bake compiles it; an invalid table is reported, left as edited (on a terminal, offered for another edit); also: link --edit"
 verb::sub raycast 'link undocumented' 'every binding without a description, with its fix'
 verb::sub raycast 'snippets sync' 'import what is new or changed, one Raycast dialog a batch'
@@ -57,7 +57,7 @@ verb::sub raycast undocumented "every subsystem's undocumented units"
 verb::edit raycast raycast::edit_cmd '[link [<slug>] | snippets [--local|--shared]]' \
   "a subsystem's edit; no target: pick one on a terminal (snippets local, snippets shared, bindings), otherwise the targets are listed, exit 64"
 verb::flag raycast '--plain' "link: the bare form, <Raycast: Title | key: '✦4'> url"
-verb::flag raycast '--dry-run' 'allow, sync, adopt, pull, fmt, move, reset-manifest: print the plan, change nothing'
+verb::flag raycast '--dry-run' 'sync, adopt, pull, fmt, move, reset-manifest: print the plan, change nothing'
 verb::flag raycast '--deleted' 'snippets sync: the old copies of the changed and removed snippets are gone from Raycast; import the changes'
 verb::flag raycast '--to TIER' 'move: shared or local'
 verb::flag raycast '--local' 'edit: open the local tier file (the default)'

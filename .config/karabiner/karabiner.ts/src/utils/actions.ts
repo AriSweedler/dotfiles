@@ -8,8 +8,7 @@ import { karabiner_script } from "./macros.ts"
 // --- Types ---
 // A deeplink carries what the `dotfiles raycast link` widget needs (generate_bindings.ts): the path is the
 // identity (its last segment, the command slug, is how the widget is addressed), title defaults
-// to the slug title-cased, allowId is the key Raycast stores under alwaysAllowCommandDeeplinking
-// once "Always allow" is clicked (`dotfiles raycast link allow` writes it). description is the
+// to the slug title-cased. description is the
 // binding's documentation, one line saying what the action does (the title is a name, not
 // documentation); the raycast_sync healthcheck step fails on a binding without one.
 export type Deeplink = {
@@ -18,9 +17,8 @@ export type Deeplink = {
   title: string
   description?: string
   keepFocus?: boolean
-  allowId?: string
 }
-export type DeeplinkOptions = { title?: string; description?: string; keepFocus?: boolean; allowId?: string }
+export type DeeplinkOptions = { title?: string; description?: string; keepFocus?: boolean }
 export const deeplinkSlug = (path: string): string => path.split("/").filter(Boolean).pop() ?? path
 export type Url = { kind: "url"; url: string; label?: string }
 export type Script = { kind: "script"; name: string; args?: string[] }
@@ -49,7 +47,6 @@ export const deeplink = (path: string, opts: DeeplinkOptions = {}): Deeplink => 
   title: opts.title ?? titleCase(deeplinkSlug(path)),
   ...(opts.description ? { description: opts.description } : {}),
   ...(opts.keepFocus ? { keepFocus: true } : {}),
-  ...(opts.allowId ? { allowId: opts.allowId } : {}),
 })
 export const url = (u: string, label?: string): Url => ({ kind: "url", url: u, label })
 export const script = (name: string, args?: string[]): Script => ({ kind: "script", name, args })

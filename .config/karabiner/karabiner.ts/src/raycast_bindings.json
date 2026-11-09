@@ -2,7 +2,6 @@
   "$generated": "by bake from karabiner.ts/src/*.ts (modes/*.ts, raycast_shortcuts.ts); do not edit",
   "bindings": [
     {
-      "allowId": "extension_raycast-go-aws.command-go-aws__dev",
       "chords": [
         "hyper+s"
       ],
@@ -11,7 +10,6 @@
       "title": "Go AWS"
     },
     {
-      "allowId": "builtin_command_calendar_schedule",
       "chords": [
         "opt+s"
       ],
@@ -20,7 +18,6 @@
       "title": "My Schedule"
     },
     {
-      "allowId": "builtin_command_clipboardHistory",
       "chords": [
         "hyper+4"
       ],
@@ -29,7 +26,6 @@
       "title": "Clipboard History"
     },
     {
-      "allowId": "builtin_command_searchEmoji",
       "chords": [
         "ctrl+cmd+spacebar"
       ],
@@ -38,7 +34,6 @@
       "title": "Search Emoji & Symbols"
     },
     {
-      "allowId": "builtin_command_confetti",
       "chords": [
         "hyper+k d"
       ],
@@ -47,7 +42,6 @@
       "title": "Confetti"
     },
     {
-      "allowId": "builtin_command_searchSnippets",
       "chords": [
         "hyper+grave_accent_and_tilde"
       ],
@@ -56,7 +50,6 @@
       "title": "Search Snippets"
     },
     {
-      "allowId": "builtin_command_typingPractice_start",
       "chords": [
         "hyper+t r"
       ],
@@ -65,7 +58,6 @@
       "title": "Typing Practice"
     },
     {
-      "allowId": "builtin_command_windowManagementMaximizeAlmost",
       "chords": [
         "ctrl+opt+return_or_enter"
       ],
@@ -75,7 +67,6 @@
       "title": "Almost Maximize"
     },
     {
-      "allowId": "builtin_command_windowManagementBottomCenterSixth",
       "chords": [
         "ctrl+opt+x"
       ],
@@ -85,7 +76,6 @@
       "title": "Bottom Center Sixth"
     },
     {
-      "allowId": "builtin_command_windowManagementBottomLeftQuarter",
       "chords": [
         "ctrl+opt+j"
       ],
@@ -95,7 +85,6 @@
       "title": "Bottom Left Quarter"
     },
     {
-      "allowId": "builtin_command_windowManagementBottomLeftSixth",
       "chords": [
         "ctrl+opt+z"
       ],
@@ -105,7 +94,6 @@
       "title": "Bottom Left Sixth"
     },
     {
-      "allowId": "builtin_command_windowManagementBottomRightQuarter",
       "chords": [
         "ctrl+opt+k"
       ],
@@ -115,7 +103,6 @@
       "title": "Bottom Right Quarter"
     },
     {
-      "allowId": "builtin_command_windowManagementBottomRightSixth",
       "chords": [
         "ctrl+opt+v"
       ],
@@ -125,7 +112,6 @@
       "title": "Bottom Right Sixth"
     },
     {
-      "allowId": "builtin_command_windowManagementCenter",
       "chords": [
         "ctrl+opt+c"
       ],
@@ -135,7 +121,6 @@
       "title": "Center"
     },
     {
-      "allowId": "builtin_command_windowManagementCenterThird",
       "chords": [
         "ctrl+opt+w"
       ],
@@ -145,7 +130,6 @@
       "title": "Center Third"
     },
     {
-      "allowId": "builtin_command_windowManagementFirstThird",
       "chords": [
         "ctrl+opt+q"
       ],
@@ -155,7 +139,6 @@
       "title": "First Third"
     },
     {
-      "allowId": "builtin_command_windowManagementLastThird",
       "chords": [
         "ctrl+opt+e"
       ],
@@ -165,7 +148,6 @@
       "title": "Last Third"
     },
     {
-      "allowId": "builtin_command_windowManagementLeftHalf",
       "chords": [
         "ctrl+opt+h"
       ],
@@ -175,7 +157,6 @@
       "title": "Left Half"
     },
     {
-      "allowId": "builtin_command_windowManagementMakeLarger",
       "chords": [
         "ctrl+opt+equal_sign"
       ],
@@ -185,7 +166,6 @@
       "title": "Make Larger"
     },
     {
-      "allowId": "builtin_command_windowManagementMakeSmaller",
       "chords": [
         "ctrl+opt+hyphen"
       ],
@@ -195,7 +175,6 @@
       "title": "Make Smaller"
     },
     {
-      "allowId": "builtin_command_windowManagementNextDesktop",
       "chords": [
         "ctrl+opt+close_bracket"
       ],
@@ -205,7 +184,6 @@
       "title": "Next Desktop"
     },
     {
-      "allowId": "builtin_command_windowManagementNextDisplay",
       "chords": [
         "ctrl+opt+period"
       ],
@@ -215,7 +193,6 @@
       "title": "Next Display"
     },
     {
-      "allowId": "builtin_command_windowManagementPreviousDesktop",
       "chords": [
         "ctrl+opt+open_bracket"
       ],
@@ -225,7 +202,6 @@
       "title": "Previous Desktop"
     },
     {
-      "allowId": "builtin_command_windowManagementPreviousDisplay",
       "chords": [
         "ctrl+opt+comma"
       ],
@@ -235,7 +211,6 @@
       "title": "Previous Display"
     },
     {
-      "allowId": "builtin_command_windowManagementReasonableSize",
       "chords": [
         "ctrl+opt+r"
       ],
@@ -245,7 +220,6 @@
       "title": "Reasonable Size"
     },
     {
-      "allowId": "builtin_command_windowManagementRestore",
       "chords": [
         "ctrl+opt+delete_or_backspace"
       ],
@@ -255,7 +229,6 @@
       "title": "Restore"
     },
     {
-      "allowId": "builtin_command_windowManagementRightHalf",
       "chords": [
         "ctrl+opt+l"
       ],
@@ -265,7 +238,6 @@
       "title": "Right Half"
     },
     {
-      "allowId": "builtin_command_windowManagementToggleFullscreen",
       "chords": [
         "ctrl+opt+f"
       ],
@@ -275,7 +247,6 @@
       "title": "Toggle Fullscreen"
     },
     {
-      "allowId": "builtin_command_windowManagementTopCenterSixth",
       "chords": [
         "ctrl+opt+s"
       ],
@@ -285,7 +256,6 @@
       "title": "Top Center Sixth"
     },
     {
-      "allowId": "builtin_command_windowManagementTopLeftQuarter",
       "chords": [
         "ctrl+opt+u"
       ],
@@ -295,7 +265,6 @@
       "title": "Top Left Quarter"
     },
     {
-      "allowId": "builtin_command_windowManagementTopLeftSixth",
       "chords": [
         "ctrl+opt+a"
       ],
@@ -305,7 +274,6 @@
       "title": "Top Left Sixth"
     },
     {
-      "allowId": "builtin_command_windowManagementTopRightQuarter",
       "chords": [
         "ctrl+opt+i"
       ],
@@ -315,7 +283,6 @@
       "title": "Top Right Quarter"
     },
     {
-      "allowId": "builtin_command_windowManagementTopRightSixth",
       "chords": [
         "ctrl+opt+d"
       ],

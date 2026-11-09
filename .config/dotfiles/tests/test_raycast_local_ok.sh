@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # raycast_sync with snippets: a local-only snippet (no shared placeholder) is a valid end state,
 # so the step is ok and `snippets fmt` adds nothing to shared; a shared placeholder nothing
-# overrides still warns. Raycast is a directory, `defaults` a shim that reads nothing, the
-# bindings an empty fixture; nothing reaches the real app or tiers.
+# overrides still warns. Raycast is a directory, the bindings an empty fixture; nothing reaches the real app or tiers.
 set -u
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -13,7 +12,6 @@ world_new
 for p in json_sort raycast raycast_link raycast_snippets; do
   ln -s "${ORIG_CONFIG_DIR}/zsh/plugins/${p}.zsh" "${HOME}/.config/zsh/plugins/${p}.zsh"
 done
-printf '#!/bin/sh\nexit 0\n' > "${FIX}/shims/defaults"; chmod +x "${FIX}/shims/defaults"
 mkdir -p "${FIX}/Raycast.app" "${FIX}/shared" "${FIX}/local"
 printf '{"bindings":[]}\n' > "${FIX}/bindings.json"
 export ARI_DOTFILES_RAYCAST_APP="${FIX}/Raycast.app"

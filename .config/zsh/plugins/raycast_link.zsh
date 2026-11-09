@@ -18,10 +18,9 @@
 # --check verifies direct chords against the compiled karabiner.json exactly (`open -g` iff
 # keepFocus); layer chords are reported as `layer`, not verified.
 #
-# Raycast asks "Always allow" once per command launched by deeplink and keeps the answers in the
-# plain plist com.raycast.macos (alwaysAllowCommandDeeplinking, <id> = 1); each binding's allowId
-# names its key, and --allow writes the missing ones so the prompt never shows. bake and the
-# raycast_sync step run --allow.
+# Raycast asks "Always allow" once per command launched by deeplink and keeps the answer in its
+# encrypted database, which nothing outside Raycast can write. --prime opens every binding's
+# deeplink in turn, waiting for Enter between them, so each prompt can be answered once.
 #
 # Documentation rule: every binding's deeplink(…) carries a one-line `description` option (what
 # the action does; the title is a name, not documentation), which the generator emits.
@@ -34,20 +33,17 @@
 # another edit). Nothing is committed: bake compiles the tables into karabiner.json, so the
 # next command is bake.
 #
-# Usage: raycast_link <slug|path> [--plain] | --list | --check | --allow [--dry-run]
+# Usage: raycast_link <slug|path> [--plain] | --list | --check | --prime [<slug>...]
 #        | --undocumented | --edit [<slug>]
 # Env: ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS (the karabiner.ts checkout), ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON,
-# ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN (a domain name or a plist path), ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD (test
+# ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD (test
 # seam: a command whose stdout is the bindings JSON, e.g. `cat fixture.json`).
 
 (( ${+functions[log::info]} )) || source "${${(%):-%x}:A:h}/log.zsh"
 
 : "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS:=${HOME}/dotfiles/.config/karabiner/karabiner.ts}" # the clone: bake installs node_modules there
 : "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON:=${XDG_CONFIG_HOME:-${HOME}/.config}/karabiner/karabiner.json}"
-: "${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN:=com.raycast.macos}"
 : "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD:=}"
-# Guarded so re-sourcing (plugin loader plus the dispatcher) never trips "read-only variable".
-(( ${+ARI_DOTFILES_RAYCAST_LINK_ALLOW_KEY} )) || typeset -gr ARI_DOTFILES_RAYCAST_LINK_ALLOW_KEY="alwaysAllowCommandDeeplinking"
 # One generator run per invocation; keyed by the seam so a test that swaps fixtures reloads.
 typeset -g ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE="" ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE_KEY=""
 
@@ -256,81 +252,37 @@ function raycast_link::entry_status() {
   print -r -- "${status_word}"
 }
 
-# --- Raycast allow-list ---
+# --- Raycast's "Always allow" prompt ---
 
-# Output: the ids Raycast already allows, one per line. `defaults read` prints the dict in the
-# old plist syntax (`"id" = 1;`), the same for a domain name and for a plist path, so it is
-# parsed rather than exported; a domain without the key reads as empty.
-function raycast_link::allowed_ids() {
-  defaults read "${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN}" "${ARI_DOTFILES_RAYCAST_LINK_ALLOW_KEY}" 2>/dev/null \
-    | awk '$0 ~ /= 1;[[:space:]]*$/ { key = $1; gsub(/"/, "", key); print key }'
-  return 0
-}
-
-# Input: an entry, the allowed ids (newline-joined). Output: allowed | NOT-ALLOWED | no-allow-id.
-function raycast_link::entry_allow_state() {
-  local entry="${1}" allowed="${2}" id
-  id="$(print -r -- "${entry}" | jq -r '.allowId // empty')"
-  if [[ -z "${id}" ]]; then
-    print -r -- "no-allow-id"
-  elif [[ $'\n'"${allowed}"$'\n' == *$'\n'"${id}"$'\n'* ]]; then
-    print -r -- "allowed"
+# Open each binding's deeplink (all, or the slugs given), in generator order, and wait for Enter
+# before the next, so Ari answers each "Always allow" once. A window command acts on the
+# frontmost window. Needs a terminal; exit 64 without one, 1 on an unknown slug.
+function raycast_link::prime() {
+  local entry alias_ path_ reply
+  local -a entries=()
+  local -i i=0
+  if [[ ! -t 0 ]]; then
+    log::err "prime waits for Enter between commands | fix='run it in a terminal'"
+    return 64
+  fi
+  if (( $# )); then
+    for alias_ in "$@"; do
+      entry="$(raycast_link::entry "${alias_}")" || return 1
+      entries+=("${entry}")
+    done
   else
-    print -r -- "NOT-ALLOWED"
+    entries=("${(@f)$(raycast_link::entries)}")
   fi
-}
-
-# Write the allowIds Raycast does not yet allow, and only those, so the deeplink confirmation
-# never shows for a bound command. Idempotent; exit 0 when nothing is missing. With dry_run=1
-# nothing is written and the would-be additions are reported.
-function raycast_link::allow() {
-  local dry_run="${1:-0}" entry alias_ id allowed state
-  local -a added already no_id would_ids
-  if ! command -v defaults >/dev/null 2>&1; then
-    log::err "defaults not found; cannot sync Raycast's allow-list | domain='${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN}'"
-    return 1
-  fi
-  allowed="$(raycast_link::allowed_ids)"
-  for entry in "${(@f)$(raycast_link::entries)}"; do
+  for entry in "${entries[@]}"; do
+    i+=1
     alias_="$(raycast_link::slug "${entry}")"
-    state="$(raycast_link::entry_allow_state "${entry}" "${allowed}")"
-    case "${state}" in
-      allowed)     already+=("${alias_}") ;;
-      no-allow-id) no_id+=("${alias_}") ;;
-      NOT-ALLOWED)
-        id="$(print -r -- "${entry}" | jq -r .allowId)"
-        would_ids+=("${id}")
-        if (( dry_run )); then
-          added+=("${alias_}")
-        elif defaults write "${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN}" "${ARI_DOTFILES_RAYCAST_LINK_ALLOW_KEY}" -dict-add "${id}" -bool true; then
-          added+=("${alias_}")
-        else
-          log::err "defaults write failed | domain='${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN}' id='${id}' alias='${alias_}'"
-          return 1
-        fi ;;
-    esac
+    path_="$(print -r -- "${entry}" | jq -r .path)"
+    print -r -- "${i}/${#entries} ${alias_} $(raycast_link::render_entry_chords "${entry}"): click Always allow, then Enter here (q: stop)"
+    open -g "raycast://${path_}"
+    read -r reply
+    [[ "${reply}" == q ]] && { print -r -- "primed=$(( i - 1 )) stopped_at=${alias_}"; return 0; }
   done
-  if (( dry_run )); then
-    log::info "Raycast allow-list dry run | would_add='${#added}' already='${#already}' no_allow_id='${#no_id}' domain='${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN}' would_add_aliases='${(j:, :)added}'"
-    cat <<EOF
-dry_run=1
-would_add=${#added}
-already=${#already}
-no_allow_id=${#no_id}
-would_add_aliases=${(j:,:)added}
-would_add_ids=${(j:,:)would_ids}
-no_allow_id_aliases=${(j:,:)no_id}
-EOF
-    return 0
-  fi
-  log::info "Raycast allow-list synced | added='${#added}' already='${#already}' no_allow_id='${#no_id}' domain='${ARI_DOTFILES_RAYCAST_LINK_DEFAULTS_DOMAIN}' added_aliases='${(j:, :)added}' no_allow_id_aliases='${(j:, :)no_id}'"
-  cat <<EOF
-added=${#added}
-already=${#already}
-no_allow_id=${#no_id}
-added_aliases=${(j:,:)added}
-no_allow_id_aliases=${(j:,:)no_id}
-EOF
+  print -r -- "primed=${#entries}"
 }
 
 # --- documentation ---
@@ -487,16 +439,14 @@ function raycast_link::list() {
 }
 
 # Output: per slug, OK / MISSING (direct chords against the compiled karabiner.json) or layer
-# (only layer chords, not verified), the chords, then the Raycast allow state. Exit 1 only on a
-# MISSING; the allow state is advisory, --allow fixes it.
+# (only layer chords, not verified), then the chords. Exit 1 only on a MISSING.
 function raycast_link::check() {
-  local entry alias_ status_word allowed rc=0
-  allowed="$(raycast_link::allowed_ids)"
+  local entry alias_ status_word rc=0
   for entry in "${(@f)$(raycast_link::entries)}"; do
     alias_="$(raycast_link::slug "${entry}")"
     status_word="$(raycast_link::entry_status "${entry}")"
     [[ "${status_word}" == MISSING ]] && rc=1
-    print -r -- "${status_word} ${alias_} $(raycast_link::render_entry_chords "${entry}") $(raycast_link::entry_allow_state "${entry}" "${allowed}")"
+    print -r -- "${status_word} ${alias_} $(raycast_link::render_entry_chords "${entry}")"
   done
   (( rc )) && log::err "Bindings not compiled | karabiner_json='${ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON}' fix='run bake'"
   return "${rc}"
@@ -511,8 +461,9 @@ dotfiles raycast link — a Raycast action as a link with its Karabiner binding
                                   slug = the deeplink path's last segment: clipboard-history, left-half, my-schedule
   dotfiles raycast link list             one line per binding: slug, every chord (✦K D = Hyper+K then D), title, deeplink
   dotfiles raycast link check            OK/MISSING per binding (direct chords, against the compiled karabiner.json;
-                                  layer chords show as 'layer' and are not verified), plus allowed/NOT-ALLOWED/no-allow-id
-  dotfiles raycast link allow [--dry-run]   write the missing allowIds to Raycast's plist so no deeplink asks "Always allow"
+                                  layer chords show as 'layer' and are not verified)
+  dotfiles raycast link prime [<slug>...]   open each binding's command in turn, Enter between, to click
+                                  "Always allow" once per command (Raycast keeps that answer where no script reaches)
   dotfiles raycast link edit [<slug>]    the table holding the slug's deeplink in \$EDITOR at its line (no slug:
                                   raycast_shortcuts.ts); on save the generator and every chord are checked; no
                                   commit, next: bake; --edit is the same
@@ -520,28 +471,29 @@ dotfiles raycast link — a Raycast action as a link with its Karabiner binding
 
 Bindings come from karabiner.ts's tables: ${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS}/src/modes/*.ts and
 src/raycast_shortcuts.ts, read through its generator. To change one, edit the table and run bake
-(which also regenerates src/raycast_bindings.json, an artifact for reading, and runs --allow).
+(which also regenerates src/raycast_bindings.json, an artifact for reading).
 Every deeplink(…) takes a one-line description option, what the action does; the title is not one.
 EOF
 }
 
 function raycast_link() {
-  local mode="" selector="" plain=0 dry_run=0 edit_selector=""
+  local mode="" selector="" plain=0 edit_selector=""
+  local -a selectors=()
   while (( $# > 0 )); do case "${1}" in
     -h|--help)  raycast_link::help; return 0 ;;
     --plain)    plain=1; shift ;;
-    --dry-run)  dry_run=1; shift ;;
+    --dry-run)  shift ;;  # every mode here is read-only or interactive; the router passes it through
     --list)     mode=list; shift ;;
     --check)    mode=check; shift ;;
-    --allow)    mode=allow; shift ;;
+    --prime)    mode=prime; shift ;;
     --undocumented) mode=undocumented; shift ;;
     --edit)     mode=edit; shift; if (( $# )) && [[ "${1}" != -* ]]; then edit_selector="${1}"; shift; fi ;;
     -*)         log::err "Unknown flag | flag='${1}' hint='to change a binding, edit karabiner.ts/src/modes/*.ts or raycast_shortcuts.ts and run bake'"; raycast_link::help; return 1 ;;
-    *)          [[ -z "${mode}" ]] && mode=widget; selector="${1}"; shift ;;
+    *)          [[ -z "${mode}" ]] && mode=widget; selector="${1}"; selectors+=("${1}"); shift ;;
   esac; done
   [[ -n "${mode}" ]] || { raycast_link::help; return 1; }
   if [[ "${mode}" == edit ]]; then
-    (( plain || dry_run )) && { log::err "--edit takes only a slug | hint='--dry-run does not apply; link check reads without editing'"; return 64; }
+    (( plain )) && { log::err "--edit takes only a slug"; return 64; }
     raycast_link::edit "${edit_selector}"
     return
   fi
@@ -550,7 +502,7 @@ function raycast_link() {
     widget) raycast_link::widget "${selector}" "${plain}" ;;
     list)   raycast_link::list ;;
     check)  raycast_link::check ;;
-    allow)  raycast_link::allow "${dry_run}" ;;
+    prime)  raycast_link::prime "${selectors[@]}" ;;
     undocumented) raycast_link::undocumented ;;
   esac
 }
