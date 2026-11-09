@@ -1,6 +1,6 @@
 ---
 name: ari-dotfiles-nix
-description: Edit, switch, roll back and commit Ari's dotfiles under the Nix port (nix-darwin + home-manager): how to tell a file the bridge links into the ~/dotfiles clone from a store-placed or an unmanaged one, the shared and local flakes, where a new tool goes (never a bare brew install), `dotfiles switch` (Claude builds with --build, Ari switches), what Nix owns (packages, Homebrew, and the git, tmux, starship and gh configs home-manager writes), how to edit and verify a module-written config, how to build a worktree, and the install, first-switch, uninstall and troubleshooting facts. Use whenever a change touches ~/.config/dotfiles/nix, ~/.local/share/dotfiles/nix, a file linked into /nix/store, dotfiles switch, darwin-rebuild, brew install, or a Nix-managed package. Tiers, commits, review and pushing stay with /ari-dotfiles.
+description: Edit, switch, roll back and commit Ari's dotfiles under the Nix port (nix-darwin + home-manager): how to tell a file the bridge links into the ~/dotfiles clone from a store-placed or an unmanaged one, the shared and local flakes, where a new tool goes (never a bare brew install), `dotfiles switch` (Claude builds with --build, then switches; every other sudo command is Ari's), what Nix owns (packages, Homebrew, and the git, tmux, starship and gh configs home-manager writes), how to edit and verify a module-written config, how to build a worktree, and the install, first-switch, uninstall and troubleshooting facts. Use whenever a change touches ~/.config/dotfiles/nix, ~/.local/share/dotfiles/nix, a file linked into /nix/store, dotfiles switch, darwin-rebuild, brew install, or a Nix-managed package. Tiers, commits, review and pushing stay with /ari-dotfiles.
 ---
 
 # Dotfiles under Nix
@@ -9,12 +9,12 @@ Ari's dotfiles run on nix-darwin and home-manager: the local flake takes the sha
 
 ## Rules
 
-- **Ari runs anything that needs sudo**: `dotfiles switch` (it runs `sudo darwin-rebuild switch` and prompts for his password), `darwin-rebuild --rollback` and `--list-generations`, the installer, the uninstaller, and every edit or move in `/etc`, `/var/db` or fstab. Hand each over per `/ari-driving`. **NEVER run one yourself, even when it fails or is not found**; hand Ari the full path `/run/current-system/sw/bin/darwin-rebuild` instead.
+- **Claude runs `dotfiles switch` itself** (**Switch**); **Ari runs every other command that needs sudo**: a raw `sudo darwin-rebuild …`, `darwin-rebuild --rollback` and `--list-generations`, the installer, the uninstaller, and every edit or move in `/etc`, `/var/db` or fstab. Hand each over per `/ari-driving`. **NEVER run one yourself, even when `dotfiles switch` fails or `darwin-rebuild` is not found**; hand Ari the full path `/run/current-system/sw/bin/darwin-rebuild` instead.
   ```
-  BAD:  Ari's pane says `darwin-rebuild: command not found` → Claude runs `sudo /run/current-system/sw/bin/darwin-rebuild switch …`
+  BAD:  `dotfiles switch` prints `darwin-rebuild: command not found` → Claude runs `sudo /run/current-system/sw/bin/darwin-rebuild switch …`
   GOOD: Claude hands Ari `sudo /run/current-system/sw/bin/darwin-rebuild switch --flake ~/.local/share/dotfiles/nix#personal` per /ari-driving
   ```
-- **Claude's**: `dotfiles switch --build`, `nix build`, `nix eval`, `nvd diff` and read-only checks. `--build` is not read-only: it commits **and pushes** a moved `flake.lock` in ldf; `--build --no-commit` moves the lock but leaves it uncommitted (undo: `git ldf checkout -- ~/.local/share/dotfiles/nix/flake.lock`). A trial build that writes nothing is **Verify a module change**'s or **Build a worktree**'s `nix build`.
+- **Claude's**: `dotfiles switch` (**Switch** step 4), `dotfiles switch --build`, `nix build`, `nix eval`, `nvd diff` and read-only checks. `--build` is not read-only: it commits **and pushes** a moved `flake.lock` in ldf; `--build --no-commit` moves the lock but leaves it uncommitted (undo: `git ldf checkout -- ~/.local/share/dotfiles/nix/flake.lock`). A trial build that writes nothing is **Verify a module change**'s or **Build a worktree**'s `nix build`.
 - **Prefix every Bash call that runs `nix`, `nvd`, `dotfiles`, `env bash`, or the Nix-provided `git` or `tmux`, with the Nix PATH**: shell state does not carry between calls, and a Claude session started before the last switch lacks it. The Nix dirs must come before `/usr/bin`, or `env bash` finds `/bin/bash` 3.2:
   ```zsh
   [[ "$(command -v bash)" == /etc/profiles/* ]] || export PATH=/etc/profiles/per-user/$USER/bin:/run/current-system/sw/bin:$PATH; command -v nix >/dev/null || echo 'nix not installed: see Install and first switch'
@@ -138,30 +138,30 @@ diff ~/.config/starship.toml $H/.config/starship.toml; diff ~/.config/gh/config.
 - For starship and gh, a change in quoting, key order or indentation is formatting; ignore it.
 - **The build fails** → handle it as Switch step 2's errors do.
 - **Every diff is empty, but the change was meant to alter the config** → `$H` is not your edit (a file not `git add`ed, the wrong flake): stop; do not report it verified.
-- **A difference the change did not intend** → NEVER hand over the switch: fix the source and verify again. After two failed fixes, show Ari the diff.
+- **A difference the change did not intend** → NEVER switch: fix the source and verify again. After two failed fixes, show Ari the diff.
 - **Only intended differences** → carry them, one line each, into Switch step 3's preview.
 
 ### Switch
 
 1. **Check the clone**: `git -C ~/dotfiles status --porcelain`. An untracked (`??`) or staged new file is not linked by this switch: commit it per `/ari-dotfiles`, or tell Ari it stays out. A modified tracked file outside `.config/dotfiles/nix` does not matter: it is live already.
-2. **Always build before handing Ari a switch**: `dotfiles switch --build`. It prints one `/nix/store/…-darwin-system-…` path; record it and `git -C ~/dotfiles rev-parse HEAD`.
-   - **It warns `uncommitted under the nix directory`** → stop: commit those paths, rebuild. NEVER hand over a switch built with that warning.
+2. **Always build before switching**: `dotfiles switch --build`. It prints one `/nix/store/…-darwin-system-…` path; record it and `git -C ~/dotfiles rev-parse HEAD`.
+   - **It warns `uncommitted under the nix directory`** → stop: commit those paths, rebuild. NEVER switch a build made with that warning.
    - **Exit 64** → a precondition: no clone, no local flake, or not one host. `0 hosts` can hide an evaluation error: `nix eval path:$HOME/.local/share/dotfiles/nix#darwinConfigurations --apply builtins.attrNames` shows it. Several hosts → ask Ari which is this machine, and set `ARI_DOTFILES_NIX_HOST`.
    - **`unrelated staged changes`** in ldf → commit or unstage them per `/ari-dotfiles`.
    - **A fetch or substitute error** → say the machine is offline, and stop.
    - **An evaluation or build error** → show the first error with its file:line, fix the source, commit, rebuild. After two failed fixes, stop and show Ari the error and what you tried.
    - **The path equals `readlink /run/current-system`** → nothing changed: say so, and skip steps 3 and 4.
-3. **Preview**, then hand over, all in one message:
+3. **Preview**, in one message, then go on to step 4 unless it asks Ari something:
    - `nvd diff /run/current-system <path>`.
    - **Module configs**, when the build changes a module (**Modules**): the intended differences **Verify a module change** found, one line each; not yet run → run it now. No module changed → omit the line.
    - The source diff: the df commits after the running system's lock rev, the newest `nix: lock the shared flake at <rev>` in `git ldf log --format=%s -- ~/.local/share/dotfiles/nix/flake.lock` older than this build's, plus local-flake edits.
    - **Brew removals, which a rollback does not undo**: `export HOMEBREW_NO_AUTO_UPDATE=1; B=<path>/etc/dotfiles/Brewfile; comm -23 <(brew leaves --installed-on-request | sort) <(brew bundle list --formula --file=$B | sed 's|.*/||' | sort); comm -23 <(brew list --cask -1 | sort) <(brew bundle list --cask --file=$B | sed 's|.*/||' | sort)`. Each name printed is uninstalled by the switch: ask Ari, per name, to declare it (**Add a tool**, then rebuild) or let it go. None → say `no brew removals`.
    - **A tool leaving brew** (a `brews` entry removed, the tool now from `home.packages` or a `programs.*` module): `grep -rn '<tool>' ~/dotfiles/.config/zsh ~/dotfiles/.zshenv | grep -E 'init|eval|/opt/homebrew'`; name each match. Tell Ari to `exec zsh` in every open pane afterwards (or re-run that init, e.g. `eval "$(starship init zsh)"`), and to restart a Claude session started before it with `claude --continue`: each keeps the old `/opt/homebrew/bin` path.
-4. **Ari**: `dotfiles switch`, handed per `/ari-driving`. Read the result back:
+4. **Claude**: `dotfiles switch`, with the Nix PATH prefix (Rules), never a raw `sudo darwin-rebuild`. The harness refuses it, or sudo asks for a password → hand Ari the same `dotfiles switch` per `/ari-driving` and read his result the same way; the permission rule that allows it is Ari's to add, NEVER edit Claude's settings for it. Read the result:
    - Exit 0 and `readlink /run/current-system` equals the built path → done. Tell Ari: shell config changed → a new shell; a module's config → its **After a switch** cell in **Modules**; another app's config → reload that app, by name.
    - Exit 0, another path → HEAD moved since the build: show `nvd diff <built path> /run/current-system` and `git -C ~/dotfiles log --oneline <recorded rev>..HEAD`, the part he did not preview.
-   - Non-zero → show the first error, then route it: **Troubleshooting**, or offer **Roll back**. NEVER re-hand the same switch unchanged.
-   - Sudo cancelled → nothing activated; say so.
+   - Non-zero → show the first error, then route it: **Troubleshooting**, or offer **Roll back**. NEVER re-run the same switch unchanged.
+   - Sudo refused or cancelled → nothing activated; say so.
 
 ### Roll back
 
@@ -174,7 +174,7 @@ One generation only → nothing to roll back to: offer to fix forward, or **Unin
 
 ### Build a worktree
 
-A trial build of shared changes in a git worktree of the clone, without committing them on `main`. **NEVER hand Ari a switch from it**: a switch builds the clone's HEAD, so merge to `main`, then **Switch**.
+A trial build of shared changes in a git worktree of the clone, without committing them on `main`. **NEVER switch from it**: a switch builds the clone's HEAD, so merge to `main`, then **Switch**.
 
 1. `git -C <worktree> add` every new file: a `git+file:` input sees only tracked files (uncommitted edits to them included).
 2. Build:
@@ -205,7 +205,7 @@ Ari, in order: restore each `/etc/*.before-nix-darwin`; `sudo nix --extra-experi
 | A shared edit or a new clone file has no effect after a switch | Not committed when the switch locked HEAD | Commit per `/ari-dotfiles`, then **Switch** |
 | A `<file>.before-nix` appears in `$HOME` | A file stood where the bridge links; home-manager moved it aside | Show Ari `diff <file>.before-nix ~/dotfiles/<path>`; move into the clone only what he approves, and delete the backup only after he says so |
 | A switch fails: a file would be clobbered by backing it up | `<file>.before-nix` already exists | Resolve the old backup as above, then **Switch** |
-| A switch prints `Homebrew bundle: nothing changed since the last bundle; skipped`, yet a declared formula or cask is missing | The stamp matched | Ari: `sudo rm /var/db/dotfiles-brew-bundle.stamp`, then `dotfiles switch` |
+| A switch prints `Homebrew bundle: nothing changed since the last bundle; skipped`, yet a declared formula or cask is missing | The stamp matched | Ari: `sudo rm /var/db/dotfiles-brew-bundle.stamp`; then **Switch** |
 | `nix` not found, or `env bash` is 3.2, in a Claude session started before the switch | Its env predates the switch, and `__NIX_DARWIN_SET_ENVIRONMENT_DONE=1` makes `/etc/zshenv` skip Nix setup | The PATH prefix (Rules); test a clean login with `env -i HOME=$HOME TERM=xterm-256color USER=$USER /bin/zsh -lic 'command -v nix'`; Ari restarts the session with `claude --continue` |
 | `zsh: no such file or directory: /opt/homebrew/bin/starship` on every prompt | A switch moved starship out of brew; `starship init zsh` baked brew's path into the shell's hooks | `exec zsh` in that pane, or `eval "$(starship init zsh)"` |
 | `--list-generations`: `opening lock file "/nix/var/nix/profiles/system.lock": Permission denied` | It needs root | Ari runs it with sudo, or Claude reads the profile links (**Roll back**) |
