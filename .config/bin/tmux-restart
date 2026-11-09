@@ -1,0 +1,131 @@
+#!/usr/bin/env zsh
+#
+# tmux-restart — restart the tmux server and get every window back, in one run.
+#
+# Use it when the server must restart: it runs an old tmux binary (after an upgrade, or one
+# deleted from under it), or its environment is stale. From a pane:
+#
+#   tmux-restart
+#
+# It saves each window and pane (session, index, name, layout, cwd, what runs there) to
+# $XDG_STATE_HOME/tmux-restart/state, detaches this client with the rest of the restart as its
+# exit command (so the new server starts from the terminal, not from inside the old server), kills
+# the server, rebuilds every window with its layout, reruns caffeinate, resumes each Claude Code
+# session (claude --resume <id>) with a note saying what happened, and attaches.
+#
+# Run outside tmux with a server up, it does the same without the detach. With no server and a
+# saved state (a restart cut short), it restores. Other attached clients drop when the server dies.
+
+emulate -L zsh
+setopt pipe_fail
+
+readonly STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/tmux-restart"
+readonly STATE="${STATE_DIR}/state"
+readonly SELF="${0:a}" # the link, not its store target, so the path outlives a switch
+readonly NOTE="The tmux server was just restarted (tmux-restart). This session was resumed in a new pane: every pane id changed, and every ari-driving opt-in was cleared. Re-resolve any pane before you drive it, and ask Ari to run ari-driving on in a pane you need. Then carry on."
+
+TMUX_BIN=/etc/profiles/per-user/$USER/bin/tmux
+[[ -x $TMUX_BIN ]] || TMUX_BIN=$(command -v tmux)
+# TMUX_RESTART_SOCKET: a -L socket name, to try the script on a scratch server.
+tmux() { command $TMUX_BIN ${TMUX_RESTART_SOCKET:+-L} ${TMUX_RESTART_SOCKET} "$@" }
+
+usage() {
+  print -r -- "usage: tmux-restart [--finish]  (--finish: the half the detached client runs)"
+}
+
+# kids PID: its child pids (ps, not pgrep: pgrep skips a process whose binary was deleted).
+kids() { ps -A -o pid=,ppid= | awk -v p="$1" '$2==p {print $1}' }
+
+# pane_cmd PANE_PID: the command to rerun in that pane, or nothing for a bare shell.
+pane_cmd() {
+  local pid=$1 kid args
+  for kid in $pid $(kids $pid) $(for k in $(kids $pid); do kids $k; done); do
+    if [[ -f ~/.claude/sessions/$kid.json ]]; then
+      print -r -- "claude --resume $(jq -r .sessionId ~/.claude/sessions/$kid.json) ${(q)NOTE}"
+      return
+    fi
+  done
+  for kid in $(kids $pid); do
+    args=$(ps -o args= -p $kid)
+    case $args in
+      caffeinate*) print -r -- "$args"; return ;;
+    esac
+  done
+}
+
+save_state() {
+  local sess widx wname pidx cwd layout ppid
+  mkdir -p "$STATE_DIR"
+  : >| "$STATE"
+  tmux list-panes -a -F '#{session_name}	#{window_index}	#{window_name}	#{pane_index}	#{pane_current_path}	#{window_layout}	#{pane_pid}' |
+    while IFS=$'\t' read -r sess widx wname pidx cwd layout ppid; do
+      print -r -- "$sess	$widx	$wname	$pidx	$cwd	$layout	$(pane_cmd $ppid)" >> "$STATE"
+    done
+  print "tmux-restart: saved $(wc -l < "$STATE" | tr -d ' ') panes to $STATE"
+}
+
+kill_server() {
+  tmux kill-server 2>/dev/null
+  local i
+  for i in {1..50}; do
+    tmux list-sessions >/dev/null 2>&1 || return 0
+    sleep 0.1
+  done
+  print -u2 "tmux-restart: the server did not exit"
+  return 1
+}
+
+restore() {
+  [[ -s $STATE ]] || { print -u2 "tmux-restart: no saved state at $STATE"; return 1 }
+  local sess widx wname pidx cwd layout cmd pane first_sess="" key
+  local -A win_of layout_of
+  while IFS=$'\t' read -r sess widx wname pidx cwd layout cmd; do
+    [[ -d $cwd ]] || cwd=$HOME
+    key="$sess:$widx"
+    if [[ -z ${win_of[$key]} ]]; then
+      if ! tmux has-session -t "=$sess" 2>/dev/null; then
+        pane=$(tmux new-session -d -P -F '#{pane_id}' -s "$sess" -n "$wname" -c "$cwd")
+        tmux move-window -s "$sess:^" -t "$sess:$widx" 2>/dev/null
+      else
+        pane=$(tmux new-window -d -P -F '#{pane_id}' -t "$sess:$widx" -n "$wname" -c "$cwd" 2>/dev/null \
+          || tmux new-window -d -P -F '#{pane_id}' -t "$sess:" -n "$wname" -c "$cwd")
+      fi
+      win_of[$key]=$(tmux display -p -t "$pane" '#{session_name}:#{window_index}')
+      layout_of[$key]=$layout
+    else
+      pane=$(tmux split-window -d -P -F '#{pane_id}' -t "${win_of[$key]}" -c "$cwd")
+      tmux select-layout -t "${win_of[$key]}" tiled >/dev/null
+    fi
+    if [[ -n $cmd ]]; then
+      tmux send-keys -t "$pane" -l -- "$cmd"
+      tmux send-keys -t "$pane" Enter
+    fi
+    [[ -z $first_sess ]] && first_sess=$sess
+  done < "$STATE"
+  for key in ${(k)win_of}; do
+    tmux select-layout -t "${win_of[$key]}" "${layout_of[$key]}" \
+      || print -u2 "tmux-restart: layout not restored for ${win_of[$key]}"
+  done
+  mv "$STATE" "$STATE.done"
+  print "tmux-restart: restored; ari-driving opt-ins were cleared, so run 'ari-driving on' where Claude drives"
+  exec $TMUX_BIN ${TMUX_RESTART_SOCKET:+-L} ${TMUX_RESTART_SOCKET} attach -t "$first_sess"
+}
+
+finish() {
+  kill_server && restore
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  --finish) finish; exit ;;
+  "") ;;
+  *) usage >&2; exit 64 ;;
+esac
+
+if ! tmux list-sessions >/dev/null 2>&1; then
+  restore
+elif [[ -n $TMUX ]]; then
+  save_state && exec $TMUX_BIN ${TMUX_RESTART_SOCKET:+-L} ${TMUX_RESTART_SOCKET} detach-client -E "zsh ${(q)SELF} --finish"
+else
+  save_state && finish
+fi
