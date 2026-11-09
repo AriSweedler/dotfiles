@@ -24,9 +24,11 @@ try {
 const PATH_PREFIX_DIRS = [
   "$HOME/.config/bin",   // user CLI helpers
   npmDir,                // active node toolchain (empty if npm wasn't found)
+  `/etc/profiles/per-user/${os.userInfo().username}/bin`, // Nix: home-manager's packages (tmux, jq, …)
+  "/run/current-system/sw/bin", // Nix: nix-darwin's system packages
   "/opt/homebrew/bin",   // Homebrew (Apple Silicon)
   "/usr/local/bin",      // Homebrew (Intel) + manual installs
-].filter(Boolean)
+].filter((dir, i, dirs) => dir && dirs.indexOf(dir) === i) // npm may live in a Nix dir
 
 // Local script runner. Runs <repo>/src/scripts/bin/<rel> and keeps the last
 // `logKeep` runs of its output under /tmp/karabiner.<rel>/ (rotated via
