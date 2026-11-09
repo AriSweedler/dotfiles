@@ -302,12 +302,12 @@ nix_port::retire_bare() {
   for p in "${(@f)$(git -C "${clone}" ls-files)}"; do
     b="${HOME}/${p}.before-nix"
     [[ -f "${b}" && ! -L "${b}" ]] || continue
-    if cmp -s "${b}" "${clone}/${p}"; then run_mut rm -f "${b}" && (( removed++ )); else left+=("${b}"); fi
+    if cmp -s "${b}" "${clone}/${p}"; then run_mut rm -f "${b}" && removed+=1; else left+=("${b}"); fi
   done
   for d in "${NIX_PORT_WHOLE_DIRS[@]}"; do
     b="${HOME}/${d}.before-nix"
     [[ -d "${b}" ]] || continue
-    if diff -rq --exclude .git "${b}" "${clone}/${d}" >/dev/null 2>&1; then run_mut rm -rf "${b}" && (( removed++ )); else left+=("${b}"); fi
+    if diff -rq --exclude .git "${b}" "${clone}/${d}" >/dev/null 2>&1; then run_mut rm -rf "${b}" && removed+=1; else left+=("${b}"); fi
   done
   log::info "removed the .before-nix backups identical to the clone's | removed='${removed}' left='${#left}'"
   (( ${#left} )) && log::warn "these backups differ from the clone; compare each by hand | files='${(j:, :)left}'"
