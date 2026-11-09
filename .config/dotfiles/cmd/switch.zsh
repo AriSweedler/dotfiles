@@ -1,5 +1,5 @@
 # dotfiles/cmd/switch.zsh — `dotfiles switch`: lock the local flake's shared input at the clone's
-# HEAD, commit the lock in the local tier, then darwin-rebuild switch (Ari's sudo) or, with
+# HEAD, commit the lock in the local tier, then darwin-rebuild switch (sudo) or, with
 # --build, only build the system.
 
 verb::define switch "lock the shared flake at the clone's HEAD and switch this machine to it"
@@ -15,7 +15,7 @@ switch; a new file, and any change to the nix directory, needs a commit and
 then a switch.
 
 --build builds the system and prints its store path, with no sudo and no
-activation: what Claude runs to check a change before Ari switches.
+activation: what Claude runs to check a change before it switches.
 EOF
 verb::edit switch --none 'it applies the flakes; edit them as files in the clone and the local tier'
 verb::flag switch '--build' 'build the system and print its store path; no sudo, nothing activated'
