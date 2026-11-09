@@ -1,7 +1,7 @@
 # raycast — the router behind `dotfiles raycast`, and the interactive function `ari_raycast`:
 #   dotfiles raycast link <slug|path> [--plain]   the widget: <[Raycast: Title | key: '✦4'](raycast://…)>
 #   dotfiles raycast link list | check | allow [--dry-run]
-#   dotfiles raycast snippets sync [--dry-run] | list | check | adopt | pull FILE | diff FILE
+#   dotfiles raycast snippets sync [--dry-run] [--deleted] | list | check | adopt | pull FILE | diff FILE
 #                             | move NAME --to shared|local | fmt | reset-manifest [NAME...]
 #                             | edit [--local|--shared] | undocumented
 #   dotfiles raycast link edit [<slug>] | undocumented
@@ -35,7 +35,7 @@ dotfiles raycast — keep Raycast in parity with the dotfiles
 Usage:
   dotfiles raycast link <slug|path> [--plain]     a Raycast action as a link with its Karabiner key
   dotfiles raycast link list | check | allow [--dry-run]
-  dotfiles raycast snippets sync [--dry-run] | list | check | adopt | pull FILE | diff FILE
+  dotfiles raycast snippets sync [--dry-run] [--deleted] | list | check | adopt | pull FILE | diff FILE
                           | move NAME --to shared|local | fmt | reset-manifest [NAME...]
                           | edit [--local|--shared]
   dotfiles raycast link edit [<slug>]             the binding's table in \$EDITOR; checked on save; next: bake

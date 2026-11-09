@@ -378,11 +378,14 @@ function raycast_snippets::seed_local() {
 
 # --- modes ---
 
-# --sync [dry_run]: diff the merged set, then one deeplink for everything pending, then the
-# manifest. Parity findings follow as `warn` lines.
+# --sync [dry_run] [deleted]: diff the merged set, then one deeplink, then the manifest. Raycast's
+# import only adds, and drops a keyword another snippet holds, so a changed snippet must not be
+# imported while its old copy is in Raycast: new snippets go now, changed and removed ones are
+# listed for Ari to delete in Raycast first. deleted=1 (`sync --deleted`) says he did: the changed
+# ones are imported and the removed ones leave the manifest. Parity findings follow as `warn` lines.
 function raycast_snippets::sync() {
-  local dry_run="${1:-0}" merged src manifest plan
-  local -a new_names changed_names removed pending warns
+  local dry_run="${1:-0}" deleted="${2:-0}" merged src manifest plan
+  local -a new_names changed_names removed pending warns held
   raycast_snippets::seed_local "${dry_run}" || return 1
   merged="$(raycast_snippets::source)" || return 1
   src="$(print -r -- "${merged}" | jq -c .entries)"
@@ -394,10 +397,22 @@ function raycast_snippets::sync() {
   changed_names=("${(@f)$(print -r -- "${plan}" | jq -r '.changed[].name')}"); [[ -z "${changed_names[1]:-}" ]] && changed_names=()
   removed=("${(@f)$(print -r -- "${plan}" | jq -r '.removed[]')}"); [[ -z "${removed[1]:-}" ]] && removed=()
   local -i unchanged; unchanged="$(print -r -- "${plan}" | jq '.unchanged')"
+  # Without --deleted, a change waits for its old copy to leave Raycast.
+  if (( ! deleted )); then
+    held=("${changed_names[@]}" "${removed[@]}")
+    changed_names=()
+    plan="$(print -r -- "${plan}" | jq -c '.changed = []')"
+    (( ${#held} )) && warns+=("delete in Raycast first, then: dotfiles raycast snippets sync --deleted | ${(j:, :)held}")
+  fi
   local -i n_pending=$(( ${#new_names} + ${#changed_names} ))
+  if (( deleted && ${#removed} && ! dry_run )); then
+    raycast_snippets::write_manifest "$(raycast_snippets::manifest | jq --argjson gone "$(printf '%s\n' "${removed[@]}" | jq -R . | jq -sc .)" 'with_entries(select(.key | IN($gone[]) | not))')"
+    print -r -- "forgot_removed=${(j:, :)removed}"
+    removed=()
+    manifest="$(raycast_snippets::manifest)" || return 1
+  fi
   if (( n_pending == 0 )); then
     print -r -- "snippets: nothing to import | unchanged=${unchanged}"
-    (( ${#removed} )) && print -r -- "removed_in_repo, delete by hand in Raycast: ${(j:, :)removed}"
     print -r -- "pending=0"
     raycast_snippets::print_warns "${warns[@]}"
     return 0
@@ -431,8 +446,7 @@ EOF
   log::info "import deeplink opened; confirm the review in Raycast with Enter | snippets='${n_pending}' form='${ARI_DOTFILES_RAYCAST_SNIPPETS_URL_FORM}'"
   raycast_snippets::write_manifest "$(print -r -- "${manifest}" | jq --argjson add "$(raycast_snippets::manifest_of "$(print -r -- "${plan}" | jq -c '.new + .changed')")" '. + $add')"
   print -r -- "snippets: imported=${#new_names} changed=${#changed_names} removed_in_repo=${#removed}"
-  (( ${#changed_names} )) && print -r -- "stale in Raycast, delete by hand: ${(j:, :)changed_names}"
-  (( ${#removed} )) && print -r -- "removed_in_repo, delete by hand in Raycast: ${(j:, :)removed}"
+
   cat <<EOF
 imported=${#new_names}
 changed=${#changed_names}
@@ -764,9 +778,11 @@ function raycast_snippets::help() {
   cat >&2 <<EOF
 dotfiles raycast snippets — Raycast Snippets from the versioned files, shared and local
 
-  dotfiles raycast snippets sync [--dry-run]           import what is new or changed since the last sync in ONE deeplink
-                                                  (Raycast shows one review; confirm with Enter); nothing pending →
+  dotfiles raycast snippets sync [--dry-run]           import what is new since the last sync in ONE deeplink (Raycast shows one
+                                                  review; confirm with Enter); a changed or removed snippet is listed to
+                                                  delete in Raycast first (its old copy would keep the keyword); nothing pending →
                                                   "nothing to import", no other effect; parity findings follow as warn lines
+  dotfiles raycast snippets sync --deleted             those old copies are gone: import the changes, forget the removed names
   dotfiles raycast snippets list                       state (new|changed|synced), tier (shared|local|local>shared|placeholder),
                                                   name, keyword, first line
   dotfiles raycast snippets check                      parity: warn per active placeholder (fill the local file); a local-only
@@ -805,11 +821,12 @@ EOF
 }
 
 function raycast_snippets() {
-  local mode="" dry_run=0 file="" name="" to="" tier=""
+  local mode="" dry_run=0 deleted=0 file="" name="" to="" tier=""
   local -a names
   while (( $# > 0 )); do case "${1}" in
     -h|--help)        raycast_snippets::help; return 0 ;;
     --dry-run)        dry_run=1; shift ;;
+    --deleted)        deleted=1; shift ;;
     --sync)           mode=sync; shift ;;
     --adopt)          mode=adopt; shift ;;
     --list)           mode=list; shift ;;
@@ -843,7 +860,7 @@ function raycast_snippets() {
     return 1
   fi
   case "${mode}" in
-    sync)  raycast_snippets::sync "${dry_run}" ;;
+    sync)  raycast_snippets::sync "${dry_run}" "${deleted}" ;;
     adopt) raycast_snippets::adopt "${dry_run}" ;;
     list)  raycast_snippets::list ;;
     check) raycast_snippets::check ;;

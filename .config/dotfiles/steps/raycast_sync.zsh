@@ -85,7 +85,10 @@ step::raycast_sync::live() {
   fi
   local -a warned=(${(M)lines:#warn *})
   if (( ${#warned} )); then
-    verdict warn raycast_parity -m -d "${(F)warned}" -f "fill in the local snippets file, then: ${CLI_NAME} raycast snippets fmt"
+    local fix="fill in the local snippets file, then: ${CLI_NAME} raycast snippets fmt"
+    [[ "${(F)warned}" == *"delete in Raycast first"* ]] \
+      && fix="delete the named snippets in Raycast, then: ${CLI_NAME} raycast snippets sync --deleted"
+    verdict warn raycast_parity -m -d "${(F)warned}" -f "${fix}"
     return 0
   fi
   verdict ok in_sync -d "$(print -r -- "${(F)${(M)lines:#ok *}}" | tr '\n' ';')"

@@ -1,13 +1,14 @@
 [
   {
+    "description": "Reply asking a recruiter to take a work email off their recruiting lists and confirm",
+    "keyword": "@@R",
+    "name": "recruiterEmail",
+    "text": "Please remove this email address from your company’s recruiting and outreach mailing lists, and confirm once this has been completed. This is my work email address, and I do not consider it appropriate for recruiting solicitations.\n\nThanks,\nAri"
+  },
+  {
     "description": "Reply asking a company to take an email off its marketing lists and confirm",
     "keyword": "@R",
     "name": "removeEmail",
     "text": "Please remove my email address from all marketing and promotional mailing lists associated with your company, and confirm once the removal has been completed.\n\nThanks,\nAri"
-  },
-  {
-    "description": "Reply asking a recruiter to take a work email off their recruiting lists and confirm",
-    "name": "recruiterEmail",
-    "text": "Please remove this email address from your company’s recruiting and outreach mailing lists, and confirm once this has been completed. This is my work email address, and I do not consider it appropriate for recruiting solicitations.\n\nThanks,\nAri"
   }
 ]

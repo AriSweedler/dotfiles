@@ -7,7 +7,7 @@ verb::define raycast 'Raycast in parity with the dotfiles: allow-list, snippets'
 verb::usage raycast 'raycast link <slug|path> [--plain]' \
   'raycast link list | check | allow [--dry-run] | undocumented' \
   'raycast link edit [<slug>]' \
-  'raycast snippets sync [--dry-run] | list | check | adopt' \
+  'raycast snippets sync [--dry-run] [--deleted] | list | check | adopt' \
   'raycast snippets pull FILE | diff FILE | fmt' \
   'raycast snippets reset-manifest [NAME..]' \
   'raycast snippets move NAME --to shared|local' \
@@ -58,6 +58,7 @@ verb::edit raycast raycast::edit_cmd '[link [<slug>] | snippets [--local|--share
   "a subsystem's edit; no target: pick one on a terminal (snippets local, snippets shared, bindings), otherwise the targets are listed, exit 64"
 verb::flag raycast '--plain' "link: the bare form, <Raycast: Title | key: '✦4'> url"
 verb::flag raycast '--dry-run' 'allow, sync, adopt, pull, fmt, move, reset-manifest: print the plan, change nothing'
+verb::flag raycast '--deleted' 'snippets sync: the old copies of the changed and removed snippets are gone from Raycast; import the changes'
 verb::flag raycast '--to TIER' 'move: shared or local'
 verb::flag raycast '--local' 'edit: open the local tier file (the default)'
 verb::flag raycast '--shared' 'edit: open the shared tier file'

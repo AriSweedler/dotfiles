@@ -150,21 +150,33 @@ cat > "${_shared}" <<'EOF'
   {"name":"greet","text":"Hi!"}
 ]
 EOF
+# A changed snippet waits: its old copy in Raycast would keep the keyword and the import would
+# arrive without it. New ones go at once; the changed and removed are named to delete first.
 _out="$(raycast_snippets --sync --dry-run 2>/dev/null)"
-_t "dry-run: changed, new, removed each classified" $'new greet\nchanged sig' "$(print -r -- "${_out}" | grep -E '^(new|changed) ')"
-_t "dry-run: removed name reported, counters" $'pending=2\nnew=1\nchanged=1\nunchanged=1\nremoved_in_repo=1\nremoved_names=shrug' "$(print -r -- "${_out}" | grep -E '^(pending|new|changed|unchanged|removed_in_repo|removed_names)=')"
+_t "dry-run: only the new one is pending" $'new greet' "$(print -r -- "${_out}" | grep -E '^(new|changed) ')"
+_t "dry-run: counters, the change held" $'pending=1\nnew=1\nchanged=0\nunchanged=1\nremoved_in_repo=1\nremoved_names=shrug' "$(print -r -- "${_out}" | grep -E '^(pending|new|changed|unchanged|removed_in_repo|removed_names)=')"
+_t "dry-run: the held names, to delete first" "warn delete in Raycast first, then: dotfiles raycast snippets sync --deleted | sig, shrug" "$(print -r -- "${_out}" | grep '^warn ')"
 : > "${_log}"
 _out="$(raycast_snippets --sync 2>/dev/null)"; _rc=$?
-_t "sync: payload carries only the pending two, new before changed" '["greet","sig"]' "$(_payloads | jq -sc 'map(.name)')"
-_t "sync: result and the two delete-by-hand lines" \
-  $'snippets: imported=1 changed=1 removed_in_repo=1\nstale in Raycast, delete by hand: sig\nremoved_in_repo, delete by hand in Raycast: shrug' \
-  "$(print -r -- "${_out}" | grep -E '^(snippets:|stale|removed_in_repo,)')"
-_t "sync: manifest updated for sig and greet, shrug kept until reset" '["addr","greet","shrug","sig"]' "$(jq -c 'keys' "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
-_t "sync: manifest holds the new sig text" $'Ari\nAcme, Infra' "$(jq -r '.sig.text' "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
+_t "sync: payload carries only the new one" '["greet"]' "$(_payloads | jq -sc 'map(.name)')"
+_t "sync: result, and the held names as a warn" \
+  $'snippets: imported=1 changed=0 removed_in_repo=1\nwarn delete in Raycast first, then: dotfiles raycast snippets sync --deleted | sig, shrug' \
+  "$(print -r -- "${_out}" | grep -E '^(snippets:|warn )')"
+_t "sync: manifest gains greet; sig keeps its old text until --deleted" $'["addr","greet","shrug","sig"]\nAri\nAcme' \
+  "$(jq -c 'keys' "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"$'\n'"$(jq -r '.sig.text' "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
 : > "${_log}"
 _out="$(raycast_snippets --sync 2>/dev/null)"
-_t "no-op after a change: removed still reported, nothing opened" $'snippets: nothing to import | unchanged=3\nremoved_in_repo, delete by hand in Raycast: shrug\npending=0' "${_out}"
-_t "no-op after a change: nothing opened" "" "$(_urls)"
+_t "held: a second sync imports nothing, still names them" $'snippets: nothing to import | unchanged=2\npending=0\nwarn delete in Raycast first, then: dotfiles raycast snippets sync --deleted | sig, shrug' "${_out}"
+_t "held: nothing opened" "" "$(_urls)"
+_out="$(raycast_snippets --sync --deleted 2>/dev/null)"
+_t "--deleted: the change goes, the removed name is forgotten" '["sig"]' "$(_payloads | jq -sc 'map(.name)')"
+_t "--deleted: result" $'forgot_removed=shrug\nsnippets: imported=0 changed=1 removed_in_repo=0' "$(print -r -- "${_out}" | grep -E '^(forgot_removed|snippets:)')"
+_t "--deleted: manifest holds the new sig text, shrug gone" $'["addr","greet","sig"]\nAri\nAcme, Infra' \
+  "$(jq -c 'keys' "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"$'\n'"$(jq -r '.sig.text' "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}")"
+: > "${_log}"
+_t "after --deleted: a clean no-op" $'snippets: nothing to import | unchanged=3\npending=0' "$(raycast_snippets --sync 2>/dev/null)"
+_t "after --deleted: nothing opened" "" "$(_urls)"
+jq '. + {shrug: {name: "shrug", text: "x"}}' "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}" > "${_dir}/m.json" && mv "${_dir}/m.json" "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST}"
 
 # --- reset-manifest ---
 _out="$(raycast_snippets --reset-manifest shrug --dry-run 2>/dev/null)"
@@ -452,7 +464,7 @@ _t "manifest: records text and keyword, no description" "0" "$(jq '[.[] | select
 jq 'map(if .name == "bare" then .description = "now documented" else . end)' "${_shared}" > "${_shared}.t" && mv "${_shared}.t" "${_shared}"
 _t "sync: a description-only change is nothing to import" $'snippets: nothing to import | unchanged=5\npending=0' "$(raycast_snippets --sync 2>/dev/null | grep -v '^warn')"
 jq 'map(if .name == "bare" then .text = "docs and text" else . end)' "${_shared}" > "${_shared}.t" && mv "${_shared}.t" "${_shared}"
-raycast_snippets --sync >/dev/null 2>&1
+raycast_snippets --sync --deleted >/dev/null 2>&1
 _t "sync: the import payload carries no description" '[{"keyword":";bare","name":"bare","text":"docs and text"}]' "$(_payloads | jq -sc 'map(to_entries | sort_by(.key) | from_entries)')"
 _t "sync: the description stays in the file" "now documented" "$(jq -r '.[] | select(.name == "bare") | .description' "${_shared}")"
 _t "import_url array form strips it too" '[{"name":"a","text":"t"}]' \
