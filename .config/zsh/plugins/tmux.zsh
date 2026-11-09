@@ -1,11 +1,7 @@
 # tmux's config is ~/.config/dotfiles/nix/tmux.nix; its plugin loads from the store, no TPM.
 
-# The local tier's tmuxinator projects. `tmuxinator start <name>` looks in
-# $TMUXINATOR_CONFIG first, then ~/.config/tmuxinator, so shared projects still
-# resolve; `tmuxinator list` shows only this directory while it is set.
-if [[ -d "$XDG_DATA_HOME/tmuxinator" ]]; then
-  export TMUXINATOR_CONFIG="$XDG_DATA_HOME/tmuxinator"
-fi
+# tmuxinator projects, the local flake's included, are all in ~/.config/tmuxinator
+# (~/.config/dotfiles/nix/tmuxinator.nix).
 
 function tmux::rename-window() {
   [ -z "$TMUX" ] && return

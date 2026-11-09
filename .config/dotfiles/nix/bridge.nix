@@ -26,6 +26,7 @@ let
     ".config/karabiner/karabiner.json" # karabiner.nix
     ".config/nvim" # nvim.nix
     ".config/tmux_oneshot" # tmux-oneshot.nix merges these into one entries.json
+    ".config/tmuxinator" # tmuxinator.nix
   ];
 
   # Repo-relative paths of every tracked file (a tracked symlink included) outside wholeDirs.
