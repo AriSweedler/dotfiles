@@ -10,9 +10,10 @@ step::declare raycast_sync --group tools --needs dotfiles_repo \
 step::watches raycast_sync '.config/raycast-snippets/**' '.config/karabiner/**' '.config/zsh/plugins/raycast*.zsh'
 
 # Machine inputs: what `raycast sync --dry-run` reads. reply: the raycast plugins, karabiner.ts's
-# sources, package files, tsx and node (the bindings generator), karabiner.json, the app, both
-# snippet tier files, Nix's merge of them and the manifest. 1 when a bindings command replaces
-# the generator: its state is not on disk where the cache can see it, so uncached.
+# sources, package files, tsx and node (the bindings generator), karabiner.json, the app, the
+# record of primed bindings, both snippet tier files, Nix's merge of them and the manifest. 1 when
+# a bindings command replaces the generator: its state is not on disk where the cache can see it,
+# so uncached.
 step::raycast_sync::inputs() {
   [[ -z "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD:-}" ]] || return 1
   local cfg="${XDG_CONFIG_HOME:-${HOME}/.config}"
@@ -22,12 +23,13 @@ step::raycast_sync::inputs() {
          "${ts}/node_modules/.bin/tsx" "${commands[node]:-/nonexistent/node}"
          "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON:-${cfg}/karabiner/karabiner.json}"
          "${ARI_DOTFILES_RAYCAST_APP:-/Applications/Raycast.app}"
+         "${ARI_DOTFILES_RAYCAST_LINK_PRIMED:-${XDG_STATE_HOME:-${HOME}/.local/state}/raycast-link/primed}"
          "${ARI_DOTFILES_RAYCAST_SNIPPETS_SHARED_FILE:-${HOME}/dotfiles/.config/raycast-snippets/snippets.json}"
          "${ARI_DOTFILES_RAYCAST_SNIPPETS_LOCAL_FILE:-${HOME}/.local/share/dotfiles/nix/raycast-snippets.json}"
          "${ARI_DOTFILES_RAYCAST_SNIPPETS_MERGED:-${cfg}/raycast-snippets/merged.json}"
          "${ARI_DOTFILES_RAYCAST_SNIPPETS_MANIFEST:-${HOME}/.local/share/raycast-snippets/manifest.json}")
   cache::tree "${ts}/src"
-  CACHE_ENV=(XDG_CONFIG_HOME ARI_DOTFILES_CONFIG ${(ok)parameters[(I)ARI_DOTFILES_RAYCAST_*]})
+  CACHE_ENV=(XDG_CONFIG_HOME XDG_STATE_HOME ARI_DOTFILES_CONFIG ${(ok)parameters[(I)ARI_DOTFILES_RAYCAST_*]})
 }
 
 step::raycast_sync::load() {

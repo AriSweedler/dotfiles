@@ -71,4 +71,13 @@ printf '{"bindings":[]}\n' > "${FIX}/bindings.json"
 ARI_DOTFILES_RAYCAST_APP="${FIX}/Raycast.app" ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="cat ${FIX}/bindings.json" nm check --only raycast_sync --json
 assert_no_file "bindings command → no raycast cache entry" "${ARI_DOTFILES_STATE_DIR}/cache/raycast_sync.fp"
 
+# ── raycast_sync's fingerprint covers the primed record ──────────────────────
+# A prime appends to it; a fingerprint without it served a cached "never primed" warn after one.
+INPUTS="$(env -u ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD ARI_DOTFILES_RAYCAST_LINK_PRIMED="${FIX}/primed" zsh -c '
+  step::declare() { :; }; step::watches() { :; }; cache::tree() { :; }
+  ARI_DOTFILES_CONFIG=/nonexistent; source "$1"
+  step::raycast_sync::inputs; print -rl -- "${reply[@]}" "env: ${CACHE_ENV[*]}"' _ "${ORIG_CONFIG_DIR}/dotfiles/steps/raycast_sync.zsh")"
+assert_contains "the primed record is a machine input" "${INPUTS}" "${FIX}/primed"
+assert_contains "XDG_STATE_HOME, which places it by default, keys the cache" "${INPUTS}" "XDG_STATE_HOME"
+
 report
