@@ -30,6 +30,9 @@ unset _tmux
 readonly TMUX_BIN
 readonly NOTIFICATION_GROUP="claude-notification"
 readonly LOG_DIR="/tmp/claude-notification"
+# The subtitle shows the pane by name ("nix", "orin (pane 2)"); this file maps each name back to
+# its tmux target for the click simulator, one "name<TAB>target" line per name.
+readonly TARGETS_FILE="${LOG_DIR}/targets.tsv"
 
 # shellcheck source=/dev/null
 . "${TMUX_PANE_LIB}"
@@ -69,18 +72,24 @@ dismiss_notification() {
 
 #######################################
 # Prints the tmux target of the most-recently-delivered active Claude
-# notification, or nothing if none. The pane is the subtitle ($3) of the
-# NOTIFICATION_GROUP row; -list ALL's "Delivered At" column ($5) is an ISO-ish
-# timestamp that string-compares chronologically. One awk, not a five-process
-# pipeline: each spawn costs ~15 ms behind the endpoint agent.
+# notification, or nothing if none. The NOTIFICATION_GROUP row's subtitle ($3)
+# names the pane; TARGETS_FILE maps the name back to its target, and a subtitle
+# that is already a target (session:window.pane, from before the names) passes
+# through. -list ALL's "Delivered At" column ($5) is an ISO-ish timestamp that
+# string-compares chronologically. One awk, not a five-process pipeline: each
+# spawn costs ~15 ms behind the endpoint agent.
 # Outputs:
 #   target string to stdout, or empty
 #######################################
 most_recent_claude_target() {
   "${NOTIFIER}" -list ALL 2>>"${LOG_FILE}" \
-    | awk -F'\t' -v g="${NOTIFICATION_GROUP}" '
-        NR > 1 && $1 == g && $3 != "" && $5 > best { best = $5; target = $3 }
-        END { if (target != "") print target }'
+    | awk -F'\t' -v g="${NOTIFICATION_GROUP}" -v map="${TARGETS_FILE}" '
+        BEGIN { while ((getline line < map) > 0) { split(line, f, "\t"); target_of[f[1]] = f[2] } }
+        NR > 1 && $1 == g && $3 != "" && $5 > best { best = $5; label = $3 }
+        END {
+          if (label in target_of) print target_of[label]
+          else if (label ~ /:[0-9]+\.[0-9]+$/) print label
+        }'
 }
 
 #######################################
@@ -120,6 +129,24 @@ resolve_message() {
 }
 
 #######################################
+# Records which tmux target a subtitle names, replacing that name's old line.
+# Arguments:
+#   $1 - subtitle (the pane's name)
+#   $2 - tmux target-pane
+#######################################
+record_target() {
+  local label="${1:?}" target="${2:?}" line
+  local -a kept=()
+  if [[ -f "${TARGETS_FILE}" ]]; then
+    while IFS= read -r line; do
+      [[ "${line%%$'\t'*}" == "${label}" ]] || kept+=("${line}")
+    done < "${TARGETS_FILE}"
+  fi
+  mkdir -p "${LOG_DIR}"
+  print -rl -- "${kept[@]}" "${label}"$'\t'"${target}" >| "${TARGETS_FILE}"
+}
+
+#######################################
 # Posts the notification via terminal-notifier. One group for every Claude
 # notification: terminal-notifier 3.x makes the group the Notification Center
 # stack, so per-pane groups would scatter them; the pane travels in the
@@ -133,17 +160,19 @@ resolve_message() {
 post_notification() {
   local msg="${1:?post_notification: message required}"
   local target="${2:-}"
-  local title="Claude Code"
+  local title="Claude Code" label=""
   if [[ -n "${target}" ]]; then
-    local target_window="${target%.*}"
-    local window_name
-    window_name=$("${TMUX_BIN}" display-message -p -t "${target_window}" '#{window_name}' 2>/dev/null)
+    local window_name panes
+    IFS=$'\t' read -r window_name panes < <("${TMUX_BIN}" display-message -p -t "${target}" \
+      '#{window_name}	#{window_panes}' 2>/dev/null)
     # Fall back to the window index when the window has no resolvable name.
     if [[ -z "${window_name}" ]]; then
       local win="${target#*:}"
       window_name="win${win%%.*}"
     fi
-    title="Claude Code (${window_name})"
+    label="${window_name}"
+    (( ${panes:-1} > 1 )) && label+=" (pane ${target##*.})"
+    record_target "${label}" "${target}"
   fi
   local -a args=(
     -title "${title}"
@@ -153,7 +182,7 @@ post_notification() {
     -contentImage "${CONTENT_IMAGE}"
   )
   if [[ -n "${target}" ]]; then
-    args+=(-subtitle "${target}" -execute "${CLICK_SCRIPT} '${target}'")
+    args+=(-subtitle "${label}" -execute "${CLICK_SCRIPT} '${target}'")
   else
     args+=(-activate com.apple.Terminal)
   fi
