@@ -23,13 +23,14 @@
 step::declare nix_port --group brew --needs brew \
   --desc "on the Nix port: Nix installed, the ~/dotfiles clone, a local flake, no local data left where the shared tier stopped reading, nix-darwin switched to it, the bare repo retired" \
   --apply "installs Nix, clones ~/dotfiles from the bare repo, writes the local flake, moves the local data into it, runs nix-darwin's first switch and retires ~/dotfiles.git; sudo prompts for the install and the switch"
-step::watches nix_port '.config/dotfiles/nix/**' '.gitmodules'
+step::watches nix_port '.config/dotfiles/nix/**'
 
 : "${ARI_DOTFILES_NIX_SYSTEM:=/run/current-system}"   # nix-darwin's active system; absent before the first switch
 : "${ARI_DOTFILES_NIX_CLONE:=${HOME}/dotfiles}"        # the plain clone the shared flake input reads
+: "${ARI_DOTFILES_NIX_BARE:=${HOME}/dotfiles.git}"     # the pre-Nix bare repo the port retires
 typeset -g NIX_PORT_INSTALLER="https://artifacts.nixos.org/nix-installer"
-typeset -g NIX_PORT_BARE="${HOME}/dotfiles.git"
-typeset -g NIX_PORT_RETIRED="${HOME}/dotfiles.git.retired"
+typeset -g NIX_PORT_BARE="${ARI_DOTFILES_NIX_BARE}"
+typeset -g NIX_PORT_RETIRED="${ARI_DOTFILES_NIX_BARE}.retired"
 # bridge.nix's wholeDirs: linked as one directory, so a file the clone lacks is hidden by the link.
 typeset -ga NIX_PORT_WHOLE_DIRS=(.config/claude .config/chrome-exoskeleton .config/plugged)
 # The files nix-darwin manages and refuses to replace when they are not its own.
@@ -61,11 +62,14 @@ nix_port::is_ldf_tracked() { nix_port::ldf ls-files --error-unmatch -- "${1}" >/
 check::nix_port() {
   local flake="${ARI_DOTFILES_NIX_FLAKE}" clone="${ARI_DOTFILES_NIX_CLONE}" line
   local -a open=()
-  [[ -d "${ARI_DOTFILES_NIX_STORE}" ]] && nix_port::nix >/dev/null || open+=("Nix is not installed")
+  [[ -d "${ARI_DOTFILES_NIX_STORE}" ]] || open+=("Nix is not installed")
   [[ -d "${clone}/.git" ]] || open+=("the shared tier is not the ~/dotfiles clone; the flake reads the clone | git_dir='${ARI_DOTFILES_DF_GIT_DIR}'")
   [[ -f "${flake}/flake.nix" ]] || open+=("no local flake | path='${flake}/flake.nix'")
+  local -a fields
   for line in "${(@f)$(nix_port::legacy)}"; do
-    [[ -n "${line}" ]] && open+=("local data the shared tier no longer reads | path='${line%%$'\t'*}'")
+    [[ -n "${line}" ]] || continue
+    fields=("${(@ps:\t:)line}")
+    open+=("local data the shared tier no longer reads | path='${fields[1]}' moves_to='${flake}/${fields[2]}' option='${fields[3]}'")
   done
   [[ -e "${ARI_DOTFILES_NIX_SYSTEM}" ]] || open+=("nix-darwin has never switched here | path='${ARI_DOTFILES_NIX_SYSTEM}'")
   [[ -f "${NIX_PORT_BARE}/HEAD" && -d "${clone}/.git" ]] && open+=("the bare repo still stands beside the clone | bare='${NIX_PORT_BARE}'")

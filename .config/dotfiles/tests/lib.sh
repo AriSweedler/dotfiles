@@ -134,9 +134,10 @@ world_new() {
   export ARI_DOTFILES_FONT_DIRS="${FIX}/fonts"
   # The nvim shim is the world's "Nix" nvim.
   export ARI_DOTFILES_NIX_STORE="${FIX}/shims"
-  # The world has finished the Nix port (the nix_port step): a clone, a local flake, a switched system.
+  # The world has finished the Nix port (the nix_port step): a clone, a local flake, a switched system,
+  # its bare repo retired (HOME/dotfiles.git stays for the steps that still read the bare layout).
   export ARI_DOTFILES_NIX_CLONE="${FIX}/nix-port/clone" ARI_DOTFILES_NIX_FLAKE="${FIX}/nix-port/flake"
-  export ARI_DOTFILES_NIX_SYSTEM="${FIX}/nix-port/current-system"
+  export ARI_DOTFILES_NIX_SYSTEM="${FIX}/nix-port/current-system" ARI_DOTFILES_NIX_BARE="${FIX}/nix-port/dotfiles.git"
   mkdir -p "${ARI_DOTFILES_NIX_CLONE}/.git" "${ARI_DOTFILES_NIX_FLAKE}" "${ARI_DOTFILES_NIX_SYSTEM}"
   : > "${ARI_DOTFILES_NIX_FLAKE}/flake.nix"
   mkdir -p "${FIX}/fonts" && : > "${FIX}/fonts/CaskaydiaMonoNerdFontMono-Regular.ttf"
