@@ -4,6 +4,10 @@
 [[ "$OTTO_TEST__ZSH_PLUGINS_FZF_GROUPS" == "true" ]] || return 0
 
 local _pass=0 _fail=0
+# A private TMPDIR: "no state files left behind" must not see a real pick's file, or a parallel run's.
+local _tmp; _tmp="$(mktemp -d "${TMPDIR:-/tmp}/fzf_groups-test.XXXXXX")" || return 1
+local TMPDIR="${_tmp}"
+trap 'rm -rf -- "${_tmp}"' EXIT
 source "${HOME}/.config/zsh/plugins/log.zsh"
 source "${HOME}/.config/zsh/plugins/fzf_groups.zsh"
 
