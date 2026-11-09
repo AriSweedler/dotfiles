@@ -250,7 +250,7 @@ function tmux_oneshot::_dirs() {
 function tmux_oneshot::_files() {
   local tier dir f
   while IFS=$'\t' read -r tier dir; do
-    for f in "${dir}"/*.json(N.on); do print -r -- "${tier}	${f}"; done
+    for f in "${dir}"/*.json(N-.on); do print -r -- "${tier}	${f}"; done
   done < <(tmux_oneshot::_dirs)
 }
 
@@ -712,7 +712,7 @@ function tmux_oneshot::_pick_group() {
   local -a lines=("${(@f)out}")
   local query="${lines[1]-}" sel="${lines[2]-}" idx
   if (( rc == FZF_GROUP_BACK_RC )); then
-    tmux_oneshot::_pick
+    tmux_oneshot::_pick --no-select-1
     return $?
   fi
   if [[ -n "${query}" ]] && idx="$(tmux_oneshot::_index_or_die "${group}/${query}" 2>/dev/null \
