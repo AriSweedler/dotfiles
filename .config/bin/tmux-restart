@@ -14,8 +14,9 @@
 # session (claude --resume <id>) with a note saying what happened, and attaches.
 #
 # Run outside tmux with a server up, it does the same without the detach. With no server and a
-# saved state (a restart cut short), it restores. It names the panes that were ari-driving opted in,
-# so you can run `ari-driving on` there again; it never types that itself. Other attached clients drop when the server dies.
+# saved state (a restart cut short), it restores. In each shell pane that was ari-driving opted in
+# it types `ari-driving on` without Enter, so the grant is still your keypress. Only Ari runs this
+# script; a Claude session never does (/ari-driving). Other attached clients drop when the server dies.
 
 emulate -L zsh
 setopt pipe_fail
@@ -102,7 +103,12 @@ restore() {
       tmux send-keys -t "$pane" -l -- "$cmd"
       tmux send-keys -t "$pane" Enter
     fi
-    [[ $driving == on ]] && was_driving+=("$wname (pane $pidx)")
+    if [[ $driving == on ]]; then
+      was_driving+=("$wname (pane $pidx)")
+      # Ari runs this script, and his Enter is the grant: type the opt-in he had here, never Enter.
+      # A pane resuming Claude is skipped, since the text would land in Claude's prompt.
+      [[ -z $cmd ]] && tmux send-keys -t "$pane" -l -- "ari-driving on"
+    fi
     [[ -z $first_sess ]] && first_sess=$sess
   done < "$STATE"
   for key in ${(k)win_of}; do
@@ -111,7 +117,7 @@ restore() {
   done
   mv "$STATE" "$STATE.done"
   print "tmux-restart: restored; every ari-driving opt-in was cleared"
-  (( ${#was_driving} )) && print "tmux-restart: opted in before the restart: ${(j:, :)was_driving}"
+  (( ${#was_driving} )) && print "tmux-restart: opted in before the restart: ${(j:, :)was_driving}; 'ari-driving on' is typed there, press Enter to grant it again"
   exec $TMUX_BIN ${TMUX_RESTART_SOCKET:+-L} ${TMUX_RESTART_SOCKET} attach -t "$first_sess"
 }
 
