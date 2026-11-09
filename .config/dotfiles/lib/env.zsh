@@ -69,8 +69,9 @@ typeset -gx ARI_DOTFILES_APPLY_TIMEOUT_SECS="${ARI_DOTFILES_APPLY_TIMEOUT_SECS:-
 typeset -gx ARI_DOTFILES_RETRY_SECS="${ARI_DOTFILES_RETRY_SECS:-60}"
 typeset -gx ARI_DOTFILES_ASSIST_WAIT_SECS="${ARI_DOTFILES_ASSIST_WAIT_SECS:-600}"   # how long an assist:: waits for the human's fix; 0: no limit
 typeset -gx ARI_DOTFILES_LOCK_MAX_AGE_SECS="${ARI_DOTFILES_LOCK_MAX_AGE_SECS:-7200}"
+typeset -gx ARI_DOTFILES_APPLY_TAIL_LINES="${ARI_DOTFILES_APPLY_TAIL_LINES:-10}"   # lines of a running apply's log shown under its spinner; 0: the spinner alone
 # zsh arithmetic reads a non-numeric string as 0, which would silently disable a watchdog.
-for _seam in ARI_DOTFILES_CHECK_TIMEOUT_SECS ARI_DOTFILES_APPLY_TIMEOUT_SECS ARI_DOTFILES_RETRY_SECS ARI_DOTFILES_LOCK_MAX_AGE_SECS ARI_DOTFILES_ASSIST_WAIT_SECS; do
+for _seam in ARI_DOTFILES_CHECK_TIMEOUT_SECS ARI_DOTFILES_APPLY_TIMEOUT_SECS ARI_DOTFILES_RETRY_SECS ARI_DOTFILES_LOCK_MAX_AGE_SECS ARI_DOTFILES_ASSIST_WAIT_SECS ARI_DOTFILES_APPLY_TAIL_LINES; do
   if [[ "${(P)_seam}" != <-> ]]; then
     print -u2 "[ERROR] seam must be a non-negative integer | var='${_seam}' value='${(P)_seam}'"
     return 3

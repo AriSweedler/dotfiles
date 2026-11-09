@@ -359,9 +359,13 @@ step::run() {
       applied='"would_apply"'
     else
       run::_log info "apply::${name}"
-      run::_spin "${name} · applying: $(jq -r '.fix // ""' "${check_file}")"
+      run::_spin_tail "${name} · applying: $(jq -r '.fix // ""' "${check_file}")" "${log_file}"
       local apply_rc=0
+      local -F apply_t0="${EPOCHREALTIME}"
+      local -i apply_ms
       step::run_isolated apply "${name}" "${ARI_DOTFILES_APPLY_TIMEOUT_SECS}" >> "${log_file}" 2>&1 || apply_rc=$?
+      apply_ms=$(( (EPOCHREALTIME - apply_t0) * 1000 ))
+      duration_ms=$(( duration_ms + apply_ms ))
       local -a apply_tail=("${(f)$(tail_lines "${log_file}" 10)}")
       run::_log info "apply done | step='${name}' rc='${apply_rc}'"
       local recheck_file="${RUN_DIR}/${name}.recheck.json"
@@ -390,7 +394,11 @@ step::run() {
       ui::spin_stop
       run::_log info "assist::${name}"
       local assist_rc=0
+      local -F assist_t0="${EPOCHREALTIME}"
+      local -i assist_ms
       "assist::${name}" || assist_rc=$?
+      assist_ms=$(( (EPOCHREALTIME - assist_t0) * 1000 ))
+      duration_ms=$(( duration_ms + assist_ms ))
       run::_log info "assist done | step='${name}' rc='${assist_rc}'"
       if (( assist_rc == 0 )); then
         local recheck_file="${RUN_DIR}/${name}.recheck.json"
@@ -546,6 +554,9 @@ run::_log_file() {
 }
 
 run::_spin() { [[ -z "${RUN_BUFFER}" ]] && run::is_fancy || return 0; ui::spin_start "${1}"; }
+# An apply's spinner: the tail of its log under it (ARI_DOTFILES_APPLY_TAIL_LINES), so a long apply
+# shows its progress and a slow or wrong one is seen while it runs.
+run::_spin_tail() { [[ -z "${RUN_BUFFER}" ]] && run::is_fancy || return 0; ui::spin_tail_start "${1}" "${2}" "${ARI_DOTFILES_APPLY_TAIL_LINES}"; }
 
 # The verb comes from the caller (RUN_VERB) or dispatch's `verb`; the mode when neither is set.
 run::_header() {

@@ -71,10 +71,28 @@ ui::spin_start() {
   return 0
 }
 
-# Stops the spinner and clears its line; idempotent, and returns only once gum has exited. [no-op]
-# A watcher that has written its pid is told to exit (USR1), so gum ends with its command; a gum
-# still starting (no watcher yet) is TERMed itself, before it has drawn or spawned one.
+# The spinner with the tail of FILE under it: the shared tail window (ari-skill-shellscripts
+# lib/tail.zsh), LINES lines high, in the spinner's colour, so a long apply is watched rather than
+# waited on. Stopped by ui::spin_stop. The plain spinner when LINES is 0, there is no FILE, or the
+# library is missing. [no-op when not fancy]
+typeset -g UI_TAIL_LIB="${HOME}/.claude/skills/ari-skill-shellscripts/lib/tail.zsh" UI_TAIL_ACTIVE=0
+ui::spin_tail_start() {
+  local title="${1:-}" file="${2:-}" lines="${3:-10}"
+  ui::is_fancy || return 0
+  (( ${+functions[tail::start]} )) || source "${UI_TAIL_LIB}" 2>/dev/null || true
+  if [[ "${lines}" != <1-> || -z "${file}" ]] || (( ! ${+functions[tail::start]} )); then
+    ui::spin_start "${title}"; return 0
+  fi
+  ui::spin_stop
+  TAIL_INTERACTIVE=1 TAIL_LINES="${lines}" TAIL_SPIN_COLOR="${UI_SPIN_COLOR}" tail::start "${file}" "${title}"
+  UI_TAIL_ACTIVE=1
+}
+
+# Stops the spinner (or the tail window) and clears its line; idempotent, and returns only once gum
+# has exited. [no-op] A watcher that has written its pid is told to exit (USR1), so gum ends with its
+# command; a gum still starting (no watcher yet) is TERMed itself, before it has drawn or spawned one.
 ui::spin_stop() {
+  if (( UI_TAIL_ACTIVE )); then UI_TAIL_ACTIVE=0; tail::stop; fi
   [[ -n "${UI_SPIN_PID}" ]] || return 0
   local pid="${UI_SPIN_PID}" sentinel="${UI_SPIN_SENTINEL}" watcher=""
   UI_SPIN_PID="" UI_SPIN_SENTINEL=""
