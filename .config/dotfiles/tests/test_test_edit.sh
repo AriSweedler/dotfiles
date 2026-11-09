@@ -137,11 +137,58 @@ assert_eq "edit runner, editor fails: exit 1" 1 "${RC}"
 t record a b
 assert_eq "two NAMEs: 64" 64 "${RC}"
 
+# ── --for / --changed: the suites the files touch, then run.sh on exactly those ──
+printf '#!/usr/bin/env bash\n# the runner\nprintf "runner:"; for a in "$@"; do printf " %%s" "${a##*/}"; done; printf "\\n"\n' > "${SUITES}/run.sh"
+printf '#!/usr/bin/env bash\n# names: a fixture suite that says machine_name.\n' > "${SUITES}/test_names.sh"
+t record --for "${STEPS}/machine_name.zsh"
+assert_eq "for: exit 0" 0 "${RC}"
+assert_contains "for: the suite whose code it is" "${OUT}" "test_step_machine_name.sh  ← machine_name.zsh"
+assert_contains "for: a suite that names the stem" "${OUT}" "test_names.sh  ← machine_name.zsh"
+assert_contains "for: run.sh gets exactly those" "${OUT}" "runner: test_names.sh test_step_machine_name.sh"
+t record --for "${STEPS}/alttab.zsh" --list
+assert_contains "list: the selection" "${OUT}" "test_alttab_step.sh  ← alttab.zsh"
+assert_not_contains "list: nothing runs" "${OUT}" "runner:"
+t record --for "${CMD}/verify.zsh" --list
+assert_contains "a cmd file: its test_<verb>_* suites only" "${OUT}" "test: 1 suite(s) for 1 named file(s)"
+assert_contains "a cmd file: the verb's suite" "${OUT}" "test_verify_lock.sh  ← verify.zsh"
+t record --for "${SUITES}/test_bar.sh" --list
+assert_contains "a suite selects itself" "${OUT}" "test_bar.sh  ← test_bar.sh"
+t record --for "${PLUG}/foo.zsh" --list
+assert_contains "a plugin suite's target selects it" "${OUT}" "foo.test.zsh  ← foo.zsh"
+every=("${SUITES}"/test_*.sh "${PLUG}"/*.test.zsh)
+ALL="${#every[@]}"
+t record --for "${ORIG_CONFIG_DIR}/dotfiles/lib/ui.zsh" --list
+assert_contains "the shared core: every suite" "${OUT}" "test: ${ALL} suite(s) for 1 named file(s)"
+assert_contains "the shared core: says why" "${OUT}" "every suite: the shared core changed"
+t record --for "${SUITES}/lib.sh" --list
+assert_contains "tests/lib.sh is core" "${OUT}" "test: ${ALL} suite(s)"
+t record --for "${FIX}/nothing.txt"
+assert_eq "no suite covers it: exit 0" 0 "${RC}"
+assert_contains "no suite covers it: says so" "${OUT}" "no suite covers 1 file(s): nothing.txt"
+assert_not_contains "no suite covers it: nothing runs" "${OUT}" "runner:"
+t record --changed --list
+assert_eq "changed: exit 0" 0 "${RC}"
+assert_contains "changed: against HEAD by default" "${OUT}" "changed file(s) since HEAD"
+t record --changed --base no-such-rev
+assert_eq "changed, bad base: 64" 64 "${RC}"
+assert_contains "changed, bad base: says so" "${ERR}" "no such revision | base='no-such-rev'"
+t record --changed foo
+assert_eq "changed takes no names: 64" 64 "${RC}"
+t record --for
+assert_eq "for needs a file: 64" 64 "${RC}"
+t record --changed --for x
+assert_eq "changed and for together: 64" 64 "${RC}"
+t record --base HEAD
+assert_eq "base alone: 64" 64 "${RC}"
+t record --edit --for x
+assert_eq "edit with for: 64" 64 "${RC}"
+
 assert_eq "nothing committed" "${df_before}" "$(git --git-dir="${ARI_DOTFILES_DF_GIT_DIR}" rev-list --count HEAD 2>/dev/null || echo none)"
 nm test --help
 assert_contains "help: edit in Usage" "${OUT}" "dotfiles test edit [NAME]"
 assert_contains "help: the edit subcommand" "${OUT}" "  edit  open NAME's suite and the code it tests"
-assert_contains "help: --edit in Flags" "${OUT}" "  --edit  edit: the same as the edit subcommand"
+assert_contains "help: --edit in Flags" "${OUT}" "edit: the same as the edit subcommand"
+assert_contains "help: --changed in Usage" "${OUT}" "dotfiles test --changed [--base REV] [--list]"
 assert_no_mutation "nothing reaches brew"
 
 if (( FAIL > 0 )); then printf '%s\n' "${ERR}" | tail -n 30 >&2; fi

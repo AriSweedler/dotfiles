@@ -2,8 +2,8 @@
 # opened with the code it tests (--edit). The suite lookup and the "what does this suite test"
 # rule live here; steps/test_suites.zsh checks every suite against the same rule.
 
-verb::define test 'the hermetic suite, or one suite by name; --edit opens a suite with its code'
-verb::usage test 'test [NAME]'
+verb::define test 'the hermetic suite, one suite by name, or the suites a change touches; --edit opens a suite with its code'
+verb::usage test 'test [NAME]' 'test --changed [--base REV] [--list]' 'test --for FILE.. [--list]'
 verb::about test <<'EOF'
 Without NAME: every tests/test_*.sh under $(help::tilde "${ARI_DOTFILES_TESTS}"),
 each in a fake HOME with brew/launchctl/curl shims; nothing reaches this
@@ -11,7 +11,19 @@ machine. With NAME: the zsh plugin suite NAME.test.zsh under
 $(help::tilde "${ARI_DOTFILES_ZSH_PLUGINS}") (raycast, json_sort, …) under its
 OTTO_TEST__ZSH_PLUGINS_<NAME> gate (NAME upper-cased, anything not a letter
 or digit as _), else the hermetic tests/test_NAME.sh (verify_show, …).
+Suites run side by side, ARI_DOTFILES_TEST_JOBS at a time.
+
+--changed and --for run only the suites the files touch: a suite itself;
+the suites whose code it is (the --edit rule); the suites that name the
+file's stem (steps/nix_port.zsh → every suite saying nix_port), except a
+cmd/ file, which has only its test_<verb>_* suites. A file of the shared
+core (lib/, tests/lib.sh, run.sh, shims, fixtures, real-tools.txt,
+bin/dotfiles) runs every suite.
 EOF
+verb::flag test '--changed' "the files this checkout changed: against --base (default HEAD), untracked ones included"
+verb::flag test '--base REV' 'with --changed: the changes since REV (origin/main covers every unpushed commit too)'
+verb::flag test '--for' 'the arguments are files (absolute, or relative to the current directory), not a suite name'
+verb::flag test '--list' 'with --changed or --for: print the suites and why, run nothing'
 verb::section test 'Documentation rule' <<'EOF'
 Every suite says what it tests: a tests/test_*.sh on line 2 ('# what it
 checks'), a plugin suite on line 1 ('# Tests for <file>', a file that
@@ -22,10 +34,18 @@ verb::edit test test::edit '[NAME]' \
 verb::env test ARI_DOTFILES_TESTS "the hermetic suite's directory" '$(help::tilde "${ARI_DOTFILES_TESTS}")'
 verb::env test ARI_DOTFILES_ZSH_PLUGINS 'where the plugin suites (*.test.zsh) live' '$(help::tilde "${ARI_DOTFILES_ZSH_PLUGINS}")'
 verb::env test ARI_DOTFILES_BLESS_GOLDEN '1 rewrites the report goldens from the renderer: ARI_DOTFILES_BLESS_GOLDEN=1 bash tests/test_report_render.sh'
+verb::env test ARI_DOTFILES_TEST_JOBS 'how many suites run side by side' 'half the CPUs'
 
 cmd_test() {
   local -A opts; local -a args
   verb::parse test "$@"
+  if (( ${+opts[--changed]} || ${+opts[--for]} )); then
+    (( ! ${+opts[--edit]} )) || usage_error "test: --edit opens one suite; not with --changed or --for"
+    (( ${+opts[--changed]} + ${+opts[--for]} == 1 )) || usage_error "test: --changed or --for, not both"
+    test::select "$@"
+    return
+  fi
+  (( ! ${+opts[--base]} && ! ${+opts[--list]} )) || usage_error "test: --base and --list go with --changed or --for"
   (( ${#args} <= 1 )) || usage_error "test takes at most one name | args='${args[*]}'"
   (( ${+opts[--edit]} )) && { test::edit "${args[@]}"; return; }
   (( ${#args} )) || test::_exec_suite "${ARI_DOTFILES_TESTS}/run.sh"
@@ -62,7 +82,7 @@ test::_argv() {
   local suite="${1}" REPLY v
   local -a strip=()
   for v in ${(k)parameters[(I)ARI_DOTFILES_*]}; do
-    [[ "${v}" == ARI_DOTFILES_BLESS_GOLDEN ]] || strip+=(-u "${v}")
+    [[ "${v}" == (ARI_DOTFILES_BLESS_GOLDEN|ARI_DOTFILES_TEST_JOBS) ]] || strip+=(-u "${v}")
   done
   if [[ "${suite}" == *.test.zsh ]]; then
     test::gate_var "${suite}"
@@ -76,6 +96,91 @@ test::_exec_suite() {
   local -a reply
   test::_argv "${1}"
   exec "${reply[@]}"
+}
+
+# A file of the shared core: every suite runs on it.
+test::is_core() {
+  local f="${1}" t="${ARI_DOTFILES_TESTS}"
+  [[ "${f}" == "${ARI_DOTFILES_ROOT}/lib/"* || "${f}" == ("${t}/lib.sh"|"${t}/run.sh"|"${t}/real-tools.txt")
+     || "${f}" == ("${t}/shims/"*|"${t}/fixtures/"*) || "${f}" == "${ARI_DOTFILES_CONFIG}/bin/dotfiles" ]]
+}
+
+# test::suites_for FILE..: reply = the suites the files touch, in path order; the caller's
+# associative WHY maps each to the files that chose it, its array UNTESTED holds the files no suite
+# covers, and CORE the core files among them (then every suite is chosen).
+test::suites_for() {
+  local -a all=("${ARI_DOTFILES_TESTS}"/test_*.sh(N) "${ARI_DOTFILES_ZSH_PLUGINS}"/*.test.zsh(N)) hits
+  local -A code
+  local f s stem REPLY
+  for s in "${all[@]}"; do test::code_under "${s}"; code[${s}]=$'\n'"${(pj:\n:)reply}"$'\n'; done
+  for f in "$@"; do
+    if test::is_core "${f}"; then CORE+=("${f}"); continue; fi
+    hits=()
+    (( ${all[(Ie)${f}]} )) && hits+=("${f}")
+    for s in "${all[@]}"; do [[ "${code[${s}]}" == *$'\n'"${f}"$'\n'* ]] && hits+=("${s}"); done
+    stem="${${f:t}%%.*}"
+    if [[ -n "${stem}" && "${f}" != "${ARI_DOTFILES_CMD}/"* ]]; then
+      hits+=(${(f)"$(grep -lwF -- "${stem}" "${all[@]}" 2>/dev/null || true)"})
+    fi
+    hits=(${(u)hits})
+    if (( ${#hits} )); then
+      for s in "${hits[@]}"; do WHY[${s}]+="${WHY[${s}]:+ }${f:t}"; done
+    else
+      UNTESTED+=("${f}")
+    fi
+  done
+  if (( ${#CORE} )); then
+    for s in "${all[@]}"; do WHY[${s}]="core"; done
+  fi
+  reply=(${(ok)WHY})
+}
+
+# The files --changed or --for names, absolute: --for's arguments, or what git says this checkout
+# changed against --base (default HEAD), untracked files included.
+test::changed_files() {
+  local base="${opts[--base]:-HEAD}" top f
+  if (( ${+opts[--for]} )); then
+    (( ${#args} )) || usage_error "test --for: name at least one file"
+    for f in "${args[@]}"; do reply+=("${f:a}"); done
+    return 0
+  fi
+  (( ${#args} == 0 )) || usage_error "test --changed takes no names | args='${args[*]}'"
+  top="$(git -C "${ARI_DOTFILES_CONFIG}" rev-parse --show-toplevel 2>/dev/null)" \
+    || usage_error "test --changed: not in a git checkout | dir='${ARI_DOTFILES_CONFIG}'"
+  git -C "${top}" rev-parse --verify --quiet "${base}^{commit}" > /dev/null \
+    || usage_error "test --changed: no such revision | base='${base}'"
+  for f in ${(f)"$(git -C "${top}" diff --name-only "${base}" --; git -C "${top}" ls-files --others --exclude-standard)"}; do
+    reply+=("${top}/${f}")
+  done
+  reply=(${(u)reply})
+}
+
+# --changed / --for: the suites the files touch, listed with why, then run side by side by run.sh
+# (--list stops after the listing).
+test::select() {
+  local -A opts WHY; local -a args reply UNTESTED CORE files
+  verb::parse test "$@"
+  test::changed_files
+  files=("${reply[@]}")
+  reply=()
+  (( ${#files} )) && test::suites_for "${files[@]}"
+  local -a suites=("${reply[@]}") untested=("${UNTESTED[@]:t}")
+  local what="${#files} changed file(s) since ${opts[--base]:-HEAD}" s
+  (( ! ${+opts[--for]} )) || what="${#files} named file(s)"
+  print -r -- "test: ${#suites} suite(s) for ${what}"
+  if (( ${#CORE} )); then
+    print -r -- "  every suite: the shared core changed | files=$(ui::paths "${CORE[@]}")"
+  else
+    for s in "${suites[@]}"; do print -r -- "  ${s:t}  ← ${WHY[${s}]}"; done
+  fi
+  if (( ${#untested} )); then
+    print -r -- "  no suite covers ${#untested} file(s): ${(j:, :)untested[1,8]}${${untested[9]:+, …}:-}"
+  fi
+  (( ${+opts[--list]} )) && return 0
+  (( ${#suites} )) || return 0
+  local -a reply
+  test::_argv "${ARI_DOTFILES_TESTS}/run.sh"
+  exec "${reply[@]}" "${suites[@]}"
 }
 
 # test::target_path TARGET: REPLY = the file a plugin suite's '# Tests for <target>' names. A
