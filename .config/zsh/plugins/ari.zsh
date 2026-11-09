@@ -32,7 +32,7 @@ bindkey '^X^_' redo
 # Edit the shared Homebrew list (the brews and casks every machine gets) in the shared flake;
 # this machine's own are in ~/.local/share/dotfiles/nix. `dotfiles switch` applies both.
 function vi_::new_machine_brewfile() {
-  "${EDITOR}" "${HOME}/.config/dotfiles/nix/darwin.nix"
+  "${EDITOR}" "${HOME}/dotfiles/.config/dotfiles/nix/darwin.nix"
 }
 alias vi_newmachbrew=vi_::new_machine_brewfile
 

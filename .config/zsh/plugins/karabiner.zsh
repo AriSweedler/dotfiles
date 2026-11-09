@@ -1,4 +1,6 @@
-KARABINER_HOME="${XDG_CONFIG_HOME}/karabiner"
+# The clone, not ~/.config/karabiner: under Nix that is a tree of per-file links, and a file
+# created there would land outside the repo.
+KARABINER_HOME="${HOME}/dotfiles/.config/karabiner"
 
 function vi_::karabiner_home() {
   cd "${KARABINER_HOME}"

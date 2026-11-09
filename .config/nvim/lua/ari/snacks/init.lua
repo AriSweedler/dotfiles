@@ -214,8 +214,8 @@ function M.pick_dotfiles()
 end
 
 M.dotfiles_repo = {
-	git_dir = vim.fn.expand("$HOME/dotfiles.git"),
-	work_tree = vim.fn.expand("$HOME"),
+	git_dir = vim.fn.expand("$HOME/dotfiles/.git"),
+	work_tree = vim.fn.expand("$HOME/dotfiles"),
 	label = "[dotfiles]",
 }
 

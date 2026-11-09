@@ -4,10 +4,6 @@ require("gitsigns").setup({
 	signs_staged_enable = false,
 	worktrees = {
 		{
-			toplevel = vim.env.HOME,
-			gitdir = vim.env.HOME .. "/dotfiles.git",
-		},
-		{
 			toplevel = vim.env.HOME .. "/.local",
 			gitdir = vim.env.HOME .. "/.local/local-dotfiles.git",
 		},
