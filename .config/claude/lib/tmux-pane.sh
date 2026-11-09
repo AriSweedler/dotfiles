@@ -114,7 +114,8 @@ tmux_pane_gate_refusal() {
 # Claude Code shows up as its version (2.1.312) in #{pane_current_command}, or as claude.
 tmux_pane_is_claude() {
   _tpc_cmd=$(tmux display-message -p -t "$1" '#{pane_current_command}' 2>/dev/null) || return 1
-  [ "$_tpc_cmd" = claude ] && return 0
+  # Nix's wrapper runs the binary as .claude-wrapped (Homebrew's ran as claude); a native build reports its version.
+  case "$_tpc_cmd" in claude|.claude-wrapped) return 0 ;; esac
   printf '%s\n' "$_tpc_cmd" | awk '/^[0-9]+\.[0-9]+\.[0-9]+$/ {ok = 1} END {exit !ok}'
 }
 
