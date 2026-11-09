@@ -20,7 +20,8 @@
 #
 # Raycast asks "Always allow" once per command launched by deeplink and keeps the answer in its
 # encrypted database, which nothing outside Raycast can write. --prime opens every binding's
-# deeplink in turn, waiting for Enter between them, so each prompt can be answered once.
+# deeplink in turn, waiting for Enter between them, so each prompt can be answered once, and
+# records each slug answered; --unprimed is the healthcheck's view of the rest.
 #
 # Documentation rule: every binding's deeplink(…) carries a one-line `description` option (what
 # the action does; the title is a name, not documentation), which the generator emits.
@@ -33,17 +34,19 @@
 # another edit). Nothing is committed: bake compiles the tables into karabiner.json, so the
 # next command is bake.
 #
-# Usage: raycast_link <slug|path> [--plain] | --list | --check | --prime [<slug>...]
+# Usage: raycast_link <slug|path> [--plain] | --list | --check | --prime [<slug>...] | --unprimed
 #        | --undocumented | --edit [<slug>]
 # Env: ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS (the karabiner.ts checkout), ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON,
 # ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD (test
-# seam: a command whose stdout is the bindings JSON, e.g. `cat fixture.json`).
+# seam: a command whose stdout is the bindings JSON, e.g. `cat fixture.json`), ARI_DOTFILES_RAYCAST_LINK_PRIMED (the
+# record of primed slugs).
 
 (( ${+functions[log::info]} )) || source "${${(%):-%x}:A:h}/log.zsh"
 
 : "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS:=${HOME}/dotfiles/.config/karabiner/karabiner.ts}" # the clone: bake installs node_modules there
 : "${ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON:=${XDG_CONFIG_HOME:-${HOME}/.config}/karabiner/karabiner.json}"
 : "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD:=}"
+: "${ARI_DOTFILES_RAYCAST_LINK_PRIMED:=${XDG_STATE_HOME:-${HOME}/.local/state}/raycast-link/primed}"   # slugs prime opened here, one per line
 # One generator run per invocation; keyed by the seam so a test that swaps fixtures reloads.
 typeset -g ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE="" ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE_KEY=""
 
@@ -271,7 +274,7 @@ function raycast_link::prime() {
       entries+=("${entry}")
     done
   else
-    entries=("${(@f)$(raycast_link::entries)}")
+    entries=(${(f)"$(raycast_link::entries)"})
   fi
   for entry in "${entries[@]}"; do
     i+=1
@@ -281,8 +284,31 @@ function raycast_link::prime() {
     open -g "raycast://${path_}"
     read -r reply
     [[ "${reply}" == q ]] && { print -r -- "primed=$(( i - 1 )) stopped_at=${alias_}"; return 0; }
+    raycast_link::record_primed "${alias_}"
   done
   print -r -- "primed=${#entries}"
+}
+
+# Add a slug to the primed record, once.
+function raycast_link::record_primed() {
+  local f="${ARI_DOTFILES_RAYCAST_LINK_PRIMED}"
+  mkdir -p "${f:h}"
+  [[ -f "${f}" ]] && grep -qxF -- "${1}" "${f}" && return 0
+  print -r -- "${1}" >> "${f}"
+}
+
+# The bindings prime never opened on this machine. Output: nothing when all are primed, else one
+# `warn` line with the fix; then pending=0 (it is never work `sync` can do). A sync step.
+function raycast_link::unprimed() {
+  local f="${ARI_DOTFILES_RAYCAST_LINK_PRIMED}" entry alias_
+  local -a missing=()
+  for entry in ${(f)"$(raycast_link::entries)"}; do
+    alias_="$(raycast_link::slug "${entry}")"
+    [[ -f "${f}" ]] && grep -qxF -- "${alias_}" "${f}" && continue
+    missing+=("${alias_}")
+  done
+  (( ${#missing} )) && print -r -- "warn ${#missing} binding(s) never primed here, so Raycast asks Always allow on first use: ${(j:, :)missing} | fix='dotfiles raycast link prime ${(j: :)missing}'"
+  print -r -- "pending=0"
 }
 
 # --- documentation ---
@@ -463,7 +489,9 @@ dotfiles raycast link — a Raycast action as a link with its Karabiner binding
   dotfiles raycast link check            OK/MISSING per binding (direct chords, against the compiled karabiner.json;
                                   layer chords show as 'layer' and are not verified)
   dotfiles raycast link prime [<slug>...]   open each binding's command in turn, Enter between, to click
-                                  "Always allow" once per command (Raycast keeps that answer where no script reaches)
+                                  "Always allow" once per command (Raycast keeps that answer where no script reaches);
+                                  each answered slug is recorded in \${ARI_DOTFILES_RAYCAST_LINK_PRIMED}
+  dotfiles raycast link unprimed         a warn naming the bindings never primed here, with the prime that fixes it
   dotfiles raycast link edit [<slug>]    the table holding the slug's deeplink in \$EDITOR at its line (no slug:
                                   raycast_shortcuts.ts); on save the generator and every chord are checked; no
                                   commit, next: bake; --edit is the same
@@ -486,6 +514,7 @@ function raycast_link() {
     --list)     mode=list; shift ;;
     --check)    mode=check; shift ;;
     --prime)    mode=prime; shift ;;
+    --unprimed) mode=unprimed; shift ;;
     --undocumented) mode=undocumented; shift ;;
     --edit)     mode=edit; shift; if (( $# )) && [[ "${1}" != -* ]]; then edit_selector="${1}"; shift; fi ;;
     -*)         log::err "Unknown flag | flag='${1}' hint='to change a binding, edit karabiner.ts/src/modes/*.ts or raycast_shortcuts.ts and run bake'"; raycast_link::help; return 1 ;;
@@ -503,6 +532,7 @@ function raycast_link() {
     list)   raycast_link::list ;;
     check)  raycast_link::check ;;
     prime)  raycast_link::prime "${selectors[@]}" ;;
+    unprimed) raycast_link::unprimed ;;
     undocumented) raycast_link::undocumented ;;
   esac
 }

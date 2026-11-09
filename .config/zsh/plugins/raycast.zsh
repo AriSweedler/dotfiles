@@ -1,6 +1,6 @@
 # raycast — the router behind `dotfiles raycast`, and the interactive function `ari_raycast`:
 #   dotfiles raycast link <slug|path> [--plain]   the widget: <[Raycast: Title | key: '✦4'](raycast://…)>
-#   dotfiles raycast link list | check | prime [<slug>...]
+#   dotfiles raycast link list | check | prime [<slug>...] | unprimed
 #   dotfiles raycast snippets sync [--dry-run] [--deleted] | list | check | adopt | pull FILE | diff FILE
 #                             | move NAME --to shared|local | fmt | reset-manifest [NAME...]
 #                             | edit [--local|--shared] | undocumented
@@ -25,7 +25,7 @@
 # What `ari-raycast sync` runs, in order. Each step accepts --dry-run and prints its work as
 # key=value counters (would_add=, pending=, added=, imported=, changed=), which sync reports and
 # sums, plus `warn <text>` lines, which sync forwards (the raycast_sync step shows them as a warn).
-typeset -ga ARI_DOTFILES_RAYCAST_SYNC_STEPS=("snippets sync")
+typeset -ga ARI_DOTFILES_RAYCAST_SYNC_STEPS=("link unprimed" "snippets sync")
 : "${ARI_DOTFILES_RAYCAST_APP:=/Applications/Raycast.app}"
 
 function ari_raycast::help() {
@@ -66,9 +66,10 @@ function ari_raycast::link() {
     list)           raycast_link --list "$@" ;;
     check)          raycast_link --check "$@" ;;
     prime)          raycast_link --prime "$@" ;;
+    unprimed)       raycast_link --unprimed "$@" ;;
     edit|--edit)    raycast_link --edit "$@" ;;
     undocumented)   raycast_link --undocumented "$@" ;;
-    -*)             log::err "Unknown link verb | verb='${verb}' valid='<slug|path> [--plain], list, check, prime [<slug>...], edit [<slug>], undocumented, help'"; return 1 ;;
+    -*)             log::err "Unknown link verb | verb='${verb}' valid='<slug|path> [--plain], list, check, prime [<slug>...], unprimed, edit [<slug>], undocumented, help'"; return 1 ;;
     *)              raycast_link "${verb}" "$@" ;;
   esac
 }

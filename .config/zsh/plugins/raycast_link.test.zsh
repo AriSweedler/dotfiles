@@ -150,6 +150,15 @@ raycast_link --keep-focus >/dev/null 2>&1; _rc=$?
 _t "--keep-focus is gone: unknown flag rc 1" "1" "${_rc}"
 
 # --- prime ---
+export ARI_DOTFILES_RAYCAST_LINK_PRIMED="${_dir}/primed"
+_t "unprimed: nothing primed → every binding, with the fix" \
+  $'warn 3 binding(s) never primed here, so Raycast asks Always allow on first use: clipboard-history, confetti, left-half | fix=\'dotfiles raycast link prime clipboard-history confetti left-half\'\npending=0' \
+  "$(raycast_link --unprimed 2>/dev/null)"
+raycast_link::record_primed confetti; raycast_link::record_primed confetti
+_t "record_primed: a slug once" "confetti" "$(cat "${_dir}/primed")"
+_t "unprimed: names only the rest" "1" "$(raycast_link --unprimed 2>/dev/null | grep -c "never primed here, so Raycast asks Always allow on first use: clipboard-history, left-half |")"
+raycast_link::record_primed clipboard-history; raycast_link::record_primed left-half
+_t "unprimed: all primed → no warn, pending=0" "pending=0" "$(raycast_link --unprimed 2>/dev/null)"
 _out="$(raycast_link --prime left-half </dev/null 2>&1)"; _rc=$?
 _t "prime: refuses without a terminal, rc 64" "64" "${_rc}"
 _t "prime: says why" "1" "$(print -r -- "${_out}" | grep -c 'prime waits for Enter')"

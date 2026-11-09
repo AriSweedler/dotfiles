@@ -9,7 +9,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 world_new
 seed_fake_repos
-FLAKE="${XDG_DATA_HOME}/dotfiles/nix"
+export ARI_DOTFILES_NIX_FLAKE="${XDG_DATA_HOME}/dotfiles/nix"   # the real default; the world points it elsewhere
+FLAKE="${ARI_DOTFILES_NIX_FLAKE}"
 mkdir -p "${FLAKE}"
 printf '{ }\n' > "${FLAKE}/flake.nix"
 printf 'old\n' > "${FLAKE}/flake.lock"

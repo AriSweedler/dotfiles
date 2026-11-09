@@ -5,7 +5,7 @@
 
 verb::define raycast 'Raycast in parity with the dotfiles: bindings, snippets'
 verb::usage raycast 'raycast link <slug|path> [--plain]' \
-  'raycast link list | check | prime [<slug>..] | undocumented' \
+  'raycast link list | check | prime [<slug>..] | unprimed | undocumented' \
   'raycast link edit [<slug>]' \
   'raycast snippets sync [--dry-run] [--deleted] | list | check | adopt' \
   'raycast snippets pull FILE | diff FILE | fmt' \
@@ -38,7 +38,8 @@ EOF
 verb::sub raycast 'link <slug|path>' "the widget <[Raycast: Title | key: '✦4'](raycast://…)>"
 verb::sub raycast 'link list' 'every binding: slug, chords, title, deeplink'
 verb::sub raycast 'link check' 'OK/MISSING per binding against the compiled karabiner.json'
-verb::sub raycast 'link prime' 'open each bound command (or the slugs given) in turn, Enter between, to click "Always allow" once each; needs a terminal'
+verb::sub raycast 'link prime' 'open each bound command (or the slugs given) in turn, Enter between, to click "Always allow" once each; needs a terminal; records each answered slug'
+verb::sub raycast 'link unprimed' 'a warn naming the bindings never primed on this machine, with the prime that fixes it (a sync step)'
 verb::sub raycast 'link edit' "the table holding the slug's deeplink in \\\$EDITOR at its line (no slug: raycast_shortcuts.ts); on save the generator and every chord are checked; no commit, bake compiles it; an invalid table is reported, left as edited (on a terminal, offered for another edit); also: link --edit"
 verb::sub raycast 'link undocumented' 'every binding without a description, with its fix'
 verb::sub raycast 'snippets sync' 'import what is new or changed, one Raycast dialog a batch'

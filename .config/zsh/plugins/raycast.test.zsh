@@ -49,6 +49,7 @@ _t "route: link <slug> --plain → raycast_link slug --plain" "link clipboard-hi
 : > "${_calls}"; ari_raycast link list >/dev/null;  _t "route: link list" "link --list" "$(cat "${_calls}")"
 : > "${_calls}"; ari_raycast link check >/dev/null; _t "route: link check" "link --check" "$(cat "${_calls}")"
 : > "${_calls}"; ari_raycast link prime left-half >/dev/null; _t "route: link prime slug" "link --prime left-half" "$(cat "${_calls}")"
+: > "${_calls}"; ari_raycast link unprimed >/dev/null; _t "route: link unprimed" "link --unprimed" "$(cat "${_calls}")"
 : > "${_calls}"; ari_raycast snippets sync >/dev/null; _t "route: snippets sync" "snippets --sync" "$(cat "${_calls}")"
 : > "${_calls}"; ari_raycast snippets pull /tmp/x.json --dry-run >/dev/null; _t "route: snippets pull FILE --dry-run" "snippets --pull /tmp/x.json --dry-run" "$(cat "${_calls}")"
 : > "${_calls}"; ari_raycast snippets reset-manifest a b >/dev/null; _t "route: snippets reset-manifest names" "snippets --reset-manifest a b" "$(cat "${_calls}")"
@@ -100,23 +101,23 @@ function raycast_snippets() { print -r -- "snippets $*" >> "${_calls}"; [[ "$*" 
 # --- sync ---
 : > "${_calls}"
 _out="$(ari_raycast sync 2>/dev/null)"; _rc=$?
-_t "sync: runs every step in order" $'snippets --sync' "$(cat "${_calls}")"
-_t "sync: one line per step and the total" $'ok snippets sync | pending=\'1\'\ntotal_pending=1' "${_out}"
-_t "sync: link has no sync step (Raycast keeps Always allow where no script reaches)" "0" "$(grep -c '^link' "${_calls}")"
+_t "sync: runs every step in order" $'link --unprimed\nsnippets --sync' "$(cat "${_calls}")"
+_t "sync: one line per step and the total" $'ok link unprimed | pending=\'2\'\nok snippets sync | pending=\'1\'\ntotal_pending=3' "${_out}"
 _t "sync: rc 0" "0" "${_rc}"
 : > "${_calls}"
 _out="$(ari_raycast sync --dry-run 2>/dev/null)"
-_t "sync --dry-run: passes --dry-run through" $'snippets --sync --dry-run' "$(cat "${_calls}")"
-_t "sync --dry-run: sums the pending counters" "total_pending=1" "$(print -r -- "${_out}" | tail -n 1)"
+_t "sync --dry-run: passes --dry-run through" $'link --unprimed --dry-run\nsnippets --sync --dry-run' "$(cat "${_calls}")"
+_t "sync --dry-run: sums the pending counters" "total_pending=3" "$(print -r -- "${_out}" | tail -n 1)"
 function raycast_snippets() { print -r -- "snippets $*" >> "${_calls}"; print $'snippets: nothing to import | unchanged=5\npending=0\nwarn placeholder active: orphan (~o) fill in /x/snippets.json'; }
 _out="$(ari_raycast sync 2>/dev/null)"; _rc=$?
 _t "sync: a step's warn line is forwarded with the step name, pending stays 0" \
-  $'ok snippets sync | pending=\'0\'\nwarn snippets sync | placeholder active: orphan (~o) fill in /x/snippets.json\ntotal_pending=0' "${_out}"
+  $'ok link unprimed | pending=\'2\'\nok snippets sync | pending=\'0\'\nwarn snippets sync | placeholder active: orphan (~o) fill in /x/snippets.json\ntotal_pending=2' "${_out}"
 _t "sync: a warn is not a failure" "0" "${_rc}"
 function raycast_snippets() { print -r -- "snippets $*" >> "${_calls}"; print -u2 "boom"; return 7; }
 _out="$(ari_raycast sync 2>/dev/null)"; _rc=$?
 _t "sync: a failing step is reported and the run continues" "1" "$(print -r -- "${_out}" | grep -c "^FAIL snippets sync | rc='7'")"
 _t "sync: a failing step makes rc 1" "1" "${_rc}"
+_t "sync: the other step still ran" "1" "$(print -r -- "${_out}" | grep -c "^ok link unprimed")"
 _out="$(ARI_DOTFILES_RAYCAST_APP="${_dir}/nope.app" ari_raycast sync 2>/dev/null)"; _rc=$?
 _t "sync: skips when Raycast is not installed" "skip raycast not installed | app='${_dir}/nope.app'" "${_out}"
 _t "sync: skip is rc 0" "0" "${_rc}"

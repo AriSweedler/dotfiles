@@ -16,6 +16,7 @@ done
 mkdir -p "${FIX}/Raycast.app" "${FIX}/shared" "${FIX}/local"
 export ARI_DOTFILES_RAYCAST_APP="${FIX}/Raycast.app"
 export ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="cat ${FIX}/bindings.json"
+export ARI_DOTFILES_RAYCAST_LINK_PRIMED="${FIX}/primed"; printf 'left-half\n' > "${ARI_DOTFILES_RAYCAST_LINK_PRIMED}"   # Always allow answered
 export ARI_DOTFILES_RAYCAST_SNIPPETS_SHARED_FILE="${FIX}/shared/snippets.json"
 export ARI_DOTFILES_RAYCAST_SNIPPETS_LOCAL_FILE="${FIX}/local/snippets.json"
 export ARI_DOTFILES_RAYCAST_SNIPPETS_MERGED="${FIX}/merged.json"
@@ -57,6 +58,13 @@ jq -c 'map(.description = "my address")' "${FIX}/local/snippets.json" > "${FIX}/
 check_step
 assert_eq "everything documented → ok" ok "$(step_get raycast_sync .status)"
 assert_eq "reason in_sync" in_sync "$(step_get raycast_sync .reason)"
+
+# A binding prime never opened on this machine is a warn that names the prime to run.
+: > "${ARI_DOTFILES_RAYCAST_LINK_PRIMED}"
+check_step
+assert_eq "an unprimed binding → warn" warn "$(step_get raycast_sync .status)"
+assert_contains "the warn names the prime" "$(step_get raycast_sync .detail)" "fix='dotfiles raycast link prime left-half'"
+printf 'left-half\n' > "${ARI_DOTFILES_RAYCAST_LINK_PRIMED}"
 
 # A description is not something Raycast holds: adding them left nothing to import.
 snippets_merge; nm raycast snippets sync --dry-run

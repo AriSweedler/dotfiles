@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The small steps: neovim, claude, terminal_nerdfont, terminal_config, home_strays,
+# The small steps: neovim, claude, terminal_nerdfont, terminal_config, home_strays, nix_port,
 # karabiner, claude_notifications, dotfiles_jobs — each check's verdicts and the dry-run of each apply.
 set -u
 # shellcheck source=lib.sh
@@ -186,6 +186,32 @@ assert_contains "the fix removes them after porting" "$(step_get home_strays .fi
 dry_step home_strays
 assert_file "a dry run leaves them" "${HOME}/.profile"
 rm -f "${HOME}/.profile" "${HOME}/.bash_aliases"
+
+# ── nix_port ──────────────────────────────────────────────────────────────────
+check_step nix_port
+assert_eq "the world has finished the port → ok" ok "$(status_of nix_port)"
+rm -rf "${ARI_DOTFILES_NIX_CLONE}/.git" "${ARI_DOTFILES_NIX_SYSTEM}"
+mkdir -p "${XDG_DATA_HOME}/tmuxinator" "${XDG_DATA_HOME}/raycast-snippets"
+: > "${XDG_DATA_HOME}/tmuxinator/work.yml"; printf '[]\n' > "${XDG_DATA_HOME}/raycast-snippets/snippets.json"
+check_step nix_port
+assert_eq "items open → fail" fail "$(status_of nix_port)"
+assert_eq "reason transition_open" transition_open "$(reason_of nix_port)"
+assert_eq "transition_open is manual" true "$(step_get nix_port .manual)"
+D="$(step_get nix_port .detail)"
+assert_contains "counts the open items" "${D}" "4 transition item(s) open, in order:"
+assert_contains "1: the clone" "${D}" "1. the shared tier is not the ~/dotfiles clone"
+assert_contains "2: the first switch" "${D}" "2. nix-darwin has never switched here"
+assert_contains "a tmuxinator project left behind, with its option" "${D}" "programs.tmuxinatorProjects.work = ./tmuxinator/work.yml;"
+assert_contains "the old snippets file, with its option" "${D}" "programs.raycastSnippets.localFile = ./raycast-snippets.json;"
+assert_contains "the fix is the first item's" "$(step_get nix_port .fix)" "git clone ${ARI_DOTFILES_REMOTE} ~/dotfiles"
+mv "${ARI_DOTFILES_NIX_FLAKE}/flake.nix" "${FIX}/flake.nix.bak"
+check_step nix_port
+assert_contains "no local flake is an item" "$(step_get nix_port .detail)" "no local flake | path='${ARI_DOTFILES_NIX_FLAKE}/flake.nix'"
+mv "${FIX}/flake.nix.bak" "${ARI_DOTFILES_NIX_FLAKE}/flake.nix"
+mkdir -p "${ARI_DOTFILES_NIX_CLONE}/.git" "${ARI_DOTFILES_NIX_SYSTEM}"
+rm -rf "${XDG_DATA_HOME}/tmuxinator" "${XDG_DATA_HOME}/raycast-snippets"
+check_step nix_port
+assert_eq "all done again → ok" ok "$(status_of nix_port)"
 
 # ── karabiner ─────────────────────────────────────────────────────────────────
 KJ="${HOME}/.config/karabiner/karabiner.json"
