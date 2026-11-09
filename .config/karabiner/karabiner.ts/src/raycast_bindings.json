@@ -3,14 +3,6 @@
   "bindings": [
     {
       "chords": [
-        "hyper+s"
-      ],
-      "description": "Jump to an AWS console page through the raycast-go-aws extension",
-      "path": "extensions/arisweedler/raycast-go-aws/command-go-aws",
-      "title": "Go AWS"
-    },
-    {
-      "chords": [
         "opt+s"
       ],
       "description": "Show today's and upcoming calendar events, with links to join meetings",

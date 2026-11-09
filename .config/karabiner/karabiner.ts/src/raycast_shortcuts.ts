@@ -47,11 +47,4 @@ export const raycastShortcuts: RaycastShortcut[] = [
       description: "Search the Raycast snippets (the dotfiles' raycast-snippets tiers) and paste one",
     }),
   },
-  {
-    chord: "hyper+s",
-    action: deeplink("extensions/arisweedler/raycast-go-aws/command-go-aws", {
-      title: "Go AWS",
-      description: "Jump to an AWS console page through the raycast-go-aws extension",
-    }),
-  },
 ]

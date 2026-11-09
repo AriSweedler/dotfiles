@@ -2854,30 +2854,6 @@
             ]
           },
           {
-            "description": "Go AWS → raycast://extensions/arisweedler/raycast-go-aws/command-go-aws",
-            "manipulators": [
-              {
-                "from": {
-                  "key_code": "s",
-                  "modifiers": {
-                    "mandatory": [
-                      "control",
-                      "option",
-                      "shift",
-                      "command"
-                    ]
-                  }
-                },
-                "to": [
-                  {
-                    "shell_command": "open raycast://extensions/arisweedler/raycast-go-aws/command-go-aws"
-                  }
-                ],
-                "type": "basic"
-              }
-            ]
-          },
-          {
             "description": "window-management direct: control+option+⌫ → deeplink: extensions/raycast/window-management/restore",
             "manipulators": [
               {

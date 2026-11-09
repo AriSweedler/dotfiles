@@ -253,7 +253,7 @@ if [[ -x "${_kts}/node_modules/.bin/tsx" ]]; then
   local _gen
   _gen="$(ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="" ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS="${_kts}" zsh -c 'source "${1}/raycast_link.zsh"; raycast_link::load_bindings && print -r -- "${ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CACHE}"' _ "${_plugins}")"
   _t "generated: parses, has a bindings array, no alias field" "true" "$(print -r -- "${_gen}" | jq '(.bindings | type == "array") and ([.bindings[] | has("alias")] | any | not)')"
-  _t "generated: 33 entries (26 window management + 5 shortcuts + confetti + typing practice)" "33" "$(print -r -- "${_gen}" | jq '.bindings | length')"
+  _t "generated: 32 entries (26 window management + 4 shortcuts + confetti + typing practice)" "32" "$(print -r -- "${_gen}" | jq '.bindings | length')"
   _t "generated: paths unique and sorted, slugs unique" "true" "$(print -r -- "${_gen}" | jq '([.bindings[].path] | (length == (unique | length)) and (. == sort)) and ([.bindings[].path | split("/") | last] | length == (unique | length))')"
   _t "generated: every wm entry has keepFocus and exactly one direct ⌃⌥ chord (no layer)" "26" "$(print -r -- "${_gen}" | jq '[.bindings[] | select(.path | startswith("extensions/raycast/window-management/")) | select(.keepFocus == true and (.chords | length == 1) and (.chords[0] | startswith("ctrl+opt+")))] | length')"
   _t "generated: no hyper+w chord anywhere" "0" "$(print -r -- "${_gen}" | jq '[.bindings[].chords[] | select(startswith("hyper+w "))] | length')"
