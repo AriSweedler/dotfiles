@@ -24,6 +24,10 @@ if [[ ! -r "${LIB_TMUX_PANE}" ]]; then
 fi
 source "${LIB_TMUX_PANE}"
 
+# Sourced, not copied (load_wrap_lib, for a run_log-wrapped --cmd only), so a --cmd types exactly what a
+# /ari-driving-tmux --run click types.
+readonly LIB_WRAP="${SKILLS_DIR}/ari-driving-tmux/lib/wrap.zsh"
+
 # --- Constants ---
 
 readonly POLL_SECONDS=5
@@ -33,6 +37,8 @@ readonly EXIT_TIMEOUT=124
 readonly EXIT_NO_TARGET=70
 readonly EXIT_BUSY=75   # EX_TEMPFAIL: the pane is not an idle shell at its prompt; nothing was typed
 readonly EXIT_NOT_OPTED_IN=77   # EX_NOPERM: the pane's OPT_IN_OPTION is not on; nothing was typed
+readonly EXIT_PASTE_FAILED=73   # tmux could not paste the text; nothing is on the line
+readonly EXIT_ENTER_FAILED=74   # the text is on the line, Enter did not reach it
 # A 75 or 77 prints 'REFUSED_KIND: <kind>' on the line right after its REFUSED: text, and no other exit prints
 # one; callers classify by the kind, never by the REFUSED: words. The exit code follows from the kind:
 # not_opted_in is 77, every other kind 75. A held lock is other_caller; each reason tmux_pane_gate_refusal gives
@@ -42,6 +48,7 @@ readonly REFUSED_KIND_PREFIX='REFUSED_KIND: '
 readonly KIND_NOT_OPTED_IN=not_opted_in
 readonly KIND_OTHER_CALLER=other_caller
 readonly KIND_UNKNOWN=unknown
+readonly KIND_NOT_ZSH=not_zsh   # run.zsh's own reason: a laid-out text into a pane whose shell is not zsh
 readonly GATE_REASON_KINDS=(
   "'not opted in'*"                          "${KIND_NOT_OPTED_IN}"
   "'in copy mode'*"                          copy_mode
@@ -162,7 +169,11 @@ in the prompt. TEXT is one line, with no control characters, no leading clear, n
 the opt-in ('${OPT_IN_COMMAND}', 'ari-remote-tmux on' or ${OPT_IN_OPTION}, case and quotes ignored, a new pane's
 startup command included); any of those exits 1 before connecting. Claude never sets the opt-in, by any route.
 Panes are named 'ID=%301|pane=2.4'.
-After typing it prints 'TYPED: <the exact text sent>' and, once Enter is sent (or skipped), 'SENT'.
+A --cmd is handed to run_log when the host has ${HOST_RUN_LOG} (else typed bare, with a NOTE: line), in the form
+a /ari-driving-tmux run link types (its Command layout; wrap_run_log_text in its lib/wrap.zsh): one line, or a
+quoted heredoc over several lines, never '\\''. It goes in as one bracketed paste; a text over several lines
+goes into a zsh pane only. After typing it prints 'TYPED: <the exact text sent>', spanning those lines, and,
+once Enter is sent (or skipped), 'SENT'.
 
 A pane is bound to the Claude session (\$CLAUDE_CODE_SESSION_ID) that first types into it, in
 ${BINDINGS_DIR}/<definition>/<pane>; another session is refused with ${EXIT_BOUND_ELSEWHERE} and types nothing.
@@ -193,15 +204,16 @@ ${c_bold}Options:${c_rst}
   --name NAME             with --put: what the file is, letters, digits, . _ -; default FILE's basename without its
                           last extension (swap.py -> swap, queue.tar.gz -> queue.tar, .env -> .env)
   --no-enter              type without pressing Enter (Ari presses it)
-  --no-run-log            type the command bare; by default it is typed as run_log '<cmd>' when the host
-                          has ${HOST_RUN_LOG}, so the capture lands in the host's /tmp/run_log
+  --no-run-log            type the command bare instead of handing it to run_log (the default when the host
+                          has ${HOST_RUN_LOG}; its capture lands in the host's /tmp/run_log)
   --no-wait               return right after typing instead of waiting for the shell prompt
   --lines N               pane lines to print (default: ${DEFAULT_LINES})
   --timeout S             seconds to wait for the shell prompt, at least ${POLL_SECONDS} (default: ${DEFAULT_TIMEOUT});
                           set the Bash tool's timeout above it
   --path-prefix DIR       prepended to PATH on the host so tmux resolves (default: ${DEFAULT_PATH_PREFIX}; '' for none)
   --prompt-end STR        what the idle shell-prompt line ends with (default: ${DEFAULT_PROMPT_END})
-  --dry-run               print the host script, or the definition that would be written, and change nothing
+  --dry-run               print the host script (for a --cmd, under 'WOULD TYPE:' the text the pane gets, verbatim),
+                          or the definition that would be written, and change nothing
   -h, --help              show this help
 
 ${c_bold}Exit codes:${c_rst}
@@ -214,10 +226,12 @@ ${c_bold}Exit codes:${c_rst}
        every pane on the host is printed under the refusal, so the right one can be picked without --list
   ${EXIT_NOT_OPTED_IN}   pane not opted in (nothing typed); the line after REFUSED: is '${REFUSED_KIND_PREFIX}${KIND_NOT_OPTED_IN}'
   ${EXIT_BUSY}   pane busy (nothing typed); the line after REFUSED: is '${REFUSED_KIND_PREFIX}<kind>', one of
-       ${KIND_OTHER_CALLER}, $(gate_busy_kinds),
+       ${KIND_OTHER_CALLER}, $(gate_busy_kinds), ${KIND_NOT_ZSH} (the text spans lines and the pane's shell is not zsh),
        ${KIND_UNKNOWN} (a gate reason this version does not map).
        Only ${EXIT_NOT_OPTED_IN} and ${EXIT_BUSY} carry a kind; switch on the exit code first, then on the kind
   ${EXIT_BOUND_ELSEWHERE}   pane bound to another Claude session (nothing typed); get a pane of your own
+  ${EXIT_PASTE_FAILED}   tmux could not paste the text; nothing is on the line; resend once
+  ${EXIT_ENTER_FAILED}   the text is on the line but Enter did not reach it; Ari presses Enter or clears it
   ${EXIT_NOT_FOUND}  tmux not found on the host (--path-prefix)
   ${EXIT_SSH}  ssh could not connect before anything was typed; for a --put, nothing is at the path
 
@@ -702,6 +716,32 @@ binding_block() {
 }
 
 #######################################
+# The script lines that put the text on the pane's line: the command bare, or handed to run_log when the host
+# has HOST_RUN_LOG, in the form /ari-driving-tmux's wrap_run_log_text gives (the lib's rule; never '\''). A
+# text over several lines goes into zsh only, as focus.zsh's layout_refusal holds: another shell would run the
+# heredoc differently, so it is refused with KIND_NOT_ZSH, untyped. One bracketed paste (load-buffer,
+# paste-buffer -p), not send-keys: a newline lands as a newline, not an Enter, and a trailing `;` is not a
+# tmux separator; not the lib's tmux_paste_line, which adds a leading space and turns newlines into CRs.
+# Checked by tests/run-typed-text.test.zsh.
+# Globals: HOST_RUN_LOG REFUSED_KIND_PREFIX KIND_NOT_ZSH EXIT_BUSY EXIT_PASTE_FAILED
+# Arguments: $1 cmd  $2 run_log(true|false)  $3 lines
+# Returns: the script lines on stdout
+#######################################
+type_block() {
+  local cmd="${1}" run_log="${2}" lines="${3}" run_log_text
+  print -r -- "typed=${(qq)cmd}"
+  if [[ "${run_log}" == "true" ]]; then
+    run_log_text="$(wrap_run_log_text '' "${cmd}")"
+    print -r -- "if [ -x \"${HOST_RUN_LOG}\" ]; then typed=${(qq)run_log_text}; else echo \"NOTE: no ${HOST_RUN_LOG} on the host; typed the command bare\"; fi"
+  fi
+  print -r -- "nl=\$(printf '\\n.'); nl=\${nl%.}"
+  print -r -- "case \"\$typed\" in *\"\$nl\"*) program=\$(tmux display-message -p -t \"\$pane\" '#{pane_current_command}'); case \"\$program\" in zsh|-zsh) ;; *) echo \"REFUSED: \$label the command is laid out over several lines, which only zsh reads as one; \$program runs there\"; echo ${(qq)REFUSED_KIND_PREFIX}${KIND_NOT_ZSH}; $(pane_tail_cmd "${lines}"); exit ${EXIT_BUSY} ;; esac ;; esac"
+  print -r -- "buffer=\"ari-driving-remote-\$\$\""
+  print -r -- "printf '%s' \"\$typed\" | tmux load-buffer -b \"\$buffer\" - && tmux paste-buffer -p -r -d -b \"\$buffer\" -t \"\$pane\" || { tmux delete-buffer -b \"\$buffer\" 2>/dev/null; echo \"FAILED: paste into \$label; nothing is on the line\"; exit ${EXIT_PASTE_FAILED}; }"
+  print -r -- "printf 'TYPED: %s\\n' \"\$typed\""
+}
+
+#######################################
 # The wait part of the remote script: poll until the pane's last line ends in the prompt, or sleep 1.
 # Arguments: $1 quoted_target  $2 quoted_prompt_end  $3 wait(true|false)  $4 press_enter(true|false)  $5 timeout
 # Returns: the script lines on stdout
@@ -741,14 +781,9 @@ remote_script() {
   if [[ -n "${cmd}" ]]; then
     gate_block "${quoted_prompt_end}" "${lines}"
     binding_block "${bindings}" "${lines}"
-    print -r -- "typed=${(qq)cmd}"
-    if [[ "${run_log}" == "true" ]]; then
-      print -r -- "if [ -x \"${HOST_RUN_LOG}\" ]; then typed=${(qq)${:-run_log ${(qq)cmd}}}; else echo \"NOTE: no ${HOST_RUN_LOG} on the host; typed the command bare\"; fi"
-    fi
-    print -r -- "tmux send-keys -t \"\$pane\" -l -- \"\$typed\" || { echo \"FAILED: send-keys to \$label\"; exit 1; }"
-    print -r -- "printf 'TYPED: %s\\n' \"\$typed\""
+    type_block "${cmd}" "${run_log}" "${lines}"
   fi
-  if [[ "${press_enter}" == "true" ]]; then print -r -- "tmux send-keys -t \"\$pane\" Enter || { echo \"FAILED: Enter to \$label\"; exit 1; }"; fi
+  if [[ "${press_enter}" == "true" ]]; then print -r -- "tmux send-keys -t \"\$pane\" Enter || { echo \"FAILED: Enter to \$label; the text is on the line\"; exit ${EXIT_ENTER_FAILED}; }"; fi
   if [[ -n "${cmd}" ]]; then
     # From here a dropped connection must not read as "never typed": the caller sees SENT.
     print -r -- "echo SENT"
@@ -969,6 +1004,14 @@ report_exit() {
     fi
     return 0
   fi
+  if (( exit_code == EXIT_PASTE_FAILED )); then
+    log::err "tmux could not paste the text; nothing is on the line | target='${target}' hint='resend once, announced again; a second failure goes to Ari with the label'"
+    return 0
+  fi
+  if (( exit_code == EXIT_ENTER_FAILED )); then
+    log::err "Enter did not reach the pane; the text is on the line | target='${target}' hint='tell Ari, as for --no-enter; type nothing more there until he pressed Enter or cleared it'"
+    return 0
+  fi
   if (( exit_code == EXIT_NOT_FOUND )); then
     log::err "tmux not found on the host | host='${host}' path_prefix='${path_prefix}' hint=\"--path-prefix '' on Linux, /opt/homebrew/bin on a Mac\""
     return 0
@@ -1000,7 +1043,7 @@ list_windows() {
   output="$(list_with_owners "${name}" "${output}")"
   print -r -- "${output}"
   # The reminder that holds after a compaction, when SKILL.md may be out of context: the first --cmd is the one most often sent unannounced.
-  print -r -- "NEXT: a --cmd into a ✦ pane goes in chat first: its label in inline code, then the bare command in a fenced block, above the Bash call; --cmd '' needs none"
+  print -r -- "NEXT: a --cmd into a ✦ pane goes in chat first: its label in inline code, then the one line you pass --cmd in a fenced block (never the run_log form TYPED: shows), above the Bash call; --cmd '' needs none"
   windows="${(pj:$WINDOWS_SEPARATOR:)${(f)"$(print -r -- "${output}" | awk "${AWK_WINDOW_NAMES}")"}}"
   record_definition "${name}" false "${windows}" "" true
 }
@@ -1057,6 +1100,7 @@ run_command() {
   if [[ "${dry_run}" == "true" ]]; then
     log::info "Dry run — printing the host script, sending nothing"
     print -r -- "${script}"
+    print_would_type
     return 0
   fi
   local output
@@ -1082,6 +1126,36 @@ run_command() {
 }
 
 #######################################
+# What a dry run would paste, verbatim: the host script above shows it sh-quoted, where '\'' is the script's
+# quoting, not the pane's.
+# Globals: cmd run_log HOST_RUN_LOG
+#######################################
+print_would_type() {
+  if [[ -z "${cmd}" ]]; then
+    return 0
+  fi
+  if [[ "${run_log}" == "true" ]]; then
+    print -r -- "WOULD TYPE (when the host has ${HOST_RUN_LOG}):"
+    wrap_run_log_text '' "${cmd}"
+  fi
+  print -r -- "WOULD TYPE (bare):"
+  print -r -- "${cmd}"
+}
+
+#######################################
+# Source /ari-driving-tmux's layout lib for a run_log-wrapped --cmd; every other mode runs without it.
+# Globals: LIB_WRAP
+# Returns: 1 when the lib is missing
+#######################################
+load_wrap_lib() {
+  if [[ ! -r "${LIB_WRAP}" ]]; then
+    log::err "Missing command layout lib; nothing typed | path='${LIB_WRAP}' hint='link the ari-driving-tmux skill (/ari-dotfiles-skill-registry); --no-run-log types the command bare meanwhile'"
+    return 1
+  fi
+  source "${LIB_WRAP}"
+}
+
+#######################################
 # Check the flags a --cmd run needs.
 # Globals: name target cmd lines timeout prompt_end def
 # Returns: 1 on the first bad value
@@ -1104,6 +1178,9 @@ validate_run_args() {
   if [[ -n "${cmd}" ]] && ! refusal="$(tmux_opt_in_refusal "${cmd}")"; then
     log::err "Refusing --cmd; nothing typed | reason='${refusal}'"
     return 1
+  fi
+  if [[ -n "${cmd}" && "${run_log}" == "true" ]]; then
+    load_wrap_lib || return 1
   fi
   if [[ -n "${cmd}" && -z "${SESSION_ID}" ]]; then
     log::err "CLAUDE_CODE_SESSION_ID is unset; nothing typed | hint='run.zsh types only from a Claude session, whose id binds the pane; never set or unset it by hand'"

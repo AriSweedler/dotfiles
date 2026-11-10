@@ -37,11 +37,12 @@ mkdir -p "${T}/bin" "${T}/data" "${T}/state" "${T}/cache"
 # The fake tmux: one pane, %5, whose state comes from FAKE_OPT_IN (on), FAKE_MODE and FAKE_SYNC (0), FAKE_FG (zsh),
 # FAKE_EARLIER (the pane's earlier output), FAKE_LAST (its last line, 'home ❯'), FAKE_INPUT_FAILS (set: tmux cannot
 # read the pane's mode) and FAKE_PANE_GONE (set: %5 closes after it resolved; real tmux then answers the opt-in
-# lookup with nothing, and list-panes without it).
+# lookup with nothing, and list-panes without it). It answers the buffer commands, so a pane that passes the
+# gate is typed into.
 cat > "${T}/bin/tmux" <<'FAKE'
 #!/usr/bin/env zsh
 case "${1}" in
-  list-sessions|send-keys) exit 0 ;;
+  list-sessions|send-keys|load-buffer|paste-buffer|delete-buffer) exit 0 ;;
   list-panes)
     if [[ -n "${FAKE_PANE_GONE:-}" && -e "${FAKE_STATE}/resolved" ]]; then print -r -- '%9'; exit 0; fi
     : > "${FAKE_STATE}/resolved"
