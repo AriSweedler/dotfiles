@@ -25,8 +25,9 @@ unset prefix
 unset brew_prefix
 
 # Keep interactive brew commands fast: no self-update, no upgrading the dependents of whatever
-# an install touches, no cleanup pass. Exported, or brew never sees them. The `brew-update`
-# dotfiles job keeps Homebrew current in the background instead.
+# an install touches, no cleanup pass. Exported, or brew never sees them. Nothing refreshes
+# Homebrew in the background (the Nix flakes declare what it holds): `brew update` by hand
+# before declaring a formula that needs a newer index.
 export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
 export HOMEBREW_NO_INSTALL_CLEANUP=1

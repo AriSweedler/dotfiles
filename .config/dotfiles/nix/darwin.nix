@@ -45,7 +45,7 @@
   homebrew = {
     enable = true;
     onActivation = {
-      autoUpdate = false; # the brew-update dotfiles job refreshes Homebrew instead
+      autoUpdate = false; # a switch stays offline for Homebrew's index; `brew update` by hand when a declared formula needs a newer one
       upgrade = false;
       cleanup = "uninstall";
     };
