@@ -27,7 +27,7 @@ set -euo pipefail
 export OTTO_LOG_NOTIF_GROUP="chrome-headless"
 export OTTO_LOG_NOTIF_TITLE="chrome-headless"
 export OTTO_DEBUG="${OTTO_DEBUG:-0}"
-source "${HOME}/.config/zsh/plugins/log.zsh"
+source "${ARI_ZSHLIB:-${HOME}/.config/zsh/plugins}/log.zsh"
 
 # Playwright's browser cache. PLAYWRIGHT_BROWSERS_PATH wins when set, as it does
 # for Playwright itself.

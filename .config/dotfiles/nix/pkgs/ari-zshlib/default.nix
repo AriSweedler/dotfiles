@@ -13,6 +13,7 @@ let
   liveDefaults = [
     "\${ARI_ZSHLIB:-\${HOME}/.config/zsh/plugins}"
     "\${ARI_ZSHLIB:-\${HOME}/.claude/skills/ari-skill-shellscripts/lib}"
+    "\${ARI_ZSHLIB:-\${HOME}/.config/bash/plugins}"
   ];
   pluginsDefault = "\${ARI_PLUGINS:-\${HOME}/.config/zsh/plugins}";
 in

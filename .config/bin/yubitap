@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-source "${HOME}/.config/zsh/plugins/log.zsh"
+source "${ARI_ZSHLIB:-${HOME}/.config/zsh/plugins}/log.zsh"
 
 readonly DEFAULT_TIMEOUT_SECS=45
 readonly MAX_TAP_ATTEMPTS=3

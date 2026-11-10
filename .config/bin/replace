@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-source "${XDG_CONFIG_HOME:-${HOME}/.config}/bash/plugins/log.bash"
-source "${XDG_CONFIG_HOME:-${HOME}/.config}/bash/plugins/arg.bash"
+source "${ARI_ZSHLIB:-${HOME}/.config/bash/plugins}/log.bash"
+source "${ARI_ZSHLIB:-${HOME}/.config/bash/plugins}/arg.bash"
 NL='
 '
 VERS='1.0'

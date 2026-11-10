@@ -22,7 +22,7 @@ set -euo pipefail
 export OTTO_LOG_NOTIF_GROUP="notif-center"
 export OTTO_LOG_NOTIF_TITLE="notif-center"
 export OTTO_DEBUG="${OTTO_DEBUG:-0}"
-source "${HOME}/.config/zsh/plugins/log.zsh"
+source "${ARI_ZSHLIB:-${HOME}/.config/zsh/plugins}/log.zsh"
 
 readonly DB_DIR="${HOME}/Library/Group Containers/group.com.apple.usernoted/db2"
 

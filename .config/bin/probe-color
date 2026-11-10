@@ -9,7 +9,7 @@ emulate -L zsh
 
 fpath=("${HOME}/.config/zsh/functions" $fpath)
 autoload -Uz log::err log::info log::warn
-source "${HOME}/.config/zsh/plugins/colors.zsh"
+source "${ARI_PLUGINS:-${HOME}/.config/zsh/plugins}/colors.zsh"
 
 print -- "TERM=${TERM:-} COLORTERM=${COLORTERM:-} TERM_PROGRAM=${TERM_PROGRAM:-}${TMUX:+ (inside tmux)}"
 

@@ -25,12 +25,15 @@
 # empty or unchanged text would destroy the rich copy for no gain.
 set -euo pipefail
 
-readonly LOG_LIB="${HOME}/.config/zsh/plugins/log.zsh"
+readonly LOG_LIB="${ARI_ZSHLIB:-${HOME}/.config/zsh/plugins}/log.zsh"
 [[ -r "${LOG_LIB}" ]] || { print -r -- "[pbpastelinks] missing log lib | path='${LOG_LIB}'" >&2; exit 1; }
 source "${LOG_LIB}"
 
 readonly SWIFT_SRC="${HOME}/.config/bin/pbpastelinks-extract.swift"
 readonly SWIFT_RUN="${HOME}/.config/bin/swift-run"
+# The extractor compiled ahead of time (pkgs/mac-utils sets the default); empty: swift-run
+# compiles SWIFT_SRC on first use.
+readonly EXTRACT_BIN="${PBPASTELINKS_EXTRACT_BIN:-}"
 
 #######################################
 # Verify required binaries exist.
@@ -39,11 +42,16 @@ readonly SWIFT_RUN="${HOME}/.config/bin/swift-run"
 check_prerequisites() {
   local missing=()
   local cmd
-  for cmd in pbcopy pbpaste perl swiftc; do
+  for cmd in pbcopy pbpaste perl; do
     command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
   done
-  [[ -x "${SWIFT_RUN}" ]] || missing+=("${SWIFT_RUN}")
-  [[ -r "${SWIFT_SRC}" ]] || missing+=("${SWIFT_SRC}")
+  if [[ -n "${EXTRACT_BIN}" ]]; then
+    [[ -x "${EXTRACT_BIN}" ]] || missing+=("${EXTRACT_BIN}")
+  else
+    command -v swiftc >/dev/null 2>&1 || missing+=(swiftc)
+    [[ -x "${SWIFT_RUN}" ]] || missing+=("${SWIFT_RUN}")
+    [[ -r "${SWIFT_SRC}" ]] || missing+=("${SWIFT_SRC}")
+  fi
   if (( ${#missing} > 0 )); then
     log::err "missing required commands or files | missing='${(j:, :)missing}'"
     return 1
@@ -120,7 +128,11 @@ main() {
   # The extractor emits its own diagnostic block to stderr on failure (FAIL/hint/flavor
   # list/preview) and one "hit" line on success; its exit code passes through.
   local html rc=0
-  html="$("${SWIFT_RUN}" "${run_flags[@]}" "${SWIFT_SRC}")" || rc="${?}"
+  if [[ -n "${EXTRACT_BIN}" ]]; then
+    html="$("${EXTRACT_BIN}")" || rc="${?}"
+  else
+    html="$("${SWIFT_RUN}" "${run_flags[@]}" "${SWIFT_SRC}")" || rc="${?}"
+  fi
   if (( rc != 0 )); then
     return "${rc}"
   fi
