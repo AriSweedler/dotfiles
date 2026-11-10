@@ -1,7 +1,8 @@
 #!/usr/bin/env zsh
 # Automated tests for lib/await.zsh: the guard's endings, await::run's codes (0, rc, 124, 130),
 # the refusal of a helper outside a wait, nested waits, plain and interactive renderings, slots,
-# notes, the style check, and await::until's probe protocol. No tty needed.
+# notes, the step's stderr relayed above the line, the style check, and await::until's probe
+# protocol. No tty needed.
 # Run: zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/await.test.zsh
 set -uo pipefail
 
@@ -13,6 +14,7 @@ export AWAIT_INTERACTIVE=0 AWAIT_TICK_S=0.01 LOG_COLOR=0
 readonly T="${TMPDIR:-/tmp}/await-test-$$"
 mkdir -p "${T}"
 trap 'rm -rf "${T}"' EXIT
+export TMPDIR="${T}"      # every channel and fifo of this run lands here, so the leftover checks see no other process's wait
 
 typeset -i pass=0 fail=0
 check() {   # <name> <want> <got>
@@ -179,7 +181,51 @@ check "AWAIT_BELL=0 silences it" 0 "$(print -rn -- "${out}" | tr -cd '\a' | wc -
 err="$( AWAIT_INTERACTIVE=1 guarded 4 x 2>&1 )"
 contains "interactive ✗ shows the args" "args='4 x'" "${err}"
 
-# 8. await::until: the probe's words rule
+# 8. the step's stderr: relayed above the line when interactive, passed through when plain; the probe's too
+clear=$'\e[K'
+logs() { print -u2 "[INFO] copying | rel='a.gcode'"; sleep 0.15; print -u2 "  second line, indented"; sleep 0.15; }
+raw="$( AWAIT_INTERACTIVE=1 AWAIT_BELL=0 await::run --slots 1 "copying…" -- logs 2>&1 >/dev/null )"
+lines=("${(@f)raw}")
+check "interactive: a step's two stderr lines each get a line, then the ✓ line" 3 "${#lines}"
+check "interactive: the first stderr line is whole on its own line" "[INFO] copying | rel='a.gcode'" "${lines[1]##*${clear}}"
+check "interactive: the second keeps its leading spaces" "  second line, indented" "${lines[2]##*${clear}}"
+check "interactive: the ✓ line comes last" 1 "$([[ "${lines[3]}" == *'✓'*copying* && "${lines[3]}" != *second* ]] && print 1 || print 0)"
+check "interactive: one slot draws the slot cell and the frame, both spinning" 1 "$([[ "${raw}" == *'['[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]']'*' '[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]' copying'* ]] && print 1 || print 0)"
+err="$( await::run "copying…" -- logs 2>&1 )"
+contains "plain: the step's stderr passes through as it came" $'\n[INFO] copying | rel=\'a.gcode\'\n  second line, indented\n' "${err}"
+lacks "plain: the step's stderr is not rewritten as a note" "[AWAIT] note" "${err}"
+check "plain: the ✓ line still comes last" 1 "$([[ "${err}" == *"second line, indented"*'✓ success: copying'* ]] && print 1 || print 0)"
+chatty() { while true; do print -u2 tick; sleep 0.05; done; }
+raw="$( AWAIT_INTERACTIVE=1 AWAIT_BELL=0 await::run --timeout 0.3 "m" -- chatty 2>&1 >/dev/null )"; rc=$?
+check "interactive: a chatty step killed by --timeout is 124" 124 "${rc}"
+check "interactive: its ticks precede the ✗ line, which is last" 1 "$([[ "${raw}" == *tick*'✗'*'timed out: m'* && "${raw##*timed out}" != *tick* ]] && print 1 || print 0)"
+leftovers=("${TMPDIR:-/tmp}"/await.*(N))
+check "interactive: no fifo is left behind after the relay" 0 "${#leftovers}"
+probe_logs() { print -u2 "probe looked"; print "success seen"; }
+raw="$( AWAIT_INTERACTIVE=1 AWAIT_BELL=0 await::until --timeout 5 -- probe_logs 2>&1 )"; rc=$?
+lines=("${(@f)raw}")
+check "until interactive: the probe's stderr is a line above, then the ✓ line" 2 "${#lines}"
+check "until interactive: the probe's line is whole" "probe looked" "${lines[1]##*${clear}}"
+check "until interactive: the ✓ line comes last" 1 "$([[ "${lines[2]}" == *'✓'*seen* ]] && print 1 || print 0)"
+out="$( await::until --timeout 5 -- probe_logs 2>&1 )"
+contains "until plain: the probe's stderr passes through before its state" $'probe looked\n[AWAIT] ✓ success: seen' "${out}"
+orphan() { ( sleep 1.5; print -u2 "late line" ) & print -u2 "step line"; }
+t0=${EPOCHREALTIME}
+AWAIT_INTERACTIVE=1 AWAIT_BELL=0 await::run "m" -- orphan 2>"${T}/orphan.err" >/dev/null; rc=$?
+elapsed=$(( EPOCHREALTIME - t0 ))
+check "interactive: a step that leaves a child holding stderr still ends 0" 0 "${rc}"
+check "interactive: its ✓ waits about a second for that child, not for its exit" 1 "$(( elapsed >= 0.9 && elapsed < 1.5 ))"
+sleep 1
+raw="$(<"${T}/orphan.err")"
+check "interactive: the child's later line prints under the ✓, and the child lives" 1 "$([[ "${raw%%late line*}" == *'✓'* && "${raw}" == *'late line'* ]] && print 1 || print 0)"
+inner_refused() { TMPDIR="${T}/nope" await::run "inner" -- true; print -r -- "inner rc=$?"; }
+out="$( await::run "outer" -- inner_refused 2>"${T}/refused.err" )"; rc=$?
+err="$(<"${T}/refused.err")"
+contains "a refused inner wait (no TMPDIR) returns 2 to the step" "inner rc=2" "${out}"
+check "a refused inner wait leaves the outer at 0" 0 "${rc}"
+contains "a refused inner wait still lets the outer end ✓" "✓ success: outer" "${err}"
+
+# 9. await::until: the probe's words rule
 counter="${T}/counter"; print 0 > "${counter}"
 probe_counts() {
   local calls=$(( $(<"${counter}") + 1 )); print "${calls}" > "${counter}"
@@ -209,7 +255,7 @@ check "until without a probe is 2" 2 "${rc}"
 out="$( await::until --bogus 1 --timeout 5 -- probe_fails 2>&1 )"; rc=$?
 check "until refuses an unknown flag with 2" 2 "${rc}"
 
-# 9. ctrl-c during await::run ends as 130 and the step is killed, in a child shell
+# 10. ctrl-c during await::run ends as 130 and the step is killed, in a child shell
 cat > "${T}/int.zsh" <<'CHILD'
 source "${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
 source "${HOME}/.claude/skills/ari-skill-shellscripts/lib/await.zsh"
@@ -230,7 +276,7 @@ contains "ctrl-c in run is reported as interrupted" "✗ failure: interrupted: m
 sleep 0.3
 check "ctrl-c in run killed the step" 0 "$(pgrep -f '^sleep 60$' | wc -l | tr -d ' ')"
 
-# 10. the style check: a state call wants `; {` on its line or `{` on the next
+# 11. the style check: a state call wants `; {` on its line or `{` on the next
 cat > "${T}/style.zsh" <<'FIX'
 source "${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
 source "${HOME}/.claude/skills/ari-skill-shellscripts/lib/await.zsh"

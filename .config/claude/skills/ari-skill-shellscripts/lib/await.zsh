@@ -21,6 +21,7 @@
 #       read -k 1 -s < /dev/tty
 #     }
 #     await::computer "frobbing some more…"; {
+#       log::info "Frobbing | widget='${1}'"     # lands above the line; no await::note needed
 #       frob_more
 #     }
 #   }
@@ -47,17 +48,31 @@
 # bare await::_guard it only shows n/Ns on the line.
 #
 # Inside a wait, and only there: await::computer "msg", await::user "msg", await::progress N,
-# await::note "text" (printed above the line), and by hand await::success "msg" / await::failure
-# "msg" [rc]. They talk to the renderer through the descriptor in AWAIT_FD; called outside a wait
-# they print `YOU MUST CALL <name> INSIDE await::run OR await::_guard (AWAIT_FD is unset)` and
-# return 2. A wait inside a wait nests: the outer line is left frozen where it stands, the inner
-# draws its own line one space further in, and when the inner ends the outer resumes on a fresh
-# line with its elapsed time still counting (AWAIT_DEPTH is the nesting depth, 0 at the top):
+# await::note "text" (a line above the status line, tagged `[AWAIT] note:` when plain), and by hand
+# await::success "msg" / await::failure "msg" [rc]. They talk to the renderer through the descriptor
+# in AWAIT_FD; called outside a wait they print `YOU MUST CALL <name> INSIDE await::run OR
+# await::_guard (AWAIT_FD is unset)` and return 2.
+#
+# Stderr: a step's stderr (log::info, run_mut, anything) needs no call. Interactive, await::run
+# relays each line above the status line and the ✓/✗ line comes last; await::until does the same
+# with its probe's stderr. Plain passes it through. Only stderr is relayed: a step's stdout lands on
+# the line. The relay reads whole lines, so a prompt with no newline stays unseen: a question inside
+# a wait is await::user plus a read from /dev/tty. A bare await::_guard has no relay. A child the
+# step leaves running keeps the relay alive: the ✓ waits up to AWAIT_DRAIN_S (1 s) for it, then its
+# later lines print under the ✓. A tool that tests its stderr for a tty sees a pipe under the relay.
+#
+# A wait inside a wait nests: the outer line is left frozen where it stands, the inner draws its
+# own line one space further in, and when the inner ends the outer resumes on a fresh line with
+# its elapsed time still counting:
 #
 #   ⠹ frobbing the widget…                 ← frozen while the inner runs
 #    ✓ frobbing the sub-widget…            ← the inner's final line, indented one space
 #   ⠼ frobbing the widget… (7s)            ← the outer, resumed
 #   ✓ frobbing the widget…
+#
+# With --slots the current cell and the frame beside the message both spin: one slot reads
+# `[⠋] ⠋ copying…`. Only the frame switches to the magenta pulse on the person's turn; the cell
+# keeps the spinner until its slot is done.
 #
 # House style: every state call (computer, user) is followed by `; {` and an indented group holding
 # that state's work, so whose turn it is reads at a glance. await::_is_shell_block checks the call
@@ -65,11 +80,18 @@
 #
 # The declarative loop, await::until [--interval S] [--timeout S] [--slots N] -- probe args…: the
 # probe prints `<state> <message>` (computer|user|success|failure) and `progress <n>` lines; its
-# words rule. Returns 0, 1, 124, 130, or 2 for an unknown state or flag.
+# words rule, and every other stdout line is an unknown state. Returns 0, 1, 124, 130, or 2 for an
+# unknown state or flag. The probe runs every interval, so it logs a change of state, never a look.
 #
-# Renderings: interactive (stderr is a tty; AWAIT_INTERACTIVE=1|0 overrides) redraws one line in
-# place; plain prints one `[AWAIT] …` line per state change and nothing on a tick, for logs, pipes
-# and agents. AWAIT_BELL=0 silences the bell. Names with `_` after `::` are internal.
+# Renderings: interactive (the outermost wait's stderr is a tty; AWAIT_INTERACTIVE=1|0 overrides)
+# redraws one line in place; plain prints one `[AWAIT] …` line per state change and nothing on a
+# tick, for logs, pipes and agents. Names with `_` after `::` are internal.
+#
+# Environment: AWAIT_INTERACTIVE=1|0 forces the rendering; AWAIT_BELL=0 silences the bell;
+# AWAIT_TICK_S is await::until's default --interval (0.1); AWAIT_DRAIN_S is the relay's grace (1).
+# Exported for the wait's children, never set by hand: AWAIT_FD (the channel), AWAIT_DEPTH (the
+# nesting depth, 0 at the top), AWAIT_TTY (the outermost wait's copy of stderr, where every
+# renderer draws).
 
 [[ -n "${_ARI_AWAIT_ZSH:-}" ]] && return 0
 readonly _ARI_AWAIT_ZSH=1
@@ -87,8 +109,8 @@ alias await::_guard='setopt localoptions localtraps; trap '\''await::_end $? || 
 
 typeset -ga _AWAIT_SPINNER=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
 typeset -ga _AWAIT_PULSE=(◆ ◆ ◆ ◆ ◇ ◇ ◇ ◇)
-typeset -g _await_fd='' _await_dir='' _await_renderer='' _await_child='' _await_msg='' _await_args=''
-typeset -g _await_ended=0 _await_slots=0 _await_timeout=0 _await_started=0 _await_interactive=0 _await_interrupted=0
+typeset -g _await_fd='' _await_dir='' _await_renderer='' _await_child='' _await_relay='' _await_msg='' _await_args=''
+typeset -g _await_ended=0 _await_slots=0 _await_timeout=0 _await_started=0 _await_interactive=0 _await_interrupted=0 _await_begun=0
 
 #######################################
 # Open a wait: parse the grammar, make the channel, fork the renderer. Called by the alias.
@@ -109,22 +131,29 @@ await::_begin() {
     log::err "await: the grammar is [--timeout S] [--slots N] \"<message>\" -- <rest…> | got='${*}'"
     return 2
   fi
+  # What can fail comes first, so a refused wait leaves an outer wait, if any, untouched.
+  _await_begun=0
+  local dir fd
+  dir="$(mktemp -d "${TMPDIR:-/tmp}/await.XXXXXX")" || { log::err "await: mktemp failed | tmpdir='${TMPDIR:-/tmp}'"; return 2; }
+  mkfifo "${dir}/channel" || { log::err "await: mkfifo failed | dir='${dir}'"; rm -rf "${dir}"; return 2; }
   if [[ -n "${AWAIT_FD:-}" ]]; then        # a wait inside a wait: freeze the outer line, go one space in
     await::_push
     print -u "${AWAIT_FD}" -- "pause"
     export AWAIT_DEPTH=$(( ${AWAIT_DEPTH:-0} + 1 ))
-  else
-    export AWAIT_DEPTH=0
+  else                                     # the outermost wait: a copy of stderr every renderer under it draws on,
+    export AWAIT_DEPTH=0                   # so a nested wait never writes through the outer step's relay
+    local tty
+    exec {tty}>&2
+    export AWAIT_TTY="${tty}"
   fi
+  _await_begun=1
   _await_msg="${1}"; shift 2
   _await_args="${*}"
-  _await_slots="${slots}" _await_timeout="${timeout}" _await_started="${EPOCHREALTIME}" _await_ended=0 _await_child='' _await_interrupted=0
+  _await_dir="${dir}"
+  _await_slots="${slots}" _await_timeout="${timeout}" _await_started="${EPOCHREALTIME}" _await_ended=0 _await_child='' _await_relay='' _await_interrupted=0
   _await_owner="${sysparams[pid]:-$$}"
-  if [[ -t 2 ]]; then _await_interactive=1; else _await_interactive=0; fi
+  if [[ -t "${AWAIT_TTY}" ]]; then _await_interactive=1; else _await_interactive=0; fi
   [[ -n "${AWAIT_INTERACTIVE:-}" ]] && _await_interactive="${AWAIT_INTERACTIVE}"
-  _await_dir="$(mktemp -d "${TMPDIR:-/tmp}/await.XXXXXX")" || { log::err "await: mktemp failed"; return 2; }
-  mkfifo "${_await_dir}/channel" || { log::err "await: mkfifo failed | dir='${_await_dir}'"; return 2; }
-  local fd
   exec {fd}<>"${_await_dir}/channel"
   _await_fd="${fd}"
   export AWAIT_FD="${fd}"
@@ -141,10 +170,15 @@ await::_begin() {
 await::_end() {
   local rc="${1:-0}"
   (( _await_interrupted )) && rc=130        # a ctrl-c is a ctrl-c whatever status the return carried
+  if (( ! _await_begun )); then             # _begin refused this wait: nothing of it exists; an outer wait lives on
+    [[ -n "${_await_fd}" ]] && _await_begun=1
+    return 0
+  fi
   [[ -n "${_await_fd}" ]] || return 0
   if [[ -n "${_await_child}" ]] && kill -0 "${_await_child}" 2>/dev/null; then
     kill -TERM "${_await_child}" 2>/dev/null
   fi
+  await::_drain_relay                       # every line the step logged lands before the final one
   if (( ! _await_ended )); then
     if (( rc == 0 )); then print -u "${_await_fd}" -- "success ${_await_msg}"
     elif (( rc == 130 )); then print -u "${_await_fd}" -- "failure 130 interrupted: ${_await_msg}"
@@ -160,14 +194,17 @@ await::_end() {
   wait "${_await_renderer}" 2>/dev/null
   exec {_await_fd}>&-
   rm -rf "${_await_dir}"
-  _await_fd='' _await_dir='' _await_renderer='' _await_child='' _await_ended=0
+  _await_fd='' _await_dir='' _await_renderer='' _await_child='' _await_relay='' _await_ended=0
   if (( ${#_await_stack} > 0 )); then       # back to the outer wait: it resumes on a fresh line
     await::_pop
     export AWAIT_FD="${_await_fd}"
     export AWAIT_DEPTH=$(( AWAIT_DEPTH - 1 ))
     print -u "${_await_fd}" -- "resume"
   else
-    unset AWAIT_FD AWAIT_DEPTH
+    local tty="${AWAIT_TTY}"
+    exec {tty}>&-
+    unset AWAIT_FD AWAIT_DEPTH AWAIT_TTY
+    _await_begun=0
   fi
   # A `return 130` issued from inside the INT trap reaches the caller as status 1 when the trap fired
   # mid-loop (zsh 5.9, seen on the laptop). Only a `return` in the trap list itself sets the caller's
@@ -181,7 +218,7 @@ typeset -ga _await_stack
 typeset -g _await_owner=''
 await::_push() {
   local -a f
-  f=("${_await_fd}" "${_await_dir}" "${_await_renderer}" "${_await_child}" "${_await_msg}" "${_await_args}" "${_await_ended}" "${_await_slots}" "${_await_timeout}" "${_await_started}" "${_await_interactive}" "${_await_owner}")
+  f=("${_await_fd}" "${_await_dir}" "${_await_renderer}" "${_await_child}" "${_await_msg}" "${_await_args}" "${_await_ended}" "${_await_slots}" "${_await_timeout}" "${_await_started}" "${_await_interactive}" "${_await_owner}" "${_await_relay}")
   _await_stack+=("${(pj:\x1f:)f}")
 }
 await::_pop() {
@@ -189,7 +226,41 @@ await::_pop() {
   f=("${(@ps:\x1f:)_await_stack[-1]}")
   _await_stack[-1]=()
   _await_fd="${f[1]}" _await_dir="${f[2]}" _await_renderer="${f[3]}" _await_child="${f[4]}" _await_msg="${f[5]}" _await_args="${f[6]}"
-  _await_ended="${f[7]}" _await_slots="${f[8]}" _await_timeout="${f[9]}" _await_started="${f[10]}" _await_interactive="${f[11]}" _await_owner="${f[12]}"
+  _await_ended="${f[7]}" _await_slots="${f[8]}" _await_timeout="${f[9]}" _await_started="${f[10]}" _await_interactive="${f[11]}" _await_owner="${f[12]}" _await_relay="${f[13]}"
+}
+
+#######################################
+# The relay: stdin, line by line, into the wait, until EOF. Interactive: each line becomes a note
+# above the status line; once the renderer is gone (a child the step left behind still writing),
+# each line goes to the terminal as it came. Plain: each line goes to stderr as it came. Runs in
+# the background for a step (await::run) or as a process substitution for a probe (await::until).
+# Globals: _await_interactive, _await_renderer, AWAIT_FD, AWAIT_TTY
+#######################################
+await::_relay() {
+  local line
+  trap '' INT                               # a ctrl-c ends the step; the relay reads it out to EOF
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    if (( ! _await_interactive )); then print -r -u2 -- "${line}"
+    elif kill -0 "${_await_renderer}" 2>/dev/null; then print -r -u "${AWAIT_FD}" -- "note ${line}"
+    else print -r -u "${AWAIT_TTY}" -- "${line}"; fi
+  done
+}
+
+#######################################
+# Wait up to AWAIT_DRAIN_S (1 s) for await::run's relay to reach EOF, so its notes precede the
+# final line. A step that left a child holding stderr keeps the relay alive past that: it is left
+# running and prints the child's later lines under the final line.
+# Globals: _await_relay (cleared)
+#######################################
+await::_drain_relay() {
+  [[ -n "${_await_relay}" ]] || return 0
+  local deadline=$(( EPOCHREALTIME + ${AWAIT_DRAIN_S:-1} ))
+  while kill -0 "${_await_relay}" 2>/dev/null && (( EPOCHREALTIME < deadline )); do
+    sleep 0.05
+  done
+  kill -0 "${_await_relay}" 2>/dev/null || wait "${_await_relay}" 2>/dev/null
+  _await_relay=''
+  return 0
 }
 
 # The check every in-scope helper runs first. Arguments: $1 = the helper's name.
@@ -293,7 +364,14 @@ await::run() {
   fi
   local msg="${1}"; shift 2
   await::_guard "${opts[@]}" "${msg}" -- "$@" || return 2
-  "$@" &
+  if (( _await_interactive )) && mkfifo "${_await_dir}/stderr" 2>/dev/null; then   # the step's stderr goes above the line
+    ( await::_relay < "${_await_dir}/stderr" ) &
+    _await_relay=$!
+    "$@" 2> "${_await_dir}/stderr" &
+  else
+    (( _await_interactive )) && log::warn "await::run: mkfifo failed; the step's stderr stays on the line | dir='${_await_dir}'"
+    "$@" &
+  fi
   _await_child=$!
   local deadline=0
   (( timeout > 0 )) && deadline=$(( EPOCHREALTIME + timeout ))
@@ -341,7 +419,11 @@ await::until() {
   (( timeout > 0 )) && deadline=$(( EPOCHREALTIME + timeout ))
   local out line state msg
   while true; do
-    out="$("$@" 2>/dev/null || true)"
+    if (( _await_interactive )); then       # a group, so the substitution is waited for: its notes land before the state it reports
+      out="$({ "$@"; } 2> >(await::_relay) || true)"
+    else
+      out="$("$@" || true)"
+    fi
     for line in "${(@f)out}"; do
       [[ -z "${line}" ]] && continue
       state="${line%% *}"; msg="${line#* }"; [[ "${msg}" == "${line}" ]] && msg=''
@@ -362,12 +444,13 @@ await::until() {
 }
 
 #######################################
-# The renderer, in the background for the life of one wait: reads the channel, draws, exits after
-# a final state. Globals read: the _await_* fields set by _begin (inherited by the subshell).
+# The renderer, in the background for the life of one wait: reads the channel, draws on AWAIT_TTY,
+# exits after a final state. Globals read: the _await_* fields set by _begin (inherited by the
+# subshell).
 # Arguments: $1 = the channel descriptor
 #######################################
 await::_renderer() {
-  local fd="${1}" state=computer msg="${_await_msg}" done=0 tick=0 line word rest rc rang=0
+  local fd="${1}" out="${AWAIT_TTY}" state=computer msg="${_await_msg}" done=0 tick=0 line word rest rc rang=0
   local -i final=0 paused=0
   local last_plain='' indent=''
   repeat ${AWAIT_DEPTH:-0} indent+=' '          # one space per nesting level
@@ -375,19 +458,19 @@ await::_renderer() {
   await::_draw
   while (( ! final )); do
     if zselect -t 10 -r "${fd}" 2>/dev/null; then
-      read -r -u "${fd}" line || break
+      IFS= read -r -u "${fd}" line || break
       word="${line%% *}"; rest="${line#* }"; [[ "${rest}" == "${line}" ]] && rest=''
       case "${word}" in
-        pause)  paused=1; (( _await_interactive )) && print -u2; continue ;;     # leave the line as it stands
-        resume) paused=0; await::_draw force; continue ;;                        # a fresh line, same state, same clock
+        pause)  paused=1; (( _await_interactive )) && print -u "${out}"; continue ;;     # leave the line as it stands
+        resume) paused=0; await::_draw force; continue ;;                                # a fresh line, same state, same clock
         computer) state=computer; msg="${rest}" ;;
         user)
-          if [[ "${state}" != user ]] && (( _await_interactive )) && [[ "${AWAIT_BELL:-1}" != 0 ]]; then print -nu2 -- $'\a'; fi
+          if [[ "${state}" != user ]] && (( _await_interactive )) && [[ "${AWAIT_BELL:-1}" != 0 ]]; then print -nu "${out}" -- $'\a'; fi
           state=user; msg="${rest}" ;;
         progress)
           done="${rest}"; (( done < 0 )) && done=0; (( done > _await_slots )) && done=${_await_slots} ;;
         note)
-          if (( _await_interactive )); then print -u2 -- $'\r\e[K'"${indent}${rest}"; else print -u2 -- "${indent}${c_grey}[AWAIT] note${c_rst}: ${rest}"; fi ;;
+          if (( _await_interactive )); then print -r -u "${out}" -- $'\r\e[K'"${indent}${rest}"; else print -r -u "${out}" -- "${indent}${c_grey}[AWAIT] note${c_rst}: ${rest}"; fi ;;
         success) state=success; msg="${rest}"; done=${_await_slots}; final=1 ;;
         failure) rc="${rest%% *}"; msg="${rest#* }"; [[ "${msg}" == "${rest}" ]] && msg=''; state=failure; final=1 ;;
         *) continue ;;
@@ -402,7 +485,7 @@ await::_renderer() {
 }
 
 # Draw the current state: in place when interactive, one line per change when plain.
-# Globals: the renderer's locals (state, msg, done, tick, rc, last_plain), the _await_* fields.
+# Globals: the renderer's locals (out, state, msg, done, tick, rc, last_plain), the _await_* fields.
 await::_draw() {
   local elapsed=$(( int(EPOCHREALTIME - _await_started) ))
   if (( ! _await_interactive )); then
@@ -419,7 +502,7 @@ await::_draw() {
     (( _await_slots > 0 )) && progress=" ${done}/${_await_slots}"
     [[ -n "${_await_args}" && ( "${state}" == failure || ${elapsed} -eq 0 && "${state}" == computer ) ]] && ctx=" | args='${_await_args}'"
     [[ "${state}" == failure ]] && ctx=" | rc='${rc}'${ctx}"
-    print -u2 -- "${indent}${tag}${progress}: ${msg} | elapsed_s='${elapsed}'${ctx}"
+    print -u "${out}" -- "${indent}${tag}${progress}: ${msg} | elapsed_s='${elapsed}'${ctx}"
     return 0
   fi
   local frame slots='' tail='' text
@@ -449,7 +532,7 @@ await::_draw() {
     success)  text="${c_green}${msg}${c_rst}" ;;
     failure)  text="${c_red}${msg}${c_rst}"; [[ -n "${_await_args}" ]] && tail+=" ${c_grey}args='${_await_args}'${c_rst}" ;;
   esac
-  print -nu2 -- $'\r'"${indent}${slots}${frame} ${text}${tail}"$'\e[K'
-  [[ "${state}" == success || "${state}" == failure ]] && print -u2
+  print -nu "${out}" -- $'\r'"${indent}${slots}${frame} ${text}${tail}"$'\e[K'
+  [[ "${state}" == success || "${state}" == failure ]] && print -u "${out}"
   return 0
 }

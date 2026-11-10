@@ -242,7 +242,9 @@ run_with_timeout 30 "${err_file}" git fetch origin main || exit_code=$?
 
 ## Waiting with a visible state
 
-A script that waits on something slow MUST say whose turn it is, and MUST let the library end the line. `await::run` draws one status line for as long as a step runs and ends it from the step's exit code: a green ✓ on 0, a red ✗ with the code otherwise, 124 when `--timeout` kills the step, 130 on ctrl-c. The spinner is a background renderer, so it moves while the step blocks. Inside the step, `await::computer "msg"` (grey spinner, the machine's turn) and `await::user "msg"` (magenta pulse, one bell, the person's turn) switch the line; `await::progress N` fills `--slots`; `await::note "text"` prints above the line. Every state call is followed by an indented `{ }` group holding that state's work, so the turn structure is visible at a glance; `await::_is_shell_block` reads the call site and warns once per site when the group is missing. The library is sourced before the functions that use it, in the logging block.
+A script that waits on something slow MUST say whose turn it is, and MUST let the library end the line. Source `lib/await.zsh` on the line after `source "${LIB_LOGGING}"`, before any function is defined: `await::_guard` is an alias and expands only in functions parsed after it.
+
+`await::run` draws one status line while a step runs and ends it from the step's exit code: a green ✓ on 0, a red ✗ with the code otherwise, 124 when `--timeout` kills the step, 130 on ctrl-c. The spinner is a background renderer, so it moves while the step blocks. Interactive mode (the outermost wait's stderr is a tty, or `AWAIT_INTERACTIVE=1`) redraws the line in place; plain mode (not a tty, or `AWAIT_INTERACTIVE=0`) prints one `[AWAIT]` line per state change and nothing on a tick, for logs and agents, and its `[AWAIT] ✓`/`✗` line is the step's last stderr line.
 
 ```zsh
 source "${SKILLS_DIR}/ari-skill-shellscripts/lib/await.zsh"
@@ -253,15 +255,39 @@ step() {
     read -k 1 -s < /dev/tty
   }
   await::computer "frobbing some more…"; {
+    log::info "Frobbing | widget='${1}'"     # lands above the line; no await::note needed
     frob_more
   }
 }
 await::run --slots 3 --timeout 60 "frobbing the widget…" -- step foo bar     # 0, step's code, 124 or 130
 ```
 
-The grammar of both entry points is `[--timeout S] [--slots N] "<message>" -- <rest…>`. Underneath `await::run` is the primitive `await::_guard "<message>" -- "$@"`, for a function that wants to own its message: an alias that expands where the function is parsed, installs the function's EXIT and INT traps, and ends the line when the function returns (`--timeout` is display-only there). The helpers work only inside a wait: outside one they print `YOU MUST CALL <name> INSIDE await::run OR await::_guard (AWAIT_FD is unset)` and return 2. A wait inside a wait nests: the outer line is left frozen where it stands, the inner draws its own line one space further in, and when the inner ends the outer resumes on a fresh line with its clock still running. `await::success "msg"` and `await::failure "msg" [rc]` by hand are allowed inside a wait; the function's return then only reaps. In plain mode (stderr not a tty, or `AWAIT_INTERACTIVE=0`) the same calls print one `[AWAIT]` line per state change and nothing on a tick, so logs and agents read a transcript.
+Inside the step:
 
-When a probe can say where things stand, let the loop be declarative: the probe prints `<state> <message>` (and `progress <n>` lines), and `await::until --interval 0.2 --timeout 30 -- probe` draws and returns 0, 1, 124, 130 or 2. The probe runs in a command substitution, so its state lives in a file or the world, never a variable.
+- `await::computer "msg"` is the machine's turn (grey spinner); `await::user "msg"` is the person's (magenta pulse, one bell). **Each MUST be followed by `; {` and an indented `}` group holding that turn's work**; the library warns once per site when the group is missing.
+- `await::progress N` fills `--slots`. With `--slots` the current cell and the frame beside the message both spin: one slot reads `[⠋] ⠋ copying…` on the machine's turn, `[⠋] ◆ press a key` on the person's (only the frame pulses), `[✓] ✓ copying…` when done. That is correct; never hide it.
+- **Log inside a step as anywhere else (`log::info`, `run_mut`).** Interactive, `await::run` relays every stderr line above the status line and the ✓ or ✗ line comes last; plain, the line passes through as it came. NEVER redirect a step's stderr to keep the line clean (`2>/dev/null`, `2>&1`): the relay then sees nothing. Only stderr is relayed: a step's stdout lands on the line, so status goes through `log::*` and data is printed after the wait. A bare `await::_guard` has no relay.
+- `await::note "text"` prints one line above the status line that is not a log record (a hint for the person); plain mode tags it `[AWAIT] note:`. NEVER report one event through both `log::*` and `await::note`.
+- A question inside a wait is `await::user "…"` plus a read from `/dev/tty`, never a bare stderr prompt: the relay forwards whole lines, so a prompt with no newline stays unseen.
+- A step that backgrounds a command MUST `wait` for it or give it its own stderr: the ✓ waits up to a second for the step's stderr to close, then the child's later lines print under the ✓. A tool that tests its stderr for a tty (colour, a progress bar) sees a pipe under the relay.
+
+A step that logs once and reports `await::progress 1` under `--slots 2`, on the terminal once the wait has ended, then the same run with stderr on a pipe:
+
+```
+[INFO] copying | rel='a.gcode'
+[✓✓] ✓ copying…
+```
+
+```
+[AWAIT] computer 0/2: copying… | elapsed_s='0' | args='step'
+[INFO] copying | rel='a.gcode'
+[AWAIT] computer 1/2: copying… | elapsed_s='0' | args='step'
+[AWAIT] ✓ success 2/2: copying… | elapsed_s='0'
+```
+
+Underneath: the grammar of both entry points is `[--timeout S] [--slots N] "<message>" -- <rest…>`. `await::_guard "<message>" -- "$@"` is the primitive under `await::run`, for a function that owns its message: an alias that installs the function's EXIT and INT traps and ends the line when it returns (`--timeout` is display-only there). A helper outside a wait prints `YOU MUST CALL <name> INSIDE await::run OR await::_guard (AWAIT_FD is unset)` and returns 2. A wait inside a wait nests: the outer line freezes, the inner draws one space further in, and when the inner ends the outer resumes on a fresh line with its clock still running. `await::success "msg"` and `await::failure "msg" [rc]` by hand are allowed inside a wait; the function's return then only reaps.
+
+When a probe can say where things stand, let the loop be declarative: the probe prints `<state> <message>` (and `progress <n>` lines), and `await::until --interval 0.2 --timeout 30 -- probe` draws and returns 0, 1, 124, 130 or 2. Every other stdout line is an unknown state (2). The probe's stderr is relayed like a step's, and the probe runs every interval, so it logs a change of state, never a look. It runs in a command substitution, so its state lives in a file or the world, never a variable, and it never leaves a child behind.
 
 Learn it by watching: `zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/await-lessons` runs ten lessons in order (`--list` prints what each teaches; `--only N` one of them). The automated checks are `zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/await.test.zsh`.
 

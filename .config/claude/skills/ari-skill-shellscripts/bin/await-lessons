@@ -96,6 +96,7 @@ for f in "${files[@]}"; do
   fi
 done
 print -u2 -- "
-${c_bold}That is the whole library:${c_rst} await::run owns the line and ends it from the step's code; two turns
-(computer, user), each followed by its { } group; slots; a timeout (124); ctrl-c (130); a probe loop;
-plain mode for logs; await::_guard underneath; and a refusal for every call made outside a wait."
+${c_bold}That is the whole library:${c_rst} await::run owns the line and ends it from the step's code; the step's
+stderr lands above the line (interactive) or passes through (plain); two turns (computer, user), each
+followed by its { } group; slots; a timeout (124); ctrl-c (130); a probe loop; plain mode for logs;
+await::_guard underneath; and a refusal outside a wait."
