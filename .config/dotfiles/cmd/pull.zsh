@@ -10,11 +10,14 @@ typeset -gA PULL_WHY=()
 verb::define pull 'update the shared tier from origin; name the steps the pulled changes affect'
 verb::usage pull 'pull [--dry-run]'
 verb::about pull <<'EOF'
-'git df pull --rebase --autostash': a fast-forward when nothing is local,
-otherwise the local commits are replayed onto origin, with uncommitted edits
-stashed around it. A replay that conflicts is aborted, the tier is left as it
-was, and the conflicting files are named: resolve by hand
-('git df pull --rebase'), then pull again. Then the pulled paths are mapped
+'git df fetch', then 'git df rebase --no-fork-point --autostash @{u}': a
+fast-forward when nothing is local, otherwise the local commits since the
+merge-base are replayed onto origin, with uncommitted edits stashed around it.
+Not 'git pull --rebase': it replays from the fork-point, and a clone's reflog
+can still hold the bare repo's commits, which that replay would drop. A replay
+that conflicts is aborted, the tier is left as it was, and the conflicting
+files are named: resolve by hand ('git df rebase --no-fork-point @{u}'), then
+pull again. Then the pulled paths are mapped
 to the steps that watch them (no check runs): a warning names each affected
 step and its paths, and one 'dotfiles apply STEP..' brings the machine along.
 The harness (lib/, cmd/) is live as soon as it lands. The local tier is never
@@ -43,15 +46,24 @@ is_rebase_in_progress() {
 }
 
 # The pull, and on a stopped replay: name the conflicts, abort (the autostash comes back with it).
+# A fetch and a rebase from the merge-base, not `git pull --rebase`: pull hands rebase the fork-point
+# from origin's reflog, which in a clone nix_port made from the bare repo still holds that repo's
+# commits, and the replay silently drops every local commit up to it. The submodule update is the
+# one `git pull` runs after a rebase when submodule.recurse is set.
 pull_rebase() {
-  run_mut repo_git shared pull --rebase --autostash && return 0
+  if run_mut repo_git shared fetch --quiet && run_mut repo_git shared rebase --no-fork-point --autostash '@{u}'; then
+    if [[ "$(repo_git shared config --bool submodule.recurse 2>/dev/null)" == true ]]; then
+      run_mut repo_git shared submodule update --recursive --rebase
+    fi
+    return 0
+  fi
   if ! is_rebase_in_progress; then
-    log::err "pull failed before replaying anything | fix='git df pull --rebase' see='the git output above'"
+    log::err "pull failed before replaying anything | fix='git df fetch && git df rebase --no-fork-point @{u}' see='the git output above'"
     return 1
   fi
   local -a conflicts=("${(@f)$(repo_git shared diff --name-only --diff-filter=U 2>/dev/null)}")
   repo_git shared rebase --abort
-  log::err "local commits conflict with origin; pull aborted, nothing changed | conflicts='${(j:, :)conflicts:#}' fix='git df pull --rebase, resolve, git df rebase --continue, then dotfiles pull'"
+  log::err "local commits conflict with origin; pull aborted, nothing changed | conflicts='${(j:, :)conflicts:#}' fix='git df rebase --no-fork-point @{u}, resolve, git df rebase --continue, then dotfiles pull'"
   return 1
 }
 
@@ -145,7 +157,7 @@ pull::main() {
     slow=5 step fetch repo_git shared fetch --quiet || return 1
     after="$(repo_git shared rev-parse '@{u}')" || { log::err "no upstream to pull from | fix='git df branch --set-upstream-to=origin/main'"; return 1; }
     before="$(repo_git shared merge-base HEAD "${after}")" || before="$(repo_git shared rev-parse HEAD)"
-    run_mut repo_git shared pull --rebase --autostash
+    run_mut repo_git shared rebase --no-fork-point --autostash '@{u}'
   else
     slow=5 step pull pull_rebase || return 1   # a fetch takes seconds; that is not slow
     after="$(repo_git shared rev-parse HEAD)"

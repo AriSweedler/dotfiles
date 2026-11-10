@@ -46,6 +46,22 @@ assert_contains "clean replay: no step watches it" "${OUT}" "no step watches the
 assert_no_file "clean replay: init did not run" "${ARI_DOTFILES_STATE_DIR}/runs"
 assert_no_file "clean replay: no init result" "${ARI_DOTFILES_STATE_DIR}/last_result.json"
 
+# A fork-point the reflog invents: origin/main once pointed at a local commit (nix_port clones from the
+# bare repo, then re-points origin at the remote), so a fork-point rebase would drop every local commit
+# up to it. The replay starts at the merge-base instead.
+local_commit .config/pull-fp-1.txt one "local one"
+local_commit .config/pull-fp-2.txt two "local two"
+real_origin="$(df_git rev-parse origin/main)"
+df_git update-ref --create-reflog -m "clone: from the bare repo" refs/remotes/origin/main "$(df_git rev-parse HEAD)"
+df_git update-ref --create-reflog -m "fetch: forced-update" refs/remotes/origin/main "${real_origin}"
+remote_commit .config/pull-fp-remote.txt remote "remote after the clone"
+bump_now_secs 60
+nm pull
+assert_eq "fork-point trap: exit 0" 0 "${RC}"
+assert_contains "fork-point trap: the first local commit survives" "$(df_git log --format=%s origin/main..HEAD)" "local one"
+assert_contains "fork-point trap: the second local commit survives" "$(df_git log --format=%s origin/main..HEAD)" "local two"
+assert_file "fork-point trap: origin's file checked out" "${HOME}/.config/pull-fp-remote.txt"
+
 # Diverged on the same file: aborted, nothing changed.
 remote_commit .config/pull-both.txt theirs "remote edit"
 local_commit .config/pull-both.txt ours "local edit"

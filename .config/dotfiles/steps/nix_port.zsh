@@ -127,6 +127,9 @@ nix_port::clone() {
     run_mut git -C "${clone}" remote set-url --push origin "${ARI_DOTFILES_PUSH_URL}" || return 1
   fi
   run_mut git -C "${clone}" fetch -q origin || { log::err "fetch failed | url='${ARI_DOTFILES_REMOTE}'"; return 1; }
+  # origin/main's reflog still starts at the bare repo's main; a `git pull --rebase` would take that
+  # as the fork-point and drop every local commit up to it.
+  run_mut git -C "${clone}" reflog expire --expire=now refs/remotes/origin/main || return 1
   run_mut git -C "${clone}" branch -q --set-upstream-to=origin/main main || return 1
   run_mut git -C "${clone}" config core.hooksPath "${ARI_DOTFILES_DF_HOOKS}" || return 1
   # The repo is public: the personal identity, as dotfiles_repo sets it on the bare repo.
