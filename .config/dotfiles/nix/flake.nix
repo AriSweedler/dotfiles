@@ -20,6 +20,12 @@
     darwinModules.default = ./darwin.nix;
     homeModules.default = ./home.nix;
 
+    # Ari's own packages (pkgs/default.nix): `nix build <this flake>#ari_zshlib`.
+    packages.aarch64-darwin = import ./pkgs {
+      pkgs = nixpkgs.legacyPackages.aarch64-darwin;
+      src = self.sourceInfo.outPath;
+    };
+
     # One machine's system: the shared modules, then the local tier's on top.
     lib.darwinSystem = { user, modules ? [ ], homeModules ? [ ] }:
       nix-darwin.lib.darwinSystem {
