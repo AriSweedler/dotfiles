@@ -31,7 +31,7 @@
 set -euo pipefail
 zmodload zsh/datetime
 
-readonly LOG_LIB="${XDG_CONFIG_HOME:-$HOME/.config}/zsh/plugins/log.zsh"
+readonly LOG_LIB="${ARI_ZSHLIB:-${HOME}/.config/zsh/plugins}/log.zsh"   # the store copy when packaged (pkgs/run-log)
 if [[ ! -r "${LOG_LIB}" ]]; then
   print -u2 "[ERROR] missing logging lib | path='${LOG_LIB}'"
   exit 1

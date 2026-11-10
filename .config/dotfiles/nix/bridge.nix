@@ -35,7 +35,7 @@ let
       (name: type:
         let path = if rel == "" then name else "${rel}/${name}";
         in
-        if lib.elem path wholeDirs || lib.elem path skipped then [ ]
+        if lib.elem path wholeDirs || lib.elem path skipped || lib.elem path config.dotfiles.bridge.skip then [ ]
         else if type == "directory" then walk path
         else [ path ])
       (builtins.readDir "${src}/${rel}"));
@@ -44,17 +44,27 @@ let
     source = config.lib.file.mkOutOfStoreSymlink "${clone}/${path}";
   };
 in
-lib.mkIf (builtins.pathExists "${src}/.config/dotfiles/nix/bridge.nix") {
-  home.file = lib.listToAttrs (map link (walk "" ++ wholeDirs));
+{
+  # Paths another module places from the store (ari-bins.nix: a packaged bin), so the bridge
+  # links them no more.
+  options.dotfiles.bridge.skip = lib.mkOption {
+    type = lib.types.listOf lib.types.str;
+    default = [ ];
+    description = "Repo-relative paths the bridge leaves to another module.";
+  };
 
-  # A directory once linked whole and now filled file by file: home-manager would place the new
-  # links through the old directory link, into the clone, replacing its files. Remove that link
-  # first so the directory is created for real.
-  home.activation.bridgeUnlinkFormerDirs = lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
-    for dir in ${lib.escapeShellArgs formerWholeDirs}; do
-      if [[ -L "${config.home.homeDirectory}/$dir" ]]; then
-        run rm "${config.home.homeDirectory}/$dir"
-      fi
-    done
-  '';
+  config = lib.mkIf (builtins.pathExists "${src}/.config/dotfiles/nix/bridge.nix") {
+    home.file = lib.listToAttrs (map link (walk "" ++ wholeDirs));
+
+    # A directory once linked whole and now filled file by file: home-manager would place the new
+    # links through the old directory link, into the clone, replacing its files. Remove that link
+    # first so the directory is created for real.
+    home.activation.bridgeUnlinkFormerDirs = lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
+      for dir in ${lib.escapeShellArgs formerWholeDirs}; do
+        if [[ -L "${config.home.homeDirectory}/$dir" ]]; then
+          run rm "${config.home.homeDirectory}/$dir"
+        fi
+      done
+    '';
+  };
 }
