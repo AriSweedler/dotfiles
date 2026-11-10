@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 # Tests for lib/wrap.zsh, bin/link.zsh, bin/focus.zsh and bin/handoff.zsh: how a long command looks in the chat
-# code block, in a fenced step, and in the pane a click types it into. Golden layouts (SKILL.md's two-purpose
+# code block, in a fenced step (--paste, --capture; one form at a time), and in the pane a click types it into. Golden layouts (SKILL.md's two-purpose
 # example, a pipeline with && and a for-loop, a JSON flag value, a jq program, a short command that stays one
 # line, JSON-shaped text left alone); the link still carries the one-line command; and on a throwaway tmux
 # server (-L, its own zsh with stub programs), a --cmd types the layout and a trailing ;, a --run types it
@@ -117,10 +117,20 @@ check "fenced step: --capture lays out the jq case in the same heredoc" "\`\`\`z
 $(wrap_run_log_text '' "${CMD[jq]}")
 \`\`\`
 Expected: one token" "$(zsh "${SKILL}/bin/handoff.zsh" --print --cmd "${CMD[jq]}" --expect 'one token' --capture 2>/dev/null)"
-check "fenced step: a bare step shows the layout" "\`\`\`zsh
+check "fenced step: --paste shows the bare layout, no run_log" "\`\`\`zsh
 ${WANT[jq]}
 \`\`\`
-Expected: one token" "$(zsh "${SKILL}/bin/handoff.zsh" --print --cmd "${CMD[jq]}" --expect 'one token' 2>/dev/null)"
+Expected: one token" "$(zsh "${SKILL}/bin/handoff.zsh" --print --cmd "${CMD[jq]}" --expect 'one token' --paste 2>/dev/null)"
+zsh "${SKILL}/bin/handoff.zsh" --print --cmd "${CMD[jq]}" --expect 'one token' >/dev/null 2>&1
+check "fenced step: no form flag is refused" 1 "$?"
+zsh "${SKILL}/bin/handoff.zsh" --print --cmd "${CMD[short]}" --expect x --paste --capture >/dev/null 2>&1
+check "fenced step: --paste with --capture is refused" 1 "$?"
+zsh "${SKILL}/bin/handoff.zsh" --print --cmd "${CMD[short]}" --expect x --paste --capture-dir "${T}" >/dev/null 2>&1
+check "fenced step: --capture-dir without --capture is refused" 1 "$?"
+check "fenced step: a command holding \`\`\` widens the fence" '````zsh
+echo "```"
+````
+Expected: x' "$(zsh "${SKILL}/bin/handoff.zsh" --print --cmd 'echo "```"' --expect x --paste 2>/dev/null)"
 check "fenced step: a short command keeps run_log --" "run_log -- kubectl get pods -o wide -n kube-system" \
   "$(zsh "${SKILL}/bin/handoff.zsh" --print --cmd "${CMD[short]}" --expect x --capture 2>/dev/null | awk 'NR == 2')"
 check "typed: a line equal to the delimiter moves it" "RUN_LOG_1" "$(wrap_heredoc_delimiter $'a\nRUN_LOG\nb')"
@@ -167,6 +177,10 @@ for c in "${CASES[@]}"; do
   contains "link block: ${c}" "${block}" "${out}"
   encoded="${${out%%$'\n'*}#*\?run=}"; encoded="${encoded%%[\&\)]*}"
   check "link payload: ${c} is the one-line command" "${CMD[$c]}" "${(g::)${encoded//\%/\\x}}"
+  # The paired paste round: link.zsh --cmd's code block, its `> ` stripped, is handoff.zsh --paste's block.
+  cmd_out="$(zsh "${SKILL}/bin/link.zsh" --pane "${P}" --cmd "${CMD[$c]}" 2>/dev/null)"
+  paste_out="$(zsh "${SKILL}/bin/handoff.zsh" --print --cmd "${CMD[$c]}" --expect x --paste 2>/dev/null)"
+  check "paired round: ${c}: the --cmd block equals the --paste step" "${paste_out%$'\n'Expected: x}" "${(F)${(@)${(@f)cmd_out}[2,-1]#> }}"
 done
 
 # --- tmux off PATH (a Claude Bash without the Nix profiles): link.zsh and focus.zsh still find it ---

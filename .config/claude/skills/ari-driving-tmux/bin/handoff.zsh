@@ -82,8 +82,9 @@ is_valid_option() {
 ########################################################################
 
 #######################################
-# Choose the command line the block shows: bare, `! ` (interactive), or run_log (capture). A long
-# one-line command is laid out as link.zsh lays it out (lib/wrap.zsh); `! ` stays one line.
+# Choose the command line the block shows: bare (paste: Ari pastes it into a pane himself), `! `
+# (interactive), or run_log (capture). A long one-line command is laid out as link.zsh lays it out
+# (lib/wrap.zsh), so the paste form reads as the link's code block does; `! ` stays one line.
 # A command with a shell operator is run_log's single command string, so a pipe or && stays
 # inside the capture instead of applying to run_log: quoted when short, else a quoted heredoc.
 # Arguments:
@@ -102,7 +103,7 @@ render_command_line() {
   fi
   display="$(wrap_command "${cmd}")"
   if [[ "${capture}" != "true" ]]; then
-    log::info "Rendering bare form | cmd='${cmd}'"
+    log::info "Rendering paste form: the bare command, laid out | cmd='${cmd}'"
     print -r -- "${display}"
     return
   fi
@@ -135,15 +136,19 @@ render_command_line() {
 # Returns: markdown on stdout
 #######################################
 print_block() {
-  local step="${1}" blocking="${2}" line="${3}" expect="${4}"
+  local step="${1}" blocking="${2}" line="${3}" expect="${4}" fence="${FENCE}"
   if [[ -n "${step}" && -n "${blocking}" ]]; then
     echo "${step}. (${blocking})"
   elif [[ -n "${step}" ]]; then
     echo "${step}."
   fi
-  print -r -- "${FENCE}zsh"
+  # A command holding ``` would close a three-backtick fence early; link.zsh widens its fence the same way.
+  if [[ "${line}" == *"${FENCE}"* ]]; then
+    fence="${FENCE}\`"
+  fi
+  print -r -- "${fence}zsh"
   print -r -- "${line}"
-  print -r -- "${FENCE}"
+  print -r -- "${fence}"
   print -r -- "Expected: ${expect}"
 }
 
@@ -171,7 +176,11 @@ history_widget() {
 #######################################
 do_copy() {
   local text="${1}"
-  print -rn -- "${text}" | HANDOFF_CLIP_OK=1 pbcopy
+  if ! print -rn -- "${text}" | HANDOFF_CLIP_OK=1 pbcopy; then
+    log::err "Clipboard command failed; nothing copied | cmd='pbcopy' hint='no pasteboard in this session (ssh?)'"
+    print -r -- "not copied: pbcopy failed"
+    return 1
+  fi
   log::ok "Copied | chars='${#text}'"
   cat <<EOF
 copied_chars=${#text}
@@ -186,7 +195,7 @@ help() {
 ${c_green}handoff${c_rst} — render a command block for Ari, or copy text to his clipboard on request
 
 ${c_bold}Usage:${c_rst}
-  ${SELF} --print --cmd CMD --expect TEXT [--step N [--blocking | --not-blocking]] [--interactive | --capture [--capture-dir DIR]]
+  ${SELF} --print --cmd CMD --expect TEXT [--step N [--blocking | --not-blocking]] (--paste | --interactive | --capture [--capture-dir DIR])
   ${SELF} --copy (--text TEXT | --file PATH)
 
 ${c_bold}Modes:${c_rst}
@@ -199,6 +208,8 @@ ${c_bold}Options:${c_rst}
   --step N           Number the block (--print)
   --blocking         Mark the step "(blocks me)" (--print, with --step)
   --not-blocking     Mark the step "(not blocking)" (--print, with --step)
+  --paste            Render CMD bare, laid out as link.zsh's code block shows it, for Ari to paste into a
+                     pane himself and press Enter: no "!", no run_log (--print; one form is required)
   --interactive      Render as "! CMD" so its output lands in the conversation (--print)
   --capture          Render as "run_log -- CMD" so Claude can read the output back (--print);
                      a CMD with | & ; < > ( ) or a backtick renders as "run_log 'CMD'";
@@ -217,6 +228,7 @@ ${c_bold}Environment:${c_rst}
 ${c_bold}Examples:${c_rst}
   ${SELF} --print --step 1 --blocking --cmd 'gws auth login --scopes …' --expect 'scope_count 16 in gws auth status' --interactive
   ${SELF} --print --cmd 'kubectl get pods -n foo' --expect 'No resources found' --capture --capture-dir /tmp/inv/logs
+  ${SELF} --print --cmd 'zsh -i demo.zsh' --expect 'the demo runs; paste its output here' --paste
   ${SELF} --copy --text 'some long command'
 
 ${c_bold}Output${c_rst} (--print --step 1 --blocking --cmd 'kubectl get pods | grep web' --expect 'one Running pod' --capture):
@@ -225,6 +237,16 @@ ${c_bold}Output${c_rst} (--print --step 1 --blocking --cmd 'kubectl get pods | g
   run_log 'kubectl get pods | grep web'
   \`\`\`
   Expected: one Running pod
+
+${c_bold}Output${c_rst} (--print --cmd "op item create --category 'API Credential' --title 'Registry pull token (registry.example.com)' --vault Private" --expect '…' --paste):
+  \`\`\`zsh
+  op item create \\
+      --category 'API Credential' \\
+      --title 'Registry pull token (registry.example.com)' \\
+      --vault Private
+  \`\`\`
+  Expected: …
+The block is stdout; the [INFO] line on stderr is not part of it.
 EOF
 }
 
@@ -233,7 +255,7 @@ EOF
 main() {
   # === PARSE ===
   local mode="" cmd="" expect="" step="" blocking="" text="" file="" capture_dir=""
-  local interactive=false capture=false text_set=false
+  local paste=false interactive=false capture=false text_set=false
 
   while (( $# > 0 )); do case "${1}" in
     -h|--help)      help; return 0 ;;
@@ -244,6 +266,7 @@ main() {
     --step)         step="${2:?--step requires a value}"; shift 2 ;;
     --blocking)     blocking="blocks me"; shift ;;
     --not-blocking) blocking="not blocking"; shift ;;
+    --paste)        paste=true; shift ;;
     --interactive)  interactive=true; shift ;;
     --capture)      capture=true; shift ;;
     --capture-dir)  capture_dir="${2:?--capture-dir requires a value}"; shift 2 ;;
@@ -254,12 +277,20 @@ main() {
   esac; done
 
   # === MASSAGE ===
-  if [[ -n "${file}" && "${text_set}" == "false" ]]; then
+  if [[ -n "${file}" && "${text_set}" == "true" ]]; then
+    log::err "Pick one of --text and --file | file='${file}'"
+    return 1
+  fi
+  if [[ -n "${file}" ]]; then
     if [[ ! -r "${file}" ]]; then
       log::err "Cannot read --file | file='${file}'"
       return 1
     fi
     text="$(cat "${file}")"; text_set=true
+    if [[ -z "${text}" ]]; then
+      log::err "Nothing to copy: the file is empty | file='${file}'"
+      return 1
+    fi
   fi
 
   # === VALIDATE ===
@@ -273,8 +304,15 @@ main() {
     print)
       [[ -n "${cmd}" ]] || { log::err "Missing --cmd for --print | mode='${mode}'"; help; return 1; }
       [[ -n "${expect}" ]] || { log::err "Missing --expect for --print | mode='${mode}'"; help; return 1; }
-      if [[ "${interactive}" == "true" && "${capture}" == "true" ]]; then
-        log::err "Pick one of --interactive and --capture | interactive='${interactive}' capture='${capture}'"; return 1
+      local -a forms=()
+      [[ "${paste}" == "true" ]] && forms+=(--paste)
+      [[ "${interactive}" == "true" ]] && forms+=(--interactive)
+      [[ "${capture}" == "true" ]] && forms+=(--capture)
+      if (( ${#forms} != 1 )); then
+        log::err "Pick one of --paste, --interactive and --capture | given='${forms[*]}'"; return 1
+      fi
+      if [[ -n "${capture_dir}" && "${capture}" != "true" ]]; then
+        log::err "--capture-dir needs --capture | capture_dir='${capture_dir}' form='${forms[1]}'"; return 1
       fi
       if [[ -n "${blocking}" && -z "${step}" ]]; then
         log::err "--blocking/--not-blocking need --step | blocking='${blocking}'"; return 1

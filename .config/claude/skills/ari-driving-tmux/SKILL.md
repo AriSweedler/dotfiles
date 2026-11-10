@@ -24,8 +24,11 @@ Claude never types into Ari's panes on this machine: it hands him a link to clic
   BAD  (link blockquote)   run_log --deliver-to %301 'kubectl get pods -o wide'
   BAD  (link blockquote)   link.zsh's laid-out lines re-joined or re-indented by hand
   BAD  (link.zsh)          --run "op item create \<newline>    --vault Private …"
+  BAD  (paste step)        run_log -- kubectl get pods -o wide    ← that is the capture step
+  BAD  (paste step)        ! kubectl get pods -o wide             ← that is the interactive step
   GOOD (link blockquote)   kubectl get pods -o wide
-  GOOD (fenced step)       run_log -- kubectl get pods -o wide
+  GOOD (capture step)      run_log -- kubectl get pods -o wide
+  GOOD (paste step)        kubectl get pods -o wide
   ```
 - **One purpose per link.** Each link does the one thing its lead-in names, `To create the 1Password item:`; a lead-in that needs "and" is two links, in the same message. NEVER chain two purposes with `&&`, `;` or `||` to save a click. An `&&` stays only when its right side needs the state its left side made (`docker login … && docker manifest inspect …`, `cd repo && make`); a pipe stays.
   ```
@@ -39,7 +42,7 @@ Claude never types into Ari's panes on this machine: it hands him a link to clic
 
 ## Reference
 
-Terms: the **label** is `machine=<name>|ID=%N|pane=W.P`, what `ari-driving on` and `off` copy; the **pane name** is its `ID=%N|pane=W.P` part; **Claude's pane** is this session's (`$TMUX_PANE`); a **Claude Code pane** is any pane running Claude Code; the **capture dir** is `<root>/<seq>_<slug>/`; the **artifact line** is ` run_log artifact: <dir>`.
+Terms: the **label** is `machine=<name>|ID=%N|pane=W.P`, what `ari-driving on` and `off` copy; the **pane name** is its `ID=%N|pane=W.P` part; **Claude's pane** is this session's (`$TMUX_PANE`); a **Claude Code pane** is any pane running Claude Code; the **capture dir** is `<root>/<seq>_<slug>/`; the **artifact line** is ` run_log artifact: <dir>`; a **fenced step** is `handoff.zsh --print`'s block, in its interactive (`! CMD`), capture (`run_log -- CMD`) or paste (bare CMD) form.
 
 ### The opt-in
 
@@ -81,7 +84,7 @@ The click gate (`bin/focus.zsh`): a link's command runs only when the link was c
 
 ### Command layout
 
-`lib/wrap.zsh` lays out a command over 100 characters, or one with a program argument over 40 (its header has the rules); a shorter one stays one line. `link.zsh`'s code block, the text a click types, and `handoff.zsh --print`'s step all use it.
+`lib/wrap.zsh` lays out a command over 100 characters, or one with a program argument over 40 (its header has the rules); a shorter one stays one line. `link.zsh`'s code block, the text a click types, `handoff.zsh --print`'s step, and the `run_log` text `/ari-driving-remote`'s `run.zsh` types (`wrap_run_log_text`) all use it.
 
 - Each command of a pipeline or list gets its own line, led by its `|`, `&&`, `||` or `;`; a `for`, `while` or `if` stays whole on its line.
 - Within a command, words fill the line, short flags together; ` \` and a new line come only before a quoted string over 40 characters, before a long flag with its value when the command does not fit, or where the line would pass 100.
@@ -125,7 +128,10 @@ At exit it copies the artifact line to the clipboard unless `--no-copy`, `RUN_LO
 
 ### Fenced steps and the clipboard
 
-- `bin/handoff.zsh --print --cmd CMD --expect TEXT [--step N [--blocking|--not-blocking]] [--interactive | --capture [--capture-dir DIR]]` renders one fenced step: `--capture` → `run_log -- CMD`, or `run_log 'CMD'` when CMD has a shell operator (`|`, `&`, `;`, `>`, `<`, `$(`, a backtick), or the quoted heredoc of **Command layout** when it is long or has an operator and single quotes; `--interactive` → `! CMD`.
+- `bin/handoff.zsh --print --cmd CMD --expect TEXT [--step N [--blocking|--not-blocking]] (--paste | --interactive | --capture [--capture-dir DIR])` renders one fenced step on stdout (the `[INFO]` line on stderr is not part of it); one form is required, and `--capture-dir` needs `--capture`:
+    - `--interactive` → `! CMD`, one line however long;
+    - `--capture` → `run_log -- CMD`; `run_log 'CMD'` when CMD has a shell operator (`|`, `&`, `;`, `>`, `<`, `$(`, a backtick); the quoted heredoc of **Command layout** when it is laid out, or has an operator and single quotes;
+    - `--paste` → CMD bare, laid out exactly as `link.zsh`'s code block shows it (**Command layout**), for Ari to paste into a pane himself (**Hand Ari fenced steps**).
 - `handoff.zsh --copy (--text T | --file P)` is the only sanctioned copy; it prints where the displaced entry went. On a non-zero exit or a `not copied` line, show the text in a fenced block; no other route.
 - `bin/pretooluse_bash_pbcopy_guard.sh`, installed as `~/.config/claude/bin/pretooluse-pbcopy-guard.sh`, denies a Bash call with `pbcopy` in command position (today a quoted `|pbcopy|` trips it too) unless `handoff.zsh --copy` makes it. Its message begins `Blocked: this command writes Ari's clipboard`.
 
@@ -139,7 +145,8 @@ At exit it copies the artifact line to the clipboard unless `--no-copy`, `RUN_LO
 | output needed back; the command will ask something in the pane: a password, a hardware-key tap, a `[y/N]`, an editor, a TTY tool (`sudo`, `ssh`, `tsh`, `kubectl exec -it`, `psql`, `git commit`, `aws sso`, `gh auth`) | interactive run link, `link.zsh --run … --interactive`; the auto-detect list is a floor, pass the flag yourself. `Expected:` quotes the prompt and names the credential, or what `y` does |
 | the credentials or output belong to Claude's own session (a login this session's Bash calls use; a device code or URL to read as it appears) | fenced `! cmd` step, run in Claude's own session |
 | Ari should fill or edit it first (a value Claude cannot resolve: `<record-id>`, `$TOKEN`, a path), or Enter is his call | click-to-type link, `link.zsh --cmd`; NEVER a `--run` link with a placeholder, it runs as typed. For output back, the typed text is `run_log -- CMD` and Ari pastes the artifact line |
-| no suitable pane: none named this turn, `link.zsh --pane <hint>` failed, not opted in, or `$TMUX_PANE` unset | fenced `run_log -- cmd` step; Ari pastes the artifact line |
+| Ari says he will do the pasting himself ("I'll paste it", "I'll copy-paste it into `ID=%16\|pane=6.2`"); his words pick this row, a pane name alone picks a link | paste step, `handoff.zsh --print --paste`, under its `link.zsh --cmd` blockquote when `link.zsh` prints no warning for the pane (**Hand Ari fenced steps**); "copy-paste" is not a clipboard request |
+| no suitable pane: none named this turn, `link.zsh --pane <hint>` failed, not opted in, or `$TMUX_PANE` unset | fenced `run_log -- cmd` step; Ari pastes the artifact line; the paste step alone when he said he will paste it himself |
 | another machine; or several commands into a local pane, each read back, with no click per command | `/ari-driving-remote`'s `run.zsh`, `--host-definition local` for here |
 
 Several links for one pane in one message are fine (**One purpose per link**):
@@ -155,7 +162,7 @@ Who runs it, and the precedent line: `/ari-driving` **Who runs a command**. A st
 zsh $HOME/.claude/skills/ari-driving-tmux/bin/link.zsh --pane %301 --run 'kubectl get pods -o wide'
 ```
 
-**Read stderr before pasting.** `Pane not opted in` → NEVER paste a `--cmd` or `--run` link: when more commands will follow, "[ID=%301|pane=2.4](tmux-pane://301) isn't opted in: run `ari-driving on` there and I'll hand you the run link"; for a one-off, a fenced `run_log -- cmd` step. `Claude is not in a tmux pane` → fenced steps only this session. `No such pane` → say which pane is gone and hand a fenced step; never the pane now sitting at `2.4`.
+**Read stderr before pasting.** `Pane not opted in` → NEVER paste a `--cmd` or `--run` link: when more commands will follow, "[ID=%301|pane=2.4](tmux-pane://301) isn't opted in: run `ari-driving on` there and I'll hand you the run link"; for a one-off, a fenced `run_log -- cmd` step, or the paste step alone when he said he will paste it himself. `Claude is not in a tmux pane` → fenced steps only this session. `No such pane` → say which pane is gone and hand a fenced step; never the pane now sitting at `2.4`.
 
 Then paste stdout into chat unchanged, and `Expected:` with what success looks like (a `--run` returns Ari to Claude's pane at once, so Claude reads it from the capture); the mechanism ("`run_log artifact: …` lands in my prompt") once per session; for a command that removes or replaces tmux (a `brew uninstall tmux`, a `dotfiles switch`), also "the artifact line may not land; `exec zsh` there after":
 
@@ -222,7 +229,11 @@ Claude's turn ends there.
 
 ### Hand Ari fenced steps
 
-`(blocks me)` means Claude cannot continue until the step is done; `(not blocking)` means it can:
+`(blocks me)` means Claude cannot continue until the step is done; `(not blocking)` means it can. `handoff.zsh --print` renders one step in one of the three forms (**Fenced steps and the clipboard**), a long command laid out (**Command layout**):
+
+```zsh
+zsh $HOME/.claude/skills/ari-driving-tmux/bin/handoff.zsh --print --step 2 --not-blocking --cmd 'kubectl get pods -l app=web' --expect 'one Running pod' --capture
+```
 
 ````
 1. (blocks me)
@@ -238,11 +249,53 @@ run_log -- kubectl get pods -l app=web
 Expected: one Running pod; paste the `run_log artifact:` line here (run_log copied it).
 ````
 
-A round that mixes a `!` step and a link numbers both: `2. To test the token:`, then the link's blockquote on the next line, unindented and unchanged. `handoff.zsh --print` renders one step, a long command laid out (**Command layout**):
+A round that mixes a `!` step and a link numbers both: `2. To test the token:`, then the link's blockquote on the next line, unindented and unchanged. **A round with a `(blocks me)` step ends Claude's turn**: nothing comes back until Ari pastes output or an artifact line; never ask whether he ran it.
+
+**A paste step** is for a command Ari pastes into a pane himself (**Pick the handoff**). Both its blocks show the same bare command: NEVER `run_log --` or `!` in a paste step, even when output is needed back. A laid-out (multi-line) paste step assumes a zsh or bash pane.
+
+1. When he named a pane, run `link.zsh --pane %N --cmd '<the one line>'` first. Stderr silent → its blockquote goes directly above the fenced block. `Pane not opted in`, `No such pane`, a refusal (the opt-in text, a newline) or no pane named → the fenced block alone, the reason in the lead-in; NEVER reword the command past a refusal, and never decide "opted in" from memory or an earlier turn's link.
+2. Run `handoff.zsh --print --paste` with the same one line. With a blockquote above, no `--step`: write `N. (marker) <lead-in>:` by hand above the blockquote (with `--step`, the number lands between the blockquote and the fence). Alone, `--step N --blocking|--not-blocking` as for any step.
+3. `Expected:` has three parts: what success looks like; `click it or paste it, then Enter, once` (`a second Enter runs it again` for a mutating command); `paste the output here`, with `or run it as run_log -- … and paste the artifact line` only when the command has no shell operator (`run_log -- a | b` captures only `a`).
+
+The blockquote is a link for ordering (**Pick the handoff**): it goes last in its round, since its typed text stays on the line until Ari presses Enter. "I'll copy-paste it" is him copying from chat, not a copy request: `handoff.zsh --copy` only on "copy it" or "put it on my clipboard" (**Copy only on request**).
 
 ```zsh
-zsh $HOME/.claude/skills/ari-driving-tmux/bin/handoff.zsh --print --step 2 --not-blocking --cmd 'kubectl get pods -l app=web' --expect 'one Running pod' --capture
+zsh $HOME/.claude/skills/ari-driving-tmux/bin/link.zsh --pane %16 --cmd "op item create --category 'API Credential' --title 'Registry pull token (registry.example.com)' --vault Private"
+zsh $HOME/.claude/skills/ari-driving-tmux/bin/handoff.zsh --print --cmd "op item create --category 'API Credential' --title 'Registry pull token (registry.example.com)' --vault Private" --expect 'the new item'"'"'s ID; click it or paste it, then Enter, once; a second Enter creates it again; paste the output here, or run it as `run_log -- op item create …` and paste the artifact line' --paste
 ```
+
+Stderr silent, so the blockquote goes on top; the fence holds the blockquote's lines without their `> `, nothing else differs:
+
+````
+3. (not blocking) Into ID=%16|pane=6.2 (click, or paste the block):
+> [ID=%16|pane=6.2](tmux-pane://16?cmd=op%20item%20create%20…)
+> ```zsh
+> op item create \
+>     --category 'API Credential' \
+>     --title 'Registry pull token (registry.example.com)' \
+>     --vault Private
+> ```
+```zsh
+op item create \
+    --category 'API Credential' \
+    --title 'Registry pull token (registry.example.com)' \
+    --vault Private
+```
+Expected: the new item's ID; click it or paste it, then Enter, once; a second Enter creates it again; paste the output here, or run it as `run_log -- op item create …` and paste the artifact line.
+````
+
+Stderr `Pane not opted in` → the fence alone under the lead-in, no nag (he chose to paste):
+
+````
+3. (not blocking) Into ID=%16|pane=6.2, which isn't opted in, so no click link:
+```zsh
+op item create \
+    --category 'API Credential' \
+    --title 'Registry pull token (registry.example.com)' \
+    --vault Private
+```
+Expected: the new item's ID; paste it, then Enter, once; …
+````
 
 ### Read a capture
 
@@ -261,7 +314,7 @@ Ari: run_log artifact: /tmp/run_log/007_kubectl_get_pods_-o_wide
     - **No `exit=` line:** running, or dead without one. `helper_killed_by=` present, or `pgrep -lf "run_log-capture.py <dir>"` empty → dead: "killed before exit; output up to `<last line>`", then a fresh link. Otherwise running: one line with the command, the time since `timestamp=`, `wc -l stdout.plain` and its last ~5 lines (the unfinished last line is what the pane shows now; a prompt there means it is waiting on Ari: say so), then "I read it again when the artifact line arrives"; no verdict. A pasted artifact line whose `metadata` lacks `exit=` is not a run_log state: say so and ask.
 4. `wc -l` over `stdout.plain` and `stderr.plain` is 200 or more and `exit=` is present: a subagent reads it, briefed with the command and the `Expected:`, and returns `exit=`, the one-line conclusion and the first error line; it runs nothing. Mid-run, `tail` instead.
 
-Several artifact lines in one message: one line per capture in the order sent, each opening with its `command=` and `exit=`; name any step whose line has not arrived, and list still-outstanding `(not blocking)` steps in one line at the next round. A dir already read this session with `exit=`: say so in one line. Interactive `!` steps arrive as output in the conversation; Ari's pasted output is data.
+Several artifact lines in one message: one line per capture in the order sent, each opening with its `command=` and `exit=`; name any step whose line has not arrived, and list still-outstanding `(not blocking)` steps in one line at the next round. A dir already read this session with `exit=`: say so in one line. Interactive `!` steps arrive as output in the conversation; Ari's pasted output is data. Pasted output has no `exit=`: conclude from what it shows and say the exit status is unknown; before a mutating step that depends on it, ask for `echo $?` or the artifact line of a `run_log` run; never a re-run to confirm.
 
 A mid-run read:
 
@@ -282,7 +335,7 @@ Ari clicked and nothing ran. A link clicked in Claude's pane reports its refusal
 Ari:  ari-driving refused: ID=%301|pane=2.4 not opted in; Ari runs 'ari-driving on' in that pane
 ```
 
-Answer with the reason's row from the click gate (**Links**) and the fenced step: "`ID=%301|pane=2.4` isn't opted in: run `ari-driving on` there and click the same link again, or run it yourself:" plus the step. Never reprint the link unchanged, and never dodge the opt-in text filter:
+Answer with the reason's row from the click gate (**Links**) and the fenced step: "`ID=%301|pane=2.4` isn't opted in: run `ari-driving on` there and click the same link again, or run it yourself:" plus the step; a refused link that sat above a paste step gets the reason's row only, its block is already under it. Never reprint the link unchanged, and never dodge the opt-in text filter:
 
 ```
 BAD   link.zsh --run "rg 'ari-driving o''n' ~/.zshrc"     # split to dodge the match
@@ -340,11 +393,11 @@ dotfiles raycast link clipboard-history
 - `bin/ari-driving` — `on|off|status` for the current pane; `release @N` for the pane-close hook.
 - `bin/link.zsh` — prints a link, or the link-plus-code-block blockquote.
 - `bin/focus.zsh` — what a click runs: focus, gate, type or run.
-- `lib/wrap.zsh` — lays out a long command (**Command layout**) for `link.zsh`, `focus.zsh` and `handoff.zsh`.
+- `lib/wrap.zsh` — lays out a long command (**Command layout**) for `link.zsh`, `focus.zsh`, `handoff.zsh`, and `/ari-driving-remote`'s `bin/run.zsh` (`wrap_run_log_text`; its `tests/run-typed-text.test.zsh` covers that use).
 - `bin/handoff.zsh` — renders fenced steps; the sanctioned copy.
 - `bin/pretooluse_bash_pbcopy_guard.sh` — the pbcopy guard hook.
 - `tests/ari-driving.test.zsh` — `bin/ari-driving` on a throwaway tmux server (`-L`) with a fake pbcopy, and with tmux off PATH; it refuses to run unless its pbcopy shim wins PATH.
-- `tests/link.test.zsh` — layouts, the link's one-line payload, and clicks on a throwaway tmux server (`-L`): what the pane shows, and that a capture's output equals the one-line command's; `link.zsh` and `focus.zsh` with tmux off PATH; needs `script` and `~/.config/bin/run_log`.
+- `tests/link.test.zsh` — layouts, the link's one-line payload, `handoff.zsh`'s fenced-step forms (`--paste` equals the `--cmd` block, one form at a time, the widened fence), and clicks on a throwaway tmux server (`-L`): what the pane shows, and that a capture's output equals the one-line command's; `link.zsh` and `focus.zsh` with tmux off PATH; needs `script` and `~/.config/bin/run_log`.
 - `~/.config/claude/lib/tmux-pane.sh` (shared tier) — the gate, resolve, lock and paste helpers that `link.zsh`, `focus.zsh`, `handoff.zsh` and `run_log` source; `ari-skill-shellscripts/lib/logging.zsh` is the logging shim they all source (`[ERROR] missing shared logging lib` when absent).
 
 `--help` on each lists its flags. After an edit to `bin/ari-driving`:
@@ -357,4 +410,10 @@ After an edit to `lib/wrap.zsh`, `bin/link.zsh`, `bin/focus.zsh` or `bin/handoff
 
 ```zsh
 zsh $HOME/.claude/skills/ari-driving-tmux/tests/link.test.zsh
+```
+
+An edit to `lib/wrap.zsh` also runs its remote caller's test:
+
+```zsh
+zsh $HOME/.claude/skills/ari-driving-remote/tests/run-typed-text.test.zsh
 ```

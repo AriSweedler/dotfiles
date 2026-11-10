@@ -4,7 +4,8 @@
 # jq's program, and a JSON value given to a flag that parses JSON, is laid out inside its quotes. Only
 # whitespace between words, and between a program's tokens, changes, so the shell runs the laid-out text as
 # it runs the one line. link.zsh prints it in the chat code block; focus.zsh and handoff.zsh type or show
-# the same text. Source it; no `readonly`, so a caller may source it twice.
+# the same text; /ari-driving-remote's bin/run.zsh sources it for wrap_run_log_text, so a change here also
+# runs its tests/run-typed-text.test.zsh. Source it; no `readonly`, so a caller may source it twice.
 
 # A command longer than this, or one with a long program argument, is laid out; no laid-out line passes it
 # unless one word is longer.
