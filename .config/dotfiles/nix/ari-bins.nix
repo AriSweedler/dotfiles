@@ -13,6 +13,7 @@ let
     git-kit = [ ".config/git/bin/git-dotfiles" ] ++ map (b: ".config/bin/${b}") [
       "git-health" "git-ready" "git-delete-if-merged-all" "git-delete-if-merged-one" "git-dedupe-case-refs" "repo"
     ];
+    notes = [ ".config/bin/notes" ];
   };
   paths = lib.concatLists (lib.mapAttrsToList
     (pkg: rels: map (path: { inherit pkg path; bin = baseNameOf path; }) rels)

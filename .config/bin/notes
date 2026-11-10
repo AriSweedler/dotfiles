@@ -17,7 +17,7 @@ set -euo pipefail
 
 # --- Logging (shared lib; never re-define log::* inline) ---
 
-readonly LIB_LOGGING="${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
+readonly LIB_LOGGING="${ARI_ZSHLIB:-${HOME}/.claude/skills/ari-skill-shellscripts/lib}/logging.zsh"   # the store copy when packaged (pkgs/notes)
 if [[ ! -r "${LIB_LOGGING}" ]]; then
   print -u2 "[ERROR] missing shared logging lib | path='${LIB_LOGGING}'"
   exit 1
