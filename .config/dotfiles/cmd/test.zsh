@@ -190,7 +190,7 @@ test::target_path() {
   setopt localoptions extendedglob
   local t="${1%%[.,:;]##}"
   case "${t}" in
-    '~/.config/'*) REPLY="${ARI_DOTFILES_CONFIG}/${t#\~/.config/}" ;;
+    '~/.config/'*) REPLY="${ARI_DOTFILES_SRC_CONFIG}/${t#\~/.config/}" ;;
     '~/'*) REPLY="${HOME}/${t#\~/}" ;;
     /*) REPLY="${t}" ;;
     *) REPLY="${ARI_DOTFILES_ZSH_PLUGINS}/${t}" ;;

@@ -1,9 +1,9 @@
 # step plugged — the shared-tier Swift submodule (dotfiles_repo initializes it): hooks and the
-# personal identity are plain local config a fresh checkout lacks; the release build needs the
-# Xcode command line tools.
+# personal identity are plain local config a fresh checkout lacks. The binary on PATH is Nix's
+# (pkgs/plugged, built by `dotfiles switch`); bin/plugged-dev keeps the edit-and-run loop.
 step::declare plugged --group tools --needs dotfiles_repo \
-  --desc "the plugged submodule has its hooks wired (core.hooksPath=.githooks) and a built release binary" \
-  --apply "sets the submodule's commit identity and core.hooksPath=.githooks, then builds the release binary (plugged-dev build)"
+  --desc "the plugged submodule has its hooks wired (core.hooksPath=.githooks), and Nix's plugged is on PATH" \
+  --apply "sets the submodule's commit identity and core.hooksPath=.githooks"
 step::watches plugged '.config/plugged'   # the submodule pointer
 
 step::plugged::dir() {
@@ -12,15 +12,9 @@ step::plugged::dir() {
 
 # The release binary: Nix's (nix/pkgs/plugged, on PATH from the profile) when it is installed, else
 # where bin/plugged's build lands: the shared Swift cache through swift-pkg, else SwiftPM's .build/.
+# Where home-manager installs the plugged that pkgs/plugged builds.
 step::plugged::binary() {
-  local dir="${1}" swift_pkg="${HOME}/.config/bin/swift-pkg" nix="/etc/profiles/per-user/${USER}/bin/plugged"
-  if [[ -x "${nix}" ]]; then
-    print -r -- "${nix}"
-  elif [[ -x "${swift_pkg}" ]]; then
-    zsh "${swift_pkg}" --path "${dir}"
-  else
-    print -r -- "${dir}/.build/release/plugged"
-  fi
+  print -r -- "/etc/profiles/per-user/${USER}/bin/plugged"
 }
 
 check::plugged() {
@@ -28,10 +22,6 @@ check::plugged() {
   dir="$(step::plugged::dir)"
   if [[ ! -x "${dir}/bin/plugged" ]]; then
     verdict skip no_submodule -d "plugged not checked out | path='${dir}'" -f "${CLI_NAME} apply dotfiles_repo"
-    return 0
-  fi
-  if ! command -v swift >/dev/null 2>&1; then
-    verdict warn swift_missing -d "swift is not on PATH" -f "xcode-select --install" -m
     return 0
   fi
   if ! tier::is_submodule_identity_ok "${dir}"; then
@@ -47,7 +37,7 @@ check::plugged() {
   local binary
   binary="$(step::plugged::binary "${dir}")"
   if [[ ! -x "${binary}" ]]; then
-    verdict fail not_built -d "no release binary | path='${binary}'" -f "${CLI_NAME} apply plugged"
+    verdict fail not_built -d "Nix's plugged is not installed | path='${binary}'" -f "${CLI_NAME} switch"
     return 0
   fi
   verdict ok built -d "hooks='${hooks}' binary='${binary}'"
@@ -60,13 +50,8 @@ apply::plugged() {
     log::err "plugged not checked out | path='${dir}' fix='${CLI_NAME} apply dotfiles_repo'"
     return 1
   fi
-  if ! command -v swift >/dev/null 2>&1; then
-    log::warn "swift is not on PATH; skipping | fix='xcode-select --install'"
-    return 0
-  fi
   tier::submodule_identity_apply "${dir}" || return 1
   if [[ "$(git -C "${dir}" config core.hooksPath 2>/dev/null)" != ".githooks" ]]; then
     run_mut git -C "${dir}" config core.hooksPath .githooks || return 1
   fi
-  run_mut zsh "${dir}/bin/plugged-dev" build
 }

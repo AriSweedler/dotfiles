@@ -26,7 +26,7 @@ assert_eq "neovim reason timed_out" timed_out "$(step_get neovim .reason)"
 # 1 s timeout plus the 5 s KILL grace; loose because the suite runs under load.
 elapsed=$((t1 - t0))
 if (( elapsed < 20 )); then pass "wall time under 20 s (${elapsed}s)"; else fail "wall time under 20 s" "took ${elapsed}s"; fi
-for step in dotfiles_repo claude dotfiles_jobs karabiner; do
+for step in dotfiles_repo claude dotfiles_jobs home_strays; do
   status="$(step_get "${step}" .status)"
   if [[ -n "${status}" && "${status}" != null && "${status}" != skip ]]; then pass "${step} ran after the timeout (${status})"
   else fail "${step} ran after the timeout" "status='${status}'"; fi

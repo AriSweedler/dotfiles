@@ -40,7 +40,7 @@ steps_edit_check() {
   # The steps directory as it would be with the draft in place: links to every other step file.
   dir="$(mktemp -d "${TMPDIR:-/tmp}/steps-edit.XXXXXX")" || return 1
   err="${dir}.err"
-  for f in "${ARI_DOTFILES_STEPS}"/*.zsh(N); do
+  for f in "${ARI_DOTFILES_SRC}/steps"/*.zsh(N); do
     [[ "${f:t}" == "${name}.zsh" ]] || ln -s -- "${f}" "${dir}/${f:t}"
   done
   ln -s -- "${draft}" "${dir}/${name}.zsh"
@@ -51,7 +51,7 @@ steps_edit_check() {
     (( ${STEPS_DECLARED[(Ie)$3]} )) || { print -u2 -r -- "declares no step $3; want step::declare $3"; exit 3; }
     if [[ -n "${STEP_UNDOCUMENTED[$3]:-}" ]]; then print -u2 -r -- "undocumented: ${STEP_UNDOCUMENTED[$3]}"; exit 1; fi
     if (( ${+functions[apply::$3]} )); then print -r -- apply; fi
-    exit 0' steps-edit "${ARI_DOTFILES_LIB}" "${dir}" "${name}" 2> "${err}")" || rc=$?
+    exit 0' steps-edit "${ARI_DOTFILES_SRC}/lib" "${dir}" "${name}" 2> "${err}")" || rc=$?
   rm -f -- "${dir}"/*.zsh(N@)
   rmdir -- "${dir}" 2>/dev/null || true
   if (( rc != 0 )) || [[ -s "${err}" ]]; then
@@ -74,7 +74,7 @@ steps_edit() {
   (( ${#args} <= 1 )) || usage_error "steps edit takes one NAME | args='${args[*]}'"
   [[ -n "${name}" ]] || usage_error "steps edit needs a NAME | see='${CLI_NAME} steps'"
   [[ "${name}" == [a-z][a-z0-9_]# ]] || usage_error "steps edit: a step name is lowercase letters, digits and _ | name='${name}'"
-  file="${ARI_DOTFILES_STEPS}/${name}.zsh"
+  file="${ARI_DOTFILES_SRC}/steps/${name}.zsh"
   if (( new )); then
     [[ ! -e "${file}" ]] || { log::err "step exists; edit it without --new | file='${file}'"; return 1; }
   elif [[ ! -f "${file}" ]]; then

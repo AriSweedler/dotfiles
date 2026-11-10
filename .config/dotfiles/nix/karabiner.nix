@@ -8,5 +8,7 @@
 let file = "${src}/.config/karabiner/karabiner.json";
 in
 lib.mkIf (builtins.pathExists file) {
-  xdg.configFile."karabiner/karabiner.json".source = file;
+  # Parsed at evaluation, so invalid JSON fails the switch instead of reaching Karabiner.
+  xdg.configFile."karabiner/karabiner.json".source =
+    assert builtins.isAttrs (builtins.fromJSON (builtins.readFile file)); file;
 }

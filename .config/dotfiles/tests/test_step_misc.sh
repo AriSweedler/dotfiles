@@ -214,23 +214,11 @@ check_step nix_port
 assert_eq "all done again → ok" ok "$(status_of nix_port)"
 
 # ── karabiner ─────────────────────────────────────────────────────────────────
-KJ="${HOME}/.config/karabiner/karabiner.json"
-mkdir -p "${HOME}/.config/karabiner"
-shim_add npm
+# karabiner.nix places karabiner.json and parses it at the switch; the step runs only the
+# healthcheck.
 check_step karabiner
-assert_eq "karabiner.json missing → fail" fail "$(status_of karabiner)"
-assert_eq "reason karabiner_config (missing)" karabiner_config "$(reason_of karabiner)"
-printf '{"z": 1, "a": 2}\n' > "${KJ}"
-check_step karabiner
-assert_eq "unsorted karabiner.json → fail" fail "$(status_of karabiner)"
-assert_eq "reason karabiner_config (unsorted)" karabiner_config "$(reason_of karabiner)"
-shim_remove npm
-check_step karabiner
-assert_eq "no npm + bake needed → skip" skip "$(status_of karabiner)"
-assert_eq "reason no_npm" no_npm "$(reason_of karabiner)"
-jq -S -n '{a: 2, z: 1}' > "${KJ}"
-check_step karabiner
-assert_eq "sorted karabiner.json → ok" ok "$(status_of karabiner)"
+assert_eq "no healthcheck → skip" skip "$(status_of karabiner)"
+assert_eq "reason no_healthcheck" no_healthcheck "$(reason_of karabiner)"
 seed_fake_healthcheck 1
 check_step karabiner
 assert_eq "healthcheck exit 1 → warn" warn "$(status_of karabiner)"
@@ -239,11 +227,11 @@ assert_contains "detail carries issues=2" "$(step_get karabiner .detail)" "issue
 seed_fake_healthcheck 0
 check_step karabiner
 assert_eq "healthcheck exit 0 → ok" ok "$(status_of karabiner)"
-# A fresh machine has the healthcheck (df) before its logging lib (~/.claude/skills): not run, not a warn.
+# A fresh machine has the healthcheck (df) before its logging lib (~/.claude/skills): not run.
 rm -f "${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
 check_step karabiner
-assert_eq "healthcheck without its logging lib → ok" ok "$(status_of karabiner)"
-assert_contains "detail says the healthcheck was unusable" "$(step_get karabiner .detail)" "logging lib missing"
+assert_eq "healthcheck without its logging lib → skip" skip "$(status_of karabiner)"
+assert_eq "reason no_logging_lib" no_logging_lib "$(reason_of karabiner)"
 
 # ── claude_notifications ──────────────────────────────────────────────────────
 check_step claude_notifications

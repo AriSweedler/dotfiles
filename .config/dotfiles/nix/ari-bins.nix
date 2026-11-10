@@ -14,6 +14,7 @@ let
       "git-health" "git-ready" "git-delete-if-merged-all" "git-delete-if-merged-one" "git-dedupe-case-refs" "repo"
     ];
     notes = [ ".config/bin/notes" ];
+    dotfiles-cli = [ ".config/bin/dotfiles" ];
     mac-utils = map (b: ".config/bin/${b}") [
       "applelink" "applepaste" "chrome-headless" "favicon-maker" "json-sort" "karabiner-list-keyboards" "notif-center"
       "open-any" "open-link" "pbpastelinks" "probe-color" "probe-emoji" "replace" "utc-date" "yubitap"

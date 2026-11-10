@@ -17,7 +17,7 @@ A plugin is one executable file named for the job. Its header says when it runs:
     # cron: 20 * * * *
 
 - `unlock` — the screen was unlocked.
-- `load` — the job was (re)loaded: login, or `dotfiles jobs install`.
+- `load` — the job was (re)loaded: login, or a `dotfiles switch` that changed it.
 - `# cron: minute hour day-of-month month day-of-week` — standard five fields: `*`, `n`,
   `a-b`, `*/s`, `a-b/s`, comma lists; Sunday is 0 or 7. Due on a tick, and at load, once the
   expression's most recent moment at or before now is later than the plugin's last run,
@@ -82,6 +82,6 @@ in a `bin/` and leaves a shim here that execs it.
     dotfiles jobs list          plugins of both tiers, triggers, last run and rc, agent state
     dotfiles jobs run <name>    run one now (trigger 'manual')
     dotfiles jobs unlock        simulate a screen unlock (SIGUSR1 to the agent)
-    dotfiles jobs install       the launchd job; idempotent; the dotfiles_jobs step runs it
+    dotfiles jobs install       removes the per-plugin jobs this replaced; the launchd job is nix-darwin's (dotfiles switch)
 
 Only a real lock and unlock proves the observer; the simulation proves everything after it.

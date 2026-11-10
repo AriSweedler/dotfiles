@@ -27,8 +27,8 @@ verb::sub jobs list 'every plugin, its triggers, last run and rc, then the deps 
 verb::sub jobs run 'run one plugin now; output to its log and stdout'
 verb::sub jobs tick 'what the agent runs: every plugin due for --trigger T (load, tick, screenIsUnlocked)'
 verb::sub jobs unlock 'simulate a screen unlock (SIGUSR1 to the resident agent)'
-verb::sub jobs install 'compile the agent, write the plist and bootstrap the job, each only if changed (the dotfiles_jobs step runs this)'
-verb::sub jobs uninstall 'boot the job out and remove its plist'
+verb::sub jobs install 'remove the per-plugin jobs this framework replaced; the job itself is nix-darwin'"'"'s, installed by dotfiles switch (the dotfiles_jobs step runs this)'
+verb::sub jobs uninstall 'boot out and remove a job nix-darwin did not install'
 verb::edit jobs jobs::edit 'NAME [--new] [--local|--global] [--dep] [--no-commit] [--no-push]' \
   'a plugin (or --dep) in \$EDITOR as a draft: checked on save (syntax, header lines, docs), then put in place and committed in its tier'
 verb::flag jobs '--trigger T' 'run, tick: the trigger the plugin sees as \$1 (run: manual)'
@@ -488,7 +488,7 @@ jobs_list() {
   elif launchctl print "gui/$(id -u)/${JOBS_LABEL}" >/dev/null 2>&1; then
     print -r -- "  agent: ${c_yellow}loaded but not running${c_rst} (launchd restarts it; see ${JOBS_STATE_DIR}/launchd.err.log)"
   else
-    print -r -- "  agent: ${c_red}not loaded${c_rst} (dotfiles jobs install)"
+    print -r -- "  agent: ${c_red}not loaded${c_rst} (dotfiles switch)"
   fi
 }
 
@@ -567,61 +567,6 @@ jobs_notify_finish() {
 
 # --- the launchd job ---
 
-#######################################
-# Compile the agent, the job's program, which launchd keeps alive, from its source in the shared
-# flake (nix-darwin builds the same file). macOS posts the screen-unlock event only as a
-# distributed notification (NSDistributedNotificationCenter), which launchd's LaunchEvents
-# cannot subscribe to and notifyutil never sees, so a resident observer is the only way to hear
-# it. The agent also owns the timer and the load run, and serializes every run. Compiled only
-# when the source changed.
-# Globals: JOBS_AGENT_BIN, JOBS_AGENT_SRC
-#######################################
-jobs_write_agent() {
-  local src="${JOBS_AGENT_BIN}.c"
-  if [[ -x "${JOBS_AGENT_BIN}" ]] && cmp -s "${JOBS_AGENT_SRC}" "${src}"; then
-    jobs_agent_changed=0; log::info "agent current | bin='${JOBS_AGENT_BIN}'"; return 0
-  fi
-  if ! command -v cc >/dev/null 2>&1; then
-    log::err "no C compiler; the jobs agent needs the Command Line Tools | fix='xcode-select --install'"; return 1
-  fi
-  mkdir -p "${JOBS_AGENT_BIN:h}"
-  cp "${JOBS_AGENT_SRC}" "${src}"
-  cc -O2 -Wall -Wextra -framework CoreFoundation -o "${JOBS_AGENT_BIN}" "${src}"
-  jobs_agent_changed=1
-  log::info "compiled agent | bin='${JOBS_AGENT_BIN}'"
-}
-
-#######################################
-# Render the plist through jq + plutil (jq escapes every value; plutil rejects malformed
-# output) and install it only when it differs. Sets jobs_plist_changed for the caller. The
-# agent is the program and launchd keeps it alive; it owns the unlock observer and the timer.
-# Globals: JOBS_*, jobs_plist_changed
-#######################################
-jobs_write_plist() {
-  local rendered
-  rendered="$(mktemp)"
-  jq -n \
-    --arg label "${JOBS_LABEL}" --arg agent "${JOBS_AGENT_BIN}" --arg harness "${HOME}/.config/bin/dotfiles" \
-    --arg interval "${JOBS_INTERVAL_SECONDS}" --arg notification "${JOBS_UNLOCK_NOTIFICATION}" \
-    --arg path "${JOBS_LAUNCHD_PATH}" \
-    --arg out "${JOBS_STATE_DIR}/launchd.out.log" --arg err "${JOBS_STATE_DIR}/launchd.err.log" \
-    '{
-      Label: $label,
-      ProgramArguments: [$agent, $harness, $interval, $notification],
-      RunAtLoad: true,
-      KeepAlive: true,
-      EnvironmentVariables: {PATH: $path},
-      StandardOutPath: $out,
-      StandardErrorPath: $err
-    }' | plutil -convert xml1 - -o "${rendered}"
-  plutil -lint -s "${rendered}"
-  if cmp -s "${rendered}" "${JOBS_PLIST}"; then rm -f "${rendered}"; jobs_plist_changed=0; return 0; fi
-  mkdir -p "${JOBS_PLIST:h}"   # a fresh account may not have ~/Library/LaunchAgents yet
-  mv "${rendered}" "${JOBS_PLIST}"
-  chmod 0644 "${JOBS_PLIST}"
-  jobs_plist_changed=1
-}
-
 # The plist runs an agent from the Nix store: nix-darwin's launchd.user.agents wrote it, so a
 # switch owns the job and an install here would only fight it.
 jobs_nix_managed() {
@@ -632,10 +577,9 @@ jobs_nix_managed() {
 }
 
 #######################################
-# Idempotent, and an init step: the per-plugin jobs this framework replaced are booted out
-# and their plists removed; the agent is compiled and the plist written only on change; the
-# job is restarted only when one of them changed (a running agent is the old binary until it
-# is), since a bootout + bootstrap runs the load tick again.
+# Idempotent, and the dotfiles_jobs step's apply: boots out and removes the per-plugin jobs this
+# framework replaced. The job itself is nix-darwin's (launchd.user.agents.dotfiles-jobs in
+# nix/darwin.nix), so `dotfiles switch` installs and updates it; without it this fails with that fix.
 #######################################
 jobs_install() {
   local label plist
@@ -650,23 +594,15 @@ jobs_install() {
   if jobs_nix_managed; then
     log::info "jobs launchd job managed by nix-darwin; a switch installs it | label='${JOBS_LABEL}' plist='${JOBS_PLIST}'"; return 0
   fi
-  if is_dry_run; then
-    log::info "dry-run, would compile the agent, write the plist and bootstrap, each only if changed | label='${JOBS_LABEL}' plist='${JOBS_PLIST}'"; return 0
-  fi
-  mkdir -p "${JOBS_STATE_DIR}"
-  rm -f "${JOBS_STATE_DIR}"/bin/launch-event-consume(N) "${JOBS_STATE_DIR}"/bin/launch-event-consume.c(N)   # the pre-agent helper
-  local jobs_agent_changed=1 jobs_plist_changed=1
-  jobs_write_agent || return 1
-  jobs_write_plist
-  if (( jobs_plist_changed == 0 && jobs_agent_changed == 0 )) && launchctl print "gui/$(id -u)/${JOBS_LABEL}" >/dev/null 2>&1; then
-    log::info "jobs launchd job current | label='${JOBS_LABEL}'"; return 0
-  fi
-  launchctl bootout "gui/$(id -u)/${JOBS_LABEL}" 2>/dev/null || true
-  launchctl bootstrap "gui/$(id -u)" "${JOBS_PLIST}"
-  log::info "installed jobs launchd job | label='${JOBS_LABEL}' triggers='${JOBS_UNLOCK_NOTIFICATION}, login, every ${JOBS_INTERVAL_SECONDS}s' logs='${JOBS_STATE_DIR}'"
+  log::err "the jobs launchd job is nix-darwin's and this machine has not switched to it | label='${JOBS_LABEL}' plist='${JOBS_PLIST}' fix='dotfiles switch'"
+  return 1
 }
 
 jobs_uninstall() {
+  if jobs_nix_managed; then
+    log::err "nix-darwin owns the jobs launchd job; a switch would put it back | label='${JOBS_LABEL}' fix='remove launchd.user.agents.dotfiles-jobs from nix/darwin.nix, then dotfiles switch'"
+    return 1
+  fi
   launchctl bootout "gui/$(id -u)/${JOBS_LABEL}" 2>/dev/null || true
   rm -f "${JOBS_PLIST}"
   log::info "removed jobs launchd job | label='${JOBS_LABEL}'"
@@ -676,7 +612,7 @@ jobs_uninstall() {
 # distributed notification had arrived. Only a real lock and unlock proves the observer itself.
 jobs_simulate_unlock() {
   local pid; pid="$(jobs_agent_pid)"
-  if [[ -z "${pid}" ]]; then log::err "agent not running | fix='dotfiles jobs install'"; return 1; fi
+  if [[ -z "${pid}" ]]; then log::err "agent not running | fix='dotfiles switch'"; return 1; fi
   kill -USR1 "${pid}" && log::info "unlock simulated | agent_pid='${pid}' watch='${JOBS_STATE_DIR}/launchd.err.log'"
 }
 

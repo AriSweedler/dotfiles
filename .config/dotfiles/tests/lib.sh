@@ -246,6 +246,7 @@ world_empty_home() {
   fi
   rm -rf "${HOME}"
   mkdir -p "${HOME}/Desktop" "${HOME}/Library/LaunchAgents"
+  world_seed_jobs_job   # nix-darwin's, outside what a fresh dotfiles checkout makes
 }
 
 # Materialize tests/fixtures/NAME into $FIX/brew; receipts get the fake prefix spliced into
@@ -506,12 +507,20 @@ seed_home_baseline() {
   chmod +x "${HOME}/.config/claude/bin/initialize.sh" "${HOME}/.config/claude/bin/notification-fire.sh" "${HOME}/.config/bin/git-health"
   "${HOME}/.config/claude/bin/initialize.sh"
 
-  label="com.$(id -un).dotfiles-jobs"
-  plist="${HOME}/Library/LaunchAgents/${label}.plist"
-  jq -n --arg label "${label}" '{Label: $label, ProgramArguments: ["/bin/zsh", "dotfiles", "jobs", "tick"], StartInterval: 300}' \
+  world_seed_jobs_job
+  shim_logs_reset
+}
+
+# The jobs launchd job as nix-darwin installs it at a switch (launchd.user.agents.dotfiles-jobs):
+# its plist, the program under the Nix store, loaded. The world has switched, so it has one.
+world_seed_jobs_job() {
+  local label="com.$(id -un).dotfiles-jobs"
+  local plist="${HOME}/Library/LaunchAgents/${label}.plist"
+  mkdir -p "$(dirname "${plist}")" "${LAUNCHCTL_SHIM_STATE}"
+  jq -n --arg label "${label}" --arg agent "${ARI_DOTFILES_NIX_STORE}/dotfiles-jobs-agent" \
+    '{Label: $label, ProgramArguments: [$agent, "dotfiles", "300", "com.apple.screenIsUnlocked"], RunAtLoad: true}' \
     | plutil -convert xml1 - -o "${plist}"
   touch "${LAUNCHCTL_SHIM_STATE}/${label}"
-  shim_logs_reset
 }
 
 # Write a karabiner healthcheck double into the fake HOME: exit code $1, degraded output.

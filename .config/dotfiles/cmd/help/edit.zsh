@@ -65,7 +65,7 @@ help_edit_check() {
     [[ -z "${REPLY}" ]] || { print -u2 -r -- "undocumented: ${REPLY}"; exit 1; }
     set -euo pipefail
     if [[ -n "${verb}" ]]; then help_verb "${verb}"; else help; fi' \
-    help-edit "${ARI_DOTFILES_LIB}" "${ARI_DOTFILES_CMD}" "${draft}" "${verb}" 2> "${err}")" || rc=$?
+    help-edit "${ARI_DOTFILES_SRC}/lib" "${ARI_DOTFILES_SRC}/cmd" "${draft}" "${verb}" 2> "${err}")" || rc=$?
   if (( rc != 0 )) || [[ -s "${err}" || -z "${out}" ]]; then
     if [[ -s "${err}" ]]; then cat -- "${err}" >&2
     elif (( rc != 0 )); then print -u2 -r -- "the help did not render (exit ${rc})"
@@ -82,14 +82,14 @@ help_edit() {
   local verb="${1}" commit="${2:-1}" file name draft msg next at line
   local -i stubbed=0 n=0 rc=0
   if [[ -n "${verb}" ]]; then
-    file="${ARI_DOTFILES_CMD}/${verb}.zsh" name="${verb}"
+    file="${ARI_DOTFILES_SRC}/cmd/${verb}.zsh" name="${verb}"
     msg="${CLI_NAME}: edit help for ${verb}" next="${CLI_NAME} ${verb} --help"
     [[ -f "${file}" ]] || { log::err "no verb file | verb='${verb}' want='${file}'"; return 1; }
     # A verb opens at its declaration; one without one gets a declaration stub to fill in.
     at="verb::define ${verb} "
     help::is_declared "${file}" "${verb}" || stubbed=1
   else
-    file="${ARI_DOTFILES_LIB}/dispatch.zsh" name=dotfiles at="help() {"
+    file="${ARI_DOTFILES_SRC}/lib/dispatch.zsh" name=dotfiles at="help() {"
     msg="${CLI_NAME}: edit the top-level help" next="${CLI_NAME} --help"
   fi
   edit::draft "${file}" "${ARI_DOTFILES_STATE_DIR}/drafts/help"

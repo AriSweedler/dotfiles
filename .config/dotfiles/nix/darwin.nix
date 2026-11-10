@@ -91,8 +91,7 @@
     '';
 
   # The dotfiles jobs framework's one launchd job (screen unlock, login, every 5 minutes), under
-  # the label `dotfiles jobs` reads; a switch replaces a plist `dotfiles jobs install` wrote, and
-  # that command then defers here. The values mirror JOBS_* in dotfiles/lib/env.zsh.
+  # the label `dotfiles jobs` reads. The only installer: `dotfiles jobs install` defers here. The values mirror JOBS_* in dotfiles/lib/env.zsh.
   launchd.user.agents.dotfiles-jobs.serviceConfig =
     let
       home = "/Users/${user}";

@@ -23,8 +23,8 @@ assert_eq "df hooksPath set" "${ARI_DOTFILES_DF_HOOKS}" "$(df_git config --local
 assert_file "local-dotfiles bare repo created" "${ARI_DOTFILES_LDF_GIT_DIR}/HEAD"
 assert_eq "ldf hooksPath set" "${ARI_DOTFILES_LDF_HOOKS}" "$(git --git-dir="${ARI_DOTFILES_LDF_GIT_DIR}" config --local --get core.hooksPath)"
 assert_eq "ldf info/exclude == template" "$(rules "${TEMPLATE}")" "$(rules "${ARI_DOTFILES_LDF_GIT_DIR}/info/exclude")"
-assert_file "jobs plist installed" "${HOME}/Library/LaunchAgents/com.$(id -un).dotfiles-jobs.plist"
-assert_file "jobs job loaded" "${LAUNCHCTL_SHIM_STATE}/com.$(id -un).dotfiles-jobs"
+assert_file "jobs plist present (nix-darwin's)" "${HOME}/Library/LaunchAgents/com.$(id -un).dotfiles-jobs.plist"
+assert_file "jobs job still loaded" "${LAUNCHCTL_SHIM_STATE}/com.$(id -un).dotfiles-jobs"
 assert_json "status ok or warn" "${f}" '.status == "ok" or .status == "warn"' true
 assert_json "no step failed or errored" "${f}" '[.steps[] | select(.status=="fail" or .status=="error") | .step + "=" + .reason] | join(",")' ""
 assert_json "no step aborted" "${f}" '[.steps[] | select(.status=="skip" and .reason=="aborted")] | length' 0

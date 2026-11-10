@@ -4,21 +4,21 @@
 # does not fails the step, by hand only, naming `dotfiles jobs edit NAME`.
 step::declare dotfiles_jobs --group repo --needs dotfiles_repo \
   --desc "dotfiles jobs launchd job (runs the job plugins of both tiers) installed and loaded; every plugin and dep documented" \
-  --apply "compiles the agent, writes the plist and bootstraps the launchd job, each only if changed (dotfiles jobs install)"
+  --apply "boots out the per-plugin jobs this framework replaced (dotfiles jobs install); the job itself is nix-darwin's, installed by dotfiles switch"
 step::watches dotfiles_jobs '.config/dotfiles/jobs/**' '.config/dotfiles/deps/**'
 
 check::dotfiles_jobs() {
   local label="com.$(id -un).dotfiles-jobs" plist="${ARI_DOTFILES_LAUNCH_AGENTS_DIR}/com.$(id -un).dotfiles-jobs.plist"
   if [[ ! -f "${plist}" ]]; then
-    verdict fail not_installed -d "plist missing | path='${plist}'" -f "${CLI_NAME} apply dotfiles_jobs"
+    verdict fail not_installed -d "plist missing | path='${plist}'" -f "${CLI_NAME} switch"
     return 0
   fi
   if ! plutil -lint -s "${plist}" >/dev/null 2>&1; then
-    verdict fail not_installed -d "plist does not lint | path='${plist}'" -f "${CLI_NAME} apply dotfiles_jobs"
+    verdict fail not_installed -d "plist does not lint | path='${plist}'" -f "${CLI_NAME} switch"
     return 0
   fi
   if ! launchctl print "gui/$(id -u)/${label}" >/dev/null 2>&1; then
-    verdict fail not_loaded -d "job not loaded | label='${label}'" -f "${CLI_NAME} apply dotfiles_jobs"
+    verdict fail not_loaded -d "job not loaded | label='${label}'" -f "${CLI_NAME} switch"
     return 0
   fi
   need_lib "${ARI_DOTFILES_CMD}/jobs.zsh" || return 3

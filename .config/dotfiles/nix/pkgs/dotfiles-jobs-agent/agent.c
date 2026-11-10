@@ -1,7 +1,6 @@
 // dotfiles-jobs-agent <harness> <interval-seconds> <unlock-notification>
 // The dotfiles jobs job's program, which launchd keeps alive. nix-darwin builds it (default.nix
-// beside this file, wired in nix/darwin.nix); without Nix, `dotfiles jobs install` compiles it
-// (dotfiles/cmd/jobs.zsh). It runs
+// beside this file, wired in nix/darwin.nix). It runs
 //     /bin/zsh <harness> jobs tick --trigger <tag>
 // once at start (load), on every <unlock-notification> from the distributed notification
 // center (screenIsUnlocked), every <interval-seconds> (tick), and on SIGUSR1 (screenIsUnlocked

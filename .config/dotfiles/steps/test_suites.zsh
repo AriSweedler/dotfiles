@@ -13,7 +13,7 @@ check::test_suites() {
   # A suite's target is a plugin or a ~/.config/bin script: a new or removed one changes a dir.
   local -a CACHE_EXTRA=("${ARI_DOTFILES_CMD}/test.zsh")
   cache::check step::test_suites::live "${tests}" "${tests}"/test_*.sh(N) \
-    "${plugins}" "${plugins}"/*.zsh(N) "${ARI_DOTFILES_CONFIG}/bin"
+    "${plugins}" "${plugins}"/*.zsh(N) "${ARI_DOTFILES_SRC_CONFIG}/bin"
 }
 
 step::test_suites::live() {

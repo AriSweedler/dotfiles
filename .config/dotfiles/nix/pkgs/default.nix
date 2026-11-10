@@ -9,6 +9,7 @@ let
     git-kit = pkgs.callPackage ./git-kit { inherit src; inherit (self) ari_zshlib; };
     notes = pkgs.callPackage ./notes { inherit src; inherit (self) ari_zshlib; };
     mac-utils = pkgs.callPackage ./mac-utils { inherit src; inherit (self) ari_zshlib; };
+    dotfiles-cli = pkgs.callPackage ./dotfiles-cli { inherit src; };
   };
 in
 self

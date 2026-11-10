@@ -10,6 +10,11 @@ typeset -gx ARI_DOTFILES_STEPS="${ARI_DOTFILES_ROOT}/steps"
 typeset -gx ARI_DOTFILES_CMD="${ARI_DOTFILES_ROOT}/cmd"
 typeset -gx ARI_DOTFILES_CONFIG="${ARI_DOTFILES_ROOT:h}"       # the .config of this checkout, not necessarily $HOME's
 typeset -gx ARI_DOTFILES_NOTIFIER_IMAGE="${ARI_DOTFILES_ROOT}/assets/robot.png"
+# The editable sources: the edit verbs write here and the tests live here. The checkout this run
+# loaded from, or, when it runs from the Nix store (pkgs/dotfiles-cli rewrites this default),
+# the clone.
+typeset -gx ARI_DOTFILES_SRC="${ARI_DOTFILES_SRC:-${ARI_DOTFILES_ROOT}}"
+typeset -gx ARI_DOTFILES_SRC_CONFIG="${ARI_DOTFILES_SRC:h}"
 # The name fix hints print the CLI under.
 typeset -gx CLI_NAME="${CLI_NAME:-dotfiles}"
 
@@ -35,8 +40,8 @@ export HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_COLOR=0 HOMEBREW_NO_EMOJI=1
 
 # --- Seams: every default is the real machine; tests override and nothing else ---
 typeset -gx ARI_DOTFILES_SHARED_DIR="${ARI_DOTFILES_SHARED_DIR:-${ARI_DOTFILES_CONFIG}/new-machine}"
-typeset -gx ARI_DOTFILES_TESTS="${ARI_DOTFILES_TESTS:-${ARI_DOTFILES_ROOT}/tests}"            # the hermetic suite
-typeset -gx ARI_DOTFILES_ZSH_PLUGINS="${ARI_DOTFILES_ZSH_PLUGINS:-${ARI_DOTFILES_CONFIG}/zsh/plugins}"   # the plugin suites
+typeset -gx ARI_DOTFILES_TESTS="${ARI_DOTFILES_TESTS:-${ARI_DOTFILES_SRC}/tests}"            # the hermetic suite
+typeset -gx ARI_DOTFILES_ZSH_PLUGINS="${ARI_DOTFILES_ZSH_PLUGINS:-${ARI_DOTFILES_SRC_CONFIG}/zsh/plugins}"   # the plugin suites
 typeset -gx ARI_DOTFILES_LOCAL_DIR="${ARI_DOTFILES_LOCAL_DIR:-${XDG_DATA_HOME}/new-machine}"
 typeset -gx ARI_DOTFILES_STATE_DIR="${ARI_DOTFILES_STATE_DIR:-${XDG_STATE_HOME}/new-machine}"
 typeset -gx ARI_DOTFILES_DESKTOP_DIR="${ARI_DOTFILES_DESKTOP_DIR:-${HOME}/Desktop}"
@@ -207,18 +212,12 @@ typeset -g JOBS_LABEL="com.${USERNAME}.dotfiles-jobs"
 typeset -g JOBS_PLIST="${HOME}/Library/LaunchAgents/${JOBS_LABEL}.plist"
 typeset -g JOBS_ROOT_DF="${HOME}/.config/dotfiles/jobs"                              # the shared tier's plugins
 typeset -g JOBS_ROOT_LDF="${XDG_DATA_HOME}/dotfiles/jobs"                             # the local tier's
-typeset -g JOBS_STATE_DIR="${STATE_DIR}/jobs"                                         # logs, success stamps, the agent
-typeset -g JOBS_AGENT_BIN="${JOBS_STATE_DIR}/bin/dotfiles-jobs-agent"   # the job's program; launchd keeps it alive
-typeset -g JOBS_AGENT_SRC="${ARI_DOTFILES_ROOT}/nix/pkgs/dotfiles-jobs-agent/agent.c"   # its source; nix-darwin builds the same file
+typeset -g JOBS_STATE_DIR="${STATE_DIR}/jobs"                                         # logs and success stamps
 typeset -g JOBS_UNLOCK_NOTIFICATION="com.apple.screenIsUnlocked"          # a distributed notification, hence the agent
 typeset -g JOBS_INTERVAL_SECONDS=300          # the tick; cron schedules are checked on it, so it is their resolution
 typeset -g JOBS_TIMEOUT_SECONDS=900           # a plugin's run is killed after this unless its '# timeout:' line says otherwise
 typeset -g JOBS_HUD_SECONDS=2                 # how long the engine's "job ok" banner stays up
 typeset -g JOBS_NOTIFIER_TIMEOUT_SECONDS=10   # terminal-notifier occasionally never returns (seen on -remove); a banner is never worth a hang
-# launchd's PATH has neither Homebrew nor Nix; plugins shell out to jq, git, atn (the
-# terminal-notifier shim, in ~/.config/bin), python3. Same order as an interactive shell:
-# Homebrew, then the home-manager and nix-darwin profiles.
-typeset -g JOBS_LAUNCHD_PATH="${HOME}/.config/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/etc/profiles/per-user/${USERNAME}/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 # The per-plugin jobs this framework replaced; install boots them out and removes their plists.
 typeset -ga JOBS_LEGACY_LABELS=("com.${USERNAME}.git-health" "com.${USERNAME}.aws-sso-autologin" "com.${USERNAME}.new-machine-verify")
 typeset -gA JOB_PATH=() JOB_TIER=()         # name → executable, name → df | ldf; filled by jobs_discover
