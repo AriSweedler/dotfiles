@@ -4,7 +4,7 @@
 # hard-reset onto origin/main. Invokes `repo rename` first to label the
 # tmux window the same way `repo hop` does.
 
-source "${HOME}/.config/zsh/plugins/log.zsh"
+source "${ARI_ZSHLIB:-${HOME}/.config/zsh/plugins}/log.zsh"
 
 ready() {
   local branch="$1"

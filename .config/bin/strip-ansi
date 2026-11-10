@@ -2,5 +2,5 @@
 # strip-ansi — copy stdin to stdout without ANSI escape sequences. The logic is the
 # strip_ansi plugin; this wrapper is for callers that are not already in zsh.
 # Usage: strip-ansi < file   |   producer | strip-ansi
-source "${RUN_LOG_PLUGINS:-${HOME}/.config/zsh/plugins}/strip_ansi.zsh"   # the store copy when packaged (pkgs/run-log)
+source "${ARI_PLUGINS:-${HOME}/.config/zsh/plugins}/strip_ansi.zsh"   # the store copy when packaged (pkgs/run-log)
 strip_ansi

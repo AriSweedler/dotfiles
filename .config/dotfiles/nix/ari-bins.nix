@@ -1,16 +1,21 @@
-# Ari's packaged bins, placed where the clone's copies were linked: ~/.config/bin/<name> now
-# points into the store, so every caller that names that path (/ari-driving, a remote host's
-# run_log) keeps working, and the bridge skips the clone's file. An edit to one reaches HOME at
-# the next `dotfiles switch` (package what you run, link what you edit).
+# Ari's packaged bins, placed where the clone's copies were linked: ~/.config/bin/<name> (and
+# ~/.config/git/bin/git-dotfiles) now point into the store, so every caller that names that path
+# (/ari-driving, git's df alias, a remote host's run_log) keeps working, and the bridge skips the
+# clone's file. An edit to one reaches HOME at the next `dotfiles switch` (package what you run,
+# link what you edit).
 { lib, pkgs, src, ... }:
 let
   ari = import ./pkgs { inherit pkgs src; };
-  # package → its bins under .config/bin
+  # package → the repo paths of its bins; each is placed at that path under HOME, from the
+  # package's bin/<basename>.
   placed = {
-    run-log = [ "run_log" "run_log-capture.py" "irun" "strip-ansi" ];
+    run-log = map (b: ".config/bin/${b}") [ "run_log" "run_log-capture.py" "irun" "strip-ansi" ];
+    git-kit = [ ".config/git/bin/git-dotfiles" ] ++ map (b: ".config/bin/${b}") [
+      "git-health" "git-ready" "git-delete-if-merged-all" "git-delete-if-merged-one" "git-dedupe-case-refs" "repo"
+    ];
   };
   paths = lib.concatLists (lib.mapAttrsToList
-    (pkg: bins: map (bin: { inherit pkg bin; path = ".config/bin/${bin}"; }) bins)
+    (pkg: rels: map (path: { inherit pkg path; bin = baseNameOf path; }) rels)
     placed);
 in
 {

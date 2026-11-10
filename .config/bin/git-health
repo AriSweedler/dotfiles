@@ -21,7 +21,7 @@
 set -euo pipefail
 zmodload zsh/datetime
 
-source "${XDG_CONFIG_HOME:-${HOME}/.config}/zsh/plugins/log.zsh"
+source "${ARI_ZSHLIB:-${HOME}/.config/zsh/plugins}/log.zsh"
 
 readonly STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/git-health"
 readonly REGISTRY="${STATE_DIR}/repos"

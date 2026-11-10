@@ -5,9 +5,6 @@
 # /ari-driving and remote hosts expect run_log. An edit in the clone reaches them at the next
 # `dotfiles switch`; run the clone's file directly to try it first.
 { lib, stdenvNoCC, zsh, python3, ari_zshlib, src }:
-let
-  pluginsDefault = "\${RUN_LOG_PLUGINS:-\${HOME}/.config/zsh/plugins}";
-in
 stdenvNoCC.mkDerivation {
   pname = "run-log";
   version = "0";
@@ -18,14 +15,14 @@ stdenvNoCC.mkDerivation {
     runHook preInstall
     cd ${src}/.config
     install -Dm755 -t $out/bin bin/run_log bin/run_log-capture.py bin/irun bin/strip-ansi
-    install -Dm644 -t $out/share/run-log zsh/plugins/strip_ansi.zsh claude/lib/tmux-pane.sh
+    install -Dm644 -t $out/share/zsh/plugins zsh/plugins/strip_ansi.zsh
+    install -Dm644 -t $out/share/run-log claude/lib/tmux-pane.sh
     patchShebangs $out/bin
     ${ari_zshlib.pin [ "$out/bin/run_log" ]}
     substituteInPlace $out/bin/run_log \
       --replace-fail '"''${XDG_CONFIG_HOME:-$HOME/.config}/claude/lib/tmux-pane.sh"' "$out/share/run-log/tmux-pane.sh" \
       --replace-fail 'python3 -I "''${CAPTURE_HELPER}"' '${python3}/bin/python3 -I "''${CAPTURE_HELPER}"'
-    substituteInPlace $out/bin/strip-ansi \
-      --replace-fail ${lib.escapeShellArg pluginsDefault} "\''${RUN_LOG_PLUGINS:-$out/share/run-log}"
+    ${ari_zshlib.pinPlugins [ "$out/bin/strip-ansi" ]}
     runHook postInstall
   '';
 

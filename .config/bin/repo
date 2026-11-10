@@ -13,8 +13,8 @@
 #   repo sets                  every set: name, label, checkout count
 # The set is --set, else the one containing $PWD, else the entry marked default, else the first.
 
-source "${HOME}/.config/zsh/plugins/log.zsh"
-source "${HOME}/.config/zsh/plugins/double_cd.zsh"
+source "${ARI_ZSHLIB:-${HOME}/.config/zsh/plugins}/log.zsh"
+source "${ARI_PLUGINS:-${HOME}/.config/zsh/plugins}/double_cd.zsh"
 
 typeset -ga REPOS=()
 typeset -g LABEL="" SET=""

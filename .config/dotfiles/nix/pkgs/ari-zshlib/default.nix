@@ -14,6 +14,7 @@ let
     "\${ARI_ZSHLIB:-\${HOME}/.config/zsh/plugins}"
     "\${ARI_ZSHLIB:-\${HOME}/.claude/skills/ari-skill-shellscripts/lib}"
   ];
+  pluginsDefault = "\${ARI_PLUGINS:-\${HOME}/.config/zsh/plugins}";
 in
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "ari-zshlib";
@@ -43,5 +44,11 @@ stdenvNoCC.mkDerivation (finalAttrs: {
         (d: " --replace-quiet ${lib.escapeShellArg d} ${lib.escapeShellArg "\${ARI_ZSHLIB:-${finalAttrs.finalPackage}/lib}"}")
         liveDefaults
       + "\n")
+    files;
+
+  # pinPlugins [ FILE … ]: the same for a bin's own zsh plugin, "${ARI_PLUGINS:-<the live plugin
+  # dir>}", rewritten to the package's $out/share/zsh/plugins, where it installs its copies.
+  passthru.pinPlugins = files: lib.concatMapStrings
+    (f: "substituteInPlace ${f} --replace-quiet ${lib.escapeShellArg pluginsDefault} \"\\\${ARI_PLUGINS:-$out/share/zsh/plugins}\"\n")
     files;
 })
