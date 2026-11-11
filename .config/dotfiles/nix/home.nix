@@ -1,7 +1,7 @@
 # User layer every machine gets: packages and the files home-manager places.
-{ pkgs, src, ... }:
+{ pkgs, src, devInputs, ... }:
 let
-  ari = import ./pkgs { inherit pkgs src; };
+  ari = import ./pkgs { inherit pkgs src devInputs; };
   # Neovim pinned to the exact commit Ari ran under bob (v0.13.0-dev-853+g7945732ed7, 2026-06-29),
   # built with nixpkgs' recipe. The version moves only when rev and hash are edited here; a
   # nixpkgs update never bumps it. The source tarball has no .git, so `nvim --version` prints

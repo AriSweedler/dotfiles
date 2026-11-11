@@ -1,14 +1,14 @@
-# step chrome_exoskeleton — the shared-tier submodule (dotfiles_repo initializes it) has its
+# step chrome_exoskeleton — the dev repo checkout (dotfiles_repo clones it) has its
 # dependencies, which wire its hooks through npm's prepare script, a built dist/, and that
 # dist/ (or dist-personal/) loaded unpacked and enabled in at least one Chrome profile. Loading
 # it is the one part only a human can do (chrome://extensions, Load unpacked), so it is a manual
 # fail, which init at a terminal offers to walk through (assist::). Node comes from the local
 # tier's env.zsh on a work machine; a personal machine needs it on PATH, hence a warn, not a fail.
 step::declare chrome_exoskeleton --group tools --needs dotfiles_repo \
-  --desc "the Chrome Exoskeleton submodule has its dependencies (which wire its hooks), a built dist/, and Chrome loads it, enabled, in at least one profile" \
-  --apply "sets the submodule's commit identity, installs its node dependencies when missing (exo deps ci, which wires its hooks) and builds dist/ (exo build)" \
+  --desc "the Chrome Exoskeleton checkout has its dependencies (which wire its hooks), a built dist/, and Chrome loads it, enabled, in at least one profile" \
+  --apply "sets the checkout's commit identity, installs its node dependencies when missing (exo deps ci, which wires its hooks) and builds dist/ (exo build)" \
   --assist "when no profile loads it: asks y/N, then opens chrome://extensions, reveals dist/ in Finder and waits for the load"
-step::watches chrome_exoskeleton '.config/chrome-exoskeleton'   # the submodule pointer
+step::watches chrome_exoskeleton '.config/dotfiles/nix/flake.lock'   # where its input is locked
 
 step::chrome_exoskeleton::dir() {
   print -r -- "${HOME}/.config/chrome-exoskeleton"

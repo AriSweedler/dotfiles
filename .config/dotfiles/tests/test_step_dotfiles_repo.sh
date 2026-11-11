@@ -92,18 +92,16 @@ popd > /dev/null || abort "popd failed"
 assert_eq "check from a work-tree subdirectory → ok" ok "$(step_get dotfiles_repo .status)"
 assert_eq "check from a work-tree subdirectory keeps reason clean" clean "$(step_get dotfiles_repo .reason)"
 
-# A checked-out submodule needs README.md and skills/ari-dotfile--submodule-<name>/SKILL.md,
-# linked into ~/.claude/skills; each gap is a manual fail naming what lacks what.
+# A cloned dev repo needs README.md and skills/ari-dotfile--submodule-<name>/SKILL.md, linked
+# into ~/.claude/skills; each gap is a manual fail naming what lacks what.
 SUB="${HOME}/.config/sub"
 git init -q --initial-branch=main "${SUB}"
 printf 'x\n' > "${SUB}/f"
 git -C "${SUB}" add f && git -C "${SUB}" commit -q -m one
-printf '[submodule ".config/sub"]\n\tpath = .config/sub\n\turl = https://github.com/example/sub.git\n' > "${HOME}/.gitmodules"
-df_git update-index --add --cacheinfo "160000,$(git -C "${SUB}" rev-parse HEAD),.config/sub"
-df_git add "${HOME}/.gitmodules"
+world_dev_repos .config/sub
+world_lock_dev .config/sub "$(git -C "${SUB}" rev-parse HEAD)"
+df_git add "${HOME}/.config/dotfiles/dev-repos" "${HOME}/.config/dotfiles/nix/flake.lock"
 df_git -c core.hooksPath=/dev/null commit -q -m "sub"
-# What `git submodule init` records; without it git reports the checkout as uninitialized ('-').
-df_git config submodule..config/sub.url https://github.com/example/sub.git
 check_repo
 assert_eq "undocumented submodule → fail" fail "$(step_get dotfiles_repo .status)"
 assert_eq "reason submodule_undocumented" submodule_undocumented "$(step_get dotfiles_repo .reason)"
@@ -121,8 +119,42 @@ assert_contains "fix: the registry's link" "$(step_get dotfiles_repo .fix)" "ari
 mkdir -p "${HOME}/.claude/skills"
 ln -s "${SUB}/skills/ari-dotfile--submodule-sub" "${HOME}/.claude/skills/ari-dotfile--submodule-sub"
 check_repo
-assert_eq "documented submodule → ok" ok "$(step_get dotfiles_repo .status)"
-rm -rf "${SUB}" "${HOME}/.claude/skills/ari-dotfile--submodule-sub"
+assert_eq "documented dev repo → ok" ok "$(step_get dotfiles_repo .status)"
+# A commit past the one flake.lock pins: a warn, bumped by the next push.
+git -C "${SUB}" commit -q --allow-empty -m two
+check_repo
+assert_eq "past the lock → warn" warn "$(step_get dotfiles_repo .status)"
+assert_eq "reason submodule_drift" submodule_drift "$(step_get dotfiles_repo .reason)"
+assert_contains "drift: the fix is a push" "$(step_get dotfiles_repo .fix)" "dotfiles push"
+# The same repo as a git submodule checkout (.git a file into the shared repo's modules/): a fail
+# the apply fixes by moving the git dir in, on main.
+MOD="${ARI_DOTFILES_DF_GIT_DIR}/modules/.config/sub"
+mkdir -p "$(dirname "${MOD}")"
+git -C "${SUB}" checkout -q --detach
+mv "${SUB}/.git" "${MOD}"
+git --git-dir="${MOD}" config core.worktree "${SUB}"
+printf 'gitdir: %s\n' "${MOD}" > "${SUB}/.git"
+df_git config submodule..config/sub.url https://github.com/example/sub.git
+check_repo
+assert_eq "submodule layout → fail" fail "$(step_get dotfiles_repo .status)"
+assert_eq "reason submodule_layout" submodule_layout "$(step_get dotfiles_repo .reason)"
+apply_repo
+assert_eq "apply after the layout fail exits 0" 0 "${RC}"
+assert_eq "the git dir moved in" true "$([[ -d "${SUB}/.git" ]] && echo true || echo false)"
+assert_eq "core.worktree gone" "" "$(git -C "${SUB}" config core.worktree || true)"
+assert_eq "on main" main "$(git -C "${SUB}" branch --show-current)"
+assert_eq "the shared repo forgot it" "" "$(df_git config --get-regexp '^submodule\.' || true)"
+# Not cloned: a fail, and the apply clones it from its url.
+SRC="${FIX}/sub-src"
+mv "${SUB}" "${SRC}"
+/usr/bin/sed -i '' "s|url = .*|url = ${SRC}|" "${HOME}/.config/dotfiles/dev-repos"
+check_repo
+assert_eq "not cloned → fail" fail "$(step_get dotfiles_repo .status)"
+assert_eq "reason submodule_uninitialized" submodule_uninitialized "$(step_get dotfiles_repo .reason)"
+apply_repo
+[[ "${RC}" == 0 ]] || printf '%s\n' "${ERR}" | tail -n 8 >&2
+assert_eq "apply clones it" "$(git -C "${SRC}" rev-parse HEAD)" "$(git -C "${SUB}" rev-parse HEAD 2>/dev/null)"
+rm -rf "${SUB}" "${SRC}" "${HOME}/.claude/skills/ari-dotfile--submodule-sub" "${HOME}/.config/dotfiles/dev-repos"
 
 # The pre-harness layout: the bare repo at ~/dotfiles. The check names it, the apply renames it
 # and gives it tracking, hooks and a checkout like any clone; both paths present is for a human.

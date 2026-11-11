@@ -17,6 +17,7 @@ git df config core.hooksPath ~/.config/git/dotfiles-hooks
 ## Hooks
 
 - **pre-commit** — Ensures `karabiner.json` is sorted by key before committing
-  (run `bake` from `~/.config/karabiner` to fix), and refuses a submodule pointer
-  bump (every path in `~/.gitmodules`) whose commit is not yet on that repo's
-  `origin/main` (push the submodule first: `dotfiles push --submodules`).
+  (run `bake` from `~/.config/karabiner` to fix), and refuses a staged
+  `.config/dotfiles/nix/flake.lock` that locks a dev repo (every `input` in
+  `.config/dotfiles/dev-repos`) at a commit not yet on that repo's `origin/main`
+  (push it first: `dotfiles push --submodules`).

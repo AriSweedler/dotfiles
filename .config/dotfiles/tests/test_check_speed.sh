@@ -28,14 +28,15 @@ set -euo pipefail
 for f in "${KERNEL_LIB}"/*.zsh(N); do source "${f}"; done
 print -r -- "loaded ${#SUBMODULES} ${JOBS_LABEL} ${ARI_DOTFILES_HOST} ${RUN_ID}"
 ZSH
-printf '[submodule "a"]\n\tpath = .config/a\n\turl = x\n[submodule "b"]\n  path=.config/b\n' > "${HOME}/.gitmodules"
+mkdir -p "${HOME}/.config/dotfiles"
+printf '# dev repos\n[repo "a"]\n\tpath = .config/a\n\turl = x\n[repo "b"]\n  path=.config/b\n' > "${HOME}/.config/dotfiles/dev-repos"
 RC=0
 OUT="$(env -i HOME="${HOME}" PATH="${TRACE_DIR}" KERNEL_LIB="${LIB}" TZ=UTC \
   "${FIX}/tools/zsh" -f "${FIX}/source-kernel.zsh" 2> "${FIX}/kernel.err")" || RC=$?
 assert_eq "kernel sources under a tracing PATH" 0 "${RC}"; [[ "${RC}" == 0 ]] || cat "${FIX}/kernel.err" >&2
 assert_contains "kernel derived its values" "${OUT}" "loaded 2 com."
 assert_eq "kernel ran no external command" "" "$(cat "${TRACE_LOG}")"
-assert_contains "submodules parsed without git" "$(env -i HOME="${HOME}" PATH="${TRACE_DIR}" KERNEL_LIB="${LIB}" \
+assert_contains "dev repos parsed without git" "$(env -i HOME="${HOME}" PATH="${TRACE_DIR}" KERNEL_LIB="${LIB}" \
   "${FIX}/tools/zsh" -f -c 'source "${KERNEL_LIB}/env.zsh"; print -r -- "${(j:,:)SUBMODULES}"')" ".config/a,.config/b"
 assert_eq "host is hostname -s" "$(hostname -s)" "$(env -i HOME="${HOME}" PATH=/usr/bin:/bin KERNEL_LIB="${LIB}" \
   "${FIX}/tools/zsh" -f -c 'source "${KERNEL_LIB}/env.zsh"; print -r -- "${ARI_DOTFILES_HOST}"')"

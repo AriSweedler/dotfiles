@@ -1,0 +1,13 @@
+# Ari's own public repos, each checked out inside the clone (~/dotfiles/<path>, linked whole to
+# ~/<path>) as a plain clone the shared repo ignores, and read by the shared flake as an input
+# (nix/flake.nix inputs.<input>, flake = false). `dotfiles switch` builds each from its
+# checkout's HEAD; `dotfiles push` pushes the checkout, then commits the flake.lock bump.
+# The dotfiles_repo step clones one that is missing. Same ini form .gitmodules had.
+[repo ".config/chrome-exoskeleton"]
+	path = .config/chrome-exoskeleton
+	url = https://github.com/AriSweedler/chrome-exoskeleton.git
+	input = chrome-exoskeleton
+[repo ".config/plugged"]
+	path = .config/plugged
+	url = https://github.com/AriSweedler/plugged.git
+	input = plugged

@@ -74,6 +74,17 @@ tier::is_worktree_unpopulated() {
   [[ -z "$(git -C "${work_tree}" --git-dir="${git_dir}" --work-tree="${work_tree}" ls-files 2>/dev/null | head -n 1)" ]]
 }
 
+# The shared tier's committed flake.lock, as '<path>\t<rev>' per dev repo named: the commit each
+# input is locked at (the pointer a gitlink used to hold; empty when the lock has none).
+# Arguments: dev repo paths (SUBMODULES entries)
+tier::locked_revs() {
+  local json sub
+  json="$(repo_git shared show "HEAD:${SHARED_FLAKE_LOCK#${ARI_DOTFILES_DF_WORK_TREE}/}" 2>/dev/null)" || json='{}'
+  for sub in "$@"; do
+    print -r -- "${sub}"$'\t'"$(print -r -- "${json}" | jq -r --arg i "${SUBMODULE_INPUT[${sub}]:-${sub:t}}" '.nodes[$i].locked.rev // empty' 2>/dev/null)"
+  done
+}
+
 # --- Submodule identity: local config is not cloned, so each submodule's apply pins it ---
 tier::is_submodule_identity_ok() {
   local dir="${1}"

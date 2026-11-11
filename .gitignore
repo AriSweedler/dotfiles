@@ -26,6 +26,7 @@
 .config/aws-sso/
 .config/bd/
 .config/cagent/
+.config/chrome-exoskeleton/
 .config/concert-mcp/
 .config/containers/
 .config/dlv
@@ -45,6 +46,7 @@
 .config/op
 .config/pgcli/
 .config/pip/
+.config/plugged/
 .config/raycast
 .config/raycast/extensions/
 .config/superseedr-plus-mcp/

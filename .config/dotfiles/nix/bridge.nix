@@ -9,8 +9,8 @@
 let
   clone = "${config.home.homeDirectory}/dotfiles";
 
-  # Linked as whole directories, not file by file: Claude Code edits skills in place, and the
-  # submodules are repos of their own.
+  # Linked as whole directories, not file by file: Claude Code edits skills in place, and the dev
+  # repos (../dev-repos) are clones of their own, ignored by this repo.
   wholeDirs = [
     ".config/claude"
     ".config/chrome-exoskeleton"
@@ -21,7 +21,6 @@ let
   # The repo's own files, not config HOME reads, and files a module places from the store.
   skipped = [
     "README.md"
-    ".gitmodules"
     ".gitignore"
     ".config/karabiner/karabiner.json" # karabiner.nix
     ".config/nvim" # nvim.nix

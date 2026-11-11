@@ -176,33 +176,51 @@ typeset -gA TIER_HOOKS=(shared "${ARI_DOTFILES_DF_HOOKS}" local "${ARI_DOTFILES_
 typeset -gA TIER_ALIAS=(shared df local ldf)   # the git alias a human types
 # The pre-harness layout kept the shared bare repo at ~/dotfiles; the dotfiles_repo step renames it.
 typeset -g LEGACY_SHARED_GIT_DIR="${HOME}/dotfiles"
-typeset -g GITMODULES="${ARI_DOTFILES_DF_WORK_TREE}/.gitmodules"
+typeset -g DEV_REPOS="${ARI_DOTFILES_DEV_REPOS:-${ARI_DOTFILES_DF_WORK_TREE}/.config/dotfiles/dev-repos}"   # the manifest of the repos SUBMODULES lists
 typeset -g STATE_DIR="${XDG_STATE_HOME}/dotfiles"
 typeset -g LOG_DIR="${STATE_DIR}/push"
 typeset -g KEEP_BACKUPS=5
 typeset -g IDENTITY_CACHE="${STATE_DIR}/identity"   # '<sha256 of token> <login> <epoch>': whose token, verified when
 typeset -g IDENTITY_TTL_SECONDS=$(( 7 * 24 * 3600 ))
 typeset -ga PUSH_PARTS=(local submodules shared)   # in run order
-# Submodule paths declared in ~/.gitmodules, relative to $HOME; empty when none. Read in zsh, not
+# Ari's own repos checked out inside the shared tier (still called submodules here; they are plain
+# clones now, read by the shared flake as inputs), from the dev-repos manifest: their paths
+# relative to the work tree, and per path its clone url and flake input. Read in zsh, not
 # `git config -f`: every step subprocess sources this, and the file is git's simple ini form.
 typeset -ga SUBMODULES=()
-if [[ -r "${GITMODULES}" ]]; then
+typeset -gA SUBMODULE_URL=() SUBMODULE_INPUT=()
+# dev_repos::load: (re)fill the three from DEV_REPOS (the dotfiles_repo apply re-reads it after the
+# checkout that brings the file).
+dev_repos::load() {
+  SUBMODULES=() SUBMODULE_URL=() SUBMODULE_INPUT=()
+  [[ -r "${DEV_REPOS}" ]] || return 0
   () {
-    local line in_sub=0 val
-    for line in "${(@f)$(<"${GITMODULES}")}"; do
+    local line in_repo=0 key val
+    local -A fields=()
+    for line in "${(@f)$(<"${DEV_REPOS}")}" "[end]"; do
       while [[ "${line}" == [[:space:]]* ]]; do line="${line#?}"; done
       while [[ "${line}" == *[[:space:]] ]]; do line="${line%?}"; done
+      [[ -z "${line}" || "${line}" == '#'* ]] && continue
       if [[ "${line}" == '['* ]]; then
-        if [[ "${line}" == '[submodule '* ]]; then in_sub=1; else in_sub=0; fi
-      elif (( in_sub )) && [[ "${line}" == *=* && "${${${line%%=*}//[[:space:]]/}:l}" == path ]]; then
+        if (( in_repo )) && [[ -n "${fields[path]:-}" ]]; then
+          SUBMODULES+=("${fields[path]}")
+          SUBMODULE_URL[${fields[path]}]="${fields[url]:-}"
+          SUBMODULE_INPUT[${fields[path]}]="${fields[input]:-${fields[path]:t}}"
+        fi
+        fields=()
+        if [[ "${line}" == '[repo '* ]]; then in_repo=1; else in_repo=0; fi
+      elif (( in_repo )) && [[ "${line}" == *=* ]]; then
+        key="${${${line%%=*}//[[:space:]]/}:l}"
         val="${line#*=}"
         while [[ "${val}" == [[:space:]]* ]]; do val="${val#?}"; done
-        val="${${val#\"}%\"}"
-        if [[ -n "${val}" ]]; then SUBMODULES+=("${val}"); fi
+        fields[${key}]="${${val#\"}%\"}"
       fi
     done
   }
-fi
+}
+dev_repos::load
+# The shared flake whose lock pins each repo's input.
+typeset -g SHARED_FLAKE_LOCK="${ARI_DOTFILES_DF_WORK_TREE}/.config/dotfiles/nix/flake.lock"
 # Every dotfiles submodule is a public personal repo, so its commits carry the personal identity.
 typeset -g SUBMODULE_GIT_NAME="Ari Sweedler"
 typeset -g SUBMODULE_GIT_EMAIL="ari@sweedler.com"

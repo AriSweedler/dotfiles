@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "chrome-exoskeleton": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793904930,
+        "narHash": "sha256-PZ/Pfn+I/zAkbSsknmbnK7jEHlb6baa+PVnuDvXgbn0=",
+        "owner": "AriSweedler",
+        "repo": "chrome-exoskeleton",
+        "rev": "5880156c228e32f45e6e83da64830fc4a26851fa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "AriSweedler",
+        "repo": "chrome-exoskeleton",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -57,11 +73,29 @@
         "type": "github"
       }
     },
+    "plugged": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790617554,
+        "narHash": "sha256-ALvB8Du5WcJbhcvXiheISuxI6gImcmvK6xP6wWll2e4=",
+        "owner": "AriSweedler",
+        "repo": "plugged",
+        "rev": "bf0421f21e1f417b806eca2be535815e170c4a04",
+        "type": "github"
+      },
+      "original": {
+        "owner": "AriSweedler",
+        "repo": "plugged",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
+        "chrome-exoskeleton": "chrome-exoskeleton",
         "home-manager": "home-manager",
         "nix-darwin": "nix-darwin",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "plugged": "plugged"
       }
     }
   },

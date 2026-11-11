@@ -42,7 +42,7 @@ main() {
   (( touched )) || exit 0
 
   if [[ ! -x "${FW}/bin/exo" ]]; then
-    log::err "chrome-exoskeleton framework missing | path='${FW}' (shared tier not checked out or submodule not initialized)"
+    log::err "chrome-exoskeleton framework missing | path='${FW}' (shared tier not checked out or dev repo not initialized)"
     echo "[EXO-PREPUSH] failed" >&2
     exit 1
   fi

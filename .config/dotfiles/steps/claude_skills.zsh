@@ -12,21 +12,17 @@ step::claude_skills::registry_bin() {
 # Machine inputs: what the registry's `status` classifies. reply: the registry's code and its
 # logging lib, ~/.claude/skills and every entry (a link is fingerprinted through to its target,
 # so a retarget or a dangling link changes it), each tier root and its entries, and each
-# submodule's skills/ root with the .gitmodules that names it.
+# dev repo's skills/ root with the dev-repos manifest that names it.
 step::claude_skills::inputs() {
   local bin="${1}" skills="${HOME}/.claude/skills" wt root line sub
   reply=("${bin}/status" "${bin:h}/lib" "${bin:h}/lib/"*(N.) "${skills}/ari-skill-shellscripts/lib/logging.zsh"
          "${bin:h:h}/ari-skill-shellscripts/lib/logging.zsh" "${skills}" "${skills}/"*(N) "${skills}/.gitignore")
   for root in "${HOME}/.config/claude/skills" "${HOME}/.local/share/claude-skills"; do reply+=("${root}" "${root}/"*(N)); done
-  for wt in "${HOME}" "${HOME}/.local"; do
-    reply+=("${wt}/.gitmodules")
-    [[ -r "${wt}/.gitmodules" ]] || continue
-    for line in "${(@f)mapfile[${wt}/.gitmodules]}"; do
-      [[ "${line//[[:space:]]/}" == path=?* ]] || continue
-      sub="${line#*=}"
-      sub="${sub#"${sub%%[![:space:]]*}"}"; sub="${sub%"${sub##*[![:space:]]}"}"
-      reply+=("${wt}/${sub}" "${wt}/${sub}/skills" "${wt}/${sub}/skills/"*(N))
-    done
+  # Each dev repo's skills/ root, and the manifest that names them.
+  reply+=("${DEV_REPOS}")
+  for sub in "${SUBMODULES[@]}"; do
+    wt="${ARI_DOTFILES_DF_WORK_TREE}"
+    reply+=("${wt}/${sub}" "${wt}/${sub}/skills" "${wt}/${sub}/skills/"*(N))
   done
 }
 

@@ -196,11 +196,9 @@ printf 's\n' > "${SUB}/s.txt"
 git -C "${SUB}" add s.txt
 git -C "${SUB}" -c user.name=t -c user.email=t@example.invalid commit -q -m one
 git clone -q "${SUB}" "${HOME}/.config/sub"
-mv "${HOME}/.config/sub/.git" "${FIX}/sub.git"
-printf 'gitdir: %s\n' "${FIX}/sub.git" > "${HOME}/.config/sub/.git"
-git --git-dir="${FIX}/sub.git" config core.worktree "${HOME}/.config/sub"
-printf '[submodule ".config/sub"]\n\tpath = .config/sub\n\turl = %s\n' "${SUB}" > "${HOME}/.gitmodules"
-df_git update-index --add --cacheinfo "160000,$(git -C "${SUB}" rev-parse HEAD),.config/sub"
+world_dev_repos .config/sub
+world_lock_dev .config/sub "$(git -C "${SUB}" rev-parse HEAD)"
+df_git add "${HOME}/.config/dotfiles/dev-repos" "${HOME}/.config/dotfiles/nix/flake.lock"
 df_git -c core.hooksPath=/dev/null commit -q -m "add sub"
 printf 's changed\n' > "${HOME}/.config/sub/s.txt"
 st peek status --edit

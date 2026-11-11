@@ -4,10 +4,11 @@ zmodload zsh/datetime   # EPOCHREALTIME / EPOCHSECONDS
 verb::define status 'both tiers, the submodules, the last push of each repo'
 verb::usage status 'status'
 verb::about status <<'EOF'
-Each tier's branch, ahead/behind origin and uncommitted count; each
-submodule with the prefix 'git submodule status' prints (space = at the
-committed pointer, + = elsewhere, a commit awaiting its bump, - = not
-initialized); the timestamp and verdict of each repo's last push log.
+Each tier's branch, ahead/behind origin and uncommitted count; each dev
+repo (submodule, in the old word) with a 'git submodule status'-style prefix
+(space = at the commit the committed flake.lock pins, + = elsewhere, a commit
+awaiting its bump, - = not cloned); the timestamp and verdict of each repo's
+last push log.
 
 --edit writes a commit plan to $(help::tilde "${STATE_DIR}")/status-plan.dfstatus,
 one 'skip  <tier>:<path>' line per uncommitted tracked path, and opens it
@@ -49,8 +50,8 @@ status::_submodules() {
   typeset -ga STATUS_SUBS=()
   local meta repo pointer head branch prefix where
   local -A pointers
-  # ls-tree: '160000 commit <sha>\t<path>' per submodule, one call for all.
-  while IFS=$'\t' read -r meta repo; do pointers[${repo}]="${meta##* }"; done < <(repo_git shared ls-tree HEAD -- "${SUBMODULES[@]}" 2>/dev/null)
+  # The committed flake.lock's rev per dev repo, one read for all.
+  while IFS=$'\t' read -r repo meta; do pointers[${repo}]="${meta}"; done < <(tier::locked_revs "${SUBMODULES[@]}")
   for repo in "${SUBMODULES[@]}"; do
     pointer="${pointers[${repo}]:-}"
     if ! is_repo_present "${repo}"; then STATUS_SUBS+=("-"$'\x1f'"${pointer}"$'\x1f'"${repo}"$'\x1f'); continue; fi
@@ -200,8 +201,8 @@ status::_submodule_rows() {
   local -a out parts
   local dash="$(ui::paint grey -)"
   (( ${#SUBMODULES} )) || return 0
-  # ls-tree: '160000 commit <sha>\t<path>' per submodule, one call for all.
-  while IFS=$'\t' read -r meta repo; do pointers[${repo}]="${meta##* }"; done < <(repo_git shared ls-tree HEAD -- "${SUBMODULES[@]}" 2>/dev/null)
+  # The committed flake.lock's rev per dev repo, one read for all.
+  while IFS=$'\t' read -r repo meta; do pointers[${repo}]="${meta}"; done < <(tier::locked_revs "${SUBMODULES[@]}")
   for repo in "${SUBMODULES[@]}"; do
     pointer="${pointers[${repo}]:-}"
     if ! is_repo_present "${repo}"; then

@@ -86,20 +86,18 @@ last push (\$XDG_STATE_HOME/dotfiles/push; 'dotfiles logs' for the whole run)
   local                      2026-09-02T10:00:00Z  [2026-09-02T10:00:03Z] [push_repo] rejected | remote=origin
   shared                     2026-09-01T10:00:00Z  [2026-09-01T10:00:02Z] [push_repo] Pushed | main@abcdef0123 -> origin" "${OUT}"
 
-# A declared submodule: not initialized (-), then checked out at the pointer (space) and past it (+).
+# A declared dev repo: not cloned (-), then cloned at the locked commit (space) and past it (+).
 SUB="${FIX}/subsrc"
 git init -q --initial-branch=main "${SUB}"
 git -C "${SUB}" -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m one
 SUB_SHA="$(git -C "${SUB}" rev-parse HEAD)"
-printf '[submodule ".config/sub"]\n\tpath = .config/sub\n\turl = %s\n' "${SUB}" > "${HOME}/.gitmodules"
-df_git update-index --add --cacheinfo "160000,${SUB_SHA},.config/sub"
+world_dev_repos .config/sub
+world_lock_dev .config/sub "${SUB_SHA}"
+df_git add "${HOME}/.config/dotfiles/dev-repos" "${HOME}/.config/dotfiles/nix/flake.lock"
 df_git -c core.hooksPath=/dev/null commit -q -m "add sub"
 nm status
 assert_contains "plain: an uninitialized submodule" "${OUT}" $'\n'"  -${SUB_SHA} .config/sub"$'\n'
 git clone -q "${SUB}" "${HOME}/.config/sub"
-# A clone's .git is a directory; a submodule checkout's is a file, which is what is_repo_present looks for.
-mv "${HOME}/.config/sub/.git" "${FIX}/sub.git"
-printf 'gitdir: %s\n' "${FIX}/sub.git" > "${HOME}/.config/sub/.git"
 nm status
 assert_contains "plain: at the pointer" "${OUT}" $'\n'"   ${SUB_SHA} .config/sub (heads/main)"$'\n'
 git -C "${HOME}/.config/sub" -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m two
@@ -121,11 +119,11 @@ cards_run() {
 bare_args() { PATH="${ORIG_PATH}" sed $'s/\e\\[[0-9;]*m//g' "${FIX}/gum.args" 2>/dev/null; }
 has_row() { assert_contains "$1" $'\n'"${ROWS}"$'\n' $'\n'"$2"$'\n'; }
 
-# A second submodule, declared and pointed at but never initialized: an empty directory, as a clone leaves it.
+# A second dev repo, declared and locked but never cloned: an empty directory.
 mkdir -p "${HOME}/.config/sub2"
-printf '[submodule ".config/sub2"]\n\tpath = .config/sub2\n\turl = %s\n' "${SUB}" >> "${HOME}/.gitmodules"
-df_git add "${HOME}/.gitmodules"
-df_git update-index --add --cacheinfo "160000,${SUB_SHA},.config/sub2"
+world_dev_repos .config/sub .config/sub2
+world_lock_dev .config/sub2 "${SUB_SHA}"
+df_git add "${HOME}/.config/dotfiles/dev-repos" "${HOME}/.config/dotfiles/nix/flake.lock"
 df_git -c core.hooksPath=/dev/null commit -q -m "add sub2"
 git clone -q --bare "${ARI_DOTFILES_DF_GIT_DIR}" "${FIX}/remotes/df-origin.git"
 df_git remote add origin "${FIX}/remotes/df-origin.git"
@@ -148,7 +146,7 @@ assert_eq "cards: what gum drew is the output" $'GUM\n' "${OUT}"
 assert_eq "cards: two boxes, then one join" $'CALL style\nCALL style\nCALL join' "${CALLS}"
 has_row "local: its title" "local"
 has_row "local: the header row" "repo branch HEAD state"
-has_row "local: shared, with what plain calls uncommitted=2" "shared main ${SHARED_HEAD:0:7} 2 uncommitted"
+has_row "local: shared, with what plain calls uncommitted=1 (a dev repo past its lock is untracked, not a change)" "shared main ${SHARED_HEAD:0:7} 1 uncommitted"
 has_row "local: an unborn tier has no HEAD and is clean" "local main - clean"
 has_row "local: a submodule past its pointer" "sub main ${SUB_HEAD:0:7} + ahead of pointer · bumped on push"
 has_row "local: a submodule not initialized" "sub2 - - - not initialized · run dotfiles init"

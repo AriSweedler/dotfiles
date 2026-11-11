@@ -1,7 +1,8 @@
 #!/bin/bash
 #
-# Pre-commit hook for the dotfiles bare repo.
-# Ensures karabiner.json is sorted by key before committing.
+# Pre-commit hook for the shared dotfiles repo.
+# Ensures karabiner.json is sorted by key, and that a staged flake.lock locks every dev repo
+# (.config/dotfiles/dev-repos) at a commit already on its origin/main.
 #
 # Setup (after fresh clone):
 #   git df config core.hooksPath ~/.config/git/dotfiles-hooks
@@ -17,50 +18,50 @@ log::err()  { echo -e "${C_RED}[ERROR]${C_RST} $*" >&2; }
 log::warn() { echo -e "${C_YELLOW}[WARN]${C_RST} $*" >&2; }
 log::info() { echo -e "${C_GREEN}[INFO]${C_RST} $*" >&2; }
 
-# A submodule pointer bump must reference a commit already on that repo's
-# origin/main, or every other machine's `git df submodule update` fails to
-# check it out.
-check_submodule_pointer() {
-  local rel="${1}" name="${1##*/}"
-  if ! git diff --cached --name-only | grep -qx "${rel}"; then
-    return 0
-  fi
-  local sub sha
-  sub="$(git rev-parse --show-toplevel)/${rel}"
-  sha="$(git diff --cached -- "${rel}" | awk '/^\+Subproject commit/ {print $3}')"
+# A dev repo's flake input, locked in the shared flake's flake.lock, must name a commit already on
+# that repo's origin/main, or every other machine's build fails to fetch it.
+check_locked_rev() {
+  local rel="${1}" input="${2}" sha sub top lock=".config/dotfiles/nix/flake.lock"
+  top="$(git rev-parse --show-toplevel)"
+  sha="$(git show ":${lock}" 2>/dev/null | jq -r --arg i "${input}" '.nodes[$i].locked.rev // empty')"
   [[ -n "${sha}" ]] || return 0
+  sub="${top}/${rel}"
+  [[ -e "${sub}/.git" ]] || { log::warn "${input} not checked out at ${rel}; its locked ${sha:0:8} is not checked."; return 0; }
   # The local origin/main first (a `dotfiles push` bump has just set it: no network);
   # only a miss asks the remote, in case another tool pushed without refreshing it.
   if git -C "${sub}" merge-base --is-ancestor "${sha}" origin/main 2>/dev/null; then
     return 0
   fi
-  log::info "Checking ${name} ${sha:0:8} against the remote's main..."
+  log::info "Checking ${input} ${sha:0:8} against the remote's main..."
   if ! git -C "${sub}" fetch -q origin main 2>/dev/null; then
-    log::warn "Could not fetch ${name} origin; checking against the last fetch."
+    log::warn "Could not fetch ${input} origin; checking against the last fetch."
   fi
   if ! git -C "${sub}" merge-base --is-ancestor "${sha}" origin/main 2>/dev/null; then
-    log::err "${name} pointer ${sha:0:8} is not on origin/main."
-    log::warn "Push the submodule first (dotfiles push --submodules), then re-run the commit."
+    log::err "${input} is locked at ${sha:0:8}, which is not on origin/main."
+    log::warn "Push it first (dotfiles push --submodules), then re-run the commit."
     return 1
   fi
-  log::info "${name} pointer is published."
+  log::info "${input}'s locked commit is published."
 }
 
-# Every path declared in the worktree's .gitmodules. The file, not the index:
-# `dotfiles push` bumps with `commit -- <path>`, whose temporary index still
-# holds HEAD's .gitmodules, so a just-added submodule is only in the file.
-check_submodule_pointers() {
-  local modules rel
-  modules="$(git rev-parse --show-toplevel)/.gitmodules"
-  [[ -f "${modules}" ]] || return 0
-  while read -r _ rel; do
-    [[ -n "${rel}" ]] || continue
-    check_submodule_pointer "${rel}" || return 1
-  done < <(git config -f "${modules}" --get-regexp '^submodule\..*\.path$' || true)
+# Every repo in .config/dotfiles/dev-repos, when flake.lock is staged.
+check_locked_revs() {
+  local top manifest rel="" input line
+  top="$(git rev-parse --show-toplevel)"
+  manifest="${top}/.config/dotfiles/dev-repos"
+  [[ -f "${manifest}" ]] || return 0
+  git diff --cached --name-only | grep -qx ".config/dotfiles/nix/flake.lock" || return 0
+  while IFS= read -r line; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    case "${line}" in
+      path*=*) rel="${line#*=}"; rel="${rel# }" ;;
+      input*=*) input="${line#*=}"; input="${input# }"; check_locked_rev "${rel}" "${input}" || return 1 ;;
+    esac
+  done < "${manifest}"
 }
 
 main() {
-  check_submodule_pointers || return 1
+  check_locked_revs || return 1
 
   # git diff --cached --name-only emits paths relative to the repo root, and
   # the bare repo's worktree is $HOME — so match the repo-relative path, not an

@@ -1,10 +1,10 @@
-# step plugged — the shared-tier Swift submodule (dotfiles_repo initializes it): hooks and the
+# step plugged — the Swift dev repo checkout (dotfiles_repo clones it): hooks and the
 # personal identity are plain local config a fresh checkout lacks. The binary on PATH is Nix's
 # (pkgs/plugged, built by `dotfiles switch`); bin/plugged-dev keeps the edit-and-run loop.
 step::declare plugged --group tools --needs dotfiles_repo \
-  --desc "the plugged submodule has its hooks wired (core.hooksPath=.githooks), and Nix's plugged is on PATH" \
-  --apply "sets the submodule's commit identity and core.hooksPath=.githooks"
-step::watches plugged '.config/plugged'   # the submodule pointer
+  --desc "the plugged checkout has its hooks wired (core.hooksPath=.githooks), and Nix's plugged is on PATH" \
+  --apply "sets the checkout's commit identity and core.hooksPath=.githooks"
+step::watches plugged '.config/dotfiles/nix/flake.lock'   # where its input is locked
 
 step::plugged::dir() {
   print -r -- "${HOME}/.config/plugged"

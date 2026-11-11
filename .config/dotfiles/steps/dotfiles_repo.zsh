@@ -1,13 +1,14 @@
 # step dotfiles_repo — the shared tier: the plain clone ~/dotfiles (home-manager links its files
 # into HOME), or the bare repo ~/dotfiles.git with HOME checked out (renamed from the pre-harness
-# bare ~/dotfiles); either tracking origin, hooks wired, submodules initialized,
-# origin/main known, every checked-out submodule documented (README.md and its linked skill),
+# bare ~/dotfiles); either tracking origin, hooks wired, every dev repo (dev-repos: Ari's own
+# repos, read by the shared flake as inputs) cloned in place, origin/main known, every checked-out
+# dev repo documented (README.md and its linked skill),
 # nothing dirty. Every fix but the docs (a human writes them) is idempotent: `dotfiles init`
 # runs this after every pull.
 step::declare dotfiles_repo --group repo \
   --desc "shared dotfiles repo cloned (the ~/dotfiles clone, or the legacy bare repo checked out into HOME), tracking origin, hooks wired" \
-  --apply "clones the bare repo (or renames the legacy one), sets its tracking config, checks it out into HOME, wires the hooks, initializes new submodules and fetches origin"
-step::watches dotfiles_repo '.gitmodules' '.config/git/dotfiles-hooks/**'
+  --apply "clones the bare repo (or renames the legacy one), sets its tracking config, checks it out into HOME, wires the hooks, clones each missing dev repo (a submodule checkout becomes a plain clone) and fetches origin"
+step::watches dotfiles_repo '.config/dotfiles/dev-repos' '.config/git/dotfiles-hooks/**'
 
 dotfiles_repo::origin_url() { git --git-dir="${1}" config remote.origin.url 2>/dev/null || true; }
 dotfiles_repo::has_origin() { [[ -n "$(dotfiles_repo::origin_url "${1}")" ]]; }
@@ -33,9 +34,41 @@ dotfiles_repo::tracking_missing() {
 }
 dotfiles_repo::is_bare_repo() { [[ -f "${1}/HEAD" && ! -d "${1}/.git" ]]; }
 dotfiles_repo::is_origin_main_known() { git --git-dir="${1}" rev-parse -q --verify refs/remotes/origin/main >/dev/null 2>&1; }
-# Submodule paths from ~/.gitmodules, read now: env.zsh's SUBMODULES predates a checkout this apply makes.
-dotfiles_repo::submodules() {
-  git config -f "${GITMODULES}" --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}' || true
+# One line per dev repo, '<state> <path>': '-' not cloned, 's' still a submodule checkout (its .git
+# a file into the shared repo's modules/), '+' its HEAD is not the commit the committed flake.lock
+# pins, ' ' at it. Stat checks and one rev-parse each.
+dotfiles_repo::dev_status() {
+  local work_tree="${ARI_DOTFILES_DF_WORK_TREE}" sub rev head
+  local -A locked=()
+  while IFS=$'\t' read -r sub rev; do locked[${sub}]="${rev}"; done < <(tier::locked_revs "${SUBMODULES[@]}")
+  for sub in "${SUBMODULES[@]}"; do
+    if [[ ! -e "${work_tree}/${sub}/.git" ]]; then print -r -- "- ${sub}"; continue; fi
+    if [[ -f "${work_tree}/${sub}/.git" ]]; then print -r -- "s ${sub}"; continue; fi
+    head="$(git -C "${work_tree}/${sub}" rev-parse -q --verify HEAD 2>/dev/null || true)"
+    if [[ -n "${locked[${sub}]:-}" && "${head}" != "${locked[${sub}]}" ]]; then print -r -- "+ ${sub}"; else print -r -- "  ${sub}"; fi
+  done
+}
+
+# A submodule checkout becomes a plain clone in place: its git dir moves out of the shared repo's
+# modules/ into <path>/.git, core.worktree goes, and the shared repo forgets the submodule.
+dotfiles_repo::unsubmodule() {
+  local git_dir="${1}" dir="${2}" name="${3}" moddir
+  moddir="$(git -C "${dir}" rev-parse --absolute-git-dir 2>/dev/null)" || { log::err "not a git checkout | path='${dir}'"; return 1; }
+  run_mut git --git-dir="${moddir}" config --unset core.worktree || true
+  run_mut rm "${dir}/.git" || return 1
+  run_mut mv "${moddir}" "${dir}/.git" || return 1
+  run_mut git --git-dir="${git_dir}" config --remove-section "submodule.${name}" 2>/dev/null || true
+  # A submodule sits detached; a plain clone works on main. Only when that loses nothing: main
+  # absent or at HEAD.
+  local head main
+  head="$(git -C "${dir}" rev-parse -q --verify HEAD 2>/dev/null || true)"
+  main="$(git -C "${dir}" rev-parse -q --verify refs/heads/main 2>/dev/null || true)"
+  if [[ -z "$(git -C "${dir}" branch --show-current 2>/dev/null)" && ( -z "${main}" || "${main}" == "${head}" ) ]]; then
+    run_mut git -C "${dir}" switch -q -C main || return 1
+    git -C "${dir}" rev-parse -q --verify refs/remotes/origin/main >/dev/null 2>&1 \
+      && run_mut git -C "${dir}" branch -q --set-upstream-to=origin/main main
+  fi
+  return 0
 }
 
 # A checked-out submodule is documented when it has README.md and its skill,
@@ -78,14 +111,8 @@ check::dotfiles_repo() {
     verdict fail missing_bare_repo -d "repo has no HEAD | git_dir='${git_dir}'" -f "${CLI_NAME} apply dotfiles_repo"
     return 0
   fi
-  # The two slow reads (submodule status about 180 ms, status about 40 ms) start now, side by side
-  # with the config checks below, and are read where the verdict needs them. Both only read;
-  # status may refresh the index under an optional lock, so submodule status runs with optional
-  # locks off and the two never contend for index.lock.
-  local -i sub_fd=-1 dirty_fd
-  if [[ -f "${GITMODULES}" ]]; then
-    exec {sub_fd}< <(GIT_OPTIONAL_LOCKS=0 git -C "${work_tree}" --git-dir="${git_dir}" --work-tree="${work_tree}" submodule status 2>/dev/null || true)
-  fi
+  # The slow read (status about 40 ms) starts now, side by side with the config checks below.
+  local -i dirty_fd
   exec {dirty_fd}< <(git --git-dir="${git_dir}" --work-tree="${work_tree}" status --porcelain --untracked-files=no 2>/dev/null || true)
   local -a missing=("${(@f)$(dotfiles_repo::tracking_missing "${git_dir}")}")
   missing=("${(@)missing:#}")
@@ -109,14 +136,18 @@ check::dotfiles_repo() {
     verdict fail identity_drift -d "local user.name/user.email are not the personal identity | git_dir='${git_dir}'" -f "${CLI_NAME} apply dotfiles_repo"
     return 0
   fi
-  if (( sub_fd >= 0 )); then
-    local sub_status uninit drifted
-    IFS= read -r -d '' -u "${sub_fd}" sub_status || true
-    while [[ "${sub_status}" == *$'\n' ]]; do sub_status="${sub_status%$'\n'}"; done
-    uninit="$(print -r -- "${sub_status}" | awk '/^-/ {print $2}')"
-    drifted="$(print -r -- "${sub_status}" | awk '/^\+/ {print $2}')"
+  if (( ${#SUBMODULES} )); then
+    local dev_status uninit layout drifted
+    dev_status="$(dotfiles_repo::dev_status)"
+    uninit="$(print -r -- "${dev_status}" | awk '/^-/ {print $2}')"
+    layout="$(print -r -- "${dev_status}" | awk '/^s/ {print $2}')"
+    drifted="$(print -r -- "${dev_status}" | awk '/^\+/ {print $2}')"
     if [[ -n "${uninit}" ]]; then
-      verdict fail submodule_uninitialized -d "submodule not checked out | paths='${uninit//$'\n'/, }'" -f "${CLI_NAME} apply dotfiles_repo"
+      verdict fail submodule_uninitialized -d "dev repo not cloned | paths='${uninit//$'\n'/, }'" -f "${CLI_NAME} apply dotfiles_repo"
+      return 0
+    fi
+    if [[ -n "${layout}" ]]; then
+      verdict fail submodule_layout -d "still a git submodule checkout; the shared flake reads it as an input now | paths='${layout//$'\n'/, }'" -f "${CLI_NAME} apply dotfiles_repo"
       return 0
     fi
     local -a undocumented=("${(@f)$(dotfiles_repo::undocumented)}")
@@ -126,7 +157,7 @@ check::dotfiles_repo() {
       return 0
     fi
     if [[ -n "${drifted}" ]]; then
-      verdict warn submodule_drift -d "checkout differs from the committed pointer | paths='${drifted//$'\n'/, }'" -f "cd ~ && git df submodule update   (or commit the new pointer)"
+      verdict warn submodule_drift -d "checkout differs from the commit flake.lock pins | paths='${drifted//$'\n'/, }'" -f "${CLI_NAME} push   (it bumps the lock after pushing the repo)"
       return 0
     fi
   fi
@@ -146,7 +177,7 @@ check::dotfiles_repo() {
 }
 
 # In order, each a no-op once done: rename the pre-harness repo, clone, tracking config, the
-# checkout, hooks, submodules, the first fetch. The checkout fails, listing the conflicting files
+# checkout, hooks, the dev repos, the first fetch. The checkout fails, listing the conflicting files
 # in the log, when HOME already holds files it would overwrite; nothing is moved on the user's behalf.
 apply::dotfiles_repo() {
   local git_dir="${ARI_DOTFILES_DF_GIT_DIR}" work_tree="${ARI_DOTFILES_DF_WORK_TREE}" legacy="${LEGACY_SHARED_GIT_DIR}" kv
@@ -178,16 +209,19 @@ apply::dotfiles_repo() {
   fi
   tier::ensure_hooks_path "${git_dir}" "${ARI_DOTFILES_DF_HOOKS}" || return 1
   tier::submodule_identity_apply "${git_dir}" || return 1
-  # Only the never-initialized submodules: `update` would detach an initialized one onto the
-  # pointer, and a checkout ahead of the pointer is a commit awaiting its bump, not drift.
-  local -a submodules=("${(@f)$(dotfiles_repo::submodules)}") uninit=()
-  local sub
-  for sub in "${(@)submodules:#}"; do
-    [[ -e "${work_tree}/${sub}/.git" ]] || uninit+=("${sub}")
+  # The manifest came with the checkout above: read it again. Each dev repo is cloned when missing
+  # and converted when still a submodule checkout; one already cloned is left on its branch.
+  dev_repos::load
+  local sub dir
+  for sub in "${SUBMODULES[@]}"; do
+    dir="${work_tree}/${sub}"
+    if [[ -f "${dir}/.git" ]]; then
+      dotfiles_repo::unsubmodule "${git_dir}" "${dir}" "${sub}" || return 1
+    elif [[ ! -e "${dir}/.git" ]]; then
+      if [[ -z "${SUBMODULE_URL[${sub}]}" ]]; then log::err "dev repo has no url | path='${sub}' file='${DEV_REPOS}'"; return 1; fi
+      run_mut git clone -q "${SUBMODULE_URL[${sub}]}" "${dir}" || return 1
+    fi
   done
-  if (( ${#uninit} )); then
-    run_mut git -C "${work_tree}" --git-dir="${git_dir}" --work-tree="${work_tree}" submodule update --init -- "${uninit[@]}" || return 1
-  fi
   if dotfiles_repo::has_origin "${git_dir}" && ! dotfiles_repo::is_origin_main_known "${git_dir}"; then
     if ! run_mut git --git-dir="${git_dir}" fetch -q origin; then
       log::err "fetch failed; origin/main stays unknown | url='$(dotfiles_repo::origin_url "${git_dir}")'"

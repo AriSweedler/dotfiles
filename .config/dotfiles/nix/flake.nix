@@ -14,9 +14,16 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Ari's own repos (../dev-repos), read as plain sources. Each is checked out in the clone too;
+    # `dotfiles switch` overrides the input with that checkout's HEAD, and `dotfiles push` bumps
+    # this lock after pushing it.
+    plugged = { url = "github:AriSweedler/plugged"; flake = false; };
+    chrome-exoskeleton = { url = "github:AriSweedler/chrome-exoskeleton"; flake = false; };
   };
 
-  outputs = { self, nixpkgs, nix-darwin, home-manager }: {
+  outputs = { self, nixpkgs, nix-darwin, home-manager, plugged, chrome-exoskeleton }:
+  let devInputs = { inherit plugged chrome-exoskeleton; };
+  in {
     darwinModules.default = ./darwin.nix;
     homeModules.default = ./home.nix;
 
@@ -24,6 +31,7 @@
     packages.aarch64-darwin = import ./pkgs {
       pkgs = nixpkgs.legacyPackages.aarch64-darwin;
       src = self.sourceInfo.outPath;
+      inherit devInputs;
     };
 
     # One machine's system: the shared modules, then the local tier's on top.
@@ -38,7 +46,7 @@
             home-manager.useUserPackages = true;
             # The repo root for bridge.nix: the whole repo under a git+file input, only this
             # directory under a path: one.
-            home-manager.extraSpecialArgs.src = self.sourceInfo.outPath;
+            home-manager.extraSpecialArgs = { src = self.sourceInfo.outPath; inherit devInputs; };
             # A file in HOME where a link goes is moved aside, never overwritten: the first
             # switch after the clone, or a tool that replaced a link with a file of its own.
             home-manager.backupFileExtension = "before-nix";

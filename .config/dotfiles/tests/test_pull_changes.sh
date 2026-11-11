@@ -33,13 +33,15 @@ assert_eq "nothing changed: no lines" "" "${OUT}"
 map_paths "${STEPS_DIR}" <<'EOF'
 M	.config/karabiner/karabiner.ts
 M	.config/claude/skills/ari-dotfiles/SKILL.md
-M	.config/plugged
-M	.gitmodules
+M	.config/dotfiles/nix/flake.lock
+M	.config/dotfiles/dev-repos
 EOF
-assert_eq "karabiner, a skill, a submodule pointer, .gitmodules" "step dotfiles_repo .gitmodules
+assert_eq "karabiner, a skill, a dev repo's lock, the dev-repos manifest" "step dotfiles_repo .config/dotfiles/dev-repos
 step claude_skills .config/claude/skills/ari-dotfiles/SKILL.md
+step nix_port .config/dotfiles/nix/flake.lock
+step chrome_exoskeleton .config/dotfiles/nix/flake.lock
 step karabiner .config/karabiner/karabiner.ts
-step plugged .config/plugged
+step plugged .config/dotfiles/nix/flake.lock
 step raycast_sync .config/karabiner/karabiner.ts" "${OUT}"
 
 map_paths "${STEPS_DIR}" <<'EOF'

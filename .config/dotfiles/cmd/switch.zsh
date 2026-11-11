@@ -47,12 +47,19 @@ cmd_switch() {
     || log::warn "uncommitted under the nix directory; not in this switch | paths='${(j:, :)${(f)dirty}#???}'"
   local rev
   rev="$(repo_git shared rev-parse HEAD)" || return 1
-  # submodules=1: claude-skills.nix links the skills the submodules carry.
-  local input="git+file://${clone}?dir=.config/dotfiles/nix&submodules=1&rev=${rev}"
+  local input="git+file://${clone}?dir=.config/dotfiles/nix&rev=${rev}"
+  # Each dev repo checked out here builds from its HEAD, unpushed commits included; one that is
+  # not checked out builds from the shared flake's lock.
+  local -a overrides=(--override-input dotfiles "${input}")
+  local sub head
+  for sub in "${SUBMODULES[@]}"; do
+    head="$(git -C "${clone}/${sub}" rev-parse -q --verify HEAD 2>/dev/null)" || continue
+    overrides+=(--override-input "dotfiles/${SUBMODULE_INPUT[${sub}]}" "git+file://${clone}/${sub}?rev=${head}")
+  done
   if is_dry_run; then
-    print -r -- "would run: nix flake lock --override-input dotfiles '${input}' (in ${flake})"
+    print -r -- "would run: nix flake lock ${(j: :)${(@q-)overrides}} (in ${flake})"
   else
-    nix flake lock --override-input dotfiles "${input}" "path:${flake}" || {
+    nix flake lock "${overrides[@]}" "path:${flake}" || {
       log::err "locking the shared input failed | flake='${flake}' rev='${rev}'"
       return 1
     }

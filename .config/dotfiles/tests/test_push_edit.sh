@@ -58,10 +58,9 @@ sub_commit() {
 
 sub_new .config/ahead
 sub_new .config/even
-printf '[submodule "ahead"]\n\tpath = .config/ahead\n[submodule "even"]\n\tpath = .config/even\n[submodule "gone"]\n\tpath = .config/gone\n' > "${HOME}/.gitmodules"
-df_git update-index --add --cacheinfo "160000,$(git -C "${HOME}/.config/ahead" rev-parse HEAD),.config/ahead"
-df_git update-index --add --cacheinfo "160000,$(git -C "${HOME}/.config/even" rev-parse HEAD),.config/even"
-df_git add "${HOME}/.gitmodules"
+world_dev_repos .config/ahead .config/even .config/gone
+world_lock_dev .config/ahead "$(git -C "${HOME}/.config/ahead" rev-parse HEAD)" .config/even "$(git -C "${HOME}/.config/even" rev-parse HEAD)"
+df_git add "${HOME}/.config/dotfiles/dev-repos" "${HOME}/.config/dotfiles/nix/flake.lock"
 df_git -c core.hooksPath=/dev/null commit -q -m "submodules"
 git init -q --bare --initial-branch=main "${FIX}/remotes/shared.git"
 df_git push -q "${FIX}/remotes/shared.git" main

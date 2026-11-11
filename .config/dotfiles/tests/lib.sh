@@ -241,6 +241,8 @@ world_empty_home() {
     cp "${real_config}/zsh/plugins/strip_ansi.zsh" "${FIX}/shared/zsh/plugins/"
     cp "${real_config}/bin/dotfiles" "${FIX}/shared/bin/dotfiles"
     cp -R "${real_config}/dotfiles/." "${FIX}/shared/dotfiles/"
+    # The real dev repos are GitHub clones: the world declares its own, never those.
+    rm -f "${FIX}/shared/dotfiles/dev-repos"
     cp "${real_config}/claude/skills/ari-skill-shellscripts/lib/logging.zsh" "${FIX}/shared/claude/skills/ari-skill-shellscripts/lib/"
     export ARI_DOTFILES_SHARED_DIR="${FIX}/shared/new-machine"
   fi
@@ -521,6 +523,29 @@ world_seed_jobs_job() {
     '{Label: $label, ProgramArguments: [$agent, "dotfiles", "300", "com.apple.screenIsUnlocked"], RunAtLoad: true}' \
     | plutil -convert xml1 - -o "${plist}"
   touch "${LAUNCHCTL_SHIM_STATE}/${label}"
+}
+
+# world_dev_repos PATH...: the dev-repos manifest in the shared work tree, declaring each PATH
+# (relative to HOME) with its basename as the flake input.
+world_dev_repos() {
+  local p
+  mkdir -p "${HOME}/.config/dotfiles"
+  for p in "$@"; do
+    printf '[repo "%s"]\n\tpath = %s\n\turl = https://github.com/test/%s.git\n\tinput = %s\n' "${p}" "${p}" "${p##*/}" "${p##*/}"
+  done > "${HOME}/.config/dotfiles/dev-repos"
+}
+
+# world_lock_dev PATH REV [PATH REV]...: the shared flake's flake.lock with each PATH's input
+# locked at REV (not committed).
+world_lock_dev() {
+  local lock="${HOME}/.config/dotfiles/nix/flake.lock" json='{"nodes":{"root":{"inputs":{}}},"root":"root","version":7}'
+  mkdir -p "$(dirname "${lock}")"
+  [[ -f "${lock}" ]] && json="$(cat "${lock}")"
+  while (( $# >= 2 )); do
+    json="$(jq --arg i "${1##*/}" --arg r "$2" '.nodes[$i].locked.rev = $r' <<< "${json}")"
+    shift 2
+  done
+  printf '%s\n' "${json}" > "${lock}"
 }
 
 # Write a karabiner healthcheck double into the fake HOME: exit code $1, degraded output.

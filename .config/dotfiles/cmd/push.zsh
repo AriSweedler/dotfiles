@@ -197,21 +197,24 @@ push_tier() {
 }
 
 #######################################
-# The shared tier's pointer for a submodule follows its published HEAD: committed
-# alone (that path only; message '<name>: bump to <sha> (<subject>)'), so the
-# shared push after the submodules carries it. Returns 0 bumped, 2 nothing to do
-# (pointer already there, checkout not ahead of it, no shared repo), 1 refused.
+# The shared flake's lock for a dev repo follows its published HEAD: `nix flake update <input>`
+# moves the input to the repo's origin/main, and flake.lock is committed alone (message
+# '<name>: bump to <sha> (<subject>)'), so the shared push after the repos carries it. Returns 0
+# bumped, 2 nothing to do (lock already there, checkout not ahead of it, no shared repo), 1
+# refused or failed.
 # Arguments:
-#   $1 - submodule path
+#   $1 - dev repo path
 #######################################
 bump_pointer() {
-  local repo="${1}" pointer head count=1 subject message out
+  local repo="${1}" input="${SUBMODULE_INPUT[${1}]:-${1:t}}" pointer head locked count=1 subject message out
+  local lock_rel="${SHARED_FLAKE_LOCK#${ARI_DOTFILES_DF_WORK_TREE}/}"
   is_repo_present shared || return 2
-  pointer="$(repo_git shared ls-tree HEAD -- "${repo}" 2>/dev/null | awk '{print $3}')"
+  [[ -r "${SHARED_FLAKE_LOCK}" ]] || return 2
+  pointer="$(tier::locked_revs "${repo}" | cut -f2)"
   head="$(repo_git "${repo}" rev-parse HEAD 2>/dev/null || true)"
   [[ -n "${head}" && "${head}" != "${pointer}" ]] || return 2
   if [[ -n "${pointer}" ]] && ! repo_git "${repo}" merge-base --is-ancestor "${pointer}" "${head}" 2>/dev/null; then
-    log::warn "pointer not bumped: checkout is not ahead of it | repo='${repo}' pointer='${pointer:0:7}' head='${head:0:7}' fix='dotfiles pull, or git -C ~/${repo} switch main'"
+    log::warn "pointer not bumped: checkout is not ahead of the lock | repo='${repo}' locked='${pointer:0:7}' head='${head:0:7}' fix='dotfiles pull, or git -C ~/${repo} switch main'"
     return 2
   fi
   [[ -z "${pointer}" ]] || count="$(repo_git "${repo}" rev-list --count "${pointer}..${head}")"
@@ -219,16 +222,27 @@ bump_pointer() {
   message="${repo:t}: bump to ${head:0:7} (${subject})"
   (( count <= 1 )) || message="${repo:t}: bump to ${head:0:7} (${count} commits, latest: ${subject})"
   if is_dry_run; then
-    log::info "dry-run, would bump | repo='${repo}' from='${pointer:0:7}' to='${head:0:7}' message='${message}'"
+    log::info "dry-run, would bump | repo='${repo}' input='${input}' from='${pointer:0:7}' to='${head:0:7}' message='${message}'"
     push::record "${repo:t} pointer" "would bump" "${head}"; return 0
   fi
+  if ! out="$(nix flake update "${input}" --flake "path:${SHARED_FLAKE_LOCK:h}" 2>&1)"; then
+    print -r -- "${out}" >&2
+    log::err "lock update failed | repo='${repo}' input='${input}' fix='see the nix output above'"
+    push::record "${repo:t} pointer" failed "${head}"; return 1
+  fi
+  locked="$(jq -r --arg i "${input}" '.nodes[$i].locked.rev // empty' "${SHARED_FLAKE_LOCK}" 2>/dev/null)"
+  if [[ "${locked}" != "${head}" ]]; then
+    repo_git shared checkout -q -- "${lock_rel}" 2>/dev/null || true
+    log::err "lock update did not land on the pushed HEAD | repo='${repo}' input='${input}' locked='${locked:0:7}' head='${head:0:7}' fix='dotfiles pull, then dotfiles push'"
+    push::record "${repo:t} pointer" failed "${head}"; return 1
+  fi
   # `commit -- <path>` records this path alone; anything else staged in the shared tier stays staged.
-  if ! out="$(repo_git shared commit -q -m "${message}" -- "${repo}" 2>&1)"; then
+  if ! out="$(repo_git shared commit -q -m "${message}" -- "${lock_rel}" 2>&1)"; then
     print -r -- "${out}" >&2
     log::err "pointer bump refused | repo='${repo}' to='${head:0:7}' fix='see the hook output above'"
     push::record "${repo:t} pointer" failed "${head}"; return 1
   fi
-  log::info "bumped | repo='${repo}' to='${head:0:7}' commit='$(repo_git shared rev-parse --short HEAD)' message='${message}'"
+  log::info "bumped | repo='${repo}' input='${input}' to='${head:0:7}' commit='$(repo_git shared rev-parse --short HEAD)' message='${message}'"
   push::record "${repo:t} pointer" bumped "${head}"
 }
 
@@ -238,7 +252,7 @@ bump_pointer() {
 # Up-to-date submodules are silent.
 #######################################
 push_submodules() {
-  if (( ${#SUBMODULES} == 0 )); then log::info "no submodules declared | file='${GITMODULES}'"; return 0; fi
+  if (( ${#SUBMODULES} == 0 )); then log::info "no dev repos declared | file='${DEV_REPOS}'"; return 0; fi
   local repo rc checked=0 pushed=0 bumped=0 failed=0 verb=pushed start="${EPOCHREALTIME}"
   local -a running=() published=()
   is_dry_run && verb=would_push
@@ -349,7 +363,7 @@ push::main() {
 push::bump_pending() {
   local repo="${1}" pointer head
   is_repo_present shared && is_repo_present "${repo}" || return 1
-  pointer="$(repo_git shared ls-tree HEAD -- "${repo}" 2>/dev/null | awk '{print $3}')"
+  pointer="$(tier::locked_revs "${repo}" | cut -f2)"
   head="$(repo_git "${repo}" rev-parse HEAD 2>/dev/null || true)"
   [[ -n "${head}" && "${head}" != "${pointer}" ]] || return 1
   [[ -z "${pointer}" ]] || repo_git "${repo}" merge-base --is-ancestor "${pointer}" "${head}" 2>/dev/null || return 1

@@ -3,9 +3,9 @@
 # (/ari-driving, git's df alias, a remote host's run_log) keeps working, and the bridge skips the
 # clone's file. An edit to one reaches HOME at the next `dotfiles switch` (package what you run,
 # link what you edit).
-{ lib, pkgs, src, ... }:
+{ lib, pkgs, src, devInputs, ... }:
 let
-  ari = import ./pkgs { inherit pkgs src; };
+  ari = import ./pkgs { inherit pkgs src devInputs; };
   # package → the repo paths of its bins; each is placed at that path under HOME, from the
   # package's bin/<basename>.
   placed = {
