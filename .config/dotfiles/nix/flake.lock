@@ -119,11 +119,11 @@
     "tmux-oneshot": {
       "flake": false,
       "locked": {
-        "lastModified": 1794385544,
-        "narHash": "sha256-LUXVD7yapPDk4nDLOcNIpi34oegvTwbPyh79e9T8V80=",
+        "lastModified": 1794423253,
+        "narHash": "sha256-O4IaTqX2MJpNGBX6x5aJufBJLnFdyeTIMv5IEaoMkkU=",
         "owner": "AriSweedler",
         "repo": "tmux-oneshot",
-        "rev": "90a79e423d5114c753785e4df6bc3d19abc1c249",
+        "rev": "d10a2fe14e71a6c311c1b6a3fdef8233e84a84a4",
         "type": "github"
       },
       "original": {
