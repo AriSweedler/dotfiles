@@ -87,7 +87,19 @@ BAD:  Agent({subagent_type: "fork", model: "opus", prompt: …})                
 
 No Agent tool, or no Opus spawn (the Agent tool takes no `model`, or refuses `opus`): run each entry yourself in panel order, writing its `{stem}.md` before starting the next, and report `reviewers: inline`; cross-reviewer agreement then carries no weight.
 
-Read every `{stem}.md`. An empty one falls back to that agent's reply; both empty → re-dispatch it once, `model: "opus"` again, then list `{stem}: no output` and count it in `reviewers: <n>/<N> returned`.
+**A limit is not a missing Opus spawn: NEVER do a refused or killed reviewer's pass yourself, and NEVER re-spawn it on another model.** Retry it on Opus instead:
+
+- The concurrent-subagent limit refuses a spawn → spawn that reviewer again, `model: "opus"`, each time one of your running reviewers finishes; the panel runs in smaller batches, never with a reviewer skipped.
+- A rate limit kills a reviewer mid-run → resume it once (`SendMessage` to the same agent), or, when it cannot be resumed, re-spawn it once with `model: "opus"`.
+
+Read every `{stem}.md`. An empty one falls back to that agent's reply; both empty → re-dispatch it once, `model: "opus"` again. A reviewer with no output after its retry, or refused while none of yours is still running, is not run: put `not run: {stem} — {reason}` under the `reviewers: <n>/<N> returned` line (**Run modes**), counted out of `<n>`. **A review with a `not run:` line is partial: NEVER report it as whole.**
+
+```
+GOOD: reviewers: 6/8 returned
+      not run: deflake — rate limit killed it; the re-spawn died too
+      not run: examples — no output after re-dispatch
+BAD:  reviewers: 8/8 returned   ← two reviewers died; the list covers six
+```
 
 ### Challenge and deduplicate
 
@@ -99,7 +111,7 @@ Read every `{stem}.md`. An empty one falls back to that agent's reply; both empt
 
 **Main thread: write the list to `findings.md`. Subagent: NEVER Write `findings.md`; the list goes in your output (Run modes).**
 
-Write one strictly ranked list, most important first; no buckets. Rank by the first criterion below that separates two items:
+Open with the `reviewers:` line and its `not run:` lines (**Dispatch reviewers**), then one strictly ranked list, most important first; no buckets. Rank by the first criterion below that separates two items:
 
 - Flagged by multiple reviewers
 - Incorrect behavior or silent failure
@@ -121,7 +133,7 @@ Each item, then `## Dropped` after the last:
 
 ### Present the findings
 
-Per **Run modes**. The user ran it in the main thread: share the `findings.md` path, show the list inline, then the spec questions separately: "These touch the skill's purpose — your call:". **You MUST then apply every item without asking first:** copy the skill directory to `{folder}/before/`, apply, and show the diff against it with each hunk under `### [n] {title}`, `n` the item's number, so the user can say `drop 2` (restore that item's hunks from `before/`). Zero surviving items: say so and skip apply and diff. NEVER commit or push; `/ari-skill-update <skill-name> skip review` proposes the commit.
+Per **Run modes**. The user ran it in the main thread: share the `findings.md` path, show the list inline with its `not run:` lines, then the spec questions separately: "These touch the skill's purpose — your call:". **You MUST then apply every item without asking first:** copy the skill directory to `{folder}/before/`, apply, and show the diff against it with each hunk under `### [n] {title}`, `n` the item's number, so the user can say `drop 2` (restore that item's hunks from `before/`). Zero surviving items: say so and skip apply and diff. NEVER commit or push; `/ari-skill-update <skill-name> skip review` proposes the commit.
 
 Any other mode: hand the caller the reply in **Run modes**, unasked. The caller applies the items and relays the spec questions to the user, never applies them.
 
