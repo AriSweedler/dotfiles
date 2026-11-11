@@ -8,6 +8,8 @@ let
     plugged = pkgs.callPackage ./plugged { src = devInputs.plugged; };
     # The run-log dev repo's own recipe, given this tree's library.
     run-log = pkgs.callPackage "${devInputs.run-log}/package.nix" { zshlib = self.ari_zshlib; };
+    # The same for the tmux-oneshot dev repo.
+    tmux-oneshot = pkgs.callPackage "${devInputs.tmux-oneshot}/package.nix" { zshlib = self.ari_zshlib; };
     git-kit = pkgs.callPackage ./git-kit { inherit src; inherit (self) ari_zshlib; };
     notes = pkgs.callPackage ./notes { inherit src; inherit (self) ari_zshlib; };
     mac-utils = pkgs.callPackage ./mac-utils { inherit src; inherit (self) ari_zshlib; };

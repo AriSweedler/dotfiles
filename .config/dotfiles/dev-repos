@@ -20,6 +20,10 @@
 	path = .config/plugged
 	url = https://github.com/AriSweedler/plugged.git
 	input = plugged
+[repo ".config/tmux-oneshot"]
+	path = .config/tmux-oneshot
+	url = https://github.com/AriSweedler/tmux-oneshot.git
+	input = tmux-oneshot
 [mirror ".config/ari-zshlib"]
 	path = .config/ari-zshlib
 	url = https://github.com/AriSweedler/ari-zshlib.git

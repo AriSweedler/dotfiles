@@ -10,6 +10,7 @@ let
   # package's bin/<basename>.
   placed = {
     run-log = map (b: ".config/bin/${b}") [ "run_log" "run_log-capture.py" "irun" "strip-ansi" ];
+    tmux-oneshot = [ ".config/bin/tmux-oneshot" ];
     git-kit = [ ".config/git/bin/git-dotfiles" ] ++ map (b: ".config/bin/${b}") [
       "git-health" "git-ready" "git-delete-if-merged-all" "git-delete-if-merged-one" "git-dedupe-case-refs" "repo"
     ];

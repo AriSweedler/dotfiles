@@ -16,6 +16,7 @@ let
     ".config/chrome-exoskeleton"
     ".config/plugged"
     ".config/run-log"
+    ".config/tmux-oneshot"
   ];
   # Linked whole before, file by file now (karabiner.json became karabiner.nix's).
   formerWholeDirs = [ ".config/karabiner" ];

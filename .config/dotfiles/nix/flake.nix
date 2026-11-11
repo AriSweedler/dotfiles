@@ -20,10 +20,11 @@
     plugged = { url = "github:AriSweedler/plugged"; flake = false; };
     chrome-exoskeleton = { url = "github:AriSweedler/chrome-exoskeleton"; flake = false; };
     run-log = { url = "github:AriSweedler/run-log"; flake = false; };
+    tmux-oneshot = { url = "github:AriSweedler/tmux-oneshot"; flake = false; };
   };
 
-  outputs = { self, nixpkgs, nix-darwin, home-manager, plugged, chrome-exoskeleton, run-log }:
-  let devInputs = { inherit plugged chrome-exoskeleton run-log; };
+  outputs = { self, nixpkgs, nix-darwin, home-manager, plugged, chrome-exoskeleton, run-log, tmux-oneshot }:
+  let devInputs = { inherit plugged chrome-exoskeleton run-log tmux-oneshot; };
   in {
     darwinModules.default = ./darwin.nix;
     homeModules.default = ./home.nix;

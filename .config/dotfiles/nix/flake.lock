@@ -96,7 +96,8 @@
         "nix-darwin": "nix-darwin",
         "nixpkgs": "nixpkgs",
         "plugged": "plugged",
-        "run-log": "run-log"
+        "run-log": "run-log",
+        "tmux-oneshot": "tmux-oneshot"
       }
     },
     "run-log": {
@@ -112,6 +113,22 @@
       "original": {
         "owner": "AriSweedler",
         "repo": "run-log",
+        "type": "github"
+      }
+    },
+    "tmux-oneshot": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794385544,
+        "narHash": "sha256-LUXVD7yapPDk4nDLOcNIpi34oegvTwbPyh79e9T8V80=",
+        "owner": "AriSweedler",
+        "repo": "tmux-oneshot",
+        "rev": "90a79e423d5114c753785e4df6bc3d19abc1c249",
+        "type": "github"
+      },
+      "original": {
+        "owner": "AriSweedler",
+        "repo": "tmux-oneshot",
         "type": "github"
       }
     }
