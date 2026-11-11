@@ -1,6 +1,6 @@
 ---
 name: ari-dotfile--submodule
-description: Create and work in a dotfiles dev repo ("submodule" is the old word) — one of Ari's public repos, a plain git clone at ~/dotfiles/.config/<name> that the shared repo ignores, linked to ~/.config/<name>, listed in the dev-repos manifest and read by the shared Nix flake as an input locked in flake.lock, with its own hooks, driver, check and skills. The layout every dev repo follows, the recipe for a new one, how commits, the build, pushes and flake.lock bumps flow, and what refuses when. Per-repo specifics live in ari-dotfile--submodule-<name>.
+description: Create and work in a dotfiles dev repo ("submodule" is the old word) — one of Ari's public repos, a plain git clone at ~/dotfiles/.config/<name> that the shared repo ignores, linked to ~/.config/<name>, listed in the dev-repos manifest and read by the shared Nix flake as an input locked in flake.lock, with its own check and skills, and hooks unless it ships as a package. The layout every dev repo follows, the recipe for a new one, how commits, the build, pushes and flake.lock bumps flow, and what refuses when. Per-repo specifics live in ari-dotfile--submodule-<name>.
 ---
 
 # Dotfiles dev repos
@@ -47,8 +47,8 @@ new file created there is outside the repo. `<input>` is `<name>`; `<step>` is
 | Flake input | `nix/flake.nix`: in `inputs`, in the `outputs` arguments and in `devInputs`; locked in `nix/flake.lock` | df | the locked rev (the *pointer* in log lines) is the commit a machine builds when it has no checkout |
 | Link | `~/.config/<name>` → (through `/nix/store`) `~/dotfiles/.config/<name>` | df | `".config/<name>"` in `wholeDirs` of `nix/bridge.nix`; exists only after a switch that includes it |
 | Skills root | `roots` of `nix/claude-skills.nix` | df | links each committed `skills/<skill>` into `~/.claude/skills` at the switch |
-| Driver | a script run in place: `~/dotfiles/.config/bin/<name> -> ../<name>/bin/<name>` (exo); a compiled program: a package `nix/pkgs/<name>` built from `devInputs.<input>`, listed in `nix/pkgs/default.nix` (plugged) | df | one entry point with subcommands, on `PATH` |
-| Check, build | named by `/ari-dotfile--submodule-<name>` (`exo check`; `bin/plugged-dev check`) | repo | the *repo check*; it ends in one `[OK]` line; anything else is a failure |
+| Driver | a script run in place: `~/dotfiles/.config/bin/<name> -> ../<name>/bin/<name>` (exo); a compiled program: a package `nix/pkgs/<name>` built from `devInputs.<input>`, listed in `nix/pkgs/default.nix` (plugged); a *packaged repo*'s own recipe: `<input> = pkgs.callPackage "${devInputs.<input>}/package.nix" { … };` in `nix/pkgs/default.nix`, its bins placed at `~/.config/bin` from the store by `placed` in `nix/ari-bins.nix` (run-log) | df | one entry point with subcommands, on `PATH`; a packaged repo may ship several bins and needs no driver script |
+| Check, build | named by `/ari-dotfile--submodule-<name>` (`exo check`; `bin/plugged-dev check`; `nix build` of the repo's own flake) | repo | the *repo check*; it ends in one `[OK]` line, or, for a packaged repo, `nix build` exits 0; anything else is a failure |
 | Hooks | `.githooks/pre-commit` runs the repo check; `.githooks/commit-msg` greps the message against the denylist | repo | `core.hooksPath=.githooks` is local config: a fresh clone has no hooks until `dotfiles apply <step>` wires it |
 | Denylist | `~/.local/share/<name>/denylist.txt`: one regex per line, `#` comments | ldf | what the public repo must never contain; absent → both hooks pass everything |
 | Skills | `~/.config/<name>/skills/<skill>/SKILL.md` | repo | committed in the repo only |
@@ -72,6 +72,13 @@ claude-skills.nix { dir = "${devInputs.plugged}/skills"; root = ".config/plugged
 pkgs/default.nix  plugged = pkgs.callPackage ./plugged { src = devInputs.plugged; };
 ```
 
+**A packaged repo** (run-log) carries its own `package.nix` and needs every
+df row but the bootstrap step, plus `README.md`, `package.nix` and the skill in
+the repo. It may omit Hooks, Denylist and Bootstrap, so **Creating one** skips
+steps 2 and 3 and step 4's step file. Its skill then says so: `core.hooksPath`
+prints nothing, no `dotfiles apply <step>` exists, and the identity and
+company-content checks the hooks would run are Claude's at each commit.
+
 **Commits carry the personal identity only**: `user.name "Ari Sweedler"`,
 `user.email ari@sweedler.com`, in the repo's `--local` config, never inherited
 from the global or work config. Local config is not cloned: on each machine,
@@ -90,8 +97,9 @@ from the global or work config. Local config is not cloned: on each machine,
   dev repo is not on that repo's `origin/main`.
 - **`dotfiles pull`** moves the lock, never a checkout:
   `git -C ~/.config/<name> pull --ff-only origin main` fast-forwards it.
-- **NEVER run `nix flake update` for a dev-repo input, and NEVER stage
-  `nix/flake.lock` yourself**: only `dotfiles push` bumps it. A modified
+- **NEVER run `nix flake update` for a dev-repo input of the shared flake, and
+  NEVER stage `nix/flake.lock` yourself**: only `dotfiles push` bumps it. A
+  repo's own `flake.lock` is the repo's file (**Creating one**, step 1). A modified
   `flake.lock` you did not mean: `git df restore --staged --worktree -- ~/dotfiles/.config/dotfiles/nix/flake.lock`.
 
 The locked rev, to compare with the checkout's HEAD:
@@ -111,7 +119,11 @@ or showing an empty repo; a step whose result already exists is done: skip it.
    `git -C ~/dotfiles/.config/<name> config user.email ari@sweedler.com`;
    `git -C ~/dotfiles/.config/<name> remote add origin https://github.com/AriSweedler/<name>.git`.
    Write `bin/<name>`, its check and build, `README.md`
-   (`/ari-hemingway--structure-repo-quickstart`), `.gitignore`.
+   (`/ari-hemingway--structure-repo-quickstart`), `.gitignore`. A repo whose
+   own `flake.nix` takes another of Ari's repos as an input (run-log takes
+   `ari-zshlib`) locks it only after that repo is pushed, with
+   `nix flake update <input> --refresh --flake path:$HOME/dotfiles/.config/<name>`:
+   Nix caches a GitHub ref for an hour, and without `--refresh` locks the older commit.
 2. **Hooks.** `.githooks/pre-commit` (`exec` the repo check) and `.githooks/commit-msg`
    (denylist grep; `exit 0` when `~/.local/share/<name>/denylist.txt` is
    unreadable), both `chmod +x`; then
@@ -252,3 +264,9 @@ Every line must match; a mismatch is a row of **When it fails**, never a success
 |---|---|---|---|---|---|
 | `~/.config/chrome-exoskeleton/` | `chrome-exoskeleton` | `exo` (`.config/bin` link) | `github.com/AriSweedler/chrome-exoskeleton` | `/ari-dotfile--submodule-chrome-exoskeleton` | `~/.local/share/chrome-exoskeleton/` (plugins, `env.zsh`, `denylist.txt`) |
 | `~/.config/plugged/` | `plugged` | `plugged` (`nix/pkgs/plugged`) | `github.com/AriSweedler/plugged` | `/ari-dotfile--submodule-plugged` | `~/.local/share/plugged/` (`denylist.txt`) |
+| `~/.config/run-log/` | `run-log` | `run_log`, `run_log-capture.py`, `irun`, `strip-ansi` (its `package.nix`, placed by `nix/ari-bins.nix`) | `github.com/AriSweedler/run-log` | `/ari-dotfile--submodule-run-log` | none (a packaged repo: no hooks, denylist or bootstrap step) |
+
+`~/dotfiles/.config/ari-zshlib` (`github.com/AriSweedler/ari-zshlib`) is not a
+dev repo: it mirrors, byte for byte, the `lib/` that `nix/pkgs/ari-zshlib`
+builds from the dotfiles' shell library; it is not in `dev-repos`, and
+`dotfiles push` does not push it.
