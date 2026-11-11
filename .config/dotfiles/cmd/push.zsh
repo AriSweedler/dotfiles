@@ -419,7 +419,8 @@ push::main() {
     local -a PUSH_ALLOW=()   # filled by push::edit; is_allowed reads it (dynamic scope)
     local PUSH_PLAN_PATH="${STATE_DIR}/push-plan.dfpush"   # push::edit points it at a resumed FILE
     push::edit "${edit_file}" || return
-    (( ${#PUSH_ALLOW} )) || return 0
+    # An empty plan pushes nothing; a failed export is still a failure.
+    if (( ! ${#PUSH_ALLOW} )); then [[ "${failed}" == false ]]; return; fi
   fi
   start="${EPOCHREALTIME}"
   if is_in_scope local && is_allowed local; then push_tier local || failed=true; fi
