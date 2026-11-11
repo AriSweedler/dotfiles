@@ -22,6 +22,8 @@ stdenvNoCC.mkDerivation {
   nativeInstallCheckInputs = [ git ];
   installCheckPhase = ''
     export HOME=$TMPDIR NOTE_BASE=$TMPDIR/notes
+    # notes commits when it initializes the scratch repo; the sandbox has no git identity.
+    export GIT_AUTHOR_NAME=check GIT_AUTHOR_EMAIL=check@example.invalid GIT_COMMITTER_NAME=check GIT_COMMITTER_EMAIL=check@example.invalid
     mkdir -p $TMPDIR/stub && printf '#!/bin/sh\n' > $TMPDIR/stub/nvim && chmod +x $TMPDIR/stub/nvim
     export PATH=$TMPDIR/stub:$PATH
     $out/bin/notes --help >/dev/null
