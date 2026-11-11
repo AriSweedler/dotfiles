@@ -55,5 +55,18 @@
           }
         ] ++ modules;
       };
+
+    # The same user layer on a NixOS machine, as one module for its nixosSystem: the shared home
+    # module and the bridge for `user`, whose clone is ~/dotfiles there too. The machine's own
+    # flake owns the system; this adds only home-manager. Mac-only packages and bins stay out
+    # (home.nix, ari-bins.nix).
+    lib.nixosHome = { user, homeModules ? [ ] }: {
+      imports = [ home-manager.nixosModules.home-manager ];
+      home-manager.useGlobalPkgs = true;
+      home-manager.useUserPackages = true;
+      home-manager.extraSpecialArgs = { src = self.sourceInfo.outPath; inherit devInputs; };
+      home-manager.backupFileExtension = "before-nix";
+      home-manager.users.${user}.imports = [ self.homeModules.default ./bridge.nix ] ++ homeModules;
+    };
   };
 }

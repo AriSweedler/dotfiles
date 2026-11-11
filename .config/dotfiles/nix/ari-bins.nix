@@ -15,6 +15,9 @@ let
     ];
     notes = [ ".config/bin/notes" ];
     dotfiles-cli = [ ".config/bin/dotfiles" ];
+  } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
+    # Swift is compiled into this package, so it builds on a Mac only; elsewhere the bridge links
+    # the clone's copies, and the portable scripts among them (json-sort, utc-date, replace) run.
     mac-utils = map (b: ".config/bin/${b}") [
       "applelink" "applepaste" "chrome-headless" "favicon-maker" "json-sort" "karabiner-list-keyboards" "notif-center"
       "open-any" "open-link" "pbpastelinks" "probe-color" "probe-emoji" "replace" "utc-date" "yubitap"

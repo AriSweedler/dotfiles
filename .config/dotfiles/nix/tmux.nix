@@ -26,7 +26,7 @@ in
     prefix = "C-a";
     baseIndex = 1;
     terminal = "screen-256color";
-    shell = "/bin/zsh";
+    shell = if pkgs.stdenv.hostPlatform.isDarwin then "/bin/zsh" else "${pkgs.zsh}/bin/zsh"; # NixOS has no /bin/zsh
     keyMode = "vi"; # copy mode moves with vim keys
     mouse = true;
     focusEvents = true;

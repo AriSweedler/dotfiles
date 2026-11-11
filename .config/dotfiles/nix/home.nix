@@ -1,5 +1,5 @@
 # User layer every machine gets: packages and the files home-manager places.
-{ pkgs, src, devInputs, ... }:
+{ lib, pkgs, src, devInputs, ... }:
 let
   ari = import ./pkgs { inherit pkgs src devInputs; };
   # Neovim pinned to the exact commit Ari ran under bob (v0.13.0-dev-853+g7945732ed7, 2026-06-29),
@@ -44,9 +44,7 @@ in
     fzf
     gum # shell UI: the dotfiles harness's spinners and boxes
     jq
-    mas # Mac App Store from the terminal: mas install 497799835 is Xcode (alttab builds with it)
     ripgrep
-    terminal-notifier # the Claude Code notification hook and git-health
     tmuxinator
     tree
     yq-go
@@ -63,16 +61,20 @@ in
     lua-language-server
     shellcheck
 
-    # Ari's own tools, built from their submodules
-    ari.plugged
-
-    # Apps: home-manager copies them into ~/Applications/Home Manager Apps
-    monitorcontrol # brightness and volume keys for external displays
-
     # Nix
     nix-tree
     nvd
-  ];
+  ] ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin (with pkgs; [
+    # A Mac only; a Linux machine (a NixOS server importing this module) gets the list above.
+    mas # Mac App Store from the terminal: mas install 497799835 is Xcode (alttab builds with it)
+    terminal-notifier # the Claude Code notification hook and git-health
+
+    # Ari's own tools, built from their dev repos
+    ari.plugged # Swift, IOKit
+
+    # Apps: home-manager copies them into ~/Applications/Home Manager Apps
+    monitorcontrol # brightness and volume keys for external displays
+  ]);
 
   # zsh/plugins/zsh-vi-mode.zsh sources the plugin from here: the profile links only some of
   # share/, never share/zsh-vi-mode.
