@@ -114,7 +114,7 @@ readonly DEFINITION_KEYS=(host path_prefix prompt_end windows last_seen descript
 
 # The one remote host every session starts from. Written when no definition exists.
 readonly SEED_NAME=laptop
-readonly SEED_HOST=arisweedler@Aris-MacBook-Pro.local
+readonly SEED_HOST=arisweedler@ozone.local
 readonly SEED_DESCRIPTION="Ari's personal MacBook, session 0. The only machine with an ssh key on the Pi: reach ads@ganymede.local from it with a nested ssh -t."
 # This machine. Written whenever it is missing.
 readonly LOCAL_NAME=local
