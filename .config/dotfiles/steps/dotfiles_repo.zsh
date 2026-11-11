@@ -59,11 +59,12 @@ dotfiles_repo::unsubmodule() {
   run_mut mv "${moddir}" "${dir}/.git" || return 1
   run_mut git --git-dir="${git_dir}" config --remove-section "submodule.${name}" 2>/dev/null || true
   # A submodule sits detached; a plain clone works on main. Only when that loses nothing: main
-  # absent or at HEAD.
+  # absent, or at or behind HEAD (a fast-forward).
   local head main
   head="$(git -C "${dir}" rev-parse -q --verify HEAD 2>/dev/null || true)"
   main="$(git -C "${dir}" rev-parse -q --verify refs/heads/main 2>/dev/null || true)"
-  if [[ -z "$(git -C "${dir}" branch --show-current 2>/dev/null)" && ( -z "${main}" || "${main}" == "${head}" ) ]]; then
+  if [[ -z "$(git -C "${dir}" branch --show-current 2>/dev/null)" ]] \
+     && { [[ -z "${main}" ]] || git -C "${dir}" merge-base --is-ancestor "${main}" "${head}" 2>/dev/null; }; then
     run_mut git -C "${dir}" switch -q -C main || return 1
     git -C "${dir}" rev-parse -q --verify refs/remotes/origin/main >/dev/null 2>&1 \
       && run_mut git -C "${dir}" branch -q --set-upstream-to=origin/main main
