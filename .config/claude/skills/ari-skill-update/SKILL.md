@@ -37,6 +37,7 @@ Edit a skill, review it, and end with one *proposal* that a single `yes` commits
   GOOD: Cause: model default — quoted: none (read: the skill, CLAUDE.md, memory); inferred: none; unknown: system prompt (no instruction visible)
   ```
 - **The main thread holds the report, never the proposal or the work behind it.** The main thread NEVER runs `init.zsh`, reads the target skill's files, edits, or reviews: it settles the skill and the change, spawns one driver, relays one report, asks **Commit?**. **NEVER Read, cat or paste `proposal.md`:** its one access is the `awk` print at **Commit to dotfiles**, after `yes`; Ari opens the file to see the diff. Nothing of the driver's run reaches the main thread but the report (**Report the proposal**). An edit request (`drop N`, a spec answer, a change) goes back to the same driver by `SendMessage` and returns as a new report.
+- **Every agent runs on Opus.** No agent this skill starts — the driver, `/ari-skill-review`'s reviewers, the company-information reviewer — runs on any model but Opus: each Agent call passes `model: "opus"`, never omits it, never forks; a thread that cannot guarantee it does the step inline instead.
 - **Keep skill text short.** One sentence per instruction; no preamble. Cut any sentence that adds no information.
 - **Integrate, don't append.** When editing a skill, rewrite the section where the new behavior belongs — never tack lines onto the end of a section or append bullets to a list.
   ```
@@ -146,10 +147,11 @@ Main thread. A self-caught mistake needs no search: the stated line is the chang
 
 ### Spawn the driver
 
-Main thread. ONE fresh general-purpose subagent (Agent tool, `subagent_type: general-purpose`, `description: skill-update <skill>`) with this prompt; it has no conversation, so the brief carries everything:
+Main thread. ONE fresh general-purpose subagent (Agent tool, `subagent_type: general-purpose`, `model: "opus"`, `description: skill-update <skill>`) with this prompt; it has no conversation, so the brief carries everything:
 
 ````
 You are the driver for /ari-skill-update on `<skill>`. Read $HOME/.claude/skills/ari-skill-update/SKILL.md, then run it from **Set up the session** through **Report the proposal**: write the complete proposal, full diff included, to the `proposal=` path init.zsh prints. Your final message is the report only: it begins `Proposal: `, is at most 12 lines, and holds no diff, hunk or file contents. Hard limits: ask nothing; the Agent tool is for /ari-skill-review's reviewers and the company-information reviewer only, NEVER another driver; NEVER edit, invoke /ari-skill-update on, or spawn anything for a second skill — list it under Surfaced skills; NEVER run adopt or commit.
+Model rule: every Agent call you make, reviewers included, MUST pass `model: "opus"`; never omit it, never fork.
 Skill: <skill>. Change: <the settled change in one sentence>.
 Origin: <mistake | request>.
 Evidence: "<Ari's words, or the mistake line, quoted>" — <the gap: what was done instead, or what the skill should have done>.
@@ -249,7 +251,7 @@ Driver, or the `inline` thread.
 Driver, or the `inline` thread, right after **Edit the skill**, on the files as they stand. The main thread never runs this step.
 
 1. **Quality** — scaled to the change. A substantial change (a script edited, a new step or section, an intent change, or about 40 changed lines or more, counted over your edits' added and removed lines) gets `/ari-skill-review` via the Skill tool with the skill name as the argument. A short prose-only edit skips it: pre-check `skipped (small change)`. `skip review` skips it whatever the size: `skipped (skip review)`. A driver is a subagent, so the ranked findings come back in the review's own output (`findings: inline`) and `findings.md` stays empty; only the `inline` thread gets the file. Its `spec-questions.md` is in the review folder either way. Apply every finding, continuing the scratchpad's numbering (`[3] EXAMPLES — a filled dark-canvas example (review: examples)`); one that conflicts with a Rule, or that you challenged away, is not applied and goes under the proposal's Not carried as `<recommendation> — <rule name | reason>`. Spec questions are not applied; they ride the proposal as `<question>? recommended: <answer>`. An empty `findings.md` is not a failed review; the review failed only when its output holds no ranked list either, and then the pre-check says `failed: <why>`.
-2. **Company information** — when the skill is public (see Rules), dispatch a fresh reviewer with the Agent tool and this brief, unless `dotfiles machine-name` prints `personal` (the machine check `/ari-dotfiles` § Review before push uses): then dispatch nothing, pre-check `skipped (not the employer laptop)`. Three holes: `<skill_dir>`, `<shared_files>` (the absolute `--shared` paths, or `none`), and the quote, pasted byte-for-byte from your Read of this file's Rules (never retyped):
+2. **Company information** — when the skill is public (see Rules), dispatch a fresh reviewer with the Agent tool, `model: "opus"`, and this brief, unless `dotfiles machine-name` prints `personal` (the machine check `/ari-dotfiles` § Review before push uses): then dispatch nothing, pre-check `skipped (not the employer laptop)`. Three holes: `<skill_dir>`, `<shared_files>` (the absolute `--shared` paths, or `none`), and the quote, pasted byte-for-byte from your Read of this file's Rules (never retyped):
 
    ````
    Read EVERY file under <skill_dir> (SKILL.md, bin/, lib/, templates, fixtures, tests), not just a diff, and also <shared_files> (tier lib files committed with the skill; none when empty). Flag anything that identifies Ari's employer; this is the test, quoted from the skill's Rules, including its last sentence of what is not identifying:
