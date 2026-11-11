@@ -1,11 +1,12 @@
 # step chrome_exoskeleton — the dev repo checkout (dotfiles_repo clones it) has its
 # dependencies, which wire its hooks through npm's prepare script, a built dist/, and that
-# dist/ (or dist-personal/) loaded unpacked and enabled in at least one Chrome profile. Loading
-# it is the one part only a human can do (chrome://extensions, Load unpacked), so it is a manual
-# fail, which init at a terminal offers to walk through (assist::). Node comes from the local
+# dist/ (or dist-personal/) loaded unpacked and enabled in at least one Chrome profile, one copy
+# per profile. Loading it, and removing an extra copy, are the parts only a human can do
+# (chrome://extensions), so each is a manual fail; init at a terminal offers to walk through the
+# load (assist::). Node comes from the local
 # tier's env.zsh on a work machine; a personal machine needs it on PATH, hence a warn, not a fail.
 step::declare chrome_exoskeleton --group tools --needs dotfiles_repo \
-  --desc "the Chrome Exoskeleton checkout has its dependencies (which wire its hooks), a built dist/, and Chrome loads it, enabled, in at least one profile" \
+  --desc "the Chrome Exoskeleton checkout has its dependencies (which wire its hooks), a built dist/, and Chrome loads it, enabled, in at least one profile, never twice in one" \
   --apply "sets the checkout's commit identity, installs its node dependencies when missing (exo deps ci, which wires its hooks) and builds dist/ (exo build)" \
   --assist "when no profile loads it: asks y/N, then opens chrome://extensions, reveals dist/ in Finder and waits for the load"
 step::watches chrome_exoskeleton '.config/dotfiles/nix/flake.lock'   # where its input is locked
@@ -26,24 +27,34 @@ step::chrome_exoskeleton::is_node_present() {
 # keeps an unpacked extension in the profile's Secure Preferences (Preferences on older builds).
 # Older builds flag a disabled one with state 0 or a disable_reasons bitmask, newer ones with
 # a non-empty disable_reasons list. Reads files only, so it works with Chrome open or closed.
+# reply_duplicated has one `'<profile>': <id> (<path>), …` per profile running more than one
+# enabled copy, naming every copy but the one to keep (<fw>/dist, else the first). Chrome
+# derives an unpacked extension's ID from the path string it was given, so <fw>/dist and its
+# resolved path (a Load unpacked through a picker that followed the link) are two extensions.
 step::chrome_exoskeleton::profiles() {
-  local fw="${1}" chrome="${ARI_DOTFILES_CHROME_DIR}" dir name prefs st
-  typeset -ga reply_loaded=() reply_disabled=() reply_without=()
+  local fw="${1}" chrome="${ARI_DOTFILES_CHROME_DIR}" dir name prefs st extra
+  typeset -ga reply_loaded=() reply_disabled=() reply_without=() reply_duplicated=()
   [[ -r "${chrome}/Local State" ]] || return 0
   while IFS=$'\t' read -r dir name; do
-    st=none
+    st=none extra=
     for prefs in "${chrome}/${dir}/Secure Preferences" "${chrome}/${dir}/Preferences"; do
       [[ -r "${prefs}" ]] || continue
-      st="$(jq -r --arg a "${fw}/dist" --arg b "${fw}/dist-personal" --arg c "${fw:A}/dist" --arg d "${fw:A}/dist-personal" '
-        [.extensions.settings // {} | to_entries[].value
-          | select((.path? // "") as $p | [$a, $b, $c, $d] | index($p))
-          | if (.state == 0)
-               or ((.disable_reasons | type) == "number" and .disable_reasons != 0)
-               or ((.disable_reasons | type) == "array" and (.disable_reasons | length) > 0)
-            then "disabled" else "enabled" end]
-        | if index("enabled") then "enabled" elif length > 0 then "disabled" else "none" end' "${prefs}" 2>/dev/null || print -r -- none)"
+      IFS=$'\t' read -r st extra < <(jq -r --arg a "${fw}/dist" --arg b "${fw}/dist-personal" --arg c "${fw:A}/dist" --arg d "${fw:A}/dist-personal" '
+        [.extensions.settings // {} | to_entries[]
+          | select((.value.path? // "") as $p | [$a, $b, $c, $d] | index($p))
+          | {id: .key, path: .value.path, on: (
+              (.value.state == 0)
+               or ((.value.disable_reasons | type) == "number" and .value.disable_reasons != 0)
+               or ((.value.disable_reasons | type) == "array" and (.value.disable_reasons | length) > 0)
+              | not)}]
+        | map(select(.on)) as $on
+        | (first($on[] | select(.path == $a)) // $on[0]) as $keep
+        | [ (if ($on | length) > 0 then "enabled" elif length > 0 then "disabled" else "none" end),
+            ($on | map(select(. != $keep) | "\(.id) (\(.path))") | join(", ")) ]
+        | @tsv' "${prefs}" 2>/dev/null || print -r -- none)
       [[ "${st}" == none ]] || break
     done
+    [[ -n "${extra}" ]] && reply_duplicated+=("'${name}': ${extra}")
     case "${st}" in
       enabled) reply_loaded+=("${name}") ;;
       disabled) reply_disabled+=("${name}") ;;
@@ -84,8 +95,13 @@ check::chrome_exoskeleton() {
     verdict fail not_loaded -m -d "no Chrome profile found (Chrome never opened, or not installed) | path='${ARI_DOTFILES_CHROME_DIR}'" -f "${load_fix}"
     return 0
   fi
-  local -a reply_loaded reply_disabled reply_without
+  local -a reply_loaded reply_disabled reply_without reply_duplicated
   step::chrome_exoskeleton::profiles "${fw}"
+  if (( ${#reply_duplicated} )); then
+    verdict fail duplicate_load -m -d "a profile runs more than one copy, so every keybinding fires twice | remove=${(j:; :)reply_duplicated}" \
+      -f "open Chrome, chrome://extensions, Remove each card the detail names; keep the one loaded from ${fw}/dist"
+    return 0
+  fi
   if (( ! ${#reply_loaded} )); then
     if (( ${#reply_disabled} )); then
       verdict fail disabled -m -d "loaded but turned off in every profile that has it | profiles='${(j:, :)reply_disabled}'" \
@@ -108,7 +124,7 @@ check::chrome_exoskeleton() {
 #######################################
 step::chrome_exoskeleton::is_loaded() {
   local fw="${1}"
-  local -a reply_loaded reply_disabled reply_without
+  local -a reply_loaded reply_disabled reply_without reply_duplicated
   step::chrome_exoskeleton::profiles "${fw}"
   (( ${#reply_loaded} > 0 ))
 }
@@ -223,7 +239,7 @@ assist::chrome_exoskeleton() {
     log::warn "chrome_exoskeleton: dist is not built; nothing to load | dist='${fw}/dist'"
     return 1
   fi
-  local -a reply_loaded reply_disabled reply_without
+  local -a reply_loaded reply_disabled reply_without reply_duplicated
   step::chrome_exoskeleton::profiles "${fw}"
   local -a text=("${(@f)$(step::chrome_exoskeleton::assist_text "${fw}")}")
   if ! ui::confirm "${text[1]}"; then

@@ -78,6 +78,46 @@ prefs Default "Secure Preferences" "{\"path\": \"${FW}/dist\", \"disable_reasons
 check
 assert_eq "an empty disable_reasons list is enabled" "ok built" "$(field status) $(field reason)"
 
+# prefs_many <profile dir> <file> <entry JSON>...: that profile's prefs file with one extension
+# entry per argument, keyed id0, id1, … in order.
+prefs_many() {
+  local dir="$1" file="$2"; shift 2
+  jq -n '{extensions: {settings: ([$ARGS.positional[] | fromjson] | to_entries | map({key: "id\(.key)", value}) | from_entries)}}' \
+    --args "$@" > "${CHROME}/${dir}/${file}"
+}
+
+reset_prefs
+prefs_many Default "Secure Preferences" "{\"path\": \"${FW}/dist-personal\"}" "{\"path\": \"${FW}/dist\"}"
+check
+assert_eq "dist and dist-personal on in one profile: a manual fail" "fail duplicate_load true" "$(field status) $(field reason) $(field manual)"
+assert_contains "duplicate: names the copy to remove" "$(field detail)" "'Work': id0 (${FW}/dist-personal)"
+assert_not_contains "duplicate: keeps the dist/ copy" "$(field detail)" "id1"
+assert_contains "duplicate: the fix names the copy to keep" "$(field fix)" "keep the one loaded from ${FW}/dist"
+
+reset_prefs
+prefs_many Default "Secure Preferences" "{\"path\": \"${FW}/dist-personal\", \"disable_reasons\": [1]}" "{\"path\": \"${FW}/dist\"}"
+check
+assert_eq "a second copy turned off is no duplicate" "ok built" "$(field status) $(field reason)"
+
+reset_prefs
+prefs Default "Secure Preferences" "{\"path\": \"${FW}/dist\"}"
+prefs "Profile 1" "Secure Preferences" "{\"path\": \"${FW}/dist\"}"
+check
+assert_eq "one copy in each of two profiles is no duplicate" "ok built" "$(field status) $(field reason)"
+
+# The framework reached through a link, as ~/.config/chrome-exoskeleton is: Chrome keys the
+# link's path and the resolved one as two extensions.
+REAL="${FIX}/exo-checkout"
+mv "${FW}" "${REAL}" && ln -s "${REAL}" "${FW}"
+REAL_P="$(cd "${REAL}" && pwd -P)"
+reset_prefs
+prefs_many Default "Secure Preferences" "{\"path\": \"${REAL_P}/dist\"}" "{\"path\": \"${FW}/dist\"}"
+check
+assert_eq "the link's path and the resolved one: a duplicate" "fail duplicate_load" "$(field status) $(field reason)"
+assert_contains "resolved duplicate: removes the resolved copy" "$(field detail)" "id0 (${REAL_P}/dist)"
+assert_not_contains "resolved duplicate: keeps the link's copy" "$(field detail)" "id1"
+rm "${FW}" && mv "${REAL}" "${FW}"
+
 check ARI_DOTFILES_CHROME_DIR="${FIX}/no-chrome"
 assert_eq "Chrome never opened: a manual fail" "fail not_loaded true" "$(field status) $(field reason) $(field manual)"
 assert_contains "Chrome never opened: says so" "$(field detail)" "no Chrome profile found"
