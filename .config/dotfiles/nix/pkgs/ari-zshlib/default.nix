@@ -1,7 +1,7 @@
 # ari_zshlib, the shared shell library in one store directory, $out/lib: log.zsh (the one
 # logging library, with its notification icon), the skill script libs (logging, dry_run, await,
-# run_with_timeout, investigation_folder), strip_ansi.zsh, log_rotate.zsh, tmux-pane.sh and the
-# bash pair (log, arg). Built from the commit the shared flake reads. The public mirror,
+# run_with_timeout, investigation_folder), strip_ansi.zsh, log_rotate.zsh, the fzf group pickers
+# (fzf_group.zsh, fzf_groups.zsh), tmux-pane.sh and the bash pair (log, arg). Built from the commit the shared flake reads. The public mirror,
 # github.com/AriSweedler/ari-zshlib (the checkout ~/dotfiles/.config/ari-zshlib), holds this same
 # lib/ and is what Ari's public tools take as their input.
 #
@@ -27,7 +27,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   installPhase = ''
     runHook preInstall
     cd ${src}/.config
-    install -Dm644 -t $out/lib zsh/plugins/{log,strip_ansi,log_rotate}.zsh claude/lib/tmux-pane.sh
+    install -Dm644 -t $out/lib zsh/plugins/{log,strip_ansi,log_rotate,fzf_group,fzf_groups}.zsh claude/lib/tmux-pane.sh
     install -Dm644 -t $out/lib/assets zsh/plugins/assets/robot.png
     install -Dm644 -t $out/lib \
       claude/skills/ari-skill-shellscripts/lib/{logging,dry_run,await,run_with_timeout,investigation_folder}.zsh \

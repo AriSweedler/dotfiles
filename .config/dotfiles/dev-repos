@@ -25,4 +25,4 @@
 	url = https://github.com/AriSweedler/ari-zshlib.git
 	package = ari_zshlib
 	dir = lib
-	watch = .config/dotfiles/nix/pkgs/ari-zshlib .config/zsh/plugins/log.zsh .config/zsh/plugins/strip_ansi.zsh .config/zsh/plugins/log_rotate.zsh .config/zsh/plugins/assets/robot.png .config/claude/lib/tmux-pane.sh .config/claude/skills/ari-skill-shellscripts/lib .config/bash/plugins
+	watch = .config/dotfiles/nix/pkgs/ari-zshlib .config/zsh/plugins/log.zsh .config/zsh/plugins/strip_ansi.zsh .config/zsh/plugins/log_rotate.zsh .config/zsh/plugins/fzf_group.zsh .config/zsh/plugins/fzf_groups.zsh .config/zsh/plugins/assets/robot.png .config/claude/lib/tmux-pane.sh .config/claude/skills/ari-skill-shellscripts/lib .config/bash/plugins
