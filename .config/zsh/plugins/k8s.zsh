@@ -1,3 +1,6 @@
+# kubectl is a machine's own package (the local flake); without it there is nothing to set up.
+command -v kubectl >/dev/null || return 0
+
 eval "$(kubectl completion zsh)"
 
 # brew install kubectx

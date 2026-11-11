@@ -1,3 +1,6 @@
+# Homebrew is a Mac's: a Linux machine (a NixOS server) has none and needs no warning.
+[[ "${OSTYPE}" == darwin* ]] || return 0
+
 # Check if we have 'brew' installed. Log a warning if not
 #
 # Can't use 'brew --prefix' lol
