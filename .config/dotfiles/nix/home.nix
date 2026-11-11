@@ -75,7 +75,10 @@ in
 
     # Apps: home-manager copies them into ~/Applications/Home Manager Apps
     monitorcontrol # brightness and volume keys for external displays
-  ]);
+  ]) ++ lib.optionals (!pkgs.stdenv.hostPlatform.isDarwin) [
+    # Off a Mac: pbcopy, pbpaste and clip-hist, for a machine with no system clipboard
+    ari.linux-clipboard
+  ];
 
   # zsh/plugins/zsh-vi-mode.zsh sources the plugin from here: the profile links only some of
   # share/, never share/zsh-vi-mode.

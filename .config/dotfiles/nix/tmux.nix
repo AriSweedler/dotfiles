@@ -2,7 +2,7 @@
 # the tmux/*.conf files in order; typhon, the status-line and key-table plugin, loads last from
 # the store. An edit takes effect at the next `dotfiles switch`, then <Prefix>C-s in a running
 # server. A local flake appends its own lines with programs.tmux.extraConfig.
-{ pkgs, ... }:
+{ lib, pkgs, ... }:
 let
   typhon = pkgs.tmuxPlugins.mkTmuxPlugin {
     pluginName = "typhon";
@@ -54,6 +54,12 @@ in
         ./tmux/settings.conf
         ./tmux/typhon.conf
       ])}
+      ${lib.optionalString (!pkgs.stdenv.hostPlatform.isDarwin) ''
+
+        # Clipboard history off a Mac, where Hyper+4 opens Raycast's: the keyboard remapper sends
+        # <Prefix>M-4, and clip-hist (pkgs/linux-clipboard) pastes the pick into the pane it came from.
+        bind-key M-4 run-shell "tmux display-popup -E -T ' clipboard ' -b rounded -w 80% -h 60% 'clip-hist --paste-to #{pane_id}'"
+      ''}
 
       if-shell 'test -f ${typhonDev}' 'run-shell ${typhonDev}' 'run-shell ${typhon.rtp}'
     '';

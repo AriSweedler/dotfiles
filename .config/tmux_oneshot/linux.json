@@ -1,0 +1,11 @@
+[
+  {
+    "menu": {
+      "name": "clip hist",
+      "text": "pick an earlier copy; it becomes the clipboard (Hyper+4 also pastes it)"
+    },
+    "cmd": "clip-hist",
+    "key": "alt-4",
+    "autodismiss": true
+  }
+]
