@@ -20,6 +20,7 @@
 .codex/
 .config/1Password/
 .config/ari-spotify/
+.config/ari-zshlib/
 .config/AWSVPNClient
 .config/Google/
 .config/Microsoft\\VisualStudio Services/
@@ -49,7 +50,9 @@
 .config/plugged/
 .config/raycast
 .config/raycast/extensions/
+.config/run-log/
 .config/superseedr-plus-mcp/
+.config/tmux-oneshot/
 .config/swiftpm/
 .config/uv/
 .config/zsh/.zcompdump
