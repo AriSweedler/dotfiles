@@ -8,13 +8,13 @@ description: Edit and commit Ari's two-tier dotfiles — shared (`git df`, ~/.co
 Ari's dotfiles are two git repos, one per tier: a plain clone for the shared tier, a bare repo
 for the local one. Pick the tier by whether
 the content should be identical on every machine or belongs to this one. The
-shared tier and its submodules are public; no push is recommended until each unpushed commit passes **Review before
+shared tier and its dev repos are public; no push is recommended until each unpushed commit passes **Review before
 push**, except on the personal laptop, where a commit is ready to push as soon as it lands.
 
 | Tier | Alias | Repo | Worktree | Holds | Remote |
 |---|---|---|---|---|---|
 | Shared | `git dotfiles` / `git df` | plain clone `~/dotfiles` (git dir `~/dotfiles/.git`) | `~/dotfiles`; home-manager links its files into `$HOME` (`/ari-dotfiles-nix`) | Generic, every-machine config under `~/.config` | One shared repo; only Ari pushes |
-| Local | `git local-dotfiles` / `git ldf` | bare `~/.local/local-dotfiles.git` | `~/.local` | Company- and machine-specific code under `~/.local` | One private repo per machine; the agent pushes |
+| Local | `git local-dotfiles` / `git ldf` | bare `~/.local/local-dotfiles.git` | `~/.local` | Company- and machine-specific code under `~/.local` | A private repo per machine, or none (the personal laptop); the agent pushes when there is one |
 
 `git df` is `~/.config/git/bin/git-dotfiles` (the alias is the `dotfiles` block of
 `~/.config/dotfiles/nix/git.nix`). It runs git on the clone and turns a `$HOME` path that
@@ -24,38 +24,43 @@ resolves into the clone (a linked file, or a file under a linked directory) into
 clone. git refuses it as `outside repository`, so name it by its clone path. A relative path is
 relative to the caller's directory. A machine without `~/dotfiles/.git` falls back to the bare repo
 `~/dotfiles.git` with `$HOME` as its work tree. There, read every `~/dotfiles/<path>` in this skill
-as `~/<path>` and run `git df submodule …` from `$HOME`. `dotfiles --dir` prints which layout the
+as `~/<path>`. `dotfiles --dir` prints which layout the
 machine has. On the personal laptop the bare repo was retired to `~/dotfiles.git.retired`.
 
-On the personal laptop the local `origin` is a private repo
-(`git ldf remote get-url origin`). State (`~/.local/state`) and cache (`~/.cache`) are never versioned.
+The local tier pushes to its `origin` when it has one: `git ldf remote get-url origin` succeeds.
+On the personal laptop it has none, by Ari's choice: after an ldf commit there is nothing to push,
+`dotfiles push` prints `local tier has no remote; nothing to push`, and that is NEVER a problem to
+flag or fix. State (`~/.local/state`) and cache (`~/.cache`) are never versioned.
 
 ## Workflow
 
 1. Edit the file. Pick its tier with **Placement rules**. An existing shared file can be edited
-   through `$HOME` or the clone, and the change is live at once.
+   through `$HOME` or the clone, and the change is live at once. **A packaged bin
+   (**Placement rules**) is the exception: edit the clone's file and run that file to try it;
+   `$HOME`'s copy changes only at the next `dotfiles switch`.**
    - **Create a new shared file at its clone path, `~/dotfiles/<path>`, NEVER at `~/<path>`.** A
      file created at `~/<path>` is not in the repo, and git cannot see it. A new clone file appears
      in `$HOME` only after it is committed and the next `dotfiles switch` runs, because the bridge
      links only what git tracks. Ari runs the switch; Claude may run `dotfiles switch --build`
      (`/ari-dotfiles-nix`).
    - The exception is a directory linked whole, where either path works and the new file is live at
-     once. Test it with `[[ -L ~/<dir> ]]`. Today these are `.config/nvim`, `.config/karabiner`,
-     `.config/claude` and the submodules.
+     once. Test it with `[[ -L ~/<dir> ]]`. Today these are `.config/nvim`, `.config/claude` and
+     the dev repos.
 2. `git df add <abs path>` or `git ldf add <abs path>`. Give a new shared file its clone path:
    its `$HOME` path does not exist yet. Commit with a descriptive
    message and the same paths after `--` (`git df commit -m "…" -- <abs paths>`),
-   since tools like `bake` stage files of their own. A path inside a submodule (`~/.config/chrome-exoskeleton/…`) is refused by
-   `git df add`: follow **Submodules** instead.
+   since tools like `bake` stage files of their own. A path inside a dev repo
+   (`~/.config/chrome-exoskeleton/…`) is ignored by the shared repo, and `git df add` refuses it:
+   follow **Dev repos** instead.
 3. Print `git df log --oneline -1` / `git ldf log --oneline -1` to confirm the tier.
 4. Shared: run **Review before push** (its first step skips it on the
-   personal laptop). Local: `git ldf push` now. Start the
+   personal laptop). Local: `git ldf push` now, when the tier has an `origin`. Start the
    **Post-change sweep** alongside.
 5. Close with one message: what landed, the review verdicts (if it ran),
    the sweep's plan, and any history rewrite the review calls for, ending in one
    question that covers them all (none when nothing is pending). When the change touched a
-   Nix module or added a shared file outside a directory linked whole, say it is live only
-   after Ari runs `dotfiles switch`. End with "Run
+   Nix module, a packaged bin or `plugged`, or added a shared file outside a directory linked whole, say it
+   is live only after Ari runs `dotfiles switch`. End with "Run
    `dotfiles push` when ready." once every unpushed shared commit, including any
    the `yes` just made, has passed the review. On the personal laptop
    (`dotfiles machine-name` prints `personal`), end with it as soon as the commit lands.
@@ -72,7 +77,7 @@ git df add ~/.config/zsh/plugins/fzf.zsh && git df commit -m "fzf: preview files
 git ldf status
 git ldf add ~/.local/share/zsh/plugins/foo.zsh && git ldf commit -m "Add foo plugin" -- ~/.local/share/zsh/plugins/foo.zsh
 git ldf add -A        # safe: info/exclude is an allowlist of hand-written dirs
-git ldf push
+git ldf push          # only when the tier has an origin
 ```
 
 The harness spells the same two things without the aliases: `dotfiles git <args…>` runs git on
@@ -102,21 +107,23 @@ cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
 ## Pushing
 
 - **Shared: NEVER `git df push` and NEVER run `dotfiles push`.** Ari runs it
-  (denied to Claude in settings). It pushes every submodule first, in parallel,
-  commits the shared tier's pointer bump for each published one (that path
-  alone; `<name>: bump to <sha> (<subject>)`), then pushes the shared repo, all
-  as the personal account by token (no key swap), and the local tier alongside
-  to its own remote with the ssh agent's key (its pre-push hook included); a
-  repo already at its `origin/main` is skipped silently (the submodule count
-  line says how many were checked, pushed and bumped); a failed submodule or
-  a refused bump blocks the shared push, nothing else blocks anything.
+  (denied to Claude in settings). It pushes every dev repo first, in parallel;
+  for each published one it runs `nix flake update <input>` and commits the
+  shared tier's `flake.lock` alone (`<name>: bump to <sha> (<subject>)`); then
+  it pushes the shared repo, all as the personal account by token (no key
+  swap), and the local tier alongside to its own remote, when it has one, with
+  the ssh agent's key (its pre-push hook included). A repo already at its
+  `origin/main` is skipped silently (the `submodules done` line counts the dev
+  repos checked, pushed and bumped). A failed dev repo or a refused bump
+  blocks the shared push; nothing else blocks anything.
   Each repo's output lands in `~/.local/state/dotfiles/push/<repo>.log`
-  (`shared`, `local`, or the submodule path; `.log.bak.1` … `.log.bak.5` = the five runs before).
+  (`shared`, `local`, or the dev repo's path; `.log.bak.1` … `.log.bak.5` = the five runs before).
   After committing, run **Review before push** and end with "Run `dotfiles push`
   when ready." only when it passes; on the personal laptop skip the review and end
   with that line as soon as the commit lands.
-- **Local: push after every ldf commit.** No confirmation needed and no review
-  (the repo is private); `dotfiles push` also picks up a local commit left unpushed.
+- **Local: push after every ldf commit, on a machine whose local tier has an `origin`.** No
+  confirmation needed and no review (the repo is private); `dotfiles push` also picks up a local
+  commit left unpushed. Without an `origin` (the personal laptop) the commit is the last step.
 
 ### Review before push
 
@@ -129,13 +136,13 @@ Check first:
 
 `skip` → dispatch no reviewer: the commit is ready, so end with "Run `dotfiles
 push` when ready." as soon as it lands. `review` → each unpushed shared-tier or
-submodule commit becomes public on Ari's push, so review every one for content
+dev repo commit becomes public on Ari's push, so review every one for content
 that identifies the employer, using the identifying-content list in
 `/ari-skill-update` § Rules:
 
 ```zsh
 git df log --reverse --format=%h origin/main..main            # shared tier
-git -C ~/<path> log --reverse --format=%h origin/main..main   # each submodule with commits
+git -C ~/<path> log --reverse --format=%h origin/main..main   # each dev repo `dotfiles status` lists
 ```
 
 For each commit, dispatch a fresh reviewer with the Agent tool, one per commit.
@@ -157,7 +164,7 @@ It stops at the first failing repo, names it, and pushes nothing after it.
 Read the log, then act; you may run these two (read-only) yourself:
 
 ```zsh
-dotfiles status                                   # tiers, submodule pointers, each repo's last push line
+dotfiles status                                   # tiers, dev repos against the lock, each repo's last push line
 dotfiles logs --repo shared                       # or --repo .config/chrome-exoskeleton; --previous = the run before
 ```
 
@@ -165,11 +172,13 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
 |---|---|---|
 | `Personal account is not logged into gh` | this machine's gh has no personal login | the user runs `env -u GITHUB_TOKEN gh auth login` (HTTPS) |
 | `Token identity mismatch` | the stored personal token is not the personal account | `env -u GITHUB_TOKEN gh auth status`; re-login |
-| `Detached HEAD: nothing to push` | commits made while a pull had left the submodule detached (detached with nothing new is skipped silently) | **Submodules** step 1 (`git -C ~/<path> branch -f main HEAD` if `main` is an ancestor, else ask), push again |
-| `! [rejected]` (fetch first / non-fast-forward), or `Remote ref does not match after push` | the remote moved | shared: `dotfiles pull`; submodule: `git -C ~/<path> pull --rebase origin main`, re-run its checks, push again |
+| `Detached HEAD: nothing to push` | commits made in a dev repo checked out detached (a dev repo is on `main` unless someone detached it; detached with nothing new is skipped silently) | **Dev repos** step 1, which the log's `§ Submodules step 1` hint means (`git -C ~/<path> branch -f main HEAD` if `main` is an ancestor, else ask), push again |
+| `! [rejected]` (fetch first / non-fast-forward), or `Remote ref does not match after push` | the remote moved | shared: `dotfiles pull`; dev repo: `git -C ~/<path> pull --rebase origin main`, re-run its checks, push again |
+| `lock update failed`, `lock update did not land on the pushed HEAD`, `pointer bump refused` | the `flake.lock` bump after a dev repo's push failed | the nix or hook output above the line; for the second, `dotfiles pull`, then push again |
+| `pointer not bumped: checkout is not ahead of the lock` (a warning; the push goes on) | the dev repo's checkout is behind or off the locked commit | `git -C ~/<path> pull --ff-only origin main` (`/ari-dotfile--submodule` § When it fails), or **Dev repos** step 1 if it is detached; the next push bumps it |
 | `slow step` | a step took longer than `ARI_DOTFILES_SLOW_STEP` (0.5s; pull's own fetch is allowed 5s) | read the step name; `dotfiles --timing <cmd>` times every step |
-| `submodule not checked out` | never initialized here | `dotfiles init` |
-| `No such remote`, `Remote is not on github.com` | a rewired or broken checkout | `dotfiles status`, then **Submodules** |
+| `submodule not checked out` | a dev repo was never cloned here | `dotfiles apply dotfiles_repo` clones it (the log's `dotfiles init` does too) |
+| `No such remote`, `Remote is not on github.com` | a rewired or broken checkout | `dotfiles status`, then **Dev repos** |
 | DNS, timeout, TLS | network | retry; nothing was lost |
 | a hook's own `[ERROR]` lines | the repo's pre-push hook refused | fix what it names; NEVER `--no-verify` |
 | local log: `[EXO-PREPUSH] failed` | the local tier's pre-push hook ran the exoskeleton suite and it failed; the commit stands | `/ari-dotfile--submodule-chrome-exoskeleton` § When it fails, then push again |
@@ -189,12 +198,20 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
   and home-manager, and the port keeps the split (**Cutpoints**). A file
   home-manager places is a read-only symlink into `/nix/store`, among them git's config and
   ignore, tmux, Starship and gh's `config.yml`. **NEVER run `git config --global` or `gh config
-  set`, or edit `~/.config/starship.toml` or `~/.config/tmux/tmux.conf`: edit the module, then
-  `dotfiles switch --build`; Ari switches.** **NEVER `brew install`:** a new tool goes in a flake.
+  set`, or edit `~/.config/starship.toml` or `~/.config/tmux/tmux.conf`: edit the module, commit it
+  (a switch builds only committed files), then `dotfiles switch --build`; Ari switches.** **NEVER `brew install`:** a new tool goes in a flake.
   Which module writes what, and how to edit, verify, build and switch: `/ari-dotfiles-nix`
-  (§ Modules, § What Nix owns). Every other shared file in `$HOME` is an
-  out-of-store link into `~/dotfiles`, made by the bridge (`~/.config/dotfiles/nix/bridge.nix`):
-  `readlink -f` ends in the clone. Edit it in place, as below.
+  (§ Modules, § What Nix owns).
+- **A packaged bin is placed from the store at its old path, so an edit to the clone's file
+  reaches `$HOME` only after a commit and a `dotfiles switch`.** `~/.config/dotfiles/nix/ari-bins.nix`
+  lists them: the `dotfiles` CLI (its `lib/`, `cmd/` and `steps/` too, though their `$HOME` links
+  resolve into the clone), `run_log` and its helpers, the git helpers (`git-dotfiles`
+  included), `notes` and the Mac utilities. Test: `readlink -f` of its `$HOME` path (e.g.
+  `~/.config/bin/<name>`) ends in `/nix/store`. To try an edit before the switch, run the clone's
+  file by path: `~/dotfiles/.config/bin/<name>`. The package recipes are `/ari-dotfiles-nix`'s.
+- **Every other shared file in `$HOME` is an out-of-store link into `~/dotfiles`,** made by the
+  bridge (`~/.config/dotfiles/nix/bridge.nix`): `readlink -f` ends in the clone. Edit it in
+  place, as below.
 - **Claude skills follow the same split.** The real directory lives in the tier
   that owns it, `~/dotfiles/.config/claude/skills/<name>/` (df, also at
   `~/.config/claude/skills/<name>/` through the directory link) or
@@ -204,7 +221,7 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
 - **Chrome Exoskeleton plugins follow the same split.** A plugin for a site you
   use only as an employee is ldf (`~/.local/share/chrome-exoskeleton/plugins/`);
   everything else is a file of the framework repo at `~/.config/chrome-exoskeleton/`,
-  a submodule (see **Submodules**). Building, testing and the framework's own
+  a dev repo (see **Dev repos**). Building, testing and the framework's own
   push are `/ari-dotfile--submodule-chrome-exoskeleton`'s job.
 - **Starship and tmux follow the same split.** Generic config goes in `starship.nix`, `tmux.nix`
   and `nix/tmux/*.conf` (df); a work-only Starship table or tmux line goes in the local flake
@@ -296,75 +313,54 @@ Raycast's own hotkey settings, not in the tables. Before you commit a re-baked
 `karabiner.json`, read the staged diff that `bake` prints. It should change only what the
 table edit changed.
 
-## Submodules
+## Dev repos
 
-Some `~/.config` directories are git submodules of the shared repo: their files
-belong to another repo, and the shared tier records only a commit hash for the
-directory, the **pointer**, which is what every other machine checks out.
-`git df submodule status` lists them. Today: `.config/chrome-exoskeleton`
-(upstream `github.com/AriSweedler/chrome-exoskeleton`, public;
-`/ari-dotfile--submodule-chrome-exoskeleton`) and `.config/plugged` (upstream
-`github.com/AriSweedler/plugged`, public; `/ari-dotfile--submodule-plugged`).
-The layout every submodule follows and the recipe for a new one:
-`/ari-dotfile--submodule`.
+Some `~/.config` directories are *dev repos*: Ari's own public repos, each a plain git clone at
+`~/dotfiles/.config/<name>`, linked whole to `~/.config/<name>` and ignored by the shared repo.
+`~/dotfiles/.config/dotfiles/dev-repos` lists them. Today: `.config/chrome-exoskeleton`
+(upstream `github.com/AriSweedler/chrome-exoskeleton`; `/ari-dotfile--submodule-chrome-exoskeleton`)
+and `.config/plugged` (upstream `github.com/AriSweedler/plugged`; `/ari-dotfile--submodule-plugged`).
+The shared flake takes each as a github input (`flake = false`), and
+`~/dotfiles/.config/dotfiles/nix/flake.lock` locks the commit every other machine builds;
+`dotfiles switch` builds each from its checkout's `HEAD` here. There is no `.gitmodules` and no
+`git df submodule …`. Flags, log lines and healthcheck codes still say *submodule* and mean a dev
+repo. The layout, a new one, `dotfiles pull` and every refusal: `/ari-dotfile--submodule`.
 
-`git df add` refuses a file inside a submodule (`fatal: Pathspec '…' is in
-submodule '…'`); the only path it accepts there is the directory itself, the
-pointer. Each checkout lives at `~/dotfiles/.config/<name>`, with its git dir under
-`~/dotfiles/.git/modules/.config/<name>`. `~/.config/<name>` is a link to the checkout, so
-`git -C ~/.config/<name> …` and `git df add ~/.config/<name>` still work. `git df submodule …`
-runs from any directory: the wrapper moves into the clone for it, and its path arguments are the
-clone's (`.config/<name>`).
-
-### Changing something inside a submodule
+### Changing something inside a dev repo
 
 One dotfiles change; never stop after the first commit.
 
-1. **Be on its `main`.** `git -C ~/<path> branch --show-current` must print
-   `main`; it prints nothing after any `git df pull` or `git df submodule
-   update` (`submodule.recurse=true` checks the pointer out detached). Nothing
-   committed yet → `git -C ~/<path> switch main`. Committed while detached →
-   `git -C ~/<path> branch -f main HEAD`, only if
+1. **Be on its `main`.** `git -C ~/<path> branch --show-current` must print `main`, and it does
+   unless someone detached the checkout. Nothing committed yet → `git -C ~/<path> switch main`.
+   Committed while detached → `git -C ~/<path> branch -f main HEAD`, only if
    `git -C ~/<path> merge-base --is-ancestor main HEAD` succeeds; else show
    `git -C ~/<path> log --oneline --graph main...HEAD` and ask which history to keep.
-2. **Commit in the submodule's repo** on `main`, explicit paths:
+2. **Commit in the dev repo** on `main`, explicit paths:
    `git -C ~/<path> add <files> && git -C ~/<path> commit -m "…"`. Its hooks
    and commit conventions apply, not the tier's.
-3. **Its push, and the bump, are the user's**: run **Review before push** on the
-   submodule's unpushed commits and end with "Run `dotfiles push` when ready."
-   only when it passes (on the personal laptop, as soon as the commit lands). That pushes the submodule, commits the shared tier's pointer
-   bump (`<name>: bump to <sha> (<subject>)`, that path alone) and pushes the
-   shared tier with it; `dotfiles push --submodules` alone still commits the
-   bump (`--shared`, `--local` and `--no-<part>` narrow the scope the same
-   way). Claude is denied the command. Afterwards, **Verify**.
-4. **Bump by hand only when the submodule was pushed some other way** and no
-   `dotfiles push` is coming (`git df status --short -- ~/<path>` shows ` M`):
-   ```zsh
-   git df add ~/<path> && git df commit -m "<name>: bump to $(git -C ~/<path> rev-parse --short HEAD) (<what it carries>)" -- ~/<path>
-   ```
-   The df pre-commit hook refuses a pointer not on the submodule's
-   `origin/main` (checked locally, fetched only on a miss): push first, re-run
-   the commit, nothing to re-stage.
+3. **Its push, and the lock bump, are Ari's**: run **Review before push** on the
+   dev repo's unpushed commits and end with "Run `dotfiles push` when ready."
+   only when it passes (on the personal laptop, as soon as the commit lands). That pushes the
+   dev repo, commits the `flake.lock` bump (**Pushing**) and pushes the shared tier with it.
+   `dotfiles push --submodules` pushes the dev repos alone and still
+   commits the bump; `--shared`, `--local` and `--no-<part>` narrow the scope the same way.
+   Claude is denied the command. Afterwards, **Verify**.
 
-### After `git df pull` on any machine
-
-The pull moves the pointer and detaches the checkout onto it; a never-initialized
-submodule stays an empty directory until `git df submodule update --init`.
-Then the repo's own refresh (chrome-exoskeleton: `exo link && exo build`), and
-step 1 before committing in it again. `dotfiles apply dotfiles_repo` runs
-the `--init` on a fresh machine; `dotfiles healthcheck` reports
-`submodule_uninitialized` and `submodule_drift`.
+No bump is made by hand: a dev repo pushed some other way gets its bump from the next
+`dotfiles push`. The df pre-commit hook refuses a staged `flake.lock` that locks a dev repo at a
+commit not on its `origin/main`: Ari pushes the dev repo first (`dotfiles push --submodules`),
+then re-run the commit.
 
 ### Verify
 
 ```
-git -C ~/<path> status -sb                  → ## main...origin/main
-git df submodule status                    →  <sha> <path> (heads/main)    leading space, not +
-git df status --short -- ~/<path>           → (empty)
+git -C ~/<path> status -sb     → ## main...origin/main
+dotfiles status                →  <sha> <path> (heads/main)    leading space, not +
+git df status --short -- ~/dotfiles/.config/dotfiles/nix/flake.lock   → (empty)
 ```
 
-Prefixes: space = checkout matches the pointer; `+` = checkout ahead of the
-pointer (bump needed, or update on another machine); `-` = not initialized.
+Prefixes: space = the checkout is at the locked commit; `+` = it is elsewhere (a bump is due at
+the next `dotfiles push`, or the checkout is behind a pulled lock); `-` = not cloned.
 
 ## Key locations
 
@@ -377,16 +373,16 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
 - `~/.local/local-dotfiles.git/info/exclude` — the local repo's allowlist.
 
 ### Shared (df)
-- **Scripts**: `~/.config/bin/` on `$PATH`
+- **Scripts**: `~/.config/bin/` on `$PATH`; the packaged ones are placed from the store (**Placement rules**)
 - **Git, tmux, Starship and gh config**: home-manager modules in `~/.config/dotfiles/nix/`; where
   each lives and what a switch writes: `/ari-dotfiles-nix` § Modules
 - **Git hooks**: `~/.config/git/dotfiles-hooks/` (df), `~/.config/git/local-dotfiles-hooks/` (ldf; needs bash 5)
 - **Zsh plugins**: `~/.config/zsh/plugins/`, sourced first
 - **Nvim**: `~/.config/nvim/`, lazy.nvim specs in `lua/plugins/`, `lazy = true` by default
 - **Claude skills**: `~/.config/claude/skills/<name>/`, symlinked from `~/.claude/skills/<name>`
-- **Submodules**: declared in `~/dotfiles/.gitmodules`; today `~/.config/chrome-exoskeleton/`
-  (with `~/.config/bin/exo`) and `~/.config/plugged/` (with `~/.config/bin/plugged`) — see
-  **Submodules**, `/ari-dotfile--submodule` (layout, creating one),
+- **Dev repos**: listed in `~/dotfiles/.config/dotfiles/dev-repos`; today `~/.config/chrome-exoskeleton/`
+  (with `~/.config/bin/exo`) and `~/.config/plugged/` (its `plugged` binary is a Nix package) — see
+  **Dev repos**, `/ari-dotfile--submodule` (layout, creating one),
   `/ari-dotfile--submodule-chrome-exoskeleton` and `/ari-dotfile--submodule-plugged`
 - **Jobs framework**: `~/.config/dotfiles/lib/jobs.zsh`; shared plugins in `~/.config/dotfiles/jobs/`
   (README = the plugin contract) — see **Cutpoints**
@@ -396,7 +392,9 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
   and **Bootstrapping a machine**; the push is token-pinned to `ARI_DOTFILES_GITHUB_LOGIN`.
   The file in `bin` is only the entrypoint; the program is `~/.config/dotfiles/lib/*.zsh`,
   one module per concern, each independent at source time (its README has the rules and
-  the check)
+  the check). The `dotfiles` on `PATH` is the packaged copy, program included, so an edit to
+  `lib/`, `cmd/` or `steps/` runs only as `zsh ~/dotfiles/.config/bin/dotfiles <verb>` until
+  the next `dotfiles switch`
 
 ### Local (ldf)
 - **Zsh plugins**: `~/.local/share/zsh/plugins/`, sourced after the shared dir
@@ -415,7 +413,7 @@ pointer (bump needed, or update on another machine); `-` = not initialized.
 
 As soon as a dotfiles change is committed, start the sweep without asking, in
 parallel with **Review before push** when it runs. A subagent (this agent, when it is one)
-runs `git df status`, `git ldf status` and `git df submodule status`,
+runs `git df status`, `git ldf status` and `dotfiles status` (the dev repos),
 reads each change (`diff` for modified, `cat` for untracked), and drafts one line
 per commit, grouping tightly related files (a new config plus its include). It
 edits and commits nothing:
@@ -425,7 +423,7 @@ edits and commits nothing:
       df: ~/.config/foo/bar.zsh → "foo: retry once on timeout" — the retry the last session left uncommitted
 
 The plan goes into Workflow step 5's closing message; its one `yes` commits every
-planned line, pushes local, and runs **Review before push** on anything shared (skipped on the personal laptop).
+planned line, pushes local when it has an `origin`, and runs **Review before push** on anything shared (skipped on the personal laptop).
 Both tiers clean → the two status lines, nothing to ask. A change the subagent
 cannot explain is listed but left out of the plan.
 
@@ -441,7 +439,7 @@ does `dotfiles help <verb>`; a bare `dotfiles` lists the verbs.
 The `repo` group is the dotfiles themselves:
 
 - `dotfiles_repo`: the shared repo tracking `origin/main` with an ssh push url
-  (`ARI_DOTFILES_PUSH_URL`), hooks wired, submodules initialized, `origin/main` fetched. That is
+  (`ARI_DOTFILES_PUSH_URL`), hooks wired, every dev repo cloned, `origin/main` fetched. That is
   the plain clone `~/dotfiles` when `~/dotfiles/.git` exists. Without it, the step clones the bare
   repo `~/dotfiles.git` and checks it out into `$HOME`. A pre-harness bare repo at `~/dotfiles` is
   renamed to `~/dotfiles.git` first, and having both is a manual conflict.
@@ -462,7 +460,7 @@ The `repo` group is the dotfiles themselves:
 in the local flake), and a `dotfiles switch` installs them (`/ari-dotfiles-nix`). `tools` is the rest (`raycast_sync`, `chrome_exoskeleton`: `exo deps ci`, `exo build`,
 `plugged`, `karabiner`, …).
 
-To back the local tier up, give it a remote:
+To back the local tier up, give it a remote. On the personal laptop Ari chose not to, so never propose it there:
 
 ```zsh
 git ldf remote add origin <this machine's private repo>
@@ -478,9 +476,9 @@ left as it was, and the conflicting files are named; resolve by hand (`git df pu
 fix, `git df rebase --continue`), then `dotfiles pull` again. It runs no init and no check:
 it maps the pulled paths to the steps that watch them (`step::watches` in each step file),
 warns with each affected step and the paths behind it, and prints the one command to run,
-`dotfiles apply a b c`; a changed harness (`lib/`, `cmd/`) is live already. `pull --dry-run`
+`dotfiles apply a b c`; a changed harness (`lib/`, `cmd/`, `steps/`) is live after the next `dotfiles switch`. `pull --dry-run`
 fetches and reports the same for what the pull would bring. `dotfiles
-status` shows both tiers, the submodule pointers and each repo's last push; `dotfiles push`
+status` shows both tiers, the dev repos against the lock and each repo's last push; `dotfiles push`
 and `dotfiles logs` are under **Pushing**.
 
 Hook setup for both tiers is documented in `~/.config/git/dotfiles-hooks/README.md`
