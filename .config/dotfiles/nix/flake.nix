@@ -19,10 +19,11 @@
     # this lock after pushing it.
     plugged = { url = "github:AriSweedler/plugged"; flake = false; };
     chrome-exoskeleton = { url = "github:AriSweedler/chrome-exoskeleton"; flake = false; };
+    run-log = { url = "github:AriSweedler/run-log"; flake = false; };
   };
 
-  outputs = { self, nixpkgs, nix-darwin, home-manager, plugged, chrome-exoskeleton }:
-  let devInputs = { inherit plugged chrome-exoskeleton; };
+  outputs = { self, nixpkgs, nix-darwin, home-manager, plugged, chrome-exoskeleton, run-log }:
+  let devInputs = { inherit plugged chrome-exoskeleton run-log; };
   in {
     darwinModules.default = ./darwin.nix;
     homeModules.default = ./home.nix;

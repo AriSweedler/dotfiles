@@ -95,7 +95,24 @@
         "home-manager": "home-manager",
         "nix-darwin": "nix-darwin",
         "nixpkgs": "nixpkgs",
-        "plugged": "plugged"
+        "plugged": "plugged",
+        "run-log": "run-log"
+      }
+    },
+    "run-log": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794370800,
+        "narHash": "sha256-Li9BIMXTtgdpOV3PVZqK7BgviN6UMe1clHvfLrJbiwc=",
+        "owner": "AriSweedler",
+        "repo": "run-log",
+        "rev": "c91ed3218cf9dc21ab3b7177015f00c815e3d353",
+        "type": "github"
+      },
+      "original": {
+        "owner": "AriSweedler",
+        "repo": "run-log",
+        "type": "github"
       }
     }
   },

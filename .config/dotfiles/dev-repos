@@ -7,6 +7,10 @@
 	path = .config/chrome-exoskeleton
 	url = https://github.com/AriSweedler/chrome-exoskeleton.git
 	input = chrome-exoskeleton
+[repo ".config/run-log"]
+	path = .config/run-log
+	url = https://github.com/AriSweedler/run-log.git
+	input = run-log
 [repo ".config/plugged"]
 	path = .config/plugged
 	url = https://github.com/AriSweedler/plugged.git

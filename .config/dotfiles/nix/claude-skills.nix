@@ -13,6 +13,7 @@ let
     { dir = "${src}/.config/claude/skills"; root = ".config/claude/skills"; }
     { dir = "${devInputs.chrome-exoskeleton}/skills"; root = ".config/chrome-exoskeleton/skills"; } # dev repos (../dev-repos)
     { dir = "${devInputs.plugged}/skills"; root = ".config/plugged/skills"; }
+    { dir = "${devInputs.run-log}/skills"; root = ".config/run-log/skills"; }
   ];
   skillsIn = { dir, ... }:
     lib.optionals (builtins.pathExists dir)

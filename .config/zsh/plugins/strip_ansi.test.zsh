@@ -1,4 +1,4 @@
-# Tests for ~/.config/bin/strip-ansi.
+# Tests for strip_ansi.zsh, and its wrapper ~/.config/bin/strip-ansi (the run-log dev repo's, placed by Nix).
 # Only runs when OTTO_TEST__ZSH_PLUGINS_STRIP_ANSI=true
 [[ "$OTTO_TEST__ZSH_PLUGINS_STRIP_ANSI" == "true" ]] || return 0
 
