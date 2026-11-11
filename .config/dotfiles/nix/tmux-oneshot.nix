@@ -1,7 +1,7 @@
 # tmux-oneshot's menu: one file, ~/.config/tmux_oneshot/entries.json, merged here by the module
 # system instead of by the script. The shared entries are the JSON lists under
 # .config/tmux_oneshot/ in the repo, in menu order (macos.json only on a Mac, linux.json only on
-# Linux). A local flake adds its own, or replaces a
+# Linux, desktop.json only on a machine with a desktop). A local flake adds its own, or replaces a
 # shared one by name:
 #
 #   programs.tmuxOneshot.entries.deploy = { cmd = "deploy-it"; menu.text = "…"; key = "ctrl-p"; };
@@ -20,7 +20,12 @@ let
         (builtins.readDir sharedDir)))));
   # A shared file named for a platform is read only there: macos.json holds Mac commands
   # (killall NotificationCenter, applepaste, Raycast links), which a Linux menu must not offer.
-  platformFiles = { "macos.json" = pkgs.stdenv.hostPlatform.isDarwin; "linux.json" = pkgs.stdenv.hostPlatform.isLinux; };
+  # desktop.json is for a machine with a desktop to open things on (programs.tmuxOneshot.desktop).
+  platformFiles = {
+    "macos.json" = pkgs.stdenv.hostPlatform.isDarwin;
+    "linux.json" = pkgs.stdenv.hostPlatform.isLinux;
+    "desktop.json" = cfg.desktop;
+  };
   forThisPlatform = n: platformFiles.${n} or true;
   nameOf = e: e.menu.name or e.cmd;
   # A list of entries as name → entry, each carrying its position from `base` on.
@@ -43,6 +48,11 @@ in
       type = lib.types.attrsOf lib.types.anything;
       default = { };
       description = "tmux-oneshot menu entries by name; a definition replaces a shared entry of the same name.";
+    };
+    desktop = lib.mkOption {
+      type = lib.types.bool;
+      default = pkgs.stdenv.hostPlatform.isDarwin;
+      description = "Whether this machine has a desktop (a browser, apps to open): desktop.json's entries are offered only then. A Mac has one; a Linux machine says so itself.";
     };
     files = lib.mkOption {
       type = lib.types.listOf lib.types.path;
