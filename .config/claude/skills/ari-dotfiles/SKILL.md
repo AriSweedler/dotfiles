@@ -37,7 +37,8 @@ flag or fix. State (`~/.local/state`) and cache (`~/.cache`) are never versioned
 1. Edit the file. Pick its tier with **Placement rules**. An existing shared file can be edited
    through `$HOME` or the clone, and the change is live at once. **A packaged bin
    (**Placement rules**) is the exception: edit the clone's file and run that file to try it;
-   `$HOME`'s copy changes only at the next `dotfiles switch`.**
+   `$HOME`'s copy changes only at the next `dotfiles switch`.** `run_log`, `run_log-capture.py`,
+   `irun` and `strip-ansi` are not the clone's files: edit them in the run-log dev repo (**Dev repos**).
    - **Create a new shared file at its clone path, `~/dotfiles/<path>`, NEVER at `~/<path>`.** A
      file created at `~/<path>` is not in the repo, and git cannot see it. A new clone file appears
      in `$HOME` only after it is committed and the next `dotfiles switch` runs, because the bridge
@@ -48,9 +49,12 @@ flag or fix. State (`~/.local/state`) and cache (`~/.cache`) are never versioned
      the dev repos.
 2. `git df add <abs path>` or `git ldf add <abs path>`. Give a new shared file its clone path:
    its `$HOME` path does not exist yet. Commit with a descriptive
-   message and the same paths after `--` (`git df commit -m "…" -- <abs paths>`),
-   since tools like `bake` stage files of their own. A path inside a dev repo
-   (`~/.config/chrome-exoskeleton/…`) is ignored by the shared repo, and `git df add` refuses it:
+   message and the same paths after `--` (`git df commit -m "…" -- <abs paths>`).
+   **In every repo these dotfiles touch (both tiers and each dev repo's checkout), NEVER
+   `git add -A`, `git add .` or `git commit -a`: stage and commit named paths only.** A driver, a
+   tool (`bake`) or another session may have files of its own there, staged or untracked, and a
+   sweeping add commits them before anyone approved them. A path inside a dev repo
+   (`~/.config/run-log/…`) is ignored by the shared repo, and `git df add` refuses it:
    follow **Dev repos** instead.
 3. Print `git df log --oneline -1` / `git ldf log --oneline -1` to confirm the tier.
 4. Shared: run **Review before push** (its first step skips it on the
@@ -59,7 +63,7 @@ flag or fix. State (`~/.local/state`) and cache (`~/.cache`) are never versioned
 5. Close with one message: what landed, the review verdicts (if it ran),
    the sweep's plan, and any history rewrite the review calls for, ending in one
    question that covers them all (none when nothing is pending). When the change touched a
-   Nix module, a packaged bin or `plugged`, or added a shared file outside a directory linked whole, say it
+   Nix module, a packaged bin, `plugged` or run-log, or added a shared file outside a directory linked whole, say it
    is live only after Ari runs `dotfiles switch`. End with "Run
    `dotfiles push` when ready." once every unpushed shared commit, including any
    the `yes` just made, has passed the review. On the personal laptop
@@ -76,8 +80,9 @@ git df add ~/.config/zsh/plugins/fzf.zsh && git df commit -m "fzf: preview files
 
 git ldf status
 git ldf add ~/.local/share/zsh/plugins/foo.zsh && git ldf commit -m "Add foo plugin" -- ~/.local/share/zsh/plugins/foo.zsh
-git ldf add -A        # safe: info/exclude is an allowlist of hand-written dirs
 git ldf push          # only when the tier has an origin
+
+git -C ~/.config/run-log add bin/irun && git -C ~/.config/run-log commit -m "irun: …" -- bin/irun   # a dev repo
 ```
 
 The harness spells the same two things without the aliases: `dotfiles git <args…>` runs git on
@@ -86,7 +91,9 @@ prints the tier's git dir (`ARI_DOTFILES_DF_GIT_DIR`; `~/dotfiles/.git` on a clo
 passes its arguments untouched, so it needs clone paths. Only `git df` maps `$HOME` paths.
 
 `~/.local/local-dotfiles.git/info/exclude` is the allowlist. Read it; do not
-restate it. `git ldf add -A` is safe because of it.
+restate it. It keeps tool data and caches out of the tier, not another session's files: it
+admits `share/claude-skills/`, where a skill-update driver's unapproved edits sit, so
+`git ldf add -A` is unsafe too.
 
 **When `git ldf status` fails:**
 - `git: 'ldf' is not a git command` → `~/.config/git/config` lacks the alias, which
@@ -205,10 +212,12 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
 - **A packaged bin is placed from the store at its old path, so an edit to the clone's file
   reaches `$HOME` only after a commit and a `dotfiles switch`.** `~/.config/dotfiles/nix/ari-bins.nix`
   lists them: the `dotfiles` CLI (its `lib/`, `cmd/` and `steps/` too, though their `$HOME` links
-  resolve into the clone), `run_log` and its helpers, the git helpers (`git-dotfiles`
-  included), `notes` and the Mac utilities. Test: `readlink -f` of its `$HOME` path (e.g.
+  resolve into the clone), the git helpers (`git-dotfiles` included), `notes` and the Mac
+  utilities. Test: `readlink -f` of its `$HOME` path (e.g.
   `~/.config/bin/<name>`) ends in `/nix/store`. To try an edit before the switch, run the clone's
   file by path: `~/dotfiles/.config/bin/<name>`. The package recipes are `/ari-dotfiles-nix`'s.
+  The same list places run-log's four bins at `~/.config/bin`, built from the run-log dev repo
+  (**Dev repos**), so their edit reaches `$HOME` after a commit in its checkout and a `dotfiles switch`.
 - **Every other shared file in `$HOME` is an out-of-store link into `~/dotfiles`,** made by the
   bridge (`~/.config/dotfiles/nix/bridge.nix`): `readlink -f` ends in the clone. Edit it in
   place, as below.
@@ -318,7 +327,8 @@ table edit changed.
 Some `~/.config` directories are *dev repos*: Ari's own public repos, each a plain git clone at
 `~/dotfiles/.config/<name>`, linked whole to `~/.config/<name>` and ignored by the shared repo.
 `~/dotfiles/.config/dotfiles/dev-repos` lists them. Today: `.config/chrome-exoskeleton`
-(upstream `github.com/AriSweedler/chrome-exoskeleton`; `/ari-dotfile--submodule-chrome-exoskeleton`)
+(upstream `github.com/AriSweedler/chrome-exoskeleton`; `/ari-dotfile--submodule-chrome-exoskeleton`),
+`.config/run-log` (upstream `github.com/AriSweedler/run-log`; `/ari-dotfile--submodule-run-log`)
 and `.config/plugged` (upstream `github.com/AriSweedler/plugged`; `/ari-dotfile--submodule-plugged`).
 The shared flake takes each as a github input (`flake = false`), and
 `~/dotfiles/.config/dotfiles/nix/flake.lock` locks the commit every other machine builds;
@@ -335,8 +345,8 @@ One dotfiles change; never stop after the first commit.
    Committed while detached → `git -C ~/<path> branch -f main HEAD`, only if
    `git -C ~/<path> merge-base --is-ancestor main HEAD` succeeds; else show
    `git -C ~/<path> log --oneline --graph main...HEAD` and ask which history to keep.
-2. **Commit in the dev repo** on `main`, explicit paths:
-   `git -C ~/<path> add <files> && git -C ~/<path> commit -m "…"`. Its hooks
+2. **Commit in the dev repo** on `main`, named paths only (Workflow step 2's NEVER holds here too):
+   `git -C ~/<path> add <paths> && git -C ~/<path> commit -m "…" -- <paths>`. Its hooks
    and commit conventions apply, not the tier's.
 3. **Its push, and the lock bump, are Ari's**: run **Review before push** on the
    dev repo's unpushed commits and end with "Run `dotfiles push` when ready."
@@ -381,9 +391,11 @@ the next `dotfiles push`, or the checkout is behind a pulled lock); `-` = not cl
 - **Nvim**: `~/.config/nvim/`, lazy.nvim specs in `lua/plugins/`, `lazy = true` by default
 - **Claude skills**: `~/.config/claude/skills/<name>/`, symlinked from `~/.claude/skills/<name>`
 - **Dev repos**: listed in `~/dotfiles/.config/dotfiles/dev-repos`; today `~/.config/chrome-exoskeleton/`
-  (with `~/.config/bin/exo`) and `~/.config/plugged/` (its `plugged` binary is a Nix package) — see
+  (with `~/.config/bin/exo`), `~/.config/run-log/` (its four bins are placed at `~/.config/bin`) and
+  `~/.config/plugged/` (its `plugged` binary is a Nix package) — see
   **Dev repos**, `/ari-dotfile--submodule` (layout, creating one),
-  `/ari-dotfile--submodule-chrome-exoskeleton` and `/ari-dotfile--submodule-plugged`
+  `/ari-dotfile--submodule-chrome-exoskeleton`, `/ari-dotfile--submodule-run-log` and
+  `/ari-dotfile--submodule-plugged`
 - **Jobs framework**: `~/.config/dotfiles/lib/jobs.zsh`; shared plugins in `~/.config/dotfiles/jobs/`
   (README = the plugin contract) — see **Cutpoints**
 - **Nix flake**: `~/.config/dotfiles/nix/` (`flake.nix`, `darwin.nix`, `home.nix`), the shared
@@ -464,7 +476,8 @@ To back the local tier up, give it a remote. On the personal laptop Ari chose no
 
 ```zsh
 git ldf remote add origin <this machine's private repo>
-git ldf add -A && git ldf commit -m "local dotfiles: initial snapshot" && git ldf push -u origin main
+git ldf status --short   # name each listed path that is the tier's own, never -A
+git ldf add <paths> && git ldf commit -m "local dotfiles: initial snapshot" -- <paths> && git ldf push -u origin main
 ```
 
 Keep `local-dotfiles-exclude` in sync with `~/.local/local-dotfiles.git/info/exclude` when the
