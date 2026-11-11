@@ -4,25 +4,61 @@
 #
 # Skills are versioned in the dotfiles, one real directory per tier root, and
 # ${HOME}/.claude/skills/<name> is a symlink into whichever tier owns the skill.
-# A tier's git submodules add roots too: every submodule's top-level skills/
-# directory holds skills that travel with that submodule (committed in its own
-# repo, owned by the tier that holds the submodule).
+# Ari's own repos checked out inside a tier add roots too: each one's top-level
+# skills/ directory holds skills that travel with that repo, committed in its own
+# repo. The shared tier names them in its dev-repos manifest (plain clones the
+# shared repo ignores); a tier may still name them in a .gitmodules. Either way
+# this file and its callers call them submodules (`source=submodule:<path>`).
 
 [[ -n "${_ARI_SKILL_REGISTRY_ZSH:-}" ]] && return 0
 readonly _ARI_SKILL_REGISTRY_ZSH=1
+
+#######################################
+# Set $REPLY to the shared tier's worktree, in the dotfiles CLI's order
+# (lib/env.zsh): ARI_DOTFILES_DF_WORK_TREE when set; else the parent of
+# ARI_DOTFILES_DF_GIT_DIR when that is a clone's .git, HOME when it is a bare
+# repo; else the ~/dotfiles clone when it has a .git (the Nix port); else HOME
+# (the bare repo ~/dotfiles.git). No trailing slash. No subshell.
+#######################################
+shared_worktree_reply() {
+  if [[ -n "${ARI_DOTFILES_DF_WORK_TREE:-}" ]]; then
+    REPLY="${ARI_DOTFILES_DF_WORK_TREE%/}"
+    return 0
+  fi
+  if [[ -n "${ARI_DOTFILES_DF_GIT_DIR:-}" ]]; then
+    REPLY="${HOME}"
+    [[ "${${ARI_DOTFILES_DF_GIT_DIR%/}:t}" == .git ]] && REPLY="${${ARI_DOTFILES_DF_GIT_DIR%/}:h}"
+    return 0
+  fi
+  if [[ -e "${HOME}/dotfiles/.git" ]]; then
+    REPLY="${HOME}/dotfiles"
+    return 0
+  fi
+  REPLY="${HOME}"
+}
 
 # Callers define SKILLS_DIR before sourcing logging; this only fills it for a bare source.
 : "${SKILLS_DIR:=${HOME}/.claude/skills}"
 readonly IGNORE_FILE="${SKILLS_DIR}/.gitignore"
 readonly TIERS=(df ldf)
+shared_worktree_reply
+# Each tier root sits under its worktree (callers take the root's path relative to
+# it): on the Nix port the shared root is the real directory in the clone, which
+# ~/.config/claude links to.
 readonly -A TIER_ROOTS=(
-  df  "${HOME}/.config/claude/skills"
+  df  "${REPLY}/.config/claude/skills"
   ldf "${HOME}/.local/share/claude-skills"
 )
-# Each tier's worktree: where its .gitmodules lives and submodule paths resolve.
+# Each tier's worktree: where its manifests live and submodule paths resolve.
 readonly -A TIER_WORKTREES=(
-  df  "${HOME}"
+  df  "${REPLY}"
   ldf "${HOME}/.local"
+)
+# Each tier's dev-repos manifest (git's ini form: `[repo "<path>"]` blocks with a
+# `path =`), the dotfiles CLI's DEV_REPOS; empty for a tier that has none.
+readonly -A TIER_DEV_REPOS=(
+  df  "${ARI_DOTFILES_DEV_REPOS:-${REPLY}/.config/dotfiles/dev-repos}"
+  ldf ""
 )
 
 #######################################
@@ -46,22 +82,50 @@ tier_root() {
 }
 
 #######################################
-# Print the skills root of every submodule the tier tracks, one per line: for
-# each path in the tier worktree's .gitmodules, <worktree>/<path>/skills when
-# that directory exists. Nothing when the tier has no .gitmodules.
+# Print every `path` value one ini file declares under the given section kind,
+# one per line; nothing when the file is absent. A file git cannot parse prints
+# nothing and logs a warning: its repos' skills would otherwise read as foreign.
+# Arguments:
+#   $1 - ini file (a dev-repos manifest or a .gitmodules)
+#   $2 - section kind (`repo` or `submodule`)
+#######################################
+ini_paths() {
+  local file="${1}" kind="${2}"
+  [[ -n "${file}" && -f "${file}" ]] || return 0
+  local out exit_code=0
+  out="$(git config -f "${file}" --get-regexp "^${kind}\\..*\\.path\$" 2>&1)" || exit_code=$?
+  # git config exits 1 when nothing matches: a file with no such section, not a broken one.
+  if (( exit_code > 1 )); then
+    log::warn "unreadable submodule manifest; its skills are not counted | file='${file}' exit_code='${exit_code}' error='${out%%$'\n'*}'"
+    return 0
+  fi
+  local line
+  for line in "${(@f)out}"; do
+    [[ "${line}" == *' '?* ]] && echo "${line#* }"
+  done
+  return 0
+}
+
+#######################################
+# Print the skills root of every submodule the tier tracks, one per line and
+# each once: for each path in the tier's dev-repos manifest, then in its
+# worktree's .gitmodules, <worktree>/<path>/skills when that directory exists.
+# Nothing when the tier has neither file.
 # Arguments:
 #   $1 - tier
 #######################################
 submodule_skill_roots() {
   local tier="${1}"
   local worktree="${TIER_WORKTREES[${tier}]}"
-  local modules="${worktree}/.gitmodules"
-  [[ -f "${modules}" ]] || return 0
-  local key sub_path
-  while read -r key sub_path; do
-    [[ -n "${sub_path}" ]] || continue
+  local -aU sub_paths=(
+    "${(@f)$(ini_paths "${TIER_DEV_REPOS[${tier}]}" repo)}"
+    "${(@f)$(ini_paths "${worktree}/.gitmodules" submodule)}"
+  )
+  sub_paths=("${(@)sub_paths:#}")
+  local sub_path
+  for sub_path in "${sub_paths[@]}"; do
     [[ -d "${worktree}/${sub_path}/skills" ]] && echo "${worktree}/${sub_path}/skills"
-  done < <(git config -f "${modules}" --get-regexp '^submodule\..*\.path$' 2>/dev/null)
+  done
   return 0
 }
 
@@ -339,7 +403,7 @@ list_all_skills() {
 
 #######################################
 # Fill the roots cache in the sourcing process, so every $(...) subshell the
-# scripts open inherits it instead of re-reading .gitmodules.
+# scripts open inherits it instead of re-reading the manifests.
 #######################################
 warm_skill_roots() {
   local tier

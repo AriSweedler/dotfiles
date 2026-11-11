@@ -6,16 +6,16 @@ description: Claude skills are versioned in Ari's dotfiles. Link tier-held skill
 # Dotfiles Skill Registry
 
 The dotfiles are the registry. Each skill is one real directory in the tier that
-owns it, and `~/.claude/skills/<name>` is a symlink to it. Editing through either
-path edits the same files; committing through the tier publishes. There is no
-copy step, no drift check against a remote, and no push here (pushing follows
-`/ari-dotfiles`).
+owns it, and `~/.claude/skills/<name>` is a symlink to it (on a Nix machine,
+home-manager's link through the store). Editing through either path edits the
+same files; committing through the tier publishes. There is no copy step, no
+drift check against a remote, and no push here (pushing follows `/ari-dotfiles`).
 
 | Tier | Root | Holds |
 |---|---|---|
-| Shared (`git df`) | `~/.config/claude/skills/` | Skills correct on every machine |
+| Shared (`git df`) | `~/.config/claude/skills/` (real dir `~/dotfiles/.config/claude/skills/` on a Nix machine) | Skills correct on every machine |
 | Local (`git ldf`) | `~/.local/share/claude-skills/` | Work- or machine-specific skills |
-| Either, via a submodule | `<submodule>/skills/` for every path in the tier's `.gitmodules` (e.g. `~/.config/chrome-exoskeleton/skills/`) | Skills that travel with that repo; committed there, not with `git df`/`git ldf` |
+| Either, via a dev repo | `<repo>/skills/` for every `path` in the shared tier's dev-repos manifest (`~/dotfiles/.config/dotfiles/dev-repos`), and in a tier worktree's `.gitmodules` where one remains (e.g. `~/.config/chrome-exoskeleton/skills/`) | Skills that travel with that repo; committed there, not with `git df`/`git ldf` |
 
 `~/.local/share/claude/` is Claude Code's own install dir, which is why the local
 root is a sibling, not a child, of it.
@@ -25,15 +25,16 @@ root is a sibling, not a child, of it.
 - **Pick the tier with `/ari-dotfiles` Placement rules.** Generic → df, company-specific → ldf.
 - **`adopt` stages; you commit.** One skill per commit, message says why it moved.
   A rename (`--as`) also fixes the `name:` frontmatter and every caller
-  (`rg -n '<old>' $HOME/.claude/skills`) in that same commit.
-- **Never move a skill between tiers with `adopt`.** Follow the Moving-between-tiers
-  recipe in `/ari-dotfiles`, then run `link`.
+  (`rg -L -n '<old>' $HOME/.claude/skills`: `-L`, since each skill there is a link) in that same commit.
+- **Never move a skill between tiers with `adopt`.** Follow `/ari-dotfiles` § Moving
+  a file between tiers, then run `link`.
 - **Shared libraries resolve through `$HOME/.claude/skills/`**, never through a
   relative hop from the script's own directory: skills sit in different tiers.
-- **Submodule skills are committed in the submodule.** `status` marks them
-  `source=submodule:<path>`; `link` symlinks them like any tier skill. `adopt`
-  never targets a submodule: create the skill under `<submodule>/skills/<name>/`,
-  commit it there and finish per `/ari-dotfiles` § Submodules, then run `link`.
+- **Dev-repo skills are committed in the dev repo.** `status` marks them
+  `source=submodule:<path>` ("submodule" is the output's word for a dev repo);
+  `link` symlinks them like any tier skill. `adopt` never targets a dev repo:
+  create the skill under `<repo>/skills/<name>/`, commit it there and finish per
+  `/ari-dotfiles` § Dev repos, then link it (**Link on a machine**).
 - **Third-party skills stay put.** `~/.claude/skills/.gitignore` lists them; `status`
   reports them as `ignored`. Naming one explicitly to `adopt` is the override. A directory
   with no `SKILL.md` (Claude Code's `synced/` bucket) is not a skill: `status` reports it
@@ -48,16 +49,18 @@ zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/status
 ```
 
 Prints one `state=… tier=… name=…` line per actionable skill (`--all` includes
-healthy rows; `ignored` rows add `reason=gitignore|no-skill-md`; rows held by a
-submodule add `source=submodule:<path>`). Act per state:
+healthy rows; `ignored` rows add `reason=gitignore|no-skill-md`; `linked` and
+`missing` rows held by a dev repo add `source=submodule:<path>`, `<path>` relative to
+the tier's worktree, e.g. `.config/plugged` for `~/dotfiles/.config/plugged` on a
+Nix machine). Act per state:
 
 | State | Meaning | Fix |
 |---|---|---|
 | `unlinked` | real dir, no tier holds it | `adopt` |
-| `missing` | tier holds it, no symlink | `link` |
+| `missing` | tier holds it, no symlink | `link`, or on a Nix machine `dotfiles switch` (**Link on a machine**) |
 | `dangling` | symlink target gone | `link --prune` |
 | `shadowed` | real dir hides a tier copy | diff them, keep one, `link` |
-| `conflict` | both tiers hold it | remove one via its tier's git, `link` |
+| `conflict` | two roots hold it (`tier=df,ldf`; `tier=df,df` is the tier root and a dev repo) | remove one copy through the git that holds it (tier or dev repo), `link` |
 | `foreign` | symlink outside every tier | inspect; `rm` the link or adopt its target |
 
 ### Adopt a skill
@@ -90,12 +93,21 @@ zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link --execute
 Preview, then act (dry-run convention above). Idempotent. Creates a symlink for every `missing` skill and touches nothing else;
 `--prune` also removes `dangling` links. `dotfiles init` runs it as the
 `claude_skills` step (`new-machine check --only claude_skills` reports; `apply` links),
-so on a new machine it happens with the rest of the bootstrap. Run it by hand after
-pulling shared dotfiles that added a skill.
+so on a new machine it happens with the rest of the bootstrap.
+
+Who makes which link:
+
+- **A Nix machine (`~/dotfiles/.git` exists): home-manager owns every shared-tier
+  and dev-repo link** (`nix/claude-skills.nix`). A `missing` one is fixed by
+  `git add` (in the tier, or the dev repo) and `dotfiles switch` (`/ari-dotfiles-nix`),
+  never by `link`: the switch's `claudeSkillsAdopt` removes a link `link` made.
+- **`link` makes the rest:** local-tier links on every machine, and every link on a
+  machine without the Nix port. Run it there after pulling dotfiles that added a skill.
 
 ## File storage
 
 - `bin/status` — read-only classification
 - `bin/link` — (dry run unless `--execute`) create missing symlinks, prune dangling ones
 - `bin/adopt` — (dry run unless `--execute`) move + link + stage one or more skills into a tier
-- `lib/registry.zsh` — tier roots (plus every submodule's `skills/`) and `skill_state`, shared by the three scripts
+- `lib/registry.zsh` — tier roots (plus every dev repo's `skills/`, from the dev-repos manifest and any `.gitmodules`) and `skill_state`, shared by the three scripts
+- `tests/registry.test.zsh` — dev-repo roots in throwaway HOMEs: `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/tests/registry.test.zsh`
