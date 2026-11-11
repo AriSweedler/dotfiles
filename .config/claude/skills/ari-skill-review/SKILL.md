@@ -11,6 +11,7 @@ Dispatch expert reviewers against a skill. Challenge their findings, deduplicate
 
 - **Reviewers MUST NOT change the skill's purpose.** Route any finding that does to `spec-questions.md` for the user.
 - **Reviewers read; they NEVER write outside the skill directory or the review folder.** Editing is out, and so is running any mode of the reviewed skill's scripts that writes elsewhere: the clipboard, a tmux pane, a remote host, a repo, a calendar. Probing is read-only (`--help`, `--print`, a dry run); a mode with no read-only form is reported as untested, never run. Every brief this skill dispatches carries this rule, the edge-case reviewer's included.
+- **Every reviewer runs on Opus, never on Fable.** Each Agent call this skill makes, a re-dispatch included, MUST pass `model: "opus"`: an Agent call without `model` inherits the caller's model, Fable included. NEVER fork a reviewer: a fork ignores `model` and runs on the parent's. A thread that cannot spawn on Opus runs the panel inline (**Dispatch reviewers**), never on another model.
 - **In a subagent, NEVER Write `findings.md`; the ranked list goes in your output.** The harness refuses a subagent's Write to `findings.md` in any directory ("Subagents should return findings as text"). A Write refused with that text means you are in a subagent: NEVER retry it through a Bash redirect or a renamed file; switch to the subagent row of **Run modes**.
 - **Write like Kernighan & Ritchie:** terse, precise, complete.
 
@@ -68,7 +69,13 @@ zsh $HOME/.claude/skills/ari-skill-review/bin/setup.zsh --skill <skill-name>
 
 ### Dispatch reviewers
 
-Launch one agent per entry in **Reviewer panel**, all **in parallel**, with the Agent tool and this prompt; say `dispatched <n>`:
+Launch one agent per entry in **Reviewer panel**, all **in parallel**, with the Agent tool, `model: "opus"` on every call, and this prompt; say `dispatched <n>`:
+
+```
+GOOD: Agent({description: "review clarity", model: "opus", prompt: "<the prompt below, filled in>"})
+BAD:  Agent({description: "review clarity", prompt: …})                        ← no model: inherits the caller's, Fable included
+BAD:  Agent({subagent_type: "fork", model: "opus", prompt: …})                ← a fork ignores model
+```
 
 > You are reviewing a Claude Code skill as a {role} expert. Its purpose, verbatim: "{purpose}". Do NOT suggest changes to this purpose; list any problem with the purpose itself under a final `## Spec questions` heading, never among your recommendations.
 >
@@ -78,9 +85,9 @@ Launch one agent per entry in **Reviewer panel**, all **in parallel**, with the 
 >
 > Return specific, actionable recommendations, most important first, each as `## n. {title}`, `**Problem:**`, `**Fix:**`. Write them to {investigation_folder}/{stem}.md, which already exists (write it directly; no `mkdir` or `touch`), and return the same list as your final reply.
 
-No Agent tool: run each entry yourself in panel order, writing its `{stem}.md` before starting the next, and report `reviewers: inline`; cross-reviewer agreement then carries no weight.
+No Agent tool, or no Opus spawn (the Agent tool takes no `model`, or refuses `opus`): run each entry yourself in panel order, writing its `{stem}.md` before starting the next, and report `reviewers: inline`; cross-reviewer agreement then carries no weight.
 
-Read every `{stem}.md`. An empty one falls back to that agent's reply; both empty → re-dispatch it once, then list `{stem}: no output` and count it in `reviewers: <n>/<N> returned`.
+Read every `{stem}.md`. An empty one falls back to that agent's reply; both empty → re-dispatch it once, `model: "opus"` again, then list `{stem}: no output` and count it in `reviewers: <n>/<N> returned`.
 
 ### Challenge and deduplicate
 
