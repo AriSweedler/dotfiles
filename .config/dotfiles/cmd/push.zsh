@@ -64,7 +64,7 @@ load_token() {
 # keeps its origin as is. Returns 1 with the reason logged.
 #######################################
 push_target() {
-  local repo="${1}" remote_url fix="git -C ~/${1} switch main   (/ari-dotfiles § Submodules step 1)"
+  local repo="${1}" remote_url fix="git -C ~/${1} switch main   (/ari-dotfiles § Dev repos step 1)"
   [[ -z "${TIER_ALIAS[${repo}]:-}" ]] || fix="git ${TIER_ALIAS[${repo}]} switch main"
   branch="$(repo_git "${repo}" branch --show-current 2>/dev/null || true)"
   if [[ -z "${branch}" ]]; then log::err "Detached HEAD: nothing to push | repo='${repo}' fix='${fix}'"; return 1; fi
@@ -233,7 +233,7 @@ bump_pointer() {
   locked="$(jq -r --arg i "${input}" '.nodes[$i].locked.rev // empty' "${SHARED_FLAKE_LOCK}" 2>/dev/null)"
   if [[ "${locked}" != "${head}" ]]; then
     repo_git shared checkout -q -- "${lock_rel}" 2>/dev/null || true
-    log::err "lock update did not land on the pushed HEAD | repo='${repo}' input='${input}' locked='${locked:0:7}' head='${head:0:7}' fix='dotfiles pull, then dotfiles push'"
+    log::err "lock update did not land on the pushed HEAD | repo='${repo}' input='${input}' locked='${locked:0:7}' head='${head:0:7}' fix='git -C ~/${repo} pull --ff-only (origin/main moved past it; dotfiles pull does not move a dev repo), then dotfiles push'"
     push::record "${repo:t} pointer" failed "${head}"; return 1
   fi
   # `commit -- <path>` records this path alone; anything else staged in the shared tier stays staged.
