@@ -8,7 +8,7 @@ description: Edit and commit Ari's two-tier dotfiles — shared (`git df`, ~/.co
 Ari's dotfiles are two git repos, one per tier: a plain clone for the shared tier, a bare repo
 for the local one. Pick the tier by whether
 the content should be identical on every machine or belongs to this one. The
-shared tier and its dev repos are public; no push is recommended until each unpushed commit passes **Review before
+shared tier, its dev repos and its mirrors are public; no push is recommended until each unpushed commit passes **Review before
 push**, except on the personal laptop, where a commit is ready to push as soon as it lands.
 
 | Tier | Alias | Repo | Worktree | Holds | Remote |
@@ -37,8 +37,9 @@ flag or fix. State (`~/.local/state`) and cache (`~/.cache`) are never versioned
 1. Edit the file. Pick its tier with **Placement rules**. An existing shared file can be edited
    through `$HOME` or the clone, and the change is live at once. **A packaged bin
    (**Placement rules**) is the exception: edit the clone's file and run that file to try it;
-   `$HOME`'s copy changes only at the next `dotfiles switch`.** `run_log`, `run_log-capture.py`,
-   `irun` and `strip-ansi` are not the clone's files: edit them in the run-log dev repo (**Dev repos**).
+   `$HOME`'s copy changes only at the next `dotfiles switch`.** A bin built from a dev repo
+   (run-log's four, `tmux-oneshot`) is not the clone's file: edit it in that dev repo (**Dev
+   repos**). A mirror's files are the reverse: edit them only at their dotfiles source.
    - **Create a new shared file at its clone path, `~/dotfiles/<path>`, NEVER at `~/<path>`.** A
      file created at `~/<path>` is not in the repo, and git cannot see it. A new clone file appears
      in `$HOME` only after it is committed and the next `dotfiles switch` runs, because the bridge
@@ -63,8 +64,9 @@ flag or fix. State (`~/.local/state`) and cache (`~/.cache`) are never versioned
 5. Close with one message: what landed, the review verdicts (if it ran),
    the sweep's plan, and any history rewrite the review calls for, ending in one
    question that covers them all (none when nothing is pending). When the change touched a
-   Nix module, a packaged bin, `plugged` or run-log, or added a shared file outside a directory linked whole, say it
-   is live only after Ari runs `dotfiles switch`. End with "Run
+   Nix module, a packaged bin (dev-repo bins included) or `plugged`, or added a shared file outside a directory linked whole, say it
+   is live only after Ari runs `dotfiles switch`; when it touched a path in a `[mirror]`'s
+   `watch` list, say the next `dotfiles push` also exports and publishes that mirror. End with "Run
    `dotfiles push` when ready." once every unpushed shared commit, including any
    the `yes` just made, has passed the review. On the personal laptop
    (`dotfiles machine-name` prints `personal`), end with it as soon as the commit lands.
@@ -114,15 +116,21 @@ cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
 ## Pushing
 
 - **Shared: NEVER `git df push` and NEVER run `dotfiles push`.** Ari runs it
-  (denied to Claude in settings). It pushes every dev repo first, in parallel;
-  for each published one it runs `nix flake update <input>` and commits the
+  (denied to Claude in settings). It first exports each mirror (**Dev repos**):
+  when a path in the mirror's manifest `watch` list changed since its last
+  export, it builds the mirror's package from the shared HEAD and commits it in
+  the checkout as `<dir>: mirror dotfiles <sha7>` (`/ari-dotfile--submodule` § Mirrors).
+  It then pushes every dev repo and mirror, in parallel; for each published dev
+  repo (a mirror has no lock) it runs `nix flake update <input>` and commits the
   shared tier's `flake.lock` alone (`<name>: bump to <sha> (<subject>)`); then
   it pushes the shared repo, all as the personal account by token (no key
   swap), and the local tier alongside to its own remote, when it has one, with
   the ssh agent's key (its pre-push hook included). A repo already at its
   `origin/main` is skipped silently (the `submodules done` line counts the dev
-  repos checked, pushed and bumped). A failed dev repo or a refused bump
-  blocks the shared push; nothing else blocks anything.
+  repos checked, pushed and bumped). **A failed dev repo or mirror push, or a
+  refused bump, skips the shared push (`skipped (a submodule failed)`); an export
+  that fails (any `mirror not exported` line) skips nothing, but the run still
+  exits non-zero (`push failed`; after an empty `--edit` plan, with no further line).**
   Each repo's output lands in `~/.local/state/dotfiles/push/<repo>.log`
   (`shared`, `local`, or the dev repo's path; `.log.bak.1` … `.log.bak.5` = the five runs before).
   After committing, run **Review before push** and end with "Run `dotfiles push`
@@ -142,15 +150,20 @@ Check first:
 ```
 
 `skip` → dispatch no reviewer: the commit is ready, so end with "Run `dotfiles
-push` when ready." as soon as it lands. `review` → each unpushed shared-tier or
-dev repo commit becomes public on Ari's push, so review every one for content
+push` when ready." as soon as it lands. `review` → each unpushed shared-tier,
+dev repo or mirror commit becomes public on Ari's push, so review every one for content
 that identifies the employer, using the identifying-content list in
 `/ari-skill-update` § Rules:
 
 ```zsh
-git df log --reverse --format=%h origin/main..main            # shared tier
-git -C ~/<path> log --reverse --format=%h origin/main..main   # each dev repo `dotfiles status` lists
+git df log --reverse --format=%h origin/main..main                     # shared tier
+git -C ~/<path> log --reverse --format=%h origin/main..main            # each dev repo `dotfiles status` lists
+git -C ~/dotfiles/<path> log --reverse --format=%h origin/main..main   # each [mirror] in dev-repos (status omits them)
 ```
+
+A mirror's `<dir>: mirror dotfiles <sha7>` commit, the push's own export included, passes when
+the shared commits it copies passed. When the commits touch a mirror's `watch` path or its
+checkout, the mirror preflight (`/ari-dotfile--submodule` § Verify a mirror) must pass too.
 
 For each commit, dispatch a fresh reviewer with the Agent tool, one per commit.
 Give it `git df show <sha>` (or `git -C ~/<path> show <sha>`), the full text of
@@ -167,8 +180,10 @@ exact rewrite and what each rewritten commit will hold, and ask once.
 
 ### When `dotfiles push` fails
 
-It stops at the first failing repo, names it, and pushes nothing after it.
-Read the log, then act; you may run these two (read-only) yourself:
+It pushes every repo it can, then ends in `push failed` and, on a terminal, a table of each
+repo's result; what skips the shared push is under **Pushing**. Read the log, then act. "Push
+again" below means: close per Workflow step 5, through **Review before push** when the fix
+committed anything. Both commands are read-only; run them yourself:
 
 ```zsh
 dotfiles status                                   # tiers, dev repos against the lock, each repo's last push line
@@ -183,6 +198,7 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
 | `! [rejected]` (fetch first / non-fast-forward), or `Remote ref does not match after push` | the remote moved | shared: `dotfiles pull`; dev repo: `git -C ~/<path> pull --rebase origin main`, re-run its checks, push again |
 | `lock update failed`, `lock update did not land on the pushed HEAD`, `pointer bump refused` | the `flake.lock` bump after a dev repo's push failed | the nix or hook output above the line; for the second, `dotfiles pull`, then push again |
 | `pointer not bumped: checkout is not ahead of the lock` (a warning; the push goes on) | the dev repo's checkout is behind or off the locked commit | `git -C ~/<path> pull --ff-only origin main` (`/ari-dotfile--submodule` § When it fails), or **Dev repos** step 1 if it is detached; the next push bumps it |
+| `mirror not exported: …`, on Ari's terminal only (no push log holds it) | the export failed: the package did not build, the checkout `~/dotfiles/<path>` is not on `main`, its `<dir>/` has uncommitted changes, or the copy or commit failed | ask Ari for the line; its row in `/ari-dotfile--submodule` § When it fails (never a bare `switch main`; save a `<dir>/` edit before the `restore`/`clean` its `fix=` names), then push again |
 | `slow step` | a step took longer than `ARI_DOTFILES_SLOW_STEP` (0.5s; pull's own fetch is allowed 5s) | read the step name; `dotfiles --timing <cmd>` times every step |
 | `submodule not checked out` | a dev repo was never cloned here | `dotfiles apply dotfiles_repo` clones it (the log's `dotfiles init` does too) |
 | `No such remote`, `Remote is not on github.com` | a rewired or broken checkout | `dotfiles status`, then **Dev repos** |
@@ -216,8 +232,9 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
   utilities. Test: `readlink -f` of its `$HOME` path (e.g.
   `~/.config/bin/<name>`) ends in `/nix/store`. To try an edit before the switch, run the clone's
   file by path: `~/dotfiles/.config/bin/<name>`. The package recipes are `/ari-dotfiles-nix`'s.
-  The same list places run-log's four bins at `~/.config/bin`, built from the run-log dev repo
-  (**Dev repos**), so their edit reaches `$HOME` after a commit in its checkout and a `dotfiles switch`.
+  The same list places run-log's four bins and `tmux-oneshot` at `~/.config/bin`, built from
+  their dev repos (**Dev repos**); try an edit by running the checkout's file,
+  `~/dotfiles/.config/<repo>/bin/<name>`.
 - **Every other shared file in `$HOME` is an out-of-store link into `~/dotfiles`,** made by the
   bridge (`~/.config/dotfiles/nix/bridge.nix`): `readlink -f` ends in the clone. Edit it in
   place, as below.
@@ -328,13 +345,22 @@ Some `~/.config` directories are *dev repos*: Ari's own public repos, each a pla
 `~/dotfiles/.config/<name>`, linked whole to `~/.config/<name>` and ignored by the shared repo.
 `~/dotfiles/.config/dotfiles/dev-repos` lists them. Today: `.config/chrome-exoskeleton`
 (upstream `github.com/AriSweedler/chrome-exoskeleton`; `/ari-dotfile--submodule-chrome-exoskeleton`),
-`.config/run-log` (upstream `github.com/AriSweedler/run-log`; `/ari-dotfile--submodule-run-log`)
-and `.config/plugged` (upstream `github.com/AriSweedler/plugged`; `/ari-dotfile--submodule-plugged`).
+`.config/run-log` (upstream `github.com/AriSweedler/run-log`; `/ari-dotfile--submodule-run-log`),
+`.config/plugged` (upstream `github.com/AriSweedler/plugged`; `/ari-dotfile--submodule-plugged`)
+and `.config/tmux-oneshot` (upstream `github.com/AriSweedler/tmux-oneshot`; `/ari-dotfile--submodule-tmux-oneshot`,
+in the repo's `skills/` until a commit there and a `dotfiles switch` link it).
 The shared flake takes each as a github input (`flake = false`), and
 `~/dotfiles/.config/dotfiles/nix/flake.lock` locks the commit every other machine builds;
 `dotfiles switch` builds each from its checkout's `HEAD` here. There is no `.gitmodules` and no
 `git df submodule …`. Flags, log lines and healthcheck codes still say *submodule* and mean a dev
-repo. The layout, a new one, `dotfiles pull` and every refusal: `/ari-dotfile--submodule`.
+repo, and the *submodule* flags and counts cover mirrors too. The layout, a new one, `dotfiles pull`
+and every refusal: `/ari-dotfile--submodule`.
+
+The manifest also lists *mirrors* (`[mirror]`; today ari-zshlib): public repos whose `<dir>`
+(`lib`) `dotfiles push` exports from a shared-flake package (**Pushing**). A mirror is not
+linked into `$HOME`: address its checkout as `~/dotfiles/<path>` (`~/dotfiles/.config/ari-zshlib`),
+never `~/<path>`. **NEVER edit a file under its `<dir>` in the checkout; edit its dotfiles source.**
+Mirrors: `/ari-dotfile--submodule` § Mirrors.
 
 ### Changing something inside a dev repo
 
@@ -349,10 +375,11 @@ One dotfiles change; never stop after the first commit.
    `git -C ~/<path> add <paths> && git -C ~/<path> commit -m "…" -- <paths>`. Its hooks
    and commit conventions apply, not the tier's.
 3. **Its push, and the lock bump, are Ari's**: run **Review before push** on the
-   dev repo's unpushed commits and end with "Run `dotfiles push` when ready."
+   dev repo's unpushed commits, **and on every unpushed shared commit, even for
+   `--submodules`: a mirror export publishes from the shared HEAD**, and end with "Run `dotfiles push` when ready."
    only when it passes (on the personal laptop, as soon as the commit lands). That pushes the
    dev repo, commits the `flake.lock` bump (**Pushing**) and pushes the shared tier with it.
-   `dotfiles push --submodules` pushes the dev repos alone and still
+   `dotfiles push --submodules` exports the mirrors, pushes the dev repos and mirrors alone and still
    commits the bump; `--shared`, `--local` and `--no-<part>` narrow the scope the same way.
    Claude is denied the command. Afterwards, **Verify**.
 
@@ -391,11 +418,12 @@ the next `dotfiles push`, or the checkout is behind a pulled lock); `-` = not cl
 - **Nvim**: `~/.config/nvim/`, lazy.nvim specs in `lua/plugins/`, `lazy = true` by default
 - **Claude skills**: `~/.config/claude/skills/<name>/`, symlinked from `~/.claude/skills/<name>`
 - **Dev repos**: listed in `~/dotfiles/.config/dotfiles/dev-repos`; today `~/.config/chrome-exoskeleton/`
-  (with `~/.config/bin/exo`), `~/.config/run-log/` (its four bins are placed at `~/.config/bin`) and
-  `~/.config/plugged/` (its `plugged` binary is a Nix package) — see
+  (with `~/.config/bin/exo`), `~/.config/run-log/` (its four bins are placed at `~/.config/bin`),
+  `~/.config/plugged/` (its `plugged` binary is a Nix package) and `~/.config/tmux-oneshot/` (its
+  bin is placed at `~/.config/bin/tmux-oneshot`) — see
   **Dev repos**, `/ari-dotfile--submodule` (layout, creating one),
-  `/ari-dotfile--submodule-chrome-exoskeleton`, `/ari-dotfile--submodule-run-log` and
-  `/ari-dotfile--submodule-plugged`
+  `/ari-dotfile--submodule-chrome-exoskeleton`, `/ari-dotfile--submodule-run-log`,
+  `/ari-dotfile--submodule-plugged` and `/ari-dotfile--submodule-tmux-oneshot`
 - **Jobs framework**: `~/.config/dotfiles/lib/jobs.zsh`; shared plugins in `~/.config/dotfiles/jobs/`
   (README = the plugin contract) — see **Cutpoints**
 - **Nix flake**: `~/.config/dotfiles/nix/` (`flake.nix`, `darwin.nix`, `home.nix`), the shared
