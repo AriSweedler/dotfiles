@@ -1,6 +1,7 @@
 # tmux-oneshot's menu: one file, ~/.config/tmux_oneshot/entries.json, merged here by the module
 # system instead of by the script. The shared entries are the JSON lists under
-# .config/tmux_oneshot/ in the repo, in menu order. A local flake adds its own, or replaces a
+# .config/tmux_oneshot/ in the repo, in menu order (macos.json only on a Mac, linux.json only on
+# Linux). A local flake adds its own, or replaces a
 # shared one by name:
 #
 #   programs.tmuxOneshot.entries.deploy = { cmd = "deploy-it"; menu.text = "…"; key = "ctrl-p"; };
@@ -15,8 +16,12 @@ let
   sharedDir = "${src}/.config/tmux_oneshot";
   sharedFiles = lib.optionals (builtins.pathExists sharedDir)
     (map (f: "${sharedDir}/${f}") (lib.sort lib.lessThan
-      (lib.attrNames (lib.filterAttrs (n: t: t == "regular" && lib.hasSuffix ".json" n)
+      (lib.attrNames (lib.filterAttrs (n: t: t == "regular" && lib.hasSuffix ".json" n && forThisPlatform n)
         (builtins.readDir sharedDir)))));
+  # A shared file named for a platform is read only there: macos.json holds Mac commands
+  # (killall NotificationCenter, applepaste, Raycast links), which a Linux menu must not offer.
+  platformFiles = { "macos.json" = pkgs.stdenv.hostPlatform.isDarwin; "linux.json" = pkgs.stdenv.hostPlatform.isLinux; };
+  forThisPlatform = n: platformFiles.${n} or true;
   nameOf = e: e.menu.name or e.cmd;
   # A list of entries as name → entry, each carrying its position from `base` on.
   fromList = base: list: lib.listToAttrs (lib.imap0
