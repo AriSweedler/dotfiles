@@ -274,13 +274,15 @@ mirror::export() {
     is_dry_run || git -C "${dir}" config --local dotfiles.mirroredRev "${head}"
     return 2
   fi
+  # A mirror is not linked into HOME: name its checkout, where the fix runs.
+  local shown="${dir/#${HOME}\//~/}"
   branch="$(git -C "${dir}" branch --show-current 2>/dev/null || true)"
   if [[ "${branch}" != main ]]; then
-    log::err "mirror not exported: its checkout is not on main | repo='${repo}' branch='${branch:-detached}' fix='git -C ~/${repo} switch main'"
+    log::err "mirror not exported: its checkout is not on main | repo='${repo}' branch='${branch:-detached}' fix='git -C ${shown} switch main'"
     push::record "${repo:t} mirror" failed "${head}"; return 1
   fi
   if [[ -n "$(git -C "${dir}" status --porcelain -- "${sub}" 2>/dev/null)" ]]; then
-    log::err "mirror not exported: ${sub}/ has uncommitted changes (a mirror is written in the dotfiles, never in its checkout) | repo='${repo}' fix='move the change to the dotfiles source, then git -C ~/${repo} restore --staged --worktree ${sub} && git -C ~/${repo} clean -fd ${sub}'"
+    log::err "mirror not exported: ${sub}/ has uncommitted changes (a mirror is written in the dotfiles, never in its checkout) | repo='${repo}' fix='move the change to the dotfiles source, then git -C ${shown} restore --staged --worktree ${sub} && git -C ${shown} clean -fd ${sub}'"
     push::record "${repo:t} mirror" failed "${head}"; return 1
   fi
   if is_dry_run; then
