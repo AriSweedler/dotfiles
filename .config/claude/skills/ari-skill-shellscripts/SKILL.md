@@ -153,6 +153,13 @@ source "${LIB_LOGGING}"
 
 Shared libs resolve through the symlink farm (`SKILLS_DIR`), never a relative hop from `SCRIPT_DIR`: skills are versioned across dotfiles tiers (`/ari-dotfiles-skill-registry`), so `${SCRIPT_DIR:h:h}` lands in whichever tier root the script happens to live in. `${0:A:h}` is the script's real dir with symlinks resolved, even when sourced; use `SCRIPT_DIR` only for the skill's own `lib/`. A sourced lib uses `return 1` in place of `exit 1`. `bin/example` opens with this exact preamble.
 
+A skill script keeps that live path; nothing exports `ARI_ZSHLIB` or `ARI_PLUGINS`. A bin a Nix package builds (under `~/.config/bin`, or in a dev repo) spells the library dir as `${ARI_ZSHLIB:-<live dir>}`, with `<live dir>` exactly one of `${HOME}/.claude/skills/ari-skill-shellscripts/lib`, `${HOME}/.config/zsh/plugins` or `${HOME}/.config/bash/plugins`, and its own plugin dir as `${ARI_PLUGINS:-${HOME}/.config/zsh/plugins}`. The package's build rewrites those exact defaults to its store copy (`ari_zshlib.pin`, `pinPlugins` in `~/.config/dotfiles/nix/pkgs/ari-zshlib`); any other spelling stays live, and the install check fails with `a bin still names a live library path`. Package what you run, link what you edit; packaging itself is `/ari-dotfiles-nix`'s.
+
+```zsh
+readonly LIB_LOGGING="${ARI_ZSHLIB:-${HOME}/.claude/skills/ari-skill-shellscripts/lib}/logging.zsh"
+source "${ARI_PLUGINS:-${HOME}/.config/zsh/plugins}/x.zsh"
+```
+
 The sourced lib provides, all colorized to stderr:
 
 - `log::info`, `log::err`, etc. — single-line; one `key='value'` record per call.
