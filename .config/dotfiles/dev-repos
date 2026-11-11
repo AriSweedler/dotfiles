@@ -3,6 +3,11 @@
 # (nix/flake.nix inputs.<input>, flake = false). `dotfiles switch` builds each from its
 # checkout's HEAD; `dotfiles push` pushes the checkout, then commits the flake.lock bump.
 # The dotfiles_repo step clones one that is missing. Same ini form .gitmodules had.
+#
+# A [mirror] is a public repo that is written here, not there: its <dir> (default lib) is a copy
+# of one of the shared flake's packages. `dotfiles push` builds <package> from the shared HEAD
+# when a <watch> path changed since the last export, commits the copy in the checkout, and pushes
+# it. Not a flake input of the dotfiles, so no lock bump; a machine without the checkout skips it.
 [repo ".config/chrome-exoskeleton"]
 	path = .config/chrome-exoskeleton
 	url = https://github.com/AriSweedler/chrome-exoskeleton.git
@@ -15,3 +20,9 @@
 	path = .config/plugged
 	url = https://github.com/AriSweedler/plugged.git
 	input = plugged
+[mirror ".config/ari-zshlib"]
+	path = .config/ari-zshlib
+	url = https://github.com/AriSweedler/ari-zshlib.git
+	package = ari_zshlib
+	dir = lib
+	watch = .config/dotfiles/nix/pkgs/ari-zshlib .config/zsh/plugins/log.zsh .config/zsh/plugins/strip_ansi.zsh .config/zsh/plugins/log_rotate.zsh .config/zsh/plugins/assets/robot.png .config/claude/lib/tmux-pane.sh .config/claude/skills/ari-skill-shellscripts/lib .config/bash/plugins

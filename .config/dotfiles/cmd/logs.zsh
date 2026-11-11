@@ -39,7 +39,7 @@ logs::files() {
   if (( ${+opts[--repo]} )); then files=("$(log_file "${opts[--repo]}")${suffix}"); else files=("${LOG_DIR}"/*.log${suffix}(N)); fi
   if (( ${#files} == 0 )); then log::info "no push logs yet | dir='${LOG_DIR}'"; return 2; fi
   for file in "${files[@]}"; do
-    [[ -f "${file}" ]] || { log::err "no such log | file='${file}' valid_repos='shared, local, ${(j: :)SUBMODULES}'"; return 1; }
+    [[ -f "${file}" ]] || { log::err "no such log | file='${file}' valid_repos='shared, local, ${(j: :)SUBMODULES} ${(j: :)MIRRORS}'"; return 1; }
   done
 }
 

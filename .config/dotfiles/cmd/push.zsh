@@ -10,6 +10,9 @@ commits the shared tier's pointer bumps, then pushes the shared tier, all as
 ${ARI_DOTFILES_GITHUB_LOGIN} by its gh token; the local tier alongside, to its own remote
 with the ssh agent's key (its pre-push hook included). Repos already at
 origin are skipped silently; a submodule failure blocks the shared push.
+A mirror (a [mirror] in $(help::tilde "${DEV_REPOS}")) is exported
+first, its package built from the shared HEAD and committed in its checkout
+when a watched path changed, then pushed with the submodules.
 Logs: $(help::tilde "${LOG_DIR}")/<repo>.log ('dotfiles logs'). Once per
 machine: env -u GITHUB_TOKEN gh auth login. Human-only: Claude Code is denied
 'dotfiles push'.
@@ -249,17 +252,96 @@ bump_pointer() {
 }
 
 #######################################
-# Push every checked-out submodule that needs it, in parallel; wait for all; bump the
-# shared tier's pointer of every published one; report the counts; fail if any failed.
-# Up-to-date submodules are silent.
+# Export a mirror: its directory becomes the package's, built from the shared tier's HEAD, and is
+# committed alone ('<dir>: mirror dotfiles <sha>'); push_submodules then pushes the checkout like
+# a dev repo's. The checkout's git config remembers the shared commit last exported
+# (dotfiles.mirroredRev), so the build runs only when a watched path changed since. Returns 0
+# committed, 2 nothing to do (no checkout, no shared repo, nothing watched changed, the package's
+# files are the mirror's already, a dry run), 1 refused or failed.
+# Arguments:
+#   $1 - mirror path (a MIRRORS entry)
+#######################################
+mirror::export() {
+  local repo="${1}" dir="${ARI_DOTFILES_DF_WORK_TREE}/${1}" sub="${MIRROR_DIR[${1}]}" package="${MIRROR_PACKAGE[${1}]}"
+  local head stamp branch out store
+  local -a watch=(${=MIRROR_WATCH[${repo}]})
+  is_repo_present shared && is_repo_present "${repo}" || return 2
+  head="$(repo_git shared rev-parse HEAD 2>/dev/null)" || return 2
+  stamp="$(git -C "${dir}" config --local --get dotfiles.mirroredRev 2>/dev/null || true)"
+  [[ "${stamp}" != "${head}" ]] || return 2
+  if [[ -n "${stamp}" ]] && (( ${#watch} )) && repo_git shared cat-file -e "${stamp}^{commit}" 2>/dev/null &&
+     repo_git shared diff --quiet "${stamp}" "${head}" -- "${watch[@]}" 2>/dev/null; then
+    is_dry_run || git -C "${dir}" config --local dotfiles.mirroredRev "${head}"
+    return 2
+  fi
+  branch="$(git -C "${dir}" branch --show-current 2>/dev/null || true)"
+  if [[ "${branch}" != main ]]; then
+    log::err "mirror not exported: its checkout is not on main | repo='${repo}' branch='${branch:-detached}' fix='git -C ~/${repo} switch main'"
+    push::record "${repo:t} mirror" failed "${head}"; return 1
+  fi
+  if [[ -n "$(git -C "${dir}" status --porcelain -- "${sub}" 2>/dev/null)" ]]; then
+    log::err "mirror not exported: ${sub}/ has uncommitted changes (a mirror is written in the dotfiles, never in its checkout) | repo='${repo}' fix='move the change to the dotfiles source, then git -C ~/${repo} restore --staged --worktree ${sub} && git -C ~/${repo} clean -fd ${sub}'"
+    push::record "${repo:t} mirror" failed "${head}"; return 1
+  fi
+  if is_dry_run; then
+    log::info "dry-run, would export | repo='${repo}' package='${package}' dir='${sub}' from='${stamp:0:7}' to='${head:0:7}'"
+    push::record "${repo:t} mirror" "would export" "${head}"; return 2
+  fi
+  if ! out="$(nix build "git+file://${ARI_DOTFILES_DF_WORK_TREE}?dir=.config/dotfiles/nix&rev=${head}#${package}" --no-link --print-out-paths 2>&1)"; then
+    print -r -- "${out}" >&2
+    log::err "mirror not exported: the package did not build | repo='${repo}' package='${package}' fix='see the nix output above'"
+    push::record "${repo:t} mirror" failed "${head}"; return 1
+  fi
+  local -a lines=("${(@f)out}")   # the path is the last line; warnings may come before it
+  store="${lines[-1]}"
+  if [[ ! -d "${store}/${sub}" ]]; then
+    log::err "mirror not exported: the package has no such directory | repo='${repo}' package='${package}' store='${store}' dir='${sub}'"
+    push::record "${repo:t} mirror" failed "${head}"; return 1
+  fi
+  # The store's copy is read-only; the checkout's is written like any file.
+  if ! { rm -rf -- "${dir}/${sub}" && cp -R "${store}/${sub}" "${dir}/${sub}" && chmod -R u+w "${dir}/${sub}" &&
+         git -C "${dir}" add -A -- "${sub}"; }; then
+    log::err "mirror not exported: the copy failed | repo='${repo}' from='${store}/${sub}' to='${dir}/${sub}'"
+    push::record "${repo:t} mirror" failed "${head}"; return 1
+  fi
+  if git -C "${dir}" diff --cached --quiet -- "${sub}"; then
+    git -C "${dir}" config --local dotfiles.mirroredRev "${head}"
+    return 2
+  fi
+  if ! out="$(git -C "${dir}" -c user.name="${SUBMODULE_GIT_NAME}" -c user.email="${SUBMODULE_GIT_EMAIL}" \
+      commit -q -m "${sub}: mirror dotfiles ${head:0:7}" -- "${sub}" 2>&1)"; then
+    print -r -- "${out}" >&2
+    log::err "mirror not exported: the commit was refused | repo='${repo}' fix='see the output above'"
+    push::record "${repo:t} mirror" failed "${head}"; return 1
+  fi
+  git -C "${dir}" config --local dotfiles.mirroredRev "${head}"
+  log::info "exported | repo='${repo}' package='${package}' dotfiles='${head:0:7}' commit='$(git -C "${dir}" rev-parse --short HEAD)'"
+  push::record "${repo:t} mirror" exported "$(git -C "${dir}" rev-parse HEAD)"
+}
+
+# Export every mirror; 1 when any was refused or failed.
+mirror::export_all() {
+  local repo rc failed=0
+  for repo in "${MIRRORS[@]}"; do
+    rc=0; mirror::export "${repo}" || rc=$?
+    (( rc != 1 )) || failed=1
+  done
+  (( failed == 0 ))
+}
+
+#######################################
+# Push every checked-out submodule and mirror that needs it, in parallel; wait for all; bump
+# the shared tier's pointer of every published submodule (a mirror has none); report the counts;
+# fail if any failed. Up-to-date ones are silent, and so is a mirror with no checkout here.
 #######################################
 push_submodules() {
-  if (( ${#SUBMODULES} == 0 )); then log::info "no dev repos declared | file='${DEV_REPOS}'"; return 0; fi
+  if (( ${#SUBMODULES} + ${#MIRRORS} == 0 )); then log::info "no dev repos declared | file='${DEV_REPOS}'"; return 0; fi
   local repo rc checked=0 pushed=0 bumped=0 failed=0 verb=pushed start="${EPOCHREALTIME}"
   local -a running=() published=()
   is_dry_run && verb=would_push
-  for repo in "${SUBMODULES[@]}"; do
+  for repo in "${SUBMODULES[@]}" "${MIRRORS[@]}"; do
     if ! is_repo_present "${repo}"; then
+      (( ! ${MIRRORS[(Ie)${repo}]} )) || continue
       log::warn "submodule not checked out; skipping | path='${repo}' fix='dotfiles init'"
       push::record "${repo}" "skipped (not checked out)"; continue
     fi
@@ -281,6 +363,7 @@ push_submodules() {
       if push_wait "${repo}"; then pushed=$(( pushed + 1 )); published+=("${repo}"); else failed=$(( failed + 1 )); fi
     done
   fi
+  published=("${(@)published:|MIRRORS}")
   for repo in "${published[@]}"; do
     rc=0; bump_pointer "${repo}" || rc=$?
     case "${rc}" in 0) bumped=$(( bumped + 1 )) ;; 2) ;; *) failed=$(( failed + 1 )) ;; esac
@@ -327,6 +410,9 @@ push::main() {
   local start failed=false scope="${(j:, :)PUSH_SCOPE}"
   local -a PUSH_ROWS=()   # push::record's rows, for the closing table (dynamic scope: the push_* functions append)
   check_prerequisites git gh || return 1
+  # Before the plan, so a mirror's new commit is one of its lines. A failed export fails the
+  # push at the end and blocks nothing: no repo here depends on a mirror.
+  if is_in_scope submodules; then mirror::export_all || failed=true; fi
   if [[ "${edit}" == true ]]; then
     local -a PUSH_ALLOW=()   # filled by push::edit; is_allowed reads it (dynamic scope)
     local PUSH_PLAN_PATH="${STATE_DIR}/push-plan.dfpush"   # push::edit points it at a resumed FILE
@@ -386,6 +472,9 @@ push::edit_candidates() {
       is_repo_present "${repo}" || continue
       is_push_needed "${repo}" && print -r -- "${repo}"
       push::bump_pending "${repo}" >/dev/null && bumps+=1
+    done
+    for repo in "${MIRRORS[@]}"; do
+      is_repo_present "${repo}" && is_push_needed "${repo}" && print -r -- "${repo}"
     done
   fi
   if is_in_scope shared && is_repo_present shared && { (( bumps )) || is_push_needed shared; }; then
@@ -537,7 +626,7 @@ push::edit() {
 # --- The closing table: one row per repo (and per pointer bump), terminal only ---
 
 # push::record <repo> <result> [sha] [secs] [log] — one row of what happened, appended to
-# push::main's PUSH_ROWS. result: pushed, up to date, would push, bumped, would bump, failed[ (why)],
+# push::main's PUSH_ROWS. result: pushed, up to date, would push, bumped, would bump, exported, would export, failed[ (why)],
 # skipped (why). sha is any length; secs as elapsed prints them. A tab or newline in a field
 # becomes a space, so a row is always one line of five fields.
 push::record() {
@@ -562,7 +651,7 @@ push::summary_tsv() {
 # The ui status colour a result is painted in: done green, a plan yellow, failed red, no-op grey.
 push::result_status() {
   case "${1}" in
-    pushed|bumped)           print -r -- ok ;;
+    pushed|bumped|exported)  print -r -- ok ;;
     would\ *)                print -r -- warn ;;
     failed*)                 print -r -- fail ;;
     *)                       print -r -- skip ;;

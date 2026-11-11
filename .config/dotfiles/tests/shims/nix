@@ -3,7 +3,7 @@
 # (so the lock "moves" when the rev does); `flake update INPUT --flake path:DIR` locks INPUT in
 # DIR/flake.lock (JSON) at its checkout's origin/main, GitHub's main in this world (the checkout
 # found through $HOME/.config/dotfiles/dev-repos); `eval` prints NIX_SHIM_HOSTS one per line;
-# `build` prints a store path. NIX_SHIM_FAIL=<subcommand> makes that one exit 1.
+# `build` prints a store path (NIX_SHIM_BUILD_OUT when set). NIX_SHIM_FAIL=<subcommand> makes that one exit 1.
 set -u
 printf '%s\n' "$*" >> "${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/nix.log"
 sub="${1:-}"
@@ -41,5 +41,5 @@ case "${sub}" in
       && mv "${flake}/flake.lock.tmp" "${flake}/flake.lock"
     ;;
   eval) printf '%s' "${NIX_SHIM_HOSTS-testhost}" ;;
-  build) echo "/nix/store/00000000000000000000000000000000-darwin-system" ;;
+  build) echo "${NIX_SHIM_BUILD_OUT:-/nix/store/00000000000000000000000000000000-darwin-system}" ;;
 esac

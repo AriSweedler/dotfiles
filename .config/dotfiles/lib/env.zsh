@@ -189,27 +189,40 @@ typeset -ga PUSH_PARTS=(local submodules shared)   # in run order
 # `git config -f`: every step subprocess sources this, and the file is git's simple ini form.
 typeset -ga SUBMODULES=()
 typeset -gA SUBMODULE_URL=() SUBMODULE_INPUT=()
-# dev_repos::load: (re)fill the three from DEV_REPOS (the dotfiles_repo apply re-reads it after the
+# The manifest's mirrors ([mirror "<path>"]): a public repo whose <dir> is a copy of one of the
+# shared flake's packages, exported by `dotfiles push` (cmd/push.zsh, mirror::export). Per path:
+# its clone url, the package, the directory inside both (default lib), and the clone paths whose
+# change since the last export makes it worth a build (space separated).
+typeset -ga MIRRORS=()
+typeset -gA MIRROR_URL=() MIRROR_PACKAGE=() MIRROR_DIR=() MIRROR_WATCH=()
+# dev_repos::load: (re)fill them from DEV_REPOS (the dotfiles_repo apply re-reads it after the
 # checkout that brings the file).
 dev_repos::load() {
   SUBMODULES=() SUBMODULE_URL=() SUBMODULE_INPUT=()
+  MIRRORS=() MIRROR_URL=() MIRROR_PACKAGE=() MIRROR_DIR=() MIRROR_WATCH=()
   [[ -r "${DEV_REPOS}" ]] || return 0
   () {
-    local line in_repo=0 key val
+    local line kind="" key val
     local -A fields=()
     for line in "${(@f)$(<"${DEV_REPOS}")}" "[end]"; do
       while [[ "${line}" == [[:space:]]* ]]; do line="${line#?}"; done
       while [[ "${line}" == *[[:space:]] ]]; do line="${line%?}"; done
       [[ -z "${line}" || "${line}" == '#'* ]] && continue
       if [[ "${line}" == '['* ]]; then
-        if (( in_repo )) && [[ -n "${fields[path]:-}" ]]; then
+        if [[ "${kind}" == repo && -n "${fields[path]:-}" ]]; then
           SUBMODULES+=("${fields[path]}")
           SUBMODULE_URL[${fields[path]}]="${fields[url]:-}"
           SUBMODULE_INPUT[${fields[path]}]="${fields[input]:-${fields[path]:t}}"
+        elif [[ "${kind}" == mirror && -n "${fields[path]:-}" && -n "${fields[package]:-}" ]]; then
+          MIRRORS+=("${fields[path]}")
+          MIRROR_URL[${fields[path]}]="${fields[url]:-}"
+          MIRROR_PACKAGE[${fields[path]}]="${fields[package]}"
+          MIRROR_DIR[${fields[path]}]="${fields[dir]:-lib}"
+          MIRROR_WATCH[${fields[path]}]="${fields[watch]:-}"
         fi
         fields=()
-        if [[ "${line}" == '[repo '* ]]; then in_repo=1; else in_repo=0; fi
-      elif (( in_repo )) && [[ "${line}" == *=* ]]; then
+        case "${line}" in '[repo '*) kind=repo ;; '[mirror '*) kind=mirror ;; *) kind="" ;; esac
+      elif [[ -n "${kind}" && "${line}" == *=* ]]; then
         key="${${${line%%=*}//[[:space:]]/}:l}"
         val="${line#*=}"
         while [[ "${val}" == [[:space:]]* ]]; do val="${val#?}"; done
