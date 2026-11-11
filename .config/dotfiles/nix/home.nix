@@ -44,6 +44,7 @@ in
     fzf
     gum # shell UI: the dotfiles harness's spinners and boxes
     jq
+    tt # the terminal typing test karabiner-typing-test runs off a Mac (its terminal frontend)
     ripgrep
     tmuxinator
     tree

@@ -8,6 +8,12 @@
 # and from the tmux oneshot `typing` (~/.config/bin symlinks here), REPO_LIB then
 # defaulting to the lib dir beside this script.
 #
+# Frontend ($TYPING_TEST_FRONTEND, else browser on macOS and terminal elsewhere):
+#   browser   Monkeytype in the browser, narrated through Notification Center
+#   terminal  the passage typed here with `tt`, messages printed; needs a terminal, so
+#             run it from the tmux oneshot popup or a shell. A test quit before its end
+#             does not consume the passage.
+#
 # Usage: karabiner-typing-test [ACTION] [--words N]
 #   next (default)  next unread passage, advancing the bookmark
 #   current         retype the last passage (--words N re-anchors at N words)
@@ -28,6 +34,13 @@ readonly NOTIFY_GROUP_OK="karabiner-typing-test-ok"
 readonly NOTIFY_GROUP_ERR="karabiner-typing-test-err"
 readonly NOTIFY_DISMISS_SECONDS=5
 readonly VALID_ACTIONS=(next current previous status)
+readonly VALID_FRONTENDS=(browser terminal)
+if [[ "${OSTYPE}" == darwin* ]]; then
+  readonly DEFAULT_FRONTEND="browser"
+else
+  readonly DEFAULT_FRONTEND="terminal"
+fi
+readonly FRONTEND="${TYPING_TEST_FRONTEND:-${DEFAULT_FRONTEND}}"
 readonly RC_NOTHING_TO_DO=2
 
 source "${REPO_LIB}/notify.bash"
@@ -35,6 +48,10 @@ source "${REPO_LIB}/notify.bash"
 # Failure notifications persist until seen (their own group, never
 # auto-removed). Success ones self-dismiss without touching failures.
 notify_err() {
+  if [[ "${FRONTEND}" == "terminal" ]]; then
+    say_terminal "[ERROR] ${1}"
+    return 0
+  fi
   if [[ -x "${NOTIFIER}" ]]; then
     notify_image_warn
     "${NOTIFIER}" -title "Typing test" -message "${1}" -group "${NOTIFY_GROUP_ERR}" -contentImage "${NOTIFIER_IMAGE}"
@@ -42,8 +59,35 @@ notify_err() {
 }
 
 #######################################
+# A success message: a self-dismissing notification, or a line in the terminal.
+# Arguments:
+#   $1 - message
+#######################################
+notify_ok() {
+  if [[ "${FRONTEND}" == "terminal" ]]; then
+    say_terminal "${1}"
+    return 0
+  fi
+  notify_transient "Typing test" "${1}" "${NOTIFY_GROUP_OK}" "${NOTIFY_DISMISS_SECONDS}"
+}
+
+#######################################
+# Print a message and, on a terminal, hold it until a key is pressed: the oneshot
+# popup closes the moment this script exits.
+#######################################
+say_terminal() {
+  echo "Typing test: ${1}" >&2
+  if [[ -t 0 && -t 2 ]]; then
+    read -k 1 -s "?(any key closes)" || true
+    echo >&2
+  fi
+}
+
+#######################################
 # Check every dependency up front and name each missing one, so the log from a
 # fresh machine says exactly what to install/copy instead of a bare exit code.
+# Arguments:
+#   $1 - action (status needs no terminal to type in)
 #######################################
 check_prerequisites() {
   local -a problems
@@ -57,14 +101,23 @@ check_prerequisites() {
   if [[ -z "$(print -l "${BOOK_DIR}"/*(N.) 2>/dev/null)" ]]; then
     problems+=("no books on the shelf | expected='text files in ${BOOK_DIR}' fix='mkdir -p it and drop plain-text books in (XDG data, not tracked in dotfiles)'")
   fi
-  if [[ ! -r "${ENCODER}" ]]; then
-    problems+=("monkeytype URL encoder missing | expected='${ENCODER}' fix='pull dotfiles; it lives in karabiner.ts/src/scripts/lib/'")
-  fi
-  if [[ ! -r "${LZ_STRING}" ]]; then
-    problems+=("vendored lz-string missing (encoder's only dependency) | expected='${LZ_STRING}' fix='pull dotfiles; it lives beside the encoder'")
-  fi
-  if ! command -v node >/dev/null 2>&1; then
-    problems+=("node not on PATH | path='${PATH}' fix='install node, or re-run bake so the wrapper PATH picks up the node toolchain'")
+  if [[ "${FRONTEND}" == "browser" ]]; then
+    if [[ ! -r "${ENCODER}" ]]; then
+      problems+=("monkeytype URL encoder missing | expected='${ENCODER}' fix='pull dotfiles; it lives in karabiner.ts/src/scripts/lib/'")
+    fi
+    if [[ ! -r "${LZ_STRING}" ]]; then
+      problems+=("vendored lz-string missing (encoder's only dependency) | expected='${LZ_STRING}' fix='pull dotfiles; it lives beside the encoder'")
+    fi
+    if ! command -v node >/dev/null 2>&1; then
+      problems+=("node not on PATH | path='${PATH}' fix='install node, or re-run bake so the wrapper PATH picks up the node toolchain'")
+    fi
+  else
+    if ! command -v tt >/dev/null 2>&1; then
+      problems+=("tt (the terminal typing test) not on PATH | path='${PATH}' fix='it is a package of the shared home.nix; dotfiles switch'")
+    fi
+    if [[ "${1}" != "status" && ! -t 2 ]]; then
+      problems+=("no terminal to type in | fix='run it from the tmux oneshot popup (typing) or a shell'")
+    fi
   fi
 
   if (( ${#problems} > 0 )); then
@@ -72,7 +125,7 @@ check_prerequisites() {
     for problem in "${problems[@]}"; do
       echo "[PREREQ-FAIL] ${problem}" >&2
     done
-    notify_err "${#problems} missing prereq(s) — see /tmp/karabiner.karabiner-typing-test/log.txt"
+    notify_err "${#problems} missing prereq(s) — see the [PREREQ-FAIL] lines (from Karabiner: /tmp/karabiner.karabiner-typing-test/log.txt)"
     return 1
   fi
 }
@@ -154,7 +207,11 @@ main() {
     echo "[ERROR] Invalid action | action='${action}' valid_actions='${(j:, :)VALID_ACTIONS}'" >&2
     return 1
   fi
-  check_prerequisites
+  if [[ ! " ${VALID_FRONTENDS[*]} " == *" ${FRONTEND} "* ]]; then
+    echo "[ERROR] Invalid TYPING_TEST_FRONTEND | frontend='${FRONTEND}' valid_frontends='${(j:, :)VALID_FRONTENDS}'" >&2
+    return 1
+  fi
+  check_prerequisites "${action}"
 
   # === LOGIC ===
   local status_line book bookmark total_lines progress_pct passages_read
@@ -165,37 +222,39 @@ main() {
       return 1
     fi
     if [[ -z "${status_line}" ]]; then
-      notify_transient "Typing test" "no book in hand yet — press 1 to start" "${NOTIFY_GROUP_OK}" "${NOTIFY_DISMISS_SECONDS}"
+      notify_ok "no book in hand yet — press 1 to start"
       return 0
     fi
     IFS=$'\t' read -r book bookmark total_lines progress_pct passages_read <<< "${status_line}"
-    notify_transient "Typing test" "${book:r}: ${progress_pct}%, ${passages_read} passages typed" "${NOTIFY_GROUP_OK}" "${NOTIFY_DISMISS_SECONDS}"
+    notify_ok "${book:r}: ${progress_pct}%, ${passages_read} passages typed"
     return 0
   fi
 
   local passage rc=0
   passage="$(zsh "${PASSAGE_BIN}" "${action}" "${passage_flags[@]}")" || rc=$?
   if (( rc == RC_NOTHING_TO_DO )); then
-    notify_transient "Typing test" "nothing to retype yet — type a passage first (1/2/3)" "${NOTIFY_GROUP_OK}" "${NOTIFY_DISMISS_SECONDS}"
+    notify_ok "nothing to retype yet — type a passage first (1/2/3)"
     return 0
   elif (( rc != 0 )); then
     notify_err "passage ${action} failed — see the log"
     return 1
   fi
   if [[ -z "${passage//[[:space:]]/}" ]]; then
-    notify_transient "Typing test" "nothing to type — bookmark is at the start of the book" "${NOTIFY_GROUP_OK}" "${NOTIFY_DISMISS_SECONDS}"
+    notify_ok "nothing to type — bookmark is at the start of the book"
     return 0
   fi
 
-  local url
-  if ! url="$(printf '%s' "${passage}" | node "${ENCODER}")"; then
-    if [[ "${action}" == "next" ]]; then
-      rollback_next
+  local url=""
+  if [[ "${FRONTEND}" == "browser" ]]; then
+    if ! url="$(printf '%s' "${passage}" | node "${ENCODER}")"; then
+      if [[ "${action}" == "next" ]]; then
+        rollback_next
+      fi
+      notify_err "URL encoding failed — see the log"
+      return 1
     fi
-    notify_err "URL encoding failed — see the log"
-    return 1
+    echo "url_length=${#url}"
   fi
-  echo "url_length=${#url}"
 
   if ! status_line="$(book_status)" || [[ -z "${status_line}" ]]; then
     book="unknown" bookmark=0 total_lines=0 progress_pct="?" passages_read=0
@@ -208,17 +267,30 @@ main() {
     finished=true
   fi
 
-  # Confetti before the browser grabs focus, so it plays over the new test.
-  # Best-effort: a machine without Raycast must not abort the press.
-  if [[ "${finished}" == "true" ]]; then
-    open "raycast://confetti" 2>/dev/null || true
-  fi
-  if ! open "${url}"; then
-    if [[ "${action}" == "next" ]]; then
-      rollback_next
+  if [[ "${FRONTEND}" == "terminal" ]]; then
+    # -raw keeps the passage's own line breaks (verse); tt reads the keys from the terminal
+    # and shows its report (wpm, accuracy) when the passage is typed. Quit early (escape,
+    # control-c) and tt exits non-zero: the passage was not typed, so it is not consumed.
+    if ! printf '%s\n' "${passage}" | tt -raw -oneshot -showwpm; then
+      if [[ "${action}" == "next" ]]; then
+        rollback_next
+      fi
+      notify_err "test not finished — the passage stays unread"
+      return 1
     fi
-    notify_err "could not open the browser — see the log"
-    return 1
+  else
+    # Confetti before the browser grabs focus, so it plays over the new test.
+    # Best-effort: a machine without Raycast must not abort the press.
+    if [[ "${finished}" == "true" ]]; then
+      open "raycast://confetti" 2>/dev/null || true
+    fi
+    if ! open "${url}"; then
+      if [[ "${action}" == "next" ]]; then
+        rollback_next
+      fi
+      notify_err "could not open the browser — see the log"
+      return 1
+    fi
   fi
 
   local message
@@ -226,9 +298,8 @@ main() {
   if [[ "${finished}" == "true" ]]; then
     message="${message} — book finished!"
   fi
-  notify_transient "Typing test" "${message}" "${NOTIFY_GROUP_OK}" "${NOTIFY_DISMISS_SECONDS}"
-
   record_test "${action}" "${words_requested}" "${words_actual}" "${book}" "${bookmark}" "${total_lines}" "${progress_pct}"
+  notify_ok "${message}"
 }
 
 main "${@}"
