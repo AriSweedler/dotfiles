@@ -239,6 +239,8 @@ bump_pointer() {
   # `commit -- <path>` records this path alone; anything else staged in the shared tier stays staged.
   if ! out="$(repo_git shared commit -q -m "${message}" -- "${lock_rel}" 2>&1)"; then
     print -r -- "${out}" >&2
+    # The lock goes back to HEAD's, so the next repo's bump does not carry this one's change.
+    repo_git shared checkout -q -- "${lock_rel}" 2>/dev/null || true
     log::err "pointer bump refused | repo='${repo}' to='${head:0:7}' fix='see the hook output above'"
     push::record "${repo:t} pointer" failed "${head}"; return 1
   fi

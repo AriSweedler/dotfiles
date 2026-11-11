@@ -18,6 +18,14 @@ log::err()  { echo -e "${C_RED}[ERROR]${C_RST} $*" >&2; }
 log::warn() { echo -e "${C_YELLOW}[WARN]${C_RST} $*" >&2; }
 log::info() { echo -e "${C_GREEN}[INFO]${C_RST} $*" >&2; }
 
+# git in a dev repo's checkout. A hook runs with GIT_DIR, GIT_WORK_TREE and GIT_INDEX_FILE naming
+# the repo being committed, which `git -C` does not override: without clearing them the question
+# goes to the shared repo, which has none of the checkout's commits.
+sub_git() {
+  local dir="${1}"; shift
+  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX git -C "${dir}" "$@"
+}
+
 # A dev repo's flake input, locked in the shared flake's flake.lock, must name a commit already on
 # that repo's origin/main, or every other machine's build fails to fetch it.
 check_locked_rev() {
@@ -29,14 +37,14 @@ check_locked_rev() {
   [[ -e "${sub}/.git" ]] || { log::warn "${input} not checked out at ${rel}; its locked ${sha:0:8} is not checked."; return 0; }
   # The local origin/main first (a `dotfiles push` bump has just set it: no network);
   # only a miss asks the remote, in case another tool pushed without refreshing it.
-  if git -C "${sub}" merge-base --is-ancestor "${sha}" origin/main 2>/dev/null; then
+  if sub_git "${sub}" merge-base --is-ancestor "${sha}" origin/main 2>/dev/null; then
     return 0
   fi
   log::info "Checking ${input} ${sha:0:8} against the remote's main..."
-  if ! git -C "${sub}" fetch -q origin main 2>/dev/null; then
+  if ! sub_git "${sub}" fetch -q origin main 2>/dev/null; then
     log::warn "Could not fetch ${input} origin; checking against the last fetch."
   fi
-  if ! git -C "${sub}" merge-base --is-ancestor "${sha}" origin/main 2>/dev/null; then
+  if ! sub_git "${sub}" merge-base --is-ancestor "${sha}" origin/main 2>/dev/null; then
     log::err "${input} is locked at ${sha:0:8}, which is not on origin/main."
     log::warn "Push it first (dotfiles push --submodules), then re-run the commit."
     return 1

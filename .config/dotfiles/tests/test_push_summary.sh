@@ -149,6 +149,11 @@ assert_contains "dry-run fancy: header bold" "${ERR}" $'\e[1mrepo'
 
 # ── Real push, fancy: local to its bare remote; personal pushes fail on the token ──
 
+# The shared tier's real pre-commit hook guards the bump commit: it must ask the dev repo's
+# checkout, not the repo being committed (a hook runs with GIT_DIR set to that one).
+mkdir -p "${ARI_DOTFILES_DF_HOOKS}"
+cp "${PRE_COMMIT_HOOK:-$(dirname "${REPO_DIR}")/git/dotfiles-hooks/pre-commit}" "${ARI_DOTFILES_DF_HOOKS}/pre-commit"
+chmod +x "${ARI_DOTFILES_DF_HOOKS}/pre-commit"
 shim_logs_reset
 nm push
 assert_eq "push fancy: exit 1 (a submodule failed)" 1 "${RC}"
