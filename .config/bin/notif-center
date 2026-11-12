@@ -31,8 +31,8 @@ readonly DB_DIR="${HOME}/Library/Group Containers/group.com.apple.usernoted/db2"
 # to the macOS this was built and verified against; warn_if_macos_changed() flags
 # drift, since a bump may require updating the DB reader (the DECODE block) or
 # the AX engines. Query the running version with `notif-center os`.
-readonly EXPECTED_MACOS_VERSION="26.5"   # macOS Tahoe
-readonly EXPECTED_MACOS_BUILD="25F71"    # Darwin 25.5.0 (xnu)
+readonly EXPECTED_MACOS_VERSION="26.6.2" # macOS Tahoe
+readonly EXPECTED_MACOS_BUILD="25G83"    # Darwin 25.6.0 (xnu)
 
 # --- DB reader (sqlite) ---
 #
@@ -165,11 +165,24 @@ on run argv
     if not (exists process "NotificationCenter") then return "fail: no NotificationCenter process"
     tell process "NotificationCenter"
       if (count of windows) is 0 then return "fail: no notification tray"
+      -- macOS 26.6 puts an on-screen banner directly in the scroll area; the
+      -- open tray (and 26.5) wraps the alerts in one more group.
       try
-        set grp to group 1 of scroll area 1 of group 1 of group 1 of window 1
+        set grp to scroll area 1 of group 1 of group 1 of window 1
       on error
         return "fail: notification container not found"
       end try
+      set sr0 to ""
+      try
+        set sr0 to (subrole of UI element 1 of grp) as text
+      end try
+      if sr0 is not "AXNotificationCenterAlert" and sr0 is not "AXNotificationCenterAlertStack" then
+        try
+          set grp to group 1 of grp
+        on error
+          return "fail: notification container not found"
+        end try
+      end if
 
       if targetN is 1 then
         -- Find the newest = first alert/stack child (skipping any leading chrome).
@@ -316,11 +329,24 @@ on run argv
     if not (exists process "NotificationCenter") then return "fail: no NotificationCenter process"
     tell process "NotificationCenter"
       if (count of windows) is 0 then return "fail: no notification tray"
+      -- macOS 26.6 puts an on-screen banner directly in the scroll area; the
+      -- open tray (and 26.5) wraps the alerts in one more group.
       try
-        set grp to group 1 of scroll area 1 of group 1 of group 1 of window 1
+        set grp to scroll area 1 of group 1 of group 1 of window 1
       on error
         return "fail: notification container not found"
       end try
+      set sr0 to ""
+      try
+        set sr0 to (subrole of UI element 1 of grp) as text
+      end try
+      if sr0 is not "AXNotificationCenterAlert" and sr0 is not "AXNotificationCenterAlertStack" then
+        try
+          set grp to group 1 of grp
+        on error
+          return "fail: notification container not found"
+        end try
+      end if
       set kc to count of UI elements of grp
       repeat with i from 1 to kc
         set sr to ""
