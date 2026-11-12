@@ -8,8 +8,10 @@ step::watches claude_notifications '.config/claude/bin/**'
 
 readonly CLAUDE_NOTIFIER_BUNDLE='fr.julienxx.oss.terminal-notifier'
 
-# Prints on, off, unregistered (no entry for the bundle) or unknown (no usernoted prefs file, as in
-# the test world, or an unreadable one).
+# Prints "on <style>", off, unregistered (no entry for the bundle) or unknown (no usernoted prefs
+# file, as in the test world, or an unreadable one). The style is the app's alert style in System
+# Settings > Notifications: persistent (flags bit 4: the banner stays until dismissed), temporary
+# (bit 3: it leaves after a few seconds) or none.
 step::claude_notifications::allowed() {
   local plist="${ARI_DOTFILES_USERNOTED_PLIST:-${HOME}/Library/Group Containers/group.com.apple.usernoted/Library/Preferences/group.com.apple.usernoted.plist}"
   [[ -r "${plist}" ]] || { print -r -- unknown; return 0; }
@@ -17,7 +19,9 @@ step::claude_notifications::allowed() {
 import plistlib, sys
 apps = plistlib.load(open(sys.argv[1], "rb")).get("apps", [])
 hit = [a for a in apps if a.get("bundle-id") == sys.argv[2]]
-print("unregistered" if not hit else ("on" if hit[0].get("flags", 0) >> 25 & 1 else "off"))
+flags = hit[0].get("flags", 0) if hit else 0
+style = "persistent" if flags >> 4 & 1 else "temporary" if flags >> 3 & 1 else "none"
+print("unregistered" if not hit else (f"on {style}" if flags >> 25 & 1 else "off"))
 PY
 }
 
@@ -66,7 +70,11 @@ check::claude_notifications() {
       verdict warn notifier_unregistered -d "macOS has no notification setting for terminal-notifier yet; it appears after the first banner | bundle='${CLAUDE_NOTIFIER_BUNDLE}'" -f "~/.config/claude/bin/notification-fire.sh test, then allow it when macOS asks" -m
       return 0 ;;
   esac
-  verdict ok configured -d "hook='${current}' stop='${stop}' guard='${guard}' notifier='${ARI_DOTFILES_NOTIFIER}'"
+  # The alert style is Ari's choice per machine and macOS offers no supported way to set it, so it
+  # is reported, never judged.
+  local style="unknown"
+  [[ "${allowed}" == on\ * ]] && style="${allowed#on }"
+  verdict ok configured -d "alert style='${style}' (System Settings > Notifications > terminal-notifier) | hook='${current}' stop='${stop}' guard='${guard}' notifier='${ARI_DOTFILES_NOTIFIER}'"
 }
 
 apply::claude_notifications() {

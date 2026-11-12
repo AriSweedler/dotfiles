@@ -268,6 +268,11 @@ _nc_write() { python3 -I -c 'import plistlib,sys; plistlib.dump({"apps": [{"bund
 _nc_write fr.julienxx.oss.terminal-notifier $(( 1 << 25 | 12 ))
 check_step claude_notifications
 assert_eq "terminal-notifier allowed in macOS → ok" ok "$(status_of claude_notifications)"
+assert_contains "banners style is reported as temporary" "$(step_get claude_notifications .detail)" "alert style='temporary'"
+_nc_write fr.julienxx.oss.terminal-notifier $(( 1 << 25 | 1 << 4 ))
+check_step claude_notifications
+assert_eq "alerts style is still ok" ok "$(status_of claude_notifications)"
+assert_contains "alerts style is reported as persistent" "$(step_get claude_notifications .detail)" "alert style='persistent'"
 _nc_write fr.julienxx.oss.terminal-notifier 12
 check_step claude_notifications
 assert_eq "terminal-notifier switched off in macOS → fail" fail "$(status_of claude_notifications)"
