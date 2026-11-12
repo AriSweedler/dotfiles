@@ -145,7 +145,7 @@ machine_name() {
 }
 
 #######################################
-# The pane's full label, 'machine=personal|ID=%301|pane=2.4', the machine part only when known.
+# The pane's full label, 'machine=ozone|ID=%301|pane=2.4', the machine part only when known.
 # Arguments: $1 pane_id
 # Returns: the label on stdout
 #######################################
