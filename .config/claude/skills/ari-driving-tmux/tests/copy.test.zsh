@@ -18,6 +18,10 @@ check() {   # <name> <want> <got>
   if [[ "${2}" == "${3}" ]]; then (( pass += 1 )); print -- "ok      ${1}"
   else (( fail += 1 )); print -- "FAIL    ${1}"; print -r -- "--- want"; print -r -- "${2}"; print -r -- "--- got"; print -r -- "${3}"; fi
 }
+lacks() {   # <name> <needle> <haystack>
+  if [[ "${3}" != *"${2}"* ]]; then (( pass += 1 )); print -- "ok      ${1}"
+  else (( fail += 1 )); print -- "FAIL    ${1} | found='${2}'"; fi
+}
 
 cat > "${T}/shim/pbcopy" <<EOF
 #!/bin/sh
@@ -49,7 +53,7 @@ clipboard() { [[ -f "${T}/clip" ]] && cat "${T}/clip" || print -rn -- "<untouche
 
 # --- link.zsh --copy ---
 OUT="$(zsh "${SKILL}/bin/link.zsh" --copy 'bd close beads-q1h --reason "done"' 2>/dev/null)"
-check "link: the copy link and the command's code block" '> [⧉ copy to clipboard](tmux-pane://copy?copy=bd%20close%20beads-q1h%20--reason%20%22done%22)
+check "link: the copy link and the command's code block" '> [⎘ copy to clipboard](tmux-pane://copy?copy=bd%20close%20beads-q1h%20--reason%20%22done%22)
 > ```zsh
 > bd close beads-q1h --reason "done"
 > ```' "${OUT}"
@@ -63,10 +67,11 @@ zsh "${SKILL}/bin/link.zsh" --copy 'ari-driving on' >/dev/null 2>&1
 check "link: the opt-in text is refused" 1 "$?"
 
 check "link: the URL names a host, never an empty authority" 0 "$([[ "${OUT}" == *'](tmux-pane://copy?copy='* && "${OUT}" != *'tmux-pane://?'* ]]; print -r -- $?)"
+lacks "link: no U+29C9 (Claude Code would print the URL after the link text)" $'⧉' "${OUT}"
 
 # --- link.zsh --copy: the artifact line comes back to Claude's pane ---
 DELIVER="$(TMUX_PANE=%96 zsh "${SKILL}/bin/link.zsh" --copy 'run_log -- kubectl get pods' 2>/dev/null)"
-check "deliver: run_log text gets --deliver-to Claude's pane" '> [⧉ copy to clipboard](tmux-pane://copy?copy=run_log%20--deliver-to%20%2596%20--%20kubectl%20get%20pods)
+check "deliver: run_log text gets --deliver-to Claude's pane" '> [⎘ copy to clipboard](tmux-pane://copy?copy=run_log%20--deliver-to%20%2596%20--%20kubectl%20get%20pods)
 > ```zsh
 > run_log --deliver-to %96 -- kubectl get pods
 > ```' "${DELIVER}"

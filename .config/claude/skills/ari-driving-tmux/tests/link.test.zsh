@@ -187,6 +187,18 @@ for c in "${CASES[@]}"; do
   check "paired round: ${c}: the --cmd block equals the --paste step" "${paste_out%$'\n'Expected: x}" "${(F)${(@)${(@f)cmd_out}[2,-1]#> }}"
 done
 
+# --- every link text link.zsh prints holds no U+29C9 (Claude Code would print the URL after it) ---
+typeset -A LINK_OUT=(
+  run "$(zsh "${SKILL}/bin/link.zsh" --pane "${P}" --run 'ls' 2>/dev/null)"
+  interactive "$(zsh "${SKILL}/bin/link.zsh" --pane "${P}" --run 'sudo ls' 2>/dev/null)"
+  type "$(zsh "${SKILL}/bin/link.zsh" --pane "${P}" --cmd 'ls' 2>/dev/null)"
+  focus "$(zsh "${SKILL}/bin/link.zsh" --pane "${P}" 2>/dev/null)"
+)
+for kind in run interactive type focus; do
+  contains "link text: the ${kind} link printed" "](tmux-pane://${P#%}" "${LINK_OUT[$kind]}"
+  lacks "link text: the ${kind} link holds no U+29C9" $'⧉' "${LINK_OUT[$kind]}"
+done
+
 # --- tmux off PATH (a Claude Bash without the Nix profiles): link.zsh and focus.zsh still find it ---
 readonly BARE_PATH=/usr/bin:/bin
 if [[ -n "$(PATH="${BARE_PATH}" command -v tmux)" ]]; then

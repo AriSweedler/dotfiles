@@ -38,9 +38,11 @@ source "${LIB_WRAP}"
 # --- Constants ---
 
 readonly SCHEME='tmux-pane://'
-# A copy link names no pane. Its first click showed the raw URL after the link text, and an empty authority was
-# the one thing it had that run links lack; this host fills it. focus.zsh accepts both forms.
+# A copy link names no pane, so this host fills the authority; focus.zsh also takes the older empty-host form.
 readonly COPY_HOST=copy
+# Never U+29C9 (⧉), Claude Code's artifact-link glyph (seen in 2.1.322): after any other link whose text holds
+# it, or whose paragraph holds it before the link, Claude Code prints ' (<url>)', the whole encoded command.
+readonly COPY_TEXT='⎘ copy to clipboard'
 # tmux's homes, Nix's first: Claude's Bash may run this with a PATH that lacks the Nix profiles.
 readonly PATH_PREFIX="/etc/profiles/per-user/${USERNAME}/bin:/run/current-system/sw/bin:/opt/homebrew/bin:/usr/local/bin"
 # Commands that ask something in the pane (a password, a 2FA tap, a [y/N], a login), by first word, or by
@@ -99,7 +101,7 @@ ${c_bold}Output:${c_rst}
     > kubectl get pods
     > \`\`\`
   Copy on click, no pane (paste as-is into chat):
-    > [⧉ copy to clipboard](tmux-pane://copy?copy=kubectl%20get%20pods)
+    > [${COPY_TEXT}](tmux-pane://copy?copy=kubectl%20get%20pods)
     > \`\`\`zsh
     > kubectl get pods
     > \`\`\`
@@ -347,7 +349,7 @@ main() {
       log::warn "Claude is not in a tmux pane; no click can reach the handler | TMUX_PANE='' hint='hand a fenced block instead'"
     fi
     cmd="$(deliver_to_claude "${cmd}")"
-    print_block "[⧉ copy to clipboard](${SCHEME}${COPY_HOST}?copy=$(percent_encode "${cmd}"))" "${cmd}"
+    print_block "[${COPY_TEXT}](${SCHEME}${COPY_HOST}?copy=$(percent_encode "${cmd}"))" "${cmd}"
     return 0
   fi
   if [[ "${pane}" != (<0->.<0->|%<0->|<0->) ]]; then
