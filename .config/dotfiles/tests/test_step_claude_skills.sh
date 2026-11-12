@@ -67,5 +67,26 @@ nm apply claude_skills
 assert_eq "apply leaves the shadowed dir alone" 0 "${RC}"
 assert_eq "bar stays a real dir" "" "$(readlink "${FARM}/bar" || true)"
 
+# A registry whose status crashes is an error, never a clean ok.
+cp "${TIER}/ari-dotfiles-skill-registry/bin/status" "${FIX}/status.orig"
+printf '#!/usr/bin/env zsh\nprint -u2 "status: boom"\nexit 3\n' > "${TIER}/ari-dotfiles-skill-registry/bin/status"
+check_skills
+assert_eq "status crashes → error" error "$(step_get claude_skills .status)"
+assert_eq "reason status_failed" status_failed "$(step_get claude_skills .reason)"
+assert_contains "detail quotes its stderr" "$(step_get claude_skills .detail)" "status: boom"
+cp "${FIX}/status.orig" "${TIER}/ari-dotfiles-skill-registry/bin/status"
+
+# A Nix machine before its first switch: no ~/.config/claude, the registry only in the clone.
+rm -rf "${FARM}/bar" "${TIER}/bar"
+CLONE="${FIX}/clone"
+mkdir -p "${CLONE}/.config/claude"
+mv "${TIER}" "${CLONE}/.config/claude/skills"
+export ARI_DOTFILES_DF_WORK_TREE="${CLONE}"
+check_skills
+# The registry ran from the clone: the farm's links into the moved tier now dangle.
+assert_eq "registry found in the clone → its links checked" links_missing "$(step_get claude_skills .reason)"
+assert_contains "the moved tier's links dangle" "$(step_get claude_skills .detail)" "dangling='ari-dotfiles-skill-registry"
+unset ARI_DOTFILES_DF_WORK_TREE
+
 if (( FAIL > 0 )); then jq -c '.steps[] | {step, status, reason, detail, fix}' "${FIX}/out.json" >&2; fi
 report

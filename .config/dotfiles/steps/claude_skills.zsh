@@ -1,13 +1,19 @@
 # step claude_skills — every skill a dotfiles tier holds is symlinked into ~/.claude/skills
 # and no link dangles. The registry skill owns the classification; it is addressed by its
-# shared-tier path, because on a fresh machine the symlink is exactly what does not exist yet.
+# shared-tier path, because on a fresh machine the symlink is exactly what does not exist yet,
+# and by its clone path when that is missing too (a Nix machine before its first switch).
 step::declare claude_skills --group repo --needs dotfiles_repo \
   --desc "every skill a dotfiles tier holds is symlinked into ~/.claude/skills and no link dangles" \
   --apply "links every tier-held skill into ~/.claude/skills and prunes the dangling links (the skill registry's link --prune)"
 step::watches claude_skills '.config/claude/skills/**'
 
 step::claude_skills::registry_bin() {
-  print -r -- "${HOME}/.config/claude/skills/ari-dotfiles-skill-registry/bin"
+  local rel=.config/claude/skills/ari-dotfiles-skill-registry/bin
+  if [[ ! -r "${HOME}/${rel}/status" && -r "${ARI_DOTFILES_DF_WORK_TREE}/${rel}/status" ]]; then
+    print -r -- "${ARI_DOTFILES_DF_WORK_TREE}/${rel}"
+    return 0
+  fi
+  print -r -- "${HOME}/${rel}"
 }
 # Machine inputs: what the registry's `status` classifies. reply: the registry's code and its
 # logging lib, ~/.claude/skills and every entry (a link is fingerprinted through to its target,
@@ -39,9 +45,18 @@ check::claude_skills() {
 }
 
 step::claude_skills::live() {
-  local bin rows
+  local bin rows err rc=0
   bin="$(step::claude_skills::registry_bin)"
-  rows="$(zsh "${bin}/status" --all 2>/dev/null || true)"
+  err="$(mktemp)"
+  rows="$(zsh "${bin}/status" --all 2>"${err}")" || rc=$?
+  if (( rc != 0 )); then
+    local msg="${$(<"${err}")##*$'\n'}"
+    rm -f "${err}"
+    verdict error status_failed -d "the registry's status exited ${rc} | bin='${bin}' stderr='${msg}'" \
+      -f "zsh ${bin}/status --all"
+    return 0
+  fi
+  rm -f "${err}"
   local -a missing dangling manual
   local line state name linked=0
   for line in "${(f)rows}"; do
