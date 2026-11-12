@@ -62,6 +62,66 @@ assert_contains "fork-point trap: the first local commit survives" "$(df_git log
 assert_contains "fork-point trap: the second local commit survives" "$(df_git log --format=%s origin/main..HEAD)" "local two"
 assert_file "fork-point trap: origin's file checked out" "${HOME}/.config/pull-fp-remote.txt"
 
+# ── Dev repos: fast-forwarded to their origin/main, or left alone with a warning ─────────────
+
+# dev_new PATH: a dev repo checkout at HOME/PATH with one commit, its origin a local bare repo.
+dev_new() {
+  local dir="${HOME}/$1" bare="${FIX}/remotes/${1//\//-}.git"
+  mkdir -p "${dir}"
+  git init -q --initial-branch=main "${dir}"
+  git -C "${dir}" config user.name test && git -C "${dir}" config user.email test@example.com
+  printf 'one\n' > "${dir}/f"
+  git -C "${dir}" add f && git -C "${dir}" commit -q -m one
+  git init -q --bare --initial-branch=main "${bare}"
+  git -C "${dir}" remote add origin "${bare}"
+  git -C "${dir}" push -q origin main
+}
+# dev_origin_commit PATH: a commit lands on the dev repo's origin that the checkout has not fetched.
+dev_origin_commit() {
+  local bare="${FIX}/remotes/${1//\//-}.git" clone="${FIX}/dev-clone-${1//\//-}"
+  rm -rf "${clone}"
+  git clone -q "${bare}" "${clone}"
+  printf 'more\n' >> "${clone}/f"
+  git -C "${clone}" -c user.name=test -c user.email=test@example.com commit -q -am more
+  git -C "${clone}" push -q origin main
+}
+dev_head() { git -C "${HOME}/$1" rev-parse HEAD; }
+
+for d in behind dirty diverged detached; do dev_new ".config/dev-${d}"; done
+world_dev_repos .config/dev-behind .config/dev-dirty .config/dev-diverged .config/dev-detached
+for d in behind dirty diverged detached; do dev_origin_commit ".config/dev-${d}"; done
+printf 'edit\n' >> "${HOME}/.config/dev-dirty/f"
+printf 'ours\n' > "${HOME}/.config/dev-diverged/g"
+git -C "${HOME}/.config/dev-diverged" add g && git -C "${HOME}/.config/dev-diverged" commit -q -m ours
+git -C "${HOME}/.config/dev-detached" checkout -q --detach
+want="$(git -C "${FIX}/dev-clone-.config-dev-behind" rev-parse HEAD)"
+before_behind="$(dev_head .config/dev-behind)"
+before_dirty="$(dev_head .config/dev-dirty)"
+before_diverged="$(dev_head .config/dev-diverged)"
+before_detached="$(dev_head .config/dev-detached)"
+
+bump_now_secs 60
+nm pull --dry-run
+assert_eq "dev repos, dry run: exit 0" 0 "${RC}"
+assert_contains "dev repos, dry run: names what would move" "${OUT}" "dev repo (would move) .config/dev-behind"
+assert_eq "dev repos, dry run: nothing moved" "${before_behind}" "$(dev_head .config/dev-behind)"
+
+bump_now_secs 60
+nm pull
+assert_eq "dev repos: exit 0" 0 "${RC}"
+assert_eq "dev repos: the behind checkout fast-forwarded" "${want}" "$(dev_head .config/dev-behind)"
+assert_contains "dev repos: the range is reported" "${OUT}" "dev repo .config/dev-behind: "
+assert_eq "dev repos: a dirty checkout is untouched" "${before_dirty}" "$(dev_head .config/dev-dirty)"
+assert_contains "dev repos: a dirty checkout is warned about" "${ERR}" "uncommitted changes | repo='.config/dev-dirty'"
+assert_eq "dev repos: a diverged checkout is untouched" "${before_diverged}" "$(dev_head .config/dev-diverged)"
+assert_contains "dev repos: a diverged checkout is warned about" "${ERR}" "has commits origin/main lacks | repo='.config/dev-diverged'"
+assert_eq "dev repos: a detached checkout is untouched" "${before_detached}" "$(dev_head .config/dev-detached)"
+assert_contains "dev repos: a detached checkout is warned about" "${ERR}" "not on main (detached HEAD) | repo='.config/dev-detached'"
+
+bump_now_secs 60
+nm pull
+assert_not_contains "dev repos: a second pull moves nothing" "${OUT}" "dev repo .config/dev-behind"
+
 # Diverged on the same file: aborted, nothing changed.
 remote_commit .config/pull-both.txt theirs "remote edit"
 local_commit .config/pull-both.txt ours "local edit"

@@ -236,7 +236,7 @@ bump_pointer() {
   locked="$(jq -r --arg i "${input}" '.nodes[$i].locked.rev // empty' "${SHARED_FLAKE_LOCK}" 2>/dev/null)"
   if [[ "${locked}" != "${head}" ]]; then
     repo_git shared checkout -q -- "${lock_rel}" 2>/dev/null || true
-    log::err "lock update did not land on the pushed HEAD | repo='${repo}' input='${input}' locked='${locked:0:7}' head='${head:0:7}' fix='git -C ~/${repo} pull --ff-only (origin/main moved past it; dotfiles pull does not move a dev repo), then dotfiles push'"
+    log::err "lock update did not land on the pushed HEAD | repo='${repo}' input='${input}' locked='${locked:0:7}' head='${head:0:7}' fix='dotfiles pull (origin/main moved past it; pull fast-forwards a dev repo), then dotfiles push'"
     push::record "${repo:t} pointer" failed "${head}"; return 1
   fi
   # `commit -- <path>` records this path alone; anything else staged in the shared tier stays staged.

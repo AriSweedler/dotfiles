@@ -106,8 +106,10 @@ from the global or work config. Local config is not cloned: on each machine,
   alone, `<name>: bump to <sha> (<subject>)`, which the shared push carries.
 - **The df pre-commit hook** refuses a staged `flake.lock` whose locked rev for a
   dev repo is not on that repo's `origin/main`.
-- **`dotfiles pull`** moves the lock, never a checkout:
-  `git -C ~/.config/<name> pull --ff-only origin main` fast-forwards it.
+- **`dotfiles pull`** fast-forwards each dev repo's checkout to its `origin/main` after it
+  pulls the shared tier (`dev repo <path>: <old7>..<new7>`; `--dry-run` says "would move"). A checkout that
+  is off `main`, has tracked edits, or is ahead of or diverged from `origin/main` is left as it is with a
+  warning naming why (`git -C ~/.config/<name> status -sb`). Mirrors are not pulled.
 - **NEVER run `nix flake update` for a dev-repo input of the shared flake, and
   NEVER stage `nix/flake.lock` yourself**: only `dotfiles push` bumps it. A
   repo's own `flake.lock` is the repo's file (**Creating one**, step 1). A modified

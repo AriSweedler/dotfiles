@@ -20,8 +20,10 @@ files are named: resolve by hand ('git df rebase --no-fork-point @{u}'), then
 pull again. Then the pulled paths are mapped
 to the steps that watch them (no check runs): a warning names each affected
 step and its paths, and one 'dotfiles apply STEP..' brings the machine along.
-The harness (lib/, cmd/) is live as soon as it lands. The local tier is never
-pulled: it has one machine.
+The harness (lib/, cmd/) is live as soon as it lands. Each dev repo
+checkout (dev-repos manifest) is fetched and fast-forwarded to its origin/main, never
+merged or rebased: one that is off main, edited, ahead or diverged is left alone with a
+warning naming why. The local tier is never pulled: it has one machine.
 
 With --edit (a terminal only), the affected steps then open in \$EDITOR as a
 plan, $(help::tilde "${ARI_DOTFILES_STATE_DIR}")/pull-plan.dfpull, one
@@ -48,13 +50,9 @@ is_rebase_in_progress() {
 # The pull, and on a stopped replay: name the conflicts, abort (the autostash comes back with it).
 # A fetch and a rebase from the merge-base, not `git pull --rebase`: pull hands rebase the fork-point
 # from origin's reflog, which in a clone nix_port made from the bare repo still holds that repo's
-# commits, and the replay silently drops every local commit up to it. The submodule update is the
-# one `git pull` runs after a rebase when submodule.recurse is set.
+# commits, and the replay silently drops every local commit up to it.
 pull_rebase() {
   if run_mut repo_git shared fetch --quiet && run_mut repo_git shared rebase --no-fork-point --autostash '@{u}'; then
-    if [[ "$(repo_git shared config --bool submodule.recurse 2>/dev/null)" == true ]]; then
-      run_mut repo_git shared submodule update --recursive --rebase
-    fi
     return 0
   fi
   if ! is_rebase_in_progress; then
@@ -65,6 +63,50 @@ pull_rebase() {
   repo_git shared rebase --abort
   log::err "local commits conflict with origin; pull aborted, nothing changed | conflicts='${(j:, :)conflicts:#}' fix='git df rebase --no-fork-point @{u}, resolve, git df rebase --continue, then dotfiles pull'"
   return 1
+}
+
+# Why a dev repo's checkout is not fast-forwarded, or nothing (0) when it may be: on main, no
+# tracked edits, and HEAD strictly behind origin/main. Prints the reason on stdout.
+# Arguments:
+#   $1 - dev repo path
+pull::dev_repo_skip_reason() {
+  local repo="${1}" branch
+  branch="$(repo_git "${repo}" branch --show-current 2>/dev/null)"
+  [[ "${branch}" == main ]] || { print -r -- "not on main (${branch:-detached HEAD})"; return 1; }
+  [[ -z "$(repo_git "${repo}" status --porcelain --untracked-files=no 2>/dev/null)" ]] || { print -r -- "uncommitted changes"; return 1; }
+  repo_git "${repo}" merge-base --is-ancestor HEAD origin/main 2>/dev/null || { print -r -- "has commits origin/main lacks"; return 1; }
+  return 0
+}
+
+# Every dev repo checkout brought up to its origin/main, fast-forward only. The pull moves the
+# shared tier; each dev repo is its own clone, so it is fetched and fast-forwarded here too. One
+# that is detached, off main, edited, ahead or diverged is left as it is with a warning naming why,
+# never an error. A dry run fetches (that moves only origin/*) and reports what it would move.
+# A fast-forward is printed to stdout as `dev repo PATH: OLD..NEW`.
+pull::dev_repos() {
+  local repo before after reason verb
+  for repo in "${SUBMODULES[@]}"; do
+    is_repo_present "${repo}" || continue
+    if ! repo_git "${repo}" fetch --quiet origin 2>/dev/null; then
+      log::warn "dev repo not updated: fetch failed | repo='${repo}' fix='git -C ~/${repo} fetch origin'"
+      continue
+    fi
+    before="$(repo_git "${repo}" rev-parse HEAD 2>/dev/null)" || continue
+    after="$(repo_git "${repo}" rev-parse origin/main 2>/dev/null)" || continue
+    [[ "${before}" != "${after}" ]] || continue
+    # Ahead of origin/main only: nothing to pull in, and nothing to warn about either.
+    repo_git "${repo}" merge-base --is-ancestor "${after}" "${before}" 2>/dev/null && continue
+    if ! reason="$(pull::dev_repo_skip_reason "${repo}")"; then
+      log::warn "dev repo not fast-forwarded: ${reason} | repo='${repo}' fix='git -C ~/${repo} status -sb'"
+      continue
+    fi
+    verb="dev repo"; is_dry_run && verb="dev repo (would move)"
+    run_mut repo_git "${repo}" merge --ff-only --quiet origin/main || {
+      log::warn "dev repo not fast-forwarded: merge refused | repo='${repo}' fix='git -C ~/${repo} pull --ff-only origin main'"
+      continue
+    }
+    print -r -- "${verb} ${repo}: ${before[1,7]}..${after[1,7]}"
+  done
 }
 
 # The changed paths between two commits, as `git diff --name-status` lines (one git call).
@@ -162,6 +204,7 @@ pull::main() {
     slow=5 step pull pull_rebase || return 1   # a fetch takes seconds; that is not slow
     after="$(repo_git shared rev-parse HEAD)"
   fi
+  slow=5 step dev_repos pull::dev_repos
   log::info "pulled | took='$(elapsed "${start}")s'"
   slow=0.5 timed pull_changes pull::analyze "${before}" "${after}"
   (( edit )) || return 0
