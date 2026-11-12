@@ -79,3 +79,5 @@
 !/share/ari-diagram-mermaid/
 # Private cmdson example documents kept beside the shared cmdson spec (~/.config/cmdson).
 !/share/cmdson/
+# The books the typing test reads passages from (karabiner-typing-test), chosen per machine.
+!/share/typing-books/
