@@ -49,10 +49,16 @@ function prepend_to_path() {
   path=("${add_me}" "${(@)path:#${add_me}}")
 }
 
-# Source all files in these folders
 source_file "${ZDOTDIR}/tab_completion.zsh"
-source_zsh_dir "${ZDOTDIR}/plugins"
-source_zsh_dir --optional "${XDG_DATA_HOME}/zsh/plugins"
+# The plugins of both tiers, in the order a switch lists them (~/.config/dotfiles/nix/zsh-plugins.nix).
+# A machine not yet on Nix has no list and scans the two plugin dirs instead; that fallback goes
+# once every machine switches (beads-2ly.7.25).
+if [[ -r "${ZDOTDIR}/plugins.list.zsh" ]]; then
+  source "${ZDOTDIR}/plugins.list.zsh"
+else
+  source_zsh_dir "${ZDOTDIR}/plugins"
+  source_zsh_dir --optional "${XDG_DATA_HOME}/zsh/plugins"
+fi
 
 # PATH policy for both dotfile tiers, after every plugin so nothing a plugin prepends (brew
 # shellenv's Homebrew dirs, a company bin) lands ahead: this machine's local bins, then the
