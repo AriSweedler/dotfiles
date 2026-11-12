@@ -10,5 +10,11 @@
     "keyword": "@R",
     "name": "removeEmail",
     "text": "Please remove my email address from all marketing and promotional mailing lists associated with your company, and confirm once the removal has been completed.\n\nThanks,\nAri"
+  },
+  {
+    "description": "Ari's LinkedIn profile URL",
+    "keyword": "~L",
+    "name": "linkedinUrl",
+    "text": "https://www.linkedin.com/in/arisweedler/"
   }
 ]
