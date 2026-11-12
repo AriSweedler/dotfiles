@@ -282,8 +282,8 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
 
 **NEVER put a credential literal in a tracked file.** The `export` goes in
 `<plugin>.secret.zsh` beside the plugin that needs it; `*.secret.zsh` is
-excluded from ldf. A shell sources it only once the local flake lists it, like any local
-plugin (**Cutpoints**, zsh row), and Workflow step 3 has switched.
+excluded from ldf. A shell sources it only once the local flake declares it under its own
+`local-` key, like any local plugin (**Cutpoints**, zsh row), and Workflow step 3 has switched.
 
 ```zsh
 f=~/.local/share/zsh/plugins/foo.secret.zsh
@@ -324,7 +324,7 @@ Exoskeleton is the model.
 
 | Framework (df) | ldf plugs in at | How the framework finds it |
 |---|---|---|
-| zsh startup, the Nix-built `~/.config/zsh/plugins.list.zsh` (`nix/zsh-plugins.nix`) | `~/.local/share/zsh/plugins/*.zsh` (secrets in `*.secret.zsh`, untracked) | listed after the shared plugins only when the local flake declares it, `dotfiles.zsh.plugins.<name> = "<abs path>";`; a new or removed plugin in either tier is live after a switch |
+| zsh startup, the Nix-built `~/.config/zsh/plugins.list.zsh` (`nix/zsh-plugins.nix`) | `~/.local/share/zsh/plugins/*.zsh` (secrets in `*.secret.zsh`, untracked) | sourced only when the local flake declares it, after the shared plugins, under a `local-` key: `dotfiles.zsh.plugins.local-<name> = "<abs path>";`, since a key equal to a shared plugin's name replaces that plugin in its place; its `<name>.secret.zsh` takes a key the same way (`/ari-dotfiles-nix` § Change a file); a new or removed plugin in either tier is live after a switch |
 | `dotfiles jobs` (`~/.config/dotfiles/cmd/jobs.zsh`; shared plugins `~/.config/dotfiles/jobs/`, shared deps `~/.config/dotfiles/deps/`) | `~/.local/share/dotfiles/jobs/<name>`, `~/.local/share/dotfiles/deps/<name>` | one launchd job runs both roots' plugins on unlock, login and a 5-minute tick; a plugin's `# deps:` line names deps run as its setup first (local wins); `dotfiles jobs list` |
 | Chrome Exoskeleton, `exo` (`~/.config/chrome-exoskeleton/`) | `~/.local/share/chrome-exoskeleton/plugins/<name>/` | `exo link` mounts both roots; `/ari-dotfile--submodule-chrome-exoskeleton` |
 | Claude skills, `/ari-dotfiles-skill-registry` (`~/.config/claude/skills/`) | `~/.local/share/claude-skills/<name>/` | symlinked into `~/.claude/skills` |
@@ -459,7 +459,7 @@ the next `dotfiles push`, or the checkout is behind a pulled lock); `-` = not cl
 
 ### Local (ldf)
 - **Zsh plugins**: `~/.local/share/zsh/plugins/`, sourced after the shared ones once the
-  local flake declares each (**Cutpoints**)
+  local flake declares each under a `local-` key (**Cutpoints**)
 - **Scripts**: `~/.local/bin/` and `~/.local/share/bin/`
 - **Job plugins**: `~/.local/share/dotfiles/jobs/<name>` — see **Cutpoints**
 - **Nix flake**: `~/.local/share/dotfiles/nix/`, this machine's flake, the one switched — see `/ari-dotfiles-nix`
