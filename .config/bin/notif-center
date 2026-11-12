@@ -32,7 +32,7 @@ readonly DB_DIR="${HOME}/Library/Group Containers/group.com.apple.usernoted/db2"
 readonly LAYOUT_DIR="${NOTIF_CENTER_LAYOUT_DIR:-${0:A:h:h}/notif-center/macos}"
 # Where a new layout file is written: the clone, never the read-only store copy.
 readonly LAYOUT_SRC_DIR="${HOME}/dotfiles/.config/notif-center/macos"
-readonly REPORT_FILE="/tmp/notif-center/version-mismatch.md"
+readonly REPORT_FILE="/tmp/notif-center/miss.md"
 readonly EDIT_WINDOW="${HOME}/.config/bin/tmux-edit-window"
 
 # --- DB reader (sqlite) ---
@@ -517,60 +517,83 @@ _nc_cleanup() {
   _nc_click_clock
 }
 
-# Writes REPORT_FILE: why a miss on this macOS is probably the missing layout, how to add one,
-# and the AX tree as the miss left it. Arguments: the engine's result
+# Writes REPORT_FILE for a miss: the result, the layout in use, how to read the result, how to fix
+# the layout, and the AX tree after the miss. The tree is appended last (it takes ~200ms), after
+# the banner is up; it then includes the miss banner itself, which shows where this macOS puts a
+# banner. Arguments: the engine's result
 _write_report() {
-  local result="${1}" tree
-  tree="$(_tree 2>&1)" || true
+  local result="${1}" layout_file="${LAYOUT_SRC_DIR}/${NC_LAYOUT_VERSION}.zsh" layout_note step2
+  if (( NC_LAYOUT_EXACT )); then
+    layout_note="macos/${NC_LAYOUT_VERSION}.zsh, this macOS's own"
+    step2="2. Edit the layout:
+
+	\${EDITOR:-vi} ${layout_file}"
+  else
+    layout_note="macos/${NC_LAYOUT_VERSION}.zsh, the closest older one: macOS ${NC_RUNNING} has no layout yet, which makes a stale layout likely"
+    step2="2. Start this macOS's layout from the closest one:
+
+	cp ${layout_file} ${LAYOUT_SRC_DIR}/${NC_RUNNING}.zsh"
+  fi
   mkdir -p "${REPORT_FILE:h}"
   cat > "${REPORT_FILE}" <<EOF
-# notif-center: no layout for macOS ${NC_RUNNING}
+# notif-center: a click missed on macOS ${NC_RUNNING}
 
-A click missed (\`${result}\`) on a macOS with no layout file of its own, so it used
-macOS ${NC_LAYOUT_VERSION}'s. Notification Center's AX tree changes between releases;
-when it does, the click looks in the wrong element and finds nothing.
+- Result: \`${result}\`
+- Layout: ${layout_note}
+- At: $(date '+%Y-%m-%d %H:%M:%S')
 
-## Add a layout
+## Reading the result
+
+- \`notfound:0\` while a banner was on screen: the layout no longer matches Notification
+  Center's AX tree, so the click looked in the wrong element. Fix the layout (below). A macOS
+  update is the usual cause.
+- \`notfound:0\` or \`fail: no notification tray\` with nothing on screen: a real miss. Nothing
+  to fix.
+- \`fail: notification container not found\`: the element path in \`nc_container_as\` no longer
+  exists. Fix the layout.
+
+## Fix the layout
 
 1. Post a banner and read the tree while it is on screen:
 
 	atn -title test -message test; sleep 1; ~/dotfiles/.config/bin/notif-center tree
 
-2. Start from the closest layout:
+${step2}
 
-	cp ${LAYOUT_SRC_DIR}/${NC_LAYOUT_VERSION}.zsh ${LAYOUT_SRC_DIR}/${NC_RUNNING}.zsh
-
-3. Edit its header comment and \`nc_container_as\` until the clone's copy presses the banner:
+3. Change \`nc_container_as\` until the clone's copy presses the banner (it reads the clone's
+   layouts):
 
 	~/dotfiles/.config/bin/notif-center click --verbose
 
-4. Commit the file; Hyper+N picks it up at the next \`dotfiles switch\`.
+4. Commit the file. Hyper+N runs the store copy, which gets it at the next \`dotfiles switch\`.
 
 The interface is in ${LAYOUT_SRC_DIR:h}/DESIGN.md § OS support.
-
-## The tree at the miss
-
-${tree}
 EOF
 }
 
-# Posts MESSAGE as a banner whose click runs CLICK (a /bin/sh command line under launchd's
-# environment), removed after 15 seconds.
-_notify_click() {
-  local message="${1}" click="${2}" group="${OTTO_LOG_NOTIF_GROUP}"
+_append_tree() {
+  sleep 0.5
+  { print -r -- $'\n## The tree after the miss (this report\'s banner included)\n'; _tree 2>&1; } >> "${REPORT_FILE}"
+}
+
+# Posts MESSAGE as a banner removed after 8 seconds. Its click copies FILE's path to the clipboard
+# (to paste into a shell or a Claude prompt) and opens FILE in a new tmux window, as the dotfiles
+# jobs alerts do. The click runs under /bin/sh with launchd's environment: absolute paths only.
+_notify_file() {
+  local message="${1}" file="${2}" group="${OTTO_LOG_NOTIF_GROUP}"
+  local click="printf %s ${(q)file} | /usr/bin/pbcopy; ${(q)EDIT_WINDOW} -n notif-center ${(q)file}"
   local atn="${commands[atn]:-${HOME}/.config/bin/atn}"
   [[ -x "${atn}" ]] || { log::notify "${message}"; return 0; }
   local -a args=(-title "${OTTO_LOG_NOTIF_TITLE}" -message "${message}" -group "${group}" -execute "${click}" -contentImage "${OTTO_LOG_PLUGIN_DIR}/assets/robot.png")
   log::debug "notify | group='${group}' message='${message}' click='${click}'"
   log::notify_image_check "${args[@]}"
   "${atn}" "${args[@]}" >/dev/null || true
-  nohup zsh -c "sleep 15 && ${(q)atn} -remove ${(q)group} >/dev/null 2>&1" </dev/null >/dev/null 2>&1 &
+  nohup zsh -c "sleep 8 && ${(q)atn} -remove ${(q)group} >/dev/null 2>&1" </dev/null >/dev/null 2>&1 &
 }
 
-# Transient terminal-notifier banner when a click finds nothing — so a miss is
-# visible from a Hyper+N keybind (mirrors the Claude click-simulator). Skipped
-# under --quiet, so a caller can chain a fallback before announcing a miss. On a
-# macOS without its own layout the banner blames that, and its click opens the report.
+# The miss banner, so a miss is visible from a Hyper+N keybind. Skipped under --quiet, so a caller
+# can chain a fallback before announcing a miss. Its click opens REPORT_FILE; on a macOS without
+# its own layout the banner also blames that.
 # Arguments: app pattern, match pattern, the engine's result
 _notify_empty() {
   (( ${_QUIET_EMPTY:-0} )) && return 0
@@ -580,13 +603,17 @@ _notify_empty() {
   else what="notification"; fi
   local msg="No ${what} found to click"
   [[ "${result}" == fail:* ]] && msg+=" (${result#fail: })"
-  if [[ -z "${NC_LAYOUT_VERSION}" ]] || (( NC_LAYOUT_EXACT )); then
+  if [[ -z "${NC_LAYOUT_VERSION}" ]]; then
     OTTO_LOG_NOTIFY_SECS=3 log::notify "${msg}"
     return 0
   fi
   _write_report "${result}"
-  _notify_click "${msg} — probably because macOS ${NC_RUNNING} has no layout (used ${NC_LAYOUT_VERSION}'s). Click for the fix." \
-    "${(q)EDIT_WINDOW} -n notif-center ${(q)REPORT_FILE}"
+  if (( NC_LAYOUT_EXACT )); then
+    _notify_file "${msg}. Click for the report." "${REPORT_FILE}"
+  else
+    _notify_file "${msg} — probably because macOS ${NC_RUNNING} has no layout (used ${NC_LAYOUT_VERSION}'s). Click for the fix." "${REPORT_FILE}"
+  fi
+  _append_tree
 }
 
 # AXPress an already-resolved target. mode=match → _match <needle/pattern>;

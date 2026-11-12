@@ -75,9 +75,10 @@ A layout file sets three variables:
 The click engines are templates in `bin/notif-center`: `@CONTAINER@` becomes
 `nc_container_as`, then `@ALERT@` and `@STACK@` become the subroles.
 
-A click that misses on a macOS without its own file says so in its banner, and the
-banner's click opens `/tmp/notif-center/version-mismatch.md`: the steps to add the
-file and the AX tree as the miss left it. To add one:
+Every miss banner is clickable. The click copies the path of `/tmp/notif-center/miss.md`
+and opens it: the result, the layout in use, how to tell a stale layout from a real
+miss, the fix steps, and the AX tree after the miss. On a macOS without its own file,
+the banner also blames that. To add a file:
 
 1. Read the tree with a banner on screen: `notif-center tree`.
 2. Copy the closest file to `macos/<sw_vers -productVersion>.zsh` in the clone and
