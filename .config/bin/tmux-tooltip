@@ -32,6 +32,9 @@ source "${LIB_LOGGING}"
 # --- Constants ---
 
 readonly SCHEME='tmux-tooltip://show'
+# The query key that marks an https link (link --href) as carrying a card; tmux's click binding
+# matches it, and the page itself ignores it.
+readonly HREF_MARKER='tmux-tooltip=show'
 readonly DEFAULT_MAX_WIDTH=70
 readonly DEFAULT_HINT='click or Esc closes'
 # The menu's border (2) and its one-column item margins (2).
@@ -57,12 +60,14 @@ ${c_green}tmux-tooltip${c_rst} — a read-only card over tmux, shown now or carr
 
 ${c_bold}Usage:${c_rst}
   tmux-tooltip show [CARD] [--client NAME] [--x COL --y ROW]
-  tmux-tooltip link --label TEXT [CARD]
+  tmux-tooltip link --label TEXT [--href HTTPS_URL] [CARD]
   tmux-tooltip open --url URL [--client NAME] [--x COL --y ROW]
 
 ${c_bold}Subcommands:${c_rst}
   show   draw the card on a tmux client; a click anywhere, Esc, q or Enter closes it
-  link   print [TEXT](tmux-tooltip://show?…) carrying the card; a click on it in tmux shows it
+  link   print [TEXT](tmux-tooltip://show?…) carrying the card; a click on it in tmux shows it.
+         With --href, the link is that https page with the card in its query (${HREF_MARKER}&…):
+         tmux still shows the card, and an app that only opens https (Claude's phone app) opens the page
   open   the click handler: read the card back out of a tmux-tooltip:// URL and show it
 
 ${c_bold}CARD:${c_rst}
@@ -217,13 +222,20 @@ set_block_color() {
 # Arguments: $1 url
 #######################################
 parse_card_url() {
-  local url="${1}"
-  if [[ "${url}" != ${SCHEME}\?* ]]; then
-    log::err "Not a tmux-tooltip link | url='${url}' expected_prefix='${SCHEME}?'"
+  local url="${1}" query
+  local is_href=false
+  if [[ "${url}" == ${SCHEME}\?* ]]; then
+    query="${url#${SCHEME}\?}"
+  elif [[ "${url}" == *\?* && "&${${url#*\?}%%\#*}&" == *"&${HREF_MARKER}&"* ]]; then
+    # An https link carrying a card (link --href): the card rides the query beside the page's own keys.
+    query="${${url#*\?}%%\#*}"
+    is_href=true
+  else
+    log::err "Not a tmux-tooltip link | url='${url}' expected='${SCHEME}?… or a query with ${HREF_MARKER}'"
     return 1
   fi
   local pair key value
-  for pair in "${(@s:&:)${url#${SCHEME}\?}}"; do
+  for pair in "${(@s:&:)query}"; do
     key="${pair%%=*}"
     value="$(strip_controls "$(percent_decode "${pair#*=}")")"
     case "${key}" in
@@ -232,7 +244,7 @@ parse_card_url() {
       max-width) CARD_MAX_WIDTH="${value}" ;;
       text|field) add_block "${key}" "${value}" ;;
       color) set_block_color "${value}" || log::warn "Color skipped | color='${value}'" ;;
-      *) log::warn "Unknown key in link, skipped | key='${key}'" ;;
+      *) [[ "${is_href}" == true ]] || log::warn "Unknown key in link, skipped | key='${key}'" ;;
     esac
   done
   if [[ "${CARD_MAX_WIDTH}" != <-> ]] || (( CARD_MAX_WIDTH < 10 )); then
@@ -381,7 +393,7 @@ show_card() {
 # Arguments: $1 label
 #######################################
 print_link() {
-  local label="${1}" query="" i
+  local label="${1}" href="${2}" query="" i
   [[ -n "${CARD_TITLE}" ]] && query+="&title=$(percent_encode "${CARD_TITLE}")"
   for (( i = 1; i <= ${#BLOCK_KINDS}; i++ )); do
     query+="&${BLOCK_KINDS[i]}=$(percent_encode "${BLOCK_VALUES[i]}")"
@@ -391,7 +403,16 @@ print_link() {
   [[ "${CARD_MAX_WIDTH}" != "${DEFAULT_MAX_WIDTH}" ]] && query+="&max-width=${CARD_MAX_WIDTH}"
   # Brackets would end the Markdown label early.
   label="${${label//\[/(}//\]/)}"
-  print -r -- "[${label}](${SCHEME}?${query#&})"
+  if [[ -z "${href}" ]]; then
+    print -r -- "[${label}](${SCHEME}?${query#&})"
+    return
+  fi
+  # The card goes in the query before any fragment, so a browser opens the page and tmux shows the card.
+  local base="${href%%\#*}" fragment=''
+  [[ "${href}" == *\#* ]] && fragment="#${href#*\#}"
+  local sep='?'
+  [[ "${base}" == *\?* ]] && sep='&'
+  print -r -- "[${label}](${base}${sep}${HREF_MARKER}${query}${fragment})"
 }
 
 #######################################
@@ -400,7 +421,7 @@ print_link() {
 # Arguments: the arguments after the subcommand
 #######################################
 parse_args() {
-  typeset -g LABEL='' URL='' PLACE_CLIENT='' PLACE_X='' PLACE_Y='' WANT_HELP=false
+  typeset -g LABEL='' HREF='' URL='' PLACE_CLIENT='' PLACE_X='' PLACE_Y='' WANT_HELP=false
   while (( $# > 0 )); do
     case "${1}" in
       -h|--help) WANT_HELP=true; shift ;;
@@ -411,6 +432,7 @@ parse_args() {
       --field) add_block field "${2:?--field requires KEY=VALUE}"; shift 2 ;;
       --color) set_block_color "${2:?--color requires a name}"; shift 2 ;;
       --label) LABEL="${2:?--label requires a value}"; shift 2 ;;
+      --href) HREF="${2:?--href requires a URL}"; shift 2 ;;
       --url) URL="${2:?--url requires a value}"; shift 2 ;;
       --client) PLACE_CLIENT="${2:?--client requires a value}"; shift 2 ;;
       --x) PLACE_X="${2:?--x requires a value}"; shift 2 ;;
@@ -438,18 +460,22 @@ validate_args() {
   case "${subcommand}" in
     link)
       if [[ -z "${LABEL}" || -n "${URL}${PLACE_CLIENT}${PLACE_X}" ]]; then
-        log::err "link takes --label TEXT and card flags only | label='${LABEL}'"
+        log::err "link takes --label TEXT, --href URL and card flags only | label='${LABEL}'"
+        return 1
+      fi
+      if [[ -n "${HREF}" && "${HREF}" != https://* ]]; then
+        log::err "--href is an https URL | href='${HREF}'"
         return 1
       fi
       ;;
     open)
-      if [[ -z "${URL}" || -n "${LABEL}" || ${#BLOCK_KINDS} -gt 0 || -n "${CARD_TITLE}" ]]; then
+      if [[ -z "${URL}" || -n "${LABEL}${HREF}" || ${#BLOCK_KINDS} -gt 0 || -n "${CARD_TITLE}" ]]; then
         log::err "open takes --url URL and placement flags only | url='${URL}'"
         return 1
       fi
       ;;
     show)
-      if [[ -n "${LABEL}${URL}" ]]; then
+      if [[ -n "${LABEL}${HREF}${URL}" ]]; then
         log::err "show takes card and placement flags only | label='${LABEL}' url='${URL}'"
         return 1
       fi
@@ -482,7 +508,7 @@ main() {
   # === LOGIC ===
   case "${subcommand}" in
     show) show_card "$(resolve_client "${PLACE_CLIENT}")" "${PLACE_X}" "${PLACE_Y}" ;;
-    link) print_link "${LABEL}" ;;
+    link) print_link "${LABEL}" "${HREF}" ;;
     open)
       parse_card_url "${URL}"
       show_card "$(resolve_client "${PLACE_CLIENT}")" "${PLACE_X}" "${PLACE_Y}"
