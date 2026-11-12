@@ -288,7 +288,12 @@ jq -n --arg label "${JOBS_LABEL}" '{Label: $label, ProgramArguments: ["/bin/zsh"
   | plutil -convert xml1 - -o "${JOBS_PLIST}"
 touch "${LAUNCHCTL_SHIM_STATE}/${JOBS_LABEL}"
 check_step dotfiles_jobs
-assert_eq "plist present, lints, loaded → ok" ok "$(status_of dotfiles_jobs)"
+assert_eq "loaded, but no jobs set → fail" fail "$(status_of dotfiles_jobs)"
+assert_eq "reason no_jobs_set" no_jobs_set "$(reason_of dotfiles_jobs)"
+assert_eq "no_jobs_set: the fix is a switch" "dotfiles switch" "$(step_get dotfiles_jobs .fix)"
+jobs_switch
+check_step dotfiles_jobs
+assert_eq "plist present, lints, loaded, set built → ok" ok "$(status_of dotfiles_jobs)"
 rm -f "${LAUNCHCTL_SHIM_STATE}/${JOBS_LABEL}"
 check_step dotfiles_jobs
 assert_eq "plist present but unloaded → fail" fail "$(status_of dotfiles_jobs)"

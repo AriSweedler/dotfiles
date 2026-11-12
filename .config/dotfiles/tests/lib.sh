@@ -540,6 +540,7 @@ world_seed_jobs_job() {
     '{Label: $label, ProgramArguments: [$agent, "dotfiles", "300", "com.apple.screenIsUnlocked"], RunAtLoad: true}' \
     | plutil -convert xml1 - -o "${plist}"
   touch "${LAUNCHCTL_SHIM_STATE}/${label}"
+  jobs_switch
 }
 
 # world_dev_repos PATH...: the dev-repos manifest in the shared work tree, declaring each PATH

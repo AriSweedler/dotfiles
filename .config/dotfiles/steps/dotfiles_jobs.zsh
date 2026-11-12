@@ -21,6 +21,11 @@ check::dotfiles_jobs() {
     verdict fail not_loaded -d "job not loaded | label='${label}'" -f "${CLI_NAME} switch"
     return 0
   fi
+  # The set is what the job runs; a machine that never switched has none and would run nothing.
+  if [[ ! -d "${JOBS_SET}" ]]; then
+    verdict fail no_jobs_set -d "no jobs set: nothing would run | path='${JOBS_SET}'" -f "${CLI_NAME} switch"
+    return 0
+  fi
   need_lib "${ARI_DOTFILES_CMD}/jobs.zsh" || return 3
   local -a undocumented=("${(@f)$(jobs_undocumented)}")
   undocumented=("${(@)undocumented:#}")
