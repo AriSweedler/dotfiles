@@ -9,7 +9,8 @@ A *dev repo* is one of Ari's own public repos living inside the shared-tier
 clone `~/dotfiles` (`git df`, `/ari-dotfiles`) as a plain git clone of its own:
 `~/dotfiles/.config/<name>`, its `.git` a directory. The shared repo ignores
 it; the shared Nix flake reads it as an input, and that flake's `flake.lock`
-pins the commit every other machine builds. `~/.config/<name>` resolves
+pins the commit every other machine builds, a NixOS host through a lock of its
+own (**How the build…**). `~/.config/<name>` resolves
 (through `/nix/store`) to the checkout, placed by home-manager's bridge
 (`/ari-dotfiles-nix`). "Submodule" is the old word for a dev repo: the skill
 names, the `dotfiles_repo` verdicts and `dotfiles push --submodules` keep it,
@@ -110,6 +111,17 @@ packaged repo has no step, so Claude pins it (above).
   dev repo and mirror that is ahead, then bumps the lock of each dev repo pushed:
   `nix flake update <input>` in the shared flake and a commit of `flake.lock`
   alone, `<name>: bump to <sha> (<subject>)`, which the shared push carries.
+- **A NixOS host** imports the shared flake's `lib.nixosHome` through its own
+  flake, which locks the dotfiles as its own input; `dotfiles push` does not
+  move that lock. After the push and the bump, a Nix module or packaged-bin
+  change reaches the host by `nix flake update dotfiles` in the host's flake
+  (not the shared one: the NEVER below does not apply), a commit and push of
+  that lock, and a switch; a file linked from the clone is live there after
+  `git -C ~/dotfiles pull`. The host builds with its own nixpkgs (the input
+  follows it), which can be older than the shared flake's, so a package that
+  builds on the Mac can fail there: build for the host (its dry run) before
+  calling the change shipped. For the homelab's co2 the steps and their order
+  are `/ari-homelab`'s, in `hosts/co2/README.md` § Dotfiles.
 - **The df pre-commit hook** refuses a staged `flake.lock` whose locked rev for a
   dev repo is not on that repo's `origin/main`.
 - **`dotfiles pull`** fast-forwards each dev repo's checkout to its `origin/main` after it
