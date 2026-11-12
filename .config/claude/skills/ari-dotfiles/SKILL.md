@@ -69,7 +69,7 @@ flag or fix. State (`~/.local/state`) and cache (`~/.cache`) are never versioned
    `watch` list, say the next `dotfiles push` also exports and publishes that mirror. End with "Run
    `dotfiles push` when ready." once every unpushed shared commit, including any
    the `yes` just made, has passed the review. On the personal laptop
-   (`dotfiles machine-name` prints `personal`), end with it as soon as the commit lands.
+   (`dotfiles machine-name` prints `ozone`), end with it as soon as the commit lands.
 
 **Always pass absolute paths to `git df` and `git ldf`.** Relative pathspecs
 resolve against the cwd, and from inside `~/.local` a `share/...` path silently
@@ -146,7 +146,7 @@ Runs on every machine but the personal laptop, so a new or unnamed machine is re
 Check first:
 
 ```zsh
-[[ "$(dotfiles machine-name)" == personal ]] && echo skip || echo review
+[[ "$(dotfiles machine-name)" == ozone ]] && echo skip || echo review
 ```
 
 `skip` → dispatch no reviewer: the commit is ready, so end with "Run `dotfiles
@@ -310,7 +310,7 @@ Exoskeleton is the model.
 | `dotfiles jobs` (`~/.config/dotfiles/cmd/jobs.zsh`; shared plugins `~/.config/dotfiles/jobs/`, shared deps `~/.config/dotfiles/deps/`) | `~/.local/share/dotfiles/jobs/<name>`, `~/.local/share/dotfiles/deps/<name>` | one launchd job runs both roots' plugins on unlock, login and a 5-minute tick; a plugin's `# deps:` line names deps run as its setup first (local wins); `dotfiles jobs list` |
 | Chrome Exoskeleton, `exo` (`~/.config/chrome-exoskeleton/`) | `~/.local/share/chrome-exoskeleton/plugins/<name>/` | `exo link` mounts both roots; `/ari-dotfile--submodule-chrome-exoskeleton` |
 | Claude skills, `/ari-dotfiles-skill-registry` (`~/.config/claude/skills/`) | `~/.local/share/claude-skills/<name>/` | symlinked into `~/.claude/skills` |
-| Nix flake (`~/.config/dotfiles/nix/`: exports the nix-darwin and home-manager modules, never switched alone) | `~/.local/share/dotfiles/nix/`, this machine's flake | inverted: the local flake takes the shared one as an input and is the one switched (`darwinConfigurations.personal`); `/ari-dotfiles-nix` |
+| Nix flake (`~/.config/dotfiles/nix/`: exports the nix-darwin and home-manager modules, never switched alone) | `~/.local/share/dotfiles/nix/`, this machine's flake | inverted: the local flake takes the shared one as an input and is the one switched (`darwinConfigurations.ozone` on the personal laptop); `/ari-dotfiles-nix` |
 | `open-any` (`~/.config/zsh/plugins/open_any.zsh`) | `~/.local/bin/open-*` | discovered by name across both bin tiers |
 | Starship prompt (`~/.config/dotfiles/nix/starship.nix`) | the local flake's `programs.starship.settings` tables | merged by the module system at a `dotfiles switch`; a key set in both tiers fails the build |
 | tmux (`~/.config/dotfiles/nix/tmux.nix`, `nix/tmux/*.conf`) | the local flake's `programs.tmux.extraConfig`; a typhon working copy at `~/.local/share/tmux/local-plugins/tmux-typhon` | the module system appends the local lines at a `dotfiles switch`; the working copy loads instead of the pinned typhon |
@@ -443,7 +443,7 @@ the next `dotfiles push`, or the checkout is behind a pulled lock); `-` = not cl
 - **Nix flake**: `~/.local/share/dotfiles/nix/`, this machine's flake, the one switched — see `/ari-dotfiles-nix`
 - **Machine name**: one word in `~/.local/share/dotfiles/machine-name`. Read it with
   `dotfiles machine-name`, never the path; `dotfiles machine-name NAME` renames and commits
-  it. `dotfiles init` writes a random one. `personal` turns off **Review before push**.
+  it. `dotfiles init` writes a random one. `ozone` (the personal laptop) turns off **Review before push**.
 - **Data**: `~/.local/share/{go_aws,kuber,aws_profile,tmux_oneshot}/`
 - **Claude skills**: `~/.local/share/claude-skills/<name>/`, symlinked from `~/.claude/skills/<name>`
   (`~/.local/share/claude/` is Claude Code's own install dir; hands off)
