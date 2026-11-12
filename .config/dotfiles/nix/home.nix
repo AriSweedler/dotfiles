@@ -65,13 +65,13 @@ in
     # Nix
     nix-tree
     nvd
+
+    # Ari's own tools, built from their dev repos
+    ari.plugged # Rust; IOKit on a Mac, sysfs on Linux
   ] ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin (with pkgs; [
     # A Mac only; a Linux machine (a NixOS server importing this module) gets the list above.
     mas # Mac App Store from the terminal: mas install 497799835 is Xcode (alttab builds with it)
     terminal-notifier # the Claude Code notification hook and git-health
-
-    # Ari's own tools, built from their dev repos
-    ari.plugged # Swift, IOKit
 
     # Apps: home-manager copies them into ~/Applications/Home Manager Apps
     monitorcontrol # brightness and volume keys for external displays
