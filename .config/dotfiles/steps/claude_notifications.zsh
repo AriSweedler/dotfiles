@@ -11,7 +11,8 @@ readonly CLAUDE_NOTIFIER_BUNDLE='fr.julienxx.oss.terminal-notifier'
 # Prints "on <style>", off, unregistered (no entry for the bundle) or unknown (no usernoted prefs
 # file, as in the test world, or an unreadable one). The style is the app's alert style in System
 # Settings > Notifications: persistent (flags bit 4: the banner stays until dismissed), temporary
-# (bit 3: it leaves after a few seconds) or none.
+# (bit 3: it leaves after a few seconds) or none. ~/.config/claude/bin/notification-style.sh reads
+# the same file with the same bits; change them together.
 step::claude_notifications::allowed() {
   local plist="${ARI_DOTFILES_USERNOTED_PLIST:-${HOME}/Library/Group Containers/group.com.apple.usernoted/Library/Preferences/group.com.apple.usernoted.plist}"
   [[ -r "${plist}" ]] || { print -r -- unknown; return 0; }
@@ -67,14 +68,16 @@ check::claude_notifications() {
       verdict fail notifications_off -d "terminal-notifier's notifications are switched off in macOS | bundle='${CLAUDE_NOTIFIER_BUNDLE}'" -f "System Settings > Notifications > terminal-notifier > Allow Notifications" -m
       return 0 ;;
     unregistered)
-      verdict warn notifier_unregistered -d "macOS has no notification setting for terminal-notifier yet; it appears after the first banner | bundle='${CLAUDE_NOTIFIER_BUNDLE}'" -f "~/.config/claude/bin/notification-fire.sh test, then allow it when macOS asks" -m
+      verdict warn notifier_unregistered -d "macOS has no notification setting for terminal-notifier yet; it appears after the first banner | bundle='${CLAUDE_NOTIFIER_BUNDLE}'" -f "~/.config/claude/bin/notification-fire.sh test, then allow it when macOS asks; then ~/.config/claude/bin/notification-style.sh for the alert style" -m
       return 0 ;;
   esac
-  # The alert style is Ari's choice per machine and macOS offers no supported way to set it, so it
-  # is reported, never judged.
+  # The alert style: Ari wants persistent, and only a click in System Settings sets it (no Nix
+  # option, no writable file), so it is reported, never judged. notification-style.sh prints the
+  # state, the steps for Ari and why an agent cannot do it; the detail names it for whoever reads
+  # the healthcheck.
   local style="unknown"
   [[ "${allowed}" == on\ * ]] && style="${allowed#on }"
-  verdict ok configured -d "alert style='${style}' (System Settings > Notifications > terminal-notifier) | hook='${current}' stop='${stop}' guard='${guard}' notifier='${ARI_DOTFILES_NOTIFIER}'"
+  verdict ok configured -d "alert style='${style}' (Ari wants persistent; more: ~/.config/claude/bin/notification-style.sh) | hook='${current}' stop='${stop}' guard='${guard}' notifier='${ARI_DOTFILES_NOTIFIER}'"
 }
 
 apply::claude_notifications() {
