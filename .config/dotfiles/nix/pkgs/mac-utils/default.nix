@@ -39,6 +39,9 @@ swiftPackages.stdenv.mkDerivation {
       install -Dm644 ${src}/.config/zsh/plugins/$p.zsh $out/share/zsh/plugins/$p.zsh
     done
     ln -s ${ari_zshlib}/lib/log.zsh $out/share/zsh/plugins/log.zsh
+    # notif-center's per-macOS AX layouts, at the path it reads relative to its bin.
+    mkdir -p $out/notif-center/macos
+    install -Dm644 -t $out/notif-center/macos ${src}/.config/notif-center/macos/*.zsh
     patchShebangs $out/bin
     ${ari_zshlib.pin (map (b: "$out/bin/${b}") (zshBins ++ [ "replace" ]))}
     ${ari_zshlib.pinPlugins (map (b: "$out/bin/${b}") zshBins)}
@@ -61,5 +64,6 @@ swiftPackages.stdenv.mkDerivation {
     fi
     [[ "$(echo '{"b":1,"a":2}' | $out/bin/json-sort)" == *'"a"'*'"b"'* ]]
     $out/bin/utc-date >/dev/null
+    ls $out/notif-center/macos/*.zsh >/dev/null
   '';
 }

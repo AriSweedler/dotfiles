@@ -59,12 +59,11 @@ if notif-center click --quiet --no-refresh; then
 fi
 
 # 3) Last resort: a faded non-Claude notif (e.g. an old Slack banner) lives only
-#    in Notification Center. Pay for the open-NC refresh skipped in step 2.
+#    in Notification Center. Pay for the open-NC refresh skipped in step 2. Its miss
+#    banner is the real one: it names the failure, and on a macOS without its own
+#    AX layout it blames that and opens the fix on click.
 log::warn "SLOW PATH (~800ms): no claude notif, no on-screen banner — opening Notification Center to recover a faded one"
-if notif-center click --quiet; then
+if notif-center click; then
   exit 0
 fi
-
-# 4) Everything missed → real miss; say so.
-OTTO_LOG_NOTIFY_SECS=3 log::notify "No notification to click"
 exit 1

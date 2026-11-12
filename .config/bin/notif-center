@@ -9,11 +9,12 @@
 #             pushes…), just `open` it — fast. Otherwise (Slack & co. store no
 #             URL) fall back to AX: expand the stack, then AXPress the target,
 #             which opens AND dismisses it.
-#   • dump / tree → AX debugging of the live tray.
+#   • tree → AX debugging of the live tray.
 #
 # Supersedes the earlier notif-center / notif-center-sqlite / notif-center-click.
 # READ-ONLY DB guarantee: never touches the original DB — copies db+wal+shm to a
 # temp dir and queries the copy. See DESIGN.md for the schema/version caveats.
+# Each macOS version's AX layout is a file in ../notif-center/macos/ (DESIGN.md § OS support).
 #
 # stdout carries data; stderr carries logs.
 
@@ -26,13 +27,13 @@ source "${ARI_ZSHLIB:-${HOME}/.config/zsh/plugins}/log.zsh"
 
 readonly DB_DIR="${HOME}/Library/Group Containers/group.com.apple.usernoted/db2"
 
-# The Notification Center DB schema (the bplist layout decoded below) and the AX
-# subrole names are private macOS internals that shift between releases. Pinned
-# to the macOS this was built and verified against; warn_if_macos_changed() flags
-# drift, since a bump may require updating the DB reader (the DECODE block) or
-# the AX engines. Query the running version with `notif-center os`.
-readonly EXPECTED_MACOS_VERSION="26.6.2" # macOS Tahoe
-readonly EXPECTED_MACOS_BUILD="25G83"    # Darwin 25.6.0 (xnu)
+# The same relative path in the clone (.config/bin → .config/notif-center) and in the store
+# package ($out/bin → $out/notif-center).
+readonly LAYOUT_DIR="${NOTIF_CENTER_LAYOUT_DIR:-${0:A:h:h}/notif-center/macos}"
+# Where a new layout file is written: the clone, never the read-only store copy.
+readonly LAYOUT_SRC_DIR="${HOME}/dotfiles/.config/notif-center/macos"
+readonly REPORT_FILE="/tmp/notif-center/version-mismatch.md"
+readonly EDIT_WINDOW="${HOME}/.config/bin/tmux-edit-window"
 
 # --- DB reader (sqlite) ---
 #
@@ -165,24 +166,7 @@ on run argv
     if not (exists process "NotificationCenter") then return "fail: no NotificationCenter process"
     tell process "NotificationCenter"
       if (count of windows) is 0 then return "fail: no notification tray"
-      -- macOS 26.6 puts an on-screen banner directly in the scroll area; the
-      -- open tray (and 26.5) wraps the alerts in one more group.
-      try
-        set grp to scroll area 1 of group 1 of group 1 of window 1
-      on error
-        return "fail: notification container not found"
-      end try
-      set sr0 to ""
-      try
-        set sr0 to (subrole of UI element 1 of grp) as text
-      end try
-      if sr0 is not "AXNotificationCenterAlert" and sr0 is not "AXNotificationCenterAlertStack" then
-        try
-          set grp to group 1 of grp
-        on error
-          return "fail: notification container not found"
-        end try
-      end if
+@CONTAINER@
 
       if targetN is 1 then
         -- Find the newest = first alert/stack child (skipping any leading chrome).
@@ -194,11 +178,11 @@ on run argv
           try
             set sr to (subrole of UI element i of grp) as text
           end try
-          if sr is "AXNotificationCenterAlert" then
+          if sr is "@ALERT@" then
             set firstKind to "alert"
             set firstIdx to i
             exit repeat
-          else if sr is "AXNotificationCenterAlertStack" then
+          else if sr is "@STACK@" then
             set firstKind to "stack"
             set firstIdx to i
             exit repeat
@@ -236,7 +220,7 @@ on run argv
             try
               set sr to (subrole of UI element j of grp) as text
             end try
-            if sr is "AXNotificationCenterAlert" then
+            if sr is "@ALERT@" then
               set memberIdx to j
               exit repeat
             end if
@@ -282,7 +266,7 @@ on run argv
           try
             set sr to (subrole of UI element i of grp) as text
           end try
-          if sr is "AXNotificationCenterAlertStack" then
+          if sr is "@STACK@" then
             try
               perform action "AXPress" of (UI element i of grp)
             end try
@@ -300,7 +284,7 @@ on run argv
         try
           set sr to (subrole of UI element i of grp) as text
         end try
-        if sr is "AXNotificationCenterAlert" then
+        if sr is "@ALERT@" then
           set idx to idx + 1
           if idx is targetN then
             try
@@ -329,31 +313,14 @@ on run argv
     if not (exists process "NotificationCenter") then return "fail: no NotificationCenter process"
     tell process "NotificationCenter"
       if (count of windows) is 0 then return "fail: no notification tray"
-      -- macOS 26.6 puts an on-screen banner directly in the scroll area; the
-      -- open tray (and 26.5) wraps the alerts in one more group.
-      try
-        set grp to scroll area 1 of group 1 of group 1 of window 1
-      on error
-        return "fail: notification container not found"
-      end try
-      set sr0 to ""
-      try
-        set sr0 to (subrole of UI element 1 of grp) as text
-      end try
-      if sr0 is not "AXNotificationCenterAlert" and sr0 is not "AXNotificationCenterAlertStack" then
-        try
-          set grp to group 1 of grp
-        on error
-          return "fail: notification container not found"
-        end try
-      end if
+@CONTAINER@
       set kc to count of UI elements of grp
       repeat with i from 1 to kc
         set sr to ""
         try
           set sr to (subrole of UI element i of grp) as text
         end try
-        if sr is "AXNotificationCenterAlert" or sr is "AXNotificationCenterAlertStack" then
+        if sr is "@ALERT@" or sr is "@STACK@" then
           set txt to ""
           try
             set vs to value of every static text of (UI element i of grp)
@@ -362,7 +329,7 @@ on run argv
             end repeat
           end try
           if txt contains needle then
-            if sr is "AXNotificationCenterAlertStack" then
+            if sr is "@STACK@" then
               try
                 perform action "AXPress" of (UI element i of grp)
               end try
@@ -374,7 +341,7 @@ on run argv
                 try
                   set sr2 to (subrole of UI element i of grp) as text
                 end try
-                if sr2 is "AXNotificationCenterAlert" then exit repeat
+                if sr2 is "@ALERT@" then exit repeat
                 delay 0.02
               end repeat
             end if
@@ -395,21 +362,92 @@ APPLESCRIPT
 
 # --- helpers ---
 
-# os_version — the running macOS, e.g. "26.5 (25F71)".
-os_version() { printf '%s (%s)' "$(/usr/bin/sw_vers -productVersion)" "$(/usr/bin/sw_vers -buildVersion)"; }
+# Prints the AX tree of every NotificationCenter window (role [subrole] description, two
+# spaces per level, seven levels deep): what a new layout file is written against.
+read -r -d '' AS_TREE <<'APPLESCRIPT' || true
+on walk(el, depth)
+  tell application "System Events"
+    set r to ""
+    try
+      set r to (role of el) as text
+    end try
+    set sr to ""
+    try
+      set sr to (subrole of el) as text
+    end try
+    set d to ""
+    try
+      set d to (description of el) as text
+    end try
+    set out to ""
+    repeat depth times
+      set out to out & "  "
+    end repeat
+    set out to out & r & " [" & sr & "] " & d & linefeed
+    if depth < 7 then
+      try
+        repeat with c in (UI elements of el)
+          set out to out & my walk(c, depth + 1)
+        end repeat
+      end try
+    end if
+    return out
+  end tell
+end walk
+on run
+  tell application "System Events"
+    if not (exists process "NotificationCenter") then return "no NotificationCenter process"
+    tell process "NotificationCenter"
+      set out to "windows=" & (count of windows) & linefeed
+      repeat with w in windows
+        set out to out & my walk(w, 0)
+      end repeat
+      return out
+    end tell
+  end tell
+end run
+APPLESCRIPT
 
-# warn_if_macos_changed — the DB schema and AX tree are version-specific, so warn
-# when the running macOS no longer matches the pinned one and reads may need
-# re-verifying. Soft warning: the tool still tries (the layout often survives).
-warn_if_macos_changed() {
-  local got
-  got="$(os_version)"
-  [[ "${got}" == "${EXPECTED_MACOS_VERSION} (${EXPECTED_MACOS_BUILD})" ]] && return 0
-  log::warn "macOS changed since this was verified — DB/AX reads may need updating | expected='${EXPECTED_MACOS_VERSION} (${EXPECTED_MACOS_BUILD})' got='${got}'"
+# --- per-macOS layout ---
+
+typeset -g NC_RUNNING="" NC_LAYOUT_VERSION=""
+typeset -gi NC_LAYOUT_EXACT=0
+typeset -g nc_alert_subrole="" nc_stack_subrole="" nc_container_as=""
+
+# Sources the running macOS's layout file, else the newest one older than it (else the oldest),
+# leaving NC_LAYOUT_EXACT=0 so a miss can blame the mismatch.
+layout_load() {
+  [[ -n "${NC_LAYOUT_VERSION}" ]] && return 0
+  autoload -Uz is-at-least
+  NC_RUNNING="$(/usr/bin/sw_vers -productVersion)"
+  local -a versions=( "${LAYOUT_DIR}"/*.zsh(N:t:r) )
+  versions=( ${(on)versions} )
+  (( ${#versions} )) || { log::err "No layout files | dir='${LAYOUT_DIR}'"; return 1; }
+  local v pick="${versions[1]}"
+  for v in "${versions[@]}"; do
+    is-at-least "${v}" "${NC_RUNNING}" && pick="${v}"
+  done
+  source "${LAYOUT_DIR}/${pick}.zsh"
+  local var
+  for var in nc_alert_subrole nc_stack_subrole nc_container_as; do
+    [[ -n "${(P)var}" ]] || { log::err "Layout leaves a variable unset | file='${LAYOUT_DIR}/${pick}.zsh' variable='${var}'"; return 1; }
+  done
+  NC_LAYOUT_VERSION="${pick}"
+  [[ "${pick}" == "${NC_RUNNING}" ]] && NC_LAYOUT_EXACT=1
+  (( NC_LAYOUT_EXACT )) || log::warn "No layout for this macOS; using the closest older one | running='${NC_RUNNING}' layout='${pick}'"
+  return 0
 }
 
-_press() { /usr/bin/osascript - "$@" <<<"${AS_PRESS}"; }
-_match() { /usr/bin/osascript - "$@" <<<"${AS_MATCH}"; }
+# Prints an AX engine with the loaded layout's container lookup and subroles filled in.
+_render() {
+  local s="${1//@CONTAINER@/${nc_container_as}}"
+  s="${s//@STACK@/${nc_stack_subrole}}"
+  print -r -- "${s//@ALERT@/${nc_alert_subrole}}"
+}
+
+_press() { /usr/bin/osascript - "$@" <<<"$(_render "${AS_PRESS}")"; }
+_match() { /usr/bin/osascript - "$@" <<<"$(_render "${AS_MATCH}")"; }
+_tree() { /usr/bin/osascript - <<<"${AS_TREE}"; }
 
 # Copies db + sidecars to a fresh temp dir; echoes the copy's db path (returns
 # non-zero if the db can't be obtained). Read-only w.r.t. the original.
@@ -448,7 +486,8 @@ _need_db() {
     command -v "${cmd}" >/dev/null 2>&1 || missing+=("${cmd}")
   done
   (( ${#missing} > 0 )) && { log::err "Missing required commands | missing='${(j:, :)missing}'"; return 1; }
-  warn_if_macos_changed
+  # The DB schema is as private as the AX tree: a macOS without its own layout warns here too.
+  layout_load || true
   return 0
 }
 
@@ -478,16 +517,76 @@ _nc_cleanup() {
   _nc_click_clock
 }
 
+# Writes REPORT_FILE: why a miss on this macOS is probably the missing layout, how to add one,
+# and the AX tree as the miss left it. Arguments: the engine's result
+_write_report() {
+  local result="${1}" tree
+  tree="$(_tree 2>&1)" || true
+  mkdir -p "${REPORT_FILE:h}"
+  cat > "${REPORT_FILE}" <<EOF
+# notif-center: no layout for macOS ${NC_RUNNING}
+
+A click missed (\`${result}\`) on a macOS with no layout file of its own, so it used
+macOS ${NC_LAYOUT_VERSION}'s. Notification Center's AX tree changes between releases;
+when it does, the click looks in the wrong element and finds nothing.
+
+## Add a layout
+
+1. Post a banner and read the tree while it is on screen:
+
+	atn -title test -message test; sleep 1; ~/dotfiles/.config/bin/notif-center tree
+
+2. Start from the closest layout:
+
+	cp ${LAYOUT_SRC_DIR}/${NC_LAYOUT_VERSION}.zsh ${LAYOUT_SRC_DIR}/${NC_RUNNING}.zsh
+
+3. Edit its header comment and \`nc_container_as\` until the clone's copy presses the banner:
+
+	~/dotfiles/.config/bin/notif-center click --verbose
+
+4. Commit the file; Hyper+N picks it up at the next \`dotfiles switch\`.
+
+The interface is in ${LAYOUT_SRC_DIR:h}/DESIGN.md § OS support.
+
+## The tree at the miss
+
+${tree}
+EOF
+}
+
+# Posts MESSAGE as a banner whose click runs CLICK (a /bin/sh command line under launchd's
+# environment), removed after 15 seconds.
+_notify_click() {
+  local message="${1}" click="${2}" group="${OTTO_LOG_NOTIF_GROUP}"
+  local atn="${commands[atn]:-${HOME}/.config/bin/atn}"
+  [[ -x "${atn}" ]] || { log::notify "${message}"; return 0; }
+  local -a args=(-title "${OTTO_LOG_NOTIF_TITLE}" -message "${message}" -group "${group}" -execute "${click}" -contentImage "${OTTO_LOG_PLUGIN_DIR}/assets/robot.png")
+  log::debug "notify | group='${group}' message='${message}' click='${click}'"
+  log::notify_image_check "${args[@]}"
+  "${atn}" "${args[@]}" >/dev/null || true
+  nohup zsh -c "sleep 15 && ${(q)atn} -remove ${(q)group} >/dev/null 2>&1" </dev/null >/dev/null 2>&1 &
+}
+
 # Transient terminal-notifier banner when a click finds nothing — so a miss is
 # visible from a Hyper+N keybind (mirrors the Claude click-simulator). Skipped
-# under --quiet, so a caller can chain a fallback before announcing a miss.
+# under --quiet, so a caller can chain a fallback before announcing a miss. On a
+# macOS without its own layout the banner blames that, and its click opens the report.
+# Arguments: app pattern, match pattern, the engine's result
 _notify_empty() {
   (( ${_QUIET_EMPTY:-0} )) && return 0
-  local app_pat="${1:-}" match_pat="${2:-}" what
+  local app_pat="${1:-}" match_pat="${2:-}" result="${3:-}" what
   if [[ -n "${app_pat}" ]]; then what="${app_pat} notification"
   elif [[ -n "${match_pat}" ]]; then what="notification matching “${match_pat}”"
   else what="notification"; fi
-  OTTO_LOG_NOTIFY_SECS=3 log::notify "No ${what} found to click"
+  local msg="No ${what} found to click"
+  [[ "${result}" == fail:* ]] && msg+=" (${result#fail: })"
+  if [[ -z "${NC_LAYOUT_VERSION}" ]] || (( NC_LAYOUT_EXACT )); then
+    OTTO_LOG_NOTIFY_SECS=3 log::notify "${msg}"
+    return 0
+  fi
+  _write_report "${result}"
+  _notify_click "${msg} — probably because macOS ${NC_RUNNING} has no layout (used ${NC_LAYOUT_VERSION}'s). Click for the fix." \
+    "${(q)EDIT_WINDOW} -n notif-center ${(q)REPORT_FILE}"
 }
 
 # AXPress an already-resolved target. mode=match → _match <needle/pattern>;
@@ -512,6 +611,7 @@ cmd_list() {
 
 cmd_click() {
   local n="${1:?}" app_pat="${2:-}" match_pat="${3:-}" no_refresh="${4:-0}"
+  layout_load || { _notify_empty "${app_pat}" "${match_pat}" "fail: no AX layout installed"; return 1; }
   [[ -n "${app_pat}" ]] && { _need_db || return 1; }
 
   # Resolve the AX target ONCE, before any NC toggling — the DB query for --app
@@ -558,16 +658,22 @@ print(re.sub(r"\s+", " ", (o.get("body") or o.get("subtitle") or o.get("title") 
     ok) return 0 ;;
     # 4) Still nothing → transient banner so the miss is visible from a keybinding.
     *) log::err "Target not in the live tray | result='${result}'"
-       _notify_empty "${app_pat}" "${match_pat}"
+       _notify_empty "${app_pat}" "${match_pat}" "${result}"
        return 1 ;;
   esac
 }
 
 cmd_os() {
-  print -r -- "running:  $(os_version)"
-  print -r -- "expected: ${EXPECTED_MACOS_VERSION} (${EXPECTED_MACOS_BUILD})"
-  warn_if_macos_changed
+  layout_load || return 1
+  local -a versions=( "${LAYOUT_DIR}"/*.zsh(N:t:r) )
+  local how="its own"
+  (( NC_LAYOUT_EXACT )) || how="closest older; add ${LAYOUT_SRC_DIR}/${NC_RUNNING}.zsh"
+  print -r -- "running:  ${NC_RUNNING} ($(/usr/bin/sw_vers -buildVersion))"
+  print -r -- "layout:   ${NC_LAYOUT_VERSION} (${how})"
+  print -r -- "layouts:  ${(j:, :)${(@on)versions}} in ${LAYOUT_DIR}"
 }
+
+cmd_tree() { _tree; }
 
 # --- help / main ---
 
@@ -579,6 +685,7 @@ ${c_cyan}Usage:${c_rst}
   notif-center list  [--app PAT] [--match PAT] [--limit N] [--all] [--output FMT]
   notif-center click [N] [--app PAT] [--match PAT]
   notif-center os
+  notif-center tree
 
 ${c_cyan}list${c_rst} (reads the DB — fast, knows the posting app):
   --output human|json  human: \`# time app_name title | subtitle | body\` (TSV)
@@ -597,9 +704,13 @@ ${c_cyan}click [N]${c_rst} (default N=1, the newest / first on the stack):
   --app/--match: click the newest notification from that app / matching that
   text (e.g. \`click --app slack\`). Uses the DB to target, then AX-clicks it.
 
-${c_cyan}os${c_rst} (running vs pinned macOS):
-  Reports the running macOS against the version this tool was verified on, and
-  warns on drift — the notification DB schema and AX tree are version-specific.
+${c_cyan}os${c_rst} (running macOS → AX layout):
+  Reports the running macOS, the layout file the clicks use (its own, or the
+  closest older one), and every layout installed.
+
+${c_cyan}tree${c_rst} (AX debugging):
+  Prints Notification Center's AX tree, seven levels deep: what a new macOS
+  layout is written against. Run it with a banner on screen.
 
 ${c_cyan}Options:${c_rst}
   --verbose     OTTO_DEBUG=1 (debug logs to stderr)
@@ -645,6 +756,7 @@ main() {
     list)    cmd_list "${app_pat}" "${match_pat}" "${limit}" "${show_all}" "${fmt}" ;;
     click)   cmd_click "${n}" "${app_pat}" "${match_pat}" "${no_refresh}" ;;
     os)      cmd_os ;;
+    tree)    cmd_tree ;;
     ""|help) help ;;
     *)       log::err "Unknown command | command='${subcmd}'"; help; return 1 ;;
   esac

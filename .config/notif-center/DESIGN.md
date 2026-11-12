@@ -59,14 +59,31 @@ snappy:
 
 ## OS support
 
-macOS only. The notification database schema and the AX element names are private
-and change between macOS releases, so this tool is pinned to the version it was
-built and verified against:
+macOS only. The AX tree and the database schema are private and change between
+releases. Each verified macOS has a layout file, `macos/<productVersion>.zsh` beside
+this document. The clicks use the running macOS's own file, else the newest one
+older than it. `notif-center os` names the file in use.
 
-- **macOS 26.5 (build 25F71)**, Darwin 25.5.0.
+A layout file sets three variables:
 
-The script holds this as `EXPECTED_MACOS_VERSION` / `EXPECTED_MACOS_BUILD`.
-`notif-center os` reports the running version against the pin, and any
-database-reading path warns on drift. After a macOS update that changes the
-version, expect that warning; if reads start coming back wrong, the database
-decoder and/or the AX logic likely need re-verifying against the new release.
+| Variable | Holds |
+|---|---|
+| `nc_alert_subrole` | the subrole of one notification (`AXNotificationCenterAlert`) |
+| `nc_stack_subrole` | the subrole of a collapsed group (`AXNotificationCenterAlertStack`) |
+| `nc_container_as` | AppleScript that runs inside `tell process "NotificationCenter"` with a window present, and sets `grp` to the element whose children are the alerts and stacks, or returns `"fail: <why>"`. `@ALERT@` and `@STACK@` in it become the two subroles. |
+
+The click engines are templates in `bin/notif-center`: `@CONTAINER@` becomes
+`nc_container_as`, then `@ALERT@` and `@STACK@` become the subroles.
+
+A click that misses on a macOS without its own file says so in its banner, and the
+banner's click opens `/tmp/notif-center/version-mismatch.md`: the steps to add the
+file and the AX tree as the miss left it. To add one:
+
+1. Read the tree with a banner on screen: `notif-center tree`.
+2. Copy the closest file to `macos/<sw_vers -productVersion>.zsh` in the clone and
+   edit `nc_container_as` until `~/dotfiles/.config/bin/notif-center click` presses
+   the banner. The clone's copy reads the clone's layouts.
+3. Commit it. The store copy that Hyper+N runs gets it at the next `dotfiles switch`.
+
+The database reader is not per-version. If `list` comes back wrong after an update,
+re-verify the `DECODE` block in the script.
