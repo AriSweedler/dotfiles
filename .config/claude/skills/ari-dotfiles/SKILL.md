@@ -1,13 +1,15 @@
 ---
 name: ari-dotfiles
-description: Edit and commit Ari's two-tier dotfiles — shared (`git df`, ~/.config, every machine) and local (`git ldf`, ~/.local, this machine only) — and, everywhere but the personal laptop, review every unpushed public commit for employer-identifying content before recommending a push
+description: Edit and commit Ari's two-tier dotfiles (shared: `git df`, ~/.config, every machine; local: `git ldf`, ~/.local, this machine only), run the `dotfiles switch` a commit needs and check the change is live, and, everywhere but the personal laptop, review every unpushed public commit for employer-identifying content before recommending a push
 ---
 
 # Dotfiles
 
 Ari's dotfiles are two git repos, one per tier: a plain clone for the shared tier, a bare repo
 for the local one. Pick the tier by whether
-the content should be identical on every machine or belongs to this one. The
+the content should be identical on every machine or belongs to this one. Claude commits, runs
+the `dotfiles switch` a commit needs (Workflow step 3) and pushes the local tier; Ari pushes the
+shared tier, its dev repos and its mirrors. The
 shared tier, its dev repos and its mirrors are public; no push is recommended until each unpushed commit passes **Review before
 push**, except on the personal laptop, where a commit is ready to push as soon as it lands.
 
@@ -42,11 +44,12 @@ flag or fix. State (`~/.local/state`) and cache (`~/.cache`) are never versioned
    repos**). A mirror's files are the reverse: edit them only at their dotfiles source.
    - **Create a new shared file at its clone path, `~/dotfiles/<path>`, NEVER at `~/<path>`.** A
      file created at `~/<path>` is not in the repo, and git cannot see it. A new clone file appears
-     in `$HOME` only after it is committed and the next `dotfiles switch` runs, because the bridge
-     links only what git tracks. Ari runs the switch; Claude may run `dotfiles switch --build`
-     (`/ari-dotfiles-nix`).
+     in `$HOME` only after it is committed and switched (step 3), because the bridge links only
+     what git tracks.
    - The exception is a directory linked whole, where either path works and the new file is live at
      once. Test it with `[[ -L ~/<dir> ]]`. Today these are `.config/claude` and the dev repos.
+     Two things in them still wait for the switch (step 3): a new skill directory's
+     `~/.claude/skills/<name>` link, and a packaged dev repo's bins.
      `.config/nvim` is not one: `nvim.nix` places the whole directory from the store, so an edit
      to `~/dotfiles/.config/nvim` reaches nvim only after a commit and a `dotfiles switch`.
 2. `git df add <abs path>` or `git ldf add <abs path>`. Give a new shared file its clone path:
@@ -58,16 +61,28 @@ flag or fix. State (`~/.local/state`) and cache (`~/.cache`) are never versioned
    sweeping add commits them before anyone approved them. A path inside a dev repo
    (`~/.config/run-log/…`) is ignored by the shared repo, and `git df add` refuses it:
    follow **Dev repos** instead.
-3. Print `git df log --oneline -1` / `git ldf log --oneline -1` to confirm the tier.
+3. Print `git df log --oneline -1` / `git ldf log --oneline -1` to confirm the tier: it must
+   show the subject just committed. Then test every committed path. **You MUST run `dotfiles
+   switch` yourself, now, when ANY committed path:**
+   - is under either tier's `nix/` directory (`~/dotfiles/.config/dotfiles/nix`,
+     `~/.local/share/dotfiles/nix`);
+   - is a packaged bin or a file a package copies: `readlink -f` of its `$HOME` path ends in
+     `/nix/store`, or it is in run-log, tmux-oneshot or plugged;
+   - adds, removes or moves a shared file outside a directory linked whole (step 1), a skill
+     directory, or a zsh plugin in either tier.
+
+   Switch per `/ari-dotfiles-nix` § Switch: build, preview, switch, then its check that the change
+   itself is live. **NEVER report the change live before that check passes. NEVER tell Ari to run
+   the switch**, unless § Switch's own run was refused. A commit that matches none is live at once.
 4. Shared: run **Review before push** (its first step skips it on the
    personal laptop). Local: `git ldf push` now, when the tier has an `origin`. Start the
    **Post-change sweep** alongside.
-5. Close with one message: what landed, the review verdicts (if it ran),
-   the sweep's plan, and any history rewrite the review calls for, ending in one
-   question that covers them all (none when nothing is pending). When the change touched a
-   Nix module, a packaged bin (dev-repo bins included) or `plugged`, or added a shared file outside a directory linked whole, say it
-   is live only after Ari runs `dotfiles switch`; when it touched a path in a `[mirror]`'s
-   `watch` list, say the next `dotfiles push` also exports and publishes that mirror. End with "Run
+5. Close with one message: what landed (the switch's own ldf `flake.lock` commit included), what
+   the switch made live and the check that showed it, or how it failed,
+   the review verdicts (if it ran), the sweep's plan, and any history rewrite the review calls
+   for, ending in one question that covers them all (none when nothing is pending). When the
+   change touched a path in a `[mirror]`'s `watch` list, say the next `dotfiles push` also
+   exports and publishes that mirror. End with "Run
    `dotfiles push` when ready." once every unpushed shared commit, including any
    the `yes` just made, has passed the review. On the personal laptop
    (`dotfiles machine-name` prints `ozone`), end with it as soon as the commit lands.
@@ -100,15 +115,15 @@ admits `share/claude-skills/`, where a skill-update driver's unapproved edits si
 
 **When `git ldf status` fails:**
 - `git: 'ldf' is not a git command` → `~/.config/git/config` lacks the alias, which
-  `~/.config/dotfiles/nix/git.nix` writes there at a `dotfiles switch`. The fix is the switch
-  (Ari's), never an alias added elsewhere.
+  `~/.config/dotfiles/nix/git.nix` writes there at a `dotfiles switch`. The fix is that switch,
+  which Claude runs (Workflow step 3), never an alias added elsewhere.
 - `fatal: not a git repository` (or `.../local-dotfiles.git` does not exist) → no
   local repo yet. Say the edit is untracked and point at **Bootstrapping a machine**.
 
 **When the ldf pre-commit hook rejects** (exit 1, one `[ERROR]` line), fix the
 cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
 - `bash 5 required; this is macOS /bin/bash without mapfile` → bash 5 comes from Nix
-  (`/ari-dotfiles-nix`). Ari runs `dotfiles switch`, then retry. NEVER `brew install bash`.
+  (`/ari-dotfiles-nix`): run `dotfiles switch` (Workflow step 3), then retry. NEVER `brew install bash`.
 - `refusing to commit a secret file | path='...'` → `git ldf rm --cached <abs path>`; the file stays untracked.
 - `staged content looks like a credential | path='...'` → move the literal to the
   plugin's `*.secret.zsh` sibling (recipe under **Secrets**), leave a pointer
@@ -223,7 +238,7 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
   home-manager places is a read-only symlink into `/nix/store`, among them git's config and
   ignore, tmux, Starship, gh's `config.yml` and the whole `~/.config/nvim`. **NEVER run
   `git config --global` or `gh config set`, or edit `~/.config/starship.toml` or `~/.config/tmux/tmux.conf`: edit the module, commit it
-  (a switch builds only committed files), then `dotfiles switch --build`; Ari switches.** **NEVER `brew install`:** a new tool goes in a flake.
+  (a switch builds only committed files), then switch (Workflow step 3).** **NEVER `brew install`:** a new tool goes in a flake.
   Which module writes what, and how to edit, verify, build and switch: `/ari-dotfiles-nix`
   (§ Modules, § What Nix owns).
 - **A packaged bin is placed from the store at its old path, so an edit to the clone's file
@@ -267,8 +282,8 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
 
 **NEVER put a credential literal in a tracked file.** The `export` goes in
 `<plugin>.secret.zsh` beside the plugin that needs it; `*.secret.zsh` is
-excluded from ldf and `source_zsh_dir` sources every `*.zsh` under both plugin
-dirs, so no wiring is needed.
+excluded from ldf. A shell sources it only once the local flake lists it, like any local
+plugin (**Cutpoints**, zsh row), and Workflow step 3 has switched.
 
 ```zsh
 f=~/.local/share/zsh/plugins/foo.secret.zsh
@@ -277,7 +292,7 @@ echo "export FOO_TOKEN='...'" >> "$f"
 ```
 
 In the tracked plugin leave only a pointer:
-`# Token exports: foo.secret.zsh (untracked, mode 600, sourced by source_zsh_dir)`.
+`# Token exports: foo.secret.zsh (untracked, mode 600, listed in the local flake)`.
 The ldf pre-commit hook rejects `.secret.` paths and token-shaped content. No
 shared `get secrets` helper exists yet; do not assume one.
 
@@ -293,7 +308,9 @@ git df commit -m "Move work.zsh to local tier" -- ~/dotfiles/.config/zsh/plugins
 git ldf add ~/.local/share/zsh/plugins/work.zsh && git ldf commit -m "Add work.zsh from shared tier" -- ~/.local/share/zsh/plugins/work.zsh
 ```
 
-Move the clone's file, never the `$HOME` link. The link to it dangles until the next `dotfiles switch` removes it.
+Move the clone's file, never the `$HOME` link. The link to it dangles until Workflow step 3's switch removes it: run it after the block. A zsh
+plugin moved into ldf loads only once the local flake declares it (**Cutpoints**, zsh row): add
+that line before the switch.
 
 ## Cutpoints
 
@@ -307,7 +324,7 @@ Exoskeleton is the model.
 
 | Framework (df) | ldf plugs in at | How the framework finds it |
 |---|---|---|
-| zsh startup, `source_zsh_dir` in `~/.config/zsh/plugins/` | `~/.local/share/zsh/plugins/*.zsh` (secrets in `*.secret.zsh`, untracked) | sourced after the shared plugins |
+| zsh startup, the Nix-built `~/.config/zsh/plugins.list.zsh` (`nix/zsh-plugins.nix`) | `~/.local/share/zsh/plugins/*.zsh` (secrets in `*.secret.zsh`, untracked) | listed after the shared plugins only when the local flake declares it, `dotfiles.zsh.plugins.<name> = "<abs path>";`; a new or removed plugin in either tier is live after a switch |
 | `dotfiles jobs` (`~/.config/dotfiles/cmd/jobs.zsh`; shared plugins `~/.config/dotfiles/jobs/`, shared deps `~/.config/dotfiles/deps/`) | `~/.local/share/dotfiles/jobs/<name>`, `~/.local/share/dotfiles/deps/<name>` | one launchd job runs both roots' plugins on unlock, login and a 5-minute tick; a plugin's `# deps:` line names deps run as its setup first (local wins); `dotfiles jobs list` |
 | Chrome Exoskeleton, `exo` (`~/.config/chrome-exoskeleton/`) | `~/.local/share/chrome-exoskeleton/plugins/<name>/` | `exo link` mounts both roots; `/ari-dotfile--submodule-chrome-exoskeleton` |
 | Claude skills, `/ari-dotfiles-skill-registry` (`~/.config/claude/skills/`) | `~/.local/share/claude-skills/<name>/` | symlinked into `~/.claude/skills` |
@@ -373,7 +390,8 @@ One dotfiles change; never stop after the first commit.
    `git -C ~/<path> log --oneline --graph main...HEAD` and ask which history to keep.
 2. **Commit in the dev repo** on `main`, named paths only (Workflow step 2's NEVER holds here too):
    `git -C ~/<path> add <paths> && git -C ~/<path> commit -m "…" -- <paths>`. Its hooks
-   and commit conventions apply, not the tier's.
+   and commit conventions apply, not the tier's. A commit to a packaged repo (run-log,
+   tmux-oneshot, plugged), or one that adds a skill directory, then takes Workflow step 3's switch.
 3. **Its push, and the lock bump, are Ari's**: run **Review before push** on the
    dev repo's unpushed commits, **and on every unpushed shared commit, even for
    `--submodules`: a mirror export publishes from the shared HEAD**, and end with "Run `dotfiles push` when ready."
@@ -440,8 +458,8 @@ the next `dotfiles push`, or the checkout is behind a pulled lock); `-` = not cl
   the next `dotfiles switch`
 
 ### Local (ldf)
-- **Zsh plugins**: `~/.local/share/zsh/plugins/`, sourced after the shared dir
-  via `source_zsh_dir --optional "${XDG_DATA_HOME}/zsh/plugins"`
+- **Zsh plugins**: `~/.local/share/zsh/plugins/`, sourced after the shared ones once the
+  local flake declares each (**Cutpoints**)
 - **Scripts**: `~/.local/bin/` and `~/.local/share/bin/`
 - **Job plugins**: `~/.local/share/dotfiles/jobs/<name>` — see **Cutpoints**
 - **Nix flake**: `~/.local/share/dotfiles/nix/`, this machine's flake, the one switched — see `/ari-dotfiles-nix`
@@ -466,7 +484,7 @@ edits and commits nothing:
       df: ~/.config/foo/bar.zsh → "foo: retry once on timeout" — the retry the last session left uncommitted
 
 The plan goes into Workflow step 5's closing message; its one `yes` commits every
-planned line, pushes local when it has an `origin`, and runs **Review before push** on anything shared (skipped on the personal laptop).
+planned line, switches when a line needs it (Workflow step 3), pushes local when it has an `origin`, and runs **Review before push** on anything shared (skipped on the personal laptop).
 Both tiers clean → the two status lines, nothing to ask. A change the subagent
 cannot explain is listed but left out of the plan.
 
