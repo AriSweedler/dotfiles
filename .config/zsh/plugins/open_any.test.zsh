@@ -1,5 +1,5 @@
-# Tests for open_any.zsh. Fake openers in a scratch dir stand in for the real tiers, so no
-# real opener is probed and nothing is opened.
+# Tests for open_any.zsh. Fake openers in a scratch dir, named by a scratch openers list, stand in
+# for the one a switch writes, so no real opener is probed and nothing is opened.
 # Only runs when OTTO_TEST__ZSH_PLUGINS_OPEN_ANY=true
 [[ "$OTTO_TEST__ZSH_PLUGINS_OPEN_ANY" == "true" ]] || return 0
 
@@ -51,10 +51,16 @@ EOF
 chmod +x "${_dir}/open-broken"
 : > "${_dir}/open-any"; chmod +x "${_dir}/open-any"
 
-export OPEN_ANY_IGNORE_DIR_GLOBAL=1 OPEN_ANY_IGNORE_DIR_LOCAL=1 OPEN_ANY_DIRS="${_dir}"
+: > "${_dir}/open-off"   # listed, not executable
+{
+  local _o
+  for _o in alpha any beta broken greedy off; do printf 'open-%s\t%s\n' "${_o}" "${_dir}/open-${_o}"; done
+} > "${_dir}/openers"
+export OPEN_ANY_LIST="${_dir}/openers" OPEN_ANY_PLUGIN_LIST="${_dir}/no-plugin-list"
 
-_t "dirs: only the extra dir when both tiers are ignored" "${_dir}" "$(open_any::dirs)"
-_t "openers: discovered by name, sorted, open-any excluded" $'open-alpha\nopen-beta\nopen-broken\nopen-greedy' "$(open_any::openers)"
+_t "openers: the list's names, open-any and a non-executable left out" $'open-alpha\nopen-beta\nopen-broken\nopen-greedy' "$(open_any::openers)"
+_t "path_of: the list's path" "${_dir}/open-beta" "$(open_any::path_of open-beta)"
+_t "path_of: unlisted → rc 1" "1" "$(open_any::path_of open-nope >/dev/null; echo $?)"
 _t "--list is the opener list" "$(open_any::openers)" "$(open_any --list)"
 
 local _out _rc
@@ -91,12 +97,22 @@ _t "verify: fails when an opener breaks the contract" "1" "${_rc}"
 _t "verify: names the rule-2 offender once per probe text" "3" "$(print -r -- "${_out}" | grep -c "breaks the --check contract, rule 2 | opener='open-broken'")"
 _t "verify: names the rule-5 offenders" "4" "$(print -r -- "${_out}" | grep -c "breaks rule 5")"
 
-rm -f "${_dir}/open-broken"
-export OPEN_ANY_DIRS="/nonexistent-open-any-dir"
-_out="$(open_any 'x' 2>&1)"; _rc=$?
-_t "no openers: rc 1 and says where it looked" "1" "$(print -r -- "${_out}" | grep -c "No openers installed, nothing opened | looked_in='/nonexistent-open-any-dir'")"
+# The opener plugins come from the zsh plugin list: only its open_*.zsh lines are sourced.
+mkdir -p "${_dir}/plugins"
+print -r -- 'function open_beta() { print -r -- loaded-beta; }' > "${_dir}/plugins/open_beta.zsh"
+print -r -- 'function not_an_opener() { :; }' > "${_dir}/plugins/other.zsh"
+printf 'source_file %s\nsource_file %s\n' "${_dir}/plugins/other.zsh" "${_dir}/plugins/open_beta.zsh" > "${_dir}/plugin-list"
+_t "load_plugins: sources the list's open_*.zsh" "loaded-beta" \
+  "$(OPEN_ANY_PLUGIN_LIST="${_dir}/plugin-list"; open_any::load_plugins; open_beta)"
+_t "load_plugins: and nothing else" "0" \
+  "$(OPEN_ANY_PLUGIN_LIST="${_dir}/plugin-list"; open_any::load_plugins; (( ${+functions[not_an_opener]} )) && print 1 || print 0)"
 
-unset OPEN_ANY_IGNORE_DIR_GLOBAL OPEN_ANY_IGNORE_DIR_LOCAL OPEN_ANY_DIRS
+rm -f "${_dir}/open-broken"
+export OPEN_ANY_LIST="/nonexistent-open-any-list"
+_out="$(open_any 'x' 2>&1)"; _rc=$?
+_t "no openers: rc 1 and names the list" "1" "$(print -r -- "${_out}" | grep -c "No openers listed, nothing opened | list='/nonexistent-open-any-list'")"
+
+unset OPEN_ANY_LIST OPEN_ANY_PLUGIN_LIST
 rm -rf "${_dir}"
 
 if (( _fail == 0 )); then

@@ -1,6 +1,7 @@
 # open_any — open the clipboard (or $1) with the one opener whose --check accepts it.
 #
-# Openers are the open-* executables in the global and local bin tiers, discovered by name.
+# Openers are the open-* executables a switch lists in ~/.config/open-any/openers, one
+# `name<TAB>path` line each, from both bin tiers (~/.config/dotfiles/nix/open-any.nix).
 # Zero or several matches warn and do nothing: a guess must never open the wrong thing.
 #
 # ── The open-* interface (hand this to whoever writes or audits an opener) ────────────────
@@ -18,12 +19,14 @@
 #      distinguishing shape (a prefix, a host) over a bare number or word.
 #   5. The logic is a zsh function open_<kind> in a plugin file open_*.zsh under
 #      ~/.config/zsh/plugins or ~/.local/share/zsh/plugins; the script is the thin wrapper
-#      `source <plugin>; open_<kind> "$@"`. open-any sources those plugins and probes the
-#      function in-process (a zsh start per probe costs more than the whole dispatch).
+#      `source <plugin>; open_<kind> "$@"`. open-any sources the open_*.zsh plugins of the zsh
+#      plugin list (~/.config/zsh/plugins.list.zsh) and probes the function in-process (a zsh
+#      start per probe costs more than the whole dispatch); with no list it runs the scripts.
+# A new opener joins the list at the next dotfiles switch (a local one: its flake's
+# dotfiles.openAny.openers).
 # `open-any --verify` checks 2 and 5 against every opener found; run it after adding one.
 #
-# Env: OPEN_ANY_IGNORE_DIR_GLOBAL / OPEN_ANY_IGNORE_DIR_LOCAL skip a tier; OPEN_ANY_DIRS is a
-# colon list of extra opener dirs. The same three knobs exist for tmux-oneshot.
+# Env: OPEN_ANY_LIST and OPEN_ANY_PLUGIN_LIST name another openers list and plugin list (tests).
 
 (( ${+functions[log::info]} )) || source "${${(%):-%x}:A:h}/log.zsh"
 
@@ -48,52 +51,47 @@ function open_any::take_check_flag() {
   [[ "${1:-}" == --check ]]
 }
 
-function open_any::dirs() {
-  [[ -z "${OPEN_ANY_IGNORE_DIR_GLOBAL:-}" ]] && print -r -- "${XDG_CONFIG_HOME:-${HOME}/.config}/bin"
-  [[ -z "${OPEN_ANY_IGNORE_DIR_LOCAL:-}" ]]  && print -r -- "${HOME}/.local/bin"
-  local d
-  for d in ${(s.:.)${OPEN_ANY_DIRS:-}}; do
-    print -r -- "${d/#\~/${HOME}}"
-  done
+function open_any::list() {
+  print -r -- "${OPEN_ANY_LIST:-${XDG_CONFIG_HOME:-${HOME}/.config}/open-any/openers}"
+}
+
+# Output: one opener name per line, in the list's order (by name). An entry whose file is not
+# executable is skipped; open-any is not an opener.
+function open_any::openers() {
+  local list name file
+  list="$(open_any::list)"
+  [[ -r "${list}" ]] || return 0
+  while IFS=$'\t' read -r name file; do
+    [[ -n "${name}" && "${name}" != open-any && -x "${file}" ]] && print -r -- "${name}"
+  done < "${list}"
   return 0
 }
 
-# Output: one opener name per line, first dir wins on a name clash. open-any is not an opener.
-function open_any::openers() {
-  local -A seen
-  local d f
-  for d in ${(f)"$(open_any::dirs)"}; do
-    for f in "${d}"/open-*(N.x:t); do
-      [[ "${f}" == open-any ]] && continue
-      (( ${+seen[${f}]} )) && continue
-      seen[${f}]=1
-      print -r -- "${f}"
-    done
-  done
-}
-
-# Input: opener name. Output: its path in the first dir that has it, so a dir off PATH works.
+# Input: opener name. Output: its path from the list, so an opener off PATH works.
 function open_any::path_of() {
-  local d
-  for d in ${(f)"$(open_any::dirs)"}; do
-    if [[ -x "${d}/${1}" ]]; then
-      print -r -- "${d}/${1}"
+  local list name file
+  list="$(open_any::list)"
+  [[ -r "${list}" ]] || return 1
+  while IFS=$'\t' read -r name file; do
+    if [[ "${name}" == "${1}" ]]; then
+      print -r -- "${file}"
       return 0
     fi
-  done
+  done < "${list}"
   return 1
 }
 
-# Sources every opener plugin so the open_<kind> functions exist in this shell. Idempotent
-# enough: plugins are function definitions.
+# Sources the opener plugins of the zsh plugin list (its open_*.zsh lines) so the open_<kind>
+# functions exist in this shell. Idempotent enough: plugins are function definitions.
 function open_any::load_plugins() {
-  local d f
-  for d in "${ZDOTDIR:-${HOME}/.config/zsh}/plugins" "${XDG_DATA_HOME:-${HOME}/.local/share}/zsh/plugins"; do
-    for f in "${d}"/open_*.zsh(N); do
-      [[ "${f:t}" == open_any.zsh || "${f:t}" == *.test.zsh ]] && continue
-      source "${f}"
-    done
-  done
+  local list="${OPEN_ANY_PLUGIN_LIST:-${ZDOTDIR:-${HOME}/.config/zsh}/plugins.list.zsh}" line f
+  [[ -r "${list}" ]] || return 0
+  while IFS= read -r line; do
+    [[ "${line}" == source_file\ * ]] || continue
+    f="${(Q)line#source_file }"
+    [[ "${f:t}" == open_*.zsh && "${f:t}" != open_any.zsh && -r "${f}" ]] && source "${f}"
+  done < "${list}"
+  return 0
 }
 
 # Input: opener name, then the opener's argv. Runs open_<kind> in-process when loaded, else
@@ -141,7 +139,7 @@ function open_any() {
 
   local -a openers=(${(f)"$(open_any::openers)"}) matched=() declined=()
   if (( ${#openers} == 0 )); then
-    log::warn "No openers installed, nothing opened | looked_in='${(j:, :)${(f)"$(open_any::dirs)"}}'"
+    log::warn "No openers listed, nothing opened | list='$(open_any::list)'"
     return 1
   fi
   open_any::load_plugins
