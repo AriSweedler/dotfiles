@@ -274,5 +274,47 @@ expect "commit lands a new lib file" "committed" "$(run_cmd "${cmd5}")"
 expect "the new lib file is in HEAD" "1" "$("${fenv[@]}" git -C "${FAKE}" df ls-tree HEAD .config/claude/lib/c.sh | wc -l | tr -d ' ')"
 expect "commit refuses a malformed --shared value" "1" "$(rc_of "${fenv[@]}" zsh "${BIN}/commit_blobs.zsh" --skill tskill --tier df --base-tree none --message m --shared .config/claude/lib/c.sh --execute)"
 
+# --- a dev-repo skill not yet linked into ~/.claude/skills (state=missing) ---
+# A new, untracked skill under a dev repo's skills/ has no link until after its
+# commit; init and record resolve it where it lives, never wait for a link.
+DEV="${FAKE}/.config/tdev" UDEV="${FAKE}/.config/udev"
+mkdir -p "${FAKE}/.config/dotfiles" "${DEV}/skills/tdevskill" "${UDEV}/skills/udevskill"
+print -r -- '[repo ".config/tdev"]
+	path = .config/tdev
+[repo ".config/udev"]
+	path = .config/udev' > "${FAKE}/.config/dotfiles/dev-repos"
+"${fenv[@]}" git -C "${DEV}" init -q -b main
+print -r -- readme > "${DEV}/README.md"
+"${fenv[@]}" git -C "${DEV}" add README.md
+"${fenv[@]}" git -C "${DEV}" commit -q -m init
+print -r -- one > "${DEV}/skills/tdevskill/SKILL.md"
+dout="$("${fenv[@]}" zsh "${BIN}/init.zsh" --skill tdevskill 2>/dev/null || true)"
+dkey() { print -r -- "${dout}" | awk -F= -v k="${1}" '$1 == k { print substr($0, length(k) + 2) }'; }
+expect "init: a not-yet-linked dev-repo skill reads as missing" "missing" "$(dkey state)"
+expect "init: its source is the dev repo" "submodule:.config/tdev" "$(dkey source)"
+expect "init: skill_dir is the dev repo's directory" "${DEV}/skills/tdevskill" "$(dkey skill_dir)"
+expect "init: FILES lists the skill's files" "1" "$(print -r -- "${dout}" | grep -cx "${DEV}/skills/tdevskill/SKILL.md" || true)"
+expect "init: off the Nix port, link_after is the registry's link" "1" "$(dkey link_after | grep -c 'ari-dotfiles-skill-registry/bin/link --execute$' || true)"
+dinv="$(dkey investigation_dir)"
+"${fenv[@]}" zsh "${BIN}/record_blobs.zsh" --skill tdevskill --tier df --source submodule:.config/tdev --message dmsg --investigation-dir "${dinv}" --edited "${FAKE}/.claude/skills/tdevskill/SKILL.md" --execute >"${TEST_ROOT}/drec.out" 2>/dev/null || true
+expect "record: the \$HOME/.claude/skills --edited form records an untracked skill" "1" "$(awk -F= '$1 == "files" { print $2 }' "${TEST_ROOT}/drec.out")"
+expect "record: the edit is not unmatched" "" "$(awk -F= '$1 == "unmatched_edited" { print $2 }' "${TEST_ROOT}/drec.out")"
+dcmd="$(awk '!/^```/' "${dinv}/tdevskill.commit.md")"
+"${fenv[@]}" git -C "${DEV}" switch -q -c feature
+expect "commit refuses a dev repo off main" "refused" "$(run_cmd "${dcmd}")"
+"${fenv[@]}" git -C "${DEV}" switch -q main
+expect "commit lands the not-yet-linked dev-repo skill" "committed" "$(run_cmd "${dcmd}")"
+expect "record refuses a tier that does not hold the skill" "1" "$(rc_of "${fenv[@]}" zsh "${BIN}/record_blobs.zsh" --skill tdevskill --tier df --message m --investigation-dir "${dinv}" --edited SKILL.md --execute)"
+
+"${fenv[@]}" git -C "${UDEV}" init -q -b main
+print -r -- one > "${UDEV}/skills/udevskill/SKILL.md"
+uinv="$(mk_driver udevskill u1)"
+expect "record refuses a dev repo with no commit" "1" "$(rc_of "${fenv[@]}" zsh "${BIN}/record_blobs.zsh" --skill udevskill --tier df --source submodule:.config/udev --message m --investigation-dir "${uinv}" --edited SKILL.md --execute)"
+
+mkdir -p "${DEV}/skills/toccupied"
+print -r -- one > "${DEV}/skills/toccupied/SKILL.md"
+print -r -- stray > "${FAKE}/.claude/skills/toccupied"
+expect "init refuses a missing skill whose link path holds a file" "1" "$(rc_of "${fenv[@]}" zsh "${BIN}/init.zsh" --skill toccupied)"
+
 print -- "summary  pass=${PASS} fail=${FAIL}"
 (( FAIL == 0 ))

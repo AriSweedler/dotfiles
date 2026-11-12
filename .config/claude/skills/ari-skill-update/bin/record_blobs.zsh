@@ -293,7 +293,8 @@ ${c_bold}Options:${c_rst}
   --investigation-dir DIR   Where <skill>.diff.patch and <skill>.commit.md are written (required)
   --message MSG             Commit message for the Commit command (required)
   --adopt                   The skill is not in a tier yet (state unlinked or ignored, or new)
-  --edited PATH             A file you edited: absolute, or relative to the skill dir; repeat.
+  --edited PATH             A file you edited: relative to the skill dir (the held directory unless --adopt),
+                            or absolute under it or under \$HOME/.claude/skills/<name>; repeat.
                             A changed file not named is foreign (never under --adopt)
   --shared PATH             A shared file outside the skill dir under the tier's lib root (~/.config/claude/lib for df;
                             the local tier has none): absolute, or relative to $HOME; repeat. Recorded with the skill's
@@ -308,8 +309,8 @@ ${c_bold}Output:${c_rst}
   | would-take | would-renew in a dry run), dry_run (1 | 0). A dry run hashes and diffs but writes no blob and no
   file, takes no claim, and logs the exact rerun with --execute.
   Refuses (exit 1) when another live driver holds the skill's claim, when an --edited path is not
-  a file in the skill dir, when --tier/--source do not hold the skill, or when a file changes
-  while it records (moved_files= in the log).
+  a file in the skill dir, when --tier/--source do not hold the skill, when the repo has no
+  commit yet, or when a file changes while it records (moved_files= in the log).
 EOF
 }
 
@@ -346,11 +347,6 @@ main() {
   is_dry_run && write=false
   local skill_dir="${SKILLS_DIR}/${skill}"
   local file i
-  local -a edited_rel=()
-  for file in "${edited[@]}"; do
-    edited_rel+=("$(skill_relative_path "${skill_dir}" "${file}")")
-  done
-
   local -a shared_rel=()
   for (( i = 1; i <= ${#shared}; i += 1 )); do
     [[ "${shared[i]}" == /* ]] || shared[i]="${HOME}/${shared[i]}"
@@ -387,24 +383,35 @@ main() {
     fi
   done
   shared_rel=("${(@u)shared_rel}")
+  if [[ "${adopt}" == "true" && ( -L "${skill_dir}" || ! -d "${skill_dir}" ) ]]; then
+    log::err "--adopt needs the skill as a real directory | skill_dir='${skill_dir}'"
+    return 1
+  fi
+  local link_dir="${skill_dir}"
+  if [[ "${adopt}" == "false" ]]; then
+    local holder held_source=""
+    holder="$(skill_holder_root "${tier}" "${skill}")"
+    [[ -n "${holder}" ]] && held_source="$(root_source "${tier}" "${holder}")"
+    # A held skill with no link yet is fine: its held directory is the skill. A link, when present, must point there.
+    if [[ -z "${holder}" || "${held_source}" != "${source}" ]] || [[ ( -e "${link_dir}" || -L "${link_dir}" ) && "${link_dir:A}" != "${holder:A}/${skill}" ]]; then
+      log::err "--tier and --source do not hold the skill | skill_dir='${link_dir:A}' holder='${holder}' held_source='${held_source}' tier='${tier}' source='${source}' hint='pass tier= and source= as init.zsh printed them; if they match, re-run the registry status and stop on any state but linked or missing'"
+      return 1
+    fi
+    skill_dir="${holder}/${skill}"
+    require_head "${tier}" "${source}" || return 1
+  fi
+  local -a edited_rel=()
+  for file in "${edited[@]}"; do
+    # The $HOME/.claude/skills form names a link that a held skill may not have yet.
+    [[ ! -e "${link_dir}" && ! -L "${link_dir}" && "${file}" == "${link_dir}/"?* ]] && file="${skill_dir}/${file#${link_dir}/}"
+    edited_rel+=("$(skill_relative_path "${skill_dir}" "${file}")")
+  done
   for (( i = 1; i <= ${#edited}; i += 1 )); do
     if [[ -z "${edited_rel[i]}" || ( -d "${skill_dir}/${edited_rel[i]}" && ! -L "${skill_dir}/${edited_rel[i]}" ) ]]; then
       log::err "--edited must name a file in the skill directory | edited='${edited[i]}' skill_dir='${skill_dir:A}'"
       return 1
     fi
   done
-  if [[ "${adopt}" == "true" && ( -L "${skill_dir}" || ! -d "${skill_dir}" ) ]]; then
-    log::err "--adopt needs the skill as a real directory | skill_dir='${skill_dir}'"
-    return 1
-  fi
-  if [[ "${adopt}" == "false" ]]; then
-    local held_dir
-    held_dir="$(repo_root "${tier}" "${source}")/$(repo_skill_rel "${tier}" "${source}" "${skill}")"
-    if [[ "${skill_dir:A}" != "${held_dir:A}" ]]; then
-      log::err "--tier and --source do not hold the skill | skill_dir='${skill_dir:A}' held_dir='${held_dir:A}' tier='${tier}' source='${source}' hint='pass tier= and source= as init.zsh printed them'"
-      return 1
-    fi
-  fi
 
   # === LOGIC ===
   local claim

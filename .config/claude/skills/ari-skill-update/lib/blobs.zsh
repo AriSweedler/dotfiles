@@ -73,6 +73,21 @@ repo_skill_rel() {
 }
 
 #######################################
+# Refuse when the repo that versions the skill has no commit yet: every diff and
+# stage here is against HEAD.
+# Arguments:
+#   $1 - tier
+#   $2 - source
+# Returns: 1 when HEAD is unborn
+#######################################
+require_head() {
+  local tier="${1}" source="${2}"
+  repo_git "${tier}" "${source}" rev-parse --verify -q HEAD >/dev/null 2>&1 && return 0
+  log::err "The repo has no commits yet | repo='$(repo_root "${tier}" "${source}")' hint='make its first commit per /ari-dotfile--submodule, then re-run'"
+  return 1
+}
+
+#######################################
 # Print `<mode> <blob>` for one file as git would store it, writing the blob to
 # the object store when asked.
 # Arguments:

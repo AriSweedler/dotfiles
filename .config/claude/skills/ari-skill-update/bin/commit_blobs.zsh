@@ -319,6 +319,30 @@ require_claim_not_held_by_other() {
 }
 
 #######################################
+# Refuse, committing nothing, when a dev repo's HEAD is not its main branch
+# (/ari-dotfile--submodule commits on main only), or when the repo has no commit.
+# Arguments:
+#   $1 - tier
+#   $2 - source
+# Returns: 1 on a refusal
+#######################################
+require_commit_branch() {
+  local tier="${1}" source="${2}" branch
+  if ! require_head "${tier}" "${source}"; then
+    print -r -- "result=refused"
+    print -r -- "branch=unborn"
+    return 1
+  fi
+  [[ "${source}" == submodule:* ]] || return 0
+  branch="$(repo_git "${tier}" "${source}" symbolic-ref -q --short HEAD || true)"
+  [[ "${branch}" == main ]] && return 0
+  log::err "The dev repo is not on main; nothing committed | repo='$(repo_root "${tier}" "${source}")' branch='${branch:-detached}' hint='put it on main per /ari-dotfile--submodule, then send the driver re-propose'"
+  print -r -- "result=refused"
+  print -r -- "branch=${branch:-detached}"
+  return 1
+}
+
+#######################################
 # Release the claim after a commit; a dry run keeps it.
 # Globals: None
 # Arguments:
@@ -367,11 +391,13 @@ ${c_bold}Options:${c_rst}
 record_blobs.zsh writes this command into the proposal; run it as written.
 
 ${c_bold}Output:${c_rst}
-  key=value lines: result (committed | already-committed | dry-run | refused), sha, mismatched,
-  dry_run (1 | 0). A dry run runs every check and stages in the private index; it adopts and
+  key=value lines: result (committed | already-committed | dry-run | refused | committed-differs), sha,
+  mismatched, claim_holder, branch, dry_run (1 | 0). committed-differs carries sha=: a commit landed
+  whose content is not the proposal's. A dry run runs every check and stages in the private index; it adopts and
   commits nothing and logs the exact rerun with --execute.
   Exit 1 on a refusal or an error; a refusal commits nothing. A claim held by another live driver
-  is a refusal (result=refused, claim_holder=<its folder>).
+  is a refusal (result=refused, claim_holder=<its folder>); so is a dev repo off main, or a repo
+  with no commit (result=refused, branch=<name | detached | unborn>).
 
 ${c_bold}Environment:${c_rst}
   DRY_RUN              Set and not 0 (a parent's dry run): a dry run, --execute or not; 0 alone never acts
@@ -473,6 +499,7 @@ main() {
   local skill_rel
   skill_rel="$(repo_skill_rel "${tier}" "${source}" "${skill}")"
   require_claim_not_held_by_other "${skill}" "${claim_dir}" || return 1
+  require_commit_branch "${tier}" "${source}" || return 1
 
   local adopt_pending="${adopt}"
   [[ "${adopt}" == "true" && -L "${SKILLS_DIR}/${skill}" ]] && adopt_pending=false

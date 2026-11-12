@@ -121,7 +121,32 @@ check_skill_state() {
     log::info "Skill is versioned in the dotfiles | skill='${skill}' tier='${tier}'"
     return 0
   fi
+  if [[ "${state}" == "missing" ]]; then
+    if [[ -e "${SKILLS_DIR}/${skill}" ]]; then
+      log::err "Something that is not a link occupies the skill's link path | skill='${skill}' path='${SKILLS_DIR}/${skill}' hint='move it aside, then re-run'"
+      return 1
+    fi
+    log::info "Skill is held but not linked yet; using its real directory | skill='${skill}' tier='${tier}' hint='the driver never links; link_after= names the step Ari runs after the commit'"
+    return 0
+  fi
   log::warn "Skill is not adopted into a dotfiles tier | skill='${skill}' state='${state}' hint='draft the adopt command in the proposal; it runs only on yes'"
+}
+
+#######################################
+# Print the step that links a held skill with no link, per the registry's Link
+# on a machine: a Nix machine's switch makes shared-tier and dev-repo links;
+# the registry's link makes the rest.
+# Globals: HOME
+# Arguments:
+#   $1 - tier
+#######################################
+link_step() {
+  local tier="${1}"
+  if [[ "${tier}" == "df" && -e "${HOME}/dotfiles/.git" ]]; then
+    print -r -- "dotfiles switch"
+    return 0
+  fi
+  print -r -- "zsh \$HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link --execute"
 }
 
 #######################################
@@ -173,18 +198,21 @@ ${c_bold}Options:${c_rst}
   -h, --help     Show this help
 
 ${c_bold}Output:${c_rst}
-  key=value lines (skill, is_new, state, tier, source, skill_dir, investigation_dir,
+  key=value lines (skill, is_new, state, tier, source, skill_dir, link_after, investigation_dir,
   scratchpad, proposal, claim, concurrent) plus a FILES section listing the skill's files to read.
+  Creates the investigation folder and a pre-filled scratchpad; proposal is the
+  path the driver writes the proposal to (not created here).
   claim is taken, renewed, taken-stale or taken-over: this folder now owns the skill. Another live
   driver's claim refuses (exit 1, nothing created) and names its folder: send it the change by
   SendMessage, or pass --takeover. A claim is stale after ${CLAIM_STALE_SECONDS}s with no change in its
   owner's folder; commit_blobs.zsh releases it.
   concurrent lists, comma-separated, this skill's other investigation folders with a
   file newer than its last commit and the last 24 hours.
-  Creates the investigation folder and a pre-filled scratchpad; proposal is the
-  path the driver writes the proposal to (not created here). state/tier per
-  /ari-dotfiles-skill-registry; source is submodule:<path> when a submodule's
-  skills/ holds the skill, else empty.
+  state/tier per /ari-dotfiles-skill-registry; source is submodule:<path> when a submodule's
+  skills/ holds the skill, else empty. skill_dir is \$HOME/.claude/skills/<name>, or for
+  state=missing (held, not linked yet) the skill's own real directory (<tier or dev-repo
+  skills root>/<name>). link_after is empty unless state=missing: then the step that links
+  the skill after its commit (dotfiles switch, or the registry's link --execute), Ari's to run.
 EOF
 }
 
@@ -227,12 +255,23 @@ main() {
   fi
   check_skill_state "${skill}" "${is_new}" "${state}" "${tier}" || return 1
   # A skill held by a submodule's skills/ is committed in that repo, not the tier.
+  local skill_dir="${SKILLS_DIR}/${skill}" holder=""
   if [[ "${state}" == "linked" || "${state}" == "missing" ]]; then
-    source="$(root_source "${tier}" "$(skill_holder_root "${tier}" "${skill}")")"
+    holder="$(skill_holder_root "${tier}" "${skill}")"
+    source="$(root_source "${tier}" "${holder}")"
+  fi
+  # A held skill with no link yet is read where it lives; who links it is the registry's rule (§ Link on a machine).
+  local link_after=""
+  if [[ "${state}" == "missing" ]]; then
+    if [[ -z "${holder}" ]]; then
+      log::err "Skill state is missing but no root holds it | skill='${skill}' tier='${tier}' hint='re-run the registry status'"
+      return 1
+    fi
+    skill_dir="${holder}/${skill}"
+    link_after="$(link_step "${tier}")"
   fi
 
   # === LOGIC ===
-  local skill_dir="${SKILLS_DIR}/${skill}"
   local skill_md="${skill_dir}/SKILL.md"
 
   local purpose
@@ -259,8 +298,10 @@ main() {
   scratchpad="${inv_dir}/scratchpad.md"
   proposal="${inv_dir}/proposal.md"
 
+  local skill_md_shown="\$HOME/.claude/skills/${skill}/SKILL.md"
+  [[ "${state}" == "missing" ]] && skill_md_shown="${skill_md}"
   cat > "${scratchpad}" <<EOF
-- **Skill**: ${skill} — \$HOME/.claude/skills/${skill}/SKILL.md — ${purpose}
+- **Skill**: ${skill} — ${skill_md_shown} — ${purpose}
 - **Purpose**: <one sentence from the # heading + opening paragraph>
 - **Goal**: <the brief's Change line (inline: the user's request)> — <intent | implementation | both> (<why>)
 - **Changes made**:
@@ -300,6 +341,7 @@ state=${state}
 tier=${tier}
 source=${source}
 skill_dir=${skill_dir}
+link_after=${link_after}
 investigation_dir=${inv_dir}
 scratchpad=${scratchpad}
 proposal=${proposal}
