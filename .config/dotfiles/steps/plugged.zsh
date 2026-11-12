@@ -1,4 +1,4 @@
-# step plugged — the Swift dev repo checkout (dotfiles_repo clones it): hooks and the
+# step plugged — the plugged dev repo checkout (dotfiles_repo clones it): hooks and the
 # personal identity are plain local config a fresh checkout lacks. The binary on PATH is Nix's
 # (pkgs/plugged, built by `dotfiles switch`); bin/plugged-dev keeps the edit-and-run loop.
 step::declare plugged --group tools --needs dotfiles_repo \
@@ -10,8 +10,6 @@ step::plugged::dir() {
   print -r -- "${HOME}/.config/plugged"
 }
 
-# The release binary: Nix's (nix/pkgs/plugged, on PATH from the profile) when it is installed, else
-# where bin/plugged's build lands: the shared Swift cache through swift-pkg, else SwiftPM's .build/.
 # Where home-manager installs the plugged that pkgs/plugged builds.
 step::plugged::binary() {
   print -r -- "/etc/profiles/per-user/${USER}/bin/plugged"
