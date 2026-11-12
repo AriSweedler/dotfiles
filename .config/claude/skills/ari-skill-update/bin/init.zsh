@@ -126,7 +126,7 @@ check_skill_state() {
       log::err "Something that is not a link occupies the skill's link path | skill='${skill}' path='${SKILLS_DIR}/${skill}' hint='move it aside, then re-run'"
       return 1
     fi
-    log::info "Skill is held but not linked yet; using its real directory | skill='${skill}' tier='${tier}' hint='the driver never links; link_after= names the step Ari runs after the commit'"
+    log::info "Skill is held but not linked yet; using its real directory | skill='${skill}' tier='${tier}' hint='the driver never links; link_after= names the step the main thread runs after the commit (Link the skill)'"
     return 0
   fi
   log::warn "Skill is not adopted into a dotfiles tier | skill='${skill}' state='${state}' hint='draft the adopt command in the proposal; it runs only on yes'"
@@ -212,7 +212,8 @@ ${c_bold}Output:${c_rst}
   skills/ holds the skill, else empty. skill_dir is \$HOME/.claude/skills/<name>, or for
   state=missing (held, not linked yet) the skill's own real directory (<tier or dev-repo
   skills root>/<name>). link_after is empty unless state=missing: then the step that links
-  the skill after its commit (dotfiles switch, or the registry's link --execute), Ari's to run.
+  the skill after its commit (dotfiles switch, or the registry's link --execute); the main
+  thread runs it (SKILL.md Link the skill), never the driver.
 EOF
 }
 
