@@ -2,8 +2,10 @@
 # it, put it in place and commit it in its tier. Loaded by cmd/jobs.zsh; defines functions only.
 #
 # The live file is never edited: the resident agent rediscovers plugins and rereads their headers
-# on every tick, and a new plugin with a `# cron:` line is due at once. The draft lives in
-# JOBS_STATE_DIR/drafts until it passes, so a failed edit resumes where it left off.
+# on every tick. The draft lives in JOBS_STATE_DIR/drafts until it passes, so a failed edit
+# resumes where it left off. A plugin is found through the set (JOBS_ROOT) and edited at the tier
+# file its link points to; a --new one is written in its tier and joins the set at the next
+# dotfiles switch (nix/dotfiles-jobs.nix).
 
 # jobs_edit_template <plugin|dep> <name>: what --new starts from. Its TODO line is not
 # documentation, so an unedited template does not pass.
@@ -70,27 +72,29 @@ jobs_edit() {
   local -i new=${+opts[--new]}
   [[ -n "${name}" ]] || usage_error "jobs edit needs a NAME | see='${CLI_NAME} jobs list'"
   [[ "${name}" != */* && "${name}" != .* && "${name}" != README.md ]] || usage_error "jobs edit: not a plugin name | name='${name}'"
+  local set_root
   local -a roots
-  if [[ "${kind}" == dep ]]; then roots=("${DEPS_ROOT_DF}" "${DEPS_ROOT_LDF}"); else roots=("${JOBS_ROOT_DF}" "${JOBS_ROOT_LDF}"); fi
-  # An existing file, executable or not (a plugin turned off with chmod -x is still one to edit).
-  local -a found=("${roots[1]}/${name}"(N.) "${roots[2]}/${name}"(N.))
+  if [[ "${kind}" == dep ]]; then
+    set_root="${DEPS_ROOT}"; roots=("${DEPS_ROOT_DF}" "${DEPS_ROOT_LDF}")
+  else
+    set_root="${JOBS_ROOT}"; roots=("${JOBS_ROOT_DF}" "${JOBS_ROOT_LDF}")
+  fi
+  # The set's link, executable or not (a plugin turned off with chmod -x is still one to edit).
+  local -a found=("${set_root}/${name}"(N-.))
   if (( new )); then
-    (( ${#found} == 0 )) || { log::err "${kind} exists; edit it without --new | file='${found[1]}'"; return 1; }
+    (( ${#found} == 0 )) || { log::err "${kind} exists; edit it without --new | file='${found[1]:A}'"; return 1; }
     [[ -n "${tier}" ]] || tier=ldf
     if [[ "${tier}" == df ]]; then root="${roots[1]}"; else root="${roots[2]}"; fi
     file="${root}/${name}"
+    [[ ! -e "${file}" ]] || { log::err "${kind} exists in its tier but not in the set yet; edit it there, then ${CLI_NAME} switch | file='${file}'"; return 1; }
   else
     [[ -z "${tier}" ]] || usage_error "jobs edit: --local and --global choose the tier of a --new ${kind} only"
     if (( ${#found} == 0 )); then
       log::err "no such ${kind}; --new creates one | name='${name}' fix='${CLI_NAME} jobs edit ${name}${${kind:#plugin}:+ --dep} --new'"
       return 1
     fi
-    if (( ${#found} > 1 )); then
-      log::err "${kind} in both tiers; remove one first | name='${name}' files='${(j:, :)found}'"
-      return 1
-    fi
-    file="${found[1]}"
-    tier=df; [[ "${file}" == "${roots[2]}/"* ]] && tier=ldf
+    file="${found[1]:A}"
+    jobs_tier_of "${found[1]}"; tier="${REPLY}"
   fi
 
   JOBS_EDIT_KIND="${kind}" JOBS_EDIT_NAME="${name}"
@@ -118,7 +122,8 @@ jobs_edit() {
     local what="job ${name}"; [[ "${kind}" == dep ]] && what="job dep ${name}"
     tier::commit "${t}" "${CLI_NAME}: ${verb} ${what} (${t})" "${file}" || return 1
   fi
-  if [[ "${kind}" == plugin ]]; then print -r -- "next: ${CLI_NAME} jobs run ${name}"
+  if (( new )); then print -r -- "next: ${CLI_NAME} switch puts ${name} in the set, then ${CLI_NAME} jobs list"
+  elif [[ "${kind}" == plugin ]]; then print -r -- "next: ${CLI_NAME} jobs run ${name}"
   else print -r -- "next: ${CLI_NAME} jobs list"; fi
 }
 

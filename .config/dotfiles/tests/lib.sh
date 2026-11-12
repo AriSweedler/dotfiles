@@ -513,6 +513,23 @@ seed_home_baseline() {
   shim_logs_reset
 }
 
+# jobs_switch: the jobs set as a switch builds it (nix/dotfiles-jobs.nix): one link per shared
+# plugin and dep (every file but a README), then the local tier's, a local name replacing the
+# shared one. Run it after adding or removing a plugin file, as a switch would be run.
+jobs_switch() {
+  local set="${XDG_CONFIG_HOME}/dotfiles-jobs" sub src f
+  rm -rf "${set}"
+  for sub in plugins deps; do
+    mkdir -p "${set}/${sub}"
+    for src in "${HOME}/.config/dotfiles/${sub/plugins/jobs}" "${XDG_DATA_HOME}/dotfiles/${sub/plugins/jobs}"; do
+      for f in "${src}"/*; do
+        [[ -f "${f}" && "${f}" != *.md ]] || continue
+        ln -sfn "${f}" "${set}/${sub}/${f##*/}"
+      done
+    done
+  done
+}
+
 # The jobs launchd job as nix-darwin installs it at a switch (launchd.user.agents.dotfiles-jobs):
 # its plist, the program under the Nix store, loaded. The world has switched, so it has one.
 world_seed_jobs_job() {

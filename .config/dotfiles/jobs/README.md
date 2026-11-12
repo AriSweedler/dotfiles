@@ -6,9 +6,13 @@ resident agent launchd keeps alive, because macOS announces an unlock only as a 
 notification, which launchd itself cannot subscribe to; the agent observes it, keeps the timer,
 runs the load tick when it starts, and never overlaps two runs. This
 directory holds the shared tier's plugins; the local tier adds its own under
-`~/.local/share/dotfiles/jobs/`, and the framework runs both (`dotfiles jobs list` shows each
-with its tier). Same shape as the Chrome Exoskeleton: framework and public plugins in df,
-private plugins in ldf, one place they meet.
+`~/.local/share/dotfiles/jobs/`, listed in its flake as `dotfiles.jobs.plugins.<name>`. The
+framework never scans the tiers: a `dotfiles switch` builds one set,
+`~/.config/dotfiles-jobs/plugins/<name>`, a link per plugin to its editable file, a local name
+replacing a shared one (`../nix/dotfiles-jobs.nix`), and the framework runs that set
+(`dotfiles jobs list` shows each plugin with the tier its link points into). An edit to a
+plugin is live at once; a new or removed one needs the switch. Same shape as the Chrome
+Exoskeleton: framework and public plugins in df, private plugins in ldf, one place they meet.
 
 A plugin is one executable file named for the job. Its header says when it runs: a
 `# triggers:` line, and any number of `# cron:` lines, one five-field expression each:
@@ -33,7 +37,7 @@ by hand). A dep needs the line saying what it provides. Directives, blank `#` li
 not count. One that lacks it fails the `dotfiles_jobs` step, by hand only, naming the fix:
 `dotfiles jobs edit NAME` (`--dep` for a dep), which edits a draft, checks it (syntax, these
 header lines, this rule) and only then puts it in place and commits it in its tier; `--new`
-starts one from a template. To turn a plugin off, `chmod -x` it: non-executables are not
+starts one from a template, which joins the set at the next `dotfiles switch`. To turn a plugin off, `chmod -x` it: non-executables are not
 plugins, and an edit keeps it off.
 
 An optional `# timeout: <seconds>` line caps a run (default 900); the framework kills a
@@ -44,9 +48,10 @@ A plugin that needs setup names it on a `# deps:` line:
 
     # deps: node
 
-Each name is an executable under `~/.local/share/dotfiles/deps/` (this machine) or
-`~/.config/dotfiles/deps/` (shared). The local one wins: a dep says how this machine provides
-something, and the machine knows best. The framework runs a plugin's deps in order before the
+Each name is an executable in the set's `~/.config/dotfiles-jobs/deps/`, built from
+`~/.config/dotfiles/deps/` (shared) and the local flake's `dotfiles.jobs.deps` (this machine).
+A local dep replaces a shared one of its name: a dep says how this machine provides something,
+and the machine knows best. The framework runs a plugin's deps in order before the
 plugin, every time it runs, with the plugin's name as `$1` and 120 s each. A dep's stdout is
 its contribution to the plugin's environment, `NAME=VALUE` lines and nothing else, exported
 before the plugin starts; its stderr is setup chatter and goes to the plugin's log. A dep that
@@ -79,7 +84,7 @@ independent of one another, so the order they run in is irrelevant and
 no name carries a number. A job with a CLI of its own (git-health, aws-sso-autologin) keeps it
 in a `bin/` and leaves a shim here that execs it.
 
-    dotfiles jobs list          plugins of both tiers, triggers, last run and rc, agent state
+    dotfiles jobs list          the set's plugins and their tiers, triggers, last run and rc, agent state
     dotfiles jobs run <name>    run one now (trigger 'manual')
     dotfiles jobs unlock        simulate a screen unlock (SIGUSR1 to the agent)
     dotfiles jobs install       removes the per-plugin jobs this replaced; the launchd job is nix-darwin's (dotfiles switch)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Job deps: a plugin's `# deps:` names run before it, their NAME=VALUE stdout becomes its
-# environment, the local root wins over the shared one, and a dep that is unknown, fails, or
+# environment, a local dep replaces a shared one in the set, and a dep that is unknown, fails, or
 # prints anything else blocks the plugin with rc 125 and a log line naming it.
 set -u
 # shellcheck source=lib.sh
@@ -14,15 +14,17 @@ DEPS_LDF="${XDG_DATA_HOME}/dotfiles/deps"
 STATE="${XDG_STATE_HOME}/dotfiles/jobs"
 mkdir -p "${JOBS_DF}" "${DEPS_DF}" "${DEPS_LDF}"
 
-# plugin NAME HEADER-LINE: a plugin that reports its environment and argument.
+# plugin NAME HEADER-LINE: a plugin that reports its environment and argument, switched in.
 plugin() {
   printf '#!/usr/bin/env zsh\n%s\nprint -r -- "ran greeting=${GREETING:-unset} from=${DEP_FROM:-unset} arg=${DEP_ARG:-unset} trigger=$1"\n' "$2" > "${JOBS_DF}/$1"
   chmod +x "${JOBS_DF}/$1"
+  jobs_switch
 }
-# dep ROOT NAME BODY: an executable dep in one root.
+# dep ROOT NAME BODY: an executable dep in one tier, switched in.
 dep() {
   printf '#!/usr/bin/env zsh\n%s\n' "$3" > "$1/$2"
   chmod +x "$1/$2"
+  jobs_switch
 }
 
 plugin probe '# deps: greet'
@@ -38,6 +40,7 @@ assert_eq "probe: rc recorded" 0 "$(cat "${STATE}/probe.rc")"
 assert_contains "probe: the log file has the run" "$(cat "${STATE}/probe.log")" "ran greeting=hello"
 
 rm "${DEPS_LDF}/greet"
+jobs_switch
 nm jobs run probe
 assert_contains "shared dep is the fallback" "${OUT}" "# dep greet ok | tier='df'"
 assert_contains "shared dep's environment reaches the plugin" "${OUT}" "from=df"

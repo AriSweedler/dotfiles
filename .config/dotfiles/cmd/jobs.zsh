@@ -1,4 +1,4 @@
-# dotfiles/cmd/jobs.zsh — `dotfiles jobs`: one launchd job runs every job plugin, from both tiers.
+# dotfiles/cmd/jobs.zsh — `dotfiles jobs`: one launchd job runs every job plugin of the set Nix builds.
 zmodload zsh/datetime
 zmodload -F zsh/stat b:zstat
 
@@ -9,14 +9,15 @@ verb::about jobs <<'EOF'
 One launchd job, ${JOBS_LABEL}: a resident agent that runs
 the plugins whose triggers match on screen unlock (a distributed
 notification only a resident observer can hear), at login and every
-${JOBS_INTERVAL_SECONDS}s. A plugin is an executable in $(help::tilde "${JOBS_ROOT_DF}") (shared)
-or $(help::tilde "${JOBS_ROOT_LDF}") (this machine) whose header has
+${JOBS_INTERVAL_SECONDS}s. A plugin is an executable in $(help::tilde "${JOBS_ROOT}"),
+the set a dotfiles switch builds from $(help::tilde "${JOBS_ROOT_DF}") (shared)
+and $(help::tilde "${JOBS_ROOT_LDF}") (this machine), whose header has
 '# triggers: unlock load' and any '# cron: m h dom mon dow' lines; it gets
 the trigger as \$1; the engine posts a banner when it ends (an alert, click
 copies the log's path and opens it, on failure), except for an ending a '# notifies: ok fail' line
 says the plugin reports itself. A '# deps: name...' line names setup run before
-it: executables in $(help::tilde "${DEPS_ROOT_LDF}") (this machine, wins) or
-$(help::tilde "${DEPS_ROOT_DF}") (shared) whose stdout, NAME=VALUE lines, becomes the
+it: executables in $(help::tilde "${DEPS_ROOT}") (built from $(help::tilde "${DEPS_ROOT_DF}") and
+$(help::tilde "${DEPS_ROOT_LDF}"), a local dep replacing a shared one) whose stdout, NAME=VALUE lines, becomes the
 plugin's environment; a failing dep blocks the plugin. Logs and success
 stamps: $(help::tilde "${JOBS_STATE_DIR}"). Every plugin and dep says in its
 header what it does (a plugin also when it runs); one that does not fails
@@ -45,50 +46,32 @@ jobs::edit() { need_lib "${ARI_DOTFILES_CMD}/jobs/edit.zsh" || return 3; jobs_ed
 
 # --- plugins ---
 
-# Every directory that may hold job plugins: the shared tier's, then the local tier's.
-jobs_roots() {
-  print -r -- "${JOBS_ROOT_DF}"
-  print -r -- "${JOBS_ROOT_LDF}"
+# jobs_tier_of <link>: REPLY is df or ldf, read from where the set's link points. The set is one
+# directory a switch builds (nix/dotfiles-jobs.nix); which tier wrote a name is already settled
+# there, so nothing here scans or ranks the tiers.
+jobs_tier_of() {
+  if [[ "${1:A}" == "${XDG_DATA_HOME:A}/"* ]]; then REPLY=ldf; else REPLY=df; fi
 }
 
-# Fill JOB_PATH (name → executable) and JOB_TIER (name → df | ldf). Non-executables (a
-# README) are not plugins. A name present in both tiers runs from the shared one, logged.
-# The deps the plugins may name are discovered alongside.
+# Fill JOB_PATH (name → executable) and JOB_TIER (name → df | ldf) from the set. A plugin
+# turned off with chmod -x is not one. The deps the plugins may name are discovered alongside.
 jobs_discover() {
   JOB_PATH=(); JOB_TIER=()
-  local root tier file name
-  for root in "${(@f)$(jobs_roots)}"; do
-    tier=df; [[ "${root}" == "${JOBS_ROOT_LDF}" ]] && tier=ldf
-    for file in "${root}"/*(N-.x); do
-      name="${file:t}"
-      if [[ -n "${JOB_PATH[${name}]:-}" ]]; then
-        log::err "job defined in both tiers; the shared one runs | name='${name}' shadowed='${file}'"; continue
-      fi
-      JOB_PATH[${name}]="${file}"; JOB_TIER[${name}]="${tier}"
-    done
+  local file
+  for file in "${JOBS_ROOT}"/*(N-.x); do
+    jobs_tier_of "${file}"
+    JOB_PATH[${file:t}]="${file}"; JOB_TIER[${file:t}]="${REPLY}"
   done
   deps_discover
 }
 
-# Every directory that may hold deps: the local tier's first, then the shared tier's. A dep
-# says how this machine provides something (node, a login), so the machine's answer wins and
-# the shared one is the fallback; the reverse of jobs, where a duplicate is a mistake.
-deps_roots() {
-  print -r -- "${DEPS_ROOT_LDF}"
-  print -r -- "${DEPS_ROOT_DF}"
-}
-
-# Fill DEP_PATH (name → executable) and DEP_TIER (name → df | ldf); the first root wins.
+# Fill DEP_PATH (name → executable) and DEP_TIER (name → df | ldf) from the set.
 deps_discover() {
   DEP_PATH=(); DEP_TIER=()
-  local root tier file name
-  for root in "${(@f)$(deps_roots)}"; do
-    tier=ldf; [[ "${root}" == "${DEPS_ROOT_DF}" ]] && tier=df
-    for file in "${root}"/*(N-.x); do
-      name="${file:t}"
-      [[ -n "${DEP_PATH[${name}]:-}" ]] && continue
-      DEP_PATH[${name}]="${file}"; DEP_TIER[${name}]="${tier}"
-    done
+  local file
+  for file in "${DEPS_ROOT}"/*(N-.x); do
+    jobs_tier_of "${file}"
+    DEP_PATH[${file:t}]="${file}"; DEP_TIER[${file:t}]="${REPLY}"
   done
 }
 
@@ -123,8 +106,8 @@ jobs_doc_problems() {
   return 0
 }
 
-# jobs_undocumented: one `<plugin|dep> <name>: <problem>, <problem>` line per plugin and dep (both
-# tiers, as discovered) whose header lacks what jobs_doc_problems asks for.
+# jobs_undocumented: one `<plugin|dep> <name>: <problem>, <problem>` line per plugin and dep of
+# the set whose header lacks what jobs_doc_problems asks for.
 jobs_undocumented() {
   local name kind
   local -a reply
@@ -316,7 +299,7 @@ jobs_run_deps() {
   for dep in ${=$(jobs_deps "${plugin}")}; do
     exe="${DEP_PATH[${dep}]:-}"
     if [[ -z "${exe}" ]]; then
-      print -r -- "# dep ${dep}: unknown | roots='${DEPS_ROOT_LDF}, ${DEPS_ROOT_DF}'"; return 1
+      print -r -- "# dep ${dep}: unknown | root='${DEPS_ROOT}'"; return 1
     fi
     start="${EPOCHREALTIME}"; rc=0
     tmp="${JOBS_STATE_DIR}/${name}.dep"   # the dep's stdout; kept until the next dep overwrites it
@@ -456,7 +439,7 @@ jobs_list_deps() {
   done
   local -a names=("${(@k)wanted}" "${(@k)DEP_PATH}")
   (( ${#names} )) || return 0
-  print -r -- "  ${c_bold}deps${c_rst} (a plugin's '# deps:' line, run as its setup; ${DEPS_ROOT_LDF} wins over ${DEPS_ROOT_DF})"
+  print -r -- "  ${c_bold}deps${c_rst} (a plugin's '# deps:' line, run as its setup; from ${DEPS_ROOT})"
   printf '  %-4s %-20s %s\n' tier name 'wanted by'
   for dep in "${(@uo)names}"; do
     if [[ -n "${DEP_PATH[${dep}]:-}" ]]; then
@@ -470,7 +453,7 @@ jobs_list_deps() {
 jobs_list() {
   jobs_discover
   print -r -- "${c_bold}jobs${c_rst} (${JOBS_LABEL}: on unlock, at login, every ${JOBS_INTERVAL_SECONDS}s)"
-  if (( ${#JOB_PATH} == 0 )); then print -r -- "  none | roots='${JOBS_ROOT_DF}, ${JOBS_ROOT_LDF}'"; return 0; fi
+  if (( ${#JOB_PATH} == 0 )); then print -r -- "  none | root='${JOBS_ROOT}' (a dotfiles switch builds it)"; return 0; fi
   local name stamp last rc
   printf '  %-4s %-20s %-22s %-20s %s\n' tier name triggers 'last run' rc
   for name in "${(@ko)JOB_PATH}"; do

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # `jobs edit`: a plugin or dep edited as a draft in $EDITOR, checked (syntax, header lines, the
 # documentation rule), then put in place and committed in its tier; a draft that fails is kept for
-# the next edit and the live file never changes. Then the doc rule as the dotfiles_jobs step sees it.
+# the next edit and the live file never changes. A plugin is found through the set a switch builds
+# (jobs_switch stands in for it). Then the doc rule as the dotfiles_jobs step sees it.
 set -u
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -15,6 +16,7 @@ TICKER_DRAFT="${DRAFTS}/.config%dotfiles%jobs%ticker"   # a draft is named for i
 mkdir -p "${JOBS_DF}" "${JOBS_LDF}" "${DEPS_LDF}"
 printf '#!/usr/bin/env zsh\n# cron: 0 * * * *\n# Hourly: says it ticked.\nprint -r -- tick\n' > "${JOBS_DF}/ticker"
 chmod +x "${JOBS_DF}/ticker"
+jobs_switch
 seed_fake_repos
 seed_ldf_remote
 
@@ -73,8 +75,16 @@ assert_contains "new plugin: the template's trigger line" "$(cat "${JOBS_LDF}/he
 assert_eq "new plugin: one ldf commit" "$(( ldf_before + 1 ))" "$(ldf_count)"
 assert_eq "new plugin: the subject" "dotfiles: add job hello (local)" "$(ldf_git log -1 --format=%s)"
 assert_eq "new plugin: pushed" "$(ldf_git rev-parse HEAD)" "$(git --git-dir="${FIX}/remotes/local-dotfiles.git" rev-parse main)"
-assert_contains "new plugin: the next step" "${OUT}" "next: dotfiles jobs run hello"
+assert_contains "new plugin: the next step is the switch" "${OUT}" "next: dotfiles switch puts hello in the set"
 assert_no_file "new plugin: no draft left" "${DRAFTS}/.local%share%dotfiles%jobs%hello"
+edit noop edit hello --new
+assert_eq "--new again before the switch: exit 1" 1 "${RC}"
+assert_contains "--new again before the switch: names the switch" "${ERR}" "not in the set yet"
+nm jobs list
+assert_not_contains "before the switch: not in the set" "${OUT}" "hello"
+jobs_switch
+nm jobs list
+assert_contains "after the switch: in the set, from the local tier" "${OUT}" "ldf  hello"
 edit noop edit hello --new
 assert_eq "--new on an existing plugin: exit 1" 1 "${RC}"
 
@@ -135,12 +145,16 @@ assert_eq "new dep: exit 0" 0 "${RC}"
 assert_eq "new dep: in the local deps, executable" 1 "$([[ -x "${DEPS_LDF}/greet" ]] && echo 1 || echo 0)"
 assert_eq "new dep: the subject" "dotfiles: add job dep greet (local)" "$(ldf_git log -1 --format=%s)"
 
-# ── both tiers: refused ──
+# ── one name in both tiers: the set holds the local one, and edit opens it ──
 cp "${JOBS_DF}/ticker" "${JOBS_LDF}/ticker"
+jobs_switch
+nm jobs list
+assert_contains "both tiers: the set runs the local one" "${OUT}" "ldf  ticker"
 edit noop edit ticker
-assert_eq "both tiers: exit 1" 1 "${RC}"
-assert_contains "both tiers: says so" "${ERR}" "plugin in both tiers; remove one first"
+assert_eq "both tiers: edit exits 0" 0 "${RC}"
+assert_contains "both tiers: edit opens the local file" "${OUT}" "file=\$XDG_DATA_HOME/dotfiles/jobs/ticker"
 rm -f "${JOBS_LDF}/ticker"
+jobs_switch
 
 # ── the doc rule in the dotfiles_jobs step: a manual fail naming the edit ──
 JOBS_LABEL="com.$(id -un).dotfiles-jobs"
@@ -154,6 +168,7 @@ check_jobs
 assert_eq "documented: ok" ok "$(status_of dotfiles_jobs)"
 printf '#!/usr/bin/env zsh\nprint -r -- quiet\n' > "${JOBS_LDF}/quiet"
 chmod +x "${JOBS_LDF}/quiet"
+jobs_switch
 check_jobs
 assert_eq "undocumented plugin: fail" fail "$(status_of dotfiles_jobs)"
 assert_eq "undocumented plugin: reason" undocumented "$(reason_of dotfiles_jobs)"
@@ -164,6 +179,7 @@ assert_contains "undocumented plugin: what it lacks" "$(jq -r '.steps[] | select
 rm -f "${JOBS_LDF}/quiet"
 printf '#!/usr/bin/env zsh\nprint -r -- X=1\n' > "${DEPS_LDF}/bare"
 chmod +x "${DEPS_LDF}/bare"
+jobs_switch
 check_jobs
 assert_json "undocumented dep: the fix names --dep" "${FIX}/out.json" '.steps[] | select(.step=="dotfiles_jobs") | .fix' "dotfiles jobs edit bare --dep"
 

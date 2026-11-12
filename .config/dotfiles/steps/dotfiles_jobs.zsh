@@ -1,9 +1,9 @@
 # step dotfiles_jobs — the one launchd job of the dotfiles jobs framework (screen unlock, login,
-# every 5 minutes); it runs the job plugins of both tiers, git-health's hourly tick among them.
+# every 5 minutes); it runs the set of job plugins a switch builds from both tiers, git-health's hourly tick among them.
 # Every plugin and dep must say in its header what it does (and a plugin when it runs): one that
 # does not fails the step, by hand only, naming `dotfiles jobs edit NAME`.
 step::declare dotfiles_jobs --group repo --needs dotfiles_repo \
-  --desc "dotfiles jobs launchd job (runs the job plugins of both tiers) installed and loaded; every plugin and dep documented" \
+  --desc "dotfiles jobs launchd job (runs the job plugins Nix sets up from both tiers) installed and loaded; every plugin and dep documented" \
   --apply "boots out the per-plugin jobs this framework replaced (dotfiles jobs install); the job itself is nix-darwin's, installed by dotfiles switch"
 step::watches dotfiles_jobs '.config/dotfiles/jobs/**' '.config/dotfiles/deps/**'
 

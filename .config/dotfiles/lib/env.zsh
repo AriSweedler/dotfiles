@@ -238,10 +238,12 @@ typeset -g SHARED_FLAKE_LOCK="${ARI_DOTFILES_DF_WORK_TREE}/.config/dotfiles/nix/
 typeset -g SUBMODULE_GIT_NAME="Ari Sweedler"
 typeset -g SUBMODULE_GIT_EMAIL="ari@sweedler.com"
 
-# --- jobs: one launchd job runs every job plugin, from both tiers (jobs.zsh) ---
+# --- jobs: one launchd job runs every job plugin of the set Nix builds (jobs.zsh, nix/dotfiles-jobs.nix) ---
 typeset -g JOBS_LABEL="com.${USERNAME}.dotfiles-jobs"
 typeset -g JOBS_PLIST="${HOME}/Library/LaunchAgents/${JOBS_LABEL}.plist"
-typeset -g JOBS_ROOT_DF="${HOME}/.config/dotfiles/jobs"                              # the shared tier's plugins
+typeset -g JOBS_SET="${XDG_CONFIG_HOME}/dotfiles-jobs"                               # the one set: plugins/<name>, deps/<name>, links Nix places
+typeset -g JOBS_ROOT="${JOBS_SET}/plugins"                                            # what the framework runs
+typeset -g JOBS_ROOT_DF="${HOME}/.config/dotfiles/jobs"                              # where the shared tier's plugins are written
 typeset -g JOBS_ROOT_LDF="${XDG_DATA_HOME}/dotfiles/jobs"                             # the local tier's
 typeset -g JOBS_STATE_DIR="${STATE_DIR}/jobs"                                         # logs and success stamps
 typeset -g JOBS_UNLOCK_NOTIFICATION="com.apple.screenIsUnlocked"          # a distributed notification, hence the agent
@@ -252,7 +254,8 @@ typeset -g JOBS_NOTIFIER_TIMEOUT_SECONDS=10   # terminal-notifier occasionally n
 # The per-plugin jobs this framework replaced; install boots them out and removes their plists.
 typeset -ga JOBS_LEGACY_LABELS=("com.${USERNAME}.git-health" "com.${USERNAME}.aws-sso-autologin" "com.${USERNAME}.new-machine-verify")
 typeset -gA JOB_PATH=() JOB_TIER=()         # name → executable, name → df | ldf; filled by jobs_discover
-# A plugin's `# deps:` names run as its setup first; the local root wins (how *this* machine provides X).
+# A plugin's `# deps:` names run as its setup first; a local dep replaces a shared one in the set.
+typeset -g DEPS_ROOT="${JOBS_SET}/deps"
 typeset -g DEPS_ROOT_DF="${HOME}/.config/dotfiles/deps"
 typeset -g DEPS_ROOT_LDF="${XDG_DATA_HOME}/dotfiles/deps"
 typeset -g JOBS_DEP_TIMEOUT_SECONDS=120       # a dep is setup, not the job; one that takes longer is hung

@@ -9,10 +9,11 @@ world_new
 JOBS_DF="${HOME}/.config/dotfiles/jobs"
 mkdir -p "${JOBS_DF}"
 
-# plugin NAME HEADER BODY: a documented unlock plugin in the shared root; HEADER is extra header lines.
+# plugin NAME HEADER BODY: a documented unlock plugin in the shared tier, switched in; HEADER is extra header lines.
 plugin() {
   printf '#!/usr/bin/env zsh\n# triggers: unlock\n%s# Says how it ends, to prove the engine reports it.\n%s\n' "$2" "$3" > "${JOBS_DF}/$1"
   chmod +x "${JOBS_DF}/$1"
+  jobs_switch
 }
 # run NAME: `dotfiles jobs run NAME` with an empty notifier log; `posted` is what the fake notifier saw.
 run() { shim_logs_reset; nm jobs run "$1"; }
