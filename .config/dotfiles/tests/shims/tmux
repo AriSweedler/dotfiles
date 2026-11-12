@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Fake tmux: only `display-message -p '#{pid}'` is consulted. TMUX_SHIM_PID is the server's pid;
+# unset means no server is running.
+set -u
+printf '%s\n' "$*" >> "${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/tmux.log"
+if [[ "${1:-}" == display-message ]]; then
+  if [[ -z "${TMUX_SHIM_PID:-}" ]]; then
+    printf 'no server running on /private/tmp/tmux-501/default\n' >&2
+    exit 1
+  fi
+  printf '%s\n' "${TMUX_SHIM_PID}"
+fi
+exit 0

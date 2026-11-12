@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Fake lsof for `lsof -a -p PID -d txt -Fn`: the process's executable, then a library;
+# LSOF_SHIM_EXE names the executable (default: the tmux shim beside this one); empty prints none.
+set -u
+printf '%s\n' "$*" >> "${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/lsof.log"
+exe="${LSOF_SHIM_EXE-$(cd "$(dirname "$0")" && pwd)/tmux}"
+printf 'p%s\n' "${4:-0}"
+if [[ -n "${exe}" ]]; then printf 'ftxt\nn%s\nftxt\nn/usr/lib/dyld\n' "${exe}"; fi
+exit 0
