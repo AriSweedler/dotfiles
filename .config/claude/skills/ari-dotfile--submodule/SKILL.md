@@ -81,25 +81,31 @@ the repo. Its `package.nix` takes a `zshlib` argument and rewrites each bin's
 `${ARI_ZSHLIB:-…}` default to that store copy: the shared flake passes the
 clone's own `ari_zshlib` (`nix/pkgs/default.nix`), the repo's own flake its
 `ari-zshlib` input (**Mirrors**, Consumers). It has no Hooks, Denylist or Bootstrap, so **Creating one** skips
-steps 2 and 3 and step 4's step file. Its skill then says so: `core.hooksPath`
-prints nothing, no `dotfiles apply <step>` exists, and the identity and
-company-content checks the hooks would run are Claude's at each commit.
+steps 2 and 3 and step 4's step file, and no step pins its identity: on each
+machine, once `dotfiles apply dotfiles_repo` has cloned it, Claude runs step 1's
+two `config` lines by hand. Its skill says only that `core.hooksPath` prints
+nothing, no `dotfiles apply <step>` exists, and the identity and company-content
+checks the hooks would run are Claude's at each commit; the identity pin and the
+local lock (**How the build…**, `dotfiles switch`) it cites from here.
 
 **Commits carry the personal identity only**: `user.name "Ari Sweedler"`,
 `user.email ari@sweedler.com`, in the repo's `--local` config, never inherited
 from the global or work config. Local config is not cloned: on each machine,
 `dotfiles apply <step>` pins it (`tier::submodule_identity_apply` in
-`~/.config/dotfiles/lib/tiers.zsh`) and `check::<step>` fails on drift.
+`~/.config/dotfiles/lib/tiers.zsh`) and `check::<step>` fails on drift; a
+packaged repo has no step, so Claude pins it (above).
 
 ## How the build and the lock follow the checkout
 
 - **`dotfiles switch`** adds `--override-input dotfiles/<input> git+file://<checkout>?rev=<HEAD>`
   for every dev repo checked out, so a committed but unpushed change builds here;
   an uncommitted one does not. A repo not checked out builds from the lock. It
-  locks the local flake and commits its `flake.lock` in the local tier
-  (`nix: lock the shared flake at <sha7>`; `--no-commit` leaves it modified)
-  *before* it builds, `--build` included, so a failed build still leaves the
-  local lock moved.
+  writes the local flake's lock, `~/.local/share/dotfiles/nix/flake.lock`, and
+  commits it in the local tier (`nix: lock the shared flake at <sha7>`;
+  `--no-commit` leaves it modified) *before* it builds, `--build` included, so a
+  failed build still leaves the local lock moved: a locked rev there equal to
+  the checkout's HEAD does not mean the build landed; read the last switch's
+  output.
 - **`dotfiles push`** first exports each mirror (**Mirrors**), then pushes each
   dev repo and mirror that is ahead, then bumps the lock of each dev repo pushed:
   `nix flake update <input>` in the shared flake and a commit of `flake.lock`
@@ -185,7 +191,8 @@ Until step 9, `dotfiles healthcheck` may report `submodule_undocumented` and
 - **Identity and hooks first, on every machine.** Before the first commit here,
   `git -C ~/.config/<name> config --local user.email` must print
   `ari@sweedler.com` and `config core.hooksPath` must print `.githooks`; else
-  `dotfiles apply <step>`. After every commit,
+  `dotfiles apply <step>` (a packaged repo: `core.hooksPath` prints nothing, and
+  a wrong identity takes **Creating one** step 1's two `config` lines). After every commit,
   `git -C ~/.config/<name> log -1 --format='%an <%ae> %cn <%ce>'` must print
   `Ari Sweedler <ari@sweedler.com>` twice.
 - **Be on `main`.** `git -C ~/.config/<name> branch --show-current` must print
