@@ -103,11 +103,11 @@
     "run-log": {
       "flake": false,
       "locked": {
-        "lastModified": 1794427545,
-        "narHash": "sha256-xHuVId1zyo60VH+tetnVjcln7fHv6vI2UGYqwT5Q7FQ=",
+        "lastModified": 1794455092,
+        "narHash": "sha256-6PXAFZ9ET+sVUqZBgE4yWsuBODeex57W0E4/dY0lTmE=",
         "owner": "AriSweedler",
         "repo": "run-log",
-        "rev": "a4e1f19a5dbb60d4c8a9e82665fe0c99629b3e2d",
+        "rev": "0d029e33865957bf660e18fc327b69bf705c8941",
         "type": "github"
       },
       "original": {
