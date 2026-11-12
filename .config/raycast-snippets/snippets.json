@@ -16,5 +16,11 @@
     "keyword": "~L",
     "name": "linkedinUrl",
     "text": "https://www.linkedin.com/in/arisweedler/"
+  },
+  {
+    "description": "Ari's GitHub profile URL",
+    "keyword": "~G",
+    "name": "githubUrl",
+    "text": "https://github.com/AriSweedler"
   }
 ]
