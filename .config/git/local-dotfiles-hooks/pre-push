@@ -32,7 +32,13 @@ main() {
   while read -r lref lsha rref rsha; do
     [[ "${lsha}" == "${ZERO}" ]] && continue                # deleting a ref
     if [[ "${rsha}" == "${ZERO}" ]]; then
-      touched=1                                             # first push of a ref: no range, run
+      # First push of a ref: no range to diff, so ask whether the pushed tree holds any plugin at
+      # all. A machine with no private plugins (a server's tier) has nothing for the suite to guard.
+      if ! changed="$(git ls-tree -r --name-only "${lsha}" -- share/chrome-exoskeleton/ 2>/dev/null)"; then
+        touched=1                                           # tree unreadable: fail closed
+      elif [[ -n "${changed}" ]]; then
+        touched=1
+      fi
     elif ! changed="$(git diff --name-only "${rsha}..${lsha}" -- share/chrome-exoskeleton/ 2>/dev/null)"; then
       touched=1                                             # remote sha unknown here: fail closed
     elif [[ -n "${changed}" ]]; then
