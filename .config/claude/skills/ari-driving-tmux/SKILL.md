@@ -370,7 +370,7 @@ No refusal line arrived: `tail -5 /tmp/ari-driving-focus.log` and answer with it
 - `no pane %N`: the pane closed; a fresh link for the pane Ari names now.
 - `clicked outside a Claude Code pane`, or `No attached tmux client`: ask him to click from Claude's pane.
 - a `Not typed` line whose paste was refused: Claude's pane was in copy mode when the line came (`q` there; it is also on his clipboard).
-- nothing logged: the handler did not run; `tmux list-keys -T root MouseUp1Pane | grep -c tmux-pane` must print `1`, else Ari presses `<Prefix> C-s` (it re-reads `~/.config/tmux/tmux.conf`); still `0` → the handler is not in that file yet, and Ari runs `dotfiles switch` first (**Setup**).
+- nothing logged: the handler did not run; `tmux list-keys -T root MouseUp1Pane | grep -c tmux-pane` must print `1`, else Ari presses `<Prefix> C-s` (it re-reads `~/.config/tmux/tmux.conf`); still `0` → the handler is not in that file yet: Claude runs the switch and checks it is live (**Setup**), then Ari presses `<Prefix> C-s` again.
 
 ### Nothing came back
 
@@ -409,7 +409,7 @@ dotfiles raycast link clipboard-history
 
 - **run_log:** the dotfiles shared tier puts `run_log` and `run_log-capture.py` in `~/.config/bin` (python3 required); without it `focus.zsh` refuses with `run_log is not installed at ~/.config/bin/run_log`.
 - **Command:** `ln -sfn ../claude/skills/ari-driving-tmux/bin/ari-driving ~/.config/bin/ari-driving`; `readlink` it to verify.
-- **Links:** `~/dotfiles/.config/dotfiles/nix/tmux/osc8-hyperlinks.conf` carries the handler; `tmux.nix` appends it to the store-placed `~/.config/tmux/tmux.conf`, so a change takes Ari's `dotfiles switch` (`/ari-dotfiles-nix`) and then `<Prefix> C-s` in the running server, after which `tmux list-keys -T root MouseUp1Pane | grep -c tmux-pane` prints `1`.
+- **Links:** `~/dotfiles/.config/dotfiles/nix/tmux/osc8-hyperlinks.conf` carries the handler; `tmux.nix` appends it to the store-placed `~/.config/tmux/tmux.conf`, so after a change Claude runs `dotfiles switch` itself (`/ari-dotfiles-nix` § Switch) and checks `grep -c tmux-pane ~/.config/tmux/tmux.conf` is not `0`; then Ari presses `<Prefix> C-s` in the running server, after which `tmux list-keys -T root MouseUp1Pane | grep -c tmux-pane` prints `1`.
 - **Guard:** `ln -sfn ../skills/ari-driving-tmux/bin/pretooluse_bash_pbcopy_guard.sh ~/.config/claude/bin/pretooluse-pbcopy-guard.sh`, then via `/update-config` a `PreToolUse` entry `{"matcher": "Bash", "hooks": [{"type": "command", "command": "$HOME/.config/claude/bin/pretooluse-pbcopy-guard.sh", "if": "Bash(*pbcopy*)", "timeout": 5}]}` with `$HOME` replaced by the literal home directory. Verify with the Bash call `false && pbcopy`: the guard must deny it.
 
 ## File storage
