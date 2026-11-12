@@ -347,8 +347,7 @@ Some `~/.config` directories are *dev repos*: Ari's own public repos, each a pla
 (upstream `github.com/AriSweedler/chrome-exoskeleton`; `/ari-dotfile--submodule-chrome-exoskeleton`),
 `.config/run-log` (upstream `github.com/AriSweedler/run-log`; `/ari-dotfile--submodule-run-log`),
 `.config/plugged` (upstream `github.com/AriSweedler/plugged`; `/ari-dotfile--submodule-plugged`)
-and `.config/tmux-oneshot` (upstream `github.com/AriSweedler/tmux-oneshot`; `/ari-dotfile--submodule-tmux-oneshot`,
-in the repo's `skills/` until a commit there and a `dotfiles switch` link it).
+and `.config/tmux-oneshot` (upstream `github.com/AriSweedler/tmux-oneshot`; `/ari-dotfile--submodule-tmux-oneshot`).
 The shared flake takes each as a github input (`flake = false`), and
 `~/dotfiles/.config/dotfiles/nix/flake.lock` locks the commit every other machine builds;
 `dotfiles switch` builds each from its checkout's `HEAD` here. There is no `.gitmodules` and no
