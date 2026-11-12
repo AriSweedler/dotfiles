@@ -1,0 +1,5 @@
+# macOS 26.5 (25F71): one group inside the scroll area holds every alert and stack, on-screen
+# banner or open tray alike.
+alert AXNotificationCenterAlert
+stack AXNotificationCenterAlertStack
+container AXWindow AXGroup AXGroup AXScrollArea AXGroup

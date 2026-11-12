@@ -25,13 +25,14 @@ swiftPackages.stdenv.mkDerivation {
     cp ${src}/.config/bin/applelink applelink.swift
     swiftc -O -o applelink applelink.swift
     swiftc -O -o pbpastelinks-extract ${src}/.config/bin/pbpastelinks-extract.swift
+    swiftc -O -o notif-ax ${src}/.config/notif-center/ax/notif-ax.swift
     runHook postBuild
   '';
 
   installPhase = ''
     runHook preInstall
     install -Dm755 -t $out/bin applelink
-    install -Dm755 -t $out/libexec pbpastelinks-extract
+    install -Dm755 -t $out/libexec pbpastelinks-extract notif-ax
     for b in ${lib.escapeShellArgs (zshBins ++ otherBins)}; do
       install -Dm755 ${src}/.config/bin/$b $out/bin/$b
     done
@@ -39,9 +40,10 @@ swiftPackages.stdenv.mkDerivation {
       install -Dm644 ${src}/.config/zsh/plugins/$p.zsh $out/share/zsh/plugins/$p.zsh
     done
     ln -s ${ari_zshlib}/lib/log.zsh $out/share/zsh/plugins/log.zsh
-    # notif-center's per-macOS AX layouts, at the path it reads relative to its bin.
+    # notif-center's per-macOS AX layouts and native engine (libexec/notif-ax), at the paths it
+    # reads relative to its bin.
     mkdir -p $out/notif-center/macos
-    install -Dm644 -t $out/notif-center/macos ${src}/.config/notif-center/macos/*.zsh
+    install -Dm644 -t $out/notif-center/macos ${src}/.config/notif-center/macos/*.layout
     patchShebangs $out/bin
     ${ari_zshlib.pin (map (b: "$out/bin/${b}") (zshBins ++ [ "replace" ]))}
     ${ari_zshlib.pinPlugins (map (b: "$out/bin/${b}") zshBins)}
@@ -64,6 +66,8 @@ swiftPackages.stdenv.mkDerivation {
     fi
     [[ "$(echo '{"b":1,"a":2}' | $out/bin/json-sort)" == *'"a"'*'"b"'* ]]
     $out/bin/utc-date >/dev/null
-    ls $out/notif-center/macos/*.zsh >/dev/null
+    ls $out/notif-center/macos/*.layout >/dev/null
+    # notif-ax runs: with no arguments it prints its usage and exits 2.
+    $out/libexec/notif-ax >/dev/null 2>&1 || [[ $? == 2 ]]
   '';
 }

@@ -1,0 +1,5 @@
+# macOS 26.6.2 (25G83): an on-screen banner sits directly in the scroll area; the open tray still
+# wraps its alerts in one group, as 26.5 did.
+alert AXNotificationCenterAlert
+stack AXNotificationCenterAlertStack
+container AXWindow AXGroup AXGroup AXScrollArea AXGroup?

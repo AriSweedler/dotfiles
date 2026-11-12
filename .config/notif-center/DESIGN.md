@@ -47,43 +47,77 @@ grant instead of failing silently.
 
 ## Running fast
 
-AX is the slow part: every read is an Apple-events round-trip (~20ms), so pulling
-text for a trayful of notifications through AX takes seconds. Two choices keep it
-snappy:
+Every AX read is a round-trip into NotificationCenter, so the cost of a click is
+how many reads it makes and what each one pays:
 
 - **List from the database, not AX.** A database read is ~0.1s regardless of how
   many notifications are present; the equivalent AX walk is multiple seconds.
 - **Skip the list on the hot path.** "Click the newest" needs no enumeration —
-  it presses the top notification directly, so the common keybinding press is
-  sub-second. Only filtered clicks (`--app` / `--match`) pay to read text.
+  it presses the top notification directly. Only filtered clicks (`--app` /
+  `--match`) pay to read text.
+- **Read AX natively.** `notif-ax` (`ax/notif-ax.swift`, built into the package's
+  `libexec/`) calls the Accessibility API directly. `osascript` pays ~56ms to
+  start and then routes every read through System Events.
+
+## Engines
+
+Two engines run the same layout and return the same result line (`ok`,
+`notfound:<n>`, `notfound`, `fail: <why>`):
+
+- **notif-ax**, native, used whenever it is installed and trusted.
+- **AppleScript** templates in `bin/notif-center`, rendered from the layout. They
+  run when `notif-ax` is absent (the clone's copy) or lacks the Accessibility grant
+  (`fail: accessibility not trusted`, logged as a warning). `notif-center os` names
+  the engine in use.
+
+`notif-ax LAYOUT press N --dry-run` reads everything and presses nothing.
+
+Measured on macOS 26.6.2, one banner on screen, a dry-run "press
+the newest", 15 runs:
+
+| Engine | Median | Best |
+|---|---|---|
+| osascript (System Events) | 332 ms | 320 ms |
+| notif-ax in Swift | 48 ms | 43 ms |
+| notif-ax in Rust (raw FFI, no crates) | 51 ms | 47 ms |
+
+Swift and Rust are both ~10ms of process start plus a ~20ms first IPC into
+NotificationCenter; the rest is a handful of sub-millisecond reads. Swift ships:
+it is a little faster, its binary is a fifth of the size, and the package already
+builds Swift. A whole `notif-center click` costs ~107ms with `notif-ax` and
+~430ms with osascript.
 
 ## OS support
 
 macOS only. The AX tree and the database schema are private and change between
-releases. Each verified macOS has a layout file, `macos/<productVersion>.zsh` beside
-this document. The clicks use the running macOS's own file, else the newest one
-older than it. `notif-center os` names the file in use.
+releases. Each verified macOS has a layout file, `macos/<productVersion>.layout`
+beside this document. The clicks use the running macOS's own file, else the
+newest one older than it. `notif-center os` names the file in use.
 
-A layout file sets three variables:
+A layout is three data lines (`#` starts a comment):
 
-| Variable | Holds |
+```
+alert AXNotificationCenterAlert
+stack AXNotificationCenterAlertStack
+container AXWindow AXGroup AXGroup AXScrollArea AXGroup?
+```
+
+| Key | Holds |
 |---|---|
-| `nc_alert_subrole` | the subrole of one notification (`AXNotificationCenterAlert`) |
-| `nc_stack_subrole` | the subrole of a collapsed group (`AXNotificationCenterAlertStack`) |
-| `nc_container_as` | AppleScript that runs inside `tell process "NotificationCenter"` with a window present, and sets `grp` to the element whose children are the alerts and stacks, or returns `"fail: <why>"`. `@ALERT@` and `@STACK@` in it become the two subroles. |
+| `alert` | the subrole of one notification |
+| `stack` | the subrole of a collapsed group of notifications |
+| `container` | the path from the app to the element whose children are the alerts and stacks. The first step is `AXWindow`; each later step is the first child with that role (`AXGroup:2` for the second). A step ending in `?` is taken only when the element so far does not already start with an alert or stack. |
 
-The click engines are templates in `bin/notif-center`: `@CONTAINER@` becomes
-`nc_container_as`, then `@ALERT@` and `@STACK@` become the subroles.
-
-Every miss banner is clickable. The click copies the path of `/tmp/notif-center/miss.md`
-and opens it: the result, the layout in use, how to tell a stale layout from a real
-miss, the fix steps, and the AX tree after the miss. On a macOS without its own file,
-the banner also blames that. To add a file:
+A miss on a macOS without its own file says so in its banner. The banner's click
+copies the path of `/tmp/notif-center/miss.md` and opens it: the result, how to
+tell a stale layout from a real miss, the steps below, and the AX tree after the
+miss. A miss with the macOS's own layout gets a plain banner. To add a file:
 
 1. Read the tree with a banner on screen: `notif-center tree`.
-2. Copy the closest file to `macos/<sw_vers -productVersion>.zsh` in the clone and
-   edit `nc_container_as` until `~/dotfiles/.config/bin/notif-center click` presses
-   the banner. The clone's copy reads the clone's layouts.
+2. Copy the closest file to `macos/<sw_vers -productVersion>.layout` in the clone and
+   edit `container` until
+   `NOTIF_CENTER_LAYOUT_DIR=~/dotfiles/.config/notif-center/macos notif-center click`
+   presses a test banner.
 3. Commit it. The store copy that Hyper+N runs gets it at the next `dotfiles switch`.
 
 The database reader is not per-version. If `list` comes back wrong after an update,

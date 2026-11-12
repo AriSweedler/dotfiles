@@ -34,6 +34,8 @@ readonly LAYOUT_DIR="${NOTIF_CENTER_LAYOUT_DIR:-${0:A:h:h}/notif-center/macos}"
 readonly LAYOUT_SRC_DIR="${HOME}/dotfiles/.config/notif-center/macos"
 readonly REPORT_FILE="/tmp/notif-center/miss.md"
 readonly EDIT_WINDOW="${HOME}/.config/bin/tmux-edit-window"
+# The native AX engine: built into the store package beside the bin; absent from the clone.
+readonly NOTIF_AX="${NOTIF_AX_BIN:-${0:A:h:h}/libexec/notif-ax}"
 
 # --- DB reader (sqlite) ---
 #
@@ -408,46 +410,119 @@ on run
 end run
 APPLESCRIPT
 
-# --- per-macOS layout ---
+# --- per-macOS layout and engines ---
+#
+# Two engines run a layout: notif-ax (native AX, ~45ms a click) and, when it is missing or not
+# trusted, the AppleScript templates above (~330ms). DESIGN.md § Engines has the comparison.
 
-typeset -g NC_RUNNING="" NC_LAYOUT_VERSION=""
+typeset -g NC_RUNNING="" NC_LAYOUT_VERSION="" NC_LAYOUT_FILE=""
 typeset -gi NC_LAYOUT_EXACT=0
 typeset -g nc_alert_subrole="" nc_stack_subrole="" nc_container_as=""
+typeset -ga nc_container_steps=()
 
-# Sources the running macOS's layout file, else the newest one older than it (else the oldest),
+# The running macOS's ProductVersion, read without a sw_vers process.
+_macos_version() {
+  local plist
+  plist="$(</System/Library/CoreServices/SystemVersion.plist)"
+  [[ "${plist}" =~ '<key>ProductVersion</key>[[:space:]]*<string>([^<]*)</string>' ]] && print -r -- "${match[1]}"
+}
+
+# Prints the AppleScript (run inside `tell process "NotificationCenter"`) that sets grp to the
+# container the layout's steps name: the first step is AXWindow; each later one the Nth child with
+# that role; a step ending in ? is taken only when grp does not already start with a notification.
+_container_as() {
+  local step role idx expr set_line out="" first=1
+  for step in "${nc_container_steps[@]}"; do
+    local optional=0
+    [[ "${step}" == *\? ]] && { optional=1; step="${step%\?}"; }
+    role="${step%%:*}"
+    idx=1
+    [[ "${step}" == *:* ]] && idx="${step#*:}"
+    if (( first )); then
+      [[ "${role}" == AXWindow ]] || { log::err "A layout's container starts at AXWindow | got='${role}'"; return 1; }
+      expr="window ${idx}"
+    else
+      expr="item ${idx} of (UI elements of grp whose role is \"${role}\")"
+    fi
+    set_line=$'try\n  set grp to '"${expr}"$'\non error\n  return "fail: notification container not found"\nend try'
+    if (( optional )); then
+      out+=$'\nset sr0 to ""\ntry\n  set sr0 to (subrole of UI element 1 of grp) as text\nend try\nif sr0 is not "@ALERT@" and sr0 is not "@STACK@" then\n'"${set_line}"$'\nend if'
+    else
+      out+=$'\n'"${set_line}"
+    fi
+    first=0
+  done
+  print -r -- "${out}"
+}
+
+# Reads the running macOS's layout file, else the newest one older than it (else the oldest),
 # leaving NC_LAYOUT_EXACT=0 so a miss can blame the mismatch.
 layout_load() {
   [[ -n "${NC_LAYOUT_VERSION}" ]] && return 0
   autoload -Uz is-at-least
-  NC_RUNNING="$(/usr/bin/sw_vers -productVersion)"
-  local -a versions=( "${LAYOUT_DIR}"/*.zsh(N:t:r) )
+  NC_RUNNING="$(_macos_version)"
+  local -a versions=( "${LAYOUT_DIR}"/*.layout(N:t:r) )
   versions=( ${(on)versions} )
   (( ${#versions} )) || { log::err "No layout files | dir='${LAYOUT_DIR}'"; return 1; }
   local v pick="${versions[1]}"
   for v in "${versions[@]}"; do
     is-at-least "${v}" "${NC_RUNNING}" && pick="${v}"
   done
-  source "${LAYOUT_DIR}/${pick}.zsh"
-  local var
-  for var in nc_alert_subrole nc_stack_subrole nc_container_as; do
-    [[ -n "${(P)var}" ]] || { log::err "Layout leaves a variable unset | file='${LAYOUT_DIR}/${pick}.zsh' variable='${var}'"; return 1; }
+  NC_LAYOUT_FILE="${LAYOUT_DIR}/${pick}.layout"
+  local line
+  local -a words
+  for line in "${(@f)$(<"${NC_LAYOUT_FILE}")}"; do
+    words=( ${=line} )
+    [[ ${#words} -eq 0 || "${words[1]}" == \#* ]] && continue
+    case "${words[1]}" in
+      alert)     nc_alert_subrole="${words[2]:-}" ;;
+      stack)     nc_stack_subrole="${words[2]:-}" ;;
+      container) nc_container_steps=( "${(@)words[2,-1]}" ) ;;
+      *)         log::err "Unknown layout key | file='${NC_LAYOUT_FILE}' key='${words[1]}'"; return 1 ;;
+    esac
   done
+  if [[ -z "${nc_alert_subrole}" || -z "${nc_stack_subrole}" ]] || (( ! ${#nc_container_steps} )); then
+    log::err "Layout lacks alert, stack or container | file='${NC_LAYOUT_FILE}'"
+    return 1
+  fi
   NC_LAYOUT_VERSION="${pick}"
   [[ "${pick}" == "${NC_RUNNING}" ]] && NC_LAYOUT_EXACT=1
   (( NC_LAYOUT_EXACT )) || log::warn "No layout for this macOS; using the closest older one | running='${NC_RUNNING}' layout='${pick}'"
   return 0
 }
 
-# Prints an AX engine with the loaded layout's container lookup and subroles filled in.
+# Prints an AppleScript engine with the loaded layout's container lookup and subroles filled in.
 _render() {
+  [[ -n "${nc_container_as}" ]] || nc_container_as="$(_container_as)"
   local s="${1//@CONTAINER@/${nc_container_as}}"
   s="${s//@STACK@/${nc_stack_subrole}}"
   print -r -- "${s//@ALERT@/${nc_alert_subrole}}"
 }
 
-_press() { /usr/bin/osascript - "$@" <<<"$(_render "${AS_PRESS}")"; }
-_match() { /usr/bin/osascript - "$@" <<<"$(_render "${AS_MATCH}")"; }
-_tree() { /usr/bin/osascript - <<<"${AS_TREE}"; }
+# notif-ax first; osascript when it is not installed (the clone's copy) or not trusted.
+_is_native() { [[ -x "${NOTIF_AX}" ]]; }
+
+_native_or_osascript() {
+  local engine="${1}"; shift
+  local result
+  if _is_native; then
+    result="$("${NOTIF_AX}" "$@")"
+    if [[ "${result}" != "fail: accessibility not trusted" ]]; then
+      print -r -- "${result}"
+      return 0
+    fi
+    log::warn "notif-ax lacks the Accessibility grant; falling back to osascript (~300ms slower) | fix='System Settings → Privacy & Security → Accessibility: add the process that runs notif-center (Karabiner-Elements for Hyper+N)'"
+  fi
+  case "${engine}" in
+    press) /usr/bin/osascript - "${@[-1]}" <<<"$(_render "${AS_PRESS}")" ;;
+    match) /usr/bin/osascript - "${@[-1]}" <<<"$(_render "${AS_MATCH}")" ;;
+    tree)  /usr/bin/osascript - <<<"${AS_TREE}" ;;
+  esac
+}
+
+_press() { _native_or_osascript press "${NC_LAYOUT_FILE}" press "$1"; }
+_match() { _native_or_osascript match "${NC_LAYOUT_FILE}" match "$1"; }
+_tree() { _native_or_osascript tree tree; }
 
 # Copies db + sidecars to a fresh temp dir; echoes the copy's db path (returns
 # non-zero if the db can't be obtained). Read-only w.r.t. the original.
@@ -517,57 +592,47 @@ _nc_cleanup() {
   _nc_click_clock
 }
 
-# Writes REPORT_FILE for a miss: the result, the layout in use, how to read the result, how to fix
-# the layout, and the AX tree after the miss. The tree is appended last (it takes ~200ms), after
-# the banner is up; it then includes the miss banner itself, which shows where this macOS puts a
-# banner. Arguments: the engine's result
+# Writes REPORT_FILE for a miss on a macOS without its own layout: the result, how to tell a stale
+# layout from a real miss, how to add the layout, and the AX tree after the miss (appended by
+# _append_tree once the banner is up, so it includes the banner and shows where this macOS puts
+# one). Arguments: the engine's result
 _write_report() {
-  local result="${1}" layout_file="${LAYOUT_SRC_DIR}/${NC_LAYOUT_VERSION}.zsh" layout_note step2
-  if (( NC_LAYOUT_EXACT )); then
-    layout_note="macos/${NC_LAYOUT_VERSION}.zsh, this macOS's own"
-    step2="2. Edit the layout:
-
-	\${EDITOR:-vi} ${layout_file}"
-  else
-    layout_note="macos/${NC_LAYOUT_VERSION}.zsh, the closest older one: macOS ${NC_RUNNING} has no layout yet, which makes a stale layout likely"
-    step2="2. Start this macOS's layout from the closest one:
-
-	cp ${layout_file} ${LAYOUT_SRC_DIR}/${NC_RUNNING}.zsh"
-  fi
+  local result="${1}" new="${LAYOUT_SRC_DIR}/${NC_RUNNING}.layout"
   mkdir -p "${REPORT_FILE:h}"
   cat > "${REPORT_FILE}" <<EOF
-# notif-center: a click missed on macOS ${NC_RUNNING}
+# notif-center: a click missed on macOS ${NC_RUNNING}, which has no layout
 
 - Result: \`${result}\`
-- Layout: ${layout_note}
+- Layout used: macos/${NC_LAYOUT_VERSION}.layout, the closest older one
 - At: $(date '+%Y-%m-%d %H:%M:%S')
 
 ## Reading the result
 
-- \`notfound:0\` while a banner was on screen: the layout no longer matches Notification
-  Center's AX tree, so the click looked in the wrong element. Fix the layout (below). A macOS
-  update is the usual cause.
-- \`notfound:0\` or \`fail: no notification tray\` with nothing on screen: a real miss. Nothing
-  to fix.
-- \`fail: notification container not found\`: the element path in \`nc_container_as\` no longer
-  exists. Fix the layout.
+- \`notfound:0\` while a banner was on screen: this macOS moved the notifications, so the
+  click looked in the wrong element. Add the layout (below).
+- \`fail: notification container not found\`: an element on the layout's \`container\` path no
+  longer exists. Add the layout.
+- \`notfound:0\` or \`fail: no notification tray\` with nothing on screen: a real miss. Adding
+  the layout still silences this banner.
 
-## Fix the layout
+## Add the layout
 
 1. Post a banner and read the tree while it is on screen:
 
-	atn -title test -message test; sleep 1; ~/dotfiles/.config/bin/notif-center tree
+	atn -title test -message test; sleep 1; notif-center tree
 
-${step2}
+2. Start from the closest layout:
 
-3. Change \`nc_container_as\` until the clone's copy presses the banner (it reads the clone's
-   layouts):
+	cp ${LAYOUT_SRC_DIR}/${NC_LAYOUT_VERSION}.layout ${new}
 
-	~/dotfiles/.config/bin/notif-center click --verbose
+3. Change its \`container\` line to the path down the tree to the element whose children are
+   the alerts, until this presses a test banner:
 
-4. Commit the file. Hyper+N runs the store copy, which gets it at the next \`dotfiles switch\`.
+	atn -title test -message test; sleep 1; NOTIF_CENTER_LAYOUT_DIR=${LAYOUT_SRC_DIR} notif-center click --verbose
 
-The interface is in ${LAYOUT_SRC_DIR:h}/DESIGN.md § OS support.
+4. Commit the file. Hyper+N gets it at the next \`dotfiles switch\`.
+
+The format is in ${LAYOUT_SRC_DIR:h}/DESIGN.md § OS support.
 EOF
 }
 
@@ -592,8 +657,8 @@ _notify_file() {
 }
 
 # The miss banner, so a miss is visible from a Hyper+N keybind. Skipped under --quiet, so a caller
-# can chain a fallback before announcing a miss. Its click opens REPORT_FILE; on a macOS without
-# its own layout the banner also blames that.
+# can chain a fallback before announcing a miss. On a macOS without its own layout the banner
+# blames that, and its click opens REPORT_FILE.
 # Arguments: app pattern, match pattern, the engine's result
 _notify_empty() {
   (( ${_QUIET_EMPTY:-0} )) && return 0
@@ -603,16 +668,12 @@ _notify_empty() {
   else what="notification"; fi
   local msg="No ${what} found to click"
   [[ "${result}" == fail:* ]] && msg+=" (${result#fail: })"
-  if [[ -z "${NC_LAYOUT_VERSION}" ]]; then
+  if [[ -z "${NC_LAYOUT_VERSION}" ]] || (( NC_LAYOUT_EXACT )); then
     OTTO_LOG_NOTIFY_SECS=3 log::notify "${msg}"
     return 0
   fi
   _write_report "${result}"
-  if (( NC_LAYOUT_EXACT )); then
-    _notify_file "${msg}. Click for the report." "${REPORT_FILE}"
-  else
-    _notify_file "${msg} — probably because macOS ${NC_RUNNING} has no layout (used ${NC_LAYOUT_VERSION}'s). Click for the fix." "${REPORT_FILE}"
-  fi
+  _notify_file "${msg} — probably because macOS ${NC_RUNNING} has no layout (used ${NC_LAYOUT_VERSION}'s). Click for the fix." "${REPORT_FILE}"
   _append_tree
 }
 
@@ -692,12 +753,18 @@ print(re.sub(r"\s+", " ", (o.get("body") or o.get("subtitle") or o.get("title") 
 
 cmd_os() {
   layout_load || return 1
-  local -a versions=( "${LAYOUT_DIR}"/*.zsh(N:t:r) )
-  local how="its own"
-  (( NC_LAYOUT_EXACT )) || how="closest older; add ${LAYOUT_SRC_DIR}/${NC_RUNNING}.zsh"
-  print -r -- "running:  ${NC_RUNNING} ($(/usr/bin/sw_vers -buildVersion))"
+  local -a versions=( "${LAYOUT_DIR}"/*.layout(N:t:r) )
+  local how="its own" engine="osascript (notif-ax not installed: the clone's copy)"
+  (( NC_LAYOUT_EXACT )) || how="closest older; add ${LAYOUT_SRC_DIR}/${NC_RUNNING}.layout"
+  if _is_native; then
+    engine="notif-ax ${NOTIF_AX}"
+    [[ "$("${NOTIF_AX}" tree 2>/dev/null | head -1)" == "fail: accessibility not trusted" ]] \
+      && engine+=" — not trusted here, so osascript"
+  fi
+  print -r -- "running:  ${NC_RUNNING}"
   print -r -- "layout:   ${NC_LAYOUT_VERSION} (${how})"
   print -r -- "layouts:  ${(j:, :)${(@on)versions}} in ${LAYOUT_DIR}"
+  print -r -- "engine:   ${engine}"
 }
 
 cmd_tree() { _tree; }
