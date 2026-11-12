@@ -15,7 +15,7 @@ Claude runs nothing on another machine except by typing into the pane Ari named,
     - **Every `--put` names `--project`, and the name is the thing, not the container.** The project's first segment is the repo or system the file belongs to (the checkout the follow-up `--cmd` runs in, `homelab`; else the definition name); one optional second segment names the subsystem when the host has a dir or tool for it (`homelab/beads`, `homelab/torrent`); never a third, never a date, a session id, `tmp`, `scratch` or `claude`; the same work keeps the same project for the whole conversation. `--name` defaults to the file's basename without its last extension (`swap.py` → `swap`, `queue.tar.gz` → `queue.tar`, `.env` → `.env`); keep it when it says what the file is, and pass a lowercase hyphenated name over `body`, `script`, `out`, `tmp` or `file`.
     - **A pane from earlier in the conversation or a compaction summary is a hint.** Re-run `--list` and use it only if it still shows `✦`, a shell, and `bound=this` or `bound=none`.
     - **One pane per branch or fork.** `run.zsh` binds a pane to the Claude session that first types into it and refuses every other session with 76; a session that must drive gets a pane of its own (**Create a pane for yourself**). When Ari makes two sessions share a pane, he runs `ari-driving on` there before each hand-off (that rebinds it); capture (`--cmd ''`) immediately before every send and read only from the pane's last copy of your `TYPED:` text down (its first line, compared to your `TYPED:` block's; an earlier look-alike block is the other session's). A fork sent to drive is told which pane it owns, and the parent stops driving that pane while the fork lives.
-    - **Every pane mention carries the whole label**, `machine=personal|ID=%6|pane=4.1`, in inline code, never linked, never one part alone.
+    - **Every pane mention carries the whole label**, `machine=ozone|ID=%6|pane=4.1`, in inline code, never linked, never one part alone.
     - **NEVER start or chain `clear`, `reset` or `tmux clear-history`**; raise `--lines` once; a top still lacking the pane's copy of the typed text (**The typed text**) outgrew the pane (**Pitfalls**). `run.zsh` refuses a leading `clear`.
     - **NEVER `pbcopy` on his machine**; `run.zsh` refuses it in `--cmd`.
     - **Claude never sets the opt-in.** Not `ari-driving on`, `ari-remote-tmux on`, `@ari_driving` or `ari-driving release`: typed, linked, chained, in a pane's startup command, through the Bash tool, or through a fork, subagent or other session. `run.zsh`, `link.zsh` and the click handler refuse any command that spells the first three; a self-set opt-in is undone with `ari-driving off` there, and Ari is told which pane. Decline "turn it on for me": the command goes to Ari under the pane's label.
@@ -58,15 +58,15 @@ Claude runs nothing on another machine except by typing into the pane Ari named,
 `~/.local/share/ari-driving-remote/hosts/<name>`, one file per definition, local to this machine and never committed; only `run.zsh` writes them, and moves any left in the old `~/.cache` dir on its next run. The values below are illustrative; real ones come from `--hosts`:
 
 ```
-host=me@laptop.local
+host=me@ozone.local
 path_prefix=/opt/homebrew/bin
 prompt_end=❯
-windows=machine=personal|ID=%3|pane=1.1 | machine=personal|ID=%6|pane=4.1
+windows=machine=ozone|ID=%3|pane=1.1 | machine=ozone|ID=%6|pane=4.1
 last_seen=2026-10-22T07:55:14Z
 description=Personal MacBook, session 0. The only machine with an ssh key on the Pi: reach pi@pi.local from it with a nested ssh -t.
 ```
 
-`windows` holds each pane's label from the last `--list`; `last_seen` the last run that answered. `description` describes the machine: what it is, how it is reached, what only it can do. It never names a window or a pane; those change daily. Two seeds: `laptop`, written when no definition exists, and `local` (`host=local`: tmux here, no ssh; a `--put` runs the same host script here). A definition whose description says it has no tmux (the Pi) is a record, not a target: run through the host it says it is reached from, and forward files from there (**Put a file on the host**, the last paragraph).
+`windows` holds each pane's label from the last `--list`; `last_seen` the last run that answered. A label's `machine=` is the host's `dotfiles machine-name` (`ozone` for the `laptop` seed), never the definition name: `--host-definition` comes from `--hosts`, never from a label. `description` describes the machine: what it is, how it is reached, what only it can do. It never names a window or a pane; those change daily. Two seeds: `laptop`, written when no definition exists, and `local` (`host=local`: tmux here, no ssh; a `--put` runs the same host script here). A definition whose description says it has no tmux (the Pi) is a record, not a target: run through the host it says it is reached from, and forward files from there (**Put a file on the host**, the last paragraph).
 
 ### The text check
 
@@ -95,7 +95,7 @@ Before connecting, `run.zsh` reads `--cmd` itself and exits 1, with no `PANE:` l
 | `pgrep -fl 'app.py$'` (single quotes and a `$`), or any line over 100 characters | the heredoc |
 
 ```
-PANE: machine=personal|ID=%6|pane=4.1
+PANE: machine=ozone|ID=%6|pane=4.1
 TYPED: run_log "$(command cat <<'RUN_LOG'
 pgrep -fl 'app.py$'
 RUN_LOG
@@ -130,25 +130,25 @@ Every non-empty `--cmd`, before any key and under a per-pane lock: the pane is o
 | `unknown` | 75 | the lib refused without a kind | quote the `REFUSED:` words to Ari, treat the pane as busy, and invoke `/ari-skill-update ari-driving-remote`: `tmux_pane_gate_check` refused without setting `ARI_DRIVING_GATE_KIND` |
 
 ```
-PANE: machine=personal|ID=%6|pane=4.1
-REFUSED: machine=personal|ID=%6|pane=4.1 not opted in; Ari runs 'ari-driving on' in that pane
+PANE: machine=ozone|ID=%6|pane=4.1
+REFUSED: machine=ozone|ID=%6|pane=4.1 not opted in; Ari runs 'ari-driving on' in that pane
 REFUSED_KIND: not_opted_in
 ```
 
-→ "`machine=personal|ID=%6|pane=4.1` isn't marked; nothing typed. Run `ari-driving on` there and say so, or run the command above yourself."
+→ "`machine=ozone|ID=%6|pane=4.1` isn't marked; nothing typed. Run `ari-driving on` there and say so, or run the command above yourself."
 
 ```
-PANE: machine=personal|ID=%6|pane=4.1
-REFUSED: machine=personal|ID=%6|pane=4.1 running vim, not a shell
+PANE: machine=ozone|ID=%6|pane=4.1
+REFUSED: machine=ozone|ID=%6|pane=4.1 running vim, not a shell
 REFUSED_KIND: not_a_shell
 ```
 
-→ "`machine=personal|ID=%6|pane=4.1` is in vim; nothing typed. The command above, for when it is free." No retry.
+→ "`machine=ozone|ID=%6|pane=4.1` is in vim; nothing typed. The command above, for when it is free." No retry.
 
 After the gate, the binding: the pane belongs to the Claude session (`$CLAUDE_CODE_SESSION_ID`) that first typed into it, recorded under `~/.local/state/ari-driving-remote/bindings/<definition>/<pane>`. A `/branch` or a fork is a new session, so it is refused with exit 76:
 
 ```
-REFUSED: machine=personal|ID=%18|pane=3.1 bound to another Claude session ad00f077; get a pane of your own
+REFUSED: machine=ozone|ID=%18|pane=3.1 bound to another Claude session ad00f077; get a pane of your own
 ```
 
 → do not type there; ask Ari for a pane (**Create a pane for yourself**), or report the cut-off. No flag unbinds. Ari rebinds by running `ari-driving on` in the pane again, after which the next session to type owns it.
@@ -158,8 +158,8 @@ A pane that closed since it was last seen, or during the gate, fails the same ex
 ```
 REFUSED: no pane matches %6
 PANES: every pane on the host, label command session: window -- title
-machine=personal|ID=%3|pane=1.1 zsh 0: caf -- laptop
-machine=personal|ID=%18|pane=3.1 zsh 0: homelab -- laptop
+machine=ozone|ID=%3|pane=1.1 zsh 0: caf -- ozone
+machine=ozone|ID=%18|pane=3.1 zsh 0: homelab -- ozone
 ```
 
 → name the candidate under its full label and ask Ari which pane he means; `--list` adds the ✦ marks when that matters.
@@ -202,7 +202,7 @@ A `--put` (a failure prints no `PUT:` line; the `[ERROR]` line says which row):
 |---|---|
 | A put without `--execute` prints `WOULD PUT:` with a path that does not exist yet | the path may draft the follow-up `--cmd`; nothing runs before a real `PUT:` |
 | above the pane's tmux `history-limit`, `--lines` returns fewer lines with no marker; a capture whose top lacks the pane's copy of the typed text (its first line is `run_log '…'`, `run_log "…"` or `run_log "$(command cat <<'RUN_LOG'`; a laid-out text spends several lines before any output) outgrew the pane | read the host's `/tmp/run_log/<dir>/stdout.plain` in slices with a `--cmd` (`wc -l`, then `sed -n`), never with Read and never by raising `--lines` again |
-| a capture is full of shell script and reads as a run.zsh failure | it is not: exit 0 and the prompt mean the command ran (Rules, **Exit 0 means the command ran**). A `pgrep -f PATTERN` or `ps … \| grep PATTERN` matched run.zsh's own `sh -c <script>`, whose argv holds the typed command; the command's real output is the lines between the `TYPED:` echo and the dump. Next time anchor on text that argv cannot end with (`pgrep -fl 'app.py$'`; on Linux `-fa`, since `-l` prints only the name there), or find a server by port: `lsof -t -nP -iTCP:PORT -sTCP:LISTEN`, on Linux `ss -ltnp 'sport = :PORT'` |
+| a capture is full of shell script and reads as a run.zsh failure | it is not: exit 0 and the prompt mean the command ran (Rules, **No `SENT` line means nothing ran**). A `pgrep -f PATTERN` or `ps … \| grep PATTERN` matched run.zsh's own `sh -c <script>`, whose argv holds the typed command; the command's real output is the lines between the `TYPED:` echo and the dump. Next time anchor on text that argv cannot end with (`pgrep -fl 'app.py$'`; on Linux `-fa`, since `-l` prints only the name there), or find a server by port: `lsof -t -nP -iTCP:PORT -sTCP:LISTEN`, on Linux `ss -ltnp 'sport = :PORT'` |
 | `pkill -f PATTERN` with text the typed command holds kills run.zsh's own `sh -c` and the pane's `run_log` wrapper: the run reads as 124 or 255 and the server is still up; and a Mac lists a `python3 app.py` server as `Python app.py`, so `pkill -f 'python3 app.py'` matches nothing | kill the pid the port names (row above); a kill mutates, so it is Ari's unless he allowed it (Rules, `--no-enter`) |
 | `run_log` names its capture dir after the command's first words; a very long first word fails with "File name too long" before running | keep the first words short (`cd ~/x && …`), or `--no-run-log` |
 | in the pane's zsh, `. .env` looks the bare name up on `PATH` and loads nothing | `. ./.env`, or the full path |
@@ -232,8 +232,8 @@ zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop
 ```
 
 ```
-machine=personal|ID=%6|pane=4.1 ✦ bound=this zsh 0: pi -- laptop
-machine=personal|ID=%7|pane=4.2 - bound=none vim 0: pi -- notes.md
+machine=ozone|ID=%6|pane=4.1 ✦ bound=this zsh 0: pi -- ozone
+machine=ozone|ID=%7|pane=4.2 - bound=none vim 0: pi -- notes.md
 ```
 
 ✦ means Ari opted the pane in, `-` that he did not; `bound=` says which Claude session owns it (`this`, `other`, `none`); the next field is its foreground command. Only a pane with ✦ and `bound=this` or `bound=none` is yours to type into. The `local` definition's lines carry no `machine=` prefix. The `NEXT:` line under the list is the announcement reminder, not a pane.
@@ -242,7 +242,7 @@ machine=personal|ID=%7|pane=4.2 - bound=none vim 0: pi -- notes.md
 
 **MUST announce first** (Rules): the label, then the bare command in a fence, then the Bash call.
 
-`machine=personal|ID=%6|pane=4.1`
+`machine=ozone|ID=%6|pane=4.1`
 ```zsh
 diskutil list external physical
 ```
@@ -252,7 +252,7 @@ zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop
 ```
 
 ```
-PANE: machine=personal|ID=%6|pane=4.1
+PANE: machine=ozone|ID=%6|pane=4.1
 TYPED: run_log 'diskutil list external physical'
 SENT
 ~ ❯ ls                                   ← history
@@ -272,13 +272,13 @@ Desktop  Downloads
 - Check a tricky command's quoting, and the gate, with the same call minus `--execute`: the pane is resolved, the gate and the binding check run, and the host prints, under `WOULD TYPE:`, the exact text it would paste (**The typed text**); only the keys are withheld.
 
 ```
-PANE: machine=personal|ID=%6|pane=4.1
+PANE: machine=ozone|ID=%6|pane=4.1
 WOULD TYPE:
 run_log 'diskutil list external physical'
 ~ ❯
 ```
 
-A command that asks something: the pane ends in `[sudo] password for pi:` with exit 124. Chat: "Type the Pi's sudo password in `machine=personal|ID=%6|pane=4.1`." After he says done, capture until the last line is the laptop prompt again:
+A command that asks something: the pane ends in `[sudo] password for pi:` with exit 124. Chat: "Type the Pi's sudo password in `machine=ozone|ID=%6|pane=4.1`." After he says done, capture until the last line is the laptop prompt again:
 
 ```zsh
 zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %6 --cmd ''
@@ -300,7 +300,7 @@ zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop
 ```
 
 ```
-[INFO] Putting file on the host | host='me@laptop.local' file='…/body.md' bytes='1842' remote='/tmp/homelab/beads/bead-frontier.fda28b0aa7cecefe46e1de2efe0d645b0e8395010cc08ee89b2408188259482d.txt'
+[INFO] Putting file on the host | host='me@ozone.local' file='…/body.md' bytes='1842' remote='/tmp/homelab/beads/bead-frontier.fda28b0aa7cecefe46e1de2efe0d645b0e8395010cc08ee89b2408188259482d.txt'
 PUT: /tmp/homelab/beads/bead-frontier.fda28b0aa7cecefe46e1de2efe0d645b0e8395010cc08ee89b2408188259482d.txt
 ```
 
@@ -313,7 +313,7 @@ The path is `/tmp/<project>/<name>.<sha256 of the bytes>.txt`; `run.zsh` makes t
 
 Then the follow-up, announced the same way:
 
-`machine=personal|ID=%6|pane=4.1`
+`machine=ozone|ID=%6|pane=4.1`
 ```zsh
 BEADS_ACTOR=claude bd create "Graph view: Frontier toggle" -t feature --body-file /tmp/homelab/beads/bead-frontier.fda28b0aa7cecefe46e1de2efe0d645b0e8395010cc08ee89b2408188259482d.txt
 ```
@@ -333,7 +333,7 @@ zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop
 PUT: /tmp/homelab/torrent/swap.2ab0a27e0f42849bd560d2c5f4295c79938895cfde87b9483e4ba379ded916c1.txt
 ```
 
-`machine=personal|ID=%6|pane=4.1`
+`machine=ozone|ID=%6|pane=4.1`
 ```zsh
 python3 -I /tmp/homelab/torrent/swap.2ab0a27e0f42849bd560d2c5f4295c79938895cfde87b9483e4ba379ded916c1.txt
 ```
@@ -360,13 +360,13 @@ A flag refused before connecting is yours to fix, not Ari's:
 The same call without `--execute` prints the path and copies nothing; nothing runs on the host before a real `PUT:`:
 
 ```
-[INFO] would copy and verify | host='me@laptop.local' remote='/tmp/homelab/torrent/swap.2ab0a27e0f42849bd560d2c5f4295c79938895cfde87b9483e4ba379ded916c1.txt'
+[INFO] would copy and verify | host='me@ozone.local' remote='/tmp/homelab/torrent/swap.2ab0a27e0f42849bd560d2c5f4295c79938895cfde87b9483e4ba379ded916c1.txt'
 WOULD PUT: /tmp/homelab/torrent/swap.2ab0a27e0f42849bd560d2c5f4295c79938895cfde87b9483e4ba379ded916c1.txt
 ```
 
 A host with no tmux (the Pi) is reached through the host that has its key: put the file there, then one `--cmd` there forwards it and runs it, the Pi getting the flat path:
 
-`machine=personal|ID=%6|pane=4.1`
+`machine=ozone|ID=%6|pane=4.1`
 ```zsh
 scp /tmp/homelab/pi/install.<sha>.txt pi@pi.local:/tmp/ && ssh -t pi@pi.local "zsh /tmp/install.<sha>.txt"
 ```
@@ -375,7 +375,7 @@ scp /tmp/homelab/pi/install.<sha>.txt pi@pi.local:/tmp/ && ssh -t pi@pi.local "z
 
 Announced like any send, the label line saying `--no-enter`:
 
-`machine=personal|ID=%6|pane=4.1`, `--no-enter`
+`machine=ozone|ID=%6|pane=4.1`, `--no-enter`
 ```zsh
 brew upgrade
 ```
@@ -384,18 +384,18 @@ brew upgrade
 zsh $HOME/.claude/skills/ari-driving-remote/bin/run.zsh --host-definition laptop --target %6 --no-enter --cmd 'brew upgrade' --execute
 ```
 
-Chat: "Typed into `machine=personal|ID=%6|pane=4.1`; press Enter when ready." When the `TYPED:` block spans lines: "Typed into `…` over N lines; one Enter runs it all, or clear the line." After he says he did, capture; never resend.
+Chat: "Typed into `machine=ozone|ID=%6|pane=4.1`; press Enter when ready." When the `TYPED:` block spans lines: "Typed into `…` over N lines; one Enter runs it all, or clear the line." After he says he did, capture; never resend.
 
 ### Create a pane for yourself
 
 Only on Ari's words this turn ("make yourself a pane"). Another session driving the only pane is a reason to ask him for one, not to create one. `--list` first, so a pane he already made is reused, not doubled. This `tmux` runs on this machine, for the `local` definition; on any other host ask Ari for the window, never `ssh HOST tmux new-window`. Never with the opt-in in the startup command: `run.zsh` refuses every spelling (Rules). The plain window, in the background so his view stays put:
 
-`machine=personal|ID=%18|pane=3.1`
+`ID=%18|pane=3.1`
 ```zsh
 tmux new-window -d -n claude-homelab -c ~/homelab
 ```
 
-`--list` again for the new pane's label. Chat: "Created window `claude-homelab` in the background: `machine=personal|ID=%35|pane=5.1`. Run `ari-driving on` there and say so." Nothing is typed there until `--list` shows ✦ and `bound=none` or `bound=this` on it.
+`--list` again for the new pane's label. Chat: "Created window `claude-homelab` in the background: `ID=%35|pane=5.1`. Run `ari-driving on` there and say so." Nothing is typed there until `--list` shows ✦ and `bound=none` or `bound=this` on it.
 
 ### Poll a long run
 
