@@ -15,6 +15,8 @@ let
     mac-utils = pkgs.callPackage ./mac-utils { inherit src; inherit (self) ari_zshlib; };
     dotfiles-cli = pkgs.callPackage ./dotfiles-cli { inherit src; };
     linux-clipboard = pkgs.callPackage ./linux-clipboard { };
+    # Upstream's own release, not nixpkgs' older one; the recipe says why.
+    beads = pkgs.callPackage ./beads { };
   };
 in
 self

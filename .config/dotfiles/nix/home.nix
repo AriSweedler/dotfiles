@@ -68,6 +68,7 @@ in
 
     # Ari's own tools, built from their dev repos
     ari.plugged # Rust; IOKit on a Mac, sysfs on Linux
+    ari.beads # bd, the issue tracker, at upstream's release rather than nixpkgs' 1.0.3
   ] ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin (with pkgs; [
     # A Mac only; a Linux machine (a NixOS server importing this module) gets the list above.
     mas # Mac App Store from the terminal: mas install 497799835 is Xcode (alttab builds with it)
