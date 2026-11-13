@@ -68,7 +68,7 @@ The briefing's two-to-five-word forms of `/ari-bead-driven-development`'s terms,
 | blocked | waiting on another bead |
 | stale | in progress and untouched for fourteen days; `bd stale` rejects `hooked`, so a hooked bead is never listed stale |
 | scope | this session's epics and their beads; other sessions' beads are left out |
-| pane label | `machine=personal|ID=%18|pane=3.1|nickname=homelab`: the machine, tmux's fixed pane id, the window.pane on the screen, the window's name; a pane on this Mac has no `machine=` part |
+| pane label | `machine=ozone|ID=%18|pane=3.1|nickname=homelab`: the host's `dotfiles machine-name` (`ozone`, reached through the host definition `laptop`; never a `--host-definition`), tmux's fixed pane id, the window.pane on the screen, the window's name; a pane on this Mac carries this Mac's own `dotfiles machine-name`, or no `machine=` part without the dotfiles harness |
 | doctor | the project's own health command, `health.command` |
 | agent's command | a command a Claude session, fork or lane typed through `run.zsh` (wrapped in `run_log`), or a `BEADS_ACTOR=claude:<session uuid> bd` write (a bare `BEADS_ACTOR=claude` is the older form); Ari types bare |
 | open instruction | work he gave Claude in words, with the invocation or later, that names no bead: its words are the yes, so Claude files it as a bead and starts it the turn he gives it (Workflow › Proceed); it stays open while a step that ships or destroys, a permission row, or a retry waits on him, and ends when the run ends, on a no or correction that withdraws it, or on `stop operator mode`; its claimed bead carries it across a compaction |
@@ -338,7 +338,7 @@ This: no row: Claude records that answer and closes beads-h1, then Capture   ←
 Not: | 1 | beads-amm.1 "Pin their version": your answer; I record it | P1 | waits on you |   (another session's human gate)
 This: no row and no bullet: the capture, scoped to beads-xy9, does not list it   ← another session's bead
 Not: | 2 | Show the uncommitted edit to `secrets.tf` | P2 | uncommitted on the host |   (an edit this session never made)
-This: - Laptop checkout `~/homelab`: 1 uncommitted edit not listed as this session's; …   ← not in `own`: a count, never a row
+This: - The `laptop` checkout `~/homelab`: 1 uncommitted edit not listed as this session's; …   ← not in `own`: a count, never a row
 Not: "I've written this up as a bead comment on beads-abc so it persists."
 This: the briefing in the reply, nowhere else
 Not: "PR opened for beads-abc." (from memory, no capture)

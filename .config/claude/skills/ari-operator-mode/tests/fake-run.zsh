@@ -22,9 +22,9 @@
 #   FAKE_STDERR_NOISE   a count; print this many [INFO] lines to stderr after stdout (default: 1)
 set -uo pipefail
 : "${FAKE_DIR:?FAKE_DIR is required}"
-: "${FAKE_LIST:=machine=personal|ID=%18|pane=3.1 ✦ bound=none zsh 0: homelab -- laptop
-machine=personal|ID=%3|pane=1.1 - bound=none zsh 0: caf -- laptop
-machine=personal|ID=%30|pane=11.1 - bound=none bash 0: superseedr -- laptop}"
+: "${FAKE_LIST:=machine=ozone|ID=%18|pane=3.1 ✦ bound=none zsh 0: homelab -- ozone
+machine=ozone|ID=%3|pane=1.1 - bound=none zsh 0: caf -- ozone
+machine=ozone|ID=%30|pane=11.1 - bound=none bash 0: superseedr -- ozone}"
 : "${FAKE_LIST_RC:=0}"
 : "${FAKE_PROMPT_LINE:=at 01:00:02 UTC ❯}"
 : "${FAKE_RC:=}"
@@ -58,7 +58,7 @@ noise() {
 }
 
 if [[ "${action}" == list ]]; then
-  if (( FAKE_LIST_RC != 0 )); then print -r -- "ssh: connect to host laptop port 22: No route to host" >&2; exit "${FAKE_LIST_RC}"; fi
+  if (( FAKE_LIST_RC != 0 )); then print -r -- "ssh: connect to host ozone.local port 22: No route to host" >&2; exit "${FAKE_LIST_RC}"; fi
   print -r -- "${FAKE_LIST}"
   noise
   exit 0

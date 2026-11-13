@@ -2,7 +2,7 @@
   "captured_at": "2026-10-30T09:07:24Z",
   "session": "d60c13ee",
   "host_definition": "laptop",
-  "pane": "machine=personal|ID=%18|pane=3.1",
+  "pane": "machine=ozone|ID=%18|pane=3.1",
   "nickname": "homelab",
   "beads_dir": "~/beads",
   "repo": "~/homelab",

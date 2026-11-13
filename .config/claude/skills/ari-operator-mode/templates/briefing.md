@@ -32,7 +32,7 @@ The replies that do not open with the header: the entry turn (the acknowledgemen
 
 ## First principles: one sentence
 
-Where the tracker is (`beads_dir` on `host_definition`), the *scope* read from it (`scope.epics`, or the whole workspace when `scope` is null or `all`), how Claude reaches it (`pane` with `nickname`), where the checkouts are (`repo`, `local_repo`), and the health command (`health.command`), with every term the briefing goes on to use defined at its first appearance as a two-to-five-word parenthetical from `SKILL.md › Reference › Terms`. Ninety words at most. A term whose section is empty this capture is left out; a null `health.command` means no doctor is named.
+Where the tracker is (`beads_dir` on `host_definition`, then `(machine <name>)` when the `pane` label's `machine=` names it otherwise), the *scope* read from it (`scope.epics`, or the whole workspace when `scope` is null or `all`), how Claude reaches it (`pane` with `nickname`), where the checkouts are (`repo`, `local_repo`), and the health command (`health.command`), with every term the briefing goes on to use defined at its first appearance as a two-to-five-word parenthetical from `SKILL.md › Reference › Terms`. Ninety words at most. A term whose section is empty this capture is left out; a null `health.command` means no doctor is named.
 
 ## `**State right now**`
 
