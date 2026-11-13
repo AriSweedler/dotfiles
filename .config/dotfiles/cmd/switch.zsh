@@ -1,6 +1,7 @@
 # dotfiles/cmd/switch.zsh — `dotfiles switch`: lock the local flake's shared input at the clone's
 # HEAD, commit the lock in the local tier, then darwin-rebuild switch (sudo) or, with
-# --build, only build the system.
+# --build, only build the system. macOS only: elsewhere the machine's own host flake builds
+# its user layer, so there is nothing here to switch.
 
 verb::define switch "lock the shared flake at the clone's HEAD and switch this machine to it"
 verb::usage switch 'switch [--build] [--dry-run] [--no-commit]'
@@ -16,6 +17,10 @@ then a switch.
 
 --build builds the system and prints its store path, with no sudo and no
 activation: what Claude runs to check a change before it switches.
+
+Only on macOS. On NixOS the user layer is built by the flake that builds the
+machine, which takes the shared tier as its own input, so switch refuses and
+names what to run in that flake instead.
 EOF
 verb::edit switch --none 'it applies the flakes; edit them as files in the clone and the local tier'
 verb::flag switch '--build' 'build the system and print its store path; no sudo, nothing activated'
@@ -33,6 +38,10 @@ cmd_switch() {
   local -A opts; local -a args
   verb::parse switch "$@"
   (( ${#args} == 0 )) || usage_error "switch takes no arguments | args='${args[*]}'"
+  if [[ "${OSTYPE}" != darwin* ]]; then
+    log::err "switch is darwin-rebuild, which this machine has not | fix='the host flake that builds this machine owns its user layer: nix flake update dotfiles there, commit it, and deploy from that flake'"
+    return 1
+  fi
   (( ${+opts[--dry-run]} )) && export ARI_DOTFILES_DRY_RUN=1
   local clone="${ARI_DOTFILES_DF_WORK_TREE}" flake="${ARI_DOTFILES_NIX_FLAKE}"
   [[ "${ARI_DOTFILES_DF_GIT_DIR:t}" == .git ]] \
