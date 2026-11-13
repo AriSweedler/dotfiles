@@ -76,11 +76,11 @@
     "plugged": {
       "flake": false,
       "locked": {
-        "lastModified": 1794611205,
-        "narHash": "sha256-VKEIMno0wZn23cuEPlYrdHpUsdshlx2ru6COQPWMM0Y=",
+        "lastModified": 1794611452,
+        "narHash": "sha256-ALZ2ewhztpLGAhvTYVehFdXHposnzW4JXZimZdhBTYY=",
         "owner": "AriSweedler",
         "repo": "plugged",
-        "rev": "67c92cd09d4c0801a62382aefc7faa8687d01836",
+        "rev": "19f46e7d763fb70e02ea4c4c01f01af569733911",
         "type": "github"
       },
       "original": {
