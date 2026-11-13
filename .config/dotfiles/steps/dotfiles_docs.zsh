@@ -2,13 +2,16 @@
 # docs::rule::<name> function, run in DOCS_RULES order: docs::rule::steps, each step's line 1,
 # --desc, --apply when it has an apply, and step::watches or --none (steps::doc_gaps); and
 # docs::rule::help, each verb's help_VERB and the top-level help: a one-line synopsis, a Usage
-# section, every flag the parsers accept (help::doc_gap, cmd/help.zsh). A gap is never a load
-# error: it fails this step, by hand only, naming the edit that fixes it.
+# section, every flag the parsers accept (help::doc_gap, cmd/help.zsh); and docs::rule::spec, the
+# declarations as data: the linter has no finding (lib/spec.zsh: every value names a kind, every
+# flag its subcommands, every Usage form speaks the declared flags and kinds) and _dotfiles is what
+# they compile to (cmd/completion.zsh). A gap is never a load error: it fails this step, by hand
+# only, naming the edit that fixes it.
 step::declare dotfiles_docs --group repo \
-  --desc "every step documented (its '# step NAME — summary' line, --desc, --apply for an apply, watches: dotfiles steps) and every verb's help (a synopsis, Usage, every flag it parses: dotfiles help --edit VERB)"
-step::watches dotfiles_docs '.config/dotfiles/steps/**' '.config/dotfiles/cmd/**' '.config/dotfiles/lib/dispatch.zsh'
+  --desc "every step documented (its '# step NAME — summary' line, --desc, --apply for an apply, watches: dotfiles steps) and every verb's help (a synopsis, Usage, every flag it parses: dotfiles help --edit VERB), and the declarations lint clean with the tab completion compiled from them (dotfiles completion write)"
+step::watches dotfiles_docs '.config/dotfiles/steps/**' '.config/dotfiles/cmd/**' '.config/dotfiles/lib/dispatch.zsh' '.config/dotfiles/lib/verb.zsh' '.config/dotfiles/lib/kind.zsh' '.config/dotfiles/lib/spec.zsh' '.config/zsh/completions/_dotfiles'
 
-typeset -ga DOCS_RULES=(steps help)
+typeset -ga DOCS_RULES=(steps help spec)
 
 # docs::rule::<name>: appends one '<unit>: <what it lacks>' per undocumented unit to the caller's
 # `gaps`, and the command that fixes it to `fixes`; counts what it looked at in `units`.
@@ -46,6 +49,24 @@ docs::rule::help() {
   units+=("$(( ${#verbs} + 1 )) helps")
 }
 
+# The declarations as data: no linter finding, and the kept _dotfiles is their compilation. A
+# checkout that keeps no completions directory has no copy to hold to it.
+docs::rule::spec() {
+  local finding f REPLY text
+  local -a reply
+  if (( ! ${#NODES} )); then for f in "${ARI_DOTFILES_CMD}"/*.zsh(N); do source "${f}" || return 3; done; fi
+  spec::lint
+  units+=("${#NODES} commands" "${#FLAGS} flags" "${#KINDS} kinds")
+  for finding in "${reply[@]}"; do gaps+=("${finding}"); fixes+=("${CLI_NAME} completion lint"); done
+  (( ${#reply} == 0 )) || return 0
+  spec::completion_file
+  [[ -d "${REPLY:h}" ]] || return 0
+  need_lib "${ARI_DOTFILES_CMD}/completion/emit.zsh" || return 3
+  text="$(completion::emit)"
+  [[ -r "${REPLY}" && "$(<"${REPLY}")" == "${text}" ]] && return 0
+  gaps+=("${REPLY:t}: not what the declarations compile to"); fixes+=("${CLI_NAME} completion write")
+}
+
 step::dotfiles_docs::live() {
   local rule
   local -a gaps=() fixes=() units=()
@@ -60,6 +81,8 @@ step::dotfiles_docs::live() {
 # Every rule reads only the program's own files: the verdict holds while none of them changes.
 check::dotfiles_docs() {
   local -a reply=()
+  local REPLY
   cache::tree "${ARI_DOTFILES_STEPS}" "${ARI_DOTFILES_CMD}" "${ARI_DOTFILES_LIB}"
-  cache::check step::dotfiles_docs::live "${reply[@]}"
+  spec::completion_file
+  cache::check step::dotfiles_docs::live "${reply[@]}" "${REPLY:h}" "${REPLY}"
 }

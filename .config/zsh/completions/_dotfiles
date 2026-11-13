@@ -1,0 +1,508 @@
+#compdef dotfiles
+# _dotfiles: tab completion for dotfiles. COMPILED by 'dotfiles completion write' from the verb
+# declarations (cmd/*.zsh), the kinds (cmd/kinds.zsh) and the flags before the verb
+# (lib/dispatch.zsh); never edited. Change a declaration, then write it again; the dotfiles_docs
+# step fails while this file is not what the declarations compile to.
+
+# --- The tables. A node is one command, the words after dotfiles; '-' is before any verb. ---
+# node → how its last word is reached: word (typed), flag (an edit only --edit reaches)
+typeset -gA _dotfiles_nodes=(
+  'alttab' 'word'
+  'alttab edit' 'word'
+  'alttab install' 'word'
+  'alttab status' 'word'
+  'apply' 'word'
+  'apply edit' 'word'
+  'completion' 'word'
+  'completion lint' 'word'
+  'completion write' 'word'
+  'git' 'word'
+  'git edit' 'flag'
+  'healthcheck' 'word'
+  'healthcheck edit' 'word'
+  'help' 'word'
+  'help edit' 'word'
+  'init' 'word'
+  'init edit' 'word'
+  'jobs' 'word'
+  'jobs edit' 'word'
+  'jobs install' 'word'
+  'jobs list' 'word'
+  'jobs run' 'word'
+  'jobs tick' 'word'
+  'jobs uninstall' 'word'
+  'jobs unlock' 'word'
+  'kinds' 'word'
+  'logs' 'word'
+  'logs edit' 'word'
+  'machine-name' 'word'
+  'machine-name edit' 'word'
+  'pull' 'word'
+  'pull edit' 'word'
+  'push' 'word'
+  'push edit' 'word'
+  'raycast' 'word'
+  'raycast edit' 'word'
+  'raycast edit link' 'word'
+  'raycast edit snippets' 'word'
+  'raycast link' 'word'
+  'raycast link check' 'word'
+  'raycast link edit' 'word'
+  'raycast link list' 'word'
+  'raycast link prime' 'word'
+  'raycast link undocumented' 'word'
+  'raycast link unprimed' 'word'
+  'raycast snippets' 'word'
+  'raycast snippets adopt' 'word'
+  'raycast snippets check' 'word'
+  'raycast snippets diff' 'word'
+  'raycast snippets edit' 'word'
+  'raycast snippets fmt' 'word'
+  'raycast snippets list' 'word'
+  'raycast snippets move' 'word'
+  'raycast snippets pull' 'word'
+  'raycast snippets reset-manifest' 'word'
+  'raycast snippets sync' 'word'
+  'raycast snippets undocumented' 'word'
+  'raycast sync' 'word'
+  'raycast undocumented' 'word'
+  'status' 'word'
+  'status edit' 'word'
+  'steps' 'word'
+  'steps edit' 'word'
+  'steps list' 'word'
+  'switch' 'word'
+  'test' 'word'
+  'test edit' 'word'
+  'verify' 'word'
+  'verify edit' 'word'
+)
+# node → the words that can follow it, each 'word:description'
+typeset -gA _dotfiles_children=(
+  '-' 'alttab:build, sign and install the Free-tier AltTab
+apply:init for the named steps only
+completion:the zsh completion for dotfiles, compiled from the verb…
+git:git in a tier'\''s bare repo (what '\''git df'\'' and '\''git ldf'\'' do)
+healthcheck:every step'\''s check, reported; nothing applied
+help:the verbs, or one verb'\''s help
+init:converge this machine: check every step, apply where one…
+jobs:the job plugins and the one launchd job that runs them
+kinds:the kinds of value a dotfiles command line holds, or the values…
+logs:the push logs, per repo
+machine-name:this machine'\''s everyday name: print it, or set it
+pull:update the shared tier from origin; name the steps the pulled…
+push:publish every tier: submodules, pointer bumps, shared, local
+raycast:Raycast in parity with the dotfiles: bindings, snippets
+status:both tiers, the submodules, the last push of each repo
+steps:every step in run order, with its group, needs, tools, apply and…
+switch:lock the shared flake at the clone'\''s HEAD and switch this…
+test:the hermetic suite, one suite by name, or the suites a change…
+verify:the weekly check: healthcheck, retry, Desktop report, banner'
+  'alttab' 'install:get Xcode ready (select it, accept its license, install its…
+status:the alttab step'\''s check
+edit:open the files free.patch changes in $EDITOR, in the clone the…'
+  'apply' 'edit:choose the steps in $EDITOR, every step listed; a PLAN argument…'
+  'completion' 'lint:the linter alone: one line per finding, exit 1 on any; nothing…
+write:compile, and write the function to zsh/completions/_dotfiles of…'
+  'healthcheck' 'edit:after the checks, choose the steps to apply in $EDITOR; PLAN…'
+  'help' 'edit:open that file in $EDITOR (vi when unset) at the declaration (no…'
+  'init' 'edit:check, then choose the steps to apply in $EDITOR; PLAN resumes a…'
+  'jobs' 'list:every plugin, its triggers, last run and rc, then the deps they…
+run:run one plugin now; output to its log and stdout
+tick:what the agent runs: every plugin due for --trigger T (load,…
+unlock:simulate a screen unlock (SIGUSR1 to the resident agent)
+install:remove the per-plugin jobs this framework replaced; the job…
+uninstall:boot out and remove a job nix-darwin did not install
+edit:a plugin (or --dep) in $EDITOR as a draft: checked on save…'
+  'logs' 'edit:open the logs in $EDITOR to read, instead of printing them'
+  'machine-name' 'edit:the name file in $EDITOR as a draft, checked on save, then put…'
+  'pull' 'edit:after the pull, choose the steps to apply in $EDITOR; PLAN…'
+  'push' 'edit:choose the repos in a plan file (needs a terminal); PLAN resumes…'
+  'raycast' 'link:link BINDING|DEEPLINK: the widget <[Raycast: Title | key:…
+snippets:the snippets; alone: their usage
+sync:every subsystem'\''s sync, in order
+undocumented:every subsystem'\''s undocumented units
+edit:a subsystem'\''s edit; no target: pick one on a terminal (snippets…'
+  'raycast edit' 'link:the same as link edit
+snippets:the same as snippets edit'
+  'raycast link' 'list:every binding: slug, chords, title, deeplink
+check:OK/MISSING per binding against the compiled karabiner.json
+prime:open each bound command (or the slugs given) in turn, Enter…
+unprimed:a warn naming the bindings never primed on this machine, with…
+edit:the table holding the slug'\''s deeplink in $EDITOR at its line (no…
+undocumented:every binding without a description, with its fix'
+  'raycast snippets' 'sync:import what is new or changed, one Raycast dialog a batch
+list:state and tier of every snippet
+check:warn per shared placeholder nothing overrides
+adopt:seed the manifest from Raycast'\''s current state
+pull:a Raycast export is the truth; update the tier files
+diff:the merged set against a Raycast export, by name
+move:relocate one snippet between the tiers
+fmt:canonical rewrite of both files, adds no placeholders
+reset-manifest:forget names (all when none)
+edit:a tier file in $EDITOR, then validate (and the doc rule for the…
+undocumented:every snippet without a description, with its fix'
+  'status' 'edit:write a commit plan for the uncommitted tracked paths, edit it…'
+  'steps' 'list:the registry (the default)
+edit:the step file in $EDITOR as a draft: checked on save (zsh -n,…'
+  'test' 'edit:open NAME'\''s suite and the code it tests in $EDITOR (vi when…'
+  'verify' 'edit:open the Desktop report (else the newest *.edited*.md) in…'
+)
+# node → the flags it takes, each 'flag:description'
+typeset -gA _dotfiles_flags=(
+  '-' '--dir:print the tier'\''s bare repo path and exit (in place of a verb)
+--dry-run:print what would change; change nothing
+--local:git and --dir act on the local tier, not the shared one
+--timing:log how long each timed step took
+--verbose:debug logging (with --help: every verb'\''s whole help)
+-v:debug logging (with --help: every verb'\''s whole help)
+--help:this help; after a verb, that verb'\''s'
+  'alttab' '--edit:open the files free.patch changes in $EDITOR, in the clone the…
+--help:the help of alttab'
+  'alttab edit' '--header:edit: open free.patch itself (its header names each file it…
+--no-commit:edit: put free.patch in place, leave it uncommitted
+--help:the help of alttab'
+  'alttab install' '--dry-run:install: print the build'\''s plan, change nothing
+--no-launch:install: do not open AltTab afterwards
+--help:the help of alttab'
+  'alttab status' '--help:the help of alttab'
+  'apply' '--dry-run:run every apply with each mutation logged instead of executed,…
+--json:print summary.json instead of the table (stdout is data, stderr…
+--edit:choose the steps in $EDITOR, every step listed; a PLAN argument…
+--help:the help of apply'
+  'apply edit' '--dry-run:run every apply with each mutation logged instead of executed,…
+--help:the help of apply'
+  'completion' '--help:the help of completion'
+  'completion lint' '--help:the help of completion'
+  'completion write' '--help:the help of completion'
+  'git' '--edit:with --local only ('\''dotfiles --local git --edit'\''): the allowlist…
+--help:the help of git'
+  'git edit' '--no-commit:edit: install it, leave the template uncommitted
+--help:the help of git'
+  'healthcheck' '--only:exactly these steps; a step'\''s needs are a gate, not an…
+--group:one group: repo, brew, tools
+--dry-run:accepted; a healthcheck changes nothing either way (with --edit,…
+--json:print summary.json instead of the table (stdout is data, stderr…
+--edit:after the checks, choose the steps to apply in $EDITOR; PLAN…
+--help:the help of healthcheck'
+  'healthcheck edit' '--only:exactly these steps; a step'\''s needs are a gate, not an…
+--group:one group: repo, brew, tools
+--dry-run:accepted; a healthcheck changes nothing either way (with --edit,…
+--help:the help of healthcheck'
+  'help' '--edit:open that file in $EDITOR (vi when unset) at the declaration (no…
+--help:the help of help'
+  'help edit' '--no-commit:edit: put the file in place, leave it uncommitted
+--help:the help of help'
+  'init' '--only:exactly these steps; a step'\''s needs are a gate, not an…
+--group:one group: repo, brew, tools
+--dry-run:run every apply with each mutation logged instead of executed,…
+--json:print summary.json instead of the table and status (stdout is…
+--edit:check, then choose the steps to apply in $EDITOR; PLAN resumes a…
+--help:the help of init'
+  'init edit' '--only:exactly these steps; a step'\''s needs are a gate, not an…
+--group:one group: repo, brew, tools
+--dry-run:run every apply with each mutation logged instead of executed,…
+--help:the help of init'
+  'jobs' '--edit:a plugin (or --dep) in $EDITOR as a draft: checked on save…
+--help:the help of jobs'
+  'jobs edit' '--new:edit: start NAME from a template (in the local tier unless…
+--local:edit --new: in ~/.local/share/dotfiles (git ldf; committed and…
+--global:edit --new: in ~/.config/dotfiles (git df; committed, never…
+--dep:edit: a dep, not a plugin
+--no-commit:edit: put it in place, leave it uncommitted
+--no-push:edit: skip the local tier'\''s push
+--help:the help of jobs'
+  'jobs install' '--dry-run:install: print what would change and change nothing
+--help:the help of jobs'
+  'jobs list' '--help:the help of jobs'
+  'jobs run' '--trigger:run, tick: the trigger the plugin sees as $1 (run: manual)
+--help:the help of jobs'
+  'jobs tick' '--trigger:run, tick: the trigger the plugin sees as $1 (run: manual)
+--help:the help of jobs'
+  'jobs uninstall' '--dry-run:install: print what would change and change nothing
+--help:the help of jobs'
+  'jobs unlock' '--help:the help of jobs'
+  'kinds' '--help:the help of kinds'
+  'logs' '--repo:one repo'\''s log instead of all of them
+--previous:the run before the last one (.log.bak.1)
+--edit:open the logs in $EDITOR to read, instead of printing them
+--help:the help of logs'
+  'logs edit' '--repo:one repo'\''s log instead of all of them
+--previous:the run before the last one (.log.bak.1)
+--help:the help of logs'
+  'machine-name' '--no-commit:put the name in place, leave it uncommitted
+--edit:the name file in $EDITOR as a draft, checked on save, then put…
+--help:the help of machine-name'
+  'machine-name edit' '--no-commit:put the name in place, leave it uncommitted
+--help:the help of machine-name'
+  'pull' '--dry-run:fetch, then name what the pull would bring and the steps it…
+--edit:after the pull, choose the steps to apply in $EDITOR; PLAN…
+--help:the help of pull'
+  'pull edit' '--dry-run:fetch, then name what the pull would bring and the steps it…
+--help:the help of pull'
+  'push' '--submodules:only the submodules (a selecting flag names the scope exactly;…
+--shared:only the shared tier
+--local:only the local tier
+--no-submodules:leave the submodules out
+--no-shared:leave the shared tier out
+--no-local:leave the local tier out
+--dry-run:the would-push lines, no network (edit: for the repos the plan…
+--edit:choose the repos in a plan file (needs a terminal); PLAN resumes…
+--help:the help of push'
+  'push edit' '--submodules:only the submodules (a selecting flag names the scope exactly;…
+--shared:only the shared tier
+--local:only the local tier
+--no-submodules:leave the submodules out
+--no-shared:leave the shared tier out
+--no-local:leave the local tier out
+--dry-run:the would-push lines, no network (edit: for the repos the plan…
+--help:the help of push'
+  'raycast' '--edit:a subsystem'\''s edit; no target: pick one on a terminal (snippets…
+--help:the help of raycast'
+  'raycast edit' '--local:edit: open the local tier file (the default)
+--shared:edit: open the shared tier file
+--help:the help of raycast'
+  'raycast edit link' '--help:the help of raycast'
+  'raycast edit snippets' '--local:edit: open the local tier file (the default)
+--shared:edit: open the shared tier file
+--help:the help of raycast'
+  'raycast link' '--plain:link: the bare form, <Raycast: Title | key: '\''✦4'\''> url
+--help:the help of raycast'
+  'raycast link check' '--help:the help of raycast'
+  'raycast link edit' '--help:the help of raycast'
+  'raycast link list' '--help:the help of raycast'
+  'raycast link prime' '--help:the help of raycast'
+  'raycast link undocumented' '--help:the help of raycast'
+  'raycast link unprimed' '--help:the help of raycast'
+  'raycast snippets' '--help:the help of raycast'
+  'raycast snippets adopt' '--dry-run:sync, adopt, pull, fmt, move, reset-manifest: print the plan,…
+--help:the help of raycast'
+  'raycast snippets check' '--help:the help of raycast'
+  'raycast snippets diff' '--help:the help of raycast'
+  'raycast snippets edit' '--local:edit: open the local tier file (the default)
+--shared:edit: open the shared tier file
+--help:the help of raycast'
+  'raycast snippets fmt' '--dry-run:sync, adopt, pull, fmt, move, reset-manifest: print the plan,…
+--help:the help of raycast'
+  'raycast snippets list' '--help:the help of raycast'
+  'raycast snippets move' '--dry-run:sync, adopt, pull, fmt, move, reset-manifest: print the plan,…
+--to:move: shared or local
+--help:the help of raycast'
+  'raycast snippets pull' '--dry-run:sync, adopt, pull, fmt, move, reset-manifest: print the plan,…
+--help:the help of raycast'
+  'raycast snippets reset-manifest' '--dry-run:sync, adopt, pull, fmt, move, reset-manifest: print the plan,…
+--help:the help of raycast'
+  'raycast snippets sync' '--dry-run:sync, adopt, pull, fmt, move, reset-manifest: print the plan,…
+--deleted:snippets sync: the old copies of the changed and removed…
+--help:the help of raycast'
+  'raycast snippets undocumented' '--help:the help of raycast'
+  'raycast sync' '--dry-run:sync, adopt, pull, fmt, move, reset-manifest: print the plan,…
+--help:the help of raycast'
+  'raycast undocumented' '--help:the help of raycast'
+  'status' '--edit:write a commit plan for the uncommitted tracked paths, edit it…
+--help:the help of status'
+  'status edit' '--dry-run:edit: print what would run, restores too, change nothing
+--help:the help of status'
+  'steps' '--edit:the step file in $EDITOR as a draft: checked on save (zsh -n,…
+--help:the help of steps'
+  'steps edit' '--new:edit: create steps/NAME.zsh from a template (a check and an…
+--no-commit:edit: put it in place, leave it uncommitted
+--help:the help of steps'
+  'steps list' '--help:the help of steps'
+  'switch' '--build:build the system and print its store path; no sudo, nothing…
+--dry-run:print the lock, commit and switch it would run; change nothing
+--no-commit:leave a moved flake.lock uncommitted
+--help:the help of switch'
+  'test' '--changed:the files this checkout changed: against --base (default HEAD),…
+--base:with --changed: the changes since REV (origin/main covers every…
+--for:the arguments are files (absolute, or relative to the current…
+--list:with --changed or --for: print the suites and why, run nothing
+--edit:open NAME'\''s suite and the code it tests in $EDITOR (vi when…
+--help:the help of test'
+  'test edit' '--help:the help of test'
+  'verify' '--force-report:write the report even when the set of problems is unchanged
+--no-notify:no banner (an interactive run never banners; the job does)
+--json:print summary.json instead of the table
+--show:print the current report (Desktop, else newest archived); runs…
+--edit:open the Desktop report (else the newest *.edited*.md) in…
+--help:the help of verify'
+  'verify edit' '--help:the help of verify'
+)
+# 'verb flag' → the spec of the value the flag takes
+typeset -gA _dotfiles_flag_value=(
+  'healthcheck --group' 'GROUP'
+  'healthcheck --only' 'STEP,..'
+  'init --group' 'GROUP'
+  'init --only' 'STEP,..'
+  'jobs --trigger' 'TRIGGER'
+  'logs --repo' 'REPO'
+  'raycast --to' 'TIER'
+  'test --base' 'REV'
+)
+# node → the specs of its positional values, in order
+typeset -gA _dotfiles_args=(
+  'apply' 'STEP..'
+  'apply edit' '[STEP..|PLAN]'
+  'git' 'GIT_WORDS'
+  'healthcheck edit' '[PLAN]'
+  'help' '[VERB]'
+  'help edit' '[VERB]'
+  'init edit' '[PLAN]'
+  'jobs edit' 'JOB|DEP'
+  'jobs run' 'JOB'
+  'kinds' '[KIND]'
+  'machine-name' '[MACHINE_NAME]'
+  'pull edit' '[PLAN]'
+  'push edit' '[PLAN]'
+  'raycast edit link' '[BINDING]'
+  'raycast link' 'BINDING|DEEPLINK'
+  'raycast link edit' '[BINDING]'
+  'raycast link prime' '[BINDING..]'
+  'raycast snippets diff' 'RAYCAST_EXPORT'
+  'raycast snippets move' 'SNIPPET'
+  'raycast snippets pull' 'RAYCAST_EXPORT'
+  'raycast snippets reset-manifest' '[SNIPPET..]'
+  'status edit' '[PLAN]'
+  'steps edit' 'STEP'
+  'test' '[SUITE|SOURCE_FILE..]'
+  'test edit' '[SUITE]'
+)
+# node → the command whose own completion takes the rest of the line
+typeset -gA _dotfiles_delegate=(
+  'git' 'git'
+)
+# kind → where its values come from, what one value is, and the fixed set of a words kind
+typeset -gA _dotfiles_kind_source=(
+  'VERB' 'lister'
+  'KIND' 'lister'
+  'STEP' 'lister'
+  'GROUP' 'words'
+  'PLAN' 'files'
+  'JOB' 'lister'
+  'DEP' 'lister'
+  'TRIGGER' 'words'
+  'REPO' 'lister'
+  'TIER' 'words'
+  'MACHINE_NAME' 'free'
+  'SUITE' 'lister'
+  'SOURCE_FILE' 'files'
+  'REV' 'free'
+  'BINDING' 'lister'
+  'DEEPLINK' 'free'
+  'SNIPPET' 'lister'
+  'RAYCAST_EXPORT' 'files'
+  'GIT_WORDS' 'delegate'
+)
+typeset -gA _dotfiles_kind_desc=(
+  'VERB' 'a dotfiles verb'
+  'KIND' 'a kind of value, from this catalog'
+  'STEP' 'a step: a file in steps/'
+  'GROUP' 'a group of steps'
+  'PLAN' 'a kept --edit plan file, to resume'
+  'JOB' 'a job plugin'
+  'DEP' 'a dep the job plugins name'
+  'TRIGGER' 'what set a job run off'
+  'REPO' 'a repo dotfiles push writes a log for'
+  'TIER' 'a dotfiles tier'
+  'MACHINE_NAME' 'this machine'\''s new name: one word of letters, digits, _ or -'
+  'SUITE' 'a test suite: a zsh plugin suite or a hermetic one'
+  'SOURCE_FILE' 'a file of this checkout, whose suites to run'
+  'REV' 'a git revision'
+  'BINDING' 'a Raycast binding'\''s slug'
+  'DEEPLINK' 'a raycast:// path'
+  'SNIPPET' 'a Raycast snippet'\''s name'
+  'RAYCAST_EXPORT' 'a snippets file exported from Raycast'
+  'GIT_WORDS' 'git'\''s own words, untouched'
+)
+typeset -gA _dotfiles_kind_words=(
+  'GROUP' 'repo brew tools'
+  'TRIGGER' 'unlock load tick manual screenIsUnlocked'
+  'TIER' 'shared local'
+)
+
+# --- The engine: the same for every verb ---
+
+# _dotfiles_values SPEC CLI: offer the values of a value spec: KIND, [KIND], KIND.. (repeats),
+# KIND,.. (a comma list in one word), A|B (either). A lister kind asks `CLI kinds KIND`.
+_dotfiles_values() {
+  local spec="${${1#\[}%\]}" cli="${2}" kind alt
+  local -a values
+  local -i ret=1
+  for alt in "${(@s:|:)spec}"; do
+    [[ "${alt}" != *,.. ]] || compset -P '*,'
+    kind="${${alt%..}%,}"
+    case "${_dotfiles_kind_source[${kind}]:-}" in
+      words)  values=(${=_dotfiles_kind_words[${kind}]}) ;;
+      lister) values=("${(@f)$("${cli}" kinds "${kind}" 2>/dev/null)}") ;;
+      files)  _files && ret=0; continue ;;
+      *)      _message "${kind}: ${_dotfiles_kind_desc[${kind}]:-}"; continue ;;
+    esac
+    values=("${(@)values:#}")
+    values=("${(@)values//:/\\:}")
+    _describe -t "${kind:l}" "${kind}: ${_dotfiles_kind_desc[${kind}]}" values && ret=0
+  done
+  return ret
+}
+
+_dotfiles() {
+  local cli="${words[1]/#\~/${HOME}}" node="" verb="" word name key pending="" spec
+  local -i i npos=0 verb_at=0 ret=1
+  local -a seen flags children specs
+
+  # Walk the words before the cursor: flags (and their values) aside, the first word is the verb,
+  # then each word that makes a longer node is a subcommand, and the rest are positionals.
+  for (( i = 2; i < CURRENT; i++ )); do
+    word="${words[i]}"
+    if [[ -n "${pending}" ]]; then pending=""; continue; fi
+    if [[ -n "${verb}" && -n "${_dotfiles_delegate[${node}]:-}" && "${word}" != --edit ]]; then break; fi
+    if [[ "${word}" == -?* ]]; then
+      name="${word%%=*}"; seen+=("${name}")
+      if [[ -n "${verb}" && "${name}" == --edit && -n "${_dotfiles_nodes[${verb} edit]:-}" ]]; then node="${verb} edit"; npos=0; continue; fi
+      key="${verb:+${verb} }${name}"
+      spec="${_dotfiles_flag_value[${key}]:-}"
+      [[ -z "${spec}" || "${spec}" == \[* || "${word}" == *=* ]] || pending="${key}"
+      continue
+    fi
+    if [[ -z "${verb}" ]]; then verb="${word:l}"; node="${verb}"; verb_at=i
+    elif (( npos == 0 )) && [[ "${_dotfiles_nodes[${node} ${word}]:-}" == word ]]; then node="${node} ${word}"
+    else (( npos++ )); fi
+  done
+
+  # A flag waiting for its value, or --flag=value.
+  if [[ -n "${pending}" ]]; then _dotfiles_values "${_dotfiles_flag_value[${pending}]}" "${cli}"; return; fi
+  if [[ "${PREFIX}" == --*=* ]]; then
+    spec="${_dotfiles_flag_value[${verb:+${verb} }${PREFIX%%=*}]:-}"
+    [[ -n "${spec}" ]] || return 1
+    compset -P '*='
+    _dotfiles_values "${spec}" "${cli}"; return
+  fi
+
+  flags=("${(@f)_dotfiles_flags[${node:--}]:-}")
+  for name in "${seen[@]}"; do flags=("${(@)flags:#${name}:*}"); done
+  children=("${(@f)_dotfiles_children[${node:--}]:-}")
+  flags=("${(@)flags:#}"); children=("${(@)children:#}")
+
+  # A node that hands its line on: that command's completion, from its own first word.
+  if [[ -n "${verb}" && -n "${_dotfiles_delegate[${node}]:-}" ]]; then
+    if (( CURRENT == verb_at + 1 )) && [[ "${PREFIX}" == -* ]]; then _describe -t flags 'dotfiles flag' flags && ret=0; fi
+    words=("${_dotfiles_delegate[${node}]}" "${(@)words[verb_at+1,-1]}")
+    (( CURRENT -= verb_at - 1 ))
+    _normal && ret=0
+    return ret
+  fi
+
+  if [[ "${PREFIX}" == -* ]]; then _describe -t flags flag flags; return; fi
+  if (( npos == 0 && ${#children} )); then
+    if [[ -z "${verb}" ]]; then _describe -t verbs verb children && ret=0
+    else _describe -t subcommands subcommand children && ret=0; fi
+  fi
+  specs=(${=_dotfiles_args[${node}]:-})
+  spec="${specs[npos+1]:-}"
+  if [[ -z "${spec}" && "${specs[-1]:-}" == *..* ]]; then spec="${specs[-1]}"; fi
+  if [[ -n "${spec}" ]]; then _dotfiles_values "${spec}" "${cli}" && ret=0; fi
+  # Nothing else to say: the flags.
+  if (( ret )) && [[ -z "${spec}" ]] && (( ! ${#children} || npos )); then _describe -t flags flag flags && ret=0; fi
+  return ret
+}
+
+_dotfiles "$@"

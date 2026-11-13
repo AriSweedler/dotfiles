@@ -22,9 +22,11 @@ a Usage section. The top-level help is help() in lib/dispatch.zsh, held to
 the same rule for the flags main() takes. A help that breaks the rule fails
 the dotfiles_docs step.
 EOF
+verb::arg help '[VERB]'
+verb::arg help --for edit '[VERB]'
 verb::edit help help::edit_cmd '[VERB] [--no-commit]' \
   'open that file in \$EDITOR (vi when unset) at the declaration (no VERB: the top-level help), as a draft; a verb without one gets a stub. On save the draft must pass zsh -n, the rule below, and render under "set -euo pipefail" in a fresh zsh -f with the draft in place; then it replaces the file and is committed in the shared tier. A draft that does not pass is kept: offered for another edit on a terminal, else exit 1; the same command resumes it'
-verb::flag help '--no-commit' 'edit: put the file in place, leave it uncommitted'
+verb::flag help '--no-commit' 'edit: put the file in place, leave it uncommitted' --for 'edit'
 
 cmd_help() {
   local -A opts; local -a args

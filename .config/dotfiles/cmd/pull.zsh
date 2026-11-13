@@ -32,8 +32,9 @@ checked line by line; an unchanged plan runs as written, one with no step
 line aborts, and the 'apply' steps run in a fresh 'dotfiles apply'. A plan
 with bad lines is kept: edit it again, or resume it with --edit FILE.
 EOF
-verb::edit pull pull::edit_cmd '[FILE] [--dry-run]' 'after the pull, choose the steps to apply in \$EDITOR; FILE resumes a plan that did not pass, without pulling again'
-verb::flag pull '--dry-run' 'fetch, then name what the pull would bring and the steps it affects; merge nothing (edit: the apply is a dry run too)'
+verb::arg pull --for edit '[PLAN]'
+verb::edit pull pull::edit_cmd '[PLAN] [--dry-run]' 'after the pull, choose the steps to apply in \$EDITOR; PLAN resumes a plan that did not pass, without pulling again'
+verb::flag pull '--dry-run' 'fetch, then name what the pull would bring and the steps it affects; merge nothing (edit: the apply is a dry run too)' --for 'pull, edit'
 verb::env pull ARI_DOTFILES_REMOTE 'the shared repo' '${ARI_DOTFILES_REMOTE}'
 
 plan::define pull --actions 'apply|skip' --item step

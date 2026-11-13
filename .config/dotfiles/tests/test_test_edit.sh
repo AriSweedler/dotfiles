@@ -185,7 +185,7 @@ assert_eq "edit with for: 64" 64 "${RC}"
 
 assert_eq "nothing committed" "${df_before}" "$(git --git-dir="${ARI_DOTFILES_DF_GIT_DIR}" rev-list --count HEAD 2>/dev/null || echo none)"
 nm test --help
-assert_contains "help: edit in Usage" "${OUT}" "dotfiles test edit [NAME]"
+assert_contains "help: edit in Usage" "${OUT}" "dotfiles test edit [SUITE]"
 assert_contains "help: the edit subcommand" "${OUT}" "  edit  open NAME's suite and the code it tests"
 assert_contains "help: --edit in Flags" "${OUT}" "edit: the same as the edit subcommand"
 assert_contains "help: --changed in Usage" "${OUT}" "dotfiles test --changed [--base REV] [--list]"

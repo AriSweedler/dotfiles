@@ -25,15 +25,16 @@ first: a repo whose HEAD moved since its sha was recorded is refused, and so
 is 'push shared' while a submodule whose pointer it would bump is skipped.
 Then one confirmation, and the push runs for exactly those repos.
 EOF
-verb::edit push push::edit_cmd '[FILE] [--<part>…] [--no-<part>…] [--dry-run]' \
-  'choose the repos in a plan file (needs a terminal); FILE resumes a saved plan, and off a terminal runs it as saved'
-verb::flag push '--submodules' 'only the submodules (a selecting flag names the scope exactly; none = all three parts)'
-verb::flag push '--shared' 'only the shared tier'
-verb::flag push '--local' 'only the local tier'
-verb::flag push '--no-submodules' 'leave the submodules out'
-verb::flag push '--no-shared' 'leave the shared tier out'
-verb::flag push '--no-local' 'leave the local tier out'
-verb::flag push '--dry-run' 'the would-push lines, no network (edit: for the repos the plan chose)'
+verb::arg push --for edit '[PLAN]'
+verb::edit push push::edit_cmd '[PLAN] [--submodules] [--shared] [--local] [--no-submodules] [--no-shared] [--no-local] [--dry-run]' \
+  'choose the repos in a plan file (needs a terminal); PLAN resumes a saved plan, and off a terminal runs it as saved'
+verb::flag push '--submodules' 'only the submodules (a selecting flag names the scope exactly; none = all three parts)' --for 'push, edit'
+verb::flag push '--shared' 'only the shared tier' --for 'push, edit'
+verb::flag push '--local' 'only the local tier' --for 'push, edit'
+verb::flag push '--no-submodules' 'leave the submodules out' --for 'push, edit'
+verb::flag push '--no-shared' 'leave the shared tier out' --for 'push, edit'
+verb::flag push '--no-local' 'leave the local tier out' --for 'push, edit'
+verb::flag push '--dry-run' 'the would-push lines, no network (edit: for the repos the plan chose)' --for 'push, edit'
 verb::env push ARI_DOTFILES_GITHUB_LOGIN 'the GitHub account every personal push authenticates as, by its gh token' '${ARI_DOTFILES_GITHUB_LOGIN}'
 
 plan::define push --actions 'push|skip' --item repo

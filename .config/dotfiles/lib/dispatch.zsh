@@ -5,6 +5,16 @@
 # help_<verb> (its help; the FIRST line is the one-line synopsis the top-level help lists).
 # Adding the file adds the verb: the table is ${(k)functions[(I)cmd_*]}.
 
+# The flags main() takes before the verb: spelling(s) → description. The linter holds this table
+# to the arms of main()'s case, and the completion offers it before a verb.
+typeset -gA GLOBAL_FLAG_DESC=(
+  '--dry-run'    'print what would change; change nothing'
+  '--verbose|-v' "debug logging (with --help: every verb's whole help)"
+  '--timing'     'log how long each timed step took'
+  '--local'      'git and --dir act on the local tier, not the shared one'
+  '--dir'        "print the tier's bare repo path and exit (in place of a verb)"
+)
+
 # Every verb, sorted.
 verbs() { print -rl -- ${(o)${(k)functions[(I)cmd_*]#cmd_}}; }
 
@@ -125,6 +135,7 @@ main() {
   # and `VERB --edit …` both reach its handler.
   if [[ -n "${VERB_EDIT[${verb}]:-}" && ( "${1:-}" == --edit || ( "${1:-}" == edit && -z "${VERB_EDIT_FLAG_ONLY[${verb}]:-}" ) ) ]]; then
     shift
+    VERB_SUB_SEEN[${verb}]=edit
     "${VERB_EDIT[${verb}]}" "$@"
     return
   fi

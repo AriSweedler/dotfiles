@@ -3,7 +3,7 @@ zmodload zsh/datetime
 zmodload -F zsh/stat b:zstat
 
 verb::define jobs 'the job plugins and the one launchd job that runs them'
-verb::usage jobs 'jobs [list]' 'jobs run NAME [--trigger T]' 'jobs tick --trigger T' 'jobs unlock' \
+verb::usage jobs 'jobs [list]' 'jobs run JOB [--trigger TRIGGER]' 'jobs tick --trigger TRIGGER' 'jobs unlock' \
   'jobs install [--dry-run] | uninstall'
 verb::about jobs <<'EOF'
 One launchd job, ${JOBS_LABEL}: a resident agent that runs
@@ -30,16 +30,18 @@ verb::sub jobs tick 'what the agent runs: every plugin due for --trigger T (load
 verb::sub jobs unlock 'simulate a screen unlock (SIGUSR1 to the resident agent)'
 verb::sub jobs install 'remove the per-plugin jobs this framework replaced; the job itself is nix-darwin'"'"'s, installed by dotfiles switch (the dotfiles_jobs step runs this)'
 verb::sub jobs uninstall 'boot out and remove a job nix-darwin did not install'
-verb::edit jobs jobs::edit 'NAME [--new] [--local|--global] [--dep] [--no-commit] [--no-push]' \
+verb::arg jobs --for run 'JOB'
+verb::arg jobs --for edit 'JOB|DEP'
+verb::edit jobs jobs::edit 'JOB|DEP [--new] [--local|--global] [--dep] [--no-commit] [--no-push]' \
   'a plugin (or --dep) in \$EDITOR as a draft: checked on save (syntax, header lines, docs), then put in place and committed in its tier'
-verb::flag jobs '--trigger T' 'run, tick: the trigger the plugin sees as \$1 (run: manual)'
-verb::flag jobs '--dry-run' 'install: print what would change and change nothing'
-verb::flag jobs '--new' 'edit: start NAME from a template (in the local tier unless --global)'
-verb::flag jobs '--local' 'edit --new: in ~/.local/share/dotfiles (git ldf; committed and pushed)'
-verb::flag jobs '--global' 'edit --new: in ~/.config/dotfiles (git df; committed, never pushed)'
-verb::flag jobs '--dep' 'edit: a dep, not a plugin'
-verb::flag jobs '--no-commit' 'edit: put it in place, leave it uncommitted'
-verb::flag jobs '--no-push' "edit: skip the local tier's push"
+verb::flag jobs '--trigger TRIGGER' 'run, tick: the trigger the plugin sees as \$1 (run: manual)' --for 'run, tick'
+verb::flag jobs '--dry-run' 'install: print what would change and change nothing' --for 'install, uninstall'
+verb::flag jobs '--new' 'edit: start NAME from a template (in the local tier unless --global)' --for 'edit'
+verb::flag jobs '--local' 'edit --new: in ~/.local/share/dotfiles (git ldf; committed and pushed)' --for 'edit'
+verb::flag jobs '--global' 'edit --new: in ~/.config/dotfiles (git df; committed, never pushed)' --for 'edit'
+verb::flag jobs '--dep' 'edit: a dep, not a plugin' --for 'edit'
+verb::flag jobs '--no-commit' 'edit: put it in place, leave it uncommitted' --for 'edit'
+verb::flag jobs '--no-push' "edit: skip the local tier's push" --for 'edit'
 verb::env jobs ARI_DOTFILES_INVOKED_BY 'set by the job plugins (dotfiles-jobs); a verb that sees it posts banners instead of logging them'
 
 jobs::edit() { need_lib "${ARI_DOTFILES_CMD}/jobs/edit.zsh" || return 3; jobs_edit "$@"; }

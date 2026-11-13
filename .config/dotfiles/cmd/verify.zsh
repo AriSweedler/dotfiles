@@ -14,10 +14,10 @@ Log:   $(help::tilde "${ARI_DOTFILES_STATE_DIR}")/verify/log.txt
 EOF
 verb::edit verify verify::edit_cmd '' \
   'open the Desktop report (else the newest *.edited*.md) in \$EDITOR for notes; runs nothing, commits nothing. Keep line 1: without that marker verify treats the file as foreign. Then prints the next step'
-verb::flag verify '--force-report' 'write the report even when the set of problems is unchanged'
-verb::flag verify '--no-notify' 'no banner (an interactive run never banners; the job does)'
-verb::flag verify '--json' 'print summary.json instead of the table'
-verb::flag verify '--show' 'print the current report (Desktop, else newest archived); runs nothing'
+verb::flag verify '--force-report' 'write the report even when the set of problems is unchanged' --for 'verify'
+verb::flag verify '--no-notify' 'no banner (an interactive run never banners; the job does)' --for 'verify'
+verb::flag verify '--json' 'print summary.json instead of the table' --for 'verify'
+verb::flag verify '--show' 'print the current report (Desktop, else newest archived); runs nothing' --for 'verify'
 verb::env verify ARI_DOTFILES_STATE_DIR 'where runs, the trail and the report archive live' '$(help::tilde "${ARI_DOTFILES_STATE_DIR}")'
 verb::env verify ARI_DOTFILES_DESKTOP_DIR 'where the report is written' '$(help::tilde "${ARI_DOTFILES_DESKTOP_DIR}")'
 verb::env verify ARI_DOTFILES_RETRY_SECS 'pause before the one retry of errored steps; 0 disables it' '${ARI_DOTFILES_RETRY_SECS}'

@@ -1,16 +1,16 @@
 # dotfiles/cmd/logs.zsh — `dotfiles logs`: the push logs.
 
 verb::define logs 'the push logs, per repo'
-verb::usage logs 'logs [--repo NAME] [--previous]'
+verb::usage logs 'logs [--repo REPO] [--previous]'
 verb::about logs <<'EOF'
 $(help::tilde "${LOG_DIR}")/<repo>.log holds the last push of each repo;
 .log.bak.1 through .log.bak.${KEEP_BACKUPS} hold the runs before. NAME is 'shared',
 'local' or a submodule path. --edit opens the same logs in \$EDITOR, all at
 once, read-only for the vi family; it needs a terminal and writes nothing.
 EOF
-verb::flag logs '--repo NAME' "one repo's log instead of all of them"
-verb::flag logs '--previous' 'the run before the last one (.log.bak.1)'
-verb::edit logs logs::edit_cmd '[--repo NAME] [--previous]' 'open the logs in \$EDITOR to read, instead of printing them'
+verb::flag logs '--repo REPO' "one repo's log instead of all of them" --for 'logs, edit'
+verb::flag logs '--previous' 'the run before the last one (.log.bak.1)' --for 'logs, edit'
+verb::edit logs logs::edit_cmd '[--repo REPO] [--previous]' 'open the logs in \$EDITOR to read, instead of printing them'
 verb::env logs EDITOR 'the editor --edit opens' 'vi'
 verb::env logs XDG_STATE_HOME 'the logs live under it, at dotfiles/push' '~/.local/state'
 

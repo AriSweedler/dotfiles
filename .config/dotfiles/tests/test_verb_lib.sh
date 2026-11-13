@@ -71,7 +71,8 @@ assert_eq "parse: --help is declared for every verb" "1" "${OUT}"
 
 # ── verb: --for scopes a flag to its subcommands; a declared --edit row replaces the generated one ──
 SCOPED='verb::define sc "scoped"; verb::usage sc "sc decree|triage"
-verb::flag sc "--reason TEXT" "decree: why" --for "decree undecree"
+verb::sub sc decree "decree it"; verb::sub sc undecree "take it back"; verb::sub sc triage "sort them"
+verb::flag sc "--reason TEXT" "decree: why" --for "decree, undecree"
 verb::flag sc "--edit [FILE]" "triage: a plan file"
 verb::edit sc sc_edit "" "edit it"
 typeset -A opts; typeset -a args'
@@ -79,12 +80,33 @@ zrun -- "${SCOPED}; verb::parse sc decree --reason because; print -r -- \"\${opt
 assert_eq "--for: taken after its subcommand" "because" "${OUT}"
 zrun -- "${SCOPED}; verb::parse sc triage --reason because"
 assert_eq "--for: refused after another" 64 "${RC}"
-assert_contains "--for: says which it goes with" "${ERR}" "sc triage: --reason goes with sc decree|undecree only"
+assert_contains "--for: says which it goes with" "${ERR}" "sc triage: --reason goes with sc decree, sc undecree only"
 zrun -- "${SCOPED}; verb::parse sc triage --edit plan.txt; print -r -- \"\${opts[--edit]}\""
 assert_eq "a declared --edit takes its value" "plan.txt" "${OUT}"
 zrun -- "${SCOPED}; verb::help sc"
 assert_contains "a declared --edit row is the one shown" "${OUT}" "--edit [FILE]  triage: a plan file"
 assert_not_contains "and the generated one is not" "${OUT}" "edit: the same as the edit subcommand"
+
+# ── --for names the verb itself for the verb without a subcommand; the subcommand, once known, holds for the run; verb::arg and the typed tables ──
+BARE='verb::define bv "bare"; verb::usage bv "bv THING"; verb::sub bv run "run it"
+verb::flag bv "--json" "data" --for "bv"; verb::flag bv "--new|-n KIND" "a new one" --for "edit, run"
+verb::arg bv "STEP.."; verb::arg bv --for "edit, run" "[JOB]"
+verb::edit bv bv_edit "X" "edit it"
+typeset -A opts; typeset -a args'
+zrun -- "${BARE}; verb::parse bv thing --json; print -r -- ok"
+assert_eq "--for VERB: taken without a subcommand, whatever the positional" "ok" "${OUT}"
+zrun -- "${BARE}; verb::parse bv run --json"
+assert_eq "--for VERB: refused with a subcommand" 64 "${RC}"
+assert_contains "--for VERB: says which it goes with" "${ERR}" "bv run: --json goes with bv only"
+zrun -- "${BARE}; verb::parse bv edit x; verb::parse bv x --new v; print -r -- ok"
+assert_eq "the subcommand an earlier parse found holds for a later one" "ok" "${OUT}"
+zrun -- "${BARE}; verb::parse bv --edit x --new v; print -r -- ok"
+assert_eq "--edit is the edit subcommand" "ok" "${OUT}"
+zrun -- "${BARE}; print -r -- \"\${(j:,:)NODES} | \${NODE_ARGS[bv]} | \${NODE_ARGS[bv run]} | \${FLAG_VALUE[bv --new]} | \${FLAG_SPELLINGS[bv --new]} | \${(j:,:)\${(f)FLAG_NODES[bv --new]}}\""
+assert_eq "the typed tables: nodes, positionals per node, a flag's value, spellings and nodes" \
+  "bv,bv run,bv edit | STEP.. | [JOB] | KIND | --new -n | bv edit,bv run" "${OUT}"
+zrun -- 'kind::of_spec "[STEP..|PLAN]"; print -r -- "${reply[*]}"; kind::of_spec "STEP,.."; print -r -- "${reply[*]}"'
+assert_eq "a value spec names its kinds" $'STEP PLAN\nSTEP' "${OUT}"
 
 # ── verb::edit --form writes the Usage line out; a blank prose line prints empty ──
 zrun -- 'verb::define fw "f"; verb::usage fw "fw ARGS"; verb::about fw <<< $'"'"'one\n\ntwo'"'"'; verb::edit fw fw_edit "" "edit" --form "--local fw --edit" --flag-only; verb::help fw; print -r -- "flag-only=${VERB_EDIT_FLAG_ONLY[fw]}"'

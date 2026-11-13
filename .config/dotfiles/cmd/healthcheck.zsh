@@ -21,12 +21,13 @@ comments. On save every line is checked; after a confirm, the 'apply' steps
 run in a fresh 'dotfiles apply'. A plan with bad lines is kept: edit it
 again, or resume it with --edit FILE, read against last-check.json.
 EOF
-verb::edit healthcheck healthcheck::edit '[FILE] [--only STEP,..] [--group GROUP] [--dry-run]' \
-  'after the checks, choose the steps to apply in \$EDITOR; FILE resumes a plan without checking again'
-verb::flag healthcheck '--only STEP,..' "exactly these steps; a step's needs are a gate, not an auto-include"
-verb::flag healthcheck '--group GROUP' 'one group: ${(j:, :)STEP_GROUPS}'
-verb::flag healthcheck '--dry-run' 'accepted; a healthcheck changes nothing either way (with --edit, the apply it hands over to is a dry run)'
-verb::flag healthcheck '--json' 'print summary.json instead of the table (stdout is data, stderr is logs); not with --edit'
+verb::arg healthcheck --for edit '[PLAN]'
+verb::edit healthcheck healthcheck::edit '[PLAN] [--only STEP,..] [--group GROUP] [--dry-run]' \
+  'after the checks, choose the steps to apply in \$EDITOR; PLAN resumes a plan without checking again'
+verb::flag healthcheck '--only STEP,..' "exactly these steps; a step's needs are a gate, not an auto-include" --for 'healthcheck, edit'
+verb::flag healthcheck '--group GROUP' 'one group: ${(j:, :)STEP_GROUPS}' --for 'healthcheck, edit'
+verb::flag healthcheck '--dry-run' 'accepted; a healthcheck changes nothing either way (with --edit, the apply it hands over to is a dry run)' --for 'healthcheck, edit'
+verb::flag healthcheck '--json' 'print summary.json instead of the table (stdout is data, stderr is logs); not with --edit' --for 'healthcheck'
 verb::env healthcheck ARI_DOTFILES_STATE_DIR 'where runs and summaries are written' '$(help::tilde "${ARI_DOTFILES_STATE_DIR}")'
 verb::env healthcheck ARI_DOTFILES_CHECK_TIMEOUT_SECS 'seconds a check may run before it is killed and reported as error timed_out' '${ARI_DOTFILES_CHECK_TIMEOUT_SECS}'
 verb::env healthcheck ARI_DOTFILES_LOCK_MAX_AGE_SECS 'a live lock older than this is taken over' '${ARI_DOTFILES_LOCK_MAX_AGE_SECS}'

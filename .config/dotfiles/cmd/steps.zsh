@@ -29,10 +29,11 @@ does not is reported and kept for the next 'steps edit NAME' (on a
 terminal, offered for another edit).
 EOF
 verb::sub steps list 'the registry (the default)'
-verb::edit steps steps::edit 'NAME [--new] [--no-commit]' \
+verb::arg steps --for edit 'STEP'
+verb::edit steps steps::edit 'STEP [--new] [--no-commit]' \
   'the step file in \$EDITOR as a draft: checked on save (zsh -n, the registry loads with it, its watches, the docs rule), then put in place and committed in the shared tier'
-verb::flag steps '--new' 'edit: create steps/NAME.zsh from a template (a check and an apply; a check-only step deletes the apply and its --apply)'
-verb::flag steps '--no-commit' 'edit: put it in place, leave it uncommitted'
+verb::flag steps '--new' 'edit: create steps/NAME.zsh from a template (a check and an apply; a check-only step deletes the apply and its --apply)' --for 'edit'
+verb::flag steps '--no-commit' 'edit: put it in place, leave it uncommitted' --for 'edit'
 verb::env steps ARI_DOTFILES_STEPS 'the steps directory' '$(help::tilde "${ARI_DOTFILES_STEPS}")'
 verb::section steps 'Exit codes (edit)' <<'EOF'
 0   saved, or no change

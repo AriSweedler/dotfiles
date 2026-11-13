@@ -25,12 +25,13 @@ editor. A plan with bad lines is kept: edit it again, or resume it with
 What the bootstrap one-liner ends in. 'dotfiles apply STEP' is
 'init --only STEP'; 'dotfiles steps' lists the steps and their groups.
 EOF
-verb::edit init init::edit '[FILE] [--only STEP,..] [--group GROUP] [--dry-run]' \
-  'check, then choose the steps to apply in \$EDITOR; FILE resumes a plan without checking again'
-verb::flag init '--only STEP,..' "exactly these steps; a step's needs are a gate, not an auto-include"
-verb::flag init '--group GROUP' 'one group: ${(j:, :)STEP_GROUPS}'
-verb::flag init '--dry-run' 'run every apply with each mutation logged instead of executed, so the plan printed is the real one (also accepted before the verb)'
-verb::flag init '--json' 'print summary.json instead of the table and status (stdout is data, stderr is logs); not with --edit'
+verb::arg init --for edit '[PLAN]'
+verb::edit init init::edit '[PLAN] [--only STEP,..] [--group GROUP] [--dry-run]' \
+  'check, then choose the steps to apply in \$EDITOR; PLAN resumes a plan without checking again'
+verb::flag init '--only STEP,..' "exactly these steps; a step's needs are a gate, not an auto-include" --for 'init, edit'
+verb::flag init '--group GROUP' 'one group: ${(j:, :)STEP_GROUPS}' --for 'init, edit'
+verb::flag init '--dry-run' 'run every apply with each mutation logged instead of executed, so the plan printed is the real one (also accepted before the verb)' --for 'init, edit'
+verb::flag init '--json' 'print summary.json instead of the table and status (stdout is data, stderr is logs); not with --edit' --for 'init'
 verb::env init ARI_DOTFILES_STATE_DIR 'where runs and summaries are written' '$(help::tilde "${ARI_DOTFILES_STATE_DIR}")'
 verb::env init ARI_DOTFILES_REMOTE 'the shared repo the dotfiles_repo step clones' '${ARI_DOTFILES_REMOTE}'
 verb::env init ARI_DOTFILES_PUSH_URL "the push url dotfiles_repo gives a clone fetching over something else, so 'git df push' goes over ssh; empty = none" '${ARI_DOTFILES_PUSH_URL}'

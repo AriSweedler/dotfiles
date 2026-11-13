@@ -11,7 +11,8 @@ verb::usage git '[--local] git <args…>' '[--local] --dir'
 verb::about git <<'EOF'
 Everything after 'git' goes to git untouched, --help included, with one
 exception: 'edit' or '--edit' as the first word (git has no such command
-or option; 'git commit --edit' still reaches git). The shared tier is
+or option; 'git commit --edit' still reaches git). --local and --dir are
+dotfiles' own flags and go before the verb. The shared tier is
 $(help::tilde "${TIER_GIT_DIR[shared]}") with work tree ~; the local tier is
 $(help::tilde "${TIER_GIT_DIR[local]}") with work tree ~/.local.
 EOF
@@ -22,12 +23,11 @@ tier). It starts '/*' (nothing), and each '!' entry admits a path; every
 '!' entry has a '# why' comment on the line above it, or above the run of
 '!' lines it belongs to. An entry without one fails local_dotfiles_repo.
 EOF
+verb::arg git 'GIT_WORDS'
 verb::edit git git::edit_cmd '[--no-commit]' \
   "with --local only ('dotfiles --local git --edit'): the allowlist template in \\\$EDITOR (vi when unset) as a draft. It refuses up front when this machine's info/exclude has rules the template does not (it shows the diff: make them agree first). On save the draft must start with '/*', keep every '*.secret.zsh' out of every admitted directory, and give each '!' entry its why; a draft that fails is kept (offered for another edit on a terminal, else exit 1; the same command resumes it). One that passes replaces the template and is installed as info/exclude; 'git ldf status --short -uall' then shows what it admits, and the template is committed in the shared tier" \
   --form '--local git --edit [--no-commit]' --flag-only
-verb::flag git '--local' 'act on the local tier, not the shared one (before the verb)'
-verb::flag git '--dir' "print the tier's bare repo path and exit (in place of a verb)"
-verb::flag git '--no-commit' 'edit: install it, leave the template uncommitted'
+verb::flag git '--no-commit' 'edit: install it, leave the template uncommitted' --for 'edit'
 verb::env git ARI_DOTFILES_DF_GIT_DIR "the shared tier's bare repo" '$(help::tilde "${ARI_DOTFILES_DF_GIT_DIR}")'
 verb::env git ARI_DOTFILES_LDF_GIT_DIR "the local tier's bare repo" '$(help::tilde "${ARI_DOTFILES_LDF_GIT_DIR}")'
 
@@ -40,7 +40,6 @@ git::edit_cmd() {
   (( ${+opts[--help]} )) && { help_verb git; return 0; }
   [[ "${GIT_TIER}" == local ]] || usage_error "git --edit edits the local tier's allowlist | fix='${CLI_NAME} --local git --edit'"
   (( ${#args} == 0 )) || usage_error "git --edit: unknown argument | arg='${args[1]}'"
-  (( ${+opts[--local]} + ${+opts[--dir]} == 0 )) || usage_error "git --edit: --local and --dir go before the verb | fix='${CLI_NAME} --local git --edit'"
   need_lib "${ARI_DOTFILES_CMD}/git/edit.zsh" || return 3
   git_edit "$(( ! ${+opts[--no-commit]} ))"
 }

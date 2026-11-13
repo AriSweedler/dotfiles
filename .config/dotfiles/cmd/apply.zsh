@@ -17,10 +17,12 @@ be applied too), confirmed on a terminal, and the 'apply' steps run as one
 apply. Unchanged, with no step named, applies nothing. A plan with bad lines
 is kept: edit it again, or resume it with --edit FILE.
 EOF
-verb::edit apply apply::edit '[STEP..|FILE] [--dry-run]' \
-  'choose the steps in \$EDITOR, every step listed; a FILE argument resumes a plan that did not pass'
-verb::flag apply '--dry-run' 'run every apply with each mutation logged instead of executed, so the plan printed is the real one'
-verb::flag apply '--json' 'print summary.json instead of the table (stdout is data, stderr is logs); not with --edit'
+verb::arg apply 'STEP..'
+verb::arg apply --for edit '[STEP..|PLAN]'
+verb::edit apply apply::edit '[STEP..|PLAN] [--dry-run]' \
+  'choose the steps in \$EDITOR, every step listed; a PLAN argument resumes a plan that did not pass'
+verb::flag apply '--dry-run' 'run every apply with each mutation logged instead of executed, so the plan printed is the real one' --for 'apply, edit'
+verb::flag apply '--json' 'print summary.json instead of the table (stdout is data, stderr is logs); not with --edit' --for 'apply'
 verb::env apply ARI_DOTFILES_STATE_DIR 'where runs and summaries are written' '$(help::tilde "${ARI_DOTFILES_STATE_DIR}")'
 verb::env apply ARI_DOTFILES_APPLY_TIMEOUT_SECS 'seconds an apply may run before it is killed' '${ARI_DOTFILES_APPLY_TIMEOUT_SECS}'
 

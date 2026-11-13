@@ -4,13 +4,13 @@
 # the plugins parse their own words (they run in shells without the harness libraries).
 
 verb::define raycast 'Raycast in parity with the dotfiles: bindings, snippets'
-verb::usage raycast 'raycast link <slug|path> [--plain]' \
-  'raycast link list | check | prime [<slug>..] | unprimed | undocumented' \
-  'raycast link edit [<slug>]' \
+verb::usage raycast 'raycast link BINDING|DEEPLINK [--plain]' \
+  'raycast link list | check | prime [BINDING..] | unprimed | undocumented' \
+  'raycast link edit [BINDING]' \
   'raycast snippets sync [--dry-run] [--deleted] | list | check | adopt' \
-  'raycast snippets pull FILE | diff FILE | fmt' \
-  'raycast snippets reset-manifest [NAME..]' \
-  'raycast snippets move NAME --to shared|local' \
+  'raycast snippets pull RAYCAST_EXPORT | diff RAYCAST_EXPORT | fmt' \
+  'raycast snippets reset-manifest [SNIPPET..]' \
+  'raycast snippets move SNIPPET --to TIER' \
   'raycast snippets edit [--local|--shared] | undocumented' \
   'raycast sync [--dry-run]' \
   'raycast undocumented' \
@@ -35,13 +35,14 @@ documents its placeholder's name), which Raycast never sees. The
 raycast_sync step fails, manual, on one without, naming the edit that
 fixes each.
 EOF
-verb::sub raycast 'link <slug|path>' "the widget <[Raycast: Title | key: '✦4'](raycast://…)>"
+verb::sub raycast link "link BINDING|DEEPLINK: the widget <[Raycast: Title | key: '✦4'](raycast://…)>; alone: the bindings' usage"
 verb::sub raycast 'link list' 'every binding: slug, chords, title, deeplink'
 verb::sub raycast 'link check' 'OK/MISSING per binding against the compiled karabiner.json'
 verb::sub raycast 'link prime' 'open each bound command (or the slugs given) in turn, Enter between, to click "Always allow" once each; needs a terminal; records each answered slug'
 verb::sub raycast 'link unprimed' 'a warn naming the bindings never primed on this machine, with the prime that fixes it (a sync step)'
 verb::sub raycast 'link edit' "the table holding the slug's deeplink in \\\$EDITOR at its line (no slug: raycast_shortcuts.ts); on save the generator and every chord are checked; no commit, bake compiles it; an invalid table is reported, left as edited (on a terminal, offered for another edit); also: link --edit"
 verb::sub raycast 'link undocumented' 'every binding without a description, with its fix'
+verb::sub raycast snippets "the snippets; alone: their usage"
 verb::sub raycast 'snippets sync' 'import what is new or changed, one Raycast dialog a batch'
 verb::sub raycast 'snippets list' 'state and tier of every snippet'
 verb::sub raycast 'snippets check' 'warn per shared placeholder nothing overrides'
@@ -55,14 +56,22 @@ verb::sub raycast 'snippets edit' 'a tier file in \$EDITOR, then validate (and t
 verb::sub raycast 'snippets undocumented' 'every snippet without a description, with its fix'
 verb::sub raycast sync "every subsystem's sync, in order"
 verb::sub raycast undocumented "every subsystem's undocumented units"
-verb::edit raycast raycast::edit_cmd '[link [<slug>] | snippets [--local|--shared]]' \
+verb::sub raycast 'edit link' "the same as link edit"
+verb::sub raycast 'edit snippets' "the same as snippets edit"
+verb::arg raycast --for link 'BINDING|DEEPLINK'
+verb::arg raycast --for 'link prime' '[BINDING..]'
+verb::arg raycast --for 'link edit, edit link' '[BINDING]'
+verb::arg raycast --for 'snippets pull, snippets diff' 'RAYCAST_EXPORT'
+verb::arg raycast --for 'snippets reset-manifest' '[SNIPPET..]'
+verb::arg raycast --for 'snippets move' 'SNIPPET'
+verb::edit raycast raycast::edit_cmd '[link [BINDING] | snippets [--local|--shared]]' \
   "a subsystem's edit; no target: pick one on a terminal (snippets local, snippets shared, bindings), otherwise the targets are listed, exit 64"
-verb::flag raycast '--plain' "link: the bare form, <Raycast: Title | key: '✦4'> url"
-verb::flag raycast '--dry-run' 'sync, adopt, pull, fmt, move, reset-manifest: print the plan, change nothing'
-verb::flag raycast '--deleted' 'snippets sync: the old copies of the changed and removed snippets are gone from Raycast; import the changes'
-verb::flag raycast '--to TIER' 'move: shared or local'
-verb::flag raycast '--local' 'edit: open the local tier file (the default)'
-verb::flag raycast '--shared' 'edit: open the shared tier file'
+verb::flag raycast '--plain' "link: the bare form, <Raycast: Title | key: '✦4'> url" --for 'link'
+verb::flag raycast '--dry-run' 'sync, adopt, pull, fmt, move, reset-manifest: print the plan, change nothing' --for 'sync, snippets sync, snippets adopt, snippets pull, snippets fmt, snippets move, snippets reset-manifest'
+verb::flag raycast '--deleted' 'snippets sync: the old copies of the changed and removed snippets are gone from Raycast; import the changes' --for 'snippets sync'
+verb::flag raycast '--to TIER' 'move: shared or local' --for 'snippets move'
+verb::flag raycast '--local' 'edit: open the local tier file (the default)' --for 'snippets edit, edit snippets, edit'
+verb::flag raycast '--shared' 'edit: open the shared tier file' --for 'snippets edit, edit snippets, edit'
 verb::env raycast ARI_DOTFILES_RAYCAST_APP "Raycast's app bundle; absent = sync skips" '/Applications/Raycast.app'
 verb::env raycast ARI_DOTFILES_RAYCAST_LINK_KARABINER_TS 'the karabiner.ts checkout whose generator prints the bindings' '~/dotfiles/.config/karabiner/karabiner.ts'
 verb::env raycast ARI_DOTFILES_RAYCAST_LINK_KARABINER_JSON "the compiled karabiner.json that 'link check' verifies against" '~/.config/karabiner/karabiner.json'
@@ -77,7 +86,13 @@ raycast::load() {
   need_lib "${ARI_DOTFILES_CONFIG}/zsh/plugins/raycast.zsh"
 }
 
-cmd_raycast() { raycast::load; ari_raycast "$@"; }
+# The plugins parse their own words; verb::parse first refuses a flag the declaration lacks, or one
+# with a subcommand that does not take it, so what completes is what runs.
+cmd_raycast() {
+  local -A opts; local -a args
+  verb::parse raycast "$@"
+  raycast::load; ari_raycast "$@"
+}
 
 # `raycast edit …` and `raycast --edit …`: the router's own edit.
 raycast::edit_cmd() { raycast::load; ari_raycast edit "$@"; }

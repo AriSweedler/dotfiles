@@ -16,7 +16,7 @@ in \$EDITOR (vi when unset). Change skip to commit (end the line with
 '# message'; one tier's lines with one message are one commit) or to
 restore (discards the change). Every line is checked before anything
 runs: a bad one is reported by number and the file kept, on a terminal
-offered for another edit; FILE resumes it. A path that went clean since
+offered for another edit; PLAN resumes it. A path that went clean since
 is left alone. On a terminal the commits are confirmed, then the
 restores by name; without one (a scripted \$EDITOR) the commits run
 unconfirmed and a plan with a restore is refused. Submodule changes are
@@ -24,8 +24,9 @@ comments: commit them in their own repos. Nothing is pushed: run
 '${CLI_NAME} push' after. The tables print again at the end. Exit 1 for
 a bad line, a refusal, a declined confirmation or a failed commit.
 EOF
-verb::edit status status::edit_cmd '[--dry-run] [FILE]' 'write a commit plan for the uncommitted tracked paths, edit it in \$EDITOR and run it; FILE resumes a kept one'
-verb::flag status '--dry-run' 'edit: print what would run, restores too, change nothing'
+verb::arg status --for edit '[PLAN]'
+verb::edit status status::edit_cmd '[--dry-run] [PLAN]' 'write a commit plan for the uncommitted tracked paths, edit it in \$EDITOR and run it; PLAN resumes a kept one'
+verb::flag status '--dry-run' 'edit: print what would run, restores too, change nothing' --for 'edit'
 verb::env status EDITOR 'the editor --edit opens' 'vi'
 verb::env status ARI_DOTFILES_DF_GIT_DIR "the shared tier's bare repo" '$(help::tilde "${ARI_DOTFILES_DF_GIT_DIR}")'
 verb::env status ARI_DOTFILES_LDF_GIT_DIR "the local tier's bare repo" '$(help::tilde "${ARI_DOTFILES_LDF_GIT_DIR}")'

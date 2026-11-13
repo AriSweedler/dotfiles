@@ -3,7 +3,7 @@
 # rule live here; steps/test_suites.zsh checks every suite against the same rule.
 
 verb::define test 'the hermetic suite, one suite by name, or the suites a change touches; --edit opens a suite with its code'
-verb::usage test 'test [NAME]' 'test --changed [--base REV] [--list]' 'test --for FILE.. [--list]'
+verb::usage test 'test [SUITE]' 'test --changed [--base REV] [--list]' 'test --for SOURCE_FILE.. [--list]'
 verb::about test <<'EOF'
 Without NAME: every tests/test_*.sh under $(help::tilde "${ARI_DOTFILES_TESTS}"),
 each in a fake HOME with brew/launchctl/curl shims; nothing reaches this
@@ -20,16 +20,18 @@ cmd/ file, which has only its test_<verb>_* suites. A file of the shared
 core (lib/, tests/lib.sh, run.sh, shims, fixtures, real-tools.txt,
 bin/dotfiles) runs every suite.
 EOF
-verb::flag test '--changed' "the files this checkout changed: against --base (default HEAD), untracked ones included"
-verb::flag test '--base REV' 'with --changed: the changes since REV (origin/main covers every unpushed commit too)'
-verb::flag test '--for' 'the arguments are files (absolute, or relative to the current directory), not a suite name'
-verb::flag test '--list' 'with --changed or --for: print the suites and why, run nothing'
+verb::flag test '--changed' "the files this checkout changed: against --base (default HEAD), untracked ones included" --for 'test'
+verb::flag test '--base REV' 'with --changed: the changes since REV (origin/main covers every unpushed commit too)' --for 'test'
+verb::flag test '--for' 'the arguments are files (absolute, or relative to the current directory), not a suite name' --for 'test'
+verb::flag test '--list' 'with --changed or --for: print the suites and why, run nothing' --for 'test'
 verb::section test 'Documentation rule' <<'EOF'
 Every suite says what it tests: a tests/test_*.sh on line 2 ('# what it
 checks'), a plugin suite on line 1 ('# Tests for <file>', a file that
 exists). The test_suites step fails on one that does not.
 EOF
-verb::edit test test::edit '[NAME]' \
+verb::arg test '[SUITE|SOURCE_FILE..]'
+verb::arg test --for edit '[SUITE]'
+verb::edit test test::edit '[SUITE]' \
   "open NAME's suite and the code it tests in \\\$EDITOR (vi when unset), in one editor call, then run that suite and exit with its status. The code: a plugin suite's '# Tests for <file>'; steps/X.zsh for test_step_X and test_X_step; cmd/V.zsh and cmd/V/* for test_V_*. Without NAME: open tests/run.sh, run nothing. Commits nothing; exit 1 when the editor fails (nothing runs), 64 for an unknown NAME"
 verb::env test ARI_DOTFILES_TESTS "the hermetic suite's directory" '$(help::tilde "${ARI_DOTFILES_TESTS}")'
 verb::env test ARI_DOTFILES_ZSH_PLUGINS 'where the plugin suites (*.test.zsh) live' '$(help::tilde "${ARI_DOTFILES_ZSH_PLUGINS}")'

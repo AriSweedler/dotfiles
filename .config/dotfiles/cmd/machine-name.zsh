@@ -1,7 +1,7 @@
 # dotfiles/cmd/machine-name.zsh — `dotfiles machine-name`: this machine's everyday name.
 
 verb::define machine-name "this machine's everyday name: print it, or set it"
-verb::usage machine-name 'machine-name' 'machine-name NAME [--no-commit]'
+verb::usage machine-name 'machine-name' 'machine-name MACHINE_NAME [--no-commit]'
 verb::about machine-name <<'EOF'
 Every machine has one everyday name: one word of letters, digits, _ or -
 in $(help::tilde "${ARI_DOTFILES_MACHINE_NAME_FILE}"), a local-tier file. The
@@ -13,8 +13,9 @@ file is committed in the local tier.
 Anything that labels a host reads the name through 'dotfiles machine-name',
 never the path; for another machine, run it there over ssh.
 EOF
+verb::arg machine-name '[MACHINE_NAME]'
 verb::edit machine-name machine_name::edit_cmd '[--no-commit]' 'the name file in \$EDITOR as a draft, checked on save, then put in place and committed in the local tier'
-verb::flag machine-name '--no-commit' 'put the name in place, leave it uncommitted'
+verb::flag machine-name '--no-commit' 'put the name in place, leave it uncommitted' --for 'machine-name, edit'
 verb::env machine-name ARI_DOTFILES_MACHINE_NAME_FILE 'the name file' '$(help::tilde "${ARI_DOTFILES_MACHINE_NAME_FILE}")'
 verb::section machine-name 'Exit codes' <<'EOF'
 0   printed, set, or no change
