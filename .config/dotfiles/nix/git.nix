@@ -53,6 +53,11 @@ let
     };
   };
 
+  # bd (beads) reads this from the git repository it is RUN IN, not from the workspace a -C
+  # points at, so without it every bd command outside a tracker's own clone prints
+  # "warning: beads.role not configured". Ari owns the trackers he files in, on every machine.
+  beads.beads.role = "maintainer";
+
   color = {
     color.branch = {
       current = "red reverse";
@@ -232,6 +237,7 @@ in
     enable = true;
     settings = lib.mkMerge [
       base
+      beads
       color
       delta
       dotfiles
