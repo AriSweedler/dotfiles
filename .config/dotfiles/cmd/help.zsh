@@ -181,7 +181,10 @@ help::declared_gap() {
   local -a lacks=() reply
   [[ -n "${VERB_DESC[${verb}]:-}" ]] || lacks+=("no description (verb::define ${verb} '…')")
   [[ -n "${VERB_USAGE[${verb}]:-}${VERB_EDIT[${verb}]:-}" ]] || lacks+=("no Usage form (verb::usage)")
-  for row in "${(@f)VERB_FLAGS[${verb}]:-}" "${(@f)VERB_SUBS[${verb}]:-}"; do
+  local REPLY_FLAGS
+  verb::_declared "${verb}" flags; REPLY_FLAGS="${REPLY}"
+  verb::_declared "${verb}" subs
+  for row in "${(@f)REPLY_FLAGS}" "${(@f)REPLY}"; do
     [[ -z "${row}" || -n "${row#*$'\t'}" ]] || lacks+=("'${row%%$'\t'*}' has no description")
   done
   [[ -n "${VERB_EDIT[${verb}]:-}${VERB_EDIT_NONE[${verb}]:-}" ]] || lacks+=("no edit (verb::edit ${verb} HANDLER … or verb::edit ${verb} --none '<why>')")

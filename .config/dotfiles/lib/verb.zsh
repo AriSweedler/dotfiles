@@ -37,7 +37,7 @@
 #   verb::help VERB         the help, in the one shape every verb has.
 
 typeset -gA VERB_DESC VERB_EDIT VERB_EDIT_ARGS VERB_EDIT_DESC VERB_EDIT_NONE VERB_ABOUT VERB_EDIT_FORM VERB_EDIT_FLAG_ONLY
-typeset -gA VERB_USAGE VERB_SUBS VERB_FLAGS VERB_ENV VERB_SECTIONS
+typeset -gA VERB_USAGE VERB_ENV VERB_SECTIONS
 # What the linter and the completion read (lib/spec.zsh), one table per fact. A node is one
 # command, the words after `dotfiles`: "jobs", "jobs run", "raycast link list". A flag's key is
 # "VERB --name", its first spelling.
@@ -70,7 +70,7 @@ verb::_nodes_for() {
 verb::define() { VERB_DESC[${1}]="${2}"; verb::_node "${1}" "${2}"; }
 verb::usage() { local v="${1}"; shift; local form; for form in "$@"; do VERB_USAGE[${v}]+="${form}"$'\n'; done; }
 verb::about() { local text; IFS= read -rd '' text || true; VERB_ABOUT[${1}]+="${text%$'\n'}"$'\n'; }
-verb::sub() { VERB_SUBS[${1}]+="${2}"$'\t'"${3}"$'\n'; verb::_node "${1} ${2}" "${3}"; }
+verb::sub() { verb::_node "${1} ${2}" "${3}"; }
 # verb::flag VERB SPEC DESC [--for "SUB, .."]: --for names the subcommands that take the flag (VERB
 # itself: the verb without one); the parser refuses it with any other.
 verb::flag() {
@@ -78,7 +78,6 @@ verb::flag() {
   local v="${1}" spec="${2}" names="${${2%% *}}"
   local key="${v} ${names%%|*}"
   local -a reply
-  VERB_FLAGS[${v}]+="${spec}"$'\t'"${3}"$'\n'
   (( ${FLAGS[(Ie)${key}]} )) || FLAGS+=("${key}")
   FLAG_DESC[${key}]="${3}"
   FLAG_SPELLINGS[${key}]="${names//|/ }"
@@ -114,14 +113,35 @@ verb::edit() {
   done
 }
 
+# verb::_declared VERB subs|flags: REPLY is the subcommands or flags VERB declares, one
+# 'name<TAB>description' line each, in declaration order, read from the keyed tables. A
+# subcommand's name is the words after VERB; a flag's is its spelling(s) and value spec as written
+# ('--name|-n ARG'). The edit subcommand verb::edit declares is not one: verb::_rows_of adds its row.
+verb::_declared() {
+  local v="${1}" key node spec
+  REPLY=""
+  if [[ "${2}" == subs ]]; then
+    for node in "${NODES[@]}"; do
+      [[ "${node}" == "${v} "* ]] || continue
+      [[ "${node}" != "${v} edit" || -z "${VERB_EDIT[${v}]:-}" ]] || continue
+      REPLY+="${node#${v} }"$'\t'"${NODE_DESC[${node}]}"$'\n'
+    done
+  else
+    for key in "${FLAGS[@]}"; do
+      [[ "${key%% *}" == "${v}" ]] || continue
+      spec="${(j:|:)${=FLAG_SPELLINGS[${key}]}}${FLAG_VALUE[${key}]:+ ${FLAG_VALUE[${key}]}}"
+      REPLY+="${spec}"$'\t'"${FLAG_DESC[${key}]}"$'\n'
+    done
+  fi
+}
+
 # verb::_rows_of VERB usage|subs|flags: REPLY is that table of VERB as declared, then the edit's own
 # row last (wherever verb::edit was declared), so every verb's edit reads the same.
 verb::_rows_of() {
   local v="${1}"
   case "${2}" in
     usage) REPLY="${VERB_USAGE[${v}]:-}" ;;
-    subs) REPLY="${VERB_SUBS[${v}]:-}" ;;
-    flags) REPLY="${VERB_FLAGS[${v}]:-}" ;;
+    *) verb::_declared "${v}" "${2}" ;;
   esac
   [[ -n "${VERB_EDIT[${v}]:-}" ]] || return 0
   # A verb that declares its own --edit row (a subcommand's --edit FILE) keeps that one.
