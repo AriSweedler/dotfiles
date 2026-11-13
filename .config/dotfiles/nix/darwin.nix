@@ -51,7 +51,6 @@
     };
     global.autoUpdate = false;
     brews = [
-      "beads" # tasks for AI agents; nixpkgs lags, and an older bd risks schema skew
       "tree-sitter" # nixpkgs lags (0.26 vs 0.27)
       "tree-sitter-cli"
     ];
