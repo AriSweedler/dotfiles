@@ -9,6 +9,18 @@ vim.o.relativenumber = true
 -- Set clipboard to use the system clipboard
 vim.o.clipboard = "unnamedplus"
 
+-- On a Linux machine with no X or Wayland (co2's console), nvim finds no clipboard provider.
+-- The system clipboard there is the pbcopy/pbpaste pair (dotfiles pkgs/linux-clipboard), so
+-- name them; a Mac's native provider already uses the real ones.
+if vim.fn.has("mac") == 0 and vim.fn.executable("pbcopy") == 1 then
+	vim.g.clipboard = {
+		name = "linux-clipboard",
+		copy = { ["+"] = "pbcopy", ["*"] = "pbcopy" },
+		paste = { ["+"] = "pbpaste", ["*"] = "pbpaste" },
+		cache_enabled = 0,
+	}
+end
+
 -- Keep signcolumn on by default
 vim.wo.signcolumn = "yes"
 
