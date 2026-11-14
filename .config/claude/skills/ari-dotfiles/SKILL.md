@@ -46,8 +46,9 @@ flag or fix. State (`~/.local/state`) and cache (`~/.cache`) are never versioned
      links only what git tracks. Ari runs the switch; Claude may run `dotfiles switch --build`
      (`/ari-dotfiles-nix`).
    - The exception is a directory linked whole, where either path works and the new file is live at
-     once. Test it with `[[ -L ~/<dir> ]]`. Today these are `.config/nvim`, `.config/claude` and
-     the dev repos.
+     once. Test it with `[[ -L ~/<dir> ]]`. Today these are `.config/claude` and the dev repos.
+     `.config/nvim` is not one: `nvim.nix` places the whole directory from the store, so an edit
+     to `~/dotfiles/.config/nvim` reaches nvim only after a commit and a `dotfiles switch`.
 2. `git df add <abs path>` or `git ldf add <abs path>`. Give a new shared file its clone path:
    its `$HOME` path does not exist yet. Commit with a descriptive
    message and the same paths after `--` (`git df commit -m "…" -- <abs paths>`).
@@ -220,8 +221,8 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
 - **Some files are placed by Nix.** The dotfiles are being ported to nix-darwin
   and home-manager, and the port keeps the split (**Cutpoints**). A file
   home-manager places is a read-only symlink into `/nix/store`, among them git's config and
-  ignore, tmux, Starship and gh's `config.yml`. **NEVER run `git config --global` or `gh config
-  set`, or edit `~/.config/starship.toml` or `~/.config/tmux/tmux.conf`: edit the module, commit it
+  ignore, tmux, Starship, gh's `config.yml` and the whole `~/.config/nvim`. **NEVER run
+  `git config --global` or `gh config set`, or edit `~/.config/starship.toml` or `~/.config/tmux/tmux.conf`: edit the module, commit it
   (a switch builds only committed files), then `dotfiles switch --build`; Ari switches.** **NEVER `brew install`:** a new tool goes in a flake.
   Which module writes what, and how to edit, verify, build and switch: `/ari-dotfiles-nix`
   (§ Modules, § What Nix owns).
@@ -315,7 +316,7 @@ Exoskeleton is the model.
 | Starship prompt (`~/.config/dotfiles/nix/starship.nix`) | the local flake's `programs.starship.settings` tables | merged by the module system at a `dotfiles switch`; a key set in both tiers fails the build |
 | tmux (`~/.config/dotfiles/nix/tmux.nix`, `nix/tmux/*.conf`) | the local flake's `programs.tmux.extraConfig`; a typhon working copy at `~/.local/share/tmux/local-plugins/tmux-typhon` | the module system appends the local lines at a `dotfiles switch`; the working copy loads instead of the pinned typhon |
 | tmuxinator (`~/.config/tmuxinator/*.yml`) | `~/.local/share/tmuxinator/*.yml` | `TMUXINATOR_CONFIG`, set by `~/.config/zsh/plugins/tmux.zsh` when the dir exists; searched before the shared dir |
-| Neovim (`~/.config/nvim/`) | `~/.local/share/nvim/site/plugin/*.lua` | nvim's own data-dir runtimepath (kept by lazy.nvim's rtp reset) |
+| Neovim (`~/.config/nvim/`) | `~/.local/share/nvim/site/plugin/*.lua` | nvim's default runtimepath holds `~/.local/share/nvim/site`, so its `plugin/` loads beside the store-placed config |
 | `/ari-gsw-calendar-add` event types | `~/.local/share/gsw-calendar-add/event-types.md` | the skill reads it beside its own **Event types** sections |
 | `/ari-diagram-mermaid` and `/ari-diagram-gh-todo` palette | `~/.local/share/ari-diagram-mermaid/palette.mmd` | its `classDef` lines replace the skills' own, same class names |
 | fzfdb selectors (functions in `~/.config/zsh/plugins/`) | `~/.local/share/{go_aws,kuber,aws_profile}/` | data read by the shared functions |
@@ -405,7 +406,7 @@ the next `dotfiles push`, or the checkout is behind a pulled lock); `-` = not cl
   the git module (`/ari-dotfiles-nix` § Modules). Its
   `dotfiles.git` and `.local` lines matter only to the bare-repo fallback, whose work tree is `$HOME`.
 - `~/dotfiles/.gitignore` — the shared repo's own ignore list. It also keeps out files that tools
-  write into linked directories, such as `.config/nvim/lazy-lock.json`.
+  write under `~/.config`, such as `.config/gh/hosts.yml`.
 - `~/.local/local-dotfiles.git/info/exclude` — the local repo's allowlist.
 
 ### Shared (df)
@@ -414,7 +415,10 @@ the next `dotfiles push`, or the checkout is behind a pulled lock); `-` = not cl
   each lives and what a switch writes: `/ari-dotfiles-nix` § Modules
 - **Git hooks**: `~/.config/git/dotfiles-hooks/` (df), `~/.config/git/local-dotfiles-hooks/` (ldf; needs bash 5)
 - **Zsh plugins**: `~/.config/zsh/plugins/`, sourced first
-- **Nvim**: `~/.config/nvim/`, lazy.nvim specs in `lua/plugins/`, `lazy = true` by default
+- **Nvim**: `~/.config/nvim/`, placed whole from the store by `~/.config/dotfiles/nix/nvim.nix`; edit
+  `~/dotfiles/.config/nvim`. Plugins are start packages each pinned by `nvim-pack-lock.json` (rev and
+  hash), placed in `~/.local/share/nvim/site/pack/nix/start`; nothing installs or updates one at run
+  time (`/ari-dotfiles-nix` § The bridge)
 - **Claude skills**: `~/.config/claude/skills/<name>/`, symlinked from `~/.claude/skills/<name>`
 - **Dev repos**: listed in `~/dotfiles/.config/dotfiles/dev-repos`; today `~/.config/chrome-exoskeleton/`
   (with `~/.config/bin/exo`), `~/.config/run-log/` (its four bins are placed at `~/.config/bin`),
