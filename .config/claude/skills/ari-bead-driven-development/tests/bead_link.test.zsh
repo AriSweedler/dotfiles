@@ -2,7 +2,8 @@
 # Proves bead_link.zsh's link choice against fixture configs under mktemp: a local prefix match links
 # to its Scotty page, a host's beads use only their PREFIX@DEFINITION line and never this machine's,
 # a malformed, repeated or local-URL scotty line is skipped, and the machine flag is required once.
-# Uses the real tmux-tooltip; never reads or writes Ari's beads.conf.
+# Uses the real tmux-tooltip of this checkout (the installed one when the checkout has none); never reads
+# or writes Ari's beads.conf.
 # Run: zsh $HOME/.claude/skills/ari-bead-driven-development/tests/bead_link.test.zsh
 set -euo pipefail
 
@@ -16,6 +17,8 @@ fi
 source "${LIB_LOGGING}"
 
 readonly BEAD_LINK="${SCRIPT_DIR:h}/bin/bead_link.zsh"
+# The skill sits at <checkout>/.config/claude/skills/<name>, beside <checkout>/.config/bin.
+readonly CHECKOUT_TOOLTIP="${SCRIPT_DIR:h:h:h:h}/bin/tmux-tooltip"
 readonly LOCAL_URL="https://scotty.example.com/p/beads"
 readonly HOST_URL="https://scotty.example.org/p/beads"
 
@@ -65,7 +68,9 @@ link_with() {
   local config="${1}"
   shift
   local rc=0
-  BEAD_LINK_CONFIG="${config}" zsh "${BEAD_LINK}" "$@" > "${work}/out" 2> "${work}/err" || rc=$?
+  local -a tooltip=()
+  [[ -r "${CHECKOUT_TOOLTIP}" ]] && tooltip=("BEAD_LINK_TMUX_TOOLTIP=${CHECKOUT_TOOLTIP}")
+  env "${tooltip[@]}" BEAD_LINK_CONFIG="${config}" zsh "${BEAD_LINK}" "$@" > "${work}/out" 2> "${work}/err" || rc=$?
   out="$(< "${work}/out")"
   err="$(< "${work}/err")"
   return "${rc}"
@@ -86,6 +91,9 @@ EOF
   link_with "${good}" --here --bead beads-o27 --title 'Graph view' --status open
   expect_has "a local prefix match links to its Scotty page with the card" "${out}" \
     "[beads-o27](${LOCAL_URL}?bead=beads-o27&tmux-tooltip=show&" "color=cyan"
+
+  link_with "${good}" --here --bead beads-o27 --title 'Graph view: a | b'
+  expect_has "a click copies '<id> | <title>'" "${out}" "&copy=beads-o27%20%7C%20Graph%20view%3A%20a%20%7C%20b)"
 
   link_with "${good}" --here --bead other-abc --title x
   expect_has "a prefix with no scotty line links to tmux only" "${out}" "[other-abc](tmux-tooltip://show?"

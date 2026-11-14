@@ -4,6 +4,8 @@
 # same card travels as a link: `tmux-tooltip link` prints [label](tmux-tooltip://show?…) for Markdown output
 # (Claude Code renders it as OSC 8), and a click on it in tmux runs `tmux-tooltip open` through the
 # tmux-tooltip:// branch of ~/.config/dotfiles/nix/tmux/osc8-hyperlinks.conf, which opens the card just above it.
+# A link made with --copy also puts that text on the clipboard when clicked: the click is Ari's own ask,
+# and printing the link copies nothing.
 #
 # The card is a display-menu of disabled items, one per line, not a display-popup: tmux swallows every
 # click outside a popup (no binding underneath fires and the popup stays), while a menu closes on one.
@@ -43,6 +45,9 @@ readonly BORDER_LINES=rounded
 readonly KEY_STYLE='fg=default,nobold,dim'
 readonly PLAIN_STYLE='fg=default,nobold,nodim'
 readonly -a SUBCOMMANDS=(show link open)
+# The clipboard writer, as `ari-driving on` uses it; macOS. Missing (a Linux host) or failing (no
+# pasteboard over ssh) = nothing is copied, and the card's hint says so.
+readonly COPY_CMD=pbcopy
 # --color names and their tmux colours; a `bold-` or `dim-` prefix (or both) adds that attribute, and a
 # number 0-255 is that 256-colour.
 typeset -grA COLORS=(
@@ -60,15 +65,17 @@ ${c_green}tmux-tooltip${c_rst} — a read-only card over tmux, shown now or carr
 
 ${c_bold}Usage:${c_rst}
   tmux-tooltip show [CARD] [--client NAME] [--x COL --y ROW]
-  tmux-tooltip link --label TEXT [--href HTTPS_URL] [CARD]
+  tmux-tooltip link --label TEXT [--href HTTPS_URL] [--copy TEXT] [CARD]
   tmux-tooltip open --url URL [--client NAME] [--x COL --y ROW]
 
 ${c_bold}Subcommands:${c_rst}
   show   draw the card on a tmux client; a click anywhere, Esc, q or Enter closes it
   link   print [TEXT](tmux-tooltip://show?…) carrying the card; a click on it in tmux shows it.
          With --href, the link is that https page with the card in its query (${HREF_MARKER}&…):
-         tmux still shows the card, and an app that only opens https (Claude's phone app) opens the page
-  open   the click handler: read the card back out of a tmux-tooltip:// URL and show it
+         tmux still shows the card, and an app that only opens https (Claude's phone app) opens the page.
+         With --copy, a click in tmux also copies TEXT (${COPY_CMD}); printing the link copies nothing
+  open   the click handler: read the card back out of a tmux-tooltip:// URL and show it, first copying
+         the link's copy text, if any; the hint then starts 'copied' or 'not copied: <reason>'
 
 ${c_bold}CARD:${c_rst}
   --title TEXT        the border title
@@ -151,6 +158,8 @@ format_escape() {
 CARD_TITLE=''
 CARD_HINT="${DEFAULT_HINT}"
 CARD_MAX_WIDTH="${DEFAULT_MAX_WIDTH}"
+# The text a click copies (link --copy, the URL's copy key); '' copies nothing.
+CARD_COPY=''
 typeset -a BLOCK_KINDS=() BLOCK_VALUES=() BLOCK_COLORS=()
 
 #######################################
@@ -218,7 +227,7 @@ set_block_color() {
 
 #######################################
 # Read the card out of a tmux-tooltip:// URL's query, keeping block order.
-# Globals: CARD_TITLE, CARD_HINT, CARD_MAX_WIDTH, BLOCK_KINDS, BLOCK_VALUES, BLOCK_COLORS
+# Globals: CARD_TITLE, CARD_HINT, CARD_MAX_WIDTH, CARD_COPY, BLOCK_KINDS, BLOCK_VALUES, BLOCK_COLORS
 # Arguments: $1 url
 #######################################
 parse_card_url() {
@@ -242,6 +251,7 @@ parse_card_url() {
       title) CARD_TITLE="${value}" ;;
       hint) CARD_HINT="${value}" ;;
       max-width) CARD_MAX_WIDTH="${value}" ;;
+      copy) CARD_COPY="${value}" ;;
       text|field) add_block "${key}" "${value}" ;;
       color) set_block_color "${value}" || log::warn "Color skipped | color='${value}'" ;;
       *) [[ "${is_href}" == true ]] || log::warn "Unknown key in link, skipped | key='${key}'" ;;
@@ -401,6 +411,7 @@ print_link() {
   done
   [[ "${CARD_HINT}" != "${DEFAULT_HINT}" ]] && query+="&hint=$(percent_encode "${CARD_HINT}")"
   [[ "${CARD_MAX_WIDTH}" != "${DEFAULT_MAX_WIDTH}" ]] && query+="&max-width=${CARD_MAX_WIDTH}"
+  [[ -n "${CARD_COPY}" ]] && query+="&copy=$(percent_encode "${CARD_COPY}")"
   # Brackets would end the Markdown label early.
   label="${${label//\[/(}//\]/)}"
   if [[ -z "${href}" ]]; then
@@ -432,6 +443,7 @@ parse_args() {
       --field) add_block field "${2:?--field requires KEY=VALUE}"; shift 2 ;;
       --color) set_block_color "${2:?--color requires a name}"; shift 2 ;;
       --label) LABEL="${2:?--label requires a value}"; shift 2 ;;
+      --copy) CARD_COPY="$(strip_controls "${2:?--copy requires a value}")"; shift 2 ;;
       --href) HREF="${2:?--href requires a URL}"; shift 2 ;;
       --url) URL="${2:?--url requires a value}"; shift 2 ;;
       --client) PLACE_CLIENT="${2:?--client requires a value}"; shift 2 ;;
@@ -444,7 +456,7 @@ parse_args() {
 
 #######################################
 # Check that the flags given fit the subcommand.
-# Globals: LABEL, URL, PLACE_*, CARD_MAX_WIDTH
+# Globals: LABEL, URL, PLACE_*, CARD_MAX_WIDTH, CARD_COPY
 # Arguments: $1 subcommand
 #######################################
 validate_args() {
@@ -460,7 +472,7 @@ validate_args() {
   case "${subcommand}" in
     link)
       if [[ -z "${LABEL}" || -n "${URL}${PLACE_CLIENT}${PLACE_X}" ]]; then
-        log::err "link takes --label TEXT, --href URL and card flags only | label='${LABEL}'"
+        log::err "link takes --label TEXT, --href URL, --copy TEXT and card flags only | label='${LABEL}'"
         return 1
       fi
       if [[ -n "${HREF}" && "${HREF}" != https://* ]]; then
@@ -469,18 +481,55 @@ validate_args() {
       fi
       ;;
     open)
-      if [[ -z "${URL}" || -n "${LABEL}${HREF}" || ${#BLOCK_KINDS} -gt 0 || -n "${CARD_TITLE}" ]]; then
+      if [[ -z "${URL}" || -n "${LABEL}${HREF}${CARD_COPY}" || ${#BLOCK_KINDS} -gt 0 || -n "${CARD_TITLE}" ]]; then
         log::err "open takes --url URL and placement flags only | url='${URL}'"
         return 1
       fi
       ;;
     show)
-      if [[ -n "${LABEL}${HREF}${URL}" ]]; then
-        log::err "show takes card and placement flags only | label='${LABEL}' url='${URL}'"
+      if [[ -n "${LABEL}${HREF}${URL}${CARD_COPY}" ]]; then
+        log::err "show takes card and placement flags only; --copy is link's | label='${LABEL}' url='${URL}' copy='${CARD_COPY}'"
         return 1
       fi
       ;;
   esac
+}
+
+#######################################
+# Copy the link's copy text for the click that opened it, and lead the hint with the outcome, so the
+# card says whether the clipboard changed. No copy text: nothing is copied and the hint stays.
+# Globals: CARD_COPY, CARD_HINT (written)
+#######################################
+copy_on_click() {
+  if [[ -z "${CARD_COPY}" ]]; then
+    log::info "No copy text in the link; nothing copied"
+    return 0
+  fi
+  local outcome
+  outcome="$(copy_text "${CARD_COPY}")"
+  CARD_HINT="${outcome}${CARD_HINT:+ · ${CARD_HINT}}"
+}
+
+#######################################
+# Write text to the clipboard.
+# Globals: COPY_CMD
+# Arguments: $1 text
+# Outputs: 'copied', or 'not copied: <reason>', on stdout
+#######################################
+copy_text() {
+  local text="${1}"
+  if ! command -v "${COPY_CMD}" >/dev/null 2>&1; then
+    log::warn "No clipboard command; nothing copied | cmd='${COPY_CMD}'"
+    print -r -- "not copied: no ${COPY_CMD}"
+    return 0
+  fi
+  if ! print -rn -- "${text}" | "${COPY_CMD}"; then
+    log::warn "Clipboard command failed; nothing copied | cmd='${COPY_CMD}' hint='no pasteboard in this session (ssh?)'"
+    print -r -- "not copied: ${COPY_CMD} failed"
+    return 0
+  fi
+  log::info "Copied the link's copy text | chars='${#text}'"
+  print -r -- "copied"
 }
 
 # --- Main ---
@@ -511,6 +560,7 @@ main() {
     link) print_link "${LABEL}" "${HREF}" ;;
     open)
       parse_card_url "${URL}"
+      copy_on_click
       show_card "$(resolve_client "${PLACE_CLIENT}")" "${PLACE_X}" "${PLACE_Y}"
       ;;
   esac

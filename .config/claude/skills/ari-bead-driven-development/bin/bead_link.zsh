@@ -4,6 +4,7 @@
 # so a click in tmux needs no bd and works for a workspace on another host. When
 # ~/.config/tmux-tooltip/beads.conf has a scotty line for the beads' workspace, the link is that
 # Scotty's https page for the bead with the card in its query: a phone opens only https links.
+# A click on the link in tmux also copies `<id> | <title>`, so Ari can paste a full reference to the bead.
 # Every call names the workspace's machine (--here or --host-definition), so a host's bead never
 # links to this machine's Scotty. Status and priority colors come from the same file, which Ari
 # edits; tmux-tooltip knows no bead meanings.
@@ -22,7 +23,8 @@ source "${LIB_LOGGING}"
 
 # --- Constants ---
 
-readonly TMUX_TOOLTIP="${HOME}/.config/bin/tmux-tooltip"
+# BEAD_LINK_TMUX_TOOLTIP lets tests/bead_link.test.zsh run the tmux-tooltip of its own checkout.
+readonly TMUX_TOOLTIP="${BEAD_LINK_TMUX_TOOLTIP:-${HOME}/.config/bin/tmux-tooltip}"
 # BEAD_LINK_CONFIG lets tests/bead_link.test.zsh point the script at a fixture.
 readonly CONFIG="${BEAD_LINK_CONFIG:-${HOME}/.config/tmux-tooltip/beads.conf}"
 # /ari-driving-remote's host definitions, one file per name (its § Host definitions).
@@ -75,9 +77,10 @@ ${c_bold}Config:${c_rst} ${CONFIG}, one rule per line (# comments; no file, no r
 
 ${c_bold}Output:${c_rst} one Markdown link per --bead on stdout, in order (<c>: the config's color);
   stderr carries [INFO]/[WARN] diagnostics, never links. With a scotty line for the workspace:
-  [beads-o27](${SCOTTY_URL_EXAMPLE}?bead=beads-o27&tmux-tooltip=show&title=beads-o27&text=Graph%20view%3A%20Open-only%20toggle&field=status%3Dopen&color=<c>&field=priority%3DP2&color=<c>)
+  [beads-o27](${SCOTTY_URL_EXAMPLE}?bead=beads-o27&tmux-tooltip=show&title=beads-o27&text=Graph%20view%3A%20Open-only%20toggle&field=status%3Dopen&color=<c>&field=priority%3DP2&color=<c>&copy=beads-o27%20%7C%20Graph%20view%3A%20Open-only%20toggle)
   Without one (with --host-definition laptop, only a beads@laptop line counts), tmux only:
-  [beads-o27](tmux-tooltip://show?title=beads-o27&text=Graph%20view%3A%20Open-only%20toggle&field=status%3Dopen&color=<c>&field=priority%3DP2&color=<c>)
+  [beads-o27](tmux-tooltip://show?title=beads-o27&text=Graph%20view%3A%20Open-only%20toggle&field=status%3Dopen&color=<c>&field=priority%3DP2&color=<c>&copy=beads-o27%20%7C%20Graph%20view%3A%20Open-only%20toggle)
+  A click on either in tmux shows the card and copies '<id> | <title>' (the copy key); printing copies nothing.
 EOF
 }
 
@@ -360,7 +363,7 @@ main() {
   local link href
   for (( i = 1; i <= n; i++ )); do
     href="$(scotty_href "${ids[i]}" "${host}")"
-    card=(--title "${ids[i]}" --text "${titles[i]}")
+    card=(--title "${ids[i]}" --text "${titles[i]}" --copy "${ids[i]} | ${titles[i]}")
     [[ -n "${statuses[i]}" ]] && card+=("${(@f)$(field_args status "${statuses[i]}" "${statuses[i]}")}")
     [[ -n "${priorities[i]}" ]] && card+=("${(@f)$(field_args priority "${priorities[i]}" "P${priorities[i]}")}")
     link="$(build_link "${ids[i]}" "${href}" "${card[@]}")" || return 1
