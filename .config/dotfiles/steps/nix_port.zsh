@@ -60,6 +60,10 @@ nix_port::ldf() { git --git-dir="${ARI_DOTFILES_LDF_GIT_DIR}" --work-tree="${HOM
 nix_port::is_ldf_tracked() { nix_port::ldf ls-files --error-unmatch -- "${1}" >/dev/null 2>&1; }
 
 check::nix_port() {
+  if [[ "${OSTYPE}" != darwin* ]]; then
+    verdict skip not_macos -d "the Nix port is nix-darwin's; this machine is not a Mac | ostype='${OSTYPE}'"
+    return 0
+  fi
   local flake="${ARI_DOTFILES_NIX_FLAKE}" clone="${ARI_DOTFILES_NIX_CLONE}" line
   local -a open=()
   [[ -d "${ARI_DOTFILES_NIX_STORE}" ]] || open+=("Nix is not installed")
@@ -322,6 +326,11 @@ nix_port::retire_bare() {
 }
 
 apply::nix_port() {
+  # The flake it writes declares a darwinConfigurations entry, which only a Mac can build.
+  if [[ "${OSTYPE}" != darwin* ]]; then
+    log::info "skipping the Nix port: it is nix-darwin's and this machine is not a Mac | ostype='${OSTYPE}'"
+    return 0
+  fi
   nix_port::install || return 1
   nix_port::clone || return 1
   nix_port::write_flake || return 1

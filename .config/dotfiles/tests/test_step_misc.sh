@@ -212,6 +212,27 @@ mkdir -p "${ARI_DOTFILES_NIX_CLONE}/.git" "${ARI_DOTFILES_NIX_SYSTEM}"
 rm -rf "${XDG_DATA_HOME}/tmuxinator" "${XDG_DATA_HOME}/raycast-snippets"
 check_step nix_port
 assert_eq "all done again → ok" ok "$(status_of nix_port)"
+# Off a Mac the step is nix-darwin's to skip: the check says so, and the apply writes no flake.
+nix_port_off_mac() {
+  hermetic_env
+  RC=0
+  env -i "${HERMETIC_ENV[@]}" ARI_DOTFILES_NO_CACHE=1 "${FIX}/tools/zsh" -c '
+      for f in "$1"/lib/*.zsh(N); do source "${f}"; done
+      source "$1/steps/nix_port.zsh"
+      STEP=nix_port OSTYPE=linux-gnu
+      "$2::nix_port"' _ "${ORIG_CONFIG_DIR}/dotfiles" "$1" > "${FIX}/out" 2> "${FIX}/err" || RC=$?
+}
+rm -rf "${ARI_DOTFILES_NIX_CLONE}/.git" "${ARI_DOTFILES_NIX_SYSTEM}"
+mv "${ARI_DOTFILES_NIX_FLAKE}/flake.nix" "${FIX}/flake.nix.bak"
+nix_port_off_mac check
+assert_eq "off a Mac, with every item open → skip not_macos" "skip not_macos" "$(jq -r '"\(.status) \(.reason)"' "${FIX}/out")"
+nix_port_off_mac apply
+assert_eq "off a Mac the apply succeeds" 0 "${RC}"
+assert_eq "off a Mac the apply writes no flake" no "$([[ -e "${ARI_DOTFILES_NIX_FLAKE}/flake.nix" ]] && echo yes || echo no)"
+assert_contains "off a Mac the apply logs the skip" "$(cat "${FIX}/err")" "not a Mac"
+mv "${FIX}/flake.nix.bak" "${ARI_DOTFILES_NIX_FLAKE}/flake.nix"
+mkdir -p "${ARI_DOTFILES_NIX_CLONE}/.git" "${ARI_DOTFILES_NIX_SYSTEM}"
+
 
 # ── karabiner ─────────────────────────────────────────────────────────────────
 # karabiner.nix places karabiner.json and parses it at the switch; the step runs only the
