@@ -10,6 +10,8 @@ let
     run-log = pkgs.callPackage "${devInputs.run-log}/package.nix" { zshlib = self.ari_zshlib; };
     # The same for the tmux-oneshot dev repo.
     tmux-oneshot = pkgs.callPackage "${devInputs.tmux-oneshot}/package.nix" { zshlib = self.ari_zshlib; };
+    # The Chrome Exoskeleton's native messaging host (chrome-exoskeleton.nix places its manifest).
+    chrome-exoskeleton-native-host = pkgs.callPackage "${devInputs.chrome-exoskeleton}/native-host/package.nix" { };
     git-kit = pkgs.callPackage ./git-kit { inherit src; inherit (self) ari_zshlib; };
     notes = pkgs.callPackage ./notes { inherit src; inherit (self) ari_zshlib; };
     mac-utils = pkgs.callPackage ./mac-utils { inherit src; inherit (self) ari_zshlib; };
