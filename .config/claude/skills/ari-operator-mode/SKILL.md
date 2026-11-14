@@ -145,7 +145,7 @@ The host reads stop at the first cut-off and the rest are unread; `local_git` an
 
 ### How a 75 is classified
 
-By the `REFUSED_KIND:` line right after `run.zsh`'s first `REFUSED:` line (`/ari-driving-remote` › The gate). **NEVER by the `REFUSED:` words**: they may change, and the gate's "last line does not end in the prompt (busy, or text already on the line)" names `busy` for what is `holds_text`. The words are only quoted.
+By the `REFUSED_KIND:` line right after `run.zsh`'s first `REFUSED:` line (`/ari-driving-remote` › The gate). **NEVER by the `REFUSED:` words**: they may change, and the gate's "last line does not end in the prompt (busy, or text already on the line)" names `busy` for what is `holds_text`. The words are only quoted. The kinds are those `run.zsh --refusal-kinds` lists after `not_opted_in` (the 77's); `tests/frontier.test.zsh` fails on one `classify_75` does not map.
 
 | Kind | Reason |
 |---|---|
@@ -370,4 +370,4 @@ The markers live under `/tmp`: a reboot clears them, and the mode is then off wi
 - `bin/brief.zsh` — the header line and the cut-off output (the paragraph, a waiting line, or the away line), from a capture.
 - `bin/mode.zsh`, `bin/pending.zsh`, `bin/away.zsh` — the three markers (on, the typed row, the announced absence), on `lib/marker.zsh`.
 - `templates/briefing.md` — the render spec; `templates/briefing.example.md` — the spec filled, plus the scenarios; `templates/frontier.example.json` — the capture it renders.
-- `tests/frontier.test.zsh` — the suite for all five scripts, against `tests/fake-run.zsh`, a fake `run.zsh`; run it after any edit to `bin/`, `lib/` or `templates/`: `zsh $HOME/.claude/skills/ari-operator-mode/tests/frontier.test.zsh`. An edited script also takes `zsh -n` and `/ari-skill-shellscripts` › Validation's conventions test.
+- `tests/frontier.test.zsh` — the suite for all five scripts, against `tests/fake-run.zsh`, a fake `run.zsh`; one block also takes the 75 kinds from the real `/ari-driving-remote` `run.zsh --refusal-kinds` (it connects nowhere, but needs that skill installed) and fails on any kind `classify_75` does not map. Run it after any edit to `bin/`, `lib/` or `templates/`, and after any change to the kinds `--refusal-kinds` prints: `zsh $HOME/.claude/skills/ari-operator-mode/tests/frontier.test.zsh`. An edited script also takes `zsh -n` and `/ari-skill-shellscripts` › Validation's conventions test.

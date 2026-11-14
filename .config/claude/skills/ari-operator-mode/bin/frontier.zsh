@@ -483,7 +483,7 @@ classify_75() {
     *)
       skill_fix='ari-operator-mode'
       case "${kind}" in
-        unknown) skill_fix='ari-driving-remote'; log::warn "run.zsh's GATE_REASON_KINDS has no kind for this gate reason; treated as busy | kind='${kind}' refused='${refused}' skill_fix='${skill_fix}'" ;;
+        unknown) skill_fix='ari-driving-remote'; log::warn "run.zsh refused with kind unknown (tmux_pane_gate_check set no ARI_DRIVING_GATE_KIND); treated as busy | kind='${kind}' refused='${refused}' skill_fix='${skill_fix}'" ;;
         '') skill_fix='ari-driving-remote'; log::warn "No REFUSED_KIND line follows REFUSED: (a run.zsh from before the kind line, or a --run-zsh that prints none); treated as busy | refused='${refused}' skill_fix='${skill_fix}'" ;;
         *) log::warn "frontier.zsh's classify_75 does not map this kind; treated as busy | kind='${kind}' refused='${refused}' skill_fix='${skill_fix}'" ;;
       esac

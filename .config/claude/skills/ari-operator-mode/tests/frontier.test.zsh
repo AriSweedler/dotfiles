@@ -2,7 +2,8 @@
 # Tests for bin/frontier.zsh, bin/brief.zsh, bin/mode.zsh, bin/pending.zsh and bin/away.zsh against
 # tests/fake-run.zsh: the JSON shape of a full read, every cut-off reason, reads that fail after the
 # gate, --local, the scope (two sessions in one workspace) and own paths, the header, the cut-off
-# paragraph, the away line, the three markers and the example capture. No tmux, no network.
+# paragraph, the away line, the three markers and the example capture, and each of the real run.zsh's 75 kinds
+# (ari-driving-remote's run.zsh --refusal-kinds, which connects nowhere) mapped by classify_75. No tmux, no network.
 # Run: zsh $HOME/.claude/skills/ari-operator-mode/tests/frontier.test.zsh
 set -uo pipefail
 
@@ -210,7 +211,7 @@ check "words matching no reason, kind other_caller: waited through" null "$(q "$
 run_cut "kind unknown" busy FAKE_RC=75 FAKE_KIND=unknown "FAKE_REFUSED=REFUSED: machine=ozone|ID=%18|pane=3.1 a reason the lib gained"
 check "kind unknown: the REFUSED words are kept for Ari" "a reason the lib gained" "$(q "${CUT_FILE}" '.cut_off.prompt_holds')"
 check "kind unknown: stdout names the skill to update" "skill_fix=ari-driving-remote" "$(awk '/^skill_fix=/' "${T}/last.out")"
-contains "kind unknown: the log says which list lacks the reason" "GATE_REASON_KINDS has no kind" "$(<"${T}/last.err")"
+contains "kind unknown: the log says the gate set no kind" "tmux_pane_gate_check set no ARI_DRIVING_GATE_KIND" "$(<"${T}/last.err")"
 run_cut "no kind line (an older run.zsh)" busy FAKE_RC=75 FAKE_KIND=none "FAKE_REFUSED=REFUSED: machine=ozone|ID=%18|pane=3.1 ${GATE_TEXT}" "FAKE_TAIL=at 01:00:00 UTC ❯ cd ~/homelab && bin/lab up apps/torrent"
 check "no kind line: stdout names the skill to update" "skill_fix=ari-driving-remote" "$(awk '/^skill_fix=/' "${T}/last.out")"
 contains "no kind line: the log says none followed REFUSED:" "No REFUSED_KIND line follows REFUSED:" "$(<"${T}/last.err")"
@@ -218,25 +219,32 @@ run_cut "a kind line further down is old pane text" busy FAKE_RC=75 FAKE_KIND=no
 check "a kind line further down: never a wait" 0 "$(q "${CUT_FILE}" '.waited_s')"
 run_cut "a kind this reader does not map" busy FAKE_RC=75 FAKE_KIND=brand_new_kind "FAKE_REFUSED=REFUSED: machine=ozone|ID=%18|pane=3.1 something new"
 check "a kind this reader does not map: stdout names this skill" "skill_fix=ari-operator-mode" "$(awk '/^skill_fix=/' "${T}/last.out")"
+contains "a kind this reader does not map: the log says so, the text the kind loop below looks for" "does not map this kind" "$(<"${T}/last.err")"
 pending_row="run_log 'bin/doctor.sh --fix'"
 file="$(capture FAKE_RC=75 FAKE_KIND=unknown "FAKE_REFUSED=REFUSED: machine=ozone|ID=%18|pane=3.1 a reason the lib gained" "FAKE_TAIL=at 01:00:00 UTC ❯ ${pending_row}" -- "${common[@]}" --pending "${pending_row}")"
 check "kind unknown, his row on the prompt: still row_pending, never busy" row_pending "$(q "${file}" '.cut_off.reason')"
 check "kind unknown, his row on the prompt: pending_seen" true "$(q "${file}" '.pending_seen')"
-# every kind the real run.zsh's --help lists for a 75 (its "one of" list, up to the "carry a kind" line; parentheticals dropped)
+# the real run.zsh's 75 kinds: its --refusal-kinds list (exit 0, not_opted_in, the 77's kind, first, the rest
+# in no promised order) less its first line. A new kind fails here: map it in classify_75 (bin/frontier.zsh) and
+# SKILL.md › How a 75 is classified first, then add it to the sorted list below.
 readonly REAL_RUN_ZSH="${HOME}/.claude/skills/ari-driving-remote/bin/run.zsh"
-check "the real run.zsh is readable, so its kinds can be listed" true "$([[ -r "${REAL_RUN_ZSH}" ]] && print true || print false)"
-run_kinds="$(zsh "${REAL_RUN_ZSH}" --help 2>/dev/null | awk '
-  done { next }
-  /REFUSED_KIND: <kind>/ { on=1; next }
-  on && /carry a kind/ { done=1; next }
-  on { s = s $0 " " }
-  END { gsub(/\([^)]*\)/, "", s); n = split(s, a, /[ ,.]+/); for (i = 1; i <= n; i++) if (a[i] ~ /^[a-z_]+$/) print a[i] }')"
-check "run.zsh --help names its nine kinds for a 75" "other_caller pane_gone copy_mode synchronized not_a_shell not_at_prompt lock_unavailable not_zsh unknown" "${(j: :)${(f)run_kinds}}"
-for kind in ${(f)run_kinds}; do
-  rm -f "${T}/canned/refusals.count"
-  capture FAKE_RC=75 FAKE_RC_TIMES=1 "FAKE_KIND=${kind}" "FAKE_REFUSED=REFUSED: machine=ozone|ID=%18|pane=3.1 any words" FRONTIER_RETRY_S=1 -- "${common[@]}" >/dev/null
-  lacks "run.zsh's kind ${kind}: classify_75 maps it" "does not map this kind" "$(<"${T}/last.err")"
-done
+readonly -a RUN_75_KINDS=(copy_mode lock_unavailable not_a_shell not_at_prompt not_zsh other_caller pane_gone synchronized unknown)
+check "the real run.zsh is readable (the ari-driving-remote skill is installed)" true "$([[ -r "${REAL_RUN_ZSH}" ]] && print true || print false)"
+if [[ -r "${REAL_RUN_ZSH}" ]]; then
+  all_kinds="$(zsh "${REAL_RUN_ZSH}" --refusal-kinds 2>"${T}/refusal-kinds.err")"; rc=$?
+  check "run.zsh --refusal-kinds exits 0 (stderr: $(<"${T}/refusal-kinds.err"))" 0 "${rc}"
+  check "run.zsh --refusal-kinds prints at least one kind" true "$([[ -n "${all_kinds}" ]] && print true || print false)"
+  check "run.zsh --refusal-kinds: line 1 is not_opted_in, the 77's kind" not_opted_in "${${(f)all_kinds}[1]:-}"
+  run_kinds="$(print -r -- "${all_kinds}" | awk 'NR > 1')"
+  for kind in ${(f)run_kinds}; do
+    rm -f "${T}/canned/refusals.count"
+    capture FAKE_RC=75 FAKE_RC_TIMES=1 "FAKE_KIND=${kind}" "FAKE_REFUSED=REFUSED: machine=ozone|ID=%18|pane=3.1 any words" FRONTIER_RETRY_S=1 -- "${common[@]}" >/dev/null
+    check "run.zsh's kind ${kind}: the read was refused once, so classify_75 ran" 1 "$(<"${T}/canned/refusals.count" 2>/dev/null)"
+    lacks "run.zsh's kind ${kind}: classify_75 maps it" "does not map this kind" "$(<"${T}/last.err")"
+  done
+  sorted_kinds=(${(fo)run_kinds})
+  check "run.zsh's 75 kinds, sorted, are the ones classify_75 maps (a new kind: map it first, then add it here)" "${(j: :)RUN_75_KINDS}" "${(j: :)sorted_kinds}"
+fi
 run_cut read_timed_out read_timed_out FAKE_RC=124 "FAKE_REFUSED=" "FAKE_TAIL=at 01:00:00 UTC ❯ M=…still running"
 run_cut host_unreachable host_unreachable FAKE_RC=255 "FAKE_REFUSED="
 run_cut refused_text refused_text FAKE_RC=1 "FAKE_REFUSED="
