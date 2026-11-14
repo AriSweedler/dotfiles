@@ -191,6 +191,13 @@ check "a kind it maps: skill_fix is empty" "skill_fix=" "$(awk '/^skill_fix=/' "
 run_cut lock_unavailable lock_unavailable FAKE_RC=75 FAKE_KIND=lock_unavailable "FAKE_REFUSED=REFUSED: machine=ozone|ID=%18|pane=3.1 the lock root /tmp/ari-driving-locks is not writable"
 check "lock_unavailable: the quoted words" "the lock root /tmp/ari-driving-locks is not writable" "$(q "${CUT_FILE}" '.cut_off.prompt_holds')"
 contains "lock_unavailable: brief names the lock root, no pane advice" "the host's lock root is the problem" "$(zsh "${BRIEF}" --json "${CUT_FILE}" --cut-off)"
+run_cut not_zsh not_zsh FAKE_RC=75 FAKE_KIND=not_zsh "FAKE_REFUSED=REFUSED: machine=ozone|ID=%18|pane=3.1 the command is laid out over several lines, which only zsh reads as one; bash runs there"
+check "not_zsh: the quoted words" "the command is laid out over several lines, which only zsh reads as one; bash runs there" "$(q "${CUT_FILE}" '.cut_off.prompt_holds')"
+check "not_zsh: a read over several lines is this reader's bug, so stdout names this skill" "skill_fix=ari-operator-mode" "$(awk '/^skill_fix=/' "${T}/last.out")"
+not_zsh_text="$(zsh "${BRIEF}" --json "${CUT_FILE}" --cut-off)"
+check "not_zsh: the whole paragraph" '**P0, cut off from the tracker.** The pane `machine=ozone|ID=%18|pane=3.1|nickname=homelab` refused my read (the command is laid out over several lines, which only zsh reads as one; bash runs there); my reads are built on one line, so this is a bug in the reader, not yours to clear; I read nothing from the tracker or the host checkout this turn. Unread: ready, in_progress, human, blocked, stale, deferred, host_git. I do nothing else until it is read. Name another pane by its `ID=%N`, or say `stop operator mode`. I rewrite the read now; your next message reads again.' "${not_zsh_text}"
+check "not_zsh: asks nothing, since the fix is mine" 0 "$(print -rn -- "${not_zsh_text}" | tr -cd '?' | wc -c | tr -d ' ')"
+check "--beads holding a newline is refused: every read is one line" 1 "$(zsh "${FRONTIER}" "${common[@]}" --beads $'~/beads\nx' >/dev/null 2>&1; print $?)"
 run_cut synchronized busy FAKE_RC=75 FAKE_KIND=synchronized "FAKE_REFUSED=REFUSED: machine=ozone|ID=%18|pane=3.1 synchronize-panes is on"
 run_cut "pane_gone: as for a 70" no_pane FAKE_RC=75 FAKE_KIND=pane_gone "FAKE_REFUSED=REFUSED: machine=ozone|ID=%18|pane=3.1 no such pane"
 check "pane_gone: the candidates come from a fresh --list" 3 "$(q "${CUT_FILE}" '.cut_off.candidates | length')"
@@ -215,14 +222,16 @@ pending_row="run_log 'bin/doctor.sh --fix'"
 file="$(capture FAKE_RC=75 FAKE_KIND=unknown "FAKE_REFUSED=REFUSED: machine=ozone|ID=%18|pane=3.1 a reason the lib gained" "FAKE_TAIL=at 01:00:00 UTC ❯ ${pending_row}" -- "${common[@]}" --pending "${pending_row}")"
 check "kind unknown, his row on the prompt: still row_pending, never busy" row_pending "$(q "${file}" '.cut_off.reason')"
 check "kind unknown, his row on the prompt: pending_seen" true "$(q "${file}" '.pending_seen')"
-# every kind the real run.zsh's --help lists for a 75 (its "one of" list, up to "does not map")
-run_kinds="$(zsh "${HOME}/.claude/skills/ari-driving-remote/bin/run.zsh" --help 2>/dev/null | awk '
+# every kind the real run.zsh's --help lists for a 75 (its "one of" list, up to the "carry a kind" line; parentheticals dropped)
+readonly REAL_RUN_ZSH="${HOME}/.claude/skills/ari-driving-remote/bin/run.zsh"
+check "the real run.zsh is readable, so its kinds can be listed" true "$([[ -r "${REAL_RUN_ZSH}" ]] && print true || print false)"
+run_kinds="$(zsh "${REAL_RUN_ZSH}" --help 2>/dev/null | awk '
   done { next }
   /REFUSED_KIND: <kind>/ { on=1; next }
+  on && /carry a kind/ { done=1; next }
   on { s = s $0 " " }
-  on && /does not map/ { done=1 }
-  END { sub(/\(.*$/, "", s); n = split(s, a, /[ ,]+/); for (i = 1; i <= n; i++) if (a[i] ~ /^[a-z_]+$/) print a[i] }')"
-check "run.zsh --help names its eight busy kinds" "other_caller pane_gone copy_mode synchronized not_a_shell not_at_prompt lock_unavailable unknown" "${(j: :)${(f)run_kinds}}"
+  END { gsub(/\([^)]*\)/, "", s); n = split(s, a, /[ ,.]+/); for (i = 1; i <= n; i++) if (a[i] ~ /^[a-z_]+$/) print a[i] }')"
+check "run.zsh --help names its nine kinds for a 75" "other_caller pane_gone copy_mode synchronized not_a_shell not_at_prompt lock_unavailable not_zsh unknown" "${(j: :)${(f)run_kinds}}"
 for kind in ${(f)run_kinds}; do
   rm -f "${T}/canned/refusals.count"
   capture FAKE_RC=75 FAKE_RC_TIMES=1 "FAKE_KIND=${kind}" "FAKE_REFUSED=REFUSED: machine=ozone|ID=%18|pane=3.1 any words" FRONTIER_RETRY_S=1 -- "${common[@]}" >/dev/null
@@ -466,7 +475,8 @@ print -r -- '[{"id":"beads-xy9.9","parent":"beads-xy9"},{"id":"beads-amm.5","par
 print -r -- $' M secrets.tf\n?? notes/\n M bin/lab\nabc1234 first subject' > "${S}/hostgit.txt"
 captures_now() { ls "${T}/root/operator-mode/"*/frontier.json 2>/dev/null | wc -l | tr -d ' '; }
 foreign='beads-(amm|qrv|lone)'
-before="$(captures_now)"; typed_before="$(wc -l < "${S}/typed.log" 2>/dev/null || print 0)"
+before="$(captures_now)"; typed_before=0
+[[ -r "${S}/typed.log" ]] && typed_before="$(wc -l < "${S}/typed.log")"
 out="$(FAKE_DIR="${S}" zsh "${FRONTIER}" "${common[@]}" 2>/dev/null)"; rc=$?
 check "no --scope, open epics in the workspace: exit 4" 4 "${rc}"
 contains "no --scope: says the scope is needed" "scope=needed" "${out}"
@@ -716,4 +726,4 @@ headings_fenced="$(awk '
 check "example: no heading falls inside a fence (a sample holding a fence uses ~~~ outside)" 0 "${headings_fenced}"
 
 print -- "${pass} passed, ${fail} failed"
-(( fail == 0 ))
+(( fail == 0 )) || exit 1

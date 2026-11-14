@@ -109,7 +109,7 @@ ${c_bold}Options:${c_rst}
 
 ${c_bold}Output:${c_rst} key=value lines on stdout: dir= (the folder), json= (its frontier.json), cut_off=
   (none, or the reason), skill_fix= (empty, or the skill whose update a 75 this reader could not classify
-  calls for: ari-driving-remote for unknown or no kind line, ari-operator-mode for a kind it does not map); on exit ${EXIT_SCOPE_NEEDED} instead scope=needed and epics= (the open epics, comma-joined, for
+  calls for: ari-driving-remote for unknown or no kind line, ari-operator-mode for a kind it does not map or for not_zsh); on exit ${EXIT_SCOPE_NEEDED} instead scope=needed and epics= (the open epics, comma-joined, for
   the log only). Without --scope, a bead map that could not be read makes every bd section the precondition
   error, so nothing unscoped is shown. The JSON: captured_at, session,
   host_definition, pane, nickname, beads_dir, repo, local_repo, scope (null without --scope, else {epics, all,
@@ -126,13 +126,14 @@ ${c_bold}Output:${c_rst} key=value lines on stdout: dir= (the folder), json= (it
   read holds {"error": "<why>"}; one the cut-off kept unread holds {"unread": true}. A crash after the reads
   still writes the JSON, the unfinished sections as errors.
 
-${c_bold}Cut-off reasons:${c_rst} not_opted_in (77), other_session (76), busy or holds_text (75), no_pane (70),
-  ambiguous_pane (the target matched more than one pane), read_timed_out (124: a read is still running
-  in the pane), host_unreachable (255 from ssh), bad_definition (--list failed with another code: the
-  definition or the flags, Claude's to fix), refused_text (1), lock_unavailable (75 of that kind: the host's lock root is unwritable or a stale lock will not clear). Four more are waits, not his to clear: own_command (the pane ran an agent's command for the whole budget), own_command_persists (the
-  previous capture by this session on this pane already waited on that same command), row_pending (his
-  --pending row sits un-entered on the prompt), row_running (his --pending row is running). The host reads
-  stop at the first cut-off; local_git and health still fill.
+${c_bold}Cut-off reasons:${c_rst} not_opted_in (77), other_session (76), busy, holds_text, lock_unavailable or
+  not_zsh (75, by its kind, below), no_pane (70), ambiguous_pane (the target matched more than one pane),
+  read_timed_out (124: a read is still running in the pane), host_unreachable (255 from ssh),
+  bad_definition (--list failed with another code: the definition or the flags, Claude's to fix),
+  refused_text (1). Four more are waits, not his to clear: own_command (the pane ran an agent's command
+  for the whole budget), own_command_persists (the previous capture by this session on this pane already
+  waited on that same command), row_pending (his --pending row sits un-entered on the prompt), row_running
+  (his --pending row is running). The host reads stop at the first cut-off; local_git and health still fill.
 
 ${c_bold}How a 75 is classified${c_rst}: by the ${REFUSED_KIND_PREFIX}line right after run.zsh's first REFUSED: line; the
   REFUSED: words, which may change, are quoted, never matched.
@@ -140,6 +141,8 @@ ${c_bold}How a 75 is classified${c_rst}: by the ${REFUSED_KIND_PREFIX}line right
     pane_gone                        -> no_pane, the candidates from a fresh --list
     other_caller                     -> a wait (another run.zsh holds the pane's lock), as for an agent's command
     lock_unavailable                 -> lock_unavailable (the host's lock root is unwritable; no retry, not a pane problem)
+    not_zsh                          -> not_zsh, Claude's to fix (every read is one line, so a read over several
+                                        lines is a bug in this reader); skill_fix= names this skill
     not_a_shell, not_at_prompt       -> the pane tail decides, below
     unknown, no kind line, any other -> his --pending row on the tail is row_pending or row_running; else
                                         busy; skill_fix= names the skill to update
@@ -152,7 +155,8 @@ ${c_bold}How a 75 is classified${c_rst}: by the ${REFUSED_KIND_PREFIX}line right
   no_pane, the candidates from run.zsh's PANES: inventory.
 
 ${c_bold}Exit codes:${c_rst} 0 the JSON was written (cut off or not); 1 a missing prerequisite, a bad flag, an unreadable
-  --previous, a bad --prefix, a --scope id that is not a bead id, --away empty or holding a newline, question
+  --previous, a bad --prefix, a --scope id that is not a bead id, --beads or --repo holding a newline (every
+  read is one line), --away empty or holding a newline, question
   mark or backtick, --away with --local, --timeout under 5, FRONTIER_RETRY_S not a positive integer, or
   CLAUDE_CODE_SESSION_ID unset without --local (run.zsh refuses every command without it);
   ${EXIT_SCOPE_NEEDED} no --scope while the workspace holds an open epic: nothing
@@ -230,6 +234,10 @@ if [[ ! "${timeout_s}" == <-> ]] || (( timeout_s < 5 )); then
 fi
 if [[ ! "${RETRY_S}" == <-> ]] || (( RETRY_S < 1 )); then
   log::err "FRONTIER_RETRY_S must be an integer of at least 1 second | retry_s='${RETRY_S}'"
+  exit 1
+fi
+if [[ "${beads_dir}${repo}" == *$'\n'* ]]; then   # either would lay a read over several lines, which run.zsh refuses outside zsh
+  log::err "--beads and --repo are one line each: every read is typed as one line | beads='${beads_dir}' repo='${repo}'"
   exit 1
 fi
 if [[ -n "${previous}" && ! -r "${previous}" ]]; then
@@ -454,6 +462,10 @@ classify_75() {
     other_caller) ;;
     copy_mode|synchronized) cut_reason='busy'; cut_prompt_holds="${why}"; return 0 ;;
     lock_unavailable) cut_reason='lock_unavailable'; cut_prompt_holds="${why}"; return 0 ;;
+    not_zsh)   # run.zsh raises it only for text over several lines, and every read here is one bare line
+      skill_fix='ari-operator-mode'
+      log::warn "A read reached run.zsh over several lines; a bug in this reader | refused='${refused}' read='${typed[-1]:-}' skill_fix='${skill_fix}'"
+      cut_reason='not_zsh'; cut_prompt_holds="${why}"; return 0 ;;
     pane_gone)
       log::warn "tmux could not read the pane; listing the host's panes, as for a 70 | refused='${refused}'"
       cut_reason='no_pane'; cut_prompt_holds="${why}"

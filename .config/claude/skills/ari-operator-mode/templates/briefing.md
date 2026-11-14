@@ -56,6 +56,7 @@ Every row but an answer row carries its command under the table, keyed by row an
 | When | Key, ending in the colon that opens the fence |
 |---|---|
 | row 1, `run.zsh --no-enter` printed `TYPED:` | "Row 1, typed into `<label>`, not entered:" |
+| row 1, the run was refused with kind `not_zsh` | "Row 1, for `<label>`, not typed: that pane's shell is not zsh, and this command goes in over several lines; type it there yourself, or name a zsh pane:" |
 | row 1, the run was refused (exit 75, 70, 76, 77 or 255) | "Row 1, for `<label>`, not typed: <the why after `REFUSED: <label>`>; <the move from Cut-off reasons, for the reason the `REFUSED_KIND:` line gives (SKILL.md › How a 75 is classified)>:" |
 | row 1, no run attempted: another agent uses the pane (`SKILL.md › Reference › Shared pane`) | "Row 1, for `<label>`, not typed: another agent is using this pane; typed when it is free:" |
 | row 1 opens with **destroys:** or **irreversible:** | "Row 1, for `<label>`, not typed: <destroys|ships> <what>; typed after your yes:" |
@@ -82,6 +83,7 @@ A question only when something waits on him; then one sentence saying what a no 
 | row 1 is an answer row | "A no is a correction; other words are your answer. Answer beads-h1 "Decide the indexers" (row 1) with my recommendation, stop at 1337x and TPB?"; with no recommendation, "A no is a correction; other words are your answer. Your answer to beads-h1 "Decide the indexers" (row 1)?" |
 | row 1 on this Mac (a link) | "A no is a correction. Click row 1's link for `<label>`?" |
 | row 1 typed | "A no is a correction. Row 1 is on `<label>`: Enter it?" |
+| row 1 not typed: the pane's shell is not zsh (`not_zsh`) | "A no is a correction. Type row 1 yourself in `<label>`, or name a zsh pane by its `ID=%N`?" |
 | row 1 not typed: the pane runs his program | "A no is a correction. Free `<label>` (<the why>) so I can type row 1?" |
 | row 1 not typed: another agent uses the pane | none: the key already says it is typed when the pane is free |
 | no row | none: the reply ends "Your next message reads again, and `stop operator mode` leaves." |

@@ -298,7 +298,7 @@ The other reasons his to clear share that shape; the ones that differ:
 **P0, cut off from the tracker.** The pane `%18` could not be reached (ssh: connect to host ozone.local port 22: No route to host); I read nothing from the tracker or the host checkout this turn. Unread: ready, in_progress, human, blocked, stale, deferred, host_git. I do nothing else until it is read. Name another pane by its `ID=%N`, or say `stop operator mode`. Tell me when `ssh` to the host works from a pane?
 ```
 
-The last is `host_unreachable` with no absence announced: his P0, with the `ssh` move. The `refused_text` one is Claude's bug: no question, and it says that his next message is what reads again, so neither side waits on the other.
+The last is `host_unreachable` with no absence announced: his P0, with the `ssh` move. The `refused_text` one is Claude's bug: no question, and it says that his next message is what reads again, so neither side waits on the other. A `not_zsh` cut-off is Claude's bug in the same shape (every read is one line, so a read over several lines is the reader's fault), ending "I rewrite the read now; your next message reads again."; Ari's `not_zsh` move belongs only to a refused row 1 (`briefing.md` › The table).
 
 Not this: "Shall I rewrite the read on one line and try once?"; a fix of Claude's is done, never offered.
 

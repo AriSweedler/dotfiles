@@ -93,6 +93,7 @@ reason_sentence() {
     other_session)   print -r -- "is bound to another Claude session; run \`ari-driving off\` then \`ari-driving on\` there, or name another pane" ;;
     busy)            print -r -- "is not at a shell prompt (${holds:-something is running}); wait for it, or name another pane" ;;
     lock_unavailable) print -r -- "could not take its lock on the host (${holds:-the lock root is unwritable}); the host's lock root is the problem, not the pane, so another pane there fails too" ;;
+    not_zsh)         print -r -- "refused my read (${holds:-it spans several lines and the shell there is not zsh}); my reads are built on one line, so this is a bug in the reader, not yours to clear" ;;
     holds_text)      print -r -- "holds un-entered text on its prompt; clear it or run it, then tell me" ;;
     no_pane)         print -r -- "does not exist on the host; the panes there are ${cands:-none}; name one by its ID=%N" ;;
     ambiguous_pane)  print -r -- "matches more than one pane (${cands}); name one by its ID=%N" ;;
@@ -115,7 +116,7 @@ closing_sentence() {
     host_unreachable) print -r -- "Tell me when \`ssh\` to the host works from a pane?" ;;
     lock_unavailable) print -r -- "Tell me when the host's lock root is writable again?" ;;
     bad_definition)   print -r -- "I fix the definition now; your next message reads again." ;;
-    refused_text)     print -r -- "I rewrite the read now; your next message reads again." ;;
+    refused_text|not_zsh) print -r -- "I rewrite the read now; your next message reads again." ;;
     *)                print -r -- "Tell me when it is clear, or name another pane?" ;;
   esac
 }
