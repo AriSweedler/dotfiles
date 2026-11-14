@@ -4,10 +4,16 @@ Bead beads-2ly.6. Ari, 2026-11-06: "everything that should be tested ... There a
 things that nix will fix for me. I don't need to test nix. There are also scripts and stuff that
 need to do work."
 
-Audited 2026-11-13 at shared-tier commit 2ebdebd. Scope: `~/.config/bin`, the zsh plugins and
-functions, the `dotfiles` harness (`lib`, `cmd`, `steps`, `jobs`), the skills' `bin/` scripts, and
-the nvim config's own Lua. Out of scope: the dev repos (chrome-exoskeleton, run-log, plugged,
+Audited 2026-11-13 at shared-tier commit 2c45c30. Scope: `~/.config/bin`, the zsh and bash
+plugins and the zsh functions, the `dotfiles` harness (`lib`, `cmd`, `steps`, `jobs`), the skills'
+`bin/` and `lib/` scripts, the Claude Code hook scripts (`.config/claude/bin`, `.config/claude/lib`),
+the git helper and hooks (`.config/git`), the Karabiner, AltTab and new-machine scripts, and the
+nvim config's own Lua. Out of scope: the dev repos (chrome-exoskeleton, run-log, plugged,
 tmux-oneshot), which carry their own suites, and Nix itself.
+
+`~/.local/bin` is out of this audit: it is the local tier (`git ldf`), which is per machine and
+private, and this doc is a file of the public shared repo. The local tier's scripts get their own
+audit, kept in the local tier.
 
 ## How to read the table
 
@@ -17,26 +23,34 @@ tmux-oneshot), which carry their own suites, and Nix itself.
   `.config/dotfiles/tests/`, plugin suites in `.config/zsh/plugins/`, skill suites in the
   skill's `tests/`. A Nix package's `installCheckPhase` is a smoke check run at build time; it is
   named as `install check` and has no count, because this audit did not build the packages.
-- **Nix?** says what Nix does with the file: `no`; `placed` (a packaged bin, copied from the store
-  at its old path: Nix owns where it lands, the work is still ours); `owns` (the work itself is
-  Nix's: installs, linking, launchd).
+- **Nix?** says what Nix does with the file: `no`; `placed (<package>)` (a Nix package copies the
+  file into the store, and that copy is what runs when the package's command runs: a packaged bin
+  at its old path, or a file a packaged bin sources. Nix owns which copy runs; the work is still
+  ours); `owns` (the work itself is Nix's: installs, linking, launchd). `dotfiles-cli` copies
+  `lib`, `cmd`, `steps`, `new-machine` and every zsh plugin but the `*.test.zsh` files
+  (`nix/pkgs/dotfiles-cli/default.nix`), so every row for those carries `placed (dotfiles-cli)`.
 - **Verdict** is one of `covered`, `needs a suite`, or `no test needed`, with the reason.
 
 How the counts were produced: every `tests/test_*.sh` with `bash`, every
 `zsh/plugins/*.test.zsh` under its `OTTO_TEST__ZSH_PLUGINS_<NAME>=true` gate, every skill
 `tests/*.test.zsh` (and `check_mention_matchers.zsh`) with `zsh`, and
-`lua .config/nvim/lua/ari/gitsigns/pr_parsers_spec.lua`, all from a worktree of 2ebdebd.
+`lua .config/nvim/lua/ari/gitsigns/pr_parsers_spec.lua`, all from a worktree of 2c45c30 at its
+`/private/tmp/...` path. The path matters: run through `/tmp/...` (a symlink to `/private/tmp`),
+`test_test_edit.sh` fails 59/11; from the `/private/tmp` path it passes 70/0.
 `ari-bead-driven-development/tests/claim_actor.test.zsh` was not run: it drives the real `bd`.
 
 ## Suites that failed in this run
 
 | Suite | Result | Cause |
 |---|---|---|
-| `test_help_shape.sh` | 68/1 | `push --help` runs `ssh`: `cmd/push.zsh:40` puts `` `ssh -T git@github.com` `` in a `verb::env` description, and the help expands it as a command substitution (2ebdebd). On a real machine the help opens an ssh connection. |
-| `test_help_edit.sh` | 76/3 | The three failures are on the `push` verb's help (`--no-commit`); likely the same cause. |
-| `test_test_edit.sh` | 59/11 | Every failure is a `# Tests for ~/.config/...` target or a `test_step_X` / `test_V_*` mapping that resolves to no file. Not diagnosed; may be specific to running from a worktree outside `~/dotfiles`. |
 | `raycast.test.zsh` | 75/3 | The three `bin:` cases (help lists `edit`, `--dry-run` on a read-only verb, `--to` on another verb). Not diagnosed. |
 | `ari-skill-shellscripts/tests/conventions.test.zsh` | 42/4 | All four findings are in `conventions.test.zsh` itself, read through `~/.claude/skills`. The lint skips its own file by its worktree path, so from a worktree it lints itself. An artifact of where it ran. |
+
+At 2ebdebd two more suites failed, test_help_shape.sh 68/1 and test_help_edit.sh 76/3:
+`cmd/push.zsh:40` put `` `ssh -T git@github.com` `` in a `verb::env` description, and the help
+expanded it as a command substitution, so `dotfiles push --help` opened an ssh connection. The three
+`--no-commit` cases edit `push`'s declaration and render its help, which runs the same substitution.
+2c45c30 removed the backticks, and at 2c45c30 both suites pass (69/0, 79/0).
 
 ## `~/.config/bin`
 
@@ -87,52 +101,52 @@ How the counts were produced: every `tests/test_*.sh` with `bash`, every
 
 | Path | Work | Tests today | Nix? | Verdict |
 |---|---|---|---|---|
-| `.config/zsh/plugins/brew.zsh` | Homebrew env (no auto-update) | `brew.test.zsh` (3) | no | covered |
-| `.config/zsh/plugins/claude.zsh` | reclaude and Claude helpers | `claude.test.zsh` (7) | no | covered |
-| `.config/zsh/plugins/claude_parsers.zsh` | version-dispatched parsers for Claude Code's files | `claude_parsers.test.zsh` (21) | no | covered |
-| `.config/zsh/plugins/double_cd.zsh` | `c<name>` jumps from JSON | `double_cd.test.zsh` (15) | no | covered |
-| `.config/zsh/plugins/fzf_groups.zsh` | exclusive option groups for tmux-oneshot | `fzf_groups.test.zsh` (34) | no | covered |
-| `.config/zsh/plugins/json_sort.zsh` | canonical JSON | `json_sort.test.zsh` (30) | no | covered |
-| `.config/zsh/plugins/log_rotate.zsh` | rotate a log, keep N backups | `log_rotate.test.zsh` (19) | no | covered |
-| `.config/zsh/plugins/oneshot_group.zsh` | publish a command family as a oneshot group | `oneshot_group.test.zsh` (15) | no | covered |
-| `.config/zsh/plugins/open_any.zsh` | pick the opener whose `--check` accepts the input | `open_any.test.zsh` (22) | no | covered |
-| `.config/zsh/plugins/open_link.zsh` | open a URL from the clipboard | `open_link.test.zsh` (31) | no | covered |
-| `.config/zsh/plugins/raycast.zsh` | router behind `dotfiles raycast` | `raycast.test.zsh` (75/3) | no | covered; 3 failures above |
-| `.config/zsh/plugins/raycast_link.zsh` | the `link` subsystem | `raycast_link.test.zsh` (73) | no | covered |
-| `.config/zsh/plugins/raycast_snippets.zsh` | the `snippets` subsystem | `raycast_snippets.test.zsh` (196) | no | covered |
-| `.config/zsh/plugins/strip_ansi.zsh` | strip ANSI escapes | `strip_ansi.test.zsh` (14) | no | covered |
-| `.config/zsh/plugins/tmux.zsh` | `tcap`, history slicing | `tmux.test.zsh` (53) | no | covered |
-| `.config/zsh/plugins/vi_.zsh` | the `vi_*` editor family | `vi_.test.zsh` (12) | no | covered |
-| `.config/zsh/plugins/log.zsh` | the one logging library (28 functions; the ari-zshlib mirror's source) | none of its own; every suite loads it | placed (ari-zshlib, for packaged bins) | needs a suite: its line format is a contract that bins and tests parse |
-| `.config/zsh/plugins/swift_cache.zsh` | one cache tree for Swift builds: keys, toolchain stamp, trim (351 lines) | none | no | needs a suite: key and trim logic decide what gets rebuilt or deleted |
-| `.config/zsh/plugins/fzfdb_cli.zsh` | fzfdb selector: keys, paths, actions (319 lines) | none | no | needs a suite: key validation and paths are pure |
-| `.config/zsh/plugins/history.zsh` | history options; `histrm` rewrites the history file | none | no | needs a suite: `histrm` deletes history lines |
-| `.config/zsh/plugins/colors.zsh` | contrast choice, colourize, xterm index | none | no | needs a suite: pure colour math |
-| `.config/zsh/plugins/utc.zsh` | `utc`, `timedelta` conversions | none | no | needs a suite: pure time math |
-| `.config/zsh/plugins/str.zsh` | `str::join`, `str::colorize` | none | no | needs a suite: pure, a few cases |
-| `.config/zsh/plugins/jq.zsh` | `jq::flatten`, `jq::fzf` | none | no | needs a suite for `jq::flatten` (pure); `jq::fzf` is interactive |
-| `.config/zsh/plugins/pubkey.zsh` | pick and copy a public key | none | no | no test needed: a menu over files and the clipboard |
-| `.config/zsh/plugins/scroller.zsh` | ANSI scroll-region drawing | none | no | no test needed: terminal drawing, read by eye |
-| `.config/zsh/plugins/ssh.zsh` | `ssh-conf`, `machines`, agent load | none | no | no test needed: wrappers over ssh and the agent |
-| `.config/zsh/plugins/www.zsh` | browse helpers | none | no | no test needed: opens a browser |
-| `.config/zsh/plugins/keystroke.zsh` | run a command from a keystroke | none | no | no test needed: a ZLE binding |
-| `.config/zsh/plugins/gif.zsh` | `convert_to_gif` over ffmpeg | none | no | no test needed: one ffmpeg call |
-| `.config/zsh/plugins/xdg.zsh` | XDG dir exports | none | no | no test needed: environment |
-| `.config/zsh/plugins/ari.zsh` | editor and machine defaults | none | no | no test needed: environment |
-| `.config/zsh/plugins/arr.zsh` | `arr::contains` | none | no | no test needed: one loop |
-| `.config/zsh/plugins/chpwd.zsh` | source a venv on `cd` | none | no | no test needed: one hook |
-| `.config/zsh/plugins/cronstrue.zsh` | `cronny` wrapper | none | no | no test needed: one call |
-| `.config/zsh/plugins/dotfiles_cli.zsh` | `df` aliases | none | no | no test needed: aliases |
-| `.config/zsh/plugins/focus_terminal.zsh` | bring the terminal to the front | none | no | no test needed: one osascript |
-| `.config/zsh/plugins/fzf.zsh` | fzf defaults | none | no | no test needed: configuration |
-| `.config/zsh/plugins/fzf_group.zsh` | shared fzf options for group pickers | none (used by `fzf_groups.test.zsh`) | no | no test needed: options |
-| `.config/zsh/plugins/k8s.zsh` | `kwhoami` | none | no | no test needed: one kubectl call |
-| `.config/zsh/plugins/karabiner.zsh` | `vi_::karabiner_*` editors | none | no | no test needed: opens files |
-| `.config/zsh/plugins/neovim.zsh` | `vi_::dotfiles` | none | no | no test needed: opens nvim |
-| `.config/zsh/plugins/rust.zsh` | one line of env | none | no | no test needed: environment |
-| `.config/zsh/plugins/starship.zsh` | init Starship | none | owns (home-manager writes its config) | no test needed: Nix |
-| `.config/zsh/plugins/whitespace.zsh` | `whitespace` one-liner | none | no | no test needed: one call |
-| `.config/zsh/plugins/zsh-vi-mode.zsh` | load zsh-vi-mode | none | owns (home.nix places it) | no test needed: Nix |
+| `.config/zsh/plugins/brew.zsh` | Homebrew env (no auto-update) | `brew.test.zsh` (3) | placed (dotfiles-cli) | covered |
+| `.config/zsh/plugins/claude.zsh` | reclaude and Claude helpers | `claude.test.zsh` (7) | placed (dotfiles-cli) | covered |
+| `.config/zsh/plugins/claude_parsers.zsh` | version-dispatched parsers for Claude Code's files | `claude_parsers.test.zsh` (21) | placed (dotfiles-cli) | covered |
+| `.config/zsh/plugins/double_cd.zsh` | `c<name>` jumps from JSON | `double_cd.test.zsh` (15) | placed (dotfiles-cli, git-kit) | covered |
+| `.config/zsh/plugins/fzf_groups.zsh` | exclusive option groups for tmux-oneshot | `fzf_groups.test.zsh` (34) | placed (dotfiles-cli, ari-zshlib) | covered |
+| `.config/zsh/plugins/json_sort.zsh` | canonical JSON | `json_sort.test.zsh` (30) | placed (dotfiles-cli, mac-utils) | covered |
+| `.config/zsh/plugins/log_rotate.zsh` | rotate a log, keep N backups | `log_rotate.test.zsh` (19) | placed (dotfiles-cli, ari-zshlib) | covered |
+| `.config/zsh/plugins/oneshot_group.zsh` | publish a command family as a oneshot group | `oneshot_group.test.zsh` (15) | placed (dotfiles-cli) | covered |
+| `.config/zsh/plugins/open_any.zsh` | pick the opener whose `--check` accepts the input | `open_any.test.zsh` (22) | placed (dotfiles-cli, mac-utils) | covered |
+| `.config/zsh/plugins/open_link.zsh` | open a URL from the clipboard | `open_link.test.zsh` (31) | placed (dotfiles-cli, mac-utils) | covered |
+| `.config/zsh/plugins/raycast.zsh` | router behind `dotfiles raycast` | `raycast.test.zsh` (75/3) | placed (dotfiles-cli) | covered; 3 failures above |
+| `.config/zsh/plugins/raycast_link.zsh` | the `link` subsystem | `raycast_link.test.zsh` (73) | placed (dotfiles-cli) | covered |
+| `.config/zsh/plugins/raycast_snippets.zsh` | the `snippets` subsystem | `raycast_snippets.test.zsh` (196) | placed (dotfiles-cli) | covered |
+| `.config/zsh/plugins/strip_ansi.zsh` | strip ANSI escapes | `strip_ansi.test.zsh` (14) | placed (dotfiles-cli, ari-zshlib) | covered |
+| `.config/zsh/plugins/tmux.zsh` | `tcap`, history slicing | `tmux.test.zsh` (53) | placed (dotfiles-cli) | covered |
+| `.config/zsh/plugins/vi_.zsh` | the `vi_*` editor family | `vi_.test.zsh` (12) | placed (dotfiles-cli) | covered |
+| `.config/zsh/plugins/log.zsh` | the one logging library (28 functions; the ari-zshlib mirror's source) | none of its own; every suite loads it | placed (dotfiles-cli, ari-zshlib) | needs a suite: its line format is a contract that bins and tests parse |
+| `.config/zsh/plugins/swift_cache.zsh` | one cache tree for Swift builds: keys, toolchain stamp, trim (351 lines) | none | placed (dotfiles-cli) | needs a suite: key and trim logic decide what gets rebuilt or deleted |
+| `.config/zsh/plugins/fzfdb_cli.zsh` | fzfdb selector: keys, paths, actions (319 lines) | none | placed (dotfiles-cli) | needs a suite: key validation and paths are pure |
+| `.config/zsh/plugins/history.zsh` | history options; `histrm` rewrites the history file | none | placed (dotfiles-cli) | needs a suite: `histrm` deletes history lines |
+| `.config/zsh/plugins/colors.zsh` | contrast choice, colourize, xterm index | none | placed (dotfiles-cli, mac-utils) | needs a suite: pure colour math |
+| `.config/zsh/plugins/utc.zsh` | `utc`, `timedelta` conversions | none | placed (dotfiles-cli) | needs a suite: pure time math |
+| `.config/zsh/plugins/str.zsh` | `str::join`, `str::colorize` | none | placed (dotfiles-cli) | needs a suite: pure, a few cases |
+| `.config/zsh/plugins/jq.zsh` | `jq::flatten`, `jq::fzf` | none | placed (dotfiles-cli) | needs a suite for `jq::flatten` (pure); `jq::fzf` is interactive |
+| `.config/zsh/plugins/pubkey.zsh` | pick and copy a public key | none | placed (dotfiles-cli) | no test needed: a menu over files and the clipboard |
+| `.config/zsh/plugins/scroller.zsh` | ANSI scroll-region drawing | none | placed (dotfiles-cli) | no test needed: terminal drawing, read by eye |
+| `.config/zsh/plugins/ssh.zsh` | `ssh-conf`, `machines`, agent load | none | placed (dotfiles-cli) | no test needed: wrappers over ssh and the agent |
+| `.config/zsh/plugins/www.zsh` | browse helpers | none | placed (dotfiles-cli) | no test needed: opens a browser |
+| `.config/zsh/plugins/keystroke.zsh` | run a command from a keystroke | none | placed (dotfiles-cli) | no test needed: a ZLE binding |
+| `.config/zsh/plugins/gif.zsh` | `convert_to_gif` over ffmpeg | none | placed (dotfiles-cli) | no test needed: one ffmpeg call |
+| `.config/zsh/plugins/xdg.zsh` | XDG dir exports | none | placed (dotfiles-cli) | no test needed: environment |
+| `.config/zsh/plugins/ari.zsh` | editor and machine defaults | none | placed (dotfiles-cli) | no test needed: environment |
+| `.config/zsh/plugins/arr.zsh` | `arr::contains` | none | placed (dotfiles-cli) | no test needed: one loop |
+| `.config/zsh/plugins/chpwd.zsh` | source a venv on `cd` | none | placed (dotfiles-cli) | no test needed: one hook |
+| `.config/zsh/plugins/cronstrue.zsh` | `cronny` wrapper | none | placed (dotfiles-cli) | no test needed: one call |
+| `.config/zsh/plugins/dotfiles_cli.zsh` | `df` aliases | none | placed (dotfiles-cli) | no test needed: aliases |
+| `.config/zsh/plugins/focus_terminal.zsh` | bring the terminal to the front | none | placed (dotfiles-cli) | no test needed: one osascript |
+| `.config/zsh/plugins/fzf.zsh` | fzf defaults | none | placed (dotfiles-cli) | no test needed: configuration |
+| `.config/zsh/plugins/fzf_group.zsh` | shared fzf options for group pickers | none (used by `fzf_groups.test.zsh`) | placed (dotfiles-cli, ari-zshlib) | no test needed: options |
+| `.config/zsh/plugins/k8s.zsh` | `kwhoami` | none | placed (dotfiles-cli) | no test needed: one kubectl call |
+| `.config/zsh/plugins/karabiner.zsh` | `vi_::karabiner_*` editors | none | placed (dotfiles-cli) | no test needed: opens files |
+| `.config/zsh/plugins/neovim.zsh` | `vi_::dotfiles` | none | placed (dotfiles-cli) | no test needed: opens nvim |
+| `.config/zsh/plugins/rust.zsh` | one line of env | none | placed (dotfiles-cli) | no test needed: environment |
+| `.config/zsh/plugins/starship.zsh` | init Starship | none | owns (home-manager writes its config); placed (dotfiles-cli) | no test needed: Nix |
+| `.config/zsh/plugins/whitespace.zsh` | `whitespace` one-liner | none | placed (dotfiles-cli) | no test needed: one call |
+| `.config/zsh/plugins/zsh-vi-mode.zsh` | load zsh-vi-mode | none | owns (home.nix places it); placed (dotfiles-cli) | no test needed: Nix |
 
 ## zsh functions and startup
 
@@ -164,85 +178,85 @@ All of `lib`, `cmd` and `steps` is placed by the dotfiles-cli package, whose ins
 
 | Path | Work | Tests today | Nix? | Verdict |
 |---|---|---|---|---|
-| `.config/dotfiles/lib/cache.zsh` | reuse a check's verdict while its inputs are unchanged | `test_check_speed.sh` (21), `test_check_speed_2.sh` (20) | placed | covered |
-| `.config/dotfiles/lib/dispatch.zsh` | flags, verb, help | `test_cli.sh` (95), `test_help_edit.sh` (76/3) | placed | covered |
-| `.config/dotfiles/lib/edit.zsh` | open in `$EDITOR`, keep only when it checks out | `test_verb_lib.sh` (77), `test_git_edit.sh` (72), `test_steps_edit.sh` (88) | placed | covered |
-| `.config/dotfiles/lib/env.zsh` | constants, seams, defaults | `test_env_hermetic.sh` (47), `test_push_ssh.sh` (41) | placed | covered |
-| `.config/dotfiles/lib/kind.zsh` | the type of a command-line value | `test_completion_spec.sh` (39), `test_verb_lib.sh` (77) | placed | covered |
-| `.config/dotfiles/lib/lock.zsh` | one run at a time | `test_verify_lock.sh` (16) | placed | covered |
-| `.config/dotfiles/lib/logging.zsh` | source the log library | every suite | placed | no test needed: 12 lines of sourcing |
-| `.config/dotfiles/lib/machine_name.zsh` | the machine's name file | `test_machine_name.sh` (22) | placed | covered |
-| `.config/dotfiles/lib/notify.zsh` | verify's trail and the banner | `test_jobs_notify.sh` (17), `test_verify_report.sh` (35) | placed | covered |
-| `.config/dotfiles/lib/plan.zsh` | the `--edit` plan file | `test_verb_lib.sh` (77), `test_apply_edit.sh` (38), `test_init_edit.sh` (54) | placed | covered |
-| `.config/dotfiles/lib/run.zsh` | dry-run gate, timing, watchdogs | `test_step_progress.sh` (54), `test_step_timeout.sh` (12), `test_spin_overhead.sh` (13), `test_step_assist.sh` (12) | placed | covered |
-| `.config/dotfiles/lib/spec.zsh` | the command line as data, and its linter | `test_completion_spec.sh` (39) | placed | covered |
-| `.config/dotfiles/lib/steps.zsh` | the step registry and runner | `test_runner.sh` (20), `test_step_isolation.sh` (10), `test_test_properties.sh` (12), `test_step_dotfiles_docs.sh` (37) | placed | covered |
-| `.config/dotfiles/lib/tiers.zsh` | git for the two tiers and the dev repos | `test_tier_commit_no_remote.sh` (4), `test_step_dotfiles_repo.sh` (79), `test_step_local_dotfiles_repo.sh` (27) | placed | covered |
-| `.config/dotfiles/lib/ui.zsh` | output fanciness and the gum wrapper | `test_ui.sh` (60) | placed | covered |
-| `.config/dotfiles/lib/verb.zsh` | a verb's help and parser from one declaration | `test_verb_lib.sh` (77), `test_help_shape.sh` (68/1) | placed | covered; the failure above is a bug in `push`'s declaration that this suite caught |
-| `.config/dotfiles/lib/verdict.zsh` | what a check prints | `test_runner.sh` (20), `test_report_render.sh` (32) | placed | covered |
-| `.config/dotfiles/lib/watch.zsh` | which paths each step reads | `test_pull_changes.sh` (43) | placed | covered |
+| `.config/dotfiles/lib/cache.zsh` | reuse a check's verdict while its inputs are unchanged | `test_check_speed.sh` (21), `test_check_speed_2.sh` (20) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/lib/dispatch.zsh` | flags, verb, help | `test_cli.sh` (95), `test_help_edit.sh` (79) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/lib/edit.zsh` | open in `$EDITOR`, keep only when it checks out | `test_verb_lib.sh` (77), `test_git_edit.sh` (72), `test_steps_edit.sh` (88) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/lib/env.zsh` | constants, seams, defaults | `test_env_hermetic.sh` (47), `test_push_ssh.sh` (41) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/lib/kind.zsh` | the type of a command-line value | `test_completion_spec.sh` (39), `test_verb_lib.sh` (77) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/lib/lock.zsh` | one run at a time | `test_verify_lock.sh` (16) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/lib/logging.zsh` | source the log library | every suite | placed (dotfiles-cli) | no test needed: 12 lines of sourcing |
+| `.config/dotfiles/lib/machine_name.zsh` | the machine's name file | `test_machine_name.sh` (22) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/lib/notify.zsh` | verify's trail and the banner | `test_jobs_notify.sh` (17), `test_verify_report.sh` (35) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/lib/plan.zsh` | the `--edit` plan file | `test_verb_lib.sh` (77), `test_apply_edit.sh` (38), `test_init_edit.sh` (54) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/lib/run.zsh` | dry-run gate, timing, watchdogs | `test_step_progress.sh` (54), `test_step_timeout.sh` (12), `test_spin_overhead.sh` (13), `test_step_assist.sh` (12) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/lib/spec.zsh` | the command line as data, and its linter | `test_completion_spec.sh` (39) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/lib/steps.zsh` | the step registry and runner | `test_runner.sh` (20), `test_step_isolation.sh` (10), `test_test_properties.sh` (12), `test_step_dotfiles_docs.sh` (37) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/lib/tiers.zsh` | git for the two tiers and the dev repos | `test_tier_commit_no_remote.sh` (4), `test_step_dotfiles_repo.sh` (79), `test_step_local_dotfiles_repo.sh` (27) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/lib/ui.zsh` | output fanciness and the gum wrapper | `test_ui.sh` (60) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/lib/verb.zsh` | a verb's help and parser from one declaration | `test_verb_lib.sh` (77), `test_help_shape.sh` (69) | placed (dotfiles-cli) | covered; at 2ebdebd this suite caught a bug in `push`'s declaration (see **Suites that failed in this run**) |
+| `.config/dotfiles/lib/verdict.zsh` | what a check prints | `test_runner.sh` (20), `test_report_render.sh` (32) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/lib/watch.zsh` | which paths each step reads | `test_pull_changes.sh` (43) | placed (dotfiles-cli) | covered |
 
 ## The `dotfiles` harness: `cmd`
 
 | Path | Work | Tests today | Nix? | Verdict |
 |---|---|---|---|---|
-| `.config/dotfiles/cmd/alttab.zsh` | `dotfiles alttab` | `test_alttab_step.sh` (43), `test_alttab_edit.sh` (76) | placed | covered |
-| `.config/dotfiles/cmd/alttab/edit.zsh` | `alttab edit` | `test_alttab_edit.sh` (76) | placed | covered |
-| `.config/dotfiles/cmd/apply.zsh` | `dotfiles apply STEP..` | `test_apply_edit.sh` (38), `test_fix_rollup.sh` (32) | placed | covered |
-| `.config/dotfiles/cmd/completion.zsh` | compile `_dotfiles` | `test_completion_spec.sh` (39) | placed | covered |
-| `.config/dotfiles/cmd/completion/emit.zsh` | the compiler's back end | `test_completion_spec.sh` (39) | placed | covered |
-| `.config/dotfiles/cmd/git.zsh` | `dotfiles git` | `test_local_exclude.sh` (10), `test_git_edit.sh` (72) | placed | covered |
-| `.config/dotfiles/cmd/git/edit.zsh` | `--local git edit` | `test_git_edit.sh` (72) | placed | covered |
-| `.config/dotfiles/cmd/healthcheck.zsh` | every check, reported | `test_healthcheck_edit.sh` (42), `test_report_render.sh` (32), `test_check_all_ok.sh` (8) | placed | covered |
-| `.config/dotfiles/cmd/help.zsh` | `dotfiles help` | `test_help_shape.sh` (68/1), `test_cli.sh` (95) | placed | covered |
-| `.config/dotfiles/cmd/help/edit.zsh` | `help --edit` | `test_help_edit.sh` (76/3) | placed | covered |
-| `.config/dotfiles/cmd/init.zsh` | converge the machine | `test_init.sh` (18), `test_setup_idempotent.sh` (10), `test_setup_fresh_home.sh` (24), `test_bootstrap.sh` (37) | placed | covered |
-| `.config/dotfiles/cmd/jobs.zsh` | `dotfiles jobs` | `test_jobs_deps.sh` (30), `test_jobs_notify.sh` (17), `test_jobs_edit.sh` (61) | placed | covered |
-| `.config/dotfiles/cmd/jobs/edit.zsh` | `jobs edit` | `test_jobs_edit.sh` (61) | placed | covered |
-| `.config/dotfiles/cmd/kinds.zsh` | the kind catalog | `test_completion_spec.sh` (39) | placed | covered |
-| `.config/dotfiles/cmd/logs.zsh` | `dotfiles logs` | `test_logs.sh` (19) | placed | covered |
-| `.config/dotfiles/cmd/machine-name.zsh` | `dotfiles machine-name` | `test_machine_name.sh` (22) | placed | covered |
-| `.config/dotfiles/cmd/pull.zsh` | `dotfiles pull` | `test_pull.sh` (33), `test_pull_changes.sh` (43), `test_pull_edit.sh` (41) | placed | covered |
-| `.config/dotfiles/cmd/push.zsh` | `dotfiles push` | `test_push_ssh.sh` (41), `test_push_mirror.sh` (48), `test_push_summary.sh` (49), `test_push_edit.sh` (81) | placed | covered |
-| `.config/dotfiles/cmd/raycast.zsh` | `dotfiles raycast` | `test_raycast_local_ok.sh` (13), `test_raycast_undocumented.sh` (20), `raycast.test.zsh` (75/3) | placed | covered |
-| `.config/dotfiles/cmd/run/edit.zsh` | the `--edit` plan for init, apply, healthcheck | `test_init_edit.sh` (54), `test_healthcheck_edit.sh` (42), `test_pull_edit.sh` (41) | placed | covered |
-| `.config/dotfiles/cmd/status.zsh` | `dotfiles status` | `test_status_cards.sh` (68) | placed | covered |
-| `.config/dotfiles/cmd/status/edit.zsh` | `status --edit` | `test_status_edit.sh` (66) | placed | covered |
-| `.config/dotfiles/cmd/steps.zsh` | `dotfiles steps` | `test_cli.sh` (95), `test_steps_edit.sh` (88) | placed | covered |
-| `.config/dotfiles/cmd/steps/edit.zsh` | `steps edit` | `test_steps_edit.sh` (88) | placed | covered |
-| `.config/dotfiles/cmd/switch.zsh` | `dotfiles switch`: lock the shared input, then nix-darwin | `test_cmd_switch.sh` (27) | owns the switch itself | covered for our part (the lock and the refusals); the switch is Nix |
-| `.config/dotfiles/cmd/test.zsh` | `dotfiles test` | `test_test_edit.sh` (59/11), `test_step_test_suites.sh` (21) | placed | covered; 11 failures above |
-| `.config/dotfiles/cmd/verify.zsh` | the weekly verify | `test_verify_report.sh` (35), `test_verify_error.sh` (25), `test_verify_dedup.sh` (42), `test_verify_lock.sh` (16), `test_verify_show.sh` (37), `test_verify_edit.sh` (45) | placed | covered |
-| `.config/dotfiles/cmd/verify/report.zsh` | the Desktop report | `test_report_render.sh` (32), `test_verify_edit.sh` (45) | placed | covered |
+| `.config/dotfiles/cmd/alttab.zsh` | `dotfiles alttab` | `test_alttab_step.sh` (43), `test_alttab_edit.sh` (76) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/alttab/edit.zsh` | `alttab edit` | `test_alttab_edit.sh` (76) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/apply.zsh` | `dotfiles apply STEP..` | `test_apply_edit.sh` (38), `test_fix_rollup.sh` (32) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/completion.zsh` | compile `_dotfiles` | `test_completion_spec.sh` (39) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/completion/emit.zsh` | the compiler's back end | `test_completion_spec.sh` (39) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/git.zsh` | `dotfiles git` | `test_local_exclude.sh` (10), `test_git_edit.sh` (72) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/git/edit.zsh` | `--local git edit` | `test_git_edit.sh` (72) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/healthcheck.zsh` | every check, reported | `test_healthcheck_edit.sh` (42), `test_report_render.sh` (32), `test_check_all_ok.sh` (8) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/help.zsh` | `dotfiles help` | `test_help_shape.sh` (69), `test_cli.sh` (95) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/help/edit.zsh` | `help --edit` | `test_help_edit.sh` (79) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/init.zsh` | converge the machine | `test_init.sh` (18), `test_setup_idempotent.sh` (10), `test_setup_fresh_home.sh` (24), `test_bootstrap.sh` (37) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/jobs.zsh` | `dotfiles jobs` | `test_jobs_deps.sh` (30), `test_jobs_notify.sh` (17), `test_jobs_edit.sh` (61) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/jobs/edit.zsh` | `jobs edit` | `test_jobs_edit.sh` (61) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/kinds.zsh` | the kind catalog | `test_completion_spec.sh` (39) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/logs.zsh` | `dotfiles logs` | `test_logs.sh` (19) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/machine-name.zsh` | `dotfiles machine-name` | `test_machine_name.sh` (22) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/pull.zsh` | `dotfiles pull` | `test_pull.sh` (33), `test_pull_changes.sh` (43), `test_pull_edit.sh` (41) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/push.zsh` | `dotfiles push` | `test_push_ssh.sh` (41), `test_push_mirror.sh` (48), `test_push_summary.sh` (49), `test_push_edit.sh` (81) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/raycast.zsh` | `dotfiles raycast` | `test_raycast_local_ok.sh` (13), `test_raycast_undocumented.sh` (20), `raycast.test.zsh` (75/3) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/run/edit.zsh` | the `--edit` plan for init, apply, healthcheck | `test_init_edit.sh` (54), `test_healthcheck_edit.sh` (42), `test_pull_edit.sh` (41) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/status.zsh` | `dotfiles status` | `test_status_cards.sh` (68) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/status/edit.zsh` | `status --edit` | `test_status_edit.sh` (66) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/steps.zsh` | `dotfiles steps` | `test_cli.sh` (95), `test_steps_edit.sh` (88) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/steps/edit.zsh` | `steps edit` | `test_steps_edit.sh` (88) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/switch.zsh` | `dotfiles switch`: lock the shared input, then nix-darwin | `test_cmd_switch.sh` (27) | owns the switch itself; placed (dotfiles-cli) | covered for our part (the lock and the refusals); the switch is Nix |
+| `.config/dotfiles/cmd/test.zsh` | `dotfiles test` | `test_test_edit.sh` (70), `test_step_test_suites.sh` (21) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/verify.zsh` | the weekly verify | `test_verify_report.sh` (35), `test_verify_error.sh` (25), `test_verify_dedup.sh` (42), `test_verify_lock.sh` (16), `test_verify_show.sh` (37), `test_verify_edit.sh` (45) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/verify/report.zsh` | the Desktop report | `test_report_render.sh` (32), `test_verify_edit.sh` (45) | placed (dotfiles-cli) | covered |
 
 ## The `dotfiles` harness: `steps` and `jobs`
 
 | Path | Work | Tests today | Nix? | Verdict |
 |---|---|---|---|---|
-| `.config/dotfiles/steps/alttab.zsh` | AltTab Free build installed | `test_alttab_step.sh` (43) | no | covered |
-| `.config/dotfiles/steps/brew.zsh` | Homebrew is installed | `test_check_brew_off_path.sh` (7), `test_runner.sh` (20) | owns (nix-darwin's homebrew module) | covered for the check; installs are Nix |
-| `.config/dotfiles/steps/chrome_exoskeleton.zsh` | the extension built and loaded | `test_chrome_exoskeleton_step.sh` (49) | no | covered |
-| `.config/dotfiles/steps/claude.zsh` | Claude Code installed | `test_step_misc.sh` (119) | no | covered |
-| `.config/dotfiles/steps/claude_notifications.zsh` | Claude Code hooks wired | `test_step_misc.sh` (119) | no | covered |
-| `.config/dotfiles/steps/claude_skills.zsh` | every tier-held skill linked | `test_step_claude_skills.sh` (29) | no | covered |
-| `.config/dotfiles/steps/dotfiles_docs.zsh` | every step and verb documented | `test_step_dotfiles_docs.sh` (37) | no | covered |
-| `.config/dotfiles/steps/dotfiles_jobs.zsh` | the jobs launchd agent loaded | `test_step_misc.sh` (119), `test_jobs_edit.sh` (61) | owns (the jobs agent) | covered for the check; the agent is Nix |
-| `.config/dotfiles/steps/dotfiles_repo.zsh` | the shared repo cloned, tracking, hooks | `test_step_dotfiles_repo.sh` (79) | no | covered |
-| `.config/dotfiles/steps/home_strays.zsh` | no stray shell files in `$HOME` | `test_step_misc.sh` (119) | no | covered |
-| `.config/dotfiles/steps/karabiner.zsh` | Karabiner's healthcheck passes | `test_report_render.sh` (32), `test_pull_changes.sh` (43) for its watches only | owns (karabiner.nix places the config) | no test needed beyond the watches: a pass-through of Karabiner's own check |
-| `.config/dotfiles/steps/local_dotfiles_repo.zsh` | the local bare repo, allowlist, hooks | `test_step_local_dotfiles_repo.sh` (27) | no | covered |
-| `.config/dotfiles/steps/machine_name.zsh` | the machine name is set | `test_machine_name.sh` (22) | no | covered |
-| `.config/dotfiles/steps/neovim.zsh` | nvim from Nix starts headless cleanly | `test_step_misc.sh` (119) | owns the binary | covered |
-| `.config/dotfiles/steps/nix_port.zsh` | the machine is on the Nix port (340 lines) | `test_step_misc.sh` (119) | owns | covered |
-| `.config/dotfiles/steps/plugged.zsh` | plugged's hooks wired, Nix's plugged on PATH | `test_pull_changes.sh` (43), `test_push_summary.sh` (49) name it only | no | needs a suite: its check has no case of its own (S) |
-| `.config/dotfiles/steps/raycast_sync.zsh` | Raycast in parity with the dotfiles | `test_raycast_local_ok.sh` (13), `test_raycast_undocumented.sh` (20) | no | covered |
-| `.config/dotfiles/steps/ssh_key.zsh` | the GitHub key in the agent | `test_step_ssh_key.sh` (33) | no | covered |
-| `.config/dotfiles/steps/terminal_config.zsh` | Terminal.app Option-as-Meta | `test_step_misc.sh` (119) | no | covered |
-| `.config/dotfiles/steps/terminal_nerdfont.zsh` | a Nerd Font installed and used | `test_step_misc.sh` (119), `test_check_all_ok.sh` (8) | no | covered |
-| `.config/dotfiles/steps/test_suites.zsh` | every suite says what it tests | `test_step_test_suites.sh` (21) | no | covered |
-| `.config/dotfiles/steps/tmux_server.zsh` | the tmux server runs PATH's tmux | `test_step_tmux_server.sh` (17) | no | covered |
-| `.config/dotfiles/steps/xcode.zsh` | full Xcode selected and licensed | `test_xcode_step.sh` (10) | no | covered |
+| `.config/dotfiles/steps/alttab.zsh` | AltTab Free build installed | `test_alttab_step.sh` (43) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/brew.zsh` | Homebrew is installed | `test_check_brew_off_path.sh` (7), `test_runner.sh` (20) | owns (nix-darwin's homebrew module); placed (dotfiles-cli) | covered for the check; installs are Nix |
+| `.config/dotfiles/steps/chrome_exoskeleton.zsh` | the extension built and loaded | `test_chrome_exoskeleton_step.sh` (49) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/claude.zsh` | Claude Code installed | `test_step_misc.sh` (119) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/claude_notifications.zsh` | Claude Code hooks wired | `test_step_misc.sh` (119) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/claude_skills.zsh` | every tier-held skill linked | `test_step_claude_skills.sh` (29) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/dotfiles_docs.zsh` | every step and verb documented | `test_step_dotfiles_docs.sh` (37) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/dotfiles_jobs.zsh` | the jobs launchd agent loaded | `test_step_misc.sh` (119), `test_jobs_edit.sh` (61) | owns (the jobs agent); placed (dotfiles-cli) | covered for the check; the agent is Nix |
+| `.config/dotfiles/steps/dotfiles_repo.zsh` | the shared repo cloned, tracking, hooks | `test_step_dotfiles_repo.sh` (79) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/home_strays.zsh` | no stray shell files in `$HOME` | `test_step_misc.sh` (119) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/karabiner.zsh` | Karabiner's healthcheck passes | `test_report_render.sh` (32), `test_pull_changes.sh` (43) for its watches only | owns (karabiner.nix places the config); placed (dotfiles-cli) | no test needed beyond the watches: a pass-through of Karabiner's own check |
+| `.config/dotfiles/steps/local_dotfiles_repo.zsh` | the local bare repo, allowlist, hooks | `test_step_local_dotfiles_repo.sh` (27) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/machine_name.zsh` | the machine name is set | `test_machine_name.sh` (22) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/neovim.zsh` | nvim from Nix starts headless cleanly | `test_step_misc.sh` (119) | owns the binary; placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/nix_port.zsh` | the machine is on the Nix port (340 lines) | `test_step_misc.sh` (119) | owns; placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/plugged.zsh` | plugged's hooks wired, Nix's plugged on PATH | `test_pull_changes.sh` (43), `test_push_summary.sh` (49) name it only | placed (dotfiles-cli) | needs a suite: its check has no case of its own (S) |
+| `.config/dotfiles/steps/raycast_sync.zsh` | Raycast in parity with the dotfiles | `test_raycast_local_ok.sh` (13), `test_raycast_undocumented.sh` (20) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/ssh_key.zsh` | the GitHub key in the agent | `test_step_ssh_key.sh` (33) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/terminal_config.zsh` | Terminal.app Option-as-Meta | `test_step_misc.sh` (119) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/terminal_nerdfont.zsh` | a Nerd Font installed and used | `test_step_misc.sh` (119), `test_check_all_ok.sh` (8) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/test_suites.zsh` | every suite says what it tests | `test_step_test_suites.sh` (21) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/tmux_server.zsh` | the tmux server runs PATH's tmux | `test_step_tmux_server.sh` (17) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/steps/xcode.zsh` | full Xcode selected and licensed | `test_xcode_step.sh` (10) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/jobs/dotfiles-verify` | weekly `dotfiles verify` | the verify suites above | no | no test needed: an `exec` with env |
 | `.config/dotfiles/jobs/git-health` | hourly `git-health --all` | none | no | no test needed: an `exec`; the work is `git-health`'s |
 
@@ -324,6 +338,71 @@ Paths are under `.config/claude/skills/`.
 | `.config/claude/skills/ari-skill-update/bin/commit_blobs.zsh` | commit exactly the recorded blobs | `claim.test.zsh` (72) | no | covered for the claim; a real commit is not (the suite says so) |
 | `.config/claude/skills/ari-spotify/bin/spotify.zsh` | wrapper over concert-mcp | none | no | no test needed: a wrapper |
 
+## Skill `lib/` files
+
+| Path | Work | Tests today | Nix? | Verdict |
+|---|---|---|---|---|
+| `.config/claude/skills/ari-diagram-mermaid/lib/contrast.awk` | `bake`'s contrast gate over a `.mmd` | none | no | needs a suite: pure; fold into the `bake` suite above |
+| `.config/claude/skills/ari-dotfiles-skill-registry/lib/registry.zsh` | constants and skill classification for the registry scripts (414 lines) | `registry.test.zsh` (15) | no | covered |
+| `.config/claude/skills/ari-driving-tmux/lib/wrap.zsh` | lay out a one-line command for a human to read (583 lines) | `link.test.zsh` (88), `copy.test.zsh` (38) | no | covered |
+| `.config/claude/skills/ari-gsw-calendar-add/lib/concert_mcp.zsh` | find uv, check the concert-mcp checkout, run one subcommand | none | no | no test needed: a launcher |
+| `.config/claude/skills/ari-hemingway--lib/lib/drive.zsh` | Drive helpers: folder id from a URL, a capped gws call, token scopes, folder lookup | loaded by `gdoc_publish.zsh` and `gdoc_finish.zsh`, which `gdoc_dry_run.test.zsh` (92) runs | no | covered through its callers; `drive::folder_id_from` is pure and has no case of its own |
+| `.config/claude/skills/ari-hemingway--lib/lib/gdoc_api.py` | Docs API helpers: gws calls and walks over a `documents.get` reply | loaded by `gdoc_asides.py` and `gdoc_bookmarks.py`, which `gdoc_asides.test.zsh` (65) and `gdoc_bookmarks_dry_run.test.zsh` (66) run | no | covered through its callers |
+| `.config/claude/skills/ari-hemingway--lib/lib/run_with_timeout.zsh` | pointer to the shellscripts copy (7 lines) | none | no | no test needed: a pointer |
+| `.config/claude/skills/ari-hemingway--structure-scaffold/lib/check_definitions_order.jq` | the definitions-table check | `check_mention_matchers.zsh` (24 cases) reads it | no | covered for the matcher, as `check_definitions_order.zsh` above |
+| `.config/claude/skills/ari-hemingway--structure-working-doc/lib/asks.jq` | jq for a working doc's asks table | none | no | needs a suite: pure; fold into the `asks.zsh` suite above |
+| `.config/claude/skills/ari-operator-mode/lib/marker.zsh` | the per-session marker file | `frontier.test.zsh` (491) runs `bin/mode.zsh`, which sources it | no | covered |
+| `.config/claude/skills/ari-skill-pythonscripts/lib/skill_log.py` | log lines for the skills' Python | none | no | no test needed: log and die wrappers (34 lines) |
+| `.config/claude/skills/ari-skill-pythonscripts/lib/skill_subprocess.py` | `run_capture`: a subprocess with a timeout, dying with a record on failure | none | no | no test needed: 31 lines over `subprocess` |
+| `.config/claude/skills/ari-skill-shellscripts/lib/await.zsh` | one status line for a wait (617 lines) | `await.test.zsh` (139) | placed (ari-zshlib) | covered |
+| `.config/claude/skills/ari-skill-shellscripts/lib/dry_run.zsh` | the dry-run gate for mutating skill scripts | `conventions.test.zsh` (42/4) checks its dry-run default | placed (ari-zshlib) | covered |
+| `.config/claude/skills/ari-skill-shellscripts/lib/investigation_folder.zsh` | the investigation-folder helper | `investigation_folder.test.zsh` (10) | placed (ari-zshlib) | covered |
+| `.config/claude/skills/ari-skill-shellscripts/lib/logging.zsh` | a shim over the dotfiles' log library (20 lines) | none of its own | placed (ari-zshlib) | no test needed: a shim; the format is `log.zsh`'s |
+| `.config/claude/skills/ari-skill-shellscripts/lib/run_with_timeout.zsh` | run a command under a wall-clock cap | none | placed (ari-zshlib) | needs a suite: its 124-on-timeout exit code is a contract callers branch on |
+| `.config/claude/skills/ari-skill-shellscripts/lib/tail.zsh` | a running command's last lines under a spinner | `tail.test.zsh` (17) | no | covered |
+| `.config/claude/skills/ari-skill-update/lib/blobs.zsh` | a proposal's blobs: where a skill is versioned, what its tree holds (348 lines) | `claim.test.zsh` (72) sources it | no | covered for what the claim cases reach; the hashing: needs cases, as `record_blobs.zsh` above |
+| `.config/claude/skills/ari-skill-update/lib/claim.zsh` | one driver per skill across sessions | `claim.test.zsh` (72) | no | covered |
+
+## Claude Code hooks, git, Karabiner, AltTab, new-machine and bash scripts
+
+| Path | Work | Tests today | Nix? | Verdict |
+|---|---|---|---|---|
+| `.config/claude/bin/initialize.sh` | install terminal-notifier; write the Notification, Stop and PreToolUse hooks into `~/.claude/settings.json` | `test_step_misc.sh` (119) runs a fixture stand-in, not this file | no | needs a suite: it edits `~/.claude/settings.json`; a temp HOME makes it cheap |
+| `.config/claude/bin/notification-fire.sh` | Notification hook to a macOS notification (24 lines) | none; `test_step_misc.sh` (119) checks only that it is wired | no | no test needed: the work is `notification-lib.sh`'s |
+| `.config/claude/bin/stop-fire.sh` | the same notification at the end of a turn (20 lines) | none; `test_step_misc.sh` (119) checks only that it is wired | no | no test needed: the work is `notification-lib.sh`'s |
+| `.config/claude/bin/notification-click-handler.sh` | on a click: activate Terminal, jump tmux to the pane | none | no | no test needed: UI |
+| `.config/claude/bin/notification-click-simulator.sh` | click the latest notification by hand | none | no | no test needed: a manual test tool |
+| `.config/claude/bin/notification-fire-simulator.sh` | fire a notification with a chosen target | none | no | no test needed: a manual test tool |
+| `.config/claude/bin/notification-style.sh` | explain terminal-notifier's alert style here | none | no | no test needed: a diagnostic |
+| `.config/claude/bin/pretooluse-headless-chrome-guard.sh` | PreToolUse hook: refuse a headless launch of Chrome.app | none; `test_step_misc.sh` (119) checks only that it is wired | no | needs a suite: a guard, JSON in and an exit code out (S) |
+| `.config/claude/bin/pretooluse-pbcopy-guard.sh` | link to `ari-driving-tmux/bin/pretooluse_bash_pbcopy_guard.sh` | `copy.test.zsh` (38) | no | covered: see that row |
+| `.config/claude/bin/quickchat.sh` | print a random quickchat line | none | no | no test needed: one random line |
+| `.config/claude/lib/notification-lib.sh` | the notification scripts' implementation: resolve the message, record and jump to the tmux target, post, dismiss (191 lines) | none | no | needs a suite for the message and pane resolution against a fake terminal-notifier and tmux |
+| `.config/claude/lib/tmux-pane.sh` | tmux pane helpers: the opt-in gate, refusal kinds, the pane lock (254 lines) | `tmux-pane-lib.test.zsh` (22) on `$XDG_CONFIG_HOME`'s copy, `run-refusal-kind` (123), `run-typed-text` (57) | placed (ari-zshlib) | covered |
+| `.config/git/bin/git-dotfiles` | the `git df` alias: pick the clone or the bare repo, map `$HOME` paths | `test_git_dotfiles.sh` (7) | placed (git-kit) | covered |
+| `.config/git/dotfiles-hooks/pre-commit` | shared tier: `karabiner.json` sorted, a staged `flake.lock` locks each dev repo at a commit on its `origin/main` | `test_push_summary.sh` (49) runs it on one allowed bump commit | no | needs cases for its two refusals (S) |
+| `.config/git/local-dotfiles-hooks/pre-commit` | local tier: refuse secret paths and credential-shaped content | none | no | needs a suite: it is the secret gate |
+| `.config/git/local-dotfiles-hooks/pre-push` | local tier: run the exoskeleton's suite when a push touches its private plugins | none | no | no test needed: a pass-through to `exo`'s checks |
+| `.config/git/template/hooks/pre-commit` | every new repo: prompt on files with trailing whitespace | none | no | no test needed: an interactive prompt |
+| `.config/git/template/hooks/prepare-commit-msg` | every new repo: branch prefix and a history summary in the message | none | no | no test needed: a message template read by eye |
+| `.config/karabiner/bin/bake` | compile karabiner.ts into `karabiner.json` and `raycast_bindings.json`, sort, stage | none | no | no test needed: a wrapper over the compiler; its staged diff is reviewed before a commit |
+| `.config/karabiner/bin/healthcheck` | Karabiner's processes, config, device grab, daemon link, log errors; read-only (378 lines) | `test_step_progress.sh` (54) renders its path only | no | no test needed: it reads live daemon state |
+| `.config/karabiner/karabiner.ts/src/scripts/bin/notif-click` | Hyper+N: jump to a waiting notification | none | no | no test needed: UI |
+| `.config/karabiner/karabiner.ts/src/scripts/bin/oneshot-popup` | Hyper+O: the tmux-oneshot picker as a popup | none | no | no test needed: UI |
+| `.config/karabiner/karabiner.ts/src/scripts/bin/set-fda-perms` | stage a Full Disk Access grant: copy the path, reveal it, open the settings pane | none | no | no test needed: UI; the grant itself is by hand |
+| `.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-logs` | pick a Karabiner log with fzf | none | no | no test needed: an fzf picker |
+| `.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-recompile` | re-run `bake` | none | no | no test needed: one call |
+| `.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-edit-index` | open `index.ts` in a tmux window | none | no | no test needed: one call |
+| `.config/karabiner/karabiner.ts/src/scripts/bin/karabiner-hello-world` | echo in a tmux window | none | no | no test needed: an example |
+| `.config/karabiner/karabiner.ts/src/scripts/bin/script-example` | print the environment a key script gets | none | no | no test needed: an example |
+| `.config/alttab/bin/alttab-free-cert` | make and trust a local code-signing identity (375 lines) | none | no | no test needed: it works on the login keychain and its trust settings (`security`) |
+| `.config/new-machine/bin/bootstrap.sh` | fresh Mac to the dotfiles baseline | `test_bootstrap.sh` (37) | placed (dotfiles-cli) | covered |
+| `.config/bash/plugins/arg.bash` | check that variables are set (90 lines) | none | placed (ari-zshlib) | no test needed: presence checks |
+| `.config/bash/plugins/log.bash` | a minimal bash log library and `run_cmd` (76 lines) | none | placed (ari-zshlib) | no test needed: echo wrappers |
+
+`.config/alttab/bin/alttab-free-build` and `karabiner.ts/src/scripts/bin/karabiner-typing-test` have
+their rows under `~/.config/bin`, through the links there.
+
 ## nvim Lua
 
 `steps/neovim.zsh` starts nvim headless with the whole config and fails on any load error; that
@@ -331,39 +410,39 @@ is the only test of the config files, and it is enough for files that only set o
 
 | Path | Work | Tests today | Nix? | Verdict |
 |---|---|---|---|---|
-| `.config/nvim/lua/ari/gitsigns/pr_parsers.lua` | PR number from a commit subject | `pr_parsers_spec.lua` (15/15) | no | covered |
-| `.config/nvim/lua/ari/gitsigns/pr_openers.lua` | which opener takes a PR | none | no | needs a suite: fold into `pr_parsers_spec.lua` |
-| `.config/nvim/lua/ari/gitsigns/open_relevant_pr.lua` | blame popup, then open the PR | none | no | no test needed: UI over the two modules above |
-| `.config/nvim/lua/ari/color/init.lua` | hex parse, grey test, adjust | none | no | needs a suite: pure colour math, runs under plain `lua` |
-| `.config/nvim/lua/ari/color/ize.lua` | greyscale and colourize modes | none | no | needs a suite: pure, with `color/init.lua` |
-| `.config/nvim/lua/ari/color/theme.lua` | set highlight groups from the colour helpers | none | no | no test needed: applies highlights; the math it calls is in `color/init.lua` |
-| `.config/nvim/lua/ari/gitsigns/init.lua` | gitsigns setup and keys | none | no | no test needed: configuration |
-| `.config/nvim/lua/ari/operator/tf.lua` | Terraform box-comment operator: wrap and box a paragraph | none | no | needs a suite: `wrap_paragraph` is pure |
-| `.config/nvim/lua/ari/claude_slash.lua` | probe Claude Code for slash commands, cache per binary | none | no | needs a suite for the cache key and parse; the probe needs the binary |
-| `.config/nvim/after/plugin/modes/search.lua` | lgrep and the search register | none (it carries a TODO for tests) | no | needs a suite: the escaping it plans is pure |
-| `.config/nvim/lua/ari/yaml_utils.lua` | YAML key path at the cursor | none | no | needs a suite under `nvim -l` with a buffer: treesitter-dependent |
-| `.config/nvim/lua/ari/jq-playground/init.lua` | jq playground buffers | none | no | no test needed: UI |
-| `.config/nvim/lua/ari/snacks/init.lua` | picker definitions | none | no | no test needed: configuration of a plugin |
-| `.config/nvim/lua/ari/hydra` | hydra heads and git preview | none | no | no test needed: key bindings |
-| `.config/nvim/lua/ari/operator/init.lua` | make a custom operator | none | no | no test needed: glue to `operatorfunc` |
-| `.config/nvim/lua/ari/cmp` | completion source | none | no | no test needed: plugin glue |
-| `.config/nvim/lua/ari/luasnip` | snippets | none | no | no test needed: data |
-| `.config/nvim/lua/ari/dap/delve.lua` | delve config | none | no | no test needed: configuration |
-| `.config/nvim/lua/ari/keymap.lua` | keymap helper | none | no | no test needed: a wrapper over `vim.keymap.set` |
-| `.config/nvim/lua/ari/options.lua` | options | none | no | no test needed: configuration |
-| `.config/nvim/lua/ari/lsp.lua` | enable every `lsp/` config | none | no | no test needed: configuration |
-| `.config/nvim/lua/ari/mason.lua` | install a Mason package when missing | none | no | no test needed: one call |
-| `.config/nvim/lua/ari/lazydev.lua` | lazydev setup | none | no | no test needed: configuration |
-| `.config/nvim/after/plugin/modes/quickfix.lua` | quickfix navigation | none | no | no test needed: key bindings |
-| `.config/nvim/after/plugin/whitespace.lua` | trailing-whitespace search | none | no | no test needed: key bindings |
-| `.config/nvim/after/plugin/developer.lua` | edit nvim files | none | no | no test needed: commands that open files |
-| `.config/nvim/after/plugin/inspection/scratch.lua` | scratch buffers | none | no | no test needed: UI |
+| `.config/nvim/lua/ari/gitsigns/pr_parsers.lua` | PR number from a commit subject | `pr_parsers_spec.lua` (15/15) | placed (nvim.nix) | covered |
+| `.config/nvim/lua/ari/gitsigns/pr_openers.lua` | which opener takes a PR | none | placed (nvim.nix) | needs a suite: fold into `pr_parsers_spec.lua` |
+| `.config/nvim/lua/ari/gitsigns/open_relevant_pr.lua` | blame popup, then open the PR | none | placed (nvim.nix) | no test needed: UI over the two modules above |
+| `.config/nvim/lua/ari/color/init.lua` | hex parse, grey test, adjust | none | placed (nvim.nix) | needs a suite: pure colour math, runs under plain `lua` |
+| `.config/nvim/lua/ari/color/ize.lua` | greyscale and colourize modes | none | placed (nvim.nix) | needs a suite: pure, with `color/init.lua` |
+| `.config/nvim/lua/ari/color/theme.lua` | set highlight groups from the colour helpers | none | placed (nvim.nix) | no test needed: applies highlights; the math it calls is in `color/init.lua` |
+| `.config/nvim/lua/ari/gitsigns/init.lua` | gitsigns setup and keys | none | placed (nvim.nix) | no test needed: configuration |
+| `.config/nvim/lua/ari/operator/tf.lua` | Terraform box-comment operator: wrap and box a paragraph | none | placed (nvim.nix) | needs a suite: `wrap_paragraph` is pure |
+| `.config/nvim/lua/ari/claude_slash.lua` | probe Claude Code for slash commands, cache per binary | none | placed (nvim.nix) | needs a suite for the cache key and parse; the probe needs the binary |
+| `.config/nvim/after/plugin/modes/search.lua` | lgrep and the search register | none (it carries a TODO for tests) | placed (nvim.nix) | needs a suite: the escaping it plans is pure |
+| `.config/nvim/lua/ari/yaml_utils.lua` | YAML key path at the cursor | none | placed (nvim.nix) | needs a suite under `nvim -l` with a buffer: treesitter-dependent |
+| `.config/nvim/lua/ari/jq-playground/init.lua` | jq playground buffers | none | placed (nvim.nix) | no test needed: UI |
+| `.config/nvim/lua/ari/snacks/init.lua` | picker definitions | none | placed (nvim.nix) | no test needed: configuration of a plugin |
+| `.config/nvim/lua/ari/hydra` | hydra heads and git preview | none | placed (nvim.nix) | no test needed: key bindings |
+| `.config/nvim/lua/ari/operator/init.lua` | make a custom operator | none | placed (nvim.nix) | no test needed: glue to `operatorfunc` |
+| `.config/nvim/lua/ari/cmp` | completion source | none | placed (nvim.nix) | no test needed: plugin glue |
+| `.config/nvim/lua/ari/luasnip` | snippets | none | placed (nvim.nix) | no test needed: data |
+| `.config/nvim/lua/ari/dap/delve.lua` | delve config | none | placed (nvim.nix) | no test needed: configuration |
+| `.config/nvim/lua/ari/keymap.lua` | keymap helper | none | placed (nvim.nix) | no test needed: a wrapper over `vim.keymap.set` |
+| `.config/nvim/lua/ari/options.lua` | options | none | placed (nvim.nix) | no test needed: configuration |
+| `.config/nvim/lua/ari/lsp.lua` | enable every `lsp/` config | none | placed (nvim.nix) | no test needed: configuration |
+| `.config/nvim/lua/ari/mason.lua` | install a Mason package when missing | none | placed (nvim.nix) | no test needed: one call |
+| `.config/nvim/lua/ari/lazydev.lua` | lazydev setup | none | placed (nvim.nix) | no test needed: configuration |
+| `.config/nvim/after/plugin/modes/quickfix.lua` | quickfix navigation | none | placed (nvim.nix) | no test needed: key bindings |
+| `.config/nvim/after/plugin/whitespace.lua` | trailing-whitespace search | none | placed (nvim.nix) | no test needed: key bindings |
+| `.config/nvim/after/plugin/developer.lua` | edit nvim files | none | placed (nvim.nix) | no test needed: commands that open files |
+| `.config/nvim/after/plugin/inspection/scratch.lua` | scratch buffers | none | placed (nvim.nix) | no test needed: UI |
 | `.config/nvim/after/plugin` (the rest) | buffers, doublemap, lsp, modes, textwidth | none | no | no test needed: key bindings and options |
-| `.config/nvim/plugin` | lazy plugin specs | none | owns nvim itself (the plugins are lazy.nvim's) | no test needed: declarative specs |
-| `.config/nvim/after/ftplugin` | per-filetype options | none | no | no test needed: options |
-| `.config/nvim/after/ftdetect` | filetype detection | none | no | no test needed: patterns |
-| `.config/nvim/lsp` | LSP server configs | none | no | no test needed: data |
-| `.config/nvim/init.lua` | load the config | none | no | no test needed: three lines |
+| `.config/nvim/plugin` | plugin setup | none | owns (nvim.nix places the config and the pinned plugins) | no test needed: declarative specs |
+| `.config/nvim/after/ftplugin` | per-filetype options | none | placed (nvim.nix) | no test needed: options |
+| `.config/nvim/after/ftdetect` | filetype detection | none | placed (nvim.nix) | no test needed: patterns |
+| `.config/nvim/lsp` | LSP server configs | none | placed (nvim.nix) | no test needed: data |
+| `.config/nvim/init.lua` | load the config | none | placed (nvim.nix) | no test needed: three lines |
 
 ## Suites most worth writing next
 
@@ -388,5 +467,4 @@ less; M is a day or so.
 10. **pure helpers: `colors.zsh`, `utc.zsh`, `str.zsh`, `.zshrc`'s `prepend_to_path`, and nvim's
     `color/` and `operator/tf.lua`** — S each. Cheap, and they turn the plugin count down fast.
 
-Before any of these: fix `cmd/push.zsh:40`, whose help text runs `ssh -T git@github.com`, and
-find why `test_test_edit.sh` and `raycast.test.zsh` fail (see **Suites that failed in this run**).
+Before any of these: find why `raycast.test.zsh` fails (see **Suites that failed in this run**).
