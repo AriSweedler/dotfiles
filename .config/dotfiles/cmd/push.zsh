@@ -7,15 +7,16 @@ verb::usage push 'push [--submodules] [--shared] [--local] [--dry-run]' \
 verb::about push <<'EOF'
 Pushes every submodule with something to push, in parallel (one log each),
 commits the shared tier's pointer bumps, then pushes the shared tier, all as
-${ARI_DOTFILES_GITHUB_LOGIN} by its gh token; the local tier alongside, to its own remote
-with the ssh agent's key (its pre-push hook included). Repos already at
+${ARI_DOTFILES_GITHUB_LOGIN}: over ssh to a GitHub ssh origin when 'ssh -T git@github.com'
+names that login, else over https by its gh token; the local tier alongside, to its own
+remote with the ssh agent's key (its pre-push hook included). Repos already at
 origin are skipped silently; a submodule failure blocks the shared push.
 A mirror (a [mirror] in $(help::tilde "${DEV_REPOS}")) is exported
 first, its package built from the shared HEAD and committed in its checkout
 when a watched path changed, then pushed with the submodules.
 Logs: $(help::tilde "${LOG_DIR}")/<repo>.log ('dotfiles logs'). Once per
-machine: env -u GITHUB_TOKEN gh auth login. Human-only: Claude Code is denied
-'dotfiles push'.
+machine, unless every origin goes over ssh: env -u GITHUB_TOKEN gh auth login.
+Human-only: Claude Code is denied 'dotfiles push'.
 
 --edit writes one 'skip  <repo>  # <sha>' line per repo in scope with
 something to push, under the commits it would push and the pointer bumps, to
@@ -35,7 +36,7 @@ verb::flag push '--no-submodules' 'leave the submodules out' --for 'push, edit'
 verb::flag push '--no-shared' 'leave the shared tier out' --for 'push, edit'
 verb::flag push '--no-local' 'leave the local tier out' --for 'push, edit'
 verb::flag push '--dry-run' 'the would-push lines, no network (edit: for the repos the plan chose)' --for 'push, edit'
-verb::env push ARI_DOTFILES_GITHUB_LOGIN 'the GitHub account every personal push authenticates as, by its gh token' '${ARI_DOTFILES_GITHUB_LOGIN}'
+verb::env push ARI_DOTFILES_GITHUB_LOGIN 'the GitHub account every personal push authenticates as, by ssh or by its gh token' '${ARI_DOTFILES_GITHUB_LOGIN}'
 
 plan::define push --actions 'push|skip' --item repo
 
@@ -63,12 +64,40 @@ load_token() {
 }
 
 #######################################
-# Where a repo's push goes: sets branch, sha and url in the caller's scope (zsh dynamic
-# scoping). Personal repos push by token, so their origin goes over https; the local tier
-# keeps its origin as is. Returns 1 with the reason logged.
+# Who `ssh -T git@github.com` authenticates as. Sets SSH_LOGIN to the login, or '-' when ssh
+# names none (no key, no ssh, no network). GitHub answers 'Hi <login>! You've successfully
+# authenticated' and exits 1, so the verdict is the answer, never the exit code. Runs once, before
+# the first push to an ssh origin; that answer is the identity check the ssh path rests on, as the
+# token's is for https.
+#######################################
+load_ssh_login() {
+  local out pattern='Hi ([^![:space:]]+)!'
+  out="$(ssh -T -o BatchMode=yes -o ConnectTimeout=5 git@github.com </dev/null 2>&1 || true)"
+  SSH_LOGIN=-
+  if [[ "${out}" =~ ${pattern} ]]; then SSH_LOGIN="${match[1]}"; fi
+  if [[ "${SSH_LOGIN}" == "${ARI_DOTFILES_GITHUB_LOGIN}" ]]; then
+    log::info "pushing ssh origins over ssh | login='${ARI_DOTFILES_GITHUB_LOGIN}' identity='ssh -T git@github.com'"
+    return 0
+  fi
+  log::info "ssh does not authenticate as the login; ssh origins push by token | login='${ARI_DOTFILES_GITHUB_LOGIN}' ssh_login='${SSH_LOGIN}'"
+}
+
+# The url `git push origin` would use: a pushurl when set, insteadOf and pushInsteadOf applied.
+origin_push_url() { repo_git "${1}" remote get-url --push origin 2>/dev/null; }
+
+# True (0) when a URL is GitHub over ssh.
+is_ssh_github_url() { [[ "${1}" == git@github.com:* || "${1}" == ssh://git@github.com/* ]]; }
+
+#######################################
+# Where a repo's push goes: sets branch, sha, url and transport in the caller's scope (zsh
+# dynamic scoping). transport is 'local' for the local tier (origin as is). It is 'ssh' when
+# origin's push url, rewrites applied, is GitHub over ssh and ssh authenticates as the login:
+# url is that push url, pushed with no credential helper. Else it is 'token': origin's url goes
+# over https, by token. Before load_ssh_login has run (a dry run) an ssh push url gives
+# transport 'ssh or token'. Returns 1 with the reason logged.
 #######################################
 push_target() {
-  local repo="${1}" remote_url fix="git -C ~/${1} switch main   (/ari-dotfiles § Dev repos step 1)"
+  local repo="${1}" remote_url push_url fix="git -C ~/${1} switch main   (/ari-dotfiles § Dev repos step 1)"
   [[ -z "${TIER_ALIAS[${repo}]:-}" ]] || fix="git ${TIER_ALIAS[${repo}]} switch main"
   branch="$(repo_git "${repo}" branch --show-current 2>/dev/null || true)"
   if [[ -z "${branch}" ]]; then log::err "Detached HEAD: nothing to push | repo='${repo}' fix='${fix}'"; return 1; fi
@@ -76,8 +105,13 @@ push_target() {
     log::err "No such remote | repo='${repo}' remote='origin' remotes='$(repo_git "${repo}" remote | tr '\n' ' ')'"; return 1
   fi
   sha="$(repo_git "${repo}" rev-parse "refs/heads/${branch}")"
-  url="${remote_url}"
-  [[ "${repo}" != local ]] || return 0
+  url="${remote_url}"; transport=token
+  if [[ "${repo}" == local ]]; then transport=local; return 0; fi
+  push_url="$(origin_push_url "${repo}")"
+  if is_ssh_github_url "${push_url}"; then
+    if [[ "${SSH_LOGIN}" == "${ARI_DOTFILES_GITHUB_LOGIN}" ]]; then url="${push_url}"; transport=ssh; return 0; fi
+    if [[ -z "${SSH_LOGIN}" ]]; then url="${push_url}"; transport="ssh or token"; return 0; fi
+  fi
   case "${remote_url}" in
     https://github.com/*)   ;;
     git@github.com:*)       url="https://github.com/${remote_url#git@github.com:}" ;;
@@ -89,22 +123,22 @@ push_target() {
 #######################################
 # Push one repo's current branch; everything on stdout, which push_begin sends to the
 # repo's log. One round trip: git's --porcelain verdict for the ref confirms the push (no
-# ls-remote). Personal repos go to their https URL with a one-shot credential helper
-# answering with the login's token (in the environment, never argv), and origin/<branch>
-# is set to the pushed sha (no fetch) so hooks and is_push_needed see it; the local tier goes
-# to origin as configured and git refreshes its tracking ref itself.
+# ls-remote). By transport (push_target): 'token' goes to the https URL with a one-shot
+# credential helper answering with the login's token (in the environment, never argv), and
+# origin/<branch> is set to the pushed sha (no fetch) so hooks and is_push_needed see it;
+# 'ssh' and 'local' go to origin as configured, and git refreshes the tracking ref itself.
 #######################################
 push_repo() {
-  local repo="${1}" branch sha url refspec out flag dest actor="${ARI_DOTFILES_GITHUB_LOGIN}"
+  local repo="${1}" branch sha url transport refspec out flag dest actor="${ARI_DOTFILES_GITHUB_LOGIN}"
   local -a auth=(-c credential.helper= -c 'credential.helper=!f() { echo "username=${ARI_DOTFILES_PUSH_LOGIN}"; echo "password=${ARI_DOTFILES_PUSH_TOKEN}"; }; f')
   print -r -- "# $(date -u +%FT%TZ) dotfiles push -> ${repo}"
   push_target "${repo}" || return 1
   refspec="refs/heads/${branch}:refs/heads/${branch}"; dest="${url}"
-  if [[ "${repo}" == local ]]; then
-    dest=origin; actor="the ssh agent's key"; auth=()
-  else
-    local -x ARI_DOTFILES_PUSH_LOGIN="${ARI_DOTFILES_GITHUB_LOGIN}" ARI_DOTFILES_PUSH_TOKEN="${TOKEN}"   # what the helper answers; git's environment, never argv
-  fi
+  case "${transport}" in
+    local) dest=origin; actor="the ssh agent's key"; auth=() ;;
+    ssh)   dest=origin; actor="${ARI_DOTFILES_GITHUB_LOGIN} by ssh"; auth=() ;;
+    *)     local -x ARI_DOTFILES_PUSH_LOGIN="${ARI_DOTFILES_GITHUB_LOGIN}" ARI_DOTFILES_PUSH_TOKEN="${TOKEN}" ;;   # what the helper answers; git's environment, never argv
+  esac
   log::info "Pushing | repo='${repo}' branch='${branch}' sha='${sha:0:7}' url='${url}' as='${actor}' head_author='$(repo_git "${repo}" log -1 --format='%an <%ae>' "${sha}")'"
   if ! out="$(repo_git "${repo}" "${auth[@]}" push --porcelain "${dest}" "${refspec}" 2>&1)"; then
     print -r -- "${out}"
@@ -118,7 +152,7 @@ push_repo() {
     '=')     log::info "Already there | repo='${repo}' branch='${branch}' sha='${sha:0:7}'" ;;
     *)       log::err "Remote ref does not match after push | repo='${repo}' branch='${branch}' flag='${flag:-none}'"; return 1 ;;
   esac
-  [[ "${repo}" == local ]] || repo_git "${repo}" update-ref "refs/remotes/origin/${branch}" "${sha}"
+  [[ "${transport}" != token ]] || repo_git "${repo}" update-ref "refs/remotes/origin/${branch}" "${sha}"
   log::info "Pushed | ${branch}@${sha:0:7} -> ${url}"
 }
 
@@ -136,19 +170,33 @@ is_push_needed() {
 }
 
 #######################################
+# True (0) when a personal repo pushes by token: its origin is not GitHub over ssh, or ssh does
+# not authenticate as the login. Asks ssh once per run (load_ssh_login), on the first ssh origin.
+#######################################
+push_needs_token() {
+  local remote_url
+  remote_url="$(origin_push_url "${1}")" || return 0
+  is_ssh_github_url "${remote_url}" || return 0
+  [[ -n "${SSH_LOGIN}" ]] || slow=5 step ssh_identity load_ssh_login
+  [[ "${SSH_LOGIN}" != "${ARI_DOTFILES_GITHUB_LOGIN}" ]]
+}
+
+#######################################
 # Start a repo's push. Under --dry-run: the would-push line, no network. Else: the token
-# (once; personal repos only), the rotated log, and push_repo in the background, recorded
+# (once; personal repos that push by token only), the rotated log, and push_repo in the background, recorded
 # in PIDS/STARTS for push_wait. Returns 1 with the reason logged.
 #######################################
 push_begin() {
-  local repo="${1}" branch sha url logfile
+  local repo="${1}" branch sha url transport logfile
   logfile="$(log_file "${repo}")"
   if is_dry_run; then
     if ! push_target "${repo}"; then push::record "${repo}" failed; return 1; fi
-    log::info "dry-run, would push | repo='${repo}' branch='${branch}' sha='${sha:0:7}' url='${url}' log='${logfile}'"
+    log::info "dry-run, would push | repo='${repo}' branch='${branch}' sha='${sha:0:7}' url='${url}' transport='${transport}' log='${logfile}'"
     push::record "${repo}" "would push" "${sha}"; return 0
   fi
-  if [[ "${repo}" != local && -z "${TOKEN}" ]]; then
+  if [[ "${repo}" != local ]] && ! push_needs_token "${repo}"; then
+    log::info "ssh origin, no token needed | repo='${repo}' login='${SSH_LOGIN}'"
+  elif [[ "${repo}" != local && -z "${TOKEN}" ]]; then
     step token load_token || { push::record "${repo}" "failed (token)"; return 1; }
   fi
   log_rotate "${logfile}" "${KEEP_BACKUPS}"

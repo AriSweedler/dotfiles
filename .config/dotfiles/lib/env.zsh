@@ -291,4 +291,5 @@ typeset -g GIT_TIER=shared          # git / --dir act on one tier; --local picks
 typeset -g TIMING=false
 typeset -ga PUSH_SCOPE=("${PUSH_PARTS[@]}")   # narrowed by push's --<part>, then --no-<part>
 typeset -g TOKEN=""              # the login's gh token, loaded before the first personal push; inherited by the background pushes
+typeset -g SSH_LOGIN=""          # whom ssh -T git@github.com authenticates as ('-' = none), asked before the first push to an ssh origin
 typeset -gA PIDS=() STARTS=()    # background pushes in flight, by repo
