@@ -37,7 +37,7 @@ verb::flag push '--no-shared' 'leave the shared tier out' --for 'push, edit'
 verb::flag push '--no-local' 'leave the local tier out' --for 'push, edit'
 verb::flag push '--dry-run' 'the would-push lines, no network (edit: for the repos the plan chose)' --for 'push, edit'
 verb::env push ARI_DOTFILES_GITHUB_LOGIN 'the GitHub account every personal push authenticates as, by ssh or by its gh token' '${ARI_DOTFILES_GITHUB_LOGIN}'
-verb::env push ARI_DOTFILES_SSH_PROBE_TIMEOUT_SECS 'seconds `ssh -T git@github.com` may run before it is killed and ssh origins push by token' '${ARI_DOTFILES_SSH_PROBE_TIMEOUT_SECS}'
+verb::env push ARI_DOTFILES_SSH_PROBE_TIMEOUT_SECS "seconds 'ssh -T git@github.com' may run before it is killed and ssh origins push by token" '${ARI_DOTFILES_SSH_PROBE_TIMEOUT_SECS}'
 
 plan::define push --actions 'push|skip' --item repo
 
