@@ -29,6 +29,8 @@ audit, kept in the local tier.
   ours); `owns` (the work itself is Nix's: installs, linking, launchd). `dotfiles-cli` copies
   `lib`, `cmd`, `steps`, `new-machine` and every zsh plugin but the `*.test.zsh` files
   (`nix/pkgs/dotfiles-cli/default.nix`), so every row for those carries `placed (dotfiles-cli)`.
+  `placed (mac-utils)` holds on macOS only: `ari-bins.nix` installs mac-utils when `isDarwin`, so
+  on a Linux machine the clone's copies of those files run.
 - **Verdict** is one of `covered`, `needs a suite`, or `no test needed`, with the reason.
 
 How the counts were produced: every `tests/test_*.sh` with `bash`, every
@@ -437,7 +439,7 @@ is the only test of the config files, and it is enough for files that only set o
 | `.config/nvim/after/plugin/whitespace.lua` | trailing-whitespace search | none | placed (nvim.nix) | no test needed: key bindings |
 | `.config/nvim/after/plugin/developer.lua` | edit nvim files | none | placed (nvim.nix) | no test needed: commands that open files |
 | `.config/nvim/after/plugin/inspection/scratch.lua` | scratch buffers | none | placed (nvim.nix) | no test needed: UI |
-| `.config/nvim/after/plugin` (the rest) | buffers, doublemap, lsp, modes, textwidth | none | no | no test needed: key bindings and options |
+| `.config/nvim/after/plugin` (the rest) | buffers, doublemap, lsp, modes, textwidth | none | placed (nvim.nix) | no test needed: key bindings and options |
 | `.config/nvim/plugin` | plugin setup | none | owns (nvim.nix places the config and the pinned plugins) | no test needed: declarative specs |
 | `.config/nvim/after/ftplugin` | per-filetype options | none | placed (nvim.nix) | no test needed: options |
 | `.config/nvim/after/ftdetect` | filetype detection | none | placed (nvim.nix) | no test needed: patterns |
