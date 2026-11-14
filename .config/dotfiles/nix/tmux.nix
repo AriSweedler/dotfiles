@@ -59,6 +59,10 @@ in
         # Clipboard history off a Mac, where Hyper+4 opens Raycast's: the keyboard remapper sends
         # <Prefix>M-4, and clip-hist (pkgs/linux-clipboard) pastes the pick into the pane it came from.
         bind-key M-4 run-shell "tmux display-popup -E -T ' clipboard ' -b rounded -w 80% -h 60% 'clip-hist --paste-to #{pane_id}'"
+
+        # pbcopy and xclip (pkgs/linux-clipboard) wrap their OSC 52 escape in tmux's passthrough,
+        # so a copy made in a pane over ssh reaches the clipboard of the Mac the ssh came from.
+        set -g allow-passthrough on
       ''}
 
       if-shell 'test -f ${typhonDev}' 'run-shell ${typhonDev}' 'run-shell ${typhon.rtp}'
