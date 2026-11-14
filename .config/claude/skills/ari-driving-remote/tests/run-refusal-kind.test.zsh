@@ -3,7 +3,9 @@
 # one kind per gate reason, and its exit code follows from the kind; no other exit prints one. The REFUSED:
 # words are checked too, for the callers that still read them. The real tmux-pane lib runs under the local
 # definition (and once over a fake ssh) against a fake tmux on PATH whose pane state each case sets; every
-# kind the lib gate can give is checked against --help; the lib, not run.zsh, decides each kind.
+# kind the lib gate can give is checked against --help; the lib, not run.zsh, decides each kind. --refusal-kinds
+# prints exactly run.zsh's KIND_* constants and the lib's gate kinds, one per row of SKILL.md's gate table; it runs no
+# tmux or ssh, writes nothing, and prints nothing beside another argument or a broken lib.
 # No tmux server, no ssh, no network.
 # Run: zsh $HOME/.claude/skills/ari-driving-remote/tests/run-refusal-kind.test.zsh
 
@@ -94,7 +96,9 @@ line_count() {   # <pattern>: how many lines of $out match it
   print -r -- "${#matched}"
 }
 
+typeset -a seen_kinds=()   # every kind a case below made run.zsh print, for the --refusal-kinds check
 expect_kind() {   # <case> <exit code> <kind> <words the REFUSED: line keeps>
+  seen_kinds+=("${3}")
   check "${1}: exits ${2}" "${2}" "${rc}"
   check "${1}: the line after REFUSED: is the kind" "REFUSED_KIND: ${3}" "$(line_after_refused)"
   check "${1}: one REFUSED_KIND line" 1 "$(line_count 'REFUSED_KIND: *')"
@@ -188,6 +192,72 @@ for kind in "${kinds[@]}"; do
 done
 contains "--help names the kind 'lock_unavailable'" lock_unavailable "${help_text}"
 lacks "run.zsh keeps no reason-to-kind table" GATE_REASON_KINDS "$(<"${RUN_ZSH}")"
+contains "--help names --refusal-kinds" "--refusal-kinds" "${help_text}"
+
+# --- --refusal-kinds: every kind, one per line, read-only ---
+# Its PATH holds a tmux and an ssh that only leave a mark, so a call to either shows; XDG dirs point at an empty tree.
+
+mkdir -p "${T}/marking-bin" "${T}/rk"
+for tool in tmux ssh; do
+  print -r -- "#!/usr/bin/env zsh"$'\n'": > ${(qq)T}/rk/${tool}-called; exit 1" > "${T}/marking-bin/${tool}"
+  chmod +x "${T}/marking-bin/${tool}"
+done
+out="$(env PATH="${T}/marking-bin:${PATH}" XDG_DATA_HOME="${T}/rk/data" XDG_STATE_HOME="${T}/rk/state" XDG_CACHE_HOME="${T}/rk/cache" LOG_COLOR=0 \
+  zsh "${RUN_ZSH}" --refusal-kinds 2>"${T}/err")"; rc=$?
+printed=(${(f)out})
+check "--refusal-kinds exits 0" 0 "${rc}"
+check "--refusal-kinds logs nothing" "" "$(<"${T}/err")"
+not_kinds=(${(M)printed:#*[^a-z_]*})
+unique=(${(u)printed})
+check "--refusal-kinds prints only kinds, one per line" 0 "${#not_kinds}"
+check "--refusal-kinds prints each kind once" "${#printed}" "${#unique}"
+check "--refusal-kinds: not_opted_in, the 77, comes first" not_opted_in "${printed[1]:-}"
+check "--refusal-kinds runs no tmux and no ssh" "" "$(ls "${T}/rk" | awk '/-called$/')"
+check "--refusal-kinds writes no definition, binding or cache" "" "$(ls "${T}/rk" | awk '!/-called$/')"
+
+# The kinds run.zsh can emit: its literal KIND_* constants (KIND_NOT_OPTED_IN is the lib's, so a '$' value is
+# skipped) and the lib's gate kinds. The printed list is exactly that set.
+own_kinds=(${(f)"$(awk '/^readonly KIND_[A-Z_]+=/ && !/\$/ { sub(/^readonly KIND_[A-Z_]+=/, ""); sub(/[ \t].*/, ""); print }' "${RUN_ZSH}")"})
+check "the KIND_* scrape of run.zsh found constants" 1 "$(( ${#own_kinds} > 0 ))"
+emitted=("${own_kinds[@]}" "${kinds[@]}")
+check "--refusal-kinds is exactly run.zsh's KIND_* constants and the lib's gate kinds" \
+  "${(j: :)${(@ou)emitted}}" "${(j: :)${(@o)printed}}"
+for kind in ${(u)seen_kinds}; do
+  check "--refusal-kinds lists '${kind}', which a case above made run.zsh print" 1 "$(( ${printed[(Ie)${kind}]} > 0 ))"
+done
+for kind in "${printed[@]}"; do
+  contains "--help names '${kind}', which --refusal-kinds prints" "${kind}" "${help_text}"
+done
+
+out="$(env -i HOME="${HOME}" PATH="${T}/marking-bin:/usr/bin:/bin" zsh "${RUN_ZSH}" --refusal-kinds 2>"${T}/err")"; rc=$?
+check "--refusal-kinds under env -i exits 0 with the same list" "0 ${(j: :)printed}" "${rc} ${(j: :)${(f)out}}"
+
+# SKILL.md's gate table holds one row per kind: a kind without a row leaves Claude with no next action.
+table_kinds=(${(f)"$(awk -F'|' '/^### The gate/ { on = 1; next } on && /^### / { on = 0 } on && $2 ~ /^ `[a-z_]+` $/ && $3 ~ /^ 7[57] $/ { gsub(/[ `]/, "", $2); print $2 }' "${SCRIPT_DIR:h}/SKILL.md")"})
+check "SKILL.md's gate table has one row per --refusal-kinds kind" "${(j: :)${(@o)printed}}" "${(j: :)${(@o)table_kinds}}"
+
+# Another argument is refused, in either order, with nothing on stdout: a stray --cmd is never dropped with exit 0.
+for order in "--refusal-kinds --execute" "--execute --refusal-kinds" "--cmd x --refusal-kinds"; do
+  out="$(env PATH="${T}/marking-bin:${PATH}" XDG_DATA_HOME="${T}/rk/data" XDG_STATE_HOME="${T}/rk/state" XDG_CACHE_HOME="${T}/rk/cache" LOG_COLOR=0 \
+    zsh "${RUN_ZSH}" ${=order} 2>"${T}/err")"; rc=$?
+  check "'${order}' exits 1" 1 "${rc}"
+  check "'${order}' prints nothing on stdout" "" "${out}"
+done
+
+# A tmux-pane.sh that lost its gate kinds, or holds a malformed one: a non-zero exit and nothing on stdout, never part of a list.
+mkdir -p "${T}/xdg-missing/claude/lib" "${T}/xdg-bad/claude/lib"
+for lib_case in missing bad; do   # the logging lib loads its plugins from the same XDG_CONFIG_HOME
+  ln -s "${XDG_CONFIG_HOME:-${HOME}/.config}/zsh" "${T}/xdg-${lib_case}/zsh"
+done
+awk '!/^ARI_DRIVING_GATE_KINDS=/' "${LIB_TMUX_PANE}" > "${T}/xdg-missing/claude/lib/tmux-pane.sh"
+awk '{ print } /^ARI_DRIVING_GATE_KINDS=/ { print "ARI_DRIVING_GATE_KINDS=\"$ARI_DRIVING_GATE_KINDS Bad-Kind\"" }' "${LIB_TMUX_PANE}" > "${T}/xdg-bad/claude/lib/tmux-pane.sh"
+for lib_case in missing bad; do
+  out="$(env XDG_CONFIG_HOME="${T}/xdg-${lib_case}" XDG_DATA_HOME="${T}/rk/data" XDG_STATE_HOME="${T}/rk/state" XDG_CACHE_HOME="${T}/rk/cache" LOG_COLOR=0 \
+    zsh "${RUN_ZSH}" --refusal-kinds 2>"${T}/err")"; rc=$?
+  check "a lib with ${lib_case} gate kinds: --refusal-kinds fails" 1 "$(( rc != 0 ))"
+  check "a lib with ${lib_case} gate kinds: nothing on stdout" "" "${out}"
+done
+contains "a malformed kind is named in the log" "Refusal kind list is broken" "$(<"${T}/err")"
 
 print -- "${pass} passed, ${fail} failed"
 if (( fail > 0 )); then print -u2 -- "--- run.zsh stdout and stderr of the last run:"; print -u2 -r -- "${out}"; cat "${T}/err" >&2; exit 1; fi

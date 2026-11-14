@@ -43,6 +43,7 @@ check "--help with SCRATCHPAD unset exits 0" 0 "${rc}"
 contains "--help lists --put" "--put FILE" "${out}"
 contains "--help lists --cmd" "--cmd TEXT" "${out}"
 contains "--help lists --list" "--list " "${out}"
+contains "--help lists --refusal-kinds" "--refusal-kinds " "${out}"
 check "--help with SCRATCHPAD unset prints no 'parameter not set'" "" "$(awk '/parameter not set/ { print }' "${T}/err")"
 
 run -u SCRATCHPAD -- -h

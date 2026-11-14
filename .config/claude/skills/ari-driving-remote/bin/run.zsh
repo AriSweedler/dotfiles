@@ -45,7 +45,8 @@ readonly EXIT_ENTER_FAILED=74   # the text is on the line, Enter did not reach i
 # one; callers classify by the kind, never by the REFUSED: words. The exit code follows from the kind:
 # not_opted_in is 77, every other kind 75. A held lock is other_caller, a lock that cannot be taken at all is
 # lock_unavailable; every other kind comes from the lib's tmux_pane_gate_check (ARI_DRIVING_GATE_KINDS), so a
-# reworded reason cannot change it. A kind the lib leaves empty is unknown.
+# reworded reason cannot change it. A kind the lib leaves empty is unknown. --refusal-kinds prints every kind,
+# one per line, so a caller never parses the help (refusal_kinds).
 # tests/run-refusal-kind.test.zsh puts every gate reason through the real lib.
 readonly REFUSED_KIND_PREFIX='REFUSED_KIND: '
 readonly KIND_NOT_OPTED_IN="${ARI_DRIVING_KIND_NOT_OPTED_IN}"
@@ -142,6 +143,7 @@ check_prerequisites() {
 # Script constants expand in the heredoc; every environment variable ($HOME, $SCRATCHPAD, $CLAUDE_CODE_SESSION_ID)
 # is written \$NAME, so the help is the same on every machine and set -u cannot kill it (tests/run-help.test.zsh).
 help() {
+  local busy_kinds="${(j:, :)${(f)"$(gate_busy_kinds)"}}"
   cat <<EOF
 ${c_green}run.zsh${c_rst} — type a command into a tmux pane (this machine or over ssh), wait for the shell prompt, print the pane
 
@@ -213,10 +215,13 @@ ${c_bold}Options:${c_rst}
                           get, verbatim, and types nothing; --put prints WOULD PUT; --describe and --forget log what they
                           would write or delete. --hosts, --list and --cmd '' only read and ignore it
   --dry-run               the default, said explicitly; wins over --execute and an inherited DRY_RUN other than 0
+  --refusal-kinds         print every REFUSED_KIND a refusal can carry, one per line: ${KIND_NOT_OPTED_IN} (a ${EXIT_NOT_OPTED_IN}) first,
+                          then the ${EXIT_BUSY} kinds in no promised order; nothing else on stdout. Connects nowhere, reads
+                          no definition, and takes no other argument (exit 1, nothing printed); exit 0 is the whole list
   -h, --help              show this help
 
 ${c_bold}Exit codes:${c_rst}
-  0    the shell prompt returned, or PUT: printed
+  0    the shell prompt returned, or PUT: printed, or --help or --refusal-kinds printed
   1    refused before connecting (the text check, a malformed --project or --name, an unreadable or empty FILE),
        or a --put that failed on the host (no PUT: line; the [ERROR] line says which: the path refused, no sha256
        tool, the write failed, the hash differs)
@@ -225,9 +230,10 @@ ${c_bold}Exit codes:${c_rst}
        every pane on the host is printed under the refusal, so the right one can be picked without --list
   ${EXIT_NOT_OPTED_IN}   pane not opted in (nothing typed); the line after REFUSED: is '${REFUSED_KIND_PREFIX}${KIND_NOT_OPTED_IN}'
   ${EXIT_BUSY}   pane busy (nothing typed); the line after REFUSED: is '${REFUSED_KIND_PREFIX}<kind>', one of
-       ${KIND_OTHER_CALLER}, $(gate_busy_kinds), ${KIND_NOT_ZSH} (the text spans lines and the pane's shell is not zsh),
-       ${KIND_UNKNOWN} (the lib gave no kind).
-       Only ${EXIT_NOT_OPTED_IN} and ${EXIT_BUSY} carry a kind; switch on the exit code first, then on the kind
+       ${KIND_OTHER_CALLER}, ${busy_kinds}, ${KIND_LOCK_UNAVAILABLE},
+       ${KIND_NOT_ZSH} (the text spans lines and the pane's shell is not zsh), ${KIND_UNKNOWN} (the lib gave no kind).
+       Only ${EXIT_NOT_OPTED_IN} and ${EXIT_BUSY} carry a kind; switch on the exit code first, then on the kind.
+       --refusal-kinds prints every kind, one per line: take the list from it, never from this text
   ${EXIT_BOUND_ELSEWHERE}   pane bound to another Claude session (nothing typed); get a pane of your own
   ${EXIT_PASTE_FAILED}   tmux could not paste the text; nothing is on the line; resend once
   ${EXIT_ENTER_FAILED}   the text is on the line but Enter did not reach it; Ari presses Enter or clears it
@@ -643,17 +649,50 @@ pane_tail_cmd() {
 }
 
 #######################################
-# The kinds of a 75 that the gate maps to, comma-separated, for the help: the lib's gate kinds but
-# not_opted_in (a 77), then lock_unavailable.
-# Globals: ARI_DRIVING_GATE_KINDS KIND_NOT_OPTED_IN KIND_LOCK_UNAVAILABLE
+# The kinds of a 75 that the lib's gate gives, one per line: its gate kinds but not_opted_in (a 77).
+# Globals: ARI_DRIVING_GATE_KINDS KIND_NOT_OPTED_IN
 #######################################
 gate_busy_kinds() {
   local kind
-  local -a kinds=()
   for kind in ${=ARI_DRIVING_GATE_KINDS}; do
-    [[ "${kind}" == "${KIND_NOT_OPTED_IN}" ]] || kinds+=("${kind}")
+    [[ "${kind}" == "${KIND_NOT_OPTED_IN}" ]] || print -r -- "${kind}"
   done
-  print -r -- "${(j:, :)kinds}, ${KIND_LOCK_UNAVAILABLE}"
+}
+
+#######################################
+# Every REFUSED_KIND a refusal can carry, one per line, for --refusal-kinds: not_opted_in (the 77), then the 75s
+# in the help's order. The list is checked whole before any line is printed, so a caller never reads part of it.
+# Checked against the KIND_* constants, tmux-pane.sh and SKILL.md's gate table by tests/run-refusal-kind.test.zsh.
+# Globals: KIND_*
+# Returns: 1, printing nothing, when a kind is empty or not lowercase letters and _
+#######################################
+refusal_kinds() {
+  local kind busy=""
+  local -a kinds
+  # Assigned apart from `local`, whose own status would hide a gate_busy_kinds that died on an unset variable.
+  busy="$(gate_busy_kinds 2>/dev/null)" || busy=""
+  kinds=("${KIND_NOT_OPTED_IN}" "${KIND_OTHER_CALLER}" ${(f)busy} "${KIND_LOCK_UNAVAILABLE}" "${KIND_NOT_ZSH}" "${KIND_UNKNOWN}")
+  for kind in "${kinds[@]}"; do
+    if [[ -z "${busy}" || -z "${kind}" || "${kind}" == *[^a-z_]* ]]; then
+      log::err "Refusal kind list is broken; printing none | kinds='${(j:, :)kinds}' lib='${LIB_TMUX_PANE}' hint='tmux-pane.sh lost ARI_DRIVING_KIND_NOT_OPTED_IN or ARI_DRIVING_GATE_KINDS'"
+      return 1
+    fi
+  done
+  print -rl -- "${kinds[@]}"
+}
+
+#######################################
+# --refusal-kinds: the list, only when it is the whole command line, so a stray --cmd or --execute is refused
+# rather than dropped with exit 0.
+# Arguments: every argument run.zsh was given
+# Returns: 0 with the list on stdout; 1, printing nothing, on another argument or a broken list
+#######################################
+print_refusal_kinds() {
+  if (( $# != 1 )); then
+    log::err "--refusal-kinds takes no other argument; nothing printed | args='${(j: :)@}'"
+    return 1
+  fi
+  refusal_kinds
 }
 
 #######################################
@@ -1186,9 +1225,7 @@ validate_run_args() {
 # --- Main ---
 
 main() {
-  check_prerequisites || exit 1
-
-  # === PARSE ===
+  # === PARSE ===   (--help and --refusal-kinds return here, so they need no ssh)
   local -a args=("${@}")
   local execute=false
   local name="" host="" host_set=false re_point=false target="" session="" cmd="" cmd_set=false describe="" describe_set=false
@@ -1200,6 +1237,7 @@ main() {
 
   while (( $# > 0 )); do case "${1}" in
     -h|--help)          help; return 0 ;;
+    --refusal-kinds)    print_refusal_kinds "${args[@]}"; return ;;
     --host-definition)  name="${2:?--host-definition requires a value}"; shift 2 ;;
     --host)             host="${2:?--host requires a value}"; host_set=true; shift 2 ;;
     --re-point)         re_point=true; shift ;;
@@ -1225,6 +1263,7 @@ main() {
     -*)                 log::err "Unknown flag | flag='${1}'"; help; return 1 ;;
     *)                  log::err "Unexpected argument | argument='${1}'"; help; return 1 ;;
   esac; done
+  check_prerequisites || exit 1
 
   # === MASSAGE ===
   local actions=0 flag
