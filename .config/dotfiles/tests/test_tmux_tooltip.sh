@@ -11,10 +11,15 @@ TT="${ORIG_CONFIG_DIR}/bin/tmux-tooltip"
 mkdir -p "${HOME}/.claude/skills"
 ln -s "${ORIG_CONFIG_DIR}/claude/skills/ari-skill-shellscripts" "${HOME}/.claude/skills/ari-skill-shellscripts"
 
-# A tmux that answers the client's name and width and logs each display-menu; a pbcopy that keeps what it got.
+# A tmux whose one client is c: it lists c, answers the width and logs each display-menu. A pbcopy
+# that keeps what it got.
 CLIP="${FIX}/clipboard"
 cat > "${FIX}/shims/tmux" <<EOF
 #!/usr/bin/env bash
+if [[ "\${1:-}" == list-clients ]]; then
+  printf 'c\n'
+  exit 0
+fi
 if [[ "\${1:-}" == display-message ]]; then
   case "\$*" in *client_name*) printf '%s\n' "\${4:-c}" ;; *) printf '80\n' ;; esac
   exit 0
@@ -74,6 +79,12 @@ open_url "tmux-tooltip://show?title=x&copy=x"
 assert_eq "no tmux client: open exits 1" 1 "$?"
 assert_no_file "no tmux client: nothing is copied" "${CLIP}"
 mv "${FIX}/tmux.off" "${FIX}/shims/tmux"
+
+# ── bogus client name: tmux lists only c, so open --client d stops before the copy ──
+rm -f "${CLIP}"
+zsh "${TT}" open --url "tmux-tooltip://show?title=x&copy=x" --client d 2> "${FIX}/err"
+assert_eq "bogus client name: open exits 1" 1 "$?"
+assert_no_file "bogus client name: nothing is copied" "${CLIP}"
 
 # ── --copy belongs to link ──
 zsh "${TT}" show --title x --copy x 2> /dev/null

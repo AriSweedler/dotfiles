@@ -349,8 +349,8 @@ layout_card() {
 }
 
 #######################################
-# Resolve the client to draw on: the one named, else the current one. tmux answers for a named
-# client too, so a name with no live client behind it fails here.
+# Resolve the client to draw on: the one named, else the current one. A named client must be a
+# line of list-clients. display-message -c falls back to the current client for an unknown name.
 # Arguments: $1 client name or ''
 # Outputs: the client name
 # Returns: non-zero when tmux has no such client
@@ -358,7 +358,8 @@ layout_card() {
 resolve_client() {
   local client="${1}"
   if [[ -n "${client}" ]]; then
-    tmux display-message -p -c "${client}" '#{client_name}'
+    tmux list-clients -F '#{client_name}' | grep -xF -- "${client}" > /dev/null || return 1
+    print -r -- "${client}"
     return
   fi
   tmux display-message -p '#{client_name}'

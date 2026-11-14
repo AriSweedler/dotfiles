@@ -31,13 +31,13 @@ main() {
   # count, and neither does a fragment of a longer name (xyz-pbcopy-abc, pbcopyish, my.pbcopy).
   local sep='[|;&({`'$'\n'']'
   local pbcopy_cmd="(^|${sep}[[:space:]]*|/|(xargs|sudo|env|command|exec|nohup|time|-exec)[[:space:]]+)pbcopy([[:space:];|&)<>]|\$)"
-  local focus_copy="(^|${sep}[[:space:]]*)(zsh[[:space:]]+)?[^[:space:]]*focus\\.zsh[^"$'\n'"]*\\?copy="
+  local focus_copy="(^|${sep}[[:space:]]*)(zsh[[:space:]]+)?[^[:space:]]*focus\\.zsh([^"$'\n'"]|\\\\"$'\n'")*\\?copy="
   if [[ "${command}" =~ ${focus_copy} ]]; then
     printf '%s\n' "Blocked: focus.zsh is the click handler's script, and a ?copy= payload writes Ari's clipboard. Only his click may run it. Hand him link.zsh --copy 'CMD' and paste its output unchanged." >&2
     return 2
   fi
   # tmux-tooltip open is the bead link's click handler; a copy= key in its URL is copied with pbcopy.
-  local tooltip_copy="(^|${sep}[[:space:]]*)(zsh[[:space:]]+)?[^[:space:]]*tmux-tooltip[\"']?[[:space:]]+open[^"$'\n'"]*[?&]copy="
+  local tooltip_copy="(^|${sep}[[:space:]]*)(zsh[[:space:]]+)?[^[:space:]]*tmux-tooltip[\"']?[[:space:]]+open([^"$'\n'"]|\\\\"$'\n'")*[?&]copy="
   if [[ "${command}" =~ ${tooltip_copy} ]]; then
     printf '%s\n' "Blocked: tmux-tooltip open is the click handler, and a copy= key writes Ari's clipboard. Only his click may run it. Hand him the bead link and let him click it." >&2
     return 2
