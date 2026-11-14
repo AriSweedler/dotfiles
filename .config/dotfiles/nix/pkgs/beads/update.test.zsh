@@ -65,7 +65,7 @@ print -r -- "Nothing about versions." > "${work}/skills/other-skill/SKILL.md"
 
 # The stub curl serves files under SERVE by URL path and fails like `curl -f` on anything else.
 cat > "${STUBS}/curl" <<'EOF'
-#!/bin/zsh
+#!/usr/bin/env zsh
 url="${@[-1]}"
 case "${url}" in
   https://api.github.com/repos/gastownhall/beads/releases/latest) cat "${STUB_SERVE}/latest.json" ;;
@@ -79,7 +79,7 @@ EOF
 # The stub nix turns a hex digest into a recognizable SRI and builds a bd that prints the version
 # of the package file named in the --expr, or STUB_BD_VERSION when set.
 cat > "${STUBS}/nix" <<'EOF'
-#!/bin/zsh
+#!/usr/bin/env zsh
 case "${1} ${2}" in
   "hash convert") print -r -- "sha256-SRI-${@[-1][1,8]}=" ;;
   "build "*)
