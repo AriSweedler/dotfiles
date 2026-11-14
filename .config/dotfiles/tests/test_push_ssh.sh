@@ -40,6 +40,7 @@ for a in "\$@"; do
   if [ "\$a" = -T ]; then
     if [ -s "${FIX}/ssh-login" ]; then
       printf "Hi %s! You've successfully authenticated, but GitHub does not provide shell access.\n" "\$(cat "${FIX}/ssh-login")" >&2
+      if [ -e "${FIX}/ssh-stall" ]; then sleep 30; fi
     else
       printf 'git@github.com: Permission denied (publickey).\n' >&2
       exit 255
@@ -113,6 +114,18 @@ push_one .config/rewritten
 assert_eq "insteadOf to ssh: rc 0" 0 "${RC}"
 assert_eq "insteadOf to ssh: the remote has the commit" "$(git -C "${HOME}/.config/rewritten" rev-parse HEAD)" "$(git --git-dir="${FIX}/remotes/test/rewritten.git" rev-parse main)"
 assert_eq "insteadOf to ssh: gh never asked" "" "$(shim_log gh)"
+
+# ── ssh names the login, then stalls: killed at the timeout, the token path ─
+
+new_repo .config/stalled git@github.com:test/stalled.git
+say "${LOGIN}"; : > "${FIX}/gh-token"; touch "${FIX}/ssh-stall"
+shim_logs_reset
+START="${SECONDS}"
+ARI_DOTFILES_SSH_PROBE_TIMEOUT_SECS=1 push_one .config/stalled
+rm -f "${FIX}/ssh-stall"
+assert_contains "ssh stalls: killed at the timeout, falls back to the token" "${ERR}" "ssh -T timed out; ssh origins push by token | login='${LOGIN}' timeout_secs='1'"
+assert_contains "ssh stalls: asks gh for the token" "$(shim_log gh)" "auth token -u ${LOGIN}"
+assert_eq "ssh stalls: does not wait out the 30 s stall" 1 "$(( SECONDS - START < 15 ))"
 
 # ── ssh authenticates as someone else: the token path, which refuses ────────
 

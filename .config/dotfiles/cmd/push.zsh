@@ -37,6 +37,7 @@ verb::flag push '--no-shared' 'leave the shared tier out' --for 'push, edit'
 verb::flag push '--no-local' 'leave the local tier out' --for 'push, edit'
 verb::flag push '--dry-run' 'the would-push lines, no network (edit: for the repos the plan chose)' --for 'push, edit'
 verb::env push ARI_DOTFILES_GITHUB_LOGIN 'the GitHub account every personal push authenticates as, by ssh or by its gh token' '${ARI_DOTFILES_GITHUB_LOGIN}'
+verb::env push ARI_DOTFILES_SSH_PROBE_TIMEOUT_SECS 'seconds `ssh -T git@github.com` may run before it is killed and ssh origins push by token' '${ARI_DOTFILES_SSH_PROBE_TIMEOUT_SECS}'
 
 plan::define push --actions 'push|skip' --item repo
 
@@ -68,12 +69,17 @@ load_token() {
 # names none (no key, no ssh, no network). GitHub answers 'Hi <login>! You've successfully
 # authenticated' and exits 1, so the verdict is the answer, never the exit code. Runs once, before
 # the first push to an ssh origin; that answer is the identity check the ssh path rests on, as the
-# token's is for https.
+# token's is for https. ConnectTimeout bounds only the connect, so the whole probe runs under
+# with_timeout; a probe it kills names nobody, whatever it printed first.
 #######################################
 load_ssh_login() {
-  local out pattern='Hi ([^![:space:]]+)!'
-  out="$(ssh -T -o BatchMode=yes -o ConnectTimeout=5 git@github.com </dev/null 2>&1 || true)"
+  local out rc=0 pattern='Hi ([^![:space:]]+)!'
+  out="$(with_timeout "${ARI_DOTFILES_SSH_PROBE_TIMEOUT_SECS}" ssh -T -o BatchMode=yes -o ConnectTimeout=5 git@github.com </dev/null 2>&1)" || rc=$?
   SSH_LOGIN=-
+  if (( rc == 143 || rc == 137 )); then
+    log::warn "ssh -T timed out; ssh origins push by token | login='${ARI_DOTFILES_GITHUB_LOGIN}' timeout_secs='${ARI_DOTFILES_SSH_PROBE_TIMEOUT_SECS}'"
+    return 0
+  fi
   if [[ "${out}" =~ ${pattern} ]]; then SSH_LOGIN="${match[1]}"; fi
   if [[ "${SSH_LOGIN}" == "${ARI_DOTFILES_GITHUB_LOGIN}" ]]; then
     log::info "pushing ssh origins over ssh | login='${ARI_DOTFILES_GITHUB_LOGIN}' identity='ssh -T git@github.com'"
