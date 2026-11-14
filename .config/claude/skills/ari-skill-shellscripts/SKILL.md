@@ -234,7 +234,7 @@ When the user, not Claude, runs the `--execute` step, hand the `rerun` command t
 
 ## Bounded subprocesses
 
-Any backgrounded command that talks to a network or external process MUST have a wall-clock cap. `set -e` plus a hung child wedges the session silently.
+Any backgrounded command that talks to a network or external process MUST have a wall-clock cap. `set -e` plus a hung child wedges the session silently. A step under `await::run --timeout` has its cap; use `run_with_timeout` outside a wait and inside an `await::until` probe.
 
 Source `run_with_timeout` from the shared lib (reusing `SKILLS_DIR` from the logging block). It prefers `timeout`/`gtimeout` and falls back to a poll-and-SIGKILL loop; it returns the command's exit code, or `124` on timeout (mirrors GNU `timeout`).
 
@@ -251,7 +251,7 @@ run_with_timeout 30 "${err_file}" git fetch origin main || exit_code=$?
 
 A script that waits on something slow MUST say whose turn it is, and MUST let the library end the line. Source `lib/await.zsh` on the line after `source "${LIB_LOGGING}"`, before any function is defined: `await::_guard` is an alias and expands only in functions parsed after it.
 
-`await::run` draws one status line while a step runs and ends it from the step's exit code: a green ✓ on 0, a red ✗ with the code otherwise, 124 when `--timeout` kills the step, 130 on ctrl-c. The spinner is a background renderer, so it moves while the step blocks. Interactive mode (the outermost wait's stderr is a tty, or `AWAIT_INTERACTIVE=1`) redraws the line in place; plain mode (not a tty, or `AWAIT_INTERACTIVE=0`) prints one `[AWAIT]` line per state change and nothing on a tick, for logs and agents, and its `[AWAIT] ✓`/`✗` line is the step's last stderr line.
+`await::run` draws one status line while a step runs and ends it from the step's exit code: a green ✓ on 0, a red ✗ with the code otherwise, 124 when `--timeout` kills the step, 130 on ctrl-c. On a timeout or a ctrl-c the library kills every process still under the step (TERM, then KILL after `AWAIT_KILL_GRACE_S`, 0.2 s); a process that detached itself (`setsid`, a double fork) escapes, and a normal return kills nothing. The spinner is a background renderer, so it moves while the step blocks. Interactive mode (the outermost wait's stderr is a tty, or `AWAIT_INTERACTIVE=1`) redraws the line in place; plain mode (not a tty, or `AWAIT_INTERACTIVE=0`) prints one `[AWAIT]` line per state change and nothing on a tick, for logs and agents, and its `[AWAIT] ✓`/`✗` line is the step's last stderr line.
 
 ```zsh
 source "${SKILLS_DIR}/ari-skill-shellscripts/lib/await.zsh"
@@ -276,7 +276,8 @@ Inside the step:
 - **Log inside a step as anywhere else (`log::info`, `run_mut`).** Interactive, `await::run` relays every stderr line above the status line and the ✓ or ✗ line comes last; plain, the line passes through as it came. NEVER redirect a step's stderr to keep the line clean (`2>/dev/null`, `2>&1`): the relay then sees nothing. Only stderr is relayed: a step's stdout lands on the line, so status goes through `log::*` and data is printed after the wait. A bare `await::_guard` has no relay.
 - `await::note "text"` prints one line above the status line that is not a log record (a hint for the person); plain mode tags it `[AWAIT] note:`. NEVER report one event through both `log::*` and `await::note`.
 - A question inside a wait is `await::user "…"` plus a read from `/dev/tty`, never a bare stderr prompt: the relay forwards whole lines, so a prompt with no newline stays unseen.
-- A step that backgrounds a command MUST `wait` for it or give it its own stderr: the ✓ waits up to a second for the step's stderr to close, then the child's later lines print under the ✓. A tool that tests its stderr for a tty (colour, a progress bar) sees a pipe under the relay.
+- A step that backgrounds a command MUST `wait` for it or give it its own stderr: on a normal return the ✓ waits up to a second for the step's stderr to close, then the child's later lines print under the ✓. A tool that tests its stderr for a tty (colour, a progress bar) sees a pipe under the relay.
+- **A step that cleans up traps TERM or EXIT, never INT:** it runs as a background job, so ctrl-c never reaches it; the library's TERM ends it, with 0.2 s before the KILL. Longer cleanup goes after `await::run` returns, on 124 or 130.
 
 A step that logs once and reports `await::progress 1` under `--slots 2`, on the terminal once the wait has ended, then the same run with stderr on a pipe:
 
@@ -294,7 +295,7 @@ A step that logs once and reports `await::progress 1` under `--slots 2`, on the 
 
 Underneath: the grammar of both entry points is `[--timeout S] [--slots N] "<message>" -- <rest…>`. `await::_guard "<message>" -- "$@"` is the primitive under `await::run`, for a function that owns its message: an alias that installs the function's EXIT and INT traps and ends the line when it returns (`--timeout` is display-only there). A helper outside a wait prints `YOU MUST CALL <name> INSIDE await::run OR await::_guard (AWAIT_FD is unset)` and returns 2. A wait inside a wait nests: the outer line freezes, the inner draws one space further in, and when the inner ends the outer resumes on a fresh line with its clock still running. `await::success "msg"` and `await::failure "msg" [rc]` by hand are allowed inside a wait; the function's return then only reaps.
 
-When a probe can say where things stand, let the loop be declarative: the probe prints `<state> <message>` (and `progress <n>` lines), and `await::until --interval 0.2 --timeout 30 -- probe` draws and returns 0, 1, 124, 130 or 2. Every other stdout line is an unknown state (2). The probe's stderr is relayed like a step's, and the probe runs every interval, so it logs a change of state, never a look. It runs in a command substitution, so its state lives in a file or the world, never a variable, and it never leaves a child behind.
+When a probe can say where things stand, let the loop be declarative: the probe prints `<state> <message>` (and `progress <n>` lines), and `await::until --interval 0.2 --timeout 30 -- probe` draws and returns 0, 1, 124, 130 or 2; `--timeout` is checked between probe calls, so a probe bounds its own I/O (`curl --max-time`, `run_with_timeout`). Every other stdout line is an unknown state (2). The probe's stderr is relayed like a step's, and the probe runs every interval, so it logs a change of state, never a look. It runs in a command substitution, so its state lives in a file or the world, never a variable, and it never leaves a child behind.
 
 Learn it by watching: `zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/await-lessons` runs ten lessons in order (`--list` prints what each teaches; `--only N` one of them). The automated checks are `zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/await.test.zsh`.
 
@@ -334,6 +335,8 @@ zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/conventions.test.zsh --ski
 zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/await.test.zsh
 zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/investigation_folder.test.zsh
 ```
+
+`await.test.zsh` needs `perl` (its ctrl-c case gives a child its own process group) and `pgrep`; a FAIL naming perl is the host, not the change.
 
 `conventions.test.zsh` proves the rules above in a throwaway zsh (`lib/dry_run.zsh` and `bin/example` among them), then lints zsh scripts; without `--skill` it lints every skill. One line per finding, `FAIL  <file>:<line>  <what and the fix>`, then `summary  pass=N fail=N warn=N`:
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env zsh
 # Automated tests for lib/await.zsh: the guard's endings, await::run's codes (0, rc, 124, 130),
 # the refusal of a helper outside a wait, nested waits, plain and interactive renderings, slots,
-# notes, the step's stderr relayed above the line, the style check, and await::until's probe
-# protocol. No tty needed.
+# notes, the step's stderr relayed above the line, the style check, await::until's probe
+# protocol, the step's whole process tree killed on a timeout and a ctrl-c, and one wait primitive
+# per run with and without zsh/zselect. No tty needed; the ctrl-c test needs perl.
 # Run: zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/await.test.zsh
 set -uo pipefail
 
@@ -13,7 +14,11 @@ source "${LIB}/await.zsh"
 export AWAIT_INTERACTIVE=0 AWAIT_TICK_S=0.01 LOG_COLOR=0
 readonly T="${TMPDIR:-/tmp}/await-test-$$"
 mkdir -p "${T}"
-trap 'rm -rf "${T}"' EXIT
+# The tree tests' sleeps last <n>.<this run's pid> s: no other process, a concurrent run of this
+# file included, has that command line, and a failing run must not leave one behind.
+readonly TREE_SLEEPS="^sleep 3[0-9]\\.$$\$"
+trap 'pkill -f "${TREE_SLEEPS}"; rm -rf "${T}"' EXIT
+alive() { pgrep -f "^sleep ${1//./\\.}\$" | wc -l | tr -d ' '; }   # <seconds>: how many such sleeps run
 export TMPDIR="${T}"      # every channel and fifo of this run lands here, so the leftover checks see no other process's wait
 
 typeset -i pass=0 fail=0
@@ -125,6 +130,23 @@ err="$( await::run --timeout 0.3 "m" -- sleep 60 2>&1 )"; rc=$?
 check "run --timeout is 124" 124 "${rc}"
 contains "run --timeout reads as timed out" "✗ failure: timed out: m" "${err}"
 check "run --timeout killed the step" 1 "$(( EPOCHREALTIME - t0 < 3 ))"
+# Work after the command keeps the step's subshell alive with the sleep as its child; a step whose
+# last command is the sleep is exec'd in its place, and this would pass on a lib that kills only it.
+tree_step() { sleep "31.$$"; true; }
+for mode in 0 1; do
+  AWAIT_INTERACTIVE="${mode}" AWAIT_BELL=0 await::run --timeout 0.3 "m" -- tree_step 2>/dev/null; rc=$?   # a test silences a wait; a script never does
+  check "run --timeout (interactive=${mode}) on a function step is 124" 124 "${rc}"
+  check "run --timeout (interactive=${mode}) leaves no process of the step" 0 "$(alive "31.$$")"
+  pkill -f "^sleep 31\\.$$\$"
+done
+# A timeout on an outer wait kills the open inner wait with its step: the outer still ends ✗.
+nest_tree() { await::run "inner" -- tree_step; true; }
+mkdir -p "${T}/nest-cut"
+err="$( TMPDIR="${T}/nest-cut" await::run --timeout 0.5 "outer" -- nest_tree 2>&1 )"; rc=$?
+check "nested, outer --timeout: 124" 124 "${rc}"
+contains "nested, outer --timeout: the outer still ends ✗ timed out" $'\n[AWAIT] ✗ failure: timed out: outer' "${err}"
+check "nested, outer --timeout: no process of either step is left" 0 "$(alive "31.$$")"
+pkill -f "^sleep 31\\.$$\$"
 talks() {
   await::computer "one"; {
     :
@@ -255,26 +277,44 @@ check "until without a probe is 2" 2 "${rc}"
 out="$( await::until --bogus 1 --timeout 5 -- probe_fails 2>&1 )"; rc=$?
 check "until refuses an unknown flag with 2" 2 "${rc}"
 
-# 10. ctrl-c during await::run ends as 130 and the step is killed, in a child shell
+# 10. ctrl-c during await::run ends as 130 and kills the step's whole tree, in a child shell. A
+# terminal's ctrl-c is INT to the foreground process group, so the child gets a group of its own
+# (perl's setpgrp; `set -m` needs a tty) and INT back at its default (a `&` job starts with it
+# ignored, and a shell cannot trap a signal ignored at entry). The step's subshell and its sleep
+# ignore INT as every background job here does: only the library's kill ends them.
 cat > "${T}/int.zsh" <<'CHILD'
+set -euo pipefail
 source "${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
 source "${HOME}/.claude/skills/ari-skill-shellscripts/lib/await.zsh"
-AWAIT_INTERACTIVE=0 await::run "m" -- sleep 60
+(( ${STUBBORN:-0} )) && trap '' TERM    # the step and its sleep ignore TERM too: only the KILL ends them
+step() { sleep "${SLEEP_S}"; true; }
+AWAIT_INTERACTIVE=0 await::run "m" -- step
 CHILD
-zsh "${T}/int.zsh" 2>"${T}/int.err" &
-child=$!
-for (( i = 0; i < 50; i++ )); do        # the wait is open once its first line is out; then the trap is armed
-  [[ -s "${T}/int.err" ]] && break
-  sleep 0.1
-done
-sleep 0.1
-pkill -INT -f '^sleep 60$'          # a terminal's ctrl-c reaches the whole foreground group: the step too
-kill -INT "${child}"
-rc=0; wait "${child}" || rc=$?
-check "ctrl-c in run returns 130" 130 "${rc}"
-contains "ctrl-c in run is reported as interrupted" "✗ failure: interrupted: m" "$(<"${T}/int.err")"
-sleep 0.3
-check "ctrl-c in run killed the step" 0 "$(pgrep -f '^sleep 60$' | wc -l | tr -d ' ')"
+if command -v perl >/dev/null; then
+  # A second ctrl-c 0.1 s after the first lands inside the TERM grace; it must not cut the cleanup short.
+  for stubborn in 0 1; do
+    if (( stubborn )); then name="ctrl-c twice on a step that ignores TERM"; else name="ctrl-c in run"; fi
+    secs="32.$$"; dir="${T}/int-${stubborn}"; mkdir -p "${dir}"
+    STUBBORN="${stubborn}" SLEEP_S="${secs}" TMPDIR="${dir}" \
+      perl -e '$SIG{INT} = "DEFAULT"; setpgrp(0, 0); exec @ARGV' zsh "${T}/int.zsh" 2>"${dir}/err" &
+    child=$!
+    for (( i = 0; i < 50; i++ )); do    # the step's sleep runs once the wait is open and its INT trap armed
+      [[ "$(alive "${secs}")" != 0 ]] && break
+      sleep 0.1
+    done
+    kill -s INT -- "-${child}"
+    if (( stubborn )); then sleep 0.1; kill -s INT -- "-${child}" 2>/dev/null; fi
+    rc=0; wait "${child}" || rc=$?
+    check "${name}: 130" 130 "${rc}"
+    contains "${name}: reported as interrupted" "✗ failure: interrupted: m" "$(<"${dir}/err")"
+    check "${name}: no process of the step is left" 0 "$(alive "${secs}")"
+    leftovers=("${dir}"/await.*(N))
+    check "${name}: no channel is left behind" 0 "${#leftovers}"
+    pkill -f "^sleep 32\\.$$\$"
+  done
+else
+  check "ctrl-c in run: perl is on PATH (it gives the child its own process group)" perl ''
+fi
 
 # 11. the style check: a state call wants `; {` on its line or `{` on the next
 cat > "${T}/style.zsh" <<'FIX'
@@ -303,6 +343,44 @@ check "style: a bare state call warns once per site, even when called twice" 1 "
 contains "style: the warning names the call site" "at='${T}/style.zsh:14'" "${err}"
 err="$( zsh -c 'source "${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"; source "${HOME}/.claude/skills/ari-skill-shellscripts/lib/await.zsh"; export AWAIT_INTERACTIVE=0; s() { await::user "x"; }; await::run "m" -- s' 2>&1 )"
 lacks "style: no warning from zsh -c" "style:" "${err}"
+
+# 12. one wait primitive per run, chosen at load: zselect when zsh/zselect works, else sleep and
+# `read -t`. Each child logs every call to the primitive it must not use; a stub zselect defined
+# before the lib loads stands in for a zsh without the module.
+cat > "${T}/prim.zsh" <<'CHILD'
+source "${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"
+(( NO_ZSELECT )) && zselect() { print -r -- zselect >> "${PRIM_LOG}"; return 2; }
+source "${HOME}/.claude/skills/ari-skill-shellscripts/lib/await.zsh"
+(( NO_ZSELECT )) || sleep() { print -r -- sleep >> "${PRIM_LOG}"; command sleep "$@"; }
+: > "${PRIM_LOG}"
+export AWAIT_BELL=0
+step() { command sleep 0.5; true; }
+long() { command sleep "${SLEEP_S}" </dev/null >/dev/null 2>&1; true; }   # no pipe of ours stays open behind it
+probe() { print "success seen"; }
+t0=${EPOCHREALTIME}
+AWAIT_INTERACTIVE=0 await::run "plain" -- step; print -r -- "plain rc=$? wall=$(( EPOCHREALTIME - t0 ))"
+AWAIT_INTERACTIVE=1 await::run "drawn" -- step; print -r -- "drawn rc=$?"
+AWAIT_INTERACTIVE=0 await::run --timeout 0.3 "cut" -- long; rc=$?
+print -r -- "cut rc=${rc} alive=$(pgrep -f "^sleep ${SLEEP_S//./\\.}\$" | wc -l | tr -d ' ')"
+AWAIT_INTERACTIVE=0 await::until --interval 0.05 --timeout 5 -- probe; print -r -- "until rc=$?"
+CHILD
+for no_zselect in 0 1; do
+  if (( no_zselect )); then used=sleep unused=zselect; else used=zselect unused=sleep; fi
+  print -n > "${T}/prim.log"
+  out="$( NO_ZSELECT="${no_zselect}" PRIM_LOG="${T}/prim.log" SLEEP_S="33.$$" zsh "${T}/prim.zsh" 2>"${T}/prim.err" )"
+  err="$(<"${T}/prim.err")"
+  wall="${${out#*wall=}%%$'\n'*}"
+  check "${used}: no ${unused} call once the lib has loaded" "" "$(<"${T}/prim.log")"
+  contains "${used}: a plain run of a 0.5 s step is 0" "plain rc=0" "${out}"
+  contains "${used}: its ✓ line prints" "[AWAIT] ✓ success: plain" "${err}"
+  check "${used}: it takes under 2 s (each tick waits once; the doubled ticks took 2.7 s)" 1 "$(( ${wall:-9} < 2.0 ))"
+  contains "${used}: an interactive run is 0" "drawn rc=0" "${out}"
+  contains "${used}: its ✓ line prints" "✓ drawn" "${err}"
+  contains "${used}: --timeout is 124" "cut rc=124" "${out}"
+  contains "${used}: --timeout leaves no process of the step" "alive=0" "${out}"
+  contains "${used}: await::until is 0" "until rc=0" "${out}"
+  pkill -f "^sleep 33\\.$$\$"
+done
 
 print
 print -- "${pass} passed, ${fail} failed"

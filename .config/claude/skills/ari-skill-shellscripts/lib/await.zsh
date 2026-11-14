@@ -44,8 +44,9 @@
 #
 # Both take `[--timeout S] [--slots N] "<message>" -- <rest…>`: for await::run the rest is the
 # command; for await::_guard it is the function's own "$@", shown as args='…' in plain mode and on
-# a ✗ line. --timeout is enforced by await::run (the command is killed, 124) and await::until; in a
-# bare await::_guard it only shows n/Ns on the line.
+# a ✗ line. --timeout is enforced by await::run (the command and every process still under it
+# are killed, 124; a ctrl-c kills them too; a process that detached itself escapes) and, between
+# probe calls, by await::until; in a bare await::_guard it only shows n/Ns on the line.
 #
 # Inside a wait, and only there: await::computer "msg", await::user "msg", await::progress N,
 # await::note "text" (a line above the status line, tagged `[AWAIT] note:` when plain), and by hand
@@ -88,7 +89,8 @@
 # tick, for logs, pipes and agents. Names with `_` after `::` are internal.
 #
 # Environment: AWAIT_INTERACTIVE=1|0 forces the rendering; AWAIT_BELL=0 silences the bell;
-# AWAIT_TICK_S is await::until's default --interval (0.1); AWAIT_DRAIN_S is the relay's grace (1).
+# AWAIT_TICK_S is await::until's default --interval (0.1); AWAIT_DRAIN_S is the relay's grace (1);
+# AWAIT_KILL_GRACE_S is how long a killed step's processes get between TERM and KILL (0.2).
 # Exported for the wait's children, never set by hand: AWAIT_FD (the channel), AWAIT_DEPTH (the
 # nesting depth, 0 at the top), AWAIT_TTY (the outermost wait's copy of stderr, where every
 # renderer draws).
@@ -96,12 +98,87 @@
 [[ -n "${_ARI_AWAIT_ZSH:-}" ]] && return 0
 readonly _ARI_AWAIT_ZSH=1
 
-zmodload zsh/zselect zsh/datetime zsh/mathfunc zsh/system 2>/dev/null || true
+zmodload zsh/datetime zsh/mathfunc zsh/system 2>/dev/null || true
 
 if ! typeset -f log::err >/dev/null; then
   print -u2 "[ERROR] await.zsh needs logging.zsh sourced first | lib='${XDG_CONFIG_HOME:-${HOME}/.config}/zsh/plugins/log.zsh'"
   return 1
 fi
+
+# Does zselect load and time out as it should? `zselect -t N` returns 1 on a plain timeout; a
+# missing builtin or a stub says something else. Asked once, here: every wait of the run then uses
+# one primitive, zselect or sleep, never the one after the other.
+await::_zselect_works() {
+  zmodload zsh/zselect 2>/dev/null || return 1
+  zselect -t 0 2>/dev/null
+  (( $? == 1 ))
+}
+typeset -gi _AWAIT_ZSELECT=0
+if await::_zselect_works; then _AWAIT_ZSELECT=1; fi
+typeset -gr _AWAIT_ZSELECT
+
+#######################################
+# Wait, with the primitive chosen at load. A ctrl-c ends it early; the caller checks
+# _await_interrupted.
+# Globals: _AWAIT_ZSELECT
+# Arguments: $1 = seconds, a decimal
+#######################################
+await::_pause() {
+  if (( _AWAIT_ZSELECT )); then
+    zselect -t "$(( int(${1} * 100 + 0.5) ))" 2>/dev/null || true   # 1 is the plain timeout: the wait is over
+    return 0
+  fi
+  sleep "${1}"
+}
+
+#######################################
+# The renderer's wait for the channel's next line, at most one tick (0.1 s), with the primitive
+# chosen at load. `read -t` cannot tell a quiet tick from a closed channel; the renderer holds the
+# channel open itself, so on that path a failed read is a tick.
+# Globals: _AWAIT_ZSELECT; sets the caller's `line`
+# Arguments: $1 = the channel descriptor
+# Returns: 0 with a line; 1 on a quiet tick; 2 when the channel is closed
+#######################################
+await::_next_line() {
+  if (( _AWAIT_ZSELECT )); then
+    zselect -t 10 -r "${1}" 2>/dev/null || return 1
+    IFS= read -r -u "${1}" line || return 2
+    return 0
+  fi
+  IFS= read -t 0.1 -r -u "${1}" line || return 1
+  return 0
+}
+
+#######################################
+# Kill a process and every process under it: TERM to all, up to AWAIT_KILL_GRACE_S (0.2 s) for
+# them to go, then KILL
+# to what is left. The tree is collected before the first signal, since a process whose parent
+# dies is re-parented out of it. A step's subshell and its children ignore INT (a background job
+# without job control), so a terminal's ctrl-c ends none of them: this kill does.
+# Arguments: $1 = the root, a child of this shell
+#######################################
+await::_kill_tree() {
+  local root="${1}" i=1 pid
+  local -a tree=("${root}") kids left
+  while (( i <= ${#tree} )); do
+    kids=("${(@f)$(pgrep -P "${tree[i]}" 2>/dev/null || true)}")
+    tree+=("${(@)kids:#}")
+    (( i += 1 ))
+  done
+  kill -TERM "${tree[@]}" 2>/dev/null || true
+  local deadline=$(( EPOCHREALTIME + ${AWAIT_KILL_GRACE_S:-0.2} ))
+  while true; do
+    left=()
+    for pid in "${tree[@]}"; do
+      kill -0 "${pid}" 2>/dev/null && left+=("${pid}")
+    done
+    (( ${#left} > 0 && EPOCHREALTIME < deadline )) || break
+    await::_pause 0.02 || true
+  done
+  if (( ${#left} > 0 )); then kill -KILL "${left[@]}" 2>/dev/null || true; fi
+  wait "${root}" 2>/dev/null || true
+  return 0
+}
 
 # The primitive. Expanded by the parser into the calling function: its EXIT trap ends the wait with
 # the function's status, its INT trap turns ctrl-c into 130; both are local to that function.
@@ -168,6 +245,8 @@ await::_begin() {
 # Arguments: $1 = the function's return code
 #######################################
 await::_end() {
+  setopt localoptions localtraps
+  trap '' INT                               # a second ctrl-c must not cut the cleanup short: the kill, the final line, the reap
   local rc="${1:-0}"
   (( _await_interrupted )) && rc=130        # a ctrl-c is a ctrl-c whatever status the return carried
   if (( ! _await_begun )); then             # _begin refused this wait: nothing of it exists; an outer wait lives on
@@ -176,7 +255,7 @@ await::_end() {
   fi
   [[ -n "${_await_fd}" ]] || return 0
   if [[ -n "${_await_child}" ]] && kill -0 "${_await_child}" 2>/dev/null; then
-    kill -TERM "${_await_child}" 2>/dev/null
+    await::_kill_tree "${_await_child}"     # a ctrl-c, or a return with the step still running
   fi
   await::_drain_relay                       # every line the step logged lands before the final one
   if (( ! _await_ended )); then
@@ -188,7 +267,7 @@ await::_end() {
   local i
   for (( i = 0; i < 20; i++ )); do
     kill -0 "${_await_renderer}" 2>/dev/null || break
-    zselect -t 10 2>/dev/null || sleep 0.1
+    await::_pause 0.1 || true
   done
   kill -0 "${_await_renderer}" 2>/dev/null && kill -KILL "${_await_renderer}" 2>/dev/null
   wait "${_await_renderer}" 2>/dev/null
@@ -256,7 +335,7 @@ await::_drain_relay() {
   [[ -n "${_await_relay}" ]] || return 0
   local deadline=$(( EPOCHREALTIME + ${AWAIT_DRAIN_S:-1} ))
   while kill -0 "${_await_relay}" 2>/dev/null && (( EPOCHREALTIME < deadline )); do
-    sleep 0.05
+    await::_pause 0.05 || true
   done
   kill -0 "${_await_relay}" 2>/dev/null || wait "${_await_relay}" 2>/dev/null
   _await_relay=''
@@ -377,14 +456,11 @@ await::run() {
   (( timeout > 0 )) && deadline=$(( EPOCHREALTIME + timeout ))
   while (( ! _await_interrupted )) && kill -0 "${_await_child}" 2>/dev/null; do
     if (( deadline > 0 && EPOCHREALTIME >= deadline )); then
-      kill -TERM "${_await_child}" 2>/dev/null
-      zselect -t 20 2>/dev/null || sleep 0.2
-      kill -KILL "${_await_child}" 2>/dev/null
-      wait "${_await_child}" 2>/dev/null
+      await::_kill_tree "${_await_child}"
       _await_child=''
       return 124
     fi
-    zselect -t 5 2>/dev/null || sleep 0.05
+    await::_pause 0.05 || true              # a ctrl-c ends it early; the loop's test sees the flag
   done
   (( _await_interrupted )) && return 130
   local rc=0
@@ -418,7 +494,7 @@ await::until() {
   local deadline=0
   (( timeout > 0 )) && deadline=$(( EPOCHREALTIME + timeout ))
   local out line state msg
-  while true; do
+  while (( ! _await_interrupted )); do
     if (( _await_interactive )); then       # a group, so the substitution is waited for: its notes land before the state it reports
       out="$({ "$@"; } 2> >(await::_relay) || true)"
     else
@@ -439,8 +515,9 @@ await::until() {
     if (( deadline > 0 && EPOCHREALTIME >= deadline )); then
       await::failure "timed out" 124; return 124
     fi
-    zselect -t $(( int(interval * 100) )) 2>/dev/null || sleep "${interval}"
+    await::_pause "${interval}" || true     # a ctrl-c ends it early; the loop's test sees the flag
   done
+  return 130
 }
 
 #######################################
@@ -450,15 +527,17 @@ await::until() {
 # Arguments: $1 = the channel descriptor
 #######################################
 await::_renderer() {
-  local fd="${1}" out="${AWAIT_TTY}" state=computer msg="${_await_msg}" done=0 tick=0 line word rest rc rang=0
+  local fd="${1}" out="${AWAIT_TTY}" state=computer msg="${_await_msg}" done=0 tick=0 line word rest rc rang=0 got
   local -i final=0 paused=0
   local last_plain='' indent=''
   repeat ${AWAIT_DEPTH:-0} indent+=' '          # one space per nesting level
   trap '' INT
   await::_draw
   while (( ! final )); do
-    if zselect -t 10 -r "${fd}" 2>/dev/null; then
-      IFS= read -r -u "${fd}" line || break
+    got=0
+    await::_next_line "${fd}" || got=$?
+    (( got == 2 )) && break
+    if (( got == 0 )); then
       word="${line%% *}"; rest="${line#* }"; [[ "${rest}" == "${line}" ]] && rest=''
       case "${word}" in
         pause)  paused=1; (( _await_interactive )) && print -u "${out}"; continue ;;     # leave the line as it stands
@@ -471,8 +550,8 @@ await::_renderer() {
           done="${rest}"; (( done < 0 )) && done=0; (( done > _await_slots )) && done=${_await_slots} ;;
         note)
           if (( _await_interactive )); then print -r -u "${out}" -- $'\r\e[K'"${indent}${rest}"; else print -r -u "${out}" -- "${indent}${c_grey}[AWAIT] note${c_rst}: ${rest}"; fi ;;
-        success) state=success; msg="${rest}"; done=${_await_slots}; final=1 ;;
-        failure) rc="${rest%% *}"; msg="${rest#* }"; [[ "${msg}" == "${rest}" ]] && msg=''; state=failure; final=1 ;;
+        success) state=success; msg="${rest}"; done=${_await_slots}; final=1; paused=0 ;;    # a final state ends a pause: an inner wait killed with its step never resumes this one
+        failure) rc="${rest%% *}"; msg="${rest#* }"; [[ "${msg}" == "${rest}" ]] && msg=''; state=failure; final=1; paused=0 ;;
         *) continue ;;
       esac
       (( paused )) || await::_draw
