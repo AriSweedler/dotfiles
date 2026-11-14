@@ -1,11 +1,11 @@
 ---
 name: ari-driving
-description: "Entrypoint for driving Ari's terminals: anything Ari should run, or that Claude runs in a terminal Ari watches. Routes to ari-driving-tmux for a pane on this machine (click-to-type and click-to-run links, run_log captures, fenced handoffs, the clipboard) or ari-driving-remote for a host over ssh (his laptop, a Pi, any host with tmux). Use when Ari says \"ari-driving\", \"type it into my pane\", \"pane 2.4\", \"run this on my laptop\", \"send-keys\", \"never press enter\", or Claude needs Ari to run a command and read its output back. Never raw tmux send-keys; never pbcopy unless Ari asks."
+description: "Entrypoint for driving Ari's terminals: anything Ari should run, or that Claude runs in a terminal Ari watches. Routes to ari-driving-tmux for a pane on this machine (click-to-type and click-to-run links, run_log captures, fenced handoffs, the clipboard) or ari-driving-remote for a host over ssh (his laptop, a Pi, any host with tmux), and itself hands Ari short commands to retype on a machine with no ssh and no tmux (an installer console). Use when Ari says \"ari-driving\", \"type it into my pane\", \"pane 2.4\", \"run this on my laptop\", \"send-keys\", \"never press enter\", names a console only his keyboard reaches, or Claude needs Ari to run a command and read its output back. Never raw tmux send-keys; never pbcopy unless Ari asks."
 ---
 
 # Driving
 
-Routes a request to the one sibling that reaches the terminal. Each sibling is `ari-driving-<route>`: `tmux` for a pane on this machine, by a link Ari clicks; `remote` for a pane on another host, over ssh.
+Routes a request to the one sibling that reaches the terminal. Each sibling is `ari-driving-<route>`: `tmux` for a pane on this machine, by a link Ari clicks; `remote` for a pane on another host, over ssh. A machine neither reaches, with no ssh and no tmux, is the `hand-typed` route: no sibling, Ari retypes each command from chat in the form **Who runs a command** gives.
 
 ## Rules
 
@@ -14,7 +14,7 @@ A sibling loaded alone invokes this router first; the NEVER rules below are also
 ### Pane labels
 
 - **Name every pane by its label, in prose too.** `ID=%301|pane=2.4`: tmux's pane ID, fixed for the pane's life, and the `window.pane` Ari reads off prefix-q. NEVER one part alone: not "pane 2.4", not `%301`. A pane on another machine carries that machine's everyday name first, `machine=ozone|ID=%18|pane=3.1`, what `dotfiles machine-name` prints there (`/ari-driving-remote` **Run a command**); no `machine=` means this machine, whatever route drives it. "Typed into `machine=ozone|ID=%18|pane=3.1`; it printed four ready beads", never "typed into pane 3.1 on the laptop".
-- **A label Ari pastes is placed by its `machine=`.** His own `ari-driving on` and `off` put the full label on his clipboard, `machine=<dotfiles machine-name>|ID=%N|pane=W.P`. MUST run `dotfiles machine-name` here (Bash) before deciding, and compare the whole name: equal → this machine, drop `machine=…|` and name the pane `ID=%N|pane=W.P`, `Route: tmux (pasted label is this machine)`; another name → remote, the definition whose `--hosts` `windows=` lists that label, kept whole, `Route: remote (pasted label names ozone)`; no definition lists it → `Route: ? (machine=X is not this machine and no definition has listed it; which definition?)`, never a new definition from a label alone. Here `dotfiles machine-name` prints `studio`: `machine=studio|ID=%301|pane=2.4` is `ID=%301|pane=2.4`; `machine=ozone|ID=%18|pane=3.1` stays whole.
+- **A label Ari pastes is placed by its `machine=`.** His own `ari-driving on` and `off` put the full label on his clipboard, `machine=<dotfiles machine-name>|ID=%N|pane=W.P`. MUST run `dotfiles machine-name` here (Bash) before deciding, and compare the whole name: equal → this machine, drop `machine=…|` and name the pane `ID=%N|pane=W.P`, `Route: tmux (pasted label is this machine)`; another name → remote, the definition whose `--hosts` `windows=` lists that label, kept whole, `Route: remote (pasted label names ozone)`; no definition lists it → `Route: ? (machine=X is not this machine and no definition has listed it; which definition?)`, never a new definition from a label alone. It exits non-zero or prints nothing → `Route: ?` quoting its error line, never a compare against an empty name. Say it prints `studio`: `machine=studio|ID=%301|pane=2.4` is `ID=%301|pane=2.4`; `machine=ozone|ID=%18|pane=3.1` stays whole.
 - **A local label is the link `link.zsh` prints; a remote label is inline code, never linked.**
 - **A pane Ari names casually keeps the full label and appends its nickname**, `machine=ozone|ID=%18|pane=3.1|nickname=homelab`, the window name from `--list`; a branch or fork never reuses a nickname.
 
@@ -37,7 +37,7 @@ A sibling loaded alone invokes this router first; the NEVER rules below are also
     ```
     ````
 
-- **"Turn it on for me", "opt it in", a pane Claude just created: the answer is the same.** The label and the literal `ari-driving on` go to Ari; NEVER type, link, chain or Bash it. An opt-in Claude set is undone at once with `run.zsh … --cmd 'ari-driving off'` there (exit 70: the pane is already gone, as on 2026-10-30), Ari is told which pane, and the skill update follows (`/ari-skill-update`, **A mistake is a skill update**).
+- **"Turn it on for me", "opt it in", a pane Claude just created: the answer is the same.** The label and the literal `ari-driving on` go to Ari; NEVER type, link, chain or Bash it. An opt-in Claude set is undone at once with `run.zsh --host-definition <name | local> --target %N --cmd 'ari-driving off' --execute` (without `--execute` it is a dry run and types nothing); exit 0, or 70 on a `%N` target (the pane is gone), ends it; any other exit hands Ari the label and `ari-driving off`, saying the opt-in is still on. Ari is told which pane, and the skill update follows (`/ari-skill-update`, **A mistake is a skill update**).
 
 ### Who runs a command
 
@@ -45,9 +45,25 @@ A sibling loaded alone invokes this router first; the NEVER rules below are also
     - Non-mutating: run it with the Bash tool; on a host, that is `run.zsh --cmd` into an opted-in pane. Hand off only what the tool cannot do: interactive logins, anything needing Ari's identity, kube context or terminal. `kubectl get pods` with Claude's credentials is Bash; the same command needing his kube context is a click-to-run link; `tofu plan` needs his cloud identity, so a link; `git log` is Bash, `git push` is his.
     - Mutating: Ari runs it, and clicking a `▶ run` link counts as Ari running it, so the full command is readable in chat beside the link, never only inside it. Two exceptions, this session only: he allowed that command explicitly, or he ran one with `!`, which also covers later commands of the same tool, same subcommand and same target system (his `! tofu apply` on stack X in dev covers another apply on X in dev; not X in prod, not another tool). A run on precedent prints the earlier run it follows, one line directly above the link or block: "Follows your `! tofu apply` on stack X in dev earlier this session." No line, no precedent.
 - **A command the Bash tool refused (permission, classifier, sandbox) goes to Ari unchanged.** NEVER reword it past the refusal: a denied `rm -rf /tmp/run_log/old` is never `find … -delete`. The exact text goes out as a click-to-type link, a fenced block, or `run.zsh --no-enter`, and the hand-off says the harness refused it.
-- **Hand Ari a command in the form his terminal takes.** Here, a click-to-type or click-to-run link from `link.zsh`. On a remote pane, where no link reaches, the command in a fenced `zsh` block under the pane's full label (the block above), never bare in prose ("run bd ready on your laptop").
+- **Hand Ari a command in the form his terminal takes.**
+    - Here: a click-to-type or click-to-run link from `link.zsh`.
+    - A remote pane, where no link reaches: the command in a fenced `zsh` block under the pane's full label (the block above), never bare in prose ("run bd ready on your laptop").
+    - **A hand-typed machine, which Ari retypes from chat: MUST give one command per fenced `sh` block, every line 70 characters or fewer.** A longer command becomes short ones that set shell variables first, then use them; a token too long alone (a URL, a store path) is split as `a=…`, `b=…` and used as `"$a$b"`. NEVER a ` \` continuation line or `/ari-driving-tmux`'s `wrap.zsh` layout: a wrapped or continued line is retyped as two commands.
+    - On a hand-typed machine, hand out blocks only up to the first one whose output decides the next (`lsblk` before a format), ask Ari what it printed, and end the reply. A block that erases, formats or partitions gets one line above it naming its target from output Ari reported. A new shell (a reboot, a re-login) loses the variables: hand those blocks out again.
+
+    ````
+    BAD:  nmcli device wifi connect "Home Net" password "…" ifname wlp2s0 …   ← 150 characters, wraps
+    GOOD: ```sh
+          ssid='Home Net'
+          ```
+          ```sh
+          nmcli --ask device wifi connect "$ssid" ifname wlp2s0
+          ```
+    ````
+
+    GOOD also moves the password to `--ask`, so nmcli prompts Ari for it (**Questions are Ari's**).
 - **A put is Claude's.** `run.zsh --put` types nothing, so it needs no pane, no opt-in and no hand-off: one chat line (what the file is, which definition, which project), then run it; no yes is waited for. The file is one Claude wrote this session or one Ari named that Claude has read whole; anything else is read whole first or not put. **Decide per command** covers the command that names the `PUT:` path.
-- **Questions are Ari's.** Never type a password, code or approval; say what the pane is asking. A command that will ask one (`sudo`, `ssh` to a new host, `gh auth`, a login, `-i`, a tool that prompted earlier this session) goes out as an interactive run link (`/ari-driving-tmux`), which keeps Ari in that pane until it finishes, then returns him.
+- **Questions are Ari's.** Never type a password, code or approval; say what the pane is asking. A command that will ask one (`sudo`, `ssh` to a new host, `gh auth`, a login, `-i`, a tool that prompted earlier this session) goes out as an interactive run link (`/ari-driving-tmux`), which keeps Ari in that pane until it finishes, then returns him; on a hand-typed machine, as its block with one line above naming the prompt it will show.
 
 ### Captures and the clipboard
 
@@ -59,7 +75,7 @@ A sibling loaded alone invokes this router first; the NEVER rules below are also
 
 ### Identify the route
 
-The first line of the reply is the route with its evidence: `Route: tmux (Ari said "pane 2.4")`, `Route: remote (content for the laptop)`, `Route: remote + bash (laptop half to the sibling; the local half does not mutate)`, `Route: ? (here or the laptop? likelier the laptop: you said "over there")`. A machine named this turn beats a pane named alone; a pane from earlier never overrides a machine named now; two rows at equal weight are "nothing fits".
+The first line of the reply is the route with its evidence: `Route: tmux (Ari said "pane 2.4")`, `Route: remote (content for the laptop)`, `Route: remote + bash (laptop half to the sibling; the local half does not mutate)`, `Route: hand-typed (co2 is on the installer console: no ssh, no tmux)`, `Route: ? (here or the laptop? likelier the laptop: you said "over there")`. A machine named this turn beats a pane named alone, and is placed like a pasted label (**Pane labels**): one whose name or definition's host is what `dotfiles machine-name` prints here is this machine, never an ssh back into itself; a pane from earlier never overrides a machine named now; two rows at equal weight are "nothing fits".
 
 | Ari's words | Route | Sibling | Note |
 |---|---|---|---|
@@ -69,17 +85,18 @@ The first line of the reply is the route with its evidence: `Route: tmux (Ari sa
 | a pasted `machine=…\|ID=%N\|pane=W.P` label | by machine | by machine | **Pane labels**: equal to `dotfiles machine-name` here → tmux, prefix dropped; another name → remote, kept whole; no definition lists it → ask |
 | a machine name from `--hosts` ("ozone"), "my laptop", `user@host`, "2.4 on the laptop", a machine not yet in `--hosts` | remote | `/ari-driving-remote` | the sibling owns definitions and asks for `user@host` when none exists; several plausible definitions: ask, likelier first |
 | "the Pi", a host whose definition says it has no tmux | remote | `/ari-driving-remote` | the host its definition says it is reached from, nesting `ssh -t` |
+| a machine with no ssh and no tmux, which only Ari's keyboard reaches (a NixOS installer console, a rescue shell) | hand-typed | none | **Hand Ari a command in the form his terminal takes**: one short command per block, no continuation lines; Ari reports what it printed |
 | "file that bead on my laptop", "put this script on the Pi": content (Rules) bound for a host | remote | `/ari-driving-remote` | **Put a file on the host**: a file, not keystrokes |
 | "send-keys this into …", "type it but don't press Enter" | by machine | by machine | a click-to-type link here, `run.zsh --no-enter` there |
 | Claude needs the output without Ari clicking anything (a loop, a wait for the prompt, "watch the TUI in 2.4 and tell me when hashing finishes") and the pane is on this machine | remote, the `local` definition | `/ari-driving-remote` | not tmux although the pane is local; `--hosts` must list `local` |
 | "copy that", "my clipboard got overwritten" | tmux | `/ari-driving-tmux` | **Copy only on request**, **Recover a clobbered clipboard** |
 | "make yourself a pane"; a fact about a host ("the Pi is on .102 now") | remote | `/ari-driving-remote` | **Create a pane for yourself**; **Add or describe a host** |
-| no command to run; nothing fits, or two rows fit | ask | — | one line, the likelier answer recommended; no sibling is invoked |
+| no command to run; nothing fits, or two rows fit | ask | — | one line, the likelier answer recommended, and the reply ends there: no sibling, command or link until Ari answers |
 
 ### Invoke the sibling
 
-**Invoke it through the Skill tool, argument = Ari's request verbatim plus the Route line; NEVER Read a sibling's SKILL.md in its place.** One sibling per request, and a sibling never re-invokes the router; a consumer that already knows its route may invoke the sibling directly. If the Skill tool is missing or the sibling unknown, stop: name the sibling and that `/ari-dotfiles-skill-registry` relinks it; a fork without the Skill tool hands the driving back to its parent. A route that fails is reported with the sibling's reason, never retried through the other sibling. One request can need both: "run `diskutil list` on my laptop and compare with here" is `Route: remote + bash`: the remote half goes to `/ari-driving-remote`; the local half does not mutate, so it runs with Bash and no sibling. A local half that mutates is tmux.
+**Invoke it through the Skill tool, argument = Ari's request verbatim plus the Route line; NEVER Read a sibling's SKILL.md in its place.** One sibling per request, none for `hand-typed` (the reply holds the blocks), and a sibling never re-invokes the router; a consumer that already knows its route may invoke the sibling directly. If the Skill tool is missing or the sibling unknown, stop: name the sibling and that `/ari-dotfiles-skill-registry` relinks it; a fork without the Skill tool hands the driving back to its parent. A route that fails is reported with the sibling's reason, never retried through the other sibling. One request can need both: "run `diskutil list` on my laptop and compare with here" is `Route: remote + bash`: the remote half goes to `/ari-driving-remote`; the local half does not mutate, so it runs with Bash and no sibling. A local half that mutates is tmux.
 
 ## Adding a route
 
-A new route (a browser, a device with no tmux) gets its own sibling, `ari-driving-<route>`, and a row in **Identify the route**.
+A new route that Claude reaches by script (a browser) gets its own sibling, `ari-driving-<route>`, and a row in **Identify the route**; one only Ari's hands reach, like `hand-typed`, gets a row and its hand-off form in **Who runs a command**, no sibling.
