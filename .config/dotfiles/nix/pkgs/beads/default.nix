@@ -1,7 +1,7 @@
 # bd (beads), the tracker Ari and his Claude sessions file work in. nixpkgs has `beads`, but at
 # 1.0.3, and the workflow is written against 1.3.4, so this takes upstream's own release instead of
-# the package: one asset per system, each hash from the release's checksums.txt. Bumping the
-# version means four hashes, which is the price of not waiting for nixpkgs.
+# the package: one asset per system, each hash from the release's checksums.txt. update.zsh beside
+# this file bumps the version and every hash. Its rewrite expects each platform and hash on one line.
 # The binaries are generic builds, so off a Mac autoPatchelfHook supplies the glibc they ask for;
 # a Mac's needs no such fix. The trackers are state in Ari's home, never in a package.
 { lib, stdenv, fetchurl, autoPatchelfHook }:
