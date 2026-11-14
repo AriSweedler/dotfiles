@@ -11,11 +11,14 @@ TT="${ORIG_CONFIG_DIR}/bin/tmux-tooltip"
 mkdir -p "${HOME}/.claude/skills"
 ln -s "${ORIG_CONFIG_DIR}/claude/skills/ari-skill-shellscripts" "${HOME}/.claude/skills/ari-skill-shellscripts"
 
-# A tmux that answers the client's width and logs each display-menu; a pbcopy that keeps what it got.
+# A tmux that answers the client's name and width and logs each display-menu; a pbcopy that keeps what it got.
 CLIP="${FIX}/clipboard"
 cat > "${FIX}/shims/tmux" <<EOF
 #!/usr/bin/env bash
-if [[ "\${1:-}" == display-message ]]; then printf '80\n'; exit 0; fi
+if [[ "\${1:-}" == display-message ]]; then
+  case "\$*" in *client_name*) printf '%s\n' "\${4:-c}" ;; *) printf '80\n' ;; esac
+  exit 0
+fi
 printf '%s\n' "\$*" >> "${FIX}/menu.log"
 EOF
 cat > "${FIX}/shims/pbcopy" <<EOF
@@ -56,6 +59,21 @@ assert_not_contains "no copy key: the hint does not say copied" "$(cat "${FIX}/m
 rm -f "${FIX}/shims/pbcopy"
 open_url "tmux-tooltip://show?title=x&copy=x"
 assert_contains "no pbcopy: the hint says not copied" "$(cat "${FIX}/menu.log")" "not copied: no pbcopy · click or Esc closes"
+
+# ── no tmux client: open stops before the copy ──
+cat > "${FIX}/shims/pbcopy" <<EOF
+#!/usr/bin/env bash
+cat > "${CLIP}"
+EOF
+chmod +x "${FIX}/shims/pbcopy"
+rm -f "${CLIP}"
+mv "${FIX}/shims/tmux" "${FIX}/tmux.off"
+printf '#!/usr/bin/env bash\nexit 1\n' > "${FIX}/shims/tmux"
+chmod +x "${FIX}/shims/tmux"
+open_url "tmux-tooltip://show?title=x&copy=x"
+assert_eq "no tmux client: open exits 1" 1 "$?"
+assert_no_file "no tmux client: nothing is copied" "${CLIP}"
+mv "${FIX}/tmux.off" "${FIX}/shims/tmux"
 
 # ── --copy belongs to link ──
 zsh "${TT}" show --title x --copy x 2> /dev/null

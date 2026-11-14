@@ -349,14 +349,16 @@ layout_card() {
 }
 
 #######################################
-# Resolve the client to draw on: the one named, else the current one.
+# Resolve the client to draw on: the one named, else the current one. tmux answers for a named
+# client too, so a name with no live client behind it fails here.
 # Arguments: $1 client name or ''
 # Outputs: the client name
+# Returns: non-zero when tmux has no such client
 #######################################
 resolve_client() {
   local client="${1}"
   if [[ -n "${client}" ]]; then
-    print -r -- "${client}"
+    tmux display-message -p -c "${client}" '#{client_name}'
     return
   fi
   tmux display-message -p '#{client_name}'
@@ -560,8 +562,14 @@ main() {
     link) print_link "${LABEL}" "${HREF}" ;;
     open)
       parse_card_url "${URL}"
+      # The client comes first: a run with no tmux client to draw on copies nothing.
+      local client
+      if ! client="$(resolve_client "${PLACE_CLIENT}")"; then
+        log::err "No tmux client to draw on; nothing copied | client='${PLACE_CLIENT}'"
+        return 1
+      fi
       copy_on_click
-      show_card "$(resolve_client "${PLACE_CLIENT}")" "${PLACE_X}" "${PLACE_Y}"
+      show_card "${client}" "${PLACE_X}" "${PLACE_Y}"
       ;;
   esac
 }

@@ -79,7 +79,7 @@ expanded it as a command substitution, so `dotfiles push --help` opened an ssh c
 | `.config/bin/pbpastelinks-extract.swift` | read every rich-text flavour off the clipboard | none | placed (mac-utils) | no test needed: a pasteboard read; its output feeds `pbpastelinks`, which the suite above covers from fixtures |
 | `.config/bin/passage` | walk typing-practice books one passage at a time (661 lines) | none | no | needs a suite: bookmarks and passage splitting are pure state |
 | `.config/bin/replace` | find and replace across source files | none | placed (mac-utils) | needs a suite: rewrites files |
-| `.config/bin/tmux-tooltip` | read-only card over tmux (519 lines) | used by `bead_link.test.zsh` (16) for its link form only | no | needs a suite: its block layout is pure text |
+| `.config/bin/tmux-tooltip` | read-only card over tmux (577 lines) | `test_tmux_tooltip.sh` (13); `bead_link.test.zsh` (17) for its link form | no | covered for `link --copy` and `open`'s copy (fake tmux and pbcopy); its block layout is pure text and still needs cases |
 | `.config/bin/tmux-restart` | restart the tmux server and restore every window | none | no | needs a suite on a throwaway `-L` server: it kills the server |
 | `.config/bin/tmux-edit-window` | open `$EDITOR` on a file in a tmux window | named by `test_jobs_notify.sh` (17), not run | no | no test needed: a one-call wrapper |
 | `.config/bin/swift-cache` | inspect and trim the shared Swift build cache | none | no | covered once `swift_cache.zsh` has a suite (its logic lives there) |

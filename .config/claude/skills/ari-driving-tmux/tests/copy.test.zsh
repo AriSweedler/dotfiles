@@ -133,6 +133,11 @@ click '?copy=echo%20100%25%20%60x%60' "${CLAUDE_PANE}" >/dev/null
 check "click: %, backtick survive the round trip" 'echo 100% `x`' "$(clipboard)"
 GUARD_FOCUS="$(print -r -- '{"tool_input":{"command":"zsh $HOME/.claude/skills/ari-driving-tmux/bin/focus.zsh --pane \"?copy=ls\" --return-pane %1"}}' | zsh "${SKILL}/bin/pretooluse_bash_pbcopy_guard.sh" >/dev/null 2>&1; print -r -- $?)"
 check "guard: a Bash call to focus.zsh with ?copy= is blocked" 2 "${GUARD_FOCUS}"
+guard_rc() { print -r -- "${1}" | zsh "${SKILL}/bin/pretooluse_bash_pbcopy_guard.sh" >/dev/null 2>&1; print -r -- $?; }
+check "guard: a Bash call to tmux-tooltip open with ?copy= is blocked" 2 "$(guard_rc '{"tool_input":{"command":"zsh $HOME/.config/bin/tmux-tooltip open --url '"'"'tmux-tooltip://show?copy=x'"'"' --client c"}}')"
+check "guard: a Bash call to tmux-tooltip open with &copy= is blocked" 2 "$(guard_rc '{"tool_input":{"command":"cd /tmp && \"$HOME/.config/bin/tmux-tooltip\" open --url '"'"'tmux-tooltip://show?title=x&copy=evil%20text'"'"'"}}')"
+check "guard: tmux-tooltip link --copy only prints a link, let through" 0 "$(guard_rc '{"tool_input":{"command":"zsh $HOME/.config/bin/tmux-tooltip link --label x --title x --copy '"'"'x | y'"'"'"}}')"
+check "guard: tmux-tooltip open with no copy key is let through" 0 "$(guard_rc '{"tool_input":{"command":"zsh $HOME/.config/bin/tmux-tooltip open --url '"'"'tmux-tooltip://show?title=x'"'"' --client c"}}')"
 
 # --- the pbcopy guard's message points at links, not a bare block ---
 GUARD_MSG="$(print -r -- '{"tool_input":{"command":"false && pbcopy"}}' | zsh "${SKILL}/bin/pretooluse_bash_pbcopy_guard.sh" 2>&1 >/dev/null)"

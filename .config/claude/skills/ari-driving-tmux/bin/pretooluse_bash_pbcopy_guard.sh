@@ -36,6 +36,12 @@ main() {
     printf '%s\n' "Blocked: focus.zsh is the click handler's script, and a ?copy= payload writes Ari's clipboard. Only his click may run it. Hand him link.zsh --copy 'CMD' and paste its output unchanged." >&2
     return 2
   fi
+  # tmux-tooltip open is the bead link's click handler; a copy= key in its URL is copied with pbcopy.
+  local tooltip_copy="(^|${sep}[[:space:]]*)(zsh[[:space:]]+)?[^[:space:]]*tmux-tooltip[\"']?[[:space:]]+open[^"$'\n'"]*[?&]copy="
+  if [[ "${command}" =~ ${tooltip_copy} ]]; then
+    printf '%s\n' "Blocked: tmux-tooltip open is the click handler, and a copy= key writes Ari's clipboard. Only his click may run it. Hand him the bead link and let him click it." >&2
+    return 2
+  fi
   [[ "${command}" =~ ${pbcopy_cmd} ]] || return 0
   [[ "${command}" == *HANDOFF_CLIP_OK=1* ]] && return 0
 

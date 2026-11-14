@@ -147,7 +147,7 @@ At exit it copies the artifact line to the clipboard unless `--no-copy`, `RUN_LO
     - `--capture` → `run_log -- CMD`; `run_log 'CMD'` when CMD has a shell operator (`|`, `&`, `;`, `>`, `<`, `$(`, a backtick); the quoted heredoc of **Command layout** when it is laid out, or has an operator and single quotes;
     - `--paste` → CMD bare, laid out exactly as `link.zsh`'s code block shows it (**Command layout**), for Ari to paste into a pane himself (**Hand Ari fenced steps**).
 - `handoff.zsh --copy (--text T | --file P)` is the only sanctioned copy; it prints where the displaced entry went. On a non-zero exit or a `not copied` line, hand a `link.zsh --copy` link; a fenced block only if `link.zsh` refuses the text.
-- `bin/pretooluse_bash_pbcopy_guard.sh`, installed as `~/.config/claude/bin/pretooluse-pbcopy-guard.sh`, denies a Bash call with `pbcopy` in command position (today a quoted `|pbcopy|` trips it too) unless `handoff.zsh --copy` makes it. Its message begins `Blocked: this command writes Ari's clipboard`.
+- `bin/pretooluse_bash_pbcopy_guard.sh`, installed as `~/.config/claude/bin/pretooluse-pbcopy-guard.sh`, denies a Bash call with `pbcopy` in command position (today a quoted `|pbcopy|` trips it too) unless `handoff.zsh --copy` makes it. Its message begins `Blocked: this command writes Ari's clipboard`. It also denies a Bash call that runs a click handler with a copy payload, since only Ari's click may copy: `focus.zsh` with `?copy=`, and `tmux-tooltip open` with a `?copy=` or `&copy=` URL (a bead link's click). `tmux-tooltip link --copy` only prints a link and is let through.
 
 ## Workflow
 
