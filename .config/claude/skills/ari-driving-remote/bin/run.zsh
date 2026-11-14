@@ -661,7 +661,7 @@ gate_busy_kinds() {
 
 #######################################
 # Every REFUSED_KIND a refusal can carry, one per line, for --refusal-kinds: not_opted_in (the 77), then the 75s
-# in the help's order. The list is checked whole before any line is printed, so a caller never reads part of it.
+# in no promised order, as --help says. The list is checked whole before any line is printed, so a caller never reads part of it.
 # Checked against the KIND_* constants, tmux-pane.sh and SKILL.md's gate table by tests/run-refusal-kind.test.zsh.
 # Globals: KIND_*
 # Returns: 1, printing nothing, when a kind is empty or not lowercase letters and _
