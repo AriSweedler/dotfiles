@@ -66,6 +66,9 @@ swiftPackages.stdenv.mkDerivation {
     fi
     [[ "$(echo '{"b":1,"a":2}' | $out/bin/json-sort)" == *'"a"'*'"b"'* ]]
     $out/bin/utc-date >/dev/null
+    # probe-color names the color count terminfo gives programs under the TERM it runs with.
+    [[ "$(TERM=linux $out/bin/probe-color)" == *'colors=8 '* ]]
+    [[ "$(TERM=xterm-256color $out/bin/probe-color)" == *'colors=256 '* ]]
     ls $out/notif-center/macos/*.layout >/dev/null
     # notif-ax runs: with no arguments it prints its usage and exits 2.
     $out/libexec/notif-ax >/dev/null 2>&1 || [[ $? == 2 ]]

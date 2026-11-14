@@ -1,8 +1,12 @@
 #!/usr/bin/env zsh
-# probe-color — what can THIS terminal display? Prints the 16 ANSI colors, the
-# 256-color palette (the colors plugin's color::xterm), a 24-bit gradient, and
-# the SGR text attributes. Judge by eye: banding in the gradient means no
-# truecolor, a plain word next to an attribute name means it is unsupported.
+# probe-color — what can THIS terminal display, and what will programs send it?
+# First, what terminfo tells programs about $TERM: its color count, whether it
+# claims 24-bit color (the RGB or Tc capability, or COLORTERM), and a swatch
+# drawn only with terminfo's own sequences, so `TERM=linux probe-color` shows 8.
+# Then the raw probe, which ignores TERM: the 16 ANSI colors, the 256-color
+# palette (the colors plugin's color::xterm), a 24-bit gradient, and the SGR
+# text attributes. Judge by eye: banding in the gradient means no truecolor, a
+# plain word next to an attribute name means it is unsupported.
 #
 # Usage: probe-color
 emulate -L zsh
@@ -12,6 +16,42 @@ autoload -Uz log::err log::info log::warn
 source "${ARI_PLUGINS:-${HOME}/.config/zsh/plugins}/colors.zsh"
 
 print -- "TERM=${TERM:-} COLORTERM=${COLORTERM:-} TERM_PROGRAM=${TERM_PROGRAM:-}${TMUX:+ (inside tmux)}"
+
+print -- "\nWhat programs will use (terminfo for TERM=${TERM:-}):"
+zmodload zsh/terminfo
+ncolors="${terminfo[colors]:-}"
+if ! infocmp >/dev/null 2>&1 && [[ -z "${ncolors}" ]]; then
+  print -- "  terminfo has no entry for TERM=${TERM:-}"
+elif [[ -z "${ncolors}" ]]; then
+  print -- "  terminfo gives TERM=${TERM:-} no color count: programs that ask it send no color"
+else
+  line="  colors=${ncolors}"
+  # RGB and Tc are extended capabilities, which zsh/terminfo cannot read.
+  if (( ${+commands[infocmp]} )); then
+    rgb=no
+    infocmp -x 2>/dev/null | grep -qE '(^|[[:space:],])(RGB|Tc)[,=]' && rgb=yes
+    line+="  RGB/Tc=${rgb}"
+  fi
+  print -- "${line}  COLORTERM=${COLORTERM:-unset}"
+  by=()
+  [[ "${rgb:-}" == yes ]] && by+=("terminfo's RGB/Tc")
+  [[ "${COLORTERM:-}" == (truecolor|24bit) ]] && by+=("COLORTERM=${COLORTERM}")
+  if (( ${#by} )); then
+    print -- "  24-bit offered by: ${(j:, :)by}"
+  else
+    print -- "  24-bit not offered: programs stop at ${ncolors} colors"
+  fi
+  if (( ncolors > 0 )); then
+    print -- "  swatch, drawn with terminfo's setab:"
+    shown=$(( ncolors < 256 ? ncolors : 256 ))
+    for (( i = 0; i < shown; i++ )); do
+      (( i % 32 == 0 )) && printf '  '
+      echoti setab "$i"; printf ' '
+      (( i % 32 == 31 || i == shown - 1 )) && { echoti sgr0; print; }
+    done
+  fi
+fi
+[[ -n "${TMUX:-}" ]] && print -- "  inside tmux, the attached client's TERM caps it: $(tmux display -p '#{client_termname}' 2>/dev/null)"
 
 print -- "\n16 ANSI colors (normal / bright), as foreground then background:"
 for i in {0..7}; do printf '\e[3%dm%3d\e[0m ' "$i" "$i"; done; print
