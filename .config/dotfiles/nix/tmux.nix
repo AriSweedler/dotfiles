@@ -64,6 +64,14 @@ in
         # so a copy made in a pane over ssh reaches the clipboard of the Mac the ssh came from.
         set -g allow-passthrough on
       ''}
+      ${lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
+
+        # The Mac end of that copy: take an OSC 52 escape from a pane (an ssh to a Linux machine)
+        # as a tmux buffer, and hand it to pbcopy. Terminal.app ignores OSC 52, so tmux forwarding
+        # the escape to the terminal is not enough.
+        set -s set-clipboard on
+        set-hook -g pane-set-clipboard 'run-shell -b "tmux save-buffer - | /usr/bin/pbcopy"'
+      ''}
 
       if-shell 'test -f ${typhonDev}' 'run-shell ${typhonDev}' 'run-shell ${typhon.rtp}'
     '';
