@@ -66,3 +66,8 @@ fi
 prepend_to_path "$HOME/.config/bin"
 prepend_to_path "$HOME/.local/bin"
 prepend_to_path "$XDG_DATA_HOME/bin"
+
+# Last, so tmux starts from a finished shell: an ssh login off a Mac attaches to tmux or starts it.
+if [[ -o interactive ]] && (( ${+functions[tmux::ssh_login]} )); then
+  tmux::ssh_login
+fi

@@ -248,6 +248,40 @@ _t "alternate prompt_re ❮, slice 1..2" \
   "$(_mock "$_REV_ALT" 1 2 '❮')"
 
 # ---------------------------------------------------------------------------
+# tmux::_ssh_login_action — what an ssh login does about tmux
+# The real tmux is shadowed by a function, in a subshell, so no server is asked.
+# ---------------------------------------------------------------------------
+function _ssh_action() {
+  # $1: has-session's exit code; the rest: env assignments for the call
+  local has_rc="$1"; shift
+  (
+    function tmux() { [[ "$1" == has-session ]] && return "${has_rc}"; return 0 }
+    env_assignments=("$@")
+    unset SSH_TTY TMUX
+    local kv
+    for kv in "${env_assignments[@]}"; do
+      typeset -g "${kv%%=*}=${kv#*=}"
+    done
+    tmux::_ssh_login_action
+  )
+}
+
+_t "ssh login: a session exists → attach" \
+  "attach" "$(_ssh_action 0 SSH_TTY=/dev/pts/1 OSTYPE=linux-gnu)"
+
+_t "ssh login: no session → new" \
+  "new" "$(_ssh_action 1 SSH_TTY=/dev/pts/1 OSTYPE=linux-gnu)"
+
+_t "ssh login: already inside tmux → nothing" \
+  "" "$(_ssh_action 0 SSH_TTY=/dev/pts/1 TMUX=/tmp/tmux-1000/default,1,0 OSTYPE=linux-gnu)"
+
+_t "ssh login: not over ssh → nothing" \
+  "" "$(_ssh_action 0 OSTYPE=linux-gnu)"
+
+_t "ssh login: a Mac → nothing" \
+  "" "$(_ssh_action 0 SSH_TTY=/dev/ttys001 OSTYPE=darwin27.0)"
+
+# ---------------------------------------------------------------------------
 # tmux::cap — argument parsing
 # We test by intercepting the pipeline. Mock _slice_history writes to a temp
 # file since it runs in a subshell (pipeline).

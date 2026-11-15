@@ -3,6 +3,28 @@
 # tmuxinator projects, the local flake's included, are all in ~/.config/tmuxinator
 # (~/.config/dotfiles/nix/tmuxinator.nix).
 
+# What an ssh login off a Mac does about tmux: "attach" when a session exists, "new" when none
+# does, nothing when this shell stays as it is (not over ssh, already inside tmux, a Mac, no tmux).
+function tmux::_ssh_login_action() {
+  [[ -n "${SSH_TTY:-}" && -z "${TMUX:-}" ]] || return 0
+  [[ "${OSTYPE}" == darwin* ]] && return 0
+  (( ${+commands[tmux]} || ${+functions[tmux]} )) || return 0
+  if tmux has-session 2>/dev/null; then
+    print -r -- attach
+  else
+    print -r -- new
+  fi
+}
+
+# An ssh login off a Mac always lands in tmux (.zshrc calls this last, in an interactive shell):
+# the session used most recently, or a new one. Detaching returns to the login shell.
+function tmux::ssh_login() {
+  case "$(tmux::_ssh_login_action)" in
+    attach) tmux attach-session ;;
+    new) tmux new-session ;;
+  esac
+}
+
 function tmux::rename-window() {
   [ -z "$TMUX" ] && return
   tmux rename-window "$@"
