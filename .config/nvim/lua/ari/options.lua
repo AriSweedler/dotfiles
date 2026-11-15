@@ -21,9 +21,14 @@ if vim.fn.has("mac") == 0 and vim.fn.executable("pbcopy") == 1 then
 	}
 	-- nvim runs pbcopy as a job with no controlling terminal, so its /dev/tty fails and the
 	-- copy never leaves this machine. Name nvim's own terminal for the OSC 52 escape.
-	local tty = vim.fn.system({ "ps", "-o", "tty=", "-p", tostring(vim.fn.getpid()) }):gsub("%s+", "")
-	if vim.v.shell_error == 0 and tty ~= "" and tty ~= "?" then
-		vim.env.CLIPBOARD_TTY = "/dev/" .. tty
+	-- With a UI, the nvim that reads this file is an embedded server with no terminal either;
+	-- its parent, the UI process, has it.
+	for _, pid in ipairs({ vim.fn.getpid(), vim.uv.os_getppid() }) do
+		local tty = vim.fn.system({ "ps", "-o", "tty=", "-p", tostring(pid) }):gsub("%s+", "")
+		if vim.v.shell_error == 0 and tty ~= "" and tty ~= "?" then
+			vim.env.CLIPBOARD_TTY = "/dev/" .. tty
+			break
+		end
 	end
 end
 
