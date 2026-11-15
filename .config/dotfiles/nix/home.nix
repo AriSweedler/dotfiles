@@ -79,6 +79,10 @@ in
   ]) ++ lib.optionals (!pkgs.stdenv.hostPlatform.isDarwin) [
     # Off a Mac: pbcopy, pbpaste, clip-hist and xclip, for a machine with no system clipboard
     ari.linux-clipboard
+    # nvim-treesitter compiles each parser with `tree-sitter build`, which needs the CLI and a C
+    # compiler; a Mac gets them from Homebrew (darwin.nix) and Xcode.
+    pkgs.tree-sitter
+    pkgs.gcc
   ];
 
   # zsh/plugins/zsh-vi-mode.zsh sources the plugin from here: the profile links only some of
