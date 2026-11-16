@@ -2,7 +2,11 @@
 # ('# what it checks', under the shebang), a zsh plugin suite on line 1 ('# Tests for <file>', a
 # file that exists). One that does not fails the step, by hand only, naming
 # `dotfiles test --edit NAME`. A plugin with no suite at all is counted, not failed.
-# No apply: the fix is writing the line.
+# And a closed gap stays closed: every line of tests/suites.manifest names a unit the test audit
+# (docs/test-audit.md) said needs a suite and the suite that now covers it; a unit whose suite is gone
+# fails the step, and so does a line whose unit is gone (the line goes with it). The audit's rows still
+# marked `needs a suite` are counted, not failed.
+# No apply: the fix is writing the line or the suite.
 step::declare test_suites --group repo --needs dotfiles_repo \
   --desc "every test suite (tests/test_*.sh, zsh/plugins/*.test.zsh) says what it tests on its first lines"
 step::watches test_suites '.config/dotfiles/tests/**' '.config/zsh/plugins/**'
@@ -12,8 +16,31 @@ check::test_suites() {
   local tests="${ARI_DOTFILES_TESTS}" plugins="${ARI_DOTFILES_ZSH_PLUGINS}"
   # A suite's target is a plugin or a ~/.config/bin script: a new or removed one changes a dir.
   local -a CACHE_EXTRA=("${ARI_DOTFILES_CMD}/test.zsh")
+  local manifest="${ARI_DOTFILES_SUITES_MANIFEST:-${tests}/suites.manifest}" root="${ARI_DOTFILES_SUITES_ROOT:-${ARI_DOTFILES_SRC_CONFIG:h}}"
+  local -a listed=()
+  [[ -r "${manifest}" ]] && listed=( ${(f)"$(awk '!/^#/ && NF >= 2 { print $1; print $2 }' "${manifest}")"} )
   cache::check step::test_suites::live "${tests}" "${tests}"/test_*.sh(N) \
-    "${plugins}" "${plugins}"/*.zsh(N) "${ARI_DOTFILES_SRC_CONFIG}/bin"
+    "${plugins}" "${plugins}"/*.zsh(N) "${ARI_DOTFILES_SRC_CONFIG}/bin" \
+    "${manifest}" "${ARI_DOTFILES_SRC}/docs/test-audit.md" "${root}/${^listed[@]}"
+}
+
+#######################################
+# The manifest's broken promises, one problem per line into reply: a unit whose suite is gone, a line
+# whose unit is gone, a line that is not "unit suite". Paths are relative to the shared repo root.
+# Globals: ARI_DOTFILES_SUITES_MANIFEST, ARI_DOTFILES_SUITES_ROOT (seams for the tests)
+#######################################
+step::test_suites::manifest() {
+  local manifest="${ARI_DOTFILES_SUITES_MANIFEST:-${ARI_DOTFILES_TESTS}/suites.manifest}" root="${ARI_DOTFILES_SUITES_ROOT:-${ARI_DOTFILES_SRC_CONFIG:h}}"
+  local line unit suite extra
+  reply=()
+  [[ -r "${manifest}" ]] || return 0   # no manifest, nothing promised
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    [[ -z "${line}" || "${line}" == \#* ]] && continue
+    read -r unit suite extra <<< "${line}"
+    if [[ -z "${suite}" || -n "${extra}" ]]; then reply+=("suites.manifest: '${line}' is not 'unit suite'"); continue; fi
+    if [[ ! -e "${root}/${unit}" ]]; then reply+=("suites.manifest: ${unit} is gone; remove its line"); continue; fi
+    [[ -f "${root}/${suite}" ]] || reply+=("${unit} lost its suite ${suite} (suites.manifest)")
+  done < "${manifest}"
 }
 
 step::test_suites::live() {
@@ -55,5 +82,14 @@ step::test_suites::live() {
     verdict fail undocumented -m -d "${(j:; :)problems}" -f "${CLI_NAME} test --edit ${fixes[1]}"
     return 0
   fi
-  verdict ok documented -d "${hermetic} hermetic and ${suites} plugin suites say what they test; ${bare} plugins have no suite"
+  step::test_suites::manifest
+  if (( ${#reply} )); then
+    verdict fail suite-lost -m -d "${(j:; :)reply}" -f "restore the suite, or edit ${ARI_DOTFILES_TESTS}/suites.manifest"
+    return 0
+  fi
+  local audit="${ARI_DOTFILES_SRC}/docs/test-audit.md" manifest="${ARI_DOTFILES_SUITES_MANIFEST:-${tests}/suites.manifest}"
+  local -i owed=0 held=0
+  [[ -r "${manifest}" ]] && held="$(awk '!/^#/ && NF >= 2' "${manifest}" | wc -l | tr -d ' ')"
+  [[ -r "${audit}" ]] && owed="$(grep -c '| needs a suite' "${audit}" || true)"
+  verdict ok documented -d "${hermetic} hermetic and ${suites} plugin suites say what they test; ${bare} plugins have no suite; ${held} audited units hold their suite, ${owed} still need one"
 }

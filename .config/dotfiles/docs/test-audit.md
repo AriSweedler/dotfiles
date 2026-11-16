@@ -45,7 +45,7 @@ How the counts were produced: every `tests/test_*.sh` with `bash`, every
 
 | Suite | Result | Cause |
 |---|---|---|
-| `raycast.test.zsh` | 75/3 | The three `bin:` cases (help lists `edit`, `--dry-run` on a read-only verb, `--to` on another verb). Not diagnosed. |
+| `raycast.test.zsh` | 75/3 | Fixed 2026-11-16 (78/0): the three `bin:` cases expected the behaviour before 290ce44, which scoped each flag to its verbs (a misplaced flag is now exit 64) and renamed `link edit`'s argument to `[BINDING]`. |
 | `ari-skill-shellscripts/tests/conventions.test.zsh` | 42/4 | All four findings are in `conventions.test.zsh` itself, read through `~/.claude/skills`. The lint skips its own file by its worktree path, so from a worktree it lints itself. An artifact of where it ran. |
 
 At 2ebdebd two more suites failed, test_help_shape.sh 68/1 and test_help_edit.sh 76/3:
@@ -68,12 +68,12 @@ expanded it as a command substitution, so `dotfiles push --help` opened an ssh c
 | `.config/bin/alttab-free-build` | link to `.config/alttab/bin/alttab-free-build`: build AltTab Free from source, patch, install | `test_alttab_edit.sh` (76), `test_alttab_step.sh` (43) | no | covered for the patch workflow the tests drive; the build itself needs Xcode and the network: no test needed beyond that |
 | `.config/bin/exo` | link into the chrome-exoskeleton dev repo | the dev repo's own vitest/playwright suites | no | out of scope (dev repo) |
 | `.config/bin/karabiner-typing-test` | link to karabiner.ts's script: open a Monkeytype test seeded by `passage`, log a CSV line | none | no | needs a suite: the CSV log and the passage hand-off are logic; the browser part is not |
-| `.config/bin/git-health` | maintenance runner and guardrail for git object stores (413 lines) | install check (`--help`) | placed (git-kit) | needs a suite: it rewrites object stores; a temp-repo suite is cheap |
-| `.config/bin/git-delete-if-merged-all` | delete every local branch merged into the base | none | placed (git-kit) | needs a suite: deletes branches |
-| `.config/bin/git-delete-if-merged-one` | delete one branch if merged | none | placed (git-kit) | needs a suite: deletes a branch |
-| `.config/bin/git-dedupe-case-refs` | delete remote-tracking refs that collide by case | install check (`--help`) | placed (git-kit) | needs a suite: deletes refs |
-| `.config/bin/git-ready` | switch to the dir-named branch and fetch | none | placed (git-kit) | needs a suite: small, fold into the git-kit suite |
-| `.config/bin/notes` | date-indexed git journal of daily notes (308 lines) | install check (`--help`, `notes path`) | placed (notes) | needs a suite: path math and commits on a journal Ari uses daily |
+| `.config/bin/git-health` | maintenance runner and guardrail for git object stores (413 lines) | `.config/dotfiles/tests/test_git_kit.sh` | placed (git-kit) | covered (2026-11-16, beads-2ly.6) |
+| `.config/bin/git-delete-if-merged-all` | delete every local branch merged into the base | `.config/dotfiles/tests/test_git_kit.sh` | placed (git-kit) | covered (2026-11-16, beads-2ly.6) |
+| `.config/bin/git-delete-if-merged-one` | delete one branch if merged | `.config/dotfiles/tests/test_git_kit.sh` | placed (git-kit) | covered (2026-11-16, beads-2ly.6) |
+| `.config/bin/git-dedupe-case-refs` | delete remote-tracking refs that collide by case | `.config/dotfiles/tests/test_git_kit.sh` | placed (git-kit) | covered (2026-11-16, beads-2ly.6) |
+| `.config/bin/git-ready` | switch to the dir-named branch and fetch | `.config/dotfiles/tests/test_git_kit.sh` | placed (git-kit) | covered (2026-11-16, beads-2ly.6) |
+| `.config/bin/notes` | date-indexed git journal of daily notes (308 lines) | `.config/dotfiles/tests/test_notes.sh` | placed (notes) | covered (2026-11-16, beads-2ly.6) |
 | `.config/bin/notif-center` | read and click macOS notifications through AX (862 lines) | install check (layouts present, `notif-ax` usage) | placed (mac-utils) | needs a suite for its layout parsing against the checked-in `.layout` fixtures; the AX calls need a live session |
 | `.config/bin/pbpastelinks` | rewrite the clipboard as text with links inlined (369 lines) | none | placed (mac-utils) | needs a suite: the HTML/RTF-to-text rewrite is pure given an input |
 | `.config/bin/pbpastelinks-extract.swift` | read every rich-text flavour off the clipboard | none | placed (mac-utils) | no test needed: a pasteboard read; its output feeds `pbpastelinks`, which the suite above covers from fixtures |
@@ -82,9 +82,9 @@ expanded it as a command substitution, so `dotfiles push --help` opened an ssh c
 | `.config/bin/tmux-tooltip` | read-only card over tmux (578 lines) | `test_tmux_tooltip.sh` (15); `bead_link.test.zsh` (17) for its link form | no | covered for `link --copy` and `open`'s copy (fake tmux and pbcopy); its block layout is pure text and still needs cases |
 | `.config/bin/tmux-restart` | restart the tmux server and restore every window | none | no | needs a suite on a throwaway `-L` server: it kills the server |
 | `.config/bin/tmux-edit-window` | open `$EDITOR` on a file in a tmux window | named by `test_jobs_notify.sh` (17), not run | no | no test needed: a one-call wrapper |
-| `.config/bin/swift-cache` | inspect and trim the shared Swift build cache | none | no | covered once `swift_cache.zsh` has a suite (its logic lives there) |
-| `.config/bin/swift-pkg` | run a SwiftPM package's binary from the cache | none | no | same as `swift-cache` |
-| `.config/bin/swift-run` | run a single-file Swift tool from the cache | none | no | same as `swift-cache` |
+| `.config/bin/swift-cache` | inspect and trim the shared Swift build cache | `swift_cache.test.zsh` | no | covered: its logic lives in `swift_cache.zsh` |
+| `.config/bin/swift-pkg` | run a SwiftPM package's binary from the cache | `swift_cache.test.zsh` | no | covered, as `swift-cache` |
+| `.config/bin/swift-run` | run a single-file Swift tool from the cache | `swift_cache.test.zsh` | no | covered, as `swift-cache` |
 | `.config/bin/chrome-headless` | headless Chromium that never steals focus | none | placed (mac-utils) | no test needed: launches a browser; nothing to assert without one |
 | `.config/bin/claude-pr-from-session` | print the PR bound to a Claude Code session | none | no | needs a suite: parses session files; fixtures make it cheap |
 | `.config/bin/favicon-maker` | make favicons from an image | none | placed (mac-utils) | no test needed: a wrapper over image tools |
@@ -113,19 +113,19 @@ expanded it as a command substitution, so `dotfiles push --help` opened an ssh c
 | `.config/zsh/plugins/oneshot_group.zsh` | publish a command family as a oneshot group | `oneshot_group.test.zsh` (15) | placed (dotfiles-cli) | covered |
 | `.config/zsh/plugins/open_any.zsh` | pick the opener whose `--check` accepts the input | `open_any.test.zsh` (22) | placed (dotfiles-cli, mac-utils) | covered |
 | `.config/zsh/plugins/open_link.zsh` | open a URL from the clipboard | `open_link.test.zsh` (31) | placed (dotfiles-cli, mac-utils) | covered |
-| `.config/zsh/plugins/raycast.zsh` | router behind `dotfiles raycast` | `raycast.test.zsh` (75/3) | placed (dotfiles-cli) | covered; 3 failures above |
+| `.config/zsh/plugins/raycast.zsh` | router behind `dotfiles raycast` | `raycast.test.zsh` (78/0) | placed (dotfiles-cli) | covered |
 | `.config/zsh/plugins/raycast_link.zsh` | the `link` subsystem | `raycast_link.test.zsh` (73) | placed (dotfiles-cli) | covered |
 | `.config/zsh/plugins/raycast_snippets.zsh` | the `snippets` subsystem | `raycast_snippets.test.zsh` (196) | placed (dotfiles-cli) | covered |
 | `.config/zsh/plugins/strip_ansi.zsh` | strip ANSI escapes | `strip_ansi.test.zsh` (14) | placed (dotfiles-cli, ari-zshlib) | covered |
 | `.config/zsh/plugins/tmux.zsh` | `tcap`, history slicing | `tmux.test.zsh` (53) | placed (dotfiles-cli) | covered |
 | `.config/zsh/plugins/vi_.zsh` | the `vi_*` editor family | `vi_.test.zsh` (12) | placed (dotfiles-cli) | covered |
-| `.config/zsh/plugins/log.zsh` | the one logging library (28 functions; the ari-zshlib mirror's source) | none of its own; every suite loads it | placed (dotfiles-cli, ari-zshlib) | needs a suite: its line format is a contract that bins and tests parse |
-| `.config/zsh/plugins/swift_cache.zsh` | one cache tree for Swift builds: keys, toolchain stamp, trim (351 lines) | none | placed (dotfiles-cli) | needs a suite: key and trim logic decide what gets rebuilt or deleted |
+| `.config/zsh/plugins/log.zsh` | the one logging library (28 functions; the ari-zshlib mirror's source) | `.config/zsh/plugins/log.test.zsh` | placed (dotfiles-cli, ari-zshlib) | covered (2026-11-16, beads-2ly.6) |
+| `.config/zsh/plugins/swift_cache.zsh` | one cache tree for Swift builds: keys, toolchain stamp, trim (351 lines) | `.config/zsh/plugins/swift_cache.test.zsh` | placed (dotfiles-cli) | covered (2026-11-16, beads-2ly.6) |
 | `.config/zsh/plugins/fzfdb_cli.zsh` | fzfdb selector: keys, paths, actions (319 lines) | none | placed (dotfiles-cli) | needs a suite: key validation and paths are pure |
 | `.config/zsh/plugins/history.zsh` | history options and `hist::yank` (`hy`, the last command to the clipboard) | none | placed (dotfiles-cli) | no test needed: options and a two-line copy. `histrm` was removed on 2026-11-16 instead of tested (Ari: "i never really use histrm anymore"); it never worked in a live shell, since its `fc -W` wrote the removed lines back |
-| `.config/zsh/plugins/colors.zsh` | contrast choice, colourize, xterm index | none | placed (dotfiles-cli, mac-utils) | needs a suite: pure colour math |
-| `.config/zsh/plugins/utc.zsh` | `utc`, `timedelta` conversions | none | placed (dotfiles-cli) | needs a suite: pure time math |
-| `.config/zsh/plugins/str.zsh` | `str::join`, `str::colorize` | none | placed (dotfiles-cli) | needs a suite: pure, a few cases |
+| `.config/zsh/plugins/colors.zsh` | contrast choice, colourize, xterm index | `.config/zsh/plugins/colors.test.zsh` | placed (dotfiles-cli, mac-utils) | covered (2026-11-16, beads-2ly.6) |
+| `.config/zsh/plugins/utc.zsh` | `utc`, `timedelta` conversions | `.config/zsh/plugins/utc.test.zsh` | placed (dotfiles-cli) | covered (2026-11-16, beads-2ly.6) |
+| `.config/zsh/plugins/str.zsh` | `str::join`, `str::colorize` | `.config/zsh/plugins/str.test.zsh` | placed (dotfiles-cli) | covered (2026-11-16, beads-2ly.6) |
 | `.config/zsh/plugins/jq.zsh` | `jq::flatten`, `jq::fzf` | none | placed (dotfiles-cli) | needs a suite for `jq::flatten` (pure); `jq::fzf` is interactive |
 | `.config/zsh/plugins/pubkey.zsh` | pick and copy a public key | none | placed (dotfiles-cli) | no test needed: a menu over files and the clipboard |
 | `.config/zsh/plugins/scroller.zsh` | ANSI scroll-region drawing | none | placed (dotfiles-cli) | no test needed: terminal drawing, read by eye |
@@ -154,7 +154,7 @@ expanded it as a command substitution, so `dotfiles push --help` opened an ssh c
 
 | Path | Work | Tests today | Nix? | Verdict |
 |---|---|---|---|---|
-| `.config/zsh/.zshrc` | `prepend_to_path`, plugin loading | none | no | needs a suite for `prepend_to_path` (PATH policy: move-to-front, no duplicates); the rest is startup |
+| `.config/zsh/.zshrc` | `prepend_to_path`, plugin loading | `.config/zsh/plugins/str.test.zsh` | no | covered (2026-11-16, beads-2ly.6) |
 | `.config/zsh/.zshenv` | ZDOTDIR for child shells | none | no | no test needed: environment |
 | `.config/zsh/tab_completion.zsh` | compinit and styles | none | no | no test needed: configuration |
 | `.config/zsh/completions` | completion functions (`_dotfiles` is generated) | `test_completion_spec.sh` (39) for `_dotfiles` | no | covered for `_dotfiles`; the others: no test needed (zsh completion glue) |
@@ -221,7 +221,7 @@ All of `lib`, `cmd` and `steps` is placed by the dotfiles-cli package, whose ins
 | `.config/dotfiles/cmd/machine-name.zsh` | `dotfiles machine-name` | `test_machine_name.sh` (22) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/cmd/pull.zsh` | `dotfiles pull` | `test_pull.sh` (33), `test_pull_changes.sh` (43), `test_pull_edit.sh` (41) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/cmd/push.zsh` | `dotfiles push` | `test_push_ssh.sh` (41), `test_push_mirror.sh` (48), `test_push_summary.sh` (49), `test_push_edit.sh` (81) | placed (dotfiles-cli) | covered |
-| `.config/dotfiles/cmd/raycast.zsh` | `dotfiles raycast` | `test_raycast_local_ok.sh` (13), `test_raycast_undocumented.sh` (20), `raycast.test.zsh` (75/3) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/cmd/raycast.zsh` | `dotfiles raycast` | `test_raycast_local_ok.sh` (13), `test_raycast_undocumented.sh` (20), `raycast.test.zsh` (78/0) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/cmd/run/edit.zsh` | the `--edit` plan for init, apply, healthcheck | `test_init_edit.sh` (54), `test_healthcheck_edit.sh` (42), `test_pull_edit.sh` (41) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/cmd/status.zsh` | `dotfiles status` | `test_status_cards.sh` (68) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/cmd/status/edit.zsh` | `status --edit` | `test_status_edit.sh` (66) | placed (dotfiles-cli) | covered |
@@ -277,7 +277,7 @@ Paths are under `.config/claude/skills/`.
 | `.config/claude/skills/ari-diagram-onlinegantt/bin/diff` | structural diff of two `.gantt` files | none | no | needs a suite: pure |
 | `.config/claude/skills/ari-dotfiles-skill-registry/bin/link` | link tier-held skills into `~/.claude/skills` | `registry.test.zsh` (15) | no | covered |
 | `.config/claude/skills/ari-dotfiles-skill-registry/bin/status` | where every skill stands | `registry.test.zsh` (15) | no | covered |
-| `.config/claude/skills/ari-dotfiles-skill-registry/bin/adopt` | move a skill into a tier and link it back | none | no | needs a suite: it moves directories |
+| `.config/claude/skills/ari-dotfiles-skill-registry/bin/adopt` | move a skill into a tier and link it back | `.config/claude/skills/ari-dotfiles-skill-registry/tests/adopt.test.zsh` | no | covered (2026-11-16, beads-2ly.6) |
 | `.config/claude/skills/ari-driving-remote/bin/run.zsh` | type one command into a pane, here or over ssh (1343 lines) | `run-help` (19), `run-large-capture` (7), `run-put` (67), `run-refusal-kind` (123), `run-typed-text` (57) | no | covered |
 | `.config/claude/skills/ari-driving-tmux/bin/ari-driving` | mark a pane on, off, status | `ari-driving.test.zsh` (65) | no | covered |
 | `.config/claude/skills/ari-driving-tmux/bin/focus.zsh` | focus a pane by id | `copy.test.zsh` (38), `link.test.zsh` (88) | no | covered |
@@ -286,12 +286,12 @@ Paths are under `.config/claude/skills/`.
 | `.config/claude/skills/ari-driving-tmux/bin/pretooluse_bash_pbcopy_guard.sh` | refuse a Bash command that writes the clipboard | `copy.test.zsh` (38) | no | covered |
 | `.config/claude/skills/ari-gsw-calendar-add/bin/cal-add.zsh` | add an event through concert-mcp | none | no | no test needed: a wrapper; concert-mcp holds the logic |
 | `.config/claude/skills/ari-gsw-calendar-add/bin/cal-del.zsh` | delete an event through concert-mcp | none | no | no test needed: a wrapper |
-| `.config/claude/skills/ari-gsw-doc-to-md/bin/doc_to_md.py` | Google Doc JSON to markdown (521 lines) | none | no | needs a suite: a deterministic converter; golden files from saved Doc JSON |
+| `.config/claude/skills/ari-gsw-doc-to-md/bin/doc_to_md.py` | Google Doc JSON to markdown (521 lines) | `.config/claude/skills/ari-gsw-doc-to-md/tests/test_doc_to_md.py` | no | covered (2026-11-16, beads-2ly.6) |
 | `.config/claude/skills/ari-gsw-doc-to-md/bin/doc-to-md.zsh` | its entrypoint | none | no | no test needed: prereqs and a timeout |
 | `.config/claude/skills/ari-gsw-read/bin/expand_links.py` | classify a source and expand it to doc links | none | no | needs a suite: URL classification is pure |
 | `.config/claude/skills/ari-gsw-read/bin/expand.zsh` | its entrypoint | none | no | no test needed: prereqs and a timeout |
-| `.config/claude/skills/ari-hemingway--lib/bin/verify-claims-at-sha` | check `path:line` claims at a SHA | none | no | needs a suite: a temp repo makes it cheap |
-| `.config/claude/skills/ari-hemingway--lib/bin/git-permalink-info` | build a permalink from a checkout | none | no | needs a suite: remote-URL parsing is pure |
+| `.config/claude/skills/ari-hemingway--lib/bin/verify-claims-at-sha` | check `path:line` claims at a SHA | `.config/claude/skills/ari-hemingway--lib/tests/bins.test.zsh` | no | covered (2026-11-16, beads-2ly.6) |
+| `.config/claude/skills/ari-hemingway--lib/bin/git-permalink-info` | build a permalink from a checkout | `.config/claude/skills/ari-hemingway--lib/tests/bins.test.zsh` | no | covered (2026-11-16, beads-2ly.6) |
 | `.config/claude/skills/ari-hemingway--lib/bin/detect-transfer` | detect how to get file content to Ari's machine | none | no | needs a suite: small, fold into the hemingway--lib suite |
 | `.config/claude/skills/ari-hemingway--lib/bin/make-investigation-folder` | make an investigation folder | none | no | needs a suite: fold into the hemingway--lib suite |
 | `.config/claude/skills/ari-hemingway--share-explainer/bin/share.zsh` | card, preview, gates, commit, push, watch Pages (656 lines) | none | no | needs a suite for its dry run (the default): it commits and pushes when run with `--execute` |
@@ -323,8 +323,8 @@ Paths are under `.config/claude/skills/`.
 | `.config/claude/skills/ari-operator-mode/bin/pending.zsh` | the typed-but-unentered row | `frontier.test.zsh` (491) | no | covered |
 | `.config/claude/skills/ari-operator-mode/bin/away.zsh` | the announced absence | `frontier.test.zsh` (491) | no | covered |
 | `.config/claude/skills/ari-parallel-play/bin/watch-merge.zsh` | one PR's life to merge | `watch-merge.test.zsh` (12) | no | covered |
-| `.config/claude/skills/ari-parallel-play/bin/worktree.zsh` | open and close a lane's worktree | none | no | needs a suite: it adds and removes worktrees |
-| `.config/claude/skills/ari-parallel-play/bin/lane-overlap.zsh` | which lanes may run at once | none | no | needs a suite: pure over diffs |
+| `.config/claude/skills/ari-parallel-play/bin/worktree.zsh` | open and close a lane's worktree | `.config/claude/skills/ari-parallel-play/tests/lanes.test.zsh` | no | covered (2026-11-16, beads-2ly.6) |
+| `.config/claude/skills/ari-parallel-play/bin/lane-overlap.zsh` | which lanes may run at once | `.config/claude/skills/ari-parallel-play/tests/lanes.test.zsh` | no | covered (2026-11-16, beads-2ly.6) |
 | `.config/claude/skills/ari-parallel-play/bin/render-lane-prompt.zsh` | render a lane prompt | none | no | needs a suite: a golden prompt |
 | `.config/claude/skills/ari-poem-limerick/bin/check` | verify a limerick grid | none | no | needs a suite: a gate, pure |
 | `.config/claude/skills/ari-poem-limerick/bin/init` | make the grid file | none | no | no test needed: mkdir and print |
@@ -415,11 +415,11 @@ is the only test of the config files, and it is enough for files that only set o
 | `.config/nvim/lua/ari/gitsigns/pr_parsers.lua` | PR number from a commit subject | `pr_parsers_spec.lua` (15/15) | placed (nvim.nix) | covered |
 | `.config/nvim/lua/ari/gitsigns/pr_openers.lua` | which opener takes a PR | none | placed (nvim.nix) | needs a suite: fold into `pr_parsers_spec.lua` |
 | `.config/nvim/lua/ari/gitsigns/open_relevant_pr.lua` | blame popup, then open the PR | none | placed (nvim.nix) | no test needed: UI over the two modules above |
-| `.config/nvim/lua/ari/color/init.lua` | hex parse, grey test, adjust | none | placed (nvim.nix) | needs a suite: pure colour math, runs under plain `lua` |
-| `.config/nvim/lua/ari/color/ize.lua` | greyscale and colourize modes | none | placed (nvim.nix) | needs a suite: pure, with `color/init.lua` |
+| `.config/nvim/lua/ari/color/init.lua` | hex parse, grey test, adjust | `.config/nvim/lua/ari/color/color_spec.lua` | placed (nvim.nix) | covered (2026-11-16, beads-2ly.6) |
+| `.config/nvim/lua/ari/color/ize.lua` | greyscale and colourize modes | `.config/nvim/lua/ari/color/color_spec.lua` | placed (nvim.nix) | covered (2026-11-16, beads-2ly.6) |
 | `.config/nvim/lua/ari/color/theme.lua` | set highlight groups from the colour helpers | none | placed (nvim.nix) | no test needed: applies highlights; the math it calls is in `color/init.lua` |
 | `.config/nvim/lua/ari/gitsigns/init.lua` | gitsigns setup and keys | none | placed (nvim.nix) | no test needed: configuration |
-| `.config/nvim/lua/ari/operator/tf.lua` | Terraform box-comment operator: wrap and box a paragraph | none | placed (nvim.nix) | needs a suite: `wrap_paragraph` is pure |
+| `.config/nvim/lua/ari/operator/tf.lua` | Terraform box-comment operator: wrap and box a paragraph | `.config/nvim/lua/ari/operator/tf_spec.lua` | placed (nvim.nix) | covered (2026-11-16, beads-2ly.6) |
 | `.config/nvim/lua/ari/claude_slash.lua` | probe Claude Code for slash commands, cache per binary | none | placed (nvim.nix) | needs a suite for the cache key and parse; the probe needs the binary |
 | `.config/nvim/after/plugin/modes/search.lua` | lgrep and the search register | none (it carries a TODO for tests) | placed (nvim.nix) | needs a suite: the escaping it plans is pure |
 | `.config/nvim/lua/ari/yaml_utils.lua` | YAML key path at the cursor | none | placed (nvim.nix) | needs a suite under `nvim -l` with a buffer: treesitter-dependent |
@@ -447,6 +447,8 @@ is the only test of the config files, and it is enough for files that only set o
 | `.config/nvim/init.lua` | load the config | none | placed (nvim.nix) | no test needed: three lines |
 
 ## Suites most worth writing next
+
+All ten were written on 2026-11-16 (beads-2ly.6), except `histrm`, which was removed; each covered unit is a line in `tests/suites.manifest`, which the `test_suites` step holds to. The rows still marked `needs a suite` are the next list.
 
 Ranked by what an untested bug would cost, then by how cheap the suite is. S is an afternoon or
 less; M is a day or so.

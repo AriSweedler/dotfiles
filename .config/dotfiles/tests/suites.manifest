@@ -1,0 +1,26 @@
+# Every unit the test audit (docs/test-audit.md) marked as needing a suite, once it has one: the unit,
+# then the suite that covers it, both relative to the shared repo root. The test_suites step fails
+# when a listed unit's suite is gone, so a closed gap cannot reopen; a unit removed from the repo
+# takes its line with it. A new suite for an audited unit adds a line here and turns its audit row to
+# covered.
+.config/bin/git-health  .config/dotfiles/tests/test_git_kit.sh
+.config/bin/git-delete-if-merged-all  .config/dotfiles/tests/test_git_kit.sh
+.config/bin/git-delete-if-merged-one  .config/dotfiles/tests/test_git_kit.sh
+.config/bin/git-dedupe-case-refs  .config/dotfiles/tests/test_git_kit.sh
+.config/bin/git-ready  .config/dotfiles/tests/test_git_kit.sh
+.config/bin/notes  .config/dotfiles/tests/test_notes.sh
+.config/zsh/plugins/log.zsh  .config/zsh/plugins/log.test.zsh
+.config/zsh/plugins/swift_cache.zsh  .config/zsh/plugins/swift_cache.test.zsh
+.config/zsh/plugins/colors.zsh  .config/zsh/plugins/colors.test.zsh
+.config/zsh/plugins/utc.zsh  .config/zsh/plugins/utc.test.zsh
+.config/zsh/plugins/str.zsh  .config/zsh/plugins/str.test.zsh
+.config/zsh/.zshrc  .config/zsh/plugins/str.test.zsh
+.config/claude/skills/ari-dotfiles-skill-registry/bin/adopt  .config/claude/skills/ari-dotfiles-skill-registry/tests/adopt.test.zsh
+.config/claude/skills/ari-gsw-doc-to-md/bin/doc_to_md.py  .config/claude/skills/ari-gsw-doc-to-md/tests/test_doc_to_md.py
+.config/claude/skills/ari-hemingway--lib/bin/verify-claims-at-sha  .config/claude/skills/ari-hemingway--lib/tests/bins.test.zsh
+.config/claude/skills/ari-hemingway--lib/bin/git-permalink-info  .config/claude/skills/ari-hemingway--lib/tests/bins.test.zsh
+.config/claude/skills/ari-parallel-play/bin/worktree.zsh  .config/claude/skills/ari-parallel-play/tests/lanes.test.zsh
+.config/claude/skills/ari-parallel-play/bin/lane-overlap.zsh  .config/claude/skills/ari-parallel-play/tests/lanes.test.zsh
+.config/nvim/lua/ari/color/init.lua  .config/nvim/lua/ari/color/color_spec.lua
+.config/nvim/lua/ari/color/ize.lua  .config/nvim/lua/ari/color/color_spec.lua
+.config/nvim/lua/ari/operator/tf.lua  .config/nvim/lua/ari/operator/tf_spec.lua

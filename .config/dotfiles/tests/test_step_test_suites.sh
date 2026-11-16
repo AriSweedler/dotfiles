@@ -2,7 +2,8 @@
 # test_suites: the doc rule for tests. A hermetic tests/test_*.sh says what it checks on line 2,
 # a plugin *.test.zsh names an existing target on line 1 ('# Tests for <file>'); one that does
 # not is a manual fail naming `dotfiles test --edit NAME`. A plugin with no suite is counted in
-# the ok detail, never failed. The real suites of this checkout pass.
+# the ok detail, never failed. A unit tests/suites.manifest lists keeps its suite, or the step fails.
+# The real suites of this checkout pass.
 set -u
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -38,7 +39,7 @@ age
 
 check_suites
 assert_eq "documented: ok" ok "$(status_of .status)"
-assert_eq "documented: the counts" "2 hermetic and 2 plugin suites say what they test; 2 plugins have no suite" "$(status_of .detail)"
+assert_contains "documented: the counts" "$(status_of .detail)" "2 hermetic and 2 plugin suites say what they test; 2 plugins have no suite; 0 audited units hold their suite"
 check_suites
 assert_eq "unchanged: still ok" ok "$(status_of .status)"
 assert_contains "unchanged: a cache hit" "$(status_of .detail)" "cached: true"
@@ -70,6 +71,33 @@ rm -f "${PLUG}/bare.test.zsh"
 printf '# Tests for foo.zsh.\n' > "${PLUG}/foo.test.zsh"
 check_suites
 assert_eq "fixed: ok again" ok "$(status_of .status)"
+
+# ── the manifest: an audited unit keeps its suite ──
+ROOT="${FIX}/root"
+mkdir -p "${ROOT}/bin" "${ROOT}/tests"
+printf 'x\n' > "${ROOT}/bin/tool"; printf 'x\n' > "${ROOT}/tests/test_tool.sh"; printf 'x\n' > "${ROOT}/bin/other"
+printf '# a comment line\nbin/tool  tests/test_tool.sh\nbin/other tests/test_tool.sh\n' > "${FIX}/suites.manifest"
+export ARI_DOTFILES_SUITES_MANIFEST="${FIX}/suites.manifest" ARI_DOTFILES_SUITES_ROOT="${ROOT}"
+touch -t 202601010000 "${ROOT}" "${ROOT}"/*/* "${FIX}/suites.manifest"
+check_suites
+assert_eq "manifest held: ok" ok "$(status_of .status)"
+assert_contains "manifest held: counted" "$(status_of .detail)" "2 audited units hold their suite"
+rm -f "${ROOT}/tests/test_tool.sh"
+check_suites
+assert_eq "a suite gone: fail" fail "$(status_of .status)"
+assert_eq "a suite gone: reason suite-lost" suite-lost "$(status_of .reason)"
+assert_eq "a suite gone: manual" true "$(status_of .manual)"
+assert_contains "a suite gone: names the unit and the suite" "$(status_of .detail)" "bin/tool lost its suite tests/test_tool.sh"
+printf 'x\n' > "${ROOT}/tests/test_tool.sh"; rm -f "${ROOT}/bin/other"
+check_suites
+assert_contains "a unit gone: its line must go" "$(status_of .detail)" "suites.manifest: bin/other is gone; remove its line"
+printf 'bin/tool  tests/test_tool.sh  extra\n' > "${FIX}/suites.manifest"
+check_suites
+assert_contains "a malformed line: named" "$(status_of .detail)" "is not 'unit suite'"
+rm -f "${FIX}/suites.manifest"
+check_suites
+assert_eq "no manifest: nothing promised, ok" ok "$(status_of .status)"
+unset ARI_DOTFILES_SUITES_MANIFEST ARI_DOTFILES_SUITES_ROOT
 
 nm steps
 assert_contains "registered in the repo group" "$(awk '$1 == "test_suites" { print $2 }' <<< "${OUT}")" "repo"

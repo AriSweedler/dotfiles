@@ -442,6 +442,9 @@ seed_df_remote() {
   cp -R "${TESTS_DIR}/fixtures/df-remote/." "${work}/"
   cp "${config}/bin/dotfiles" "${work}/.config/bin/dotfiles"
   cp -R "${config}/dotfiles/." "${work}/.config/dotfiles/"
+  # The manifest promises suites for units this partial tree does not carry; the seeded remote makes no
+  # such promise, or test_suites would fail every unit as gone.
+  rm -f "${work}/.config/dotfiles/tests/suites.manifest"
   cp "${config}/claude/skills/ari-skill-shellscripts/lib/logging.zsh" "${work}/.config/claude/skills/ari-skill-shellscripts/lib/"
   cp "${config}/zsh/plugins/strip_ansi.zsh" "${work}/.config/zsh/plugins/"
   cp "${shared}/local-dotfiles-exclude" "${work}/.config/new-machine/"
