@@ -289,9 +289,13 @@ def is_ordered_list(lists, list_id, level):
 
 
 def render_list_item(text, bullet, lists):
+    """A nested item is indented to its parent's content column, which is the
+    parent marker's width plus one: three spaces under `1.`, two under `-`.
+    Two spaces under `1.` would start a new list instead of nesting."""
     level = bullet.get("nestingLevel", 0)
-    indent = "  " * level
-    marker = "1." if is_ordered_list(lists, bullet.get("listId", ""), level) else "-"
+    list_id = bullet.get("listId", "")
+    indent = "".join("   " if is_ordered_list(lists, list_id, parent) else "  " for parent in range(level))
+    marker = "1." if is_ordered_list(lists, list_id, level) else "-"
     return f"{indent}{marker} {text}"
 
 

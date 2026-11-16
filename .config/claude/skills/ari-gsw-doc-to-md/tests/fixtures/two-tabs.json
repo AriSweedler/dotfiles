@@ -1,0 +1,622 @@
+{
+ "title": "[🤖 AI generated] Request flow",
+ "documentId": "doc1",
+ "tabs": [
+  {
+   "tabProperties": {
+    "tabId": "t.0",
+    "title": "Main"
+   },
+   "documentTab": {
+    "body": {
+     "content": [
+      {
+       "sectionBreak": {}
+      },
+      {
+       "paragraph": {
+        "elements": [
+         {
+          "textRun": {
+           "content": "Request flow\n",
+           "textStyle": {}
+          }
+         }
+        ],
+        "paragraphStyle": {
+         "namedStyleType": "TITLE"
+        }
+       }
+      },
+      {
+       "paragraph": {
+        "elements": [
+         {
+          "textRun": {
+           "content": "Summary\n",
+           "textStyle": {}
+          }
+         }
+        ],
+        "paragraphStyle": {
+         "namedStyleType": "HEADING_1"
+        }
+       }
+      },
+      {
+       "paragraph": {
+        "elements": [
+         {
+          "textRun": {
+           "content": "Plain, ",
+           "textStyle": {}
+          }
+         },
+         {
+          "textRun": {
+           "content": "bold",
+           "textStyle": {
+            "bold": true
+           }
+          }
+         },
+         {
+          "textRun": {
+           "content": ", ",
+           "textStyle": {}
+          }
+         },
+         {
+          "textRun": {
+           "content": "italic",
+           "textStyle": {
+            "italic": true
+           }
+          }
+         },
+         {
+          "textRun": {
+           "content": ", ",
+           "textStyle": {}
+          }
+         },
+         {
+          "textRun": {
+           "content": "  code  ",
+           "textStyle": {
+            "weightedFontFamily": {
+             "fontFamily": "Roboto Mono"
+            }
+           }
+          }
+         },
+         {
+          "textRun": {
+           "content": " and ",
+           "textStyle": {}
+          }
+         },
+         {
+          "textRun": {
+           "content": "both",
+           "textStyle": {
+            "bold": true,
+            "italic": true
+           }
+          }
+         },
+         {
+          "textRun": {
+           "content": ".\n",
+           "textStyle": {}
+          }
+         }
+        ],
+        "paragraphStyle": {
+         "namedStyleType": "NORMAL_TEXT"
+        }
+       }
+      },
+      {
+       "paragraph": {
+        "elements": [
+         {
+          "textRun": {
+           "content": "See ",
+           "textStyle": {}
+          }
+         },
+         {
+          "textRun": {
+           "content": "the ",
+           "textStyle": {
+            "link": {
+             "url": "https://example.com/a"
+            }
+           }
+          }
+         },
+         {
+          "textRun": {
+           "content": "docs",
+           "textStyle": {
+            "bold": true,
+            "link": {
+             "url": "https://example.com/a"
+            }
+           }
+          }
+         },
+         {
+          "textRun": {
+           "content": " and ",
+           "textStyle": {}
+          }
+         },
+         {
+          "textRun": {
+           "content": "a Drive file",
+           "textStyle": {
+            "link": {
+             "url": "https://docs.google.com/document/d/abc123/edit"
+            }
+           }
+          }
+         },
+         {
+          "textRun": {
+           "content": ".\n",
+           "textStyle": {}
+          }
+         }
+        ],
+        "paragraphStyle": {
+         "namedStyleType": "NORMAL_TEXT"
+        }
+       }
+      },
+      {
+       "paragraph": {
+        "elements": [
+         {
+          "textRun": {
+           "content": "Chip: ",
+           "textStyle": {}
+          }
+         },
+         {
+          "richLink": {
+           "richLinkProperties": {
+            "uri": "https://drive.google.com/file/d/xyz/view",
+            "title": "Budget sheet"
+           }
+          }
+         },
+         {
+          "textRun": {
+           "content": ", owner ",
+           "textStyle": {}
+          }
+         },
+         {
+          "person": {
+           "personProperties": {
+            "name": "Ada Lovelace",
+            "email": "ada@example.com"
+           }
+          }
+         },
+         {
+          "textRun": {
+           "content": ", due ",
+           "textStyle": {}
+          }
+         },
+         {
+          "dateElement": {
+           "dateElementProperties": {
+            "displayText": "Nov 16, 2026"
+           }
+          }
+         },
+         {
+          "textRun": {
+           "content": "\n",
+           "textStyle": {}
+          }
+         }
+        ],
+        "paragraphStyle": {
+         "namedStyleType": "NORMAL_TEXT"
+        }
+       }
+      },
+      {
+       "paragraph": {
+        "elements": [
+         {
+          "textRun": {
+           "content": "Steps\n",
+           "textStyle": {}
+          }
+         }
+        ],
+        "paragraphStyle": {
+         "namedStyleType": "HEADING_2"
+        }
+       }
+      },
+      {
+       "paragraph": {
+        "elements": [
+         {
+          "textRun": {
+           "content": "First\n",
+           "textStyle": {}
+          }
+         }
+        ],
+        "paragraphStyle": {
+         "namedStyleType": "NORMAL_TEXT"
+        },
+        "bullet": {
+         "listId": "ol",
+         "nestingLevel": 0
+        }
+       }
+      },
+      {
+       "paragraph": {
+        "elements": [
+         {
+          "textRun": {
+           "content": "Nested bullet\n",
+           "textStyle": {}
+          }
+         }
+        ],
+        "paragraphStyle": {
+         "namedStyleType": "NORMAL_TEXT"
+        },
+        "bullet": {
+         "listId": "ol",
+         "nestingLevel": 1
+        }
+       }
+      },
+      {
+       "paragraph": {
+        "elements": [
+         {
+          "textRun": {
+           "content": "Second\n",
+           "textStyle": {}
+          }
+         }
+        ],
+        "paragraphStyle": {
+         "namedStyleType": "NORMAL_TEXT"
+        },
+        "bullet": {
+         "listId": "ol",
+         "nestingLevel": 0
+        }
+       }
+      },
+      {
+       "paragraph": {
+        "elements": [
+         {
+          "textRun": {
+           "content": "\n",
+           "textStyle": {}
+          }
+         }
+        ],
+        "paragraphStyle": {
+         "namedStyleType": "NORMAL_TEXT"
+        }
+       }
+      },
+      {
+       "paragraph": {
+        "elements": [
+         {
+          "textRun": {
+           "content": "Loose item\n",
+           "textStyle": {}
+          }
+         }
+        ],
+        "paragraphStyle": {
+         "namedStyleType": "NORMAL_TEXT"
+        },
+        "bullet": {
+         "listId": "ul",
+         "nestingLevel": 0
+        }
+       }
+      },
+      {
+       "table": {
+        "tableRows": [
+         {
+          "tableCells": [
+           {
+            "content": [
+             {
+              "paragraph": {
+               "elements": [
+                {
+                 "textRun": {
+                  "content": "Name\n",
+                  "textStyle": {}
+                 }
+                }
+               ],
+               "paragraphStyle": {
+                "namedStyleType": "NORMAL_TEXT"
+               }
+              }
+             }
+            ]
+           },
+           {
+            "content": [
+             {
+              "paragraph": {
+               "elements": [
+                {
+                 "textRun": {
+                  "content": "Value\n",
+                  "textStyle": {}
+                 }
+                }
+               ],
+               "paragraphStyle": {
+                "namedStyleType": "NORMAL_TEXT"
+               }
+              }
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "tableCells": [
+           {
+            "content": [
+             {
+              "paragraph": {
+               "elements": [
+                {
+                 "textRun": {
+                  "content": "pipe\n",
+                  "textStyle": {}
+                 }
+                }
+               ],
+               "paragraphStyle": {
+                "namedStyleType": "NORMAL_TEXT"
+               }
+              }
+             }
+            ]
+           },
+           {
+            "content": [
+             {
+              "paragraph": {
+               "elements": [
+                {
+                 "textRun": {
+                  "content": "a | b\n",
+                  "textStyle": {}
+                 }
+                }
+               ],
+               "paragraphStyle": {
+                "namedStyleType": "NORMAL_TEXT"
+               }
+              }
+             },
+             {
+              "paragraph": {
+               "elements": [
+                {
+                 "textRun": {
+                  "content": "second line\n",
+                  "textStyle": {}
+                 }
+                }
+               ],
+               "paragraphStyle": {
+                "namedStyleType": "NORMAL_TEXT"
+               }
+              }
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "tableCells": [
+           {
+            "content": [
+             {
+              "paragraph": {
+               "elements": [
+                {
+                 "textRun": {
+                  "content": "short row\n",
+                  "textStyle": {}
+                 }
+                }
+               ],
+               "paragraphStyle": {
+                "namedStyleType": "NORMAL_TEXT"
+               }
+              }
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "paragraph": {
+        "elements": [
+         {
+          "inlineObjectElement": {
+           "inlineObjectId": "img1",
+           "textStyle": {
+            "link": {
+             "url": "https://mermaid.live/view#pako:eJyrVkrOT0lVslJQSsvJL0_OSCwqUfAJislTUHBU0NW1U3BS0lFQyk0tyk3MTAGpqo5RKslIzU2NUbKKUUpJTUsszSmJUapVqgUAMsoWkg"
+            }
+           }
+          }
+         },
+         {
+          "textRun": {
+           "content": "\n",
+           "textStyle": {}
+          }
+         }
+        ],
+        "paragraphStyle": {
+         "namedStyleType": "NORMAL_TEXT"
+        }
+       }
+      },
+      {
+       "paragraph": {
+        "elements": [
+         {
+          "horizontalRule": {}
+         },
+         {
+          "textRun": {
+           "content": "\n",
+           "textStyle": {}
+          }
+         }
+        ],
+        "paragraphStyle": {
+         "namedStyleType": "NORMAL_TEXT"
+        }
+       }
+      },
+      {
+       "paragraph": {
+        "elements": [
+         {
+          "textRun": {
+           "content": "Deep\n",
+           "textStyle": {}
+          }
+         }
+        ],
+        "paragraphStyle": {
+         "namedStyleType": "HEADING_3"
+        }
+       }
+      }
+     ]
+    },
+    "inlineObjects": {
+     "img1": {
+      "inlineObjectProperties": {
+       "embeddedObject": {
+        "title": "Flow diagram",
+        "imageProperties": {
+         "contentUri": "https://lh3.googleusercontent.com/expiring-token"
+        }
+       }
+      }
+     }
+    },
+    "lists": {
+     "ol": {
+      "listProperties": {
+       "nestingLevels": [
+        {
+         "glyphType": "DECIMAL"
+        },
+        {
+         "glyphSymbol": "●"
+        }
+       ]
+      }
+     },
+     "ul": {
+      "listProperties": {
+       "nestingLevels": [
+        {
+         "glyphSymbol": "●"
+        }
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "tabProperties": {
+    "tabId": "t.1",
+    "title": "Aside 1: Notes"
+   },
+   "documentTab": {
+    "body": {
+     "content": [
+      {
+       "paragraph": {
+        "elements": [
+         {
+          "textRun": {
+           "content": "Aside body\n",
+           "textStyle": {}
+          }
+         }
+        ],
+        "paragraphStyle": {
+         "namedStyleType": "NORMAL_TEXT"
+        }
+       }
+      }
+     ]
+    }
+   },
+   "childTabs": [
+    {
+     "tabProperties": {
+      "tabId": "t.2",
+      "title": "Child"
+     },
+     "documentTab": {
+      "body": {
+       "content": [
+        {
+         "paragraph": {
+          "elements": [
+           {
+            "textRun": {
+             "content": "Child body\n",
+             "textStyle": {}
+            }
+           }
+          ],
+          "paragraphStyle": {
+           "namedStyleType": "NORMAL_TEXT"
+          }
+         }
+        }
+       ]
+      }
+     }
+    }
+   ]
+  }
+ ]
+}
