@@ -34,6 +34,16 @@ function main() {
   local pr_number pr_state
   pr_number="${pr_info%% *}"
   pr_state="${pr_info##* }"
+
+  # Only a stale branch goes: a merged PR's branch, or a closed PR's branch whose every commit
+  # a remote also holds. A closed PR's local commits that were never pushed exist nowhere else,
+  # and `git branch -D` would lose them, so such a branch is kept.
+  local unpushed
+  unpushed="$(git rev-list --count "${branch}" --not --remotes 2>/dev/null || echo unknown)"
+  if [[ "${pr_state}" == "CLOSED" && "${unpushed}" != "0" ]]; then
+    log::warn "PR closed, but the branch has commits no remote holds; kept | branch='${branch}' pr='#${pr_number}' unpushed='${unpushed}'"
+    exit 1
+  fi
   log::info "PR ${pr_state,,} | branch='${branch}' pr='#${pr_number}'"
   git branch -D "${branch}"
 }

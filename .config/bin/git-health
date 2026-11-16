@@ -408,6 +408,7 @@ case "${mode}" in
         ;;
     install) do_install ;;
     register) resolve_repo; do_register ;;
-    unregister) resolve_repo; do_unregister ;;
+    # A registered repo may be gone (do_all names this fix for it), so --repo alone is enough here.
+    unregister) if [[ -n "${repo}" ]]; then repo="${repo:A}"; else resolve_repo; fi; do_unregister ;;
     tick) resolve_repo; do_tick ;;
 esac
