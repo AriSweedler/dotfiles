@@ -119,7 +119,8 @@ else
     exit "${EXIT_PARSE_FAILURE}"
 fi
 
-if [[ "${host}" != "github.com" && "${host}" != *".github."* ]]; then
+# github.<corp>.com is the usual GitHub Enterprise form; <x>.github.<corp>.com is accepted too.
+if [[ "${host}" != "github.com" && "${host}" != github.* && "${host}" != *.github.* ]]; then
     log::err "Host not supported (only GitHub) | host='${host}'"
     exit "${EXIT_PARSE_FAILURE}"
 fi
