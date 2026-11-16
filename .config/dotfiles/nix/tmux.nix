@@ -74,6 +74,8 @@ in
       ''}
 
       if-shell 'test -f ${typhonDev}' 'run-shell ${typhonDev}' 'run-shell ${typhon.rtp}'
+
+      ${builtins.readFile ./tmux/machine-focus.conf}
     '';
   };
 
