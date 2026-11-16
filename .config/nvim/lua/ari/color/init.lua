@@ -30,7 +30,9 @@ end
 --- Converts the Color object to a hex color string.
 -- @return String: The hex color string representation of the color.
 function Color:to_hex()
-	return string.format("#%02x%02x%02x", self.r, self.g, self.b)
+	-- adjust_color leaves fractions; round them, since %x takes only integers outside LuaJIT
+	local function byte(v) return math.floor(v + 0.5) end
+	return string.format("#%02x%02x%02x", byte(self.r), byte(self.g), byte(self.b))
 end
 
 --- Checks if the color is a shade of grey.
