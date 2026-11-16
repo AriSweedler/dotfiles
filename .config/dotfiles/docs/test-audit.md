@@ -122,7 +122,7 @@ expanded it as a command substitution, so `dotfiles push --help` opened an ssh c
 | `.config/zsh/plugins/log.zsh` | the one logging library (28 functions; the ari-zshlib mirror's source) | none of its own; every suite loads it | placed (dotfiles-cli, ari-zshlib) | needs a suite: its line format is a contract that bins and tests parse |
 | `.config/zsh/plugins/swift_cache.zsh` | one cache tree for Swift builds: keys, toolchain stamp, trim (351 lines) | none | placed (dotfiles-cli) | needs a suite: key and trim logic decide what gets rebuilt or deleted |
 | `.config/zsh/plugins/fzfdb_cli.zsh` | fzfdb selector: keys, paths, actions (319 lines) | none | placed (dotfiles-cli) | needs a suite: key validation and paths are pure |
-| `.config/zsh/plugins/history.zsh` | history options; `histrm` rewrites the history file | none | placed (dotfiles-cli) | needs a suite: `histrm` deletes history lines |
+| `.config/zsh/plugins/history.zsh` | history options and `hist::yank` (`hy`, the last command to the clipboard) | none | placed (dotfiles-cli) | no test needed: options and a two-line copy. `histrm` was removed on 2026-11-16 instead of tested (Ari: "i never really use histrm anymore"); it never worked in a live shell, since its `fc -W` wrote the removed lines back |
 | `.config/zsh/plugins/colors.zsh` | contrast choice, colourize, xterm index | none | placed (dotfiles-cli, mac-utils) | needs a suite: pure colour math |
 | `.config/zsh/plugins/utc.zsh` | `utc`, `timedelta` conversions | none | placed (dotfiles-cli) | needs a suite: pure time math |
 | `.config/zsh/plugins/str.zsh` | `str::join`, `str::colorize` | none | placed (dotfiles-cli) | needs a suite: pure, a few cases |
@@ -454,7 +454,7 @@ less; M is a day or so.
 1. **git-kit** (`git-health`, `git-delete-if-merged-*`, `git-dedupe-case-refs`, `git-ready`) — M.
    They delete branches and refs and rewrite object stores, hourly for `git-health`. One hermetic
    suite over temp repos, in `tests/` beside the harness.
-2. **`history.zsh` `histrm`** — S. It deletes lines from the history file.
+2. ~~**`history.zsh` `histrm`**~~ — removed on 2026-11-16 instead (see its row).
 3. **`notes`** — S. A journal written daily; the install check proves only that it loads.
 4. **ari-parallel-play `worktree.zsh` and `lane-overlap.zsh`** — M. They add and remove worktrees
    and decide which lanes run together.
