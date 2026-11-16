@@ -7,7 +7,7 @@
 emulate -L zsh
 setopt err_return no_unset pipe_fail
 
-CONF=${0:A:h}/machine-focus.conf
+CONF=${MACHINE_FOCUS_CONF:-${0:A:h}/machine-focus.conf}   # the file under test
 D=$(mktemp -d)
 export TMUX_TMPDIR=$D
 unset TMUX
@@ -77,7 +77,18 @@ unfocused_state() {
   check "$1: outer window style back to typhon's" "$(wopt window-style)" ''
 }
 
-tmux -S $OUT select-pane -t $SSH_PANE
+# The inner tmux asks for focus reports only once its client is up; on Linux an early focus-out
+# can land before that and be lost. Toggle until one arrives, then start from focused.
+warm_up() {
+  local i
+  for i in {1..10}; do
+    tmux -S $OUT select-pane -t $LOCAL_PANE; sleep 0.3
+    if in_unfocused; then tmux -S $OUT select-pane -t $SSH_PANE; return 0; fi
+    tmux -S $OUT select-pane -t $SSH_PANE; sleep 0.3
+  done
+  return 1
+}
+warm_up && ok "a focus-out reaches inner" || bad "a focus-out reaches inner" "none in 6s of toggling"
 wait_until "initial focus-in reaches inner" in_focused
 for round in 1 2 3; do
   print "round $round"
