@@ -157,7 +157,7 @@ _t "bin: undocumented names the fixture binding with its fix" \
   $'binding clipboard-history | fix=\'dotfiles raycast link edit clipboard-history\'\nundocumented=1' \
   "$(env "${_env[@]}" ARI_DOTFILES_RAYCAST_LINK_BINDINGS_CMD="cat ${_dir}/bindings.json" "${_dotfiles}" raycast undocumented 2>/dev/null)"
 _t "bin: the raycast help lists edit, --edit, link edit and undocumented" "4" \
-  "$("${_dotfiles}" help raycast 2>&1 | grep -c -e '^  dotfiles raycast edit \[link' -e '(also: raycast --edit)' -e '^  dotfiles raycast link edit \[<slug>\]' -e '^  dotfiles raycast undocumented')"
+  "$("${_dotfiles}" help raycast 2>&1 | grep -c -e '^  dotfiles raycast edit \[link' -e '(also: raycast --edit)' -e '^  dotfiles raycast link edit \[BINDING\]' -e '^  dotfiles raycast undocumented')"
 _t "bin: the raycast help lists the --edit flag" "1" "$("${_dotfiles}" help raycast 2>&1 | grep -c '^  --edit ')"
 _bin help >/dev/null 2>&1; _rc=$?; _t "bin: help rc 0" "0" "${_rc}"
 _t "bin: help lists the subsystems" "1" "$(_bin help 2>&1 | grep -c 'Subsystems:.*link, snippets')"
@@ -170,12 +170,13 @@ _bin bogus >/dev/null 2>&1; _rc=$?; _t "bin: unknown subsystem rc 1" "1" "${_rc}
 _t "bin: unknown subsystem names the valid ones and prints help" "2" "$(_bin bogus 2>&1 | grep -c -e "Unknown subsystem | subsystem='bogus' valid='link, snippets, sync, edit, undocumented, help'" -e 'Usage:' | tr -d ' ')"
 : > "${_calls}"; ari_raycast snippets adopt --dry-run >/dev/null; _t "route: snippets adopt --dry-run" "snippets --adopt --dry-run" "$(cat "${_calls}")"
 _bin snippets bogus >/dev/null 2>&1; _rc=$?; _t "bin: unknown verb rc 1" "1" "${_rc}"
-_t "bin: --dry-run on a read-only verb is the read-only run" "$(_bin link list 2>/dev/null)" "$(_bin link list --dry-run 2>/dev/null)"
+# A flag goes only with the verbs it is declared for (lib/verb.zsh, --for): elsewhere it is a usage error, exit 64.
+_bin link list --dry-run >/dev/null 2>&1; _rc=$?; _t "bin: --dry-run on a read-only verb is a usage error rc 64" "64" "${_rc}"
 _bin snippets pull >/dev/null 2>&1; _rc=$?; _t "bin: pull without FILE rc 1" "1" "${_rc}"
 _bin snippets move Phone >/dev/null 2>&1; _rc=$?; _t "bin: move without --to rc 1" "1" "${_rc}"
 _bin snippets move Phone --to attic >/dev/null 2>&1; _rc=$?; _t "bin: move to an unknown tier rc 1" "1" "${_rc}"
 _bin snippets move --to local >/dev/null 2>&1; _rc=$?; _t "bin: move without NAME rc 1" "1" "${_rc}"
-_bin snippets list --to local >/dev/null 2>&1; _rc=$?; _t "bin: --to on another verb rc 1" "1" "${_rc}"
+_bin snippets list --to local >/dev/null 2>&1; _rc=$?; _t "bin: --to on another verb is a usage error rc 64" "64" "${_rc}"
 _t "bin: move --dry-run reaches the plugin with --to" "name=nobody" \
   "$(print -r -- '[{"name":"nobody","text":"x"}]' > "${_dir}/local/snippets.json"; _snippets_merge; env "${_env[@]}" "${_dotfiles}" raycast snippets move nobody --to shared --dry-run 2>/dev/null | grep '^name=')"
 _t "bin: sync --dry-run skips without Raycast" "skip raycast not installed | app='${_dir}/nope.app'" "$(ARI_DOTFILES_RAYCAST_APP="${_dir}/nope.app" _bin sync --dry-run 2>/dev/null | grep '^skip')"
