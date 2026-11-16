@@ -1,8 +1,11 @@
 #!/usr/bin/env zsh
 # Proves bead_autolink (the MessageDisplay hook) against a stub bd and a stub linker under mktemp:
-# a bare id bd knows is shown as its link; an id already linked, in inline code, in a URL, in a
-# code fence (also one that spans two batches) or unknown to bd is left alone; and a batch with
-# nothing to change prints nothing. Never reads Ari's tracker or his beads.conf.
+# every mention bd knows (a bare id, a `[id]` shortcut reference, an inline link to its short URL) is
+# shown as its card link and its definition line is removed, with the blank line before a removed
+# trailing block; a card link, a link to another URL, a full reference, a non-bead definition, an id
+# in inline code, in a URL, in a code fence (also one that spans two batches) or unknown to bd is
+# left as written, an unknown id's definition line included; and a batch with nothing to change
+# prints nothing. Never reads Ari's tracker or his beads.conf.
 # Run: zsh $HOME/.claude/skills/ari-bead-driven-development/tests/bead_autolink.test.zsh
 set -euo pipefail
 
@@ -22,8 +25,8 @@ trap 'rm -rf "${WORK_DIR}"' EXIT
 typeset -i passed=0 failed=0
 
 #######################################
-# Write the stubs: a bd that knows beads-o27 and beads-xy9.2 only, and a linker that prints
-# [ID](stub://ID) per --bead.
+# Write the stubs: a bd that knows beads-o27 and beads-xy9.2 only, and a linker that prints, per
+# --bead, the definition line [ID]: https://x.example/p/beads?bead=ID, or [ID]: card://ID with --card.
 #######################################
 write_stubs() {
   cat > "${WORK_DIR}/bd" <<'STUB'
@@ -41,9 +44,19 @@ print -r -- "[${(j:,:)rows}]"
 STUB
   cat > "${WORK_DIR}/linker.zsh" <<'STUB'
 #!/usr/bin/env zsh
+typeset -a ids
+typeset card=false
 while (( $# )); do
-  [[ "${1}" == --bead ]] && print -r -- "[${2}](stub://${2})"
+  [[ "${1}" == --card ]] && card=true
+  [[ "${1}" == --bead ]] && ids+=("${2}")
   shift
+done
+for id in "${ids[@]}"; do
+  if [[ "${card}" == true ]]; then
+    print -r -- "[${id}]: card://${id}"
+  else
+    print -r -- "[${id}]: https://x.example/p/beads?bead=${id}"
+  fi
 done
 STUB
   chmod +x "${WORK_DIR}/bd"
@@ -85,14 +98,32 @@ main() {
   write_stubs
 
   expect_eq "a bare id is linked" \
-    "Closed [beads-o27](stub://beads-o27)." \
+    "Closed [beads-o27](card://beads-o27)." \
     "$(displayed "Closed beads-o27." m1 true)"
   expect_eq "a child id keeps its suffix, and a sentence's period stays outside" \
-    "See [beads-xy9.2](stub://beads-xy9.2). Done" \
+    "See [beads-xy9.2](card://beads-xy9.2). Done" \
     "$(displayed "See beads-xy9.2. Done" m2 true)"
-  expect_eq "an id that is already a link is left alone" \
-    "[beads-o27](https://x.example/p?bead=beads-o27) is open" \
-    "$(displayed "[beads-o27](https://x.example/p?bead=beads-o27) is open" m3 true)"
+  expect_eq "an inline link to its short URL is shown as the card link" \
+    "[the toggle](card://beads-o27) is open" \
+    "$(displayed "[the toggle](https://x.example/p/beads?bead=beads-o27) is open" m3 true)"
+  expect_eq "a card link and a link to another URL are left alone" \
+    "[beads-o27](https://x.example/p/beads?bead=beads-o27&tmux-tooltip=show&title=x) [beads-o27](https://x.example/p?bead=beads-o27)" \
+    "$(displayed "[beads-o27](https://x.example/p/beads?bead=beads-o27&tmux-tooltip=show&title=x) [beads-o27](https://x.example/p?bead=beads-o27)" m14 true)"
+  expect_eq "references become card links; their trailing definition block and its blank line are removed" \
+    'Filed [beads-o27](card://beads-o27); see [Graph][beads-xy9.2].' \
+    "$(displayed $'Filed [beads-o27]; see [Graph][beads-xy9.2].\n\n[beads-o27]: https://x.example/p/beads?bead=beads-o27\n[beads-xy9.2]: https://x.example/p/beads?bead=beads-xy9.2' m11 true)"
+  expect_eq "a non-bead definition and an unknown id's definition stay; the unknown reference is left as written" \
+    $'[beads-o27](card://beads-o27) and [beads-zzz], see [docs].\n\n[docs]: https://example.com/docs\n[beads-zzz]: https://x.example/p/beads?bead=beads-zzz' \
+    "$(displayed $'[beads-o27] and [beads-zzz], see [docs].\n\n[beads-o27]: https://x.example/p/beads?bead=beads-o27\n[docs]: https://example.com/docs\n[beads-zzz]: https://x.example/p/beads?bead=beads-zzz' m15 true)"
+  expect_eq "a definition line inside a fence and an id in inline code are left alone" \
+    $'```\n[beads-o27]: https://x.example/p/beads?bead=beads-o27\n```\nrun `bd show beads-o27`' \
+    "$(displayed $'```\n[beads-o27]: https://x.example/p/beads?bead=beads-o27\n```\nrun `bd show beads-o27`' m16 true)"
+  expect_eq "a reference with no definition still opens on screen, beside a bare id" \
+    "[beads-o27](card://beads-o27) blocks [beads-xy9.2](card://beads-xy9.2)" \
+    "$(displayed "[beads-o27] blocks beads-xy9.2" m12 true)"
+  expect_eq "an id inside other brackets is linked; an unknown reference and a labelled one are left alone" \
+    "(see [blocked by [beads-o27](card://beads-o27)]) [beads-zzz] [beads-o27][x]" \
+    "$(displayed "(see [blocked by beads-o27]) [beads-zzz] [beads-o27][x]" m13 true)"
   expect_eq "inline code and a bare URL are left alone" \
     'run `bd show beads-o27` or open https://x.example/beads-o27 now' \
     "$(displayed 'run `bd show beads-o27` or open https://x.example/beads-o27 now' m4 true)"
@@ -103,14 +134,14 @@ main() {
     "~/beads-o27 and sub-beads-o27 and beads-o27-old" \
     "$(displayed "~/beads-o27 and sub-beads-o27 and beads-o27-old" m6 true)"
   expect_eq "a code fence is left alone, the prose around it is linked" \
-    $'[beads-o27](stub://beads-o27)\n```\nbd close beads-o27\n```\n[beads-o27](stub://beads-o27) end' \
+    $'[beads-o27](card://beads-o27)\n```\nbd close beads-o27\n```\n[beads-o27](card://beads-o27) end' \
     "$(displayed $'beads-o27\n```\nbd close beads-o27\n```\nbeads-o27 end' m7 true)"
   displayed $'```zsh\n' m8 false >/dev/null
   expect_eq "a fence opened in one batch still covers the next batch" \
     "bd close beads-o27" \
     "$(displayed $'bd close beads-o27\n' m8 false)"
   expect_eq "after that fence closes, prose is linked again" \
-    $'```\n[beads-o27](stub://beads-o27) end' \
+    $'```\n[beads-o27](card://beads-o27) end' \
     "$(displayed $'```\nbeads-o27 end' m8 true)"
 
   : > "${WORK_DIR}/bd.calls"

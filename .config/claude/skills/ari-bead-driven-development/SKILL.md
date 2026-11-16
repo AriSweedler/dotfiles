@@ -30,15 +30,27 @@ Cite a rule as "(Rules: <bold lead>)". Each rule is the invariant; the procedure
 - **NEVER `bd edit`.** It opens `$EDITOR` and blocks; use `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd update <id> --description|--design|--acceptance|--append-notes`.
 - **Run one bd command per tool call, one call at a time per workspace.** Embedded Dolt has a single writer and even `show` touches the store: never several commands in one response's batch, never parallel agents against one database, never a second write behind `&&` (the `BEADS_ACTOR` prefix reaches only the first command), and on a host `/ari-driving-remote` takes one command per call. A fenced block with several commands is that many calls, in order, each id read from the previous call's output. BAD: `bd show beads-o27 --json && BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd update beads-o27 --claim` in one call. GOOD: two calls. Many beads at once go through `bd create -f <file.md>`, one issue per `##` heading (check the result first, When bd refuses).
 - **Add `--json` to every command whose output you parse.** `bd show <id> --json` returns an array even for one id; `bd list`, `bd ready` and `bd children` return arrays; `bd create --json` an object; `bd human list --json` prints `null` when empty, which is an empty bucket: parse it with `(. // [])`; `--silent` prints only the id.
-- **Write every bead id in chat as its link.** Run `zsh $HOME/.claude/skills/ari-bead-driven-development/bin/bead_link.zsh --here --bead <id> --title '<title>' --status <status> --priority <n>` (`<n>` a bare integer 0–4) on this machine, even for a workspace on a host, and paste its stdout, one `[<id>](…)` line per bead; its `[INFO]`/`[WARN]` lines are diagnostics, never pasted. NEVER build a link or a Scotty URL by hand, and never leave an id bare for the display hook: `bin/bead_autolink.zsh` (with `bin/bead_autolink.py`), a Claude Code MessageDisplay hook wired in `$HOME/.claude/settings.json` as `zsh $HOME/.claude/skills/ari-bead-driven-development/bin/bead_autolink.zsh --workspace beads=<workspace dir>`, shows a bare id of a `--workspace` prefix that bd knows as its link, but only on screen: the transcript keeps the bare id, so it is a backstop, never the link. It leaves alone an id already linked, in a code fence, inline code or a URL, and an id-shaped word with no `--workspace` prefix or unknown to bd; `zsh $HOME/.claude/skills/ari-bead-driven-development/tests/bead_autolink.test.zsh` proves this against stubs, so run it after any edit to either file. The link opens the bead's Scotty page when Ari's beads.conf has a `scotty` line for its workspace (format: `bead_link.zsh --help`), so his phone opens it, and otherwise opens only in tmux; a click in tmux opens the card either way and copies `<id> | <title>` for Ari to paste (his click is the ask; minting the link copies nothing). A tmux-only link is still the link to paste.
-  - **A workspace on a host MUST pass `--host-definition <definition>` in place of `--here`**: the definition this turn's `/ari-driving-remote` calls use, the host in the `beads (<host>)` workspace line (Rules: Resolve the workspace each turn, and name it), never a hostname. The script refuses a call with neither flag or both. BAD (workspace `beads (laptop)`): `bead_link.zsh --here --bead beads-o27 …`, a link to this machine's Scotty, where beads-o27 is another bead or none. GOOD: `bead_link.zsh --host-definition laptop --bead beads-o27 …`.
-  - **One call per workspace per message**, a `--bead` record per id; a title holding `'` is quoted `$'…'`.
-  - **Take title, status and priority from a bd read this turn** (`bd list`, `show`, `ready` and `create --json` carry all three), never from memory or a summary; an id this turn has not read, one read in an earlier turn included, gets that read first, one `bd show <id> <id> … --json` covering every such id, and then its link; leave off a field the read lacks. BAD: "Pushed; beads-2ly.7.24 and beads-2ly.7.23 closed." (read last turn, left bare). GOOD: `bd show beads-2ly.7.24 beads-2ly.7.23 --json`, then one bead_link.zsh call, then the message with both links.
-  - **An id stays bare only when bd cannot be read** (Rules: Cut off from the tracker, or no workspace) **or the script exits 1**; then one chat line quotes its `[ERROR]`.
-  - **A `[WARN]` about beads.conf gets one chat line per session**, after the links: "beads.conf line 3 skipped (http URL); beads links open only in tmux until it is fixed". NEVER edit beads.conf or derive a Scotty URL for it: Ari copies the URL from Scotty. A workspace in use with no `scotty` line is said once per session, with the line for him to add: "`scotty beads@laptop <url>` in beads.conf would make beads (laptop) links open on your phone".
+- **Write every bead id in chat as a reference link: `[<id>]` in the text, its definition line at the end.** A *mention* is an id in chat text outside a code fence or a command in inline code; every mention, a passing one included ("A is blocked by B", "Scope now:", a ledger row), MUST be `[beads-o27]`, the id as its own label. NEVER a bare id, an inline `[id](url)`, or an id alone in backticks. Every chat text block that mentions an id, the line before a tool call included, ends with a blank line and one *definition line* per distinct id it mentions, `[beads-o27]: <url>`: its last lines, after any question, ledger or beads.conf note, never inside a list, a code fence or a block quote. Paste them from the stdout of `zsh $HOME/.claude/skills/ari-bead-driven-development/bin/bead_link.zsh --here --bead <id> --bead <id> …` (or `--host-definition <name>`, below), run on this machine; its `[INFO]`/`[WARN]` lines are diagnostics, never pasted. NEVER write a definition line or a Scotty URL by hand. **Before sending, check that every `[<id>]` in the block has its definition line:** a mention with none shows as plain `[beads-o27]` text that opens nothing on his phone.
+  ```text
+  BAD:  Pushed; [beads-2ly.7.24] closed and beads-2ly.7.23 is blocked by it.
+                                                ← beads-2ly.7.23 bare; no definition line for beads-2ly.7.24
+  BAD:  Pushed; [beads-2ly.7.24](https://scotty.example.com/p/beads?bead=beads-2ly.7.24) closed.
+                                                ← inline link
+  GOOD: Pushed; [beads-2ly.7.24] closed and [beads-2ly.7.23] is blocked by it.
+
+        [beads-2ly.7.24]: https://scotty.example.com/p/beads?bead=beads-2ly.7.24
+        [beads-2ly.7.23]: https://scotty.example.com/p/beads?bead=beads-2ly.7.23
+  ```
+  **Each surface gets its own URL, from the one source:** Ari wants the short URL on his phone and the card in the terminal, and one Markdown source carries one URL, so the split happens at display. The transcript, which Ari's phone reads, keeps the short definition line: with a `scotty` line for the workspace in his beads.conf (format: `bead_link.zsh --help`) the URL is `<scotty url>?bead=<id>`, which opens the bead's Scotty page, and the phone hides definition lines. On screen in the terminal, the display hook (Related skills) shows each mention bd knows as the card link instead, whose click opens the bead's tmux card, and removes its definition line; it never changes the transcript, so it is never a reason to skip a `[<id>]` or a definition line. Without a `scotty` line, the definition line carries the tmux-only card link on both surfaces; it is still the line to paste.
+  - **A workspace on a host MUST pass `--host-definition <name>` in place of `--here`**, `<name>` the host definition this turn's `/ari-driving-remote` calls use, the host in the `beads (<host>)` workspace line (Rules: Resolve the workspace each turn, and name it), never a hostname. The script refuses a call with neither flag or both. BAD (workspace `beads (laptop)`): `bead_link.zsh --here --bead beads-o27`, a link to this machine's Scotty, where beads-o27 is another bead or none. GOOD: `bead_link.zsh --host-definition laptop --bead beads-o27`.
+  - **One call per workspace per text block**, a `--bead` per distinct id, run once the block's text is settled; a block with no mention gets no call and no definition lines. Two workspaces with one id prefix go in separate text blocks, since one label cannot name two URLs.
+  - **Linking needs no bd read** for an id from bd output earlier in this conversation; one known only from a compaction summary or memory gets `bd show <id> … --json` first, and an id it does not return is named as not found, never linked. the hook reads title, status and priority itself for the on-screen card. `--title`, `--status` and `--priority` after a `--bead` fill the tmux-only link of a workspace with no `scotty` line; pass them from a bd read this turn when one carries them, never from memory or a summary; a title holding `'` is quoted `$'…'`.
+  - **When the script exits 1, that call's ids stay bare, with no brackets**, and one chat line quotes its `[ERROR]`.
+  - **A `[WARN]` about beads.conf gets one chat line per session**, above the definition lines: "beads.conf line 3 skipped (http URL); beads links open only in tmux until it is fixed". NEVER edit beads.conf or derive a Scotty URL for it: Ari copies the URL from Scotty. A workspace in use with no `scotty` line is said once per session, with the line for him to add: "`scotty beads@laptop <url>` in beads.conf would make beads (laptop) links open on your phone".
+  - Chat only: bead bodies, notes, comments, close reasons, commit messages and tool arguments keep ids bare.
 - **Give `-p` a number 0–4 or P0–P4, never a word; `bd ready -p` takes a bare integer.** Ari's word maps through the Priorities name column (critical → 0, high → 1, medium → 2, low → 3, backlog → 4, any case); any other word ("urgent", "asap", "important") is no priority. bd always receives the number.
 - **Write one chat line "A is blocked by B" before every `bd dep add A B`:** the first id waits. `--deps blocks:X` on create reverses the edge. BAD: beads-o27 is blocked by beads-p3k, so `bd dep add beads-p3k beads-o27` (makes the fix wait on the feature). GOOD: `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd dep add beads-o27 beads-p3k`. A wrong edge comes out with `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd dep remove <issue> <depends-on>`, same order.
-- **Read, then claim, then release.** `bd show <id> --json` before `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd update <id> --claim`; when work pauses, `bd note` where it stands and `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd unclaim <id> --if-assignee "claude:${CLAUDE_CODE_SESSION_ID:?}"`, so Scotty's In Progress column is never a lie; unclaim a bead Claude holds before asking Ari to close, test or decide on it, since bd refuses his close in Scotty while the actor is not the assignee. A claim is this session's exactly when its assignee equals `claude:${CLAUDE_CODE_SESSION_ID}`; read the assignee from `bd show --json`, never recall who claimed. A bare `claude` claim predates the session actor and says nothing about who holds it: it is this session's only if this session ran its `--claim` (visible in its transcript or compaction summary), and released as `BEADS_ACTOR=claude bd unclaim <id> --if-assignee claude`; otherwise it is another session's; the session closes a bare claim it made with `BEADS_ACTOR=claude` in a single call, and picks it as its own. NEVER claim a bead assigned to someone else, take a live claim with `--force`, or claim or unclaim any other actor's claim, `claude:<other uuid>` or a bare `claude` this session did not make. Report it in one chat line: the bead link, the full assignee, `updated_at` and last note, then "leave it, file a separate bead, or tell me that session is gone and I release it". Release it only when Ari names it, by `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?}" bd unclaim <id> --if-assignee "<the holder's exact string>"` (verified: bd checks the assignee, not the actor), and the beads that session filed join this session's scope. A session resumed under a new UUID is the common case; at Start a session, when the bead map holds `claude:*` claims other than this session's, say so once and offer that release. Ari's own Scotty close or test of a session claim is refused while it stands (his actor is not the assignee), and `bd unclaim <id> --force` run as Ari releases it.
+- **Read, then claim, then release.** `bd show <id> --json` before `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd update <id> --claim`; when work pauses, `bd note` where it stands and `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd unclaim <id> --if-assignee "claude:${CLAUDE_CODE_SESSION_ID:?}"`, so Scotty's In Progress column is never a lie; unclaim a bead Claude holds before asking Ari to close, test or decide on it, since bd refuses his close in Scotty while the actor is not the assignee. A claim is this session's exactly when its assignee equals `claude:${CLAUDE_CODE_SESSION_ID}`; read the assignee from `bd show --json`, never recall who claimed. A bare `claude` claim predates the session actor and says nothing about who holds it: it is this session's only if this session ran its `--claim` (visible in its transcript or compaction summary), and released as `BEADS_ACTOR=claude bd unclaim <id> --if-assignee claude`; otherwise it is another session's; the session closes a bare claim it made with `BEADS_ACTOR=claude` in a single call, and picks it as its own. NEVER claim a bead assigned to someone else, take a live claim with `--force`, or claim or unclaim any other actor's claim, `claude:<other uuid>` or a bare `claude` this session did not make. Report it in one chat line: the bead's `[<id>]`, the full assignee, `updated_at` and last note, then "leave it, file a separate bead, or tell me that session is gone and I release it". Release it only when Ari names it, by `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?}" bd unclaim <id> --if-assignee "<the holder's exact string>"` (verified: bd checks the assignee, not the actor), and the beads that session filed join this session's scope. A session resumed under a new UUID is the common case; at Start a session, when the bead map holds `claude:*` claims other than this session's, say so once and offer that release. Ari's own Scotty close or test of a session claim is refused while it stands (his actor is not the assignee), and `bd unclaim <id> --force` run as Ari releases it.
 - **Close only with evidence.** `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd close <id> --reason "…"`, at least twenty characters (this skill's floor, not bd's), naming every one of these that exists: the commit, the check and its result, the observed state. Work with no commit names the check or observation; a decision names Ari's choice and where he said it; a spike names the finding. A bare `bd close` stores the literal "Closed", which Scotty hides. NEVER `--force` past open children or a live blocker; close them first.
 - **Give decisions only Ari can make the `human` label and no claim.** NEVER answer a `human`-labelled question yourself; there is no `bd human <id>` command despite what `bd prime` prints.
 - **Write memories with `bd remember`, never a Claude memory, wherever Resolve found a workspace.** This overrides the auto-memory instruction: how the project works and what Ari prefers are both memories in the workspace this turn's writes went to, each with one chat line, "Remembered in <prefix>: <key>", so he can veto; a memory is per workspace and is not copied (Remember a fact). Two exceptions: a fact about a host (user, prompt, panes) goes to `/ari-driving-remote --describe`, and where a workspace lives (its host and directory) stays in Claude's memory, since `bd prime` cannot say where to run `bd prime`. Claude's own memory is written only in a session where Resolve ended with no workspace.
@@ -48,7 +60,7 @@ Cite a rule as "(Rules: <bold lead>)". Each rule is the invariant; the procedure
 
 ## Reference
 
-Tables show bare syntax; Workflow writes carry the Rules: Write as the session prefix; chat examples show ids bare.
+Tables show bare syntax; Workflow writes carry the Rules: Write as the session prefix; chat examples write each mention as `[<id>]` and leave out the definition lines that end every such text block (Rules: Write every bead id in chat as a reference link).
 
 ### Terms
 
@@ -72,13 +84,13 @@ Tables show bare syntax; Workflow writes carry the Rules: Write as the session p
 | Claude-created | `created_by` is `claude` or starts with `claude:`; *this session's* means it equals the current actor |
 | memory | a `bd remember` fact that `bd prime` injects into every session |
 | ledgers | chat lists for what the tracker could not take this turn, written once the tracker answers (shape and drain order in Cut off from the tracker): `unfiled:` a wish or directive quoted verbatim; `unremembered:` a fact with its key; `unlabeled:` a filed bead awaiting a label; `pending:` a create that may have landed; `unwritten:` any other refused write, as its command and the file holding its text |
-| bead map | the output of the frontier's step 1; its rows carry title, status and priority for links |
+| bead map | the output of the frontier's step 1; its rows carry title, status and priority |
 
 ### Scope
 
 The scope's *roots* are the topmost ancestor (walk `parent` up to the bead with none, whatever its type) of each bead this session filed or claimed (its `created_by` or assignee is this session's actor; `bd show --json` settles it after a compaction), each such bead with no parent, and each bead Ari named this session; a named bead brings its descendants, never its parent or siblings, and claiming a bead under it adds nothing above it. His answer to "Which epic is this session's?": ids → those roots; "the whole workspace" → `all`; "none" → no roots: file new work parentless. The bead map holds no epic and no root is known → `all`, said in the frontier line. A bead is *in the scope* when it is a root or its chain of `parent` in the bead map reaches one, or its id starts with `<root>.`; a `parent` missing from the map is closed: `bd show <parent> --json` continues the walk. Whenever the roots change, the chat line says "Scope now: <roots>"; with the frontier line, that is how a later turn and a compaction summary carry them. After a compaction, count only roots the summary carries or Ari named.
 
-Example: this session claimed beads-xy9.2 (`parent` beads-xy9, which has no parent) and Ari named beads-q2r, so the roots are beads-xy9 and beads-q2r; chat "Scope now: beads-xy9, beads-q2r"; beads-amm.3 is not in the scope. The `bd show <id> --json` fields these rules read (bd 1.3.4):
+Example: this session claimed beads-xy9.2 (`parent` beads-xy9, which has no parent) and Ari named beads-q2r, so the roots are beads-xy9 and beads-q2r; chat "Scope now: [beads-xy9], [beads-q2r]"; beads-amm.3 is not in the scope. The `bd show <id> --json` fields these rules read (bd 1.3.4):
 
 ```json
 [{"id":"beads-xy9.2","title":"…","status":"open","priority":1,"issue_type":"task","assignee":"claude:6efd6194-3949-4fd7-9dc2-ce7b1287ad40","created_by":"claude:6efd6194-3949-4fd7-9dc2-ce7b1287ad40","labels":["scotty"],"parent":"beads-xy9","dependencies":[{"depends_on_id":"beads-p3k","type":"blocks"}]}]
@@ -182,11 +194,11 @@ A directive's body is the wish template, with research limited to what the fix n
 
 ### What is not a bead
 
-A chat question ("can you…?" asking what is possible, not for an outcome), a clarification, reading code to answer Ari, a step inside a claimed bead (progress is a `bd note`; a `bd comment` is a finished outcome Ari should see). A wish with no route yet (research could not name a first change) gets a bead at `-p 4`, then `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd defer <id> --reason "no route yet"` so it sits in Backlog; `--until <date>` instead when a date, not a route, is what it waits for. Chat: "Filed beads-x (P4, Backlog: no route yet)."
+A chat question ("can you…?" asking what is possible, not for an outcome), a clarification, reading code to answer Ari, a step inside a claimed bead (progress is a `bd note`; a `bd comment` is a finished outcome Ari should see). A wish with no route yet (research could not name a first change) gets a bead at `-p 4`, then `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd defer <id> --reason "no route yet"` so it sits in Backlog; `--until <date>` instead when a date, not a route, is what it waits for. Chat: "Filed [beads-x] (P4, Backlog: no route yet)."
 
 ### Scotty
 
-A recommendation names the view where Ari will see its effect, never a URL. The one Scotty URL in chat is a bead's link, pasted from bead_link.zsh, which opens the bead's page (`/p/<project>?bead=<id>`) when beads.conf names that workspace's Scotty (Rules: Write every bead id in chat as its link). Views and buttons here were checked against Scotty 0.3.2; where his screen differs, his screen is the authority. A claimed bead's assignee is the full actor, `claude:<uuid>` (🤖, as any actor off the human allowlist); whether Scotty's card truncates it cleanly was not checked, and a cramped card is a change to Scotty, never a shorter actor.
+A recommendation names the view where Ari will see its effect, never a URL. The one Scotty URL in chat is a bead's definition line, pasted from bead_link.zsh (Rules: Write every bead id in chat as a reference link). Views and buttons here were checked against Scotty 0.3.2; where his screen differs, his screen is the authority. A claimed bead's assignee is the full actor, `claude:<uuid>` (🤖, as any actor off the human allowlist); whether Scotty's card truncates it cleanly was not checked, and a cramped card is a change to Scotty, never a shorter actor.
 
 | question | view |
 |---|---|
@@ -204,7 +216,7 @@ Scotty's Respond on Needs You comments and removes the `human` label, leaving th
 
 ## Workflow
 
-Each line of a fenced block below is its own tool call, run in order.
+Each line of a fenced `zsh` block below is its own tool call, run in order; a `text` block is chat, sent without the fence.
 
 Classify each message first:
 
@@ -218,7 +230,7 @@ Classify each message first:
 | "I prefer close reasons to name the commit first" | preference | Remember a fact, key `ari-<slug>` |
 | "someday a mobile layout" | wish | file it at P4, then defer |
 
-BAD (a wish turn): "Filed beads-o27. Want me to start on it?" or editing a file after the Filed line. GOOD: the Filed line and nothing after it; its "say 'go'" tail is the one allowed pointer.
+BAD (a wish turn): "Filed [beads-o27]. Want me to start on it?" or editing a file after the Filed line. GOOD: the Filed line and nothing after it but its definition line; its "say 'go'" tail is the one allowed pointer.
 
 ### Start a session
 
@@ -242,13 +254,13 @@ One command per tool call, never chained: `&&` stops at the first nonzero exit a
 | waiting on you | step 5's `bd human list` rows | as ready |
 | stale | step 5's `bd stale` rows | as ready |
 
-Waiting on you non-empty means the next move is Ari's; stale non-empty means a tidy (Keep the tracker honest). An empty ready bucket (the bead map says which, since `--parent` always answers "No ready work found"): list the in-scope `deferred` rows (`bd list -s deferred` for scope `all`) and ask which to bring back, "Nothing ready in beads-xy9; Backlog holds beads-xy9.7, beads-xy9.8. Bring one back?"; on his pick `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd undefer <id>`, then Pick and claim; none deferred → ask for the next wish. Only `in_progress` rows → resume this session's claim from its notes. Only `human` rows → the move is Ari's (Needs You). Otherwise report the blocked bucket; `bd ready --explain` only for scope `all`.
+Waiting on you non-empty means the next move is Ari's; stale non-empty means a tidy (Keep the tracker honest). An empty ready bucket (the bead map says which, since `--parent` always answers "No ready work found"): list the in-scope `deferred` rows (`bd list -s deferred` for scope `all`) and ask which to bring back, "Nothing ready in [beads-xy9]; Backlog holds [beads-xy9.7], [beads-xy9.8]. Bring one back?"; on his pick `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd undefer <id>`, then Pick and claim; none deferred → ask for the next wish. Only `in_progress` rows → resume this session's claim from its notes. Only `human` rows → the move is Ari's (Needs You). Otherwise report the blocked bucket; `bd ready --explain` only for scope `all`.
 
-Chat, one line naming the roots and every bucket's ids, each a link from the map's row (Rules: Write every bead id in chat as its link):
+Chat, one line naming the roots and every bucket's ids, each a `[<id>]` reference (Rules: Write every bead id in chat as a reference link):
 
-- Normal: "Frontier (scope beads-xy9, beads-q2r): ready beads-xy9.2 (P1), beads-q2r; in flight beads-xy9.1; blocked beads-xy9.4 on beads-xy9.2; waiting on you beads-xy9.5; stale none."
+- Normal: "Frontier (scope [beads-xy9], [beads-q2r]): ready [beads-xy9.2] (P1), [beads-q2r]; in flight [beads-xy9.1]; blocked [beads-xy9.4] on [beads-xy9.2]; waiting on you [beads-xy9.5]; stale none."
 - No epic: "Frontier (scope all: no epic in the workspace): …"
-- Partial: "Frontier (scope beads-xy9), partial: ready beads-xy9.2 (P1); `bd blocked --parent beads-xy9 --json` refused ("<error>"); blocked, waiting on you, stale unread."
+- Partial: "Frontier (scope [beads-xy9]), partial: ready [beads-xy9.2] (P1); `bd blocked --parent beads-xy9 --json` refused ("<error>"); blocked, waiting on you, stale unread."
 - Cut off: "Cut off from the tracker: `machine=personal|ID=%18|pane=3.1` holds an un-entered command; clearing it is your first move."
 - Never: "From the last summary, two ready and one in flight." Never: "Frontier: ready beads-amm (P1) …" when beads-amm is another session's epic.
 
@@ -277,7 +289,7 @@ A new view: duplicates the layout code for one filter.
 - [ ] With it on, closed and blocked beads and their edges are absent; epics stay
 ```
 
-Pick the label (Pick a label), then file. One call per message for the link (Rules: Write every bead id in chat as its link):
+Pick the label (Pick a label), then file:
 
 ```zsh
 BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd create "Graph view: Open-only toggle hides closed and blocked beads" -t feature -p 2 -l scotty --body-file "$desc" --json
@@ -297,28 +309,34 @@ PUT: /tmp/homelab/beads/open-only-toggle.<sha>.txt
 BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd create "Graph view: Open-only toggle hides closed and blocked beads" -t feature -p 2 -l scotty --body-file /tmp/homelab/beads/open-only-toggle.<sha>.txt --json
 ```
 
-Its link names the same definition, run here:
+Its definition line comes from a call run here, with the same host definition:
 
 ```zsh
-zsh $HOME/.claude/skills/ari-bead-driven-development/bin/bead_link.zsh --host-definition laptop --bead beads-o27 --title 'Graph view: Open-only toggle hides closed and blocked beads' --status open --priority 2
+zsh $HOME/.claude/skills/ari-bead-driven-development/bin/bead_link.zsh --host-definition laptop --bead beads-o27
 ```
 
 Place the bead. Found while on another bead: add `--deps discovered-from:<current-id>`. Under an epic: when the work names the component of an epic in the scope or continues its steps, `--parent <epic>`, never under one outside it; never ask which epic. When none is that clear and the work is small (one commit, no host or Ari action), file it parentless; when none is that clear and it is not small, ask Ari for the information to create the epic yourself (Structure an epic). A new parentless bead, or an epic this session created, is a root: chat "Scope now: <roots>". Already fixed: File a fix already made.
 
-Chat, workspace named, the id linked from the create's own `--json`, Claude's restatement and its reading, so Ari can correct it before a pick:
+Chat, workspace named, the id from the create's own `--json` as a `[<id>]` reference, Claude's restatement and its reading, so Ari can correct it before a pick:
 
-- Wish: "Filed [beads-o27](<bead_link.zsh output for beads-o27>) in beads (here) (feature, P2, label scotty). Goal: Graph hides closed and blocked beads; route: extend the live-filter helper. It waits for a pick; say 'go' to work it now, or correct me." A coined label reads "(label torrent-queue, new)".
-- Unclear message: the line above plus its question: "beads-o27: work it now, or leave it for a pick? recommended: pick — nothing today waits on it."
+- Wish, its definition line the block's last line:
+  ```text
+  Filed [beads-o27] in beads (here) (feature, P2, label scotty). Goal: Graph hides closed and blocked beads; route: extend the live-filter helper. It waits for a pick; say 'go' to work it now, or correct me.
+
+  [beads-o27]: https://scotty.example.com/p/beads?bead=beads-o27
+  ```
+  A coined label reads "(label torrent-queue, new)".
+- Unclear message: the line above plus its question: "Work [beads-o27] now, or leave it for a pick? recommended: pick — nothing today waits on it."
 
 #### Search before filing
 
 `bd search "<words>"` covers every status, closed included (`-s open` narrows).
 
-- Open in the scope, identical outcome, Claude-created (Terms): `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd comment <id> --file "$words"` with the new words, never a new bead; chat "Folded into beads-abc (<title>) as a comment; say 'separate' to file it on its own", and on "separate" file new with `--deps relates-to:<match>`. Several such matches: comment on the one updated most recently and name the others.
-- Open in the scope, created by Ari or an outcome you are unsure of (a comment is permanent): ask "Looks like beads-abc (<title>). Fold into it, or file separately?" before writing.
+- Open in the scope, identical outcome, Claude-created (Terms): `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd comment <id> --file "$words"` with the new words, never a new bead; chat "Folded into [beads-abc] (<title>) as a comment; say 'separate' to file it on its own", and on "separate" file new with `--deps relates-to:<match>`. Several such matches: comment on the one updated most recently and name the others.
+- Open in the scope, created by Ari or an outcome you are unsure of (a comment is permanent): ask "Looks like [beads-abc] (<title>). Fold into it, or file separately?" before writing.
 - Open in the scope, different outcome: file new and `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd dep relate <new> <it>`.
-- Open outside the scope: not this session's: write nothing to it, file this one, and name the match with its `created_by` ("beads-amm, another Claude session's, is close; name it to fold this in", "…, yours, …"); once Ari names it, it is in the scope: `bd comment` the new words on it and `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd duplicate <new> --of <it>`.
-- Closed: say it was done and ask whether this is new: "beads-o27 did this (closed: 'Commit ab4c456: Open-only toggle…'). Is this new? If so, I'll file it with discovered-from beads-o27." If it is, file fresh with `--deps discovered-from:<closed-id>`, an edge on the new bead and so allowed to any bead; reopen only a bead in the scope, under Rules: Confirm. A closed match does not stop a directive (Take a directive).
+- Open outside the scope: not this session's: write nothing to it, file this one, and name the match with its `created_by` ("[beads-amm], another Claude session's, is close; name it to fold this in", "…, yours, …"); once Ari names it, it is in the scope: `bd comment` the new words on it and `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd duplicate <new> --of <it>`.
+- Closed: say it was done and ask whether this is new: "[beads-o27] did this (closed: 'Commit ab4c456: Open-only toggle…'). Is this new? If so, I'll file it with discovered-from [beads-o27]." If it is, file fresh with `--deps discovered-from:<closed-id>`, an edge on the new bead and so allowed to any bead; reopen only a bead in the scope, under Rules: Confirm. A closed match does not stop a directive (Take a directive).
 - A match is the same outcome, not the same words: "hide closed beads in Graph" matches beads-o27 "Open-only toggle hides closed and blocked beads"; "Graph: color closed beads grey" shares words but not the outcome, so file it.
 - `bd duplicate` and `bd supersede` are for two beads that already exist and close one of them.
 
@@ -344,7 +362,7 @@ A directive is filed, claimed and worked in the same turn. Mixed message: file e
 4. `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd create "<title>" -t <type> -p <n> -l <label> --body-file "$desc" --json`; the id is `.id` of its output. A create that fails is a refusal (When bd refuses): quote the error, claim nothing, add the directive to `unfiled:`, stop.
 5. A P0 while another bead is held: step 4 first, then park the held bead, as in the block below (a failed create leaves the held bead held); the P0 is the only bead worked until it closes.
 6. `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd update <id> --claim`, after the skip list of Pick and claim. A P0 then runs Pick a label and `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd label add <id> <label>` after its claim.
-7. Work it. A message that states a problem or need with no order aimed at Claude and no "later" ("the doctor check is failing") runs steps 1–4 only, leaves the bead unclaimed, and ends the turn with "<id>: work it now, or leave it for a pick? recommended: <now | pick> — <why>", recommending `now` when it files at P1, else `pick`; his "now" claims and works it, his "pick" leaves it waiting like a wish.
+7. Work it. A message that states a problem or need with no order aimed at Claude and no "later" ("the doctor check is failing") runs steps 1–4 only, leaves the bead unclaimed, and ends the turn with "Work [<id>] now, or leave it for a pick? recommended: <now | pick> — <why>", then its definition line, recommending `now` when it files at P1, else `pick`; his "now" claims and works it, his "pick" leaves it waiting like a wish.
 
 Skip-list branches: an epic → work its first ready in-scope child; `human` → claim nothing, tell Ari it waits on his decision; another actor's, or a bare `claude` claim this session did not make → claim nothing, report the holder, ask whether to file a separate bead.
 
@@ -366,7 +384,7 @@ BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd unclaim beads-o
 BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd update beads-p3k --claim
 ```
 
-The create's output is `{"id":"beads-p3k","title":"Doctor: API check fails on the laptop",…}`; `beads-p3k` is that `.id`. Chat: "Filed beads-p3k in beads (here) (bug, P0), claimed; beads-o27 parked; on it now." Without a priority, "fix the doctor check" while today's deploy waits on it is `-p 1` and the chat says "P1: today's deploy waits on it"; the same words on a day with no deploy are `-p 2`. A directive filed and claimed reads "Filed and claimed beads-p3k as a directive; say 'later' to park it."
+The create's output is `{"id":"beads-p3k","title":"Doctor: API check fails on the laptop",…}`; `beads-p3k` is that `.id`. Chat: "Filed [beads-p3k] in beads (here) (bug, P0), claimed; [beads-o27] parked; on it now." Without a priority, "fix the doctor check" while today's deploy waits on it is `-p 1` and the chat says "P1: today's deploy waits on it"; the same words on a day with no deploy are `-p 2`. A directive filed and claimed reads "Filed and claimed [beads-p3k] as a directive; say 'later' to park it."
 
 ### Structure an epic
 
@@ -383,7 +401,7 @@ bd show beads-o27 --json
 BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd update beads-o27 --claim
 ```
 
-Scotty's Ready column still lists a `human` bead. `--claim` is atomic: it is idempotent for the same actor and refused (exit 1, "already claimed by <actor>") for any other, so a refusal means another session holds it: pick the next or ask. Chat the title and the definition of done to work to, and "say 'other' to pick differently": "Picked beads-xy9.2 (P1): Open-only toggle. Done when: toggle in the Graph header, default off. Say 'other' to pick differently."
+Scotty's Ready column still lists a `human` bead. `--claim` is atomic: it is idempotent for the same actor and refused (exit 1, "already claimed by <actor>") for any other, so a refusal means another session holds it: pick the next or ask. Chat the title and the definition of done to work to, and "say 'other' to pick differently": "Picked [beads-xy9.2] (P1): Open-only toggle. Done when: toggle in the Graph header, default off. Say 'other' to pick differently."
 
 ### Work the bead
 
@@ -439,7 +457,7 @@ BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd create "Doctor:
 BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd close beads-orc --reason "Fixed in commit ab4c456 and deployed: doctor check PASS, API lists beads"
 ```
 
-`beads-orc` is `.id` of the create's output. If the close is refused, re-run it once (When bd refuses); if it still fails, `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd note <id> "fixed in <commit>; close pending"` and chat "close pending: <id>", so no later pick fixes it again.
+`beads-orc` is `.id` of the create's output. If the close is refused, re-run it once (When bd refuses); if it still fails, `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd note <id> "fixed in <commit>; close pending"` and chat "close pending: [<id>]", so no later pick fixes it again.
 
 ### Close the session
 
@@ -450,17 +468,17 @@ Run this when Ari says done, wrap up, stop, end or that's it, or when a directiv
 3. Unclaim, with a note, each bead this session claimed and did not finish.
 4. Close what it finished, with reasons.
 5. `git status`.
-6. Report the handoff for the scope, naming its roots, with each bead's state and its id as a link from a read this turn (Rules: Write every bead id in chat as its link); the same holds for any closing message, a push report included: "Handoff (scope beads-xy9): closed beads-xy9.1 (ab4c456); beads-xy9.2 unclaimed, notes 'edges still drawn'; filed beads-xy9.6 (P2); git clean."
+6. Report the handoff for the scope, naming its roots, with each bead's state from a read this turn and its id as a `[<id>]` reference (Rules: Write every bead id in chat as a reference link); the same holds for any closing message, a push report included: "Handoff (scope [beads-xy9]): closed [beads-xy9.1] (ab4c456); [beads-xy9.2] unclaimed, notes 'edges still drawn'; filed [beads-xy9.6] (P2); git clean."
 
 No push, pull or Dolt sync.
 
 ### Answer what was decided
 
-"What did we decide about …": `bd search "<words>"` (every status), then `bd show <id> --json` for `design` and `close_reason`, `bd comments <id>` for the thread in order, and `bd memories <word>` for a fact that outlived its bead. Answer with the id and the field's words, not a paraphrase. Nothing found anywhere → there was no decision: file one (Ask Ari a decision), never guess. Chat: "beads-o27's design: toggle, not a view; closed with ab4c456."
+"What did we decide about …": `bd search "<words>"` (every status), then `bd show <id> --json` for `design` and `close_reason`, `bd comments <id>` for the thread in order, and `bd memories <word>` for a fact that outlived its bead. Answer with the id and the field's words, not a paraphrase. Nothing found anywhere → there was no decision: file one (Ask Ari a decision), never guess. Chat: "[beads-o27]'s design: toggle, not a view; closed with ab4c456."
 
 ### Keep the tracker honest
 
-When Ari asks for a tidy, or the frontier's stale bucket is non-empty, run the reads one per line: `bd stale -d 14 -s in_progress`, `bd lint`, `bd doctor`, `bd dep cycles`, `bd epic close-eligible --dry-run`. A nonzero exit from `bd lint` or `bd doctor` is a report, not a stop. Chat the findings: `bd stale`, `bd lint` and `close-eligible` for in-scope beads only, with a count of the rest; `bd doctor` and `bd dep cycles` whole, as workspace health: "Tidy (scope beads-xy9): stale beads-xy9.3 (this session's, released); lint beads-xy9.4 missing Acceptance Criteria; close-eligible none; 4 findings outside the scope. Workspace: doctor OK, no cycles." Then:
+When Ari asks for a tidy, or the frontier's stale bucket is non-empty, run the reads one per line: `bd stale -d 14 -s in_progress`, `bd lint`, `bd doctor`, `bd dep cycles`, `bd epic close-eligible --dry-run`. A nonzero exit from `bd lint` or `bd doctor` is a report, not a stop. Chat the findings: `bd stale`, `bd lint` and `close-eligible` for in-scope beads only, with a count of the rest; `bd doctor` and `bd dep cycles` whole, as workspace health: "Tidy (scope [beads-xy9]): stale [beads-xy9.3] (this session's, released); lint [beads-xy9.4] missing Acceptance Criteria; close-eligible none; 4 findings outside the scope. Workspace: doctor OK, no cycles." Then:
 
 - Stale: `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd unclaim <id> --if-assignee "claude:${CLAUDE_CODE_SESSION_ID:?}"` only on a claim whose assignee is this session's actor (Rules: Read, then claim, then release); report the scope's other stale claims, each with its release command written out (the holder's UUID literal, since Ari's shell has no session id), and release one only when Ari names it.
 - Sweep: first turn, chat the dry-run's scope epics (all of them for scope `all`; Scope) and ask for a yes. Only after his yes: `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd epic close-eligible -r "<reason>"` for scope `all`, otherwise `BEADS_ACTOR="claude:${CLAUDE_CODE_SESSION_ID:?no session id}" bd close <epic> --reason "<evidence naming the children>"` per scope epic he said yes to.
@@ -469,20 +487,20 @@ When Ari asks for a tidy, or the frontier's stale bucket is non-empty, run the r
 
 ### Cut off from the tracker
 
-The ledgers hold what a turn could not write: no `bd`, no workspace answer, a cut-off pane. Shape, repeated at the end of every turn where one is non-empty (and scanned for in a compaction summary):
+The ledgers hold what a turn could not write: no `bd`, no workspace answer, a cut-off pane. Shape, repeated at the end of every turn where one is non-empty, as plain lines before the definition lines (and scanned for in a compaction summary):
 
-```
+```text
 unfiled:
 - wish: "<verbatim>" (heard <turn>)
 - directive: "<verbatim>"  (P1: today's deploy waits on it)
 unremembered:
 - <key>: "<fact>"
-unlabeled: <id>, <id>
+unlabeled: [<id>], [<id>]
 pending: <title>
 unwritten: <command> (text in <file>)
 ```
 
-A whole cut-off turn: "Cut off from the tracker: `machine=personal|ID=%18|pane=3.1` holds an un-entered command; clear or enter it in 3.1 (your first move). unfiled: wish "Graph needs an Open-only toggle" (heard this turn); directive "fix the doctor check now" (P1: today's deploy waits on it). unremembered: ari-close-reason-order: "Ari wants a close reason to name the commit before the check output". Claim still held: beads-o27. To release it, run: `BEADS_ACTOR=claude:0b8f2c64-7d1e-4c3a-9a55-2f1d6e8b7c10 bd unclaim beads-o27 --if-assignee "claude:0b8f2c64-7d1e-4c3a-9a55-2f1d6e8b7c10"`."
+A whole cut-off turn: "Cut off from the tracker: `machine=personal|ID=%18|pane=3.1` holds an un-entered command; clear or enter it in 3.1 (your first move). unfiled: wish "Graph needs an Open-only toggle" (heard this turn); directive "fix the doctor check now" (P1: today's deploy waits on it). unremembered: ari-close-reason-order: "Ari wants a close reason to name the commit before the check output". Claim still held: [beads-o27]. To release it, run: `BEADS_ACTOR=claude:0b8f2c64-7d1e-4c3a-9a55-2f1d6e8b7c10 bd unclaim beads-o27 --if-assignee "claude:0b8f2c64-7d1e-4c3a-9a55-2f1d6e8b7c10"`."
 
 Drain once the tracker answers, in this order, each a separate call: `bd info`, `bd prime`, then per `unfiled:` item in the order heard a dedupe check (`bd search "<exact title>" --json`) and a create only if missing, then each `bd remember` (Remember a fact), then `bd label add` per `unlabeled:` bead; chat "Ledger drained: <ids>, <keys>". A remote create that exited 124 is `pending: <title>`, not `unfiled:`, until a capture or search settles it.
 
@@ -500,7 +518,7 @@ Drain once the tracker answers, in this order, each a separate call: `bd info`, 
 | close exits 1 `assignee is "<a>", actor is "<b>"` | another actor holds the claim, or the prefix was dropped or names a different UUID (a bare `claude` is not the session actor) | fix the prefix; else report, the holder closes or unclaims; never `--force` or unclaim another's claim |
 | close of a closed bead | exit 0 and a `✓ Closed` line quoting the new reason, but nothing written: the old reason stays | check `bd show --json` status before re-closing; new evidence is a `bd comment`, never a second close |
 | `bd prime` schema error | binary and database versions differ | `bd info`, `bd doctor`, report; offer upgrading bd on that machine, `bd migrate` when `bd doctor` names it, or proceeding read-only; no writes, never `--ignore-schema-skew` unasked |
-| `bd create` fails (schema skew, a rejected `-p`, `--parent` or label) | nothing was filed | quote the error; claim nothing; the wish or directive sits under `unfiled:`. Never drop `-p`: map Ari's word to a number and retry with it. A rejected `--parent` is re-applied after the create with `bd update <id> --parent <epic>`, or reported; a rejected label with `bd label add` after. The chat line names each dropped flag and how it was restored ("filed without --parent (refused: …); adopted into beads-xy9 after") |
+| `bd create` fails (schema skew, a rejected `-p`, `--parent` or label) | nothing was filed | quote the error; claim nothing; the wish or directive sits under `unfiled:`. Never drop `-p`: map Ari's word to a number and retry with it. A rejected `--parent` is re-applied after the create with `bd update <id> --parent <epic>`, or reported; a rejected label with `bd label add` after. The chat line names each dropped flag and how it was restored ("filed without --parent (refused: …); adopted into [beads-xy9] after") |
 | a replayed `dep add`, `label add`, `defer`, `gate create`, `update --parent` or `comment` | an add may already exist ("already exists"), and a replayed `gate create` double-blocks | re-read with `bd show --json` before replaying; never `--force`; a write that stays refused goes to `unwritten:` |
 | any retry of a create, a ledger replay, a `bd create -f` re-run, an unparsed `--json` | bd does no dedupe: two creates give two beads | first `bd search "<exact title>" --json` (or `bd list --json` for `created_by` equal to this session's actor, this turn); create only what is missing and take ids from that read |
 | any `/ari-driving-remote` refusal, or `--put` printed no `PUT:` line | the text never reached the host, or the pane is refused | its § Exit codes; nothing filed this turn → the wish or directive goes under `unfiled:`, no bd command; exit 124 is still running: capture only, never resend, and the create is `pending:` |
@@ -513,5 +531,6 @@ Drain once the tracker answers, in this order, each a separate call: `bd info`, 
 - Commands on a host Ari named: `/ari-driving-remote`, one command per call; it owns host details and the `--put` that carries a file there. Text Ari runs himself, and fetching a remote export: `/ari-driving-tmux`.
 - A bead tree with statuses: `bd dep tree <id> --direction both --format mermaid` is the source; `/ari-diagram-mermaid` `bake` pins the palette and mints the links; `/ari-diagram-gh-todo` when it goes on a PR or issue, and `bake` when that skill is unavailable. `bd graph --dot` is Graphviz input, not Mermaid.
 - A design that outgrows `--design`: `/ari-hemingway--structure-design-doc`; the bead keeps the link in `--external-ref` and in a comment, where Scotty shows it.
-- A bead id's link: `bin/bead_link.zsh` wraps `tmux-tooltip link` from Ari's dotfiles (`$HOME/.config/bin/tmux-tooltip`), which also opens the card on a click (a click or Esc closes it) and copies the link's `--copy` text; a change to the card or the copy goes there. Ari's `$HOME/.config/tmux-tooltip/beads.conf` holds the status and priority colors and each workspace's Scotty page; Ari edits it, and `bead_link.zsh --help` gives its format. The link choice against fixture configs, never Ari's: `zsh $HOME/.claude/skills/ari-bead-driven-development/tests/bead_link.test.zsh`; run it after any edit to bead_link.zsh; it runs the tmux-tooltip of its own checkout.
+- A bead id's URLs: `bin/bead_link.zsh` prints the short definition line, the workspace's Scotty page from Ari's `$HOME/.config/tmux-tooltip/beads.conf`, and with `--card` the card URL, the one builder of it: that page with `tmux-tooltip link`'s card in its query, or tmux-tooltip's tmux-only link when beads.conf names no Scotty for the workspace. tmux-tooltip is from Ari's dotfiles (`$HOME/.config/bin/tmux-tooltip`); its click opens the card (a click or Esc closes it) and copies the link's `--copy` text, `<id> | <title>`; a change to the card or the copy goes there. beads.conf also holds the card's status and priority colors; Ari edits it, and `bead_link.zsh --help` gives its format. The URLs against fixture configs, never Ari's: `zsh $HOME/.claude/skills/ari-bead-driven-development/tests/bead_link.test.zsh`; run it after any edit to bead_link.zsh; it runs the tmux-tooltip of its own checkout.
+- The display hook: `bin/bead_autolink.zsh` (with `bin/bead_autolink.py`), a Claude Code MessageDisplay hook wired in `$HOME/.claude/settings.json` as `zsh $HOME/.claude/skills/ari-bead-driven-development/bin/bead_autolink.zsh --workspace beads=<workspace dir>`. On screen only, for each bead id of a `--workspace` prefix that bd knows, it shows every mention (a bare id, a `[<id>]` shortcut reference, an inline link to its short URL) as an inline link to its `bead_link.zsh --card` URL, with title, status and priority from `bd show`, and removes its definition line and the blank line before a removed trailing block. It leaves as written a card link, a link to any other URL, a full reference, any other reference definition, an id in a code fence, inline code or a URL, and an id bd does not know or cannot be read for, whose definition line stays. `zsh $HOME/.claude/skills/ari-bead-driven-development/tests/bead_autolink.test.zsh` proves this against stubs; run it after any edit to either file.
 - The claim guard against the real bd, in a throwaway workspace: `zsh $HOME/.claude/skills/ari-bead-driven-development/tests/claim_actor.test.zsh`; run it after any edit to the actor rules or on a bd upgrade, since exit codes and messages in When bd refuses come from bd itself.

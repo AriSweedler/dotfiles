@@ -1,14 +1,15 @@
 #!/usr/bin/env zsh
-# Print one click-for-title Markdown link per bead, so a bead id in chat says what it is.
-# The link is tmux-tooltip's (Ari's dotfiles, ~/.config/bin/tmux-tooltip): its URL carries the card,
-# so a click in tmux needs no bd and works for a workspace on another host. When
-# ~/.config/tmux-tooltip/beads.conf has a scotty line for the beads' workspace, the link is that
-# Scotty's https page for the bead with the card in its query: a phone opens only https links.
-# A click on the link in tmux also copies `<id> | <title>`, so Ari can paste a full reference to the bead.
+# Print one Markdown link reference definition per bead, for the end of a chat message whose text
+# names each bead as `[<id>]`: one short line per bead instead of a long inline link per mention.
+# When ~/.config/tmux-tooltip/beads.conf has a scotty line for the beads' workspace, the URL is that
+# Scotty's page for the bead, which the terminal and Ari's phone both open. Otherwise it is
+# tmux-tooltip's tmux-only link (Ari's dotfiles, ~/.config/bin/tmux-tooltip), whose URL carries a
+# card built from --title, --status and --priority, colored from the same file, which Ari edits.
 # Every call names the workspace's machine (--here or --host-definition), so a host's bead never
-# links to this machine's Scotty. Status and priority colors come from the same file, which Ari
-# edits; tmux-tooltip knows no bead meanings.
-# Run: zsh $HOME/.claude/skills/ari-bead-driven-development/bin/bead_link.zsh --here --bead beads-o27 --title 'Graph view: Open-only toggle' --status open --priority 2
+# links to this machine's Scotty. With --card it prints each bead's card URL instead, the one builder
+# of it: the display hook (bead_autolink.py) shows a mention as that link on screen only, so a
+# click in the terminal opens the card while the transcript keeps the short definition line.
+# Run: zsh $HOME/.claude/skills/ari-bead-driven-development/bin/bead_link.zsh --here --bead beads-o27 --bead beads-p3k
 
 set -euo pipefail
 
@@ -36,7 +37,7 @@ readonly ID_PATTERN='[A-Za-z0-9_-]##-[A-Za-z0-9]##(.[0-9]##)#'
 readonly HOST_PATTERN='[A-Za-z0-9_.-]##'
 # A scotty line's key: the id prefix, plus @DEFINITION for a host's workspace.
 readonly WORKSPACE_PATTERN="[A-Za-z0-9_-]##(@${HOST_PATTERN})#"
-# A Scotty project page: https, URL-safe characters only (a ')' would end the Markdown link), and
+# A Scotty project page: https, URL-safe characters only (a space would end the definition), and
 # no query or fragment, since the bead rides `?bead=<id>`.
 readonly SCOTTY_URL_PATTERN='https://[A-Za-z0-9._~:/%@!$&*+,;=-]##'
 readonly SCOTTY_URL_EXAMPLE='https://scotty.example.com/p/beads'
@@ -49,22 +50,27 @@ readonly -a CONFIG_FIELDS=(status priority scotty)
 
 help() {
   cat <<EOF
-${c_green}bead_link.zsh${c_rst} — print a click-for-title Markdown link per bead
+${c_green}bead_link.zsh${c_rst} — print a Markdown link reference definition per bead
 
 ${c_bold}Usage:${c_rst}
-  zsh $HOME/.claude/skills/ari-bead-driven-development/bin/bead_link.zsh --here|--host-definition NAME --bead ID --title TITLE [--status S] [--priority N] [--bead …]
+  zsh $HOME/.claude/skills/ari-bead-driven-development/bin/bead_link.zsh --here|--host-definition NAME [--card] --bead ID [--title TITLE] [--status S] [--priority N] [--bead …]
 
 ${c_bold}Options:${c_rst}
   --here                   the beads live in a workspace on this machine
   --host-definition NAME   they live in a workspace on a host: NAME is its /ari-driving-remote
                            definition (run.zsh --hosts), never a hostname; '${LOCAL_DEFINITION}' means --here
                            Exactly one of the two, once per call: one call links one workspace.
+  --card                   print each bead's card URL instead of its short one (the display hook's
+                           form; needs tmux-tooltip): the Scotty page with the card in its query,
+                           or the tmux-only link when the workspace has no scotty line
   --bead ID                start a bead's record: its bd id
-  --title TITLE            the bead's title (required per bead)
-  --status S               its bd status: ${(j:, :)STATUSES}
-  --priority N             its priority, ${PRIORITIES[1]}-${PRIORITIES[-1]} (0 is P0); shown as P<N>
+  --title TITLE            the bead's title, for the tmux card (optional)
+  --status S               its bd status, for the card: ${(j:, :)STATUSES} (optional; another is dropped with a warning)
+  --priority N             its priority, ${PRIORITIES[1]}-${PRIORITIES[-1]} (0 is P0), for the card as P<N> (optional; likewise)
   -h, --help               show this help
-  Each --bead starts a new record; --title, --status and --priority apply to the latest one.
+  Each --bead starts a new record; --title, --status and --priority apply to the latest one and
+  fill the card: they matter with --card, or for a bead whose workspace has no scotty line.
+  A repeated --bead is defined once.
 
 ${c_bold}Config:${c_rst} ${CONFIG}, one rule per line (# comments; no file, no rules):
   status VALUE COLOR, priority N COLOR    color that row; a value with no line is uncolored
@@ -75,17 +81,21 @@ ${c_bold}Config:${c_rst} ${CONFIG}, one rule per line (# comments; no file, no r
   URL is https, URL-safe characters, no query or fragment (bead_link appends ?bead=ID). A bad or
   repeated line, or a host line naming a URL this machine's lines use, is skipped with a warning.
 
-${c_bold}Output:${c_rst} one Markdown link per --bead on stdout, in order (<c>: the config's color);
-  stderr carries [INFO]/[WARN] diagnostics, never links. With a scotty line for the workspace:
-  [beads-o27](${SCOTTY_URL_EXAMPLE}?bead=beads-o27&tmux-tooltip=show&title=beads-o27&text=Graph%20view%3A%20Open-only%20toggle&field=status%3Dopen&color=<c>&field=priority%3DP2&color=<c>&copy=beads-o27%20%7C%20Graph%20view%3A%20Open-only%20toggle)
-  Without one (with --host-definition laptop, only a beads@laptop line counts), tmux only:
-  [beads-o27](tmux-tooltip://show?title=beads-o27&text=Graph%20view%3A%20Open-only%20toggle&field=status%3Dopen&color=<c>&field=priority%3DP2&color=<c>&copy=beads-o27%20%7C%20Graph%20view%3A%20Open-only%20toggle)
-  A click on either in tmux shows the card and copies '<id> | <title>' (the copy key); printing copies nothing.
+${c_bold}Output:${c_rst} one definition line per distinct --bead on stdout, in order; the message names the
+  bead as [beads-o27] and ends with these lines. stderr carries [INFO]/[WARN] diagnostics, never
+  definitions. With a scotty line for the workspace, the bead's Scotty page:
+  [beads-o27]: ${SCOTTY_URL_EXAMPLE}?bead=beads-o27
+  Without one (with --host-definition laptop, only a beads@laptop line counts), a tmux-only link
+  (<c>: the config's color); a click in tmux shows the card and copies '<id> | <title>':
+  [beads-o27]: tmux-tooltip://show?title=beads-o27&text=Graph%20view%3A%20Open-only%20toggle&field=status%3Dopen&color=<c>&field=priority%3DP2&color=<c>&copy=beads-o27%20%7C%20Graph%20view%3A%20Open-only%20toggle
+  With --card and a scotty line, the Scotty page carries the card (a click in tmux shows it):
+  [beads-o27]: ${SCOTTY_URL_EXAMPLE}?bead=beads-o27&tmux-tooltip=show&title=beads-o27&text=Graph%20view%3A%20Open-only%20toggle&…&copy=beads-o27%20%7C%20Graph%20view%3A%20Open-only%20toggle
+  Printing copies nothing.
 EOF
 }
 
 #######################################
-# Fail when tmux-tooltip, which renders the link and handles its click, is not installed.
+# Fail when tmux-tooltip, which builds a tmux-only link and handles its click, is not installed.
 # Globals: TMUX_TOOLTIP
 # Returns: 1 when it is missing
 #######################################
@@ -174,30 +184,35 @@ load_config() {
 }
 
 #######################################
-# Check one bead record.
-# Globals: ID_PATTERN, STATUSES, PRIORITIES
-# Arguments: $1 id, $2 title, $3 status or '', $4 priority or ''
-# Returns: 1 when a value is malformed
+# Check one bead id.
+# Globals: ID_PATTERN
+# Arguments: $1 id
+# Returns: 1 when it is not a bd id
 #######################################
 validate_bead() {
   setopt local_options extended_glob
-  local id="${1}" title="${2}" bead_status="${3}" priority="${4}"
+  local id="${1}"
   if [[ "${id}" != ${~ID_PATTERN} ]]; then
     log::err "Not a bd id | id='${id}' expected='beads-o27'"
     return 1
   fi
-  if [[ -z "${title//[[:space:]]/}" ]]; then
-    log::err "Missing or blank --title | id='${id}' title='${title}'"
-    return 1
+}
+
+#######################################
+# Print a card field's value when it is a known one, else nothing, with a warning: the field only
+# decorates the tmux card, so an unknown value (a custom bd status) never costs the bead its definition.
+# Arguments: $1 field name, $2 id, $3 value or '', then the valid values
+# Outputs: the value or nothing on stdout
+#######################################
+card_field() {
+  local field="${1}" id="${2}" value="${3}"
+  shift 3
+  local -a valid=("$@")
+  if [[ -z "${value}" ]] || (( ${valid[(Ie)${value}]} )); then
+    print -r -- "${value}"
+    return 0
   fi
-  if [[ -n "${bead_status}" ]] && (( ! ${STATUSES[(Ie)${bead_status}]} )); then
-    log::err "Unknown status | id='${id}' status='${bead_status}' valid='${(j:, :)STATUSES}'"
-    return 1
-  fi
-  if [[ -n "${priority}" ]] && (( ! ${PRIORITIES[(Ie)${priority}]} )); then
-    log::err "Priority not 0-4 | id='${id}' priority='${priority}'"
-    return 1
-  fi
+  log::warn "Unknown card value; dropped from the card | id='${id}' field='${field}' value='${value}' valid='${(j:, :)valid}'"
 }
 
 #######################################
@@ -244,24 +259,6 @@ host_part() {
 }
 
 #######################################
-# Print the --href value that points a bead's link at its workspace's Scotty, or nothing when
-# the config names no Scotty for that workspace (the link then opens only in tmux).
-# Globals: scotty_urls
-# Arguments: $1 id, $2 host part or ''
-# Outputs: the URL on stdout
-#######################################
-scotty_href() {
-  local id="${1}" host="${2}"
-  local workspace="${id%-*}${host:+@${host}}"
-  if [[ -z "${scotty_urls[$workspace]:-}" ]]; then
-    log::info "No scotty line for the workspace; the link opens only in tmux | id='${id}' workspace='${workspace}'"
-    return 0
-  fi
-  log::info "Linking to the workspace's Scotty | id='${id}' workspace='${workspace}' url='${scotty_urls[$workspace]}'"
-  print -r -- "${scotty_urls[$workspace]}?bead=${id}"
-}
-
-#######################################
 # Print a --field row and, when the config colors its value, its --color, one argument per line.
 # Globals: colors
 # Arguments: $1 config field (status|priority), $2 value as bd gives it, $3 value as shown
@@ -280,33 +277,66 @@ field_args() {
 }
 
 #######################################
-# Print one bead's link; when tmux-tooltip refuses the --href form (one older than link --href),
-# fall back to the tmux-only link.
+# Print a bead's card URL: tmux-tooltip's link, whose URL carries the card, with the label cut off;
+# the https page given as href with the card in its query, else a tmux-only link.
 # Globals: TMUX_TOOLTIP, CONFIG
-# Arguments: $1 id, $2 the --href value or '', then the card arguments
-# Outputs: the link on stdout
-# Returns: 1 when tmux-tooltip refuses the card itself
+# Arguments: $1 id, $2 title or '', $3 status or '', $4 priority or '', $5 href or ''
+# Outputs: the URL on stdout
+# Returns: 1 when tmux-tooltip is missing or refuses the card
 #######################################
-build_link() {
-  local id="${1}" href="${2}"
-  shift 2
-  if [[ -n "${href}" ]] && zsh "${TMUX_TOOLTIP}" link --label "${id}" --href "${href}" "$@"; then
-    return 0
-  fi
-  if [[ -n "${href}" ]]; then
-    log::warn "tmux-tooltip refused --href; is it older than link --href? This link opens only in tmux | id='${id}' href='${href}'"
-  fi
-  if ! zsh "${TMUX_TOOLTIP}" link --label "${id}" "$@"; then
+card_url() {
+  local id="${1}" title="${2}" bead_status="${3}" priority="${4}" href="${5}"
+  check_prerequisites || return 1
+  local -a card=(--title "${id}")
+  [[ -n "${href}" ]] && card+=(--href "${href}")
+  [[ -n "${title}" ]] && card+=(--text "${title}")
+  [[ -n "${bead_status}" ]] && card+=("${(@f)$(field_args status "${bead_status}" "${bead_status}")}")
+  [[ -n "${priority}" ]] && card+=("${(@f)$(field_args priority "${priority}" "P${priority}")}")
+  card+=(--copy "${id}${title:+ | ${title}}")
+  local link
+  if ! link="$(zsh "${TMUX_TOOLTIP}" link --label "${id}" "${card[@]}")"; then
     log::err "tmux-tooltip link failed; a color in the config may be wrong | id='${id}' config='${CONFIG}'"
     return 1
   fi
+  if [[ "${link}" != "[${id}]("*")" ]]; then
+    log::err "tmux-tooltip printed no [LABEL](URL) link | id='${id}' link='${link}' expected='[${id}](tmux-tooltip://show?…)'"
+    return 1
+  fi
+  local url="${link#"[${id}]("}"
+  print -r -- "${url%")"}"
+}
+
+#######################################
+# Print a bead's URL: its workspace's Scotty page when the config names one, else the tmux-only
+# link; with card=true, the card URL built on that page.
+# Globals: scotty_urls
+# Arguments: $1 id, $2 title or '', $3 status or '', $4 priority or '', $5 host part or '', $6 card (true|false)
+# Outputs: the URL on stdout
+# Returns: 1 when a card URL cannot be built
+#######################################
+bead_url() {
+  local id="${1}" title="${2}" bead_status="${3}" priority="${4}" host="${5}" card="${6}"
+  local workspace="${id%-*}${host:+@${host}}"
+  local href="${scotty_urls[$workspace]:+${scotty_urls[$workspace]}?bead=${id}}"
+  if [[ -z "${href}" ]]; then
+    log::info "No scotty line for the workspace; the link opens only in tmux | id='${id}' workspace='${workspace}'"
+    card_url "${id}" "${title}" "${bead_status}" "${priority}" ""
+    return
+  fi
+  if [[ "${card}" == true ]]; then
+    log::info "Building the card on the workspace's Scotty page | id='${id}' workspace='${workspace}' href='${href}'"
+    card_url "${id}" "${title}" "${bead_status}" "${priority}" "${href}"
+    return
+  fi
+  log::info "Linking to the workspace's Scotty | id='${id}' workspace='${workspace}' url='${href}'"
+  print -r -- "${href}"
 }
 
 # --- Main ---
 
 main() {
   # === PARSE ===
-  local definition=""
+  local definition="" card=false
   local -i machines=0
   local -a ids=() titles=() statuses=() priorities=()
   local -i n=0
@@ -314,6 +344,7 @@ main() {
     case "${1}" in
       -h|--help) help; return 0 ;;
       --here) machines+=1; shift ;;
+      --card) card=true; shift ;;
       --host-definition) machines+=1; definition="${2:?--host-definition requires a name}"; shift 2 ;;
       --bead)
         n+=1
@@ -338,11 +369,11 @@ main() {
   # === MASSAGE ===
   local -i i
   for (( i = 1; i <= n; i++ )); do
-    statuses[i]="${statuses[i]:l}"
+    statuses[i]="$(card_field status "${ids[i]}" "${statuses[i]:l}" "${STATUSES[@]}")"
+    priorities[i]="$(card_field priority "${ids[i]}" "${priorities[i]}" "${PRIORITIES[@]}")"
   done
 
   # === VALIDATE ===
-  check_prerequisites
   if (( n == 0 )); then
     log::err "No --bead given"
     help >&2
@@ -350,7 +381,7 @@ main() {
   fi
   validate_machine "${machines}" "${definition}"
   for (( i = 1; i <= n; i++ )); do
-    validate_bead "${ids[i]}" "${titles[i]}" "${statuses[i]}" "${priorities[i]}"
+    validate_bead "${ids[i]}"
   done
 
   # === LOGIC ===
@@ -358,18 +389,20 @@ main() {
   load_config
   local host
   host="$(host_part "${definition}")"
-  # Links print only once every bead's link is built, so a failure leaves no partial output.
-  local -a card links
-  local link href
+  # Definitions print only once every bead's URL is built, so a failure leaves no partial output.
+  local -a definitions
+  local -A defined=()
+  local url
   for (( i = 1; i <= n; i++ )); do
-    href="$(scotty_href "${ids[i]}" "${host}")"
-    card=(--title "${ids[i]}" --text "${titles[i]}" --copy "${ids[i]} | ${titles[i]}")
-    [[ -n "${statuses[i]}" ]] && card+=("${(@f)$(field_args status "${statuses[i]}" "${statuses[i]}")}")
-    [[ -n "${priorities[i]}" ]] && card+=("${(@f)$(field_args priority "${priorities[i]}" "P${priorities[i]}")}")
-    link="$(build_link "${ids[i]}" "${href}" "${card[@]}")" || return 1
-    links+=("${link}")
+    if [[ -n "${defined[${ids[i]}]:-}" ]]; then
+      log::info "Repeated --bead; one definition covers every mention | id='${ids[i]}'"
+      continue
+    fi
+    url="$(bead_url "${ids[i]}" "${titles[i]}" "${statuses[i]}" "${priorities[i]}" "${host}" "${card}")" || return 1
+    defined[${ids[i]}]=1
+    definitions+=("[${ids[i]}]: ${url}")
   done
-  print -rl -- "${links[@]}"
+  print -rl -- "${definitions[@]}"
 }
 
 main "$@"
