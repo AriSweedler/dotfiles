@@ -28,6 +28,8 @@
   in {
     darwinModules.default = ./darwin.nix;
     homeModules.default = ./home.nix;
+    # The personal tier (personal/): public, but only a personal machine's flake imports it.
+    homeModules.personal = ./personal;
 
     # Ari's own packages (pkgs/default.nix): `nix build <this flake>#ari_zshlib`.
     packages.aarch64-darwin = import ./pkgs {

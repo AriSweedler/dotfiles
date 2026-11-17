@@ -1,0 +1,100 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotfiles switch:*)"
+    ]
+  },
+  "model": "opus",
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/bin/notification-fire.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/bin/pretooluse-headless-chrome-guard.sh",
+            "if": "Bash(*--headless*)",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.config/claude/bin/stop-fire.sh"
+          }
+        ]
+      }
+    ],
+    "MessageDisplay": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "zsh $HOME/.claude/skills/ari-bead-driven-development/bin/bead_autolink.zsh --workspace beads=$HOME/beads",
+            "timeout": 8
+          }
+        ]
+      }
+    ]
+  },
+  "modelSettings": {
+    "claude-fable-5-1": {
+      "effortLevel": "medium"
+    }
+  },
+  "theme": "dark",
+  "agentPushNotifEnabled": true,
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Bash(bd:*) in /Users/arisweedler/homelab — routine issue-tracker use (8× in recent transcripts)",
+      "Bash(colima start:*) and Bash(colima status) in /Users/arisweedler/homelab — routine Docker VM lifecycle (3× in recent transcripts)"
+    ],
+    "soft_deny": [
+      "$defaults",
+      "Bash(bin/cloudflare-allowlist.sh:*) — writes ufw rules gating port 443 ingress; treat as a security/network-posture change requiring review",
+      "Bash(bin/vault:*) with no --dry-run — writes secrets from 1Password into .env; review before unattended regen"
+    ],
+    "environment": [
+      "### Org-wide",
+      "**Organization**: None configured",
+      "**Cloud provider(s)**: None configured",
+      "**Repository visibility**: private (AriSweedler/homelab, confirmed via gh)",
+      "**Internal sharing / snippet hosting**: None configured — treat public paste/gist services as outside the trust boundary",
+      "**Secrets management**: 1Password (bin/vault reads items named in bin/vault.json; .env holds the generated secrets, gitignored)",
+      "**Default / protected branches**: main (default); Protected branches: none listed; Rulesets: not queryable here — treat main as unverified-protection, not confirmed-unprotected",
+      "**CI/CD deploy targets**: None configured",
+      "**Network posture**: None configured",
+      "**Host containment**: None configured — assume Claude Code runs on an ordinary developer machine (the homelab gateway host itself, a MacBook Pro running Docker via colima) with open internet",
+      "**Source control**: the AriSweedler/homelab repo and its origin remote (github.com/AriSweedler/homelab) only",
+      "**Trusted internal domains**: *.sweedler.com (this repo's service zone, e.g. beads-43diamond.sweedler.com, grafana-43diamond.sweedler.com, seerr-43diamond.sweedler.com)",
+      "**Trusted cloud buckets**: None configured",
+      "**Key internal services**: the homelab gateway (Caddy + authentik) and services registered in services.yaml, reached at <name>-43diamond.sweedler.com",
+      "**Internal package registry**: None configured",
+      "**Sensitive data locations & audiences**: .env (generated secrets), apps/concert-mcp/docs/credentials.md, bin/cloudflare-allowlist.sh — share only with the repo owner (Ari)",
+      "**Data retention / declassification**: None configured",
+      "**Sensitive remote targets**: any namespace/host whose name carries prod or production as a whole word or segment — none observed in this repo's config; fall back to this default",
+      "**Protected deployment namespaces / environments**: None configured — fall back to the Sensitive remote targets heuristic",
+      "**Protected IaC scopes**: IAM, RBAC, networking, quota, and node-pool resources; anything whose name or tag carries prod or production as a whole word or name segment",
+      "### User-specific",
+      "**Primary use of Claude Code**: homelab infrastructure development (Caddy/authentik gateway, Docker/colima stacks, torrent/media automation) for the AriSweedler/homelab repo",
+      "**Trusted repo**: AriSweedler/homelab (private, working directory /Users/arisweedler/homelab) and its origin remote",
+      "**Org-specific CLIs**: bd (beads issue tracker), bin/lab, bin/vault, bin/doctor.sh, bin/compile, bin/cloudflare-setup.sh — routine under this repo's bin/ prefix",
+      "**Routine under this repo's bin/ prefix**: scripts in bin/ (lab, vault, doctor.sh, compile, cloudflare-setup.sh, typecheck.sh, cloudflare-allowlist.sh) are this project's own tooling"
+    ]
+  }
+}
