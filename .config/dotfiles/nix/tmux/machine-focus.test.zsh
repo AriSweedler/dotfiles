@@ -42,10 +42,12 @@ gopt()         { tmux -S $1 show -gv $2 }
 wopt()         { tmux -S $OUT show -wv -t out $1 2>/dev/null || true }
 
 # typhon's two styles, which machine-focus.conf saves and restores
+ACTIVE_FG=colour15 ACTIVE_BG=colour235 INACTIVE_FG=colour245 INACTIVE_BG=colour238
+TY_ACTIVE=fg=$ACTIVE_FG,bg=$ACTIVE_BG TY_INACTIVE=fg=$INACTIVE_FG,bg=$INACTIVE_BG
 STUB=$D/typhon-stub.conf
 print -l 'set -g focus-events on' \
-  'set -g window-active-style fg=colour15,bg=colour235' \
-  'set -g window-style fg=colour245,bg=colour238' > $STUB
+  "set -g window-active-style $TY_ACTIVE" \
+  "set -g window-style $TY_INACTIVE" > $STUB
 mkdir $D/bin
 cp "$(readlink -f "$(command -v tmux)")" $D/bin/ssh
 
@@ -59,21 +61,25 @@ LOCAL_PANE=$(tmux -S $OUT list-panes -t out -F '#{pane_id}' | grep -vx $SSH_PANE
 tmux -S $TERM_SOCK -f $STUB new -d -s term -x 130 -y 45 "env -u TMUX tmux -S $OUT attach -t out"
 
 print "setup"
+# The dim colours come from the conf, so changing one is a change to the conf alone.
+DIM_ACTIVE=$(gopt $IN @machine-dim-active-bg) DIM=$(gopt $IN @machine-dim-bg)
+num() { print -r -- ${1#colour} }
+check "the four backgrounds are distinct" "$(print -l $ACTIVE_BG $INACTIVE_BG $DIM_ACTIVE $DIM | sort -u | wc -l | tr -d ' ')" 4
 wait_until "outer pane runs ssh" eval '[[ $(tmux -S $OUT display -p -t $SSH_PANE "#{pane_current_command}") == ssh ]]'
 wait_until "inner client attached and focused" in_focused
 
 focused_state() {
-  check "$1: inner active style is typhon's" "$(gopt $IN window-active-style)" 'fg=colour15,bg=colour235'
-  check "$1: inner inactive style is typhon's" "$(gopt $IN window-style)" 'fg=colour245,bg=colour238'
-  wait_until "$1: ssh pane draws 235" rendered 235
-  wait_until "$1: ssh pane draws no 240" not_rendered 240
-  check "$1: outer's other panes are the inactive machine's (243)" "$(wopt window-style)" 'fg=colour245,bg=colour238,bg=colour243'
+  check "$1: inner active style is typhon's" "$(gopt $IN window-active-style)" $TY_ACTIVE
+  check "$1: inner inactive style is typhon's" "$(gopt $IN window-style)" $TY_INACTIVE
+  wait_until "$1: ssh pane draws $ACTIVE_BG" rendered $(num $ACTIVE_BG)
+  wait_until "$1: ssh pane draws no $DIM_ACTIVE" not_rendered $(num $DIM_ACTIVE)
+  check "$1: outer's other panes are the inactive machine's ($DIM)" "$(wopt window-style)" $TY_INACTIVE,bg=$DIM
 }
 unfocused_state() {
-  check "$1: inner active style is 240" "$(gopt $IN window-active-style)" 'fg=colour15,bg=colour235,bg=colour240'
-  check "$1: inner inactive style is 243" "$(gopt $IN window-style)" 'fg=colour245,bg=colour238,bg=colour243'
-  wait_until "$1: ssh pane draws 240 (inner active pane)" rendered 240
-  wait_until "$1: ssh pane draws 243 (inner inactive pane)" rendered 243
+  check "$1: inner active style is $DIM_ACTIVE" "$(gopt $IN window-active-style)" $TY_ACTIVE,bg=$DIM_ACTIVE
+  check "$1: inner inactive style is $DIM" "$(gopt $IN window-style)" $TY_INACTIVE,bg=$DIM
+  wait_until "$1: ssh pane draws $DIM_ACTIVE (inner active pane)" rendered $(num $DIM_ACTIVE)
+  wait_until "$1: ssh pane draws $DIM (inner inactive pane)" rendered $(num $DIM)
   check "$1: outer window style back to typhon's" "$(wopt window-style)" ''
 }
 
@@ -104,8 +110,8 @@ print "conf re-sourced into the inner tmux while it is unfocused"
 tmux -S $OUT select-pane -t $LOCAL_PANE
 wait_until "inner unfocused" in_unfocused
 tmux -S $IN source-file $CONF
-check "saved active style is typhon's" "$(gopt $IN @machine-focused-active-style)" 'fg=colour15,bg=colour235'
-check "saved inactive style is typhon's" "$(gopt $IN @machine-focused-style)" 'fg=colour245,bg=colour238'
+check "saved active style is typhon's" "$(gopt $IN @machine-focused-active-style)" $TY_ACTIVE
+check "saved inactive style is typhon's" "$(gopt $IN @machine-focused-style)" $TY_INACTIVE
 tmux -S $OUT select-pane -t $SSH_PANE
 wait_until "inner focused" in_focused
 focused_state "after re-source"
