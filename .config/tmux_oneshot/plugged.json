@@ -5,7 +5,7 @@
       "text": "dashboard of what is plugged in: ports, USB, displays, power (q quits)"
     },
     "cmd": "plugged",
-    "autodismiss": true,
-    "key": "alt-p"
+    "key": "alt-p",
+    "window": "plugged"
   }
 ]
