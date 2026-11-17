@@ -151,7 +151,7 @@ assert_eq "execute: checked in the repo" yes "$([[ -e "${HL}/checked" ]] && echo
 SSH_CALLS=()
 while IFS= read -r line; do SSH_CALLS+=("${line}"); done < <(shim_log ssh)
 assert_eq "execute: ssh twice" 2 "${#SSH_CALLS[@]}"
-assert_contains "execute: the pull comes first" "${SSH_CALLS[0]:-}" "dotfiles pull"
+assert_contains "execute: the pull comes first, by path (a login shell has no ~/.config/bin on PATH)" "${SSH_CALLS[0]:-}" '"$HOME/.config/bin/dotfiles" pull'
 assert_contains "execute: then the tmux reload" "${SSH_CALLS[1]:-}" "tmux source-file"
 assert_contains "execute: says what runs" "${ERR}" "web runs the shared tier at ${PUSHED:0:7}"
 
