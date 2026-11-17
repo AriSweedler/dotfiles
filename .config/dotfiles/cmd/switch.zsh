@@ -182,9 +182,10 @@ switch::remote() {
     fi
   fi
 
-  # 4. Pull the host's clone first, so the files the new generation links into it exist.
+  # 4. Pull the host's clone first, so the files the new generation links into it exist. By path: a login
+  # shell over ssh reads no .zshrc, which is what puts ~/.config/bin on PATH (co2, 2026-11-16: exit 127).
   local -a ssh_to=(ssh -o BatchMode=yes -o ConnectTimeout=10 "${r[ssh]}")
-  run_mut "${ssh_to[@]}" "zsh -lc 'dotfiles pull'" \
+  run_mut "${ssh_to[@]}" "zsh -lc '\"\$HOME/.config/bin/dotfiles\" pull'" \
     || { log::err "pulling the host's clone failed | host='${host}' ssh='${r[ssh]}'"; return 1; }
 
   # 5. Deploy, then check, from the repo (else the flake).
