@@ -66,14 +66,14 @@ focused_state() {
   check "$1: inner active style is typhon's" "$(gopt $IN window-active-style)" 'fg=colour15,bg=colour235'
   check "$1: inner inactive style is typhon's" "$(gopt $IN window-style)" 'fg=colour245,bg=colour238'
   wait_until "$1: ssh pane draws 235" rendered 235
-  wait_until "$1: ssh pane draws no 239" not_rendered 239
-  check "$1: outer's other panes are the inactive machine's (240)" "$(wopt window-style)" 'fg=colour245,bg=colour238,bg=colour240'
+  wait_until "$1: ssh pane draws no 240" not_rendered 240
+  check "$1: outer's other panes are the inactive machine's (243)" "$(wopt window-style)" 'fg=colour245,bg=colour238,bg=colour243'
 }
 unfocused_state() {
-  check "$1: inner active style is 239" "$(gopt $IN window-active-style)" 'fg=colour15,bg=colour235,bg=colour239'
-  check "$1: inner inactive style is 240" "$(gopt $IN window-style)" 'fg=colour245,bg=colour238,bg=colour240'
-  wait_until "$1: ssh pane draws 239 (inner active pane)" rendered 239
-  wait_until "$1: ssh pane draws 240 (inner inactive pane)" rendered 240
+  check "$1: inner active style is 240" "$(gopt $IN window-active-style)" 'fg=colour15,bg=colour235,bg=colour240'
+  check "$1: inner inactive style is 243" "$(gopt $IN window-style)" 'fg=colour245,bg=colour238,bg=colour243'
+  wait_until "$1: ssh pane draws 240 (inner active pane)" rendered 240
+  wait_until "$1: ssh pane draws 243 (inner inactive pane)" rendered 243
   check "$1: outer window style back to typhon's" "$(wopt window-style)" ''
 }
 
