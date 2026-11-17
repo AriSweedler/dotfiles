@@ -27,6 +27,12 @@
         time_format = "%T UTC";
         utc_time_offset = "0";
       };
+      # (N): this machine's unread notifications, which zsh/plugins/notify_badge.zsh exports
+      # before each prompt, and leaves unset at 0.
+      env_var.NOTIFY_UNREAD = {
+        format = "[\\($env_value\\)]($style) ";
+        style = "bold yellow";
+      };
     };
   };
 }

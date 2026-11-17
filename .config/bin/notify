@@ -1,0 +1,205 @@
+#!/usr/bin/env zsh
+# notify — notifications for Ari, on any machine. On macOS a notification is a banner, through
+# atn (the logging front for terminal-notifier). Elsewhere (co2: headless NixOS, reached over ssh
+# into tmux) it is recorded on the machine, where Ari can act on it:
+#   - an unread marker, one per tmux pane (a second notification from a pane replaces the
+#     first), in ${XDG_STATE_HOME:-~/.local/state}/notify/unread/
+#   - one line in notify/notifications.log, the history (10 MB a file, 3 files)
+#   - the unread count in the tmux server option @notify-unread, which the status line shows
+#     as (N) (tmux/notify.conf); the prompt shows the same count (zsh/plugins/notify_badge.zsh)
+# M-n opens `notify pick` in a popup on the machine whose pane has the keyboard.
+#
+#   notify [--title TITLE] [--pane %N] MESSAGE..   send one (--pane defaults to $TMUX_PANE)
+#   notify count [--tmux]                          print the unread count; --tmux: also set it there
+#   notify list                                    the unread ones, newest first: ID<TAB>TIME<TAB>PANE<TAB>TITLE<TAB>MESSAGE
+#   notify ack [--pane %N] [ID..]                  mark read: those IDs, that pane's, or with neither all
+#   notify pick                                    choose in fzf: space selects, enter jumps to the pane, ctrl-d dismisses
+#
+# A word that is a subcommand cannot start a message: write `notify -- list is ready`.
+# Exec-free on the record path but for tmux; a recording never fails the caller (exit 0), a
+# usage error exits 64. NOTIFY_PLATFORM (macos|linux, default from OSTYPE) is for the tests.
+set -u
+zmodload zsh/datetime
+zmodload zsh/system
+zmodload -F zsh/files b:zf_mkdir b:zf_mv b:zf_rm
+source "${0:A:h:h}/zsh/plugins/log_rotate.zsh"
+
+readonly STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/notify"
+readonly UNREAD_DIR="${STATE_DIR}/unread"
+readonly LOCK_FILE="${STATE_DIR}/.lock"
+readonly NOTIFY_LOG="${STATE_DIR}/notifications.log"
+readonly NOTIFY_LOG_MAX_BYTES=$(( 10 * 1024 * 1024 ))
+readonly NOTIFY_LOG_FILES=3
+readonly ATN="${0:A:h}/atn"
+if [[ -n "${NOTIFY_PLATFORM:-}" ]]; then
+  readonly PLATFORM="${NOTIFY_PLATFORM}"
+elif [[ "${OSTYPE}" == darwin* ]]; then
+  readonly PLATFORM=macos
+else
+  readonly PLATFORM=linux
+fi
+
+usage() {
+  cat <<'EOF'
+usage: notify [--title TITLE] [--pane %N] MESSAGE..
+       notify count [--tmux] | list | ack [--pane %N] [ID..] | pick
+EOF
+}
+
+die_usage() { print -u2 -r -- "notify: ${1}"; usage >&2; exit 64; }
+
+#######################################
+# The unread markers, newest first.
+# Outputs: reply - their paths
+#######################################
+unread_markers() { reply=( "${UNREAD_DIR}"/*(N.om) ); }
+
+#######################################
+# Set tmux's @notify-unread to the current count, when a tmux server is reachable; a server
+# that is not there is not an error.
+#######################################
+push_count() {
+  local -a reply
+  unread_markers
+  local -i n=${#reply}
+  (( ${+commands[tmux]} && ! ${+NOTIFY_NO_PUSH} )) || return 0
+  # One tmux call: set the count, then redraw the status line of a client, when there is one.
+  tmux set -g @notify-unread "${n}" \; refresh-client -S 2>/dev/null || true
+}
+
+#######################################
+# Run a command under the state lock, so two notifies never push their counts out of order.
+# A lock not had in 10 s still runs the command, with no push: the holder pushes a fresh count.
+#######################################
+with_lock() {
+  zf_mkdir -p "${UNREAD_DIR}" 2>/dev/null || true
+  # zsystem flock opens the file but never creates it; and with -t but no -i (zsh 5.9) it
+  # gives up long before the timeout under contention (6 of 20 writers, measured).
+  [[ -e "${LOCK_FILE}" ]] || : >> "${LOCK_FILE}"
+  local fd
+  if zsystem flock -t 10 -i 0.05 -f fd "${LOCK_FILE}" 2>/dev/null; then
+    "$@"
+    exec {fd}>&-
+    return 0
+  fi
+  NOTIFY_NO_PUSH=1 "$@"
+}
+
+#######################################
+# send: record one notification (or, on macOS, post its banner).
+#######################################
+record() {
+  local title="${1}" pane="${2}" message="${3}"
+  local ts id marker tmp
+  strftime -s ts '%Y-%m-%dT%H:%M:%S%z' "${EPOCHSECONDS}"
+  if [[ -n "${pane}" ]]; then id="pane-${pane#%}"; else id="${EPOCHSECONDS}.$$"; fi
+  marker="${UNREAD_DIR}/${id}"
+  tmp="${UNREAD_DIR}/.tmp.$$"
+  print -r -- "${ts}"$'\t'"${pane:-none}"$'\t'"${title}"$'\t'"${message}" > "${tmp}" && zf_mv -f "${tmp}" "${marker}"
+  push_count
+  log_append_capped "${NOTIFY_LOG}" "${NOTIFY_LOG_MAX_BYTES}" "${NOTIFY_LOG_FILES}" \
+    "${ts} | ${HOST} | ${pane:-no pane} | ${title} | ${message}" 2>/dev/null || true
+}
+
+cmd_send() {
+  local title="Notification" pane="${TMUX_PANE:-}"
+  while (( $# > 0 )); do case "${1}" in
+    -h|--help) usage; return 0 ;;
+    --title)   title="${2:?--title requires a value}"; shift 2 ;;
+    --pane)    pane="${2:?--pane requires a value}"; shift 2 ;;
+    --)        shift; break ;;
+    -*)        die_usage "unknown flag | flag='${1}'" ;;
+    *)         break ;;
+  esac; done
+  local message="${*//$'\n'/ }"
+  message="${message//$'\t'/ }"
+  [[ -n "${message}" ]] || die_usage "a message is required"
+  if [[ "${PLATFORM}" == macos ]]; then
+    exec "${ATN}" -group notify -title "${title}" -message "${message}"
+  fi
+  with_lock record "${title//$'\t'/ }" "${pane}" "${message}" 2>/dev/null || true
+  return 0
+}
+
+cmd_count() {
+  local -a reply
+  unread_markers
+  print -r -- "${#reply}"
+  [[ "${1:-}" != --tmux ]] || push_count
+}
+
+cmd_list() {
+  local -a reply
+  local file line
+  unread_markers
+  for file in "${reply[@]}"; do
+    IFS= read -r line < "${file}" || [[ -n "${line}" ]] || continue
+    print -r -- "${file:t}"$'\t'"${line}"
+  done
+}
+
+remove_markers() {
+  local id
+  for id in "$@"; do
+    [[ "${id}" != */* && -n "${id}" ]] || continue
+    zf_rm -f "${UNREAD_DIR}/${id}"
+  done
+  push_count
+}
+
+cmd_ack() {
+  local -a ids=()
+  while (( $# > 0 )); do case "${1}" in
+    --pane) ids+=("pane-${${2:?--pane requires a value}#%}"); shift 2 ;;
+    -*)     die_usage "unknown flag | flag='${1}'" ;;
+    *)      ids+=("${1}"); shift ;;
+  esac; done
+  if (( ! ${#ids} )); then
+    local -a reply
+    unread_markers
+    ids=("${reply[@]:t}")
+  fi
+  with_lock remove_markers "${ids[@]}"
+}
+
+#######################################
+# pick: the unread ones in fzf. Space selects (several), enter jumps to the first selected
+# pane and marks the selection read, ctrl-d marks it read, esc leaves it all as it is.
+#######################################
+cmd_pick() {
+  local entries
+  entries="$(cmd_list | awk -F '\t' 'BEGIN { OFS = "\t" } { t = substr($2, 12, 5); print $1, $3, t "  " $4 ": " $5 "  (" $3 ")" }')"
+  if [[ -z "${entries}" ]]; then
+    print -r -- "No notifications. (any key closes)"
+    read -k 1 -s
+    return 0
+  fi
+  local out key
+  local -a picked ids panes
+  out="$(print -r -- "${entries}" | fzf --multi --delimiter '\t' --with-nth 3 \
+    --bind 'space:toggle+down' --expect ctrl-d --no-sort --reverse \
+    --header 'space: select   enter: go to pane   ctrl-d: dismiss   esc: close')" || return 0
+  # Line 1 is the key that ended fzf: empty for enter, so split keeping empty lines.
+  local -a lines=("${(@f)out}")
+  key="${lines[1]}"
+  picked=("${(@)lines[2,-1]}")
+  (( ${#picked} )) || return 0
+  ids=("${(@)picked%%$'\t'*}")
+  panes=("${(@)${(@)picked#*$'\t'}%%$'\t'*}")
+  cmd_ack "${ids[@]}"
+  [[ "${key}" != ctrl-d ]] || return 0
+  [[ "${panes[1]}" == %* ]] || return 0
+  tmux switch-client -t "${panes[1]}" \; select-window -t "${panes[1]}" \; select-pane -t "${panes[1]}" 2>/dev/null || true
+}
+
+main() {
+  case "${1:-}" in
+    count) shift; cmd_count "$@" ;;
+    list)  shift; cmd_list "$@" ;;
+    ack)   shift; cmd_ack "$@" ;;
+    pick)  shift; cmd_pick "$@" ;;
+    *)     cmd_send "$@" ;;
+  esac
+}
+
+main "$@"

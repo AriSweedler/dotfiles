@@ -48,6 +48,7 @@ in
         ./tmux/keybindings.conf
         ./tmux/macros.conf
         ./tmux/mouse.conf
+        ./tmux/notify.conf
         ./tmux/osc8-hyperlinks.conf
         ./tmux/prefix.conf
         ./tmux/resize-panes.conf
