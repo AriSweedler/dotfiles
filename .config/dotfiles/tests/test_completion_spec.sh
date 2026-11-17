@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The declarations as data, over the real tree: the linter (lib/spec.zsh) has no finding and names each kind of gap in a broken declaration; _dotfiles is what the declarations compile to, and it offers every verb, subcommand, flag and value kind they declare.
+# The declarations as data, over the real tree: the linter (zsh/lib/cli/spec.zsh) has no finding and names each kind of gap in a broken declaration; _dotfiles is what the declarations compile to, and it offers every verb, subcommand, flag and value kind they declare.
 set -u
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"

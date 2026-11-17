@@ -1,4 +1,4 @@
-# dotfiles/cmd/kinds.zsh — the kind catalog (lib/kind.zsh): every type of value a dotfiles
+# dotfiles/cmd/kinds.zsh — the kind catalog (zsh/lib/cli/kind.zsh): every type of value a dotfiles
 # command line holds, declared once, and `dotfiles kinds [KIND]`, which prints the catalog or one
 # kind's values. The completion asks this verb for the values of a --lister kind.
 

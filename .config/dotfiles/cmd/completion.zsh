@@ -1,6 +1,7 @@
 # dotfiles/cmd/completion.zsh — `dotfiles completion`: the zsh completion for dotfiles, compiled
-# from the declarations (lib/verb.zsh, cmd/kinds.zsh, GLOBAL_FLAG_DESC), and their linter
-# (lib/spec.zsh), which is the compiler's front end: nothing is emitted while it has a finding.
+# from the declarations (cmd/kinds.zsh, GLOBAL_FLAG_DESC and the verbs, declared with the cli
+# library: ~/.config/zsh/lib/cli, set up in lib/cli.zsh), and their linter (its spec.zsh), which
+# is the compiler's front end: nothing is emitted while it has a finding.
 
 verb::define completion 'the zsh completion for dotfiles, compiled from the verb declarations; lint checks them'
 verb::usage completion 'completion' 'completion lint' 'completion write'
@@ -48,11 +49,11 @@ cmd_completion() {
     lint) completion::findings ;;
     '')
       completion::findings || return 1
-      need_lib "${ARI_DOTFILES_CMD}/completion/emit.zsh" || return 3
+      cli::load_emit || return 3
       completion::emit ;;
     write)
       completion::findings || return 1
-      need_lib "${ARI_DOTFILES_CMD}/completion/emit.zsh" || return 3
+      cli::load_emit || return 3
       spec::completion_file
       text="$(completion::emit)"
       if [[ -r "${REPLY}" && "$(<"${REPLY}")" == "${text}" ]]; then log::info "no change | file='${REPLY}'"; return 0; fi

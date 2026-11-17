@@ -6,7 +6,7 @@
 # does not parse stops every verb, this one included. The draft lives in
 # <state>/drafts/help/NAME.zsh until it passes, so a failed edit resumes where it left off.
 
-# help_edit_stub VERB: a declaration in the house shape (lib/verb.zsh), for a verb without help.
+# help_edit_stub VERB: a declaration in the house shape (zsh/lib/cli/verb.zsh), for a verb without help.
 # Its descriptions are empty, so a stub saved as is does not pass; a verb::flag per flag the verb
 # parses by hand today, so moving it onto verb::parse is the next edit.
 help_edit_stub() {

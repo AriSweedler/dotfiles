@@ -33,6 +33,7 @@ assert_json "documented: the reason" "${f}" '.steps[] | select(.step=="dotfiles_
 CODE="${HOME}/.config"
 rm -f "${CODE}/dotfiles/lib" "${CODE}/dotfiles/cmd" "${CODE}/dotfiles/steps" "${CODE}/bin/dotfiles"
 cp -R "${ORIG_CONFIG_DIR}/dotfiles/lib" "${ORIG_CONFIG_DIR}/dotfiles/cmd" "${ORIG_CONFIG_DIR}/dotfiles/steps" "${CODE}/dotfiles/"
+mkdir -p "${CODE}/zsh/lib" && cp -R "${ORIG_CONFIG_DIR}/zsh/lib/cli" "${CODE}/zsh/lib/"   # the cli library lib/cli.zsh loads
 cp "${ORIG_CONFIG_DIR}/bin/dotfiles" "${CODE}/bin/dotfiles"
 STEPS="${CODE}/dotfiles/steps"
 copy() {  # ARGS: the world's copy of the CLI

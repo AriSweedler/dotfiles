@@ -13,6 +13,7 @@ world_new
 CODE="${HOME}/.config"
 rm -f "${CODE}/dotfiles/lib" "${CODE}/dotfiles/cmd" "${CODE}/dotfiles/steps" "${CODE}/bin/dotfiles"
 cp -R "${ORIG_CONFIG_DIR}/dotfiles/lib" "${ORIG_CONFIG_DIR}/dotfiles/cmd" "${ORIG_CONFIG_DIR}/dotfiles/steps" "${CODE}/dotfiles/"
+mkdir -p "${CODE}/zsh/lib" && cp -R "${ORIG_CONFIG_DIR}/zsh/lib/cli" "${CODE}/zsh/lib/"   # the cli library lib/cli.zsh loads
 cp "${ORIG_CONFIG_DIR}/bin/dotfiles" "${CODE}/bin/dotfiles"
 CMD="${CODE}/dotfiles/cmd"
 DISPATCH="${CODE}/dotfiles/lib/dispatch.zsh"
@@ -45,7 +46,7 @@ editor() {
   chmod +x "${EDITORS}/$1"
 }
 editor noop '{ print }'
-# verify is a declared verb (lib/verb.zsh): each editor breaks one part of the declaration rule.
+# verify is a declared verb (zsh/lib/cli/verb.zsh): each editor breaks one part of the declaration rule.
 editor no_description '/^verb::define verify / { print "verb::define verify \047\047"; next } { print }'
 editor no_flag_desc '/^verb::flag verify .--show. / { print "verb::flag verify \047--show\047 \047\047"; next } { print }'
 editor bad_syntax 'END { print "help_verify() {" } { print }'

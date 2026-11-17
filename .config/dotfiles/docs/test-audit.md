@@ -184,18 +184,19 @@ All of `lib`, `cmd` and `steps` is placed by the dotfiles-cli package, whose ins
 | `.config/dotfiles/lib/dispatch.zsh` | flags, verb, help | `test_cli.sh` (95), `test_help_edit.sh` (79) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/lib/edit.zsh` | open in `$EDITOR`, keep only when it checks out | `test_verb_lib.sh` (77), `test_git_edit.sh` (72), `test_steps_edit.sh` (88) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/lib/env.zsh` | constants, seams, defaults | `test_env_hermetic.sh` (47), `test_push_ssh.sh` (41) | placed (dotfiles-cli) | covered |
-| `.config/dotfiles/lib/kind.zsh` | the type of a command-line value | `test_completion_spec.sh` (39), `test_verb_lib.sh` (77) | placed (dotfiles-cli) | covered |
+| `.config/dotfiles/lib/cli.zsh` | the cli library set up for dotfiles, and its `globals` lint rule | `test_completion_spec.sh` (39), `test_local_exclude.sh` | placed (dotfiles-cli) | covered |
+| `.config/zsh/lib/cli/kind.zsh` (was `lib/kind.zsh`) | the type of a command-line value | `test_completion_spec.sh` (39), `test_verb_lib.sh` (77) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/lib/lock.zsh` | one run at a time | `test_verify_lock.sh` (16) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/lib/logging.zsh` | source the log library | every suite | placed (dotfiles-cli) | no test needed: 12 lines of sourcing |
 | `.config/dotfiles/lib/machine_name.zsh` | the machine's name file | `test_machine_name.sh` (22) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/lib/notify.zsh` | verify's trail and the banner | `test_jobs_notify.sh` (17), `test_verify_report.sh` (35) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/lib/plan.zsh` | the `--edit` plan file | `test_verb_lib.sh` (77), `test_apply_edit.sh` (38), `test_init_edit.sh` (54) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/lib/run.zsh` | dry-run gate, timing, watchdogs | `test_step_progress.sh` (54), `test_step_timeout.sh` (12), `test_spin_overhead.sh` (13), `test_step_assist.sh` (12) | placed (dotfiles-cli) | covered |
-| `.config/dotfiles/lib/spec.zsh` | the command line as data, and its linter | `test_completion_spec.sh` (39) | placed (dotfiles-cli) | covered |
+| `.config/zsh/lib/cli/spec.zsh` (was `lib/spec.zsh`) | the command line as data, and its linter | `test_completion_spec.sh` (39) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/lib/steps.zsh` | the step registry and runner | `test_runner.sh` (20), `test_step_isolation.sh` (10), `test_test_properties.sh` (12), `test_step_dotfiles_docs.sh` (37) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/lib/tiers.zsh` | git for the two tiers and the dev repos | `test_tier_commit_no_remote.sh` (4), `test_step_dotfiles_repo.sh` (79), `test_step_local_dotfiles_repo.sh` (27) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/lib/ui.zsh` | output fanciness and the gum wrapper | `test_ui.sh` (60) | placed (dotfiles-cli) | covered |
-| `.config/dotfiles/lib/verb.zsh` | a verb's help and parser from one declaration | `test_verb_lib.sh` (77), `test_help_shape.sh` (69) | placed (dotfiles-cli) | covered; at 2ebdebd this suite caught a bug in `push`'s declaration (see **Suites that failed in this run**) |
+| `.config/zsh/lib/cli/verb.zsh` (was `lib/verb.zsh`) | a verb's help and parser from one declaration | `test_verb_lib.sh` (77), `test_help_shape.sh` (69) | placed (dotfiles-cli) | covered; at 2ebdebd this suite caught a bug in `push`'s declaration (see **Suites that failed in this run**) |
 | `.config/dotfiles/lib/verdict.zsh` | what a check prints | `test_runner.sh` (20), `test_report_render.sh` (32) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/lib/watch.zsh` | which paths each step reads | `test_pull_changes.sh` (43) | placed (dotfiles-cli) | covered |
 
@@ -207,7 +208,7 @@ All of `lib`, `cmd` and `steps` is placed by the dotfiles-cli package, whose ins
 | `.config/dotfiles/cmd/alttab/edit.zsh` | `alttab edit` | `test_alttab_edit.sh` (76) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/cmd/apply.zsh` | `dotfiles apply STEP..` | `test_apply_edit.sh` (38), `test_fix_rollup.sh` (32) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/cmd/completion.zsh` | compile `_dotfiles` | `test_completion_spec.sh` (39) | placed (dotfiles-cli) | covered |
-| `.config/dotfiles/cmd/completion/emit.zsh` | the compiler's back end | `test_completion_spec.sh` (39) | placed (dotfiles-cli) | covered |
+| `.config/zsh/lib/cli/emit.zsh` (was `cmd/completion/emit.zsh`) | the compiler's back end | `test_completion_spec.sh` (39) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/cmd/git.zsh` | `dotfiles git` | `test_local_exclude.sh` (10), `test_git_edit.sh` (72) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/cmd/git/edit.zsh` | `--local git edit` | `test_git_edit.sh` (72) | placed (dotfiles-cli) | covered |
 | `.config/dotfiles/cmd/healthcheck.zsh` | every check, reported | `test_healthcheck_edit.sh` (42), `test_report_render.sh` (32), `test_check_all_ok.sh` (8) | placed (dotfiles-cli) | covered |

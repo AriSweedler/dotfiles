@@ -21,8 +21,11 @@ stdenvNoCC.mkDerivation {
     runHook preInstall
     cd ${src}/.config
     install -Dm755 -t $out/bin bin/dotfiles
-    mkdir -p $out/dotfiles $out/zsh/plugins
+    mkdir -p $out/dotfiles $out/zsh/plugins $out/zsh/lib
     cp -R dotfiles/cmd dotfiles/lib dotfiles/steps dotfiles/assets $out/dotfiles/
+    # The cli library (verbs, kinds, the linter, the completion compiler), which lib/cli.zsh
+    # loads from beside dotfiles/.
+    cp -R zsh/lib/cli $out/zsh/lib/cli
     cp -R new-machine $out/new-machine
     for f in zsh/plugins/*.zsh; do
       [[ $f == *.test.zsh ]] || install -Dm644 $f $out/zsh/plugins/''${f##*/}

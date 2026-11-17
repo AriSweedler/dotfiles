@@ -1,12 +1,13 @@
-# dotfiles/lib/verb.zsh — a verb is declared once; its help and its flag parser come from that.
+# zsh/lib/cli/verb.zsh — a verb is declared once; its help and its flag parser come from that.
+# Part of the cli library (cli.zsh); CLI_PROG is the program the verbs belong to.
 #
-#   verb::define VERB "one-line description"     the line `dotfiles --help` lists; -h/--help come free
-#   verb::usage  VERB "FORM" ..                   one Usage line each, without the leading `dotfiles`
+#   verb::define VERB "one-line description"     the line `CLI --help` lists; -h/--help come free
+#   verb::usage  VERB "FORM" ..                   one Usage line each, without the leading `CLI`
 #   verb::about  VERB <<'EOF' … EOF               the paragraph(s) under Usage, wrapped by hand at 78
 #   verb::sub    VERB NAME "description"          a Subcommands row
 #   verb::flag   VERB "--name[|-n] [ARG]" "description" [--for "SUB, .."]   a Flags row, and what
 #                                                 verb::parse accepts; ARG is a value spec naming
-#                                                 the value's kind (lib/kind.zsh: STEP, STEP,.. for
+#                                                 the value's kind (kind.zsh: STEP, STEP,.. for
 #                                                 a comma list), in [brackets] when optional;
 #                                                 --for: only with those subcommands, the verb's
 #                                                 own name standing for the verb without one. A
@@ -16,7 +17,7 @@
 #                                                 or more words), A|B (either kind)
 #   verb::env    VERB VAR "description" ["default"]   an Env row
 #   verb::edit   VERB HANDLER "ARGS" "description" [--form "USAGE"] [--flag-only]
-#                                                 `dotfiles VERB edit ARGS` and `--edit ARGS` route
+#                                                 `CLI VERB edit ARGS` and `--edit ARGS` route
 #                                                 to HANDLER; adds the Usage line (--form: written
 #                                                 out instead), the edit Subcommands row and the
 #                                                 --edit flag. --flag-only: only `--edit` routes (a
@@ -38,8 +39,8 @@
 
 typeset -gA VERB_DESC VERB_EDIT VERB_EDIT_ARGS VERB_EDIT_DESC VERB_EDIT_NONE VERB_ABOUT VERB_EDIT_FORM VERB_EDIT_FLAG_ONLY
 typeset -gA VERB_USAGE VERB_ENV VERB_SECTIONS
-# What the linter and the completion read (lib/spec.zsh), one table per fact. A node is one
-# command, the words after `dotfiles`: "jobs", "jobs run", "raycast link list". A flag's key is
+# What the linter and the completion read (spec.zsh), one table per fact. A node is one
+# command, the words after the program's name: "jobs", "jobs run", "raycast link list". A flag's key is
 # "VERB --name", its first spelling.
 typeset -ga NODES=() FLAGS=()                   # every node, every flag key, in declaration order
 typeset -gA NODE_DESC=()                        # node → its description
@@ -274,14 +275,16 @@ verb::help() {
   print -r -- "${c_bold}Usage${c_rst}"
   local REPLY
   verb::_rows_of "${v}" usage
-  # A form wider than 80 wraps, its continuation under the words after `dotfiles VERB`.
-  local head rest
+  # A form wider than 80 wraps, its continuation under the words after `CLI VERB`. The name
+  # prints grey; its width is the plain name's.
+  local head rest name="${c_grey}${CLI_PROG}${c_rst}"
+  local -i lead=$(( 3 + ${#CLI_PROG} ))
   for form in "${(@f)REPLY}"; do
     [[ -n "${form}" ]] || continue
     form="${(e)form}"
-    if (( 11 + ${#form} <= 80 )) || [[ "${form}" != *' '* ]]; then print -r -- "  ${DF} ${form}"; continue; fi
+    if (( lead + ${#form} <= 80 )) || [[ "${form}" != *' '* ]]; then print -r -- "  ${name} ${form}"; continue; fi
     head="${form%% *}" rest="${form#* }"
-    verb::_wrap "${rest}" $(( 12 + ${#head} )) "  ${DF} ${head} "
+    verb::_wrap "${rest}" $(( lead + 1 + ${#head} )) "  ${name} ${head} "
   done
   if [[ -n "${VERB_ABOUT[${v}]:-}" ]]; then
     print -r -- ""

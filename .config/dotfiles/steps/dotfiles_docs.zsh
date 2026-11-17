@@ -3,13 +3,13 @@
 # --desc, --apply when it has an apply, and step::watches or --none (steps::doc_gaps); and
 # docs::rule::help, each verb's help_VERB and the top-level help: a one-line synopsis, a Usage
 # section, every flag the parsers accept (help::doc_gap, cmd/help.zsh); and docs::rule::spec, the
-# declarations as data: the linter has no finding (lib/spec.zsh: every value names a kind, every
+# declarations as data: the linter has no finding (zsh/lib/cli/spec.zsh: every value names a kind, every
 # flag its subcommands, every Usage form speaks the declared flags and kinds) and _dotfiles is what
 # they compile to (cmd/completion.zsh). A gap is never a load error: it fails this step, by hand
 # only, naming the edit that fixes it.
 step::declare dotfiles_docs --group repo \
   --desc "every step documented (its '# step NAME — summary' line, --desc, --apply for an apply, watches: dotfiles steps) and every verb's help (a synopsis, Usage, every flag it parses: dotfiles help --edit VERB), and the declarations lint clean with the tab completion compiled from them (dotfiles completion write)"
-step::watches dotfiles_docs '.config/dotfiles/steps/**' '.config/dotfiles/cmd/**' '.config/dotfiles/lib/dispatch.zsh' '.config/dotfiles/lib/verb.zsh' '.config/dotfiles/lib/kind.zsh' '.config/dotfiles/lib/spec.zsh' '.config/zsh/completions/_dotfiles'
+step::watches dotfiles_docs '.config/dotfiles/steps/**' '.config/dotfiles/cmd/**' '.config/dotfiles/lib/dispatch.zsh' '.config/dotfiles/lib/cli.zsh' '.config/zsh/lib/cli/**' '.config/zsh/completions/_dotfiles'
 
 typeset -ga DOCS_RULES=(steps help spec)
 
@@ -61,7 +61,7 @@ docs::rule::spec() {
   (( ${#reply} == 0 )) || return 0
   spec::completion_file
   [[ -d "${REPLY:h}" ]] || return 0
-  need_lib "${ARI_DOTFILES_CMD}/completion/emit.zsh" || return 3
+  cli::load_emit || return 3
   text="$(completion::emit)"
   [[ -r "${REPLY}" && "$(<"${REPLY}")" == "${text}" ]] && return 0
   gaps+=("${REPLY:t}: not what the declarations compile to"); fixes+=("${CLI_NAME} completion write")

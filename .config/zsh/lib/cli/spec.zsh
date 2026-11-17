@@ -1,23 +1,26 @@
-# dotfiles/lib/spec.zsh — the command line as data, and its linter. The declarations (lib/verb.zsh,
-# lib/kind.zsh, GLOBAL_FLAG_DESC in lib/dispatch.zsh) fill the tables; this module answers
-# questions about them and checks that they say everything a reader needs. The completion
-# (cmd/completion/emit.zsh) is compiled from the same answers and is refused while the linter
+# zsh/lib/cli/spec.zsh — the command line as data, and its linter. The declarations (verb.zsh,
+# kind.zsh, and GLOBAL_FLAG_DESC: the flags a program takes before its verb) fill the tables;
+# this module answers questions about them and checks that they say everything a reader needs.
+# The completion (emit.zsh) is compiled from the same answers and is refused while the linter
 # has a finding, so the linter is the compiler's front end.
 #
-# A node is one command, the words after `dotfiles`: "jobs", "jobs run". Questions:
+# A node is one command, the words after the program's name: "jobs", "jobs run". Questions:
 #   spec::verb_of NODE       REPLY = its verb
 #   spec::children NODE      reply = the next words that make a longer node (the root '': the verbs)
 #   spec::flags_at NODE      reply = the flag keys ("VERB --name") the node takes
 #   spec::args_at NODE       reply = its positional value specs, in order
-#   spec::completion_file    REPLY = where the compiled completion is kept
+#   spec::completion_file    REPLY = where the compiled completion is kept (CLI_COMPLETION_FILE)
 #   spec::lint               reply = the findings, each '<where>: <what is wrong>'; empty = clean
 # Each rule is a spec::rule::<name> function appending to the caller's `findings`, run in
-# SPEC_RULES order.
+# SPEC_RULES order; a program adds its own rule by defining it and appending its name.
 
-typeset -ga SPEC_RULES=(kinds nodes flags args usage globals)
+typeset -ga SPEC_RULES=(kinds nodes flags args usage)
+(( ${+GLOBAL_FLAG_DESC} )) || typeset -gA GLOBAL_FLAG_DESC=()
+# Where a finding tells the reader to add a kind.
+typeset -g CLI_KINDS_CATALOG="${CLI_KINDS_CATALOG:-the kind catalog}"
 
-# spec::completion_file: REPLY = where the compiled _dotfiles is kept, in the editable checkout.
-spec::completion_file() { REPLY="${ARI_DOTFILES_SRC_CONFIG}/zsh/completions/_dotfiles"; }
+# spec::completion_file: REPLY = where the compiled completion is kept, in the editable checkout.
+spec::completion_file() { REPLY="${CLI_COMPLETION_FILE:?set CLI_COMPLETION_FILE: where the compiled completion is kept}"; }
 
 spec::verb_of() { REPLY="${1%% *}"; }
 
@@ -86,7 +89,7 @@ spec::rule::kinds() {
   done
   for kind in "${KINDS[@]}"; do
     [[ -n "${KIND_DESC[${kind}]}" ]] || findings+=("kind ${kind}: no description")
-    (( ${used[(Ie)${kind}]} )) || findings+=("kind ${kind}: no flag or position names it (drop it from cmd/kinds.zsh, or name it where its value goes)")
+    (( ${used[(Ie)${kind}]} )) || findings+=("kind ${kind}: no flag or position names it (drop it from ${CLI_KINDS_CATALOG}, or name it where its value goes)")
     kind::source "${kind}"
     case "${REPLY}" in
       words)  kind::words "${kind}"; (( ${#reply} )) || findings+=("kind ${kind}: --words is empty") ;;
@@ -118,7 +121,7 @@ spec::rule::flags() {
     if (( ${+FLAG_VALUE[${key}]} )); then
       kind::of_spec "${FLAG_VALUE[${key}]}"
       for kind in "${reply[@]}"; do
-        kind::is_known "${kind}" || findings+=("${key}: its value '${FLAG_VALUE[${key}]}' names no kind | unknown='${kind}' fix='name a kind of cmd/kinds.zsh, or add one'")
+        kind::is_known "${kind}" || findings+=("${key}: its value '${FLAG_VALUE[${key}]}' names no kind | unknown='${kind}' fix='name a kind of ${CLI_KINDS_CATALOG}, or add one'")
       done
     fi
     if (( ! ${+FLAG_NODES[${key}]} )); then
@@ -148,7 +151,7 @@ spec::rule::args() {
       kind::of_spec "${spec}"
       for kind in "${reply[@]}"; do
         if ! kind::is_known "${kind}"; then
-          findings+=("${node}: its positional '${spec}' names no kind | unknown='${kind}' fix='name a kind of cmd/kinds.zsh, or add one'")
+          findings+=("${node}: its positional '${spec}' names no kind | unknown='${kind}' fix='name a kind of ${CLI_KINDS_CATALOG}, or add one'")
         elif (( ${+KIND_DELEGATE[${kind}]} )) && [[ ${#specs} -ne 1 || ${#reply} -ne 1 ]]; then
           findings+=("${node}: ${kind} hands the line to ${KIND_DELEGATE[${kind}]}; it is the node's only positional")
         fi
@@ -179,23 +182,5 @@ spec::rule::usage() {
         fi
       done
     done
-  done
-}
-
-# The flags declared for before the verb are the ones main() parses.
-spec::rule::globals() {
-  local key word
-  local -a reply declared=() parsed
-  for key in "${(@k)GLOBAL_FLAG_DESC}"; do
-    declared+=(${(s:|:)key})
-    [[ -n "${GLOBAL_FLAG_DESC[${key}]}" ]] || findings+=("${key}: no description (GLOBAL_FLAG_DESC, lib/dispatch.zsh)")
-  done
-  (( ${+functions[help::parser_flags]} )) || need_lib "${ARI_DOTFILES_CMD}/help.zsh" || return 0
-  help::parser_flags "${ARI_DOTFILES_LIB}/dispatch.zsh"; parsed=("${reply[@]}")
-  for word in "${parsed[@]}"; do
-    (( ${declared[(Ie)${word}]} )) || findings+=("${word}: main() parses it and GLOBAL_FLAG_DESC (lib/dispatch.zsh) does not declare it")
-  done
-  for word in "${declared[@]}"; do
-    (( ${parsed[(Ie)${word}]} )) || findings+=("${word}: GLOBAL_FLAG_DESC declares it and main() (lib/dispatch.zsh) does not parse it")
   done
 }

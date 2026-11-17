@@ -1,6 +1,7 @@
-# dotfiles/lib/kind.zsh — a kind is the type of one value on the command line: what a flag takes
-# (`--only STEP,..`) or what a position holds (`jobs run JOB`). The catalog is cmd/kinds.zsh; a
-# declaration names a kind by writing it where the value goes, and the completion offers a kind's
+# zsh/lib/cli/kind.zsh — a kind is the type of one value on the command line: what a flag takes
+# (`--only STEP,..`) or what a position holds (`jobs run JOB`). Each program keeps its own catalog
+# (dotfiles: cmd/kinds.zsh), and its `kinds KIND` verb prints a lister kind's values for the
+# completion. A declaration names a kind by writing it where the value goes, and the completion offers a kind's
 # values wherever it is named.
 #
 #   kind::define KIND "what one value is" SOURCE

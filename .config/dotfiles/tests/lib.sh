@@ -184,8 +184,8 @@ world_new() {
   printf '[user]\n\tname = new-machine tests\n\temail = tests@example.invalid\n[init]\n\tdefaultBranch = main\n' > "${HOME}/.config/git/config"
 }
 
-# Populate <dir>/new-machine (exclude template, lib/ + bin/ symlinks) and
-# <dir>/zsh/plugins (log libs) from the repo under test.
+# Populate <dir>/new-machine (exclude template, lib/ + bin/ symlinks), <dir>/zsh/plugins (log
+# libs) and <dir>/zsh/lib/cli (a symlink) from the repo under test.
 world_install_config() {
   local dir="$1"
   _assert_in_fix "${dir}"
@@ -200,6 +200,10 @@ world_install_config() {
   ln -s "${ORIG_CONFIG_DIR}/dotfiles/cmd" "${dir}/dotfiles/cmd"
   ln -s "${ORIG_CONFIG_DIR}/dotfiles/steps" "${dir}/dotfiles/steps"
   ln -s "${ORIG_CONFIG_DIR}/bin/dotfiles" "${dir}/bin/dotfiles"
+  # The cli library lib/cli.zsh loads from beside dotfiles/.
+  mkdir -p "${dir}/zsh/lib"
+  rm -f "${dir}/zsh/lib/cli"
+  ln -s "${ORIG_CONFIG_DIR}/zsh/lib/cli" "${dir}/zsh/lib/cli"
   cp "${ORIG_CONFIG_DIR}/zsh/plugins/log.zsh" "${ORIG_CONFIG_DIR}/zsh/plugins/log_rotate.zsh" \
      "${ORIG_CONFIG_DIR}/zsh/plugins/strip_ansi.zsh" "${dir}/zsh/plugins/"
 }
@@ -241,6 +245,7 @@ world_empty_home() {
     cp "${real_config}/zsh/plugins/strip_ansi.zsh" "${FIX}/shared/zsh/plugins/"
     cp "${real_config}/bin/dotfiles" "${FIX}/shared/bin/dotfiles"
     cp -R "${real_config}/dotfiles/." "${FIX}/shared/dotfiles/"
+    mkdir -p "${FIX}/shared/zsh/lib" && cp -R "${real_config}/zsh/lib/cli" "${FIX}/shared/zsh/lib/"   # the cli library lib/cli.zsh loads
     # The real dev repos are GitHub clones: the world declares its own, never those.
     rm -f "${FIX}/shared/dotfiles/dev-repos"
     cp "${real_config}/claude/skills/ari-skill-shellscripts/lib/logging.zsh" "${FIX}/shared/claude/skills/ari-skill-shellscripts/lib/"
@@ -442,6 +447,7 @@ seed_df_remote() {
   cp -R "${TESTS_DIR}/fixtures/df-remote/." "${work}/"
   cp "${config}/bin/dotfiles" "${work}/.config/bin/dotfiles"
   cp -R "${config}/dotfiles/." "${work}/.config/dotfiles/"
+  mkdir -p "${work}/.config/zsh/lib" && cp -R "${config}/zsh/lib/cli" "${work}/.config/zsh/lib/"   # the cli library lib/cli.zsh loads
   # The manifest promises suites for units this partial tree does not carry; the seeded remote makes no
   # such promise, or test_suites would fail every unit as gone.
   rm -f "${work}/.config/dotfiles/tests/suites.manifest"

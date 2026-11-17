@@ -170,7 +170,7 @@ _bin bogus >/dev/null 2>&1; _rc=$?; _t "bin: unknown subsystem rc 1" "1" "${_rc}
 _t "bin: unknown subsystem names the valid ones and prints help" "2" "$(_bin bogus 2>&1 | grep -c -e "Unknown subsystem | subsystem='bogus' valid='link, snippets, sync, edit, undocumented, help'" -e 'Usage:' | tr -d ' ')"
 : > "${_calls}"; ari_raycast snippets adopt --dry-run >/dev/null; _t "route: snippets adopt --dry-run" "snippets --adopt --dry-run" "$(cat "${_calls}")"
 _bin snippets bogus >/dev/null 2>&1; _rc=$?; _t "bin: unknown verb rc 1" "1" "${_rc}"
-# A flag goes only with the verbs it is declared for (lib/verb.zsh, --for): elsewhere it is a usage error, exit 64.
+# A flag goes only with the verbs it is declared for (zsh/lib/cli/verb.zsh, --for): elsewhere it is a usage error, exit 64.
 _bin link list --dry-run >/dev/null 2>&1; _rc=$?; _t "bin: --dry-run on a read-only verb is a usage error rc 64" "64" "${_rc}"
 _bin snippets pull >/dev/null 2>&1; _rc=$?; _t "bin: pull without FILE rc 1" "1" "${_rc}"
 _bin snippets move Phone >/dev/null 2>&1; _rc=$?; _t "bin: move without --to rc 1" "1" "${_rc}"

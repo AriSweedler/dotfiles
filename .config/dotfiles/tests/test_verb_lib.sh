@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# lib/verb.zsh, lib/edit.zsh, lib/plan.zsh: a declared verb's help and parser, one edit session,
+# zsh/lib/cli/verb.zsh, lib/edit.zsh, lib/plan.zsh: a declared verb's help and parser, one edit session,
 # one plan file — the three shapes every verb's --help and --edit are built from.
 set -u
 # shellcheck source=lib.sh

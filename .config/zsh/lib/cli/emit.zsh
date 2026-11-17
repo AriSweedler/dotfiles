@@ -1,8 +1,11 @@
-# dotfiles/cmd/completion/emit.zsh — the compiler's back end: completion::emit prints _dotfiles,
-# the zsh completion function, from the spec (lib/spec.zsh). The output is two parts: tables,
-# one row per node, flag and kind, written here from the declarations; and a fixed engine that
-# walks the words typed so far through those tables. Nothing about a particular verb is in the
-# engine, so a new verb, flag or kind changes only the tables.
+# zsh/lib/cli/emit.zsh — the compiler's back end: completion::emit prints _CLI (CLI_PROG), the
+# zsh completion function, from the spec (spec.zsh). The output is two parts: tables, one row
+# per node, flag and kind, written here from the declarations; and a fixed engine that walks the
+# words typed so far through those tables. Nothing about a particular verb is in the engine, so
+# a new verb, flag or kind changes only the tables. A lister kind's values come from running
+# `CLI kinds KIND` at <TAB>, so a program with one has that verb (kind::values prints them).
+#
+# CLI_COMPLETION_HEADER (an array) is the comment under the #compdef line: how the file is made.
 
 typeset -gi COMPLETION_BRIEF_WIDTH=64   # a description in a completion menu is cut to this
 
@@ -91,34 +94,38 @@ completion::emit() {
     [[ "${REPLY}" != words ]] || { kind::words "${kind}"; words_t+=("${kind}" "${reply[*]}"); }
   done
 
-  print -r -- "#compdef dotfiles"
-  print -r -- "# _dotfiles: tab completion for dotfiles. COMPILED by 'dotfiles completion write' from the verb"
-  print -r -- "# declarations (cmd/*.zsh), the kinds (cmd/kinds.zsh) and the flags before the verb"
-  print -r -- "# (lib/dispatch.zsh); never edited. Change a declaration, then write it again; the dotfiles_docs"
-  print -r -- "# step fails while this file is not what the declarations compile to."
+  # The function's name: _ and the program's name, as an identifier.
+  local fn="_${CLI_PROG//[^A-Za-z0-9_]/_}"
+  local -a header=("${CLI_COMPLETION_HEADER[@]:-# ${fn}: tab completion for ${CLI_PROG}. COMPILED from its verb declarations by the cli library (~/.config/zsh/lib/cli); never edited.}")
+  print -r -- "#compdef ${CLI_PROG}"
+  print -rl -- "${header[@]}"
   print -r -- ""
-  print -r -- "# --- The tables. A node is one command, the words after dotfiles; '-' is before any verb. ---"
+  print -r -- "# --- The tables. A node is one command, the words after ${CLI_PROG}; '-' is before any verb. ---"
   print -r -- "# node → how its last word is reached: word (typed), flag (an edit only --edit reaches)"
-  completion::_table _dotfiles_nodes "${nodes_t[@]}"
+  completion::_table "${fn}_nodes" "${nodes_t[@]}"
   print -r -- "# node → the words that can follow it, each 'word:description'"
-  completion::_table _dotfiles_children "${children_t[@]}"
+  completion::_table "${fn}_children" "${children_t[@]}"
   print -r -- "# node → the flags it takes, each 'flag:description'"
-  completion::_table _dotfiles_flags "${flags_t[@]}"
+  completion::_table "${fn}_flags" "${flags_t[@]}"
   print -r -- "# 'verb flag' → the spec of the value the flag takes"
-  completion::_table _dotfiles_flag_value "${values_t[@]}"
+  completion::_table "${fn}_flag_value" "${values_t[@]}"
   print -r -- "# node → the specs of its positional values, in order"
-  completion::_table _dotfiles_args "${args_t[@]}"
+  completion::_table "${fn}_args" "${args_t[@]}"
   print -r -- "# node → the command whose own completion takes the rest of the line"
-  completion::_table _dotfiles_delegate "${delegate_t[@]}"
+  completion::_table "${fn}_delegate" "${delegate_t[@]}"
   print -r -- "# kind → where its values come from, what one value is, and the fixed set of a words kind"
-  completion::_table _dotfiles_kind_source "${source_t[@]}"
-  completion::_table _dotfiles_kind_desc "${desc_t[@]}"
-  completion::_table _dotfiles_kind_words "${words_t[@]}"
+  completion::_table "${fn}_kind_source" "${source_t[@]}"
+  completion::_table "${fn}_kind_desc" "${desc_t[@]}"
+  completion::_table "${fn}_kind_words" "${words_t[@]}"
   print -r -- ""
-  completion::_engine
+  local engine from="'dotfiles flag'" to="'${CLI_PROG} flag'"
+  engine="$(completion::_engine)"
+  engine="${engine//_dotfiles/${fn}}"
+  print -r -- "${engine//${from}/${to}}"
 }
 
-# completion::_engine: the fixed part, printed as written.
+# completion::_engine: the fixed part, written for a program named dotfiles; completion::emit
+# renames it for CLI_PROG.
 completion::_engine() {
   cat <<'ENGINE'
 # --- The engine: the same for every verb ---

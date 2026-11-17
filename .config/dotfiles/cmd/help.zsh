@@ -11,7 +11,7 @@ verb with its one-line description. With VERB, the same as
 e.g. 'dotfiles jobs list --help'.
 EOF
 verb::section help 'The help rule' <<'EOF'
-A verb's help is its declaration at the top of cmd/VERB.zsh (lib/verb.zsh:
+A verb's help is its declaration at the top of cmd/VERB.zsh (cli/verb.zsh:
 verb::define, verb::usage, verb::flag, verb::edit, …); its help and its
 flag parser (verb::parse) both come from it. The declaration is whole: a
 description, a Usage form, a description on every flag and subcommand, an
@@ -161,11 +161,11 @@ help::verb_gap() {
   if help::is_declared "${file}" "${verb}"; then
     help::declared_gap "${verb}" "${reply[@]}"
   else
-    REPLY="not declared: 'dotfiles help --edit ${verb}' writes the declaration (lib/verb.zsh)"
+    REPLY="not declared: 'dotfiles help --edit ${verb}' writes the declaration (cli/verb.zsh)"
   fi
 }
 
-# help::is_declared FILE VERB: 0 when FILE declares VERB with verb::define (lib/verb.zsh).
+# help::is_declared FILE VERB: 0 when FILE declares VERB with verb::define (zsh/lib/cli/verb.zsh).
 help::is_declared() {
   zmodload zsh/mapfile
   [[ "${mapfile[${1}]-}" == (|*$'\n')"verb::define ${2} "* ]]
