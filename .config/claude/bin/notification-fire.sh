@@ -6,6 +6,10 @@
 
 set -u
 
+# Off macOS there is no Notification Center to post to: post nothing and succeed, so the hook
+# never fails a turn. stop-fire.sh calls this script, so it is quiet there too.
+[[ "${OSTYPE}" == darwin* ]] || exit 0
+
 readonly CLAUDE_SCRIPT_ROOT="$(cd -- "$(dirname -- "$0")/.." && pwd)"
 # shellcheck source=/dev/null
 . "${CLAUDE_SCRIPT_ROOT}/lib/notification-lib.sh"

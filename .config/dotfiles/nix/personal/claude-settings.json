@@ -56,6 +56,9 @@
       "effortLevel": "medium"
     }
   },
+  "enabledPlugins": {
+    "lua-lsp@claude-plugins-official": true
+  },
   "theme": "dark",
   "agentPushNotifEnabled": true,
   "autoMode": {
