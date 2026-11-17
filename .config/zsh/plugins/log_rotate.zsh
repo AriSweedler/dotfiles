@@ -49,6 +49,47 @@ function log_rotate() {
   zf_mv -f "${logfile}" "${logfile}.bak.1"
 }
 
+# log_rotate_at_size <logfile> <max_bytes> [files=3] — rotate <logfile> only once it has grown
+# to <max_bytes>, keeping <files> files in all: the live one plus <files>-1 backups. For a log
+# that one long-lived writer appends to (where log_rotate's once-per-run shift does not fit):
+# with max_bytes=10M and files=3, the newest 20-30 MB are always on disk. No-op while the file
+# is missing or under the cap. Exec-free: the size is zsh/stat's zstat.
+zmodload -F zsh/stat b:zstat 2>/dev/null
+function log_rotate_at_size() {
+  emulate -L zsh
+  local logfile="${1:?log_rotate_at_size: <logfile> required}"
+  local max_bytes="${2:?log_rotate_at_size: <max_bytes> required}"
+  local files="${3:-3}"
+
+  if [[ "${max_bytes}" != <-> ]] || (( max_bytes < 1 )); then
+    print -u2 "log_rotate_at_size: max_bytes must be a positive integer | got='${max_bytes}'"
+    return 1
+  fi
+  if [[ "${files}" != <-> ]] || (( files < 2 )); then
+    print -u2 "log_rotate_at_size: files counts the live file, so it is at least 2 | got='${files}'"
+    return 1
+  fi
+  [[ -e "${logfile}" ]] || return 0
+
+  local -a size
+  zstat -A size +size -- "${logfile}" || return 1
+  (( size[1] >= max_bytes )) || return 0
+  log_rotate "${logfile}" $(( files - 1 ))
+}
+
+# log_append_capped <logfile> <max_bytes> <files> <line>.. — append each <line> to <logfile>,
+# rotating it first when it has reached <max_bytes> (log_rotate_at_size). Creates the parent
+# directory if needed.
+function log_append_capped() {
+  emulate -L zsh
+  local logfile="${1:?log_append_capped: <logfile> required}"
+  local max_bytes="${2:?log_append_capped: <max_bytes> required}" files="${3:?log_append_capped: <files> required}"
+  shift 3
+  [[ -d "${logfile:h}" ]] || zf_mkdir -p "${logfile:h}" || return 1
+  log_rotate_at_size "${logfile}" "${max_bytes}" "${files}" || return 1
+  print -rl -- "$@" >> "${logfile}"
+}
+
 # log_init [name] [keep=4] — set $LOG_FILE for a per-script log and rotate the
 # previous run aside (via log_rotate) instead of truncating, so each run is
 # preserved. Call once at the start of a script; later writes append to

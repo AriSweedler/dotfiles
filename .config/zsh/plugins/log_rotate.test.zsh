@@ -62,6 +62,26 @@ log_rotate "${LOG}" 0 2>/dev/null;   _t "keep=0 → rc"   "1" "$?"
 log_rotate "${LOG}" abc 2>/dev/null; _t "keep=abc → rc" "1" "$?"
 _t "bad keep didn't touch current" "r7" "$(_cat "${LOG}")"
 
+# --- by size: log_rotate_at_size / log_append_capped ------------------------
+local CAP="${TMP}/cap/notifs.log"
+log_rotate_at_size "${CAP}" 10 3
+_t "size: missing file → rc 0"      "0"          "$?"
+log_append_capped "${CAP}" 10 3 "aaaa"          # 5 bytes, under the cap of 10
+_t "size: dir made, line appended"  "aaaa"       "$(_cat "${CAP}")"
+log_append_capped "${CAP}" 10 3 "bbbb"          # 5 before: still under, so appended
+_t "size: under the cap, no rotate" "<missing>"  "$(_cat "${CAP}.bak.1")"
+log_append_capped "${CAP}" 10 3 "cccc"          # 10 before: at the cap, rotate first
+_t "size: at the cap, rotated"      "aaaa
+bbbb" "$(_cat "${CAP}.bak.1")"
+_t "size: the new line starts fresh" "cccc"      "$(_cat "${CAP}")"
+local _n
+for _n in d e f g h i j k; do log_append_capped "${CAP}" 10 3 "${_n}${_n}${_n}${_n}"; done
+_t "size: files=3 keeps .bak.1 and .bak.2" "yes" "$([[ -e "${CAP}.bak.1" && -e "${CAP}.bak.2" ]] && print yes || print no)"
+_t "size: never a third backup"     "<missing>"  "$(_cat "${CAP}.bak.3")"
+_t "size: the newest line is live"  "kkkk"       "$(tail -1 "${CAP}")"
+log_rotate_at_size "${CAP}" 0 3 2>/dev/null;   _t "size: max_bytes=0 → rc" "1" "$?"
+log_rotate_at_size "${CAP}" 10 1 2>/dev/null;  _t "size: files=1 → rc"     "1" "$?"
+
 rm -rf "${TMP}"
 
 if (( _fail == 0 )); then
