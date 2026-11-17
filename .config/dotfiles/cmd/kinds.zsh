@@ -17,6 +17,7 @@ kind::define MACHINE_NAME "this machine's new name: one word of letters, digits,
 kind::define SUITE        'a test suite: a zsh plugin suite or a hermetic one'       --lister kinds::list_suites
 kind::define SOURCE_FILE  'a file of this checkout, whose suites to run'             --files
 kind::define REV          'a git revision'                                           --free
+kind::define REMOTE       'a host with a --remote recipe in the local tier'         --free
 kind::define BINDING      "a Raycast binding's slug"                                 --lister kinds::list_bindings
 kind::define DEEPLINK     'a raycast:// path'                                        --free
 kind::define SNIPPET      "a Raycast snippet's name"                                 --lister kinds::list_snippets

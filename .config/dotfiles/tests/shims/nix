@@ -2,7 +2,8 @@
 # Fake nix: logs every call. `flake lock` appends the overridden input to the flake's flake.lock
 # (so the lock "moves" when the rev does); `flake update INPUT --flake path:DIR` locks INPUT in
 # DIR/flake.lock (JSON) at its checkout's origin/main, GitHub's main in this world (the checkout
-# found through $HOME/.config/dotfiles/dev-repos); `eval` prints NIX_SHIM_HOSTS one per line;
+# found through $HOME/.config/dotfiles/dev-repos), or at NIX_SHIM_UPDATE_REV when set (a host
+# flake's dotfiles input, which is no dev repo); `eval` prints NIX_SHIM_HOSTS one per line;
 # `build` prints a store path (NIX_SHIM_BUILD_OUT when set). NIX_SHIM_FAIL=<subcommand> makes that one exit 1.
 set -u
 printf '%s\n' "$*" >> "${BREW_SHIM_LOG_DIR:?BREW_SHIM_LOG_DIR unset}/nix.log"
@@ -27,16 +28,19 @@ case "${sub}" in
     input="${3:?flake update needs an input}" flake=""
     shift 3
     while (( $# )); do case "$1" in --flake) flake="${2#path:}"; shift 2 ;; *) shift ;; esac; done
-    path="" dir=""
-    while IFS= read -r line; do
-      line="${line#"${line%%[![:space:]]*}"}"
-      case "${line}" in
-        path*=*) path="${line#*=}"; path="${path# }" ;;
-        input*=*) [[ "${line#*= }" == "${input}" ]] && dir="${HOME}/${path}" ;;
-      esac
-    done < "${HOME}/.config/dotfiles/dev-repos"
-    [[ -n "${dir}" ]] || { echo "nix shim: no dev repo for input ${input}" >&2; exit 1; }
-    rev="$(git -C "${dir}" rev-parse refs/remotes/origin/main)" || exit 1
+    rev="${NIX_SHIM_UPDATE_REV:-}"
+    if [[ -z "${rev}" ]]; then
+      path="" dir=""
+      while IFS= read -r line; do
+        line="${line#"${line%%[![:space:]]*}"}"
+        case "${line}" in
+          path*=*) path="${line#*=}"; path="${path# }" ;;
+          input*=*) [[ "${line#*= }" == "${input}" ]] && dir="${HOME}/${path}" ;;
+        esac
+      done < "${HOME}/.config/dotfiles/dev-repos"
+      [[ -n "${dir}" ]] || { echo "nix shim: no dev repo for input ${input}" >&2; exit 1; }
+      rev="$(git -C "${dir}" rev-parse refs/remotes/origin/main)" || exit 1
+    fi
     jq --arg i "${input}" --arg r "${rev}" '.nodes[$i].locked.rev = $r' "${flake}/flake.lock" > "${flake}/flake.lock.tmp" \
       && mv "${flake}/flake.lock.tmp" "${flake}/flake.lock"
     ;;

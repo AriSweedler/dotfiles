@@ -312,6 +312,8 @@ typeset -gA _dotfiles_flags=(
   'switch' '--build:build the system and print its store path; no sudo, nothing…
 --dry-run:print the lock, commit and switch it would run; change nothing
 --no-commit:leave a moved flake.lock uncommitted
+--remote:deploy REMOTE by its recipe in the local tier; a dry run unless…
+--execute:with --remote: deploy for real
 --help:the help of switch'
   'test' '--changed:the files this checkout changed: against --base (default HEAD),…
 --base:with --changed: the changes since REV (origin/main covers every…
@@ -337,6 +339,7 @@ typeset -gA _dotfiles_flag_value=(
   'jobs --trigger' 'TRIGGER'
   'logs --repo' 'REPO'
   'raycast --to' 'TIER'
+  'switch --remote' 'REMOTE'
   'test --base' 'REV'
 )
 # node → the specs of its positional values, in order
@@ -387,6 +390,7 @@ typeset -gA _dotfiles_kind_source=(
   'SUITE' 'lister'
   'SOURCE_FILE' 'files'
   'REV' 'free'
+  'REMOTE' 'free'
   'BINDING' 'lister'
   'DEEPLINK' 'free'
   'SNIPPET' 'lister'
@@ -408,6 +412,7 @@ typeset -gA _dotfiles_kind_desc=(
   'SUITE' 'a test suite: a zsh plugin suite or a hermetic one'
   'SOURCE_FILE' 'a file of this checkout, whose suites to run'
   'REV' 'a git revision'
+  'REMOTE' 'a host with a --remote recipe in the local tier'
   'BINDING' 'a Raycast binding'\''s slug'
   'DEEPLINK' 'a raycast:// path'
   'SNIPPET' 'a Raycast snippet'\''s name'
