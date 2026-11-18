@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dotfiles switch:*)"
+      "Bash(dotfiles switch:*)",
+      "Bash(gh pr merge:*)"
     ]
   },
   "model": "opus",
@@ -65,7 +66,8 @@
     "allow": [
       "$defaults",
       "Bash(bd:*) in /Users/arisweedler/homelab — routine issue-tracker use (8× in recent transcripts)",
-      "Bash(colima start:*) and Bash(colima status) in /Users/arisweedler/homelab — routine Docker VM lifecycle (3× in recent transcripts)"
+      "Bash(colima start:*) and Bash(colima status) in /Users/arisweedler/homelab — routine Docker VM lifecycle (3× in recent transcripts)",
+      "Bash(gh pr merge:*) on AriSweedler/* repos — merging the PRs Claude opened there is standing practice; Ari, 2026-11-17: 'you can merge yourself. stop asking me for permissions', 'you need to stop blocking prs from merging like that'"
     ],
     "soft_deny": [
       "$defaults",
