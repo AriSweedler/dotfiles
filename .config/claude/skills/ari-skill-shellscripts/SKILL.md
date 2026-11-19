@@ -343,10 +343,22 @@ Validate before use. `${VAR:?message}` for required, `${VAR:-default}` for optio
 
 Four phases: **parse → massage → validate → logic.**
 
-1. **Parse** — `--help` first, then `while (( $# > 0 )); do case` for flags. Never positional args — use repeated flags for arrays (`--target foo --target bar`). Use `${2:?--flag requires a value}` to catch missing values. A mutating script calls `resolve_dry_run` right after the loop.
+1. **Parse** — `--help` first, then `while (( $# > 0 )); do case` for flags. Never positional args — use repeated flags for arrays (`--target foo --target bar`). Use `${2:?--flag requires a value}` to catch missing values. A mutating script calls `resolve_dry_run` right after the loop. A program with verbs and subcommands declares them once with the house cli library, which is also its parser and its `--help` (§ A program with verbs).
 2. **Massage** — normalize case (`${mode:l}`), expand shortnames, split comma-separated into arrays (`${(@s/,/)val}`), multiline to array (`${(@f)$(cmd)}`).
 3. **Validate** — check required args, sane values. After massage, not during parse.
 4. **Logic** — the actual work. No more argument handling. Every mutation through `run_mut` or `write_mut`; a mutating script ends with `report_dry_run` and a heredoc carrying `dry_run=`.
+
+### A program with verbs
+
+A script that is a program with verbs and subcommands is built on the house cli library, `~/.config/zsh/lib/cli/` in the shared dotfiles tier, not a hand-rolled `case` loop.
+
+- `cli.zsh` sets it up under `CLI_PROG`.
+- `verb.zsh` declares each verb once (`verb::define`, `verb::usage`, `verb::about`, `verb::sub`, `verb::flag`, `verb::arg`, `verb::env`, `verb::edit`); `verb::parse` is the only flag parser, and a word starting with `-` the verb does not declare is a usage error.
+- `kind.zsh` gives each value its type and where its values come from.
+- `spec.zsh` holds the declarations as data and lints them.
+- `emit.zsh` compiles the completion.
+
+Help, parsing and completion all come from that one declaration. The `dotfiles` program wires it in `~/.config/dotfiles/lib/cli.zsh` and compiles `~/.config/zsh/completions/_dotfiles` with `dotfiles completion lint|write`; its `dotfiles_docs` step fails a declaration that is not whole, a flag parsed outside `verb::parse`, or a stale completion file, and `dotfiles help --edit VERB` writes a declaration stub into `cmd/VERB.zsh`. Any other zsh program reuses it the same way. `~/.config/dotfiles/lib/README.md` documents the library and the verbs.
 
 ## Validation
 
