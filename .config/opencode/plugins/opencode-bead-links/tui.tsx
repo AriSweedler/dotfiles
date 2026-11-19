@@ -38,15 +38,24 @@ export default Plugin.define({
     const [links, setLinks] = createSignal<Link[]>([])
     let current = ""
     let ids: string[] = []
+    let attempts = 0
     let inflight: Promise<Link[]> | null = null
 
     const trace = (line: string) => {
       appendFile(LOG, `${new Date().toISOString()} ${line}\n`, () => {})
     }
 
-    const scan = (id: string): string[] => {
+    const scan = async (id: string): Promise<string[]> => {
+      try {
+        // A freshly loaded plugin has an empty message cache: list() returns nothing
+        // until the session is synced from the server.
+        await context.data.session.message.sync(id)
+      } catch {
+        // Fall through to whatever is cached.
+      }
       try {
         const messages = context.data.session.message.list(id) ?? []
+        trace(`messages id=${id.slice(-6)} n=${Array.isArray(messages) ? messages.length : typeof messages}`)
         const slice = Array.isArray(messages) ? messages.slice(-TAIL) : messages
         return [...new Set(JSON.stringify(slice).match(ID) ?? [])]
       } catch {
@@ -98,8 +107,17 @@ export default Plugin.define({
     const warm = async (id: string) => {
       if (!id) return
       const started = Date.now()
-      remember(scan(id))
+      remember(await scan(id))
       trace(`scan ids=${ids.length} ms=${Date.now() - started}`)
+      // A plugin reload renders before the session's message cache is populated, so an
+      // empty scan is retried a few times rather than leaving the footer blank until the
+      // next turn ends.
+      if (ids.length === 0 && attempts < 3) {
+        attempts += 1
+        setTimeout(() => void warm(id), 1000)
+        return
+      }
+      attempts = 0
       const rows = await loadAll()
       setLinks(rows.slice(-MAX_FOOTER))
     }
