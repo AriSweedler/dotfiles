@@ -43,6 +43,12 @@
 .config/karabiner/automatic_backups
 .config/karabiner/karabiner.ts/node_modules
 .config/nvim/lazy-lock.json
+# OpenCode: the config holds a plaintext API token and service.json a password, and
+# memories/ records this machine's MCP endpoints and account ids. The notifier and the
+# bead-link plugin beside them are tracked; these never are.
+.config/opencode/opencode.json*
+.config/opencode/service.json
+.config/opencode/memories/
 .config/nvim/spell/en.utf-8.add
 .config/op
 .config/pgcli/
