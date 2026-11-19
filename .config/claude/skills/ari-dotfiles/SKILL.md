@@ -1,22 +1,22 @@
 ---
 name: ari-dotfiles
-description: Edit and commit Ari's two-tier dotfiles (shared: `git df`, ~/.config, every machine; local: `git ldf`, ~/.local, this machine only), run the `dotfiles switch` a commit needs and check the change is live, and, everywhere but the personal laptop, review every unpushed public commit for employer-identifying content before recommending a push
+description: Edit and commit Ari's two-tier dotfiles (shared: `git df`, ~/.config, every machine; local: `git ldf`, one private repo cloned at ~/local-dotfiles on every machine, holding each machine's and each tag's files, which ldf-link links into ~/.local), run the `dotfiles switch` a commit needs and check the change is live, and, everywhere but the personal laptop, review every unpushed public commit for employer-identifying content before recommending a push
 ---
 
 # Dotfiles
 
-Ari's dotfiles are two git repos, one per tier: a plain clone for the shared tier, a bare repo
-for the local one. Pick the tier by whether
-the content should be identical on every machine or belongs to this one. Claude commits, runs
-the `dotfiles switch` a commit needs (Workflow step 3) and pushes the local tier; Ari pushes the
-shared tier, its dev repos and its mirrors. The
+Ari's dotfiles are two git repos, one per tier, each a plain clone on every machine: the public
+shared repo and the private local one, `ldf`. Pick the tier by whether the content should be
+identical on every machine or belongs to one machine, or to the machines that share a tag. Claude
+commits, runs the `dotfiles switch` a commit needs (Workflow step 3) and pushes the local tier; Ari
+pushes the shared tier, its dev repos and its mirrors. The
 shared tier, its dev repos and its mirrors are public; no push is recommended until each unpushed commit passes **Review before
 push**, except on the personal laptop, where a commit is ready to push as soon as it lands.
 
 | Tier | Alias | Repo | Worktree | Holds | Remote |
 |---|---|---|---|---|---|
 | Shared | `git dotfiles` / `git df` | plain clone `~/dotfiles` (git dir `~/dotfiles/.git`) | `~/dotfiles`; home-manager links its files into `$HOME` (`/ari-dotfiles-nix`) | Generic, every-machine config under `~/.config` | One shared repo; only Ari pushes |
-| Local | `git local-dotfiles` / `git ldf` | bare `~/.local/local-dotfiles.git` | `~/.local` | Company- and machine-specific code under `~/.local` | A private repo per machine, or none (the personal laptop); the agent pushes when there is one |
+| Local | `git local-dotfiles` / `git ldf` | plain clone `~/local-dotfiles` of `ldf` (git dir `~/local-dotfiles/.git`) | `~/local-dotfiles`; `ldf-link` links its files into `~/.local` | Company- and machine-specific code under `~/.local`: one machine's in `local/<machine>/`, a tag's in `<tag>/` | `ldf` on co2's Forgejo, on every machine; the agent pushes |
 
 `git df` is `~/.config/git/bin/git-dotfiles` (the alias is the `dotfiles` block of
 `~/.config/dotfiles/nix/git.nix`). It runs git on the clone and turns a `$HOME` path that
@@ -29,16 +29,40 @@ relative to the caller's directory. A machine without `~/dotfiles/.git` falls ba
 as `~/<path>`. `dotfiles --dir` prints which layout the
 machine has. On the personal laptop the bare repo was retired to `~/dotfiles.git.retired`.
 
-The local tier pushes to its `origin` when it has one: `git ldf remote get-url origin` succeeds.
-On the personal laptop it has none, by Ari's choice: after an ldf commit there is nothing to push,
-`dotfiles push` prints `local tier has no remote; nothing to push`, and that is NEVER a problem to
-flag or fix. State (`~/.local/state`) and cache (`~/.cache`) are never versioned.
+The local clone holds `local/<machine>/` (one machine's files, at their paths under `~/.local`),
+one directory per tag (`mac/`, `nixos/`, `pi/`: files every machine with that tag shares), and
+`machines` (one line per machine with its tags: `ozone mac`, `co2 nixos`, `ganymede nixos pi`).
+A new file goes in `local/<machine>/` until a second machine needs it; then it moves to the tag
+those machines share, never copied into each `local/<machine>/`. When no tag fits, or which tag is
+unclear, ask Ari, naming the machines each choice reaches (`machines`).
+
+`ldf-link` (`~/.config/bin/ldf-link`, a dry run unless `--execute`) links each `~/.local/<path>` to
+`local/<machine>/<path>`, else to the one tag that has it: local beats a tag. It prunes links into
+the clone whose source is gone, and replaces a real file only when identical. Every home-manager
+activation runs it (`~/.config/dotfiles/nix/ldf.nix`), but a switch that changes nothing in the
+system does not activate: after a fresh clone, a new file or a pull, run `ldf-link --execute`
+yourself. Exit 1 has three causes:
+- `conflict <path>: in tags <a> and <b>` (a path in two of this machine's tags, not in
+  `local/<machine>/`) → the run links and prunes nothing. Ask Ari which tag keeps it, or put this
+  machine's copy in `local/<machine>/`, then run again.
+- `refuse <file>: differs from <source>` (a real file where a link goes; the rest of the run still
+  applies) → `diff` the two, keep one copy (the clone's, or the real file's content committed into
+  the clone), remove the real file, run again.
+- `machine '<name>' is not in …/machines` → add the machine's line (**Bootstrapping a machine**).
+
+A machine without `~/local-dotfiles/.git` has not moved yet: `git ldf` falls back to its old bare
+repo `~/.local/local-dotfiles.git`, work tree `~/.local`, with an allowlist and an optional `origin`;
+read every clone path in this skill as its `~/.local` path there. The moved machines (ozone, co2,
+ganymede) kept the bare repo as `~/.local/local-dotfiles.git.retired`. The archived per-machine
+repos' history is `local/ozone/`'s and `local/co2/`'s, merged in by git subtree: `git ldf log --
+local/ozone` shows only the merge, because the old commits recorded their paths at the root.
+State (`~/.local/state`) and cache (`~/.cache`) are never versioned.
 
 ## Workflow
 
 1. Edit the file. Pick its tier with **Placement rules**. An existing shared file can be edited
-   through `$HOME` or the clone, and the change is live at once. **A packaged bin
-   (**Placement rules**) is the exception: edit the clone's file and run that file to try it;
+   through `$HOME` or the clone, and the change is live at once. **A packaged bin is the
+   exception** (**Placement rules**): **edit the clone's file and run that file to try it;
    `$HOME`'s copy changes only at the next `dotfiles switch`.** A bin built from a dev repo
    (run-log's four, `tmux-oneshot`) is not the clone's file: edit it in that dev repo (**Dev
    repos**). A mirror's files are the reverse: edit them only at their dotfiles source.
@@ -52,8 +76,13 @@ flag or fix. State (`~/.local/state`) and cache (`~/.cache`) are never versioned
      `~/.claude/skills/<name>` link, and a packaged dev repo's bins.
      `.config/nvim` is not one: `nvim.nix` places the whole directory from the store, so an edit
      to `~/dotfiles/.config/nvim` reaches nvim only after a commit and a `dotfiles switch`.
-2. `git df add <abs path>` or `git ldf add <abs path>`. Give a new shared file its clone path:
-   its `$HOME` path does not exist yet. Commit with a descriptive
+   - **Edit or create a local file at its clone path, `~/local-dotfiles/local/<machine>/<path>`
+     (or `~/local-dotfiles/<tag>/<path>`), NEVER through its `~/.local` link.** An edit is live at
+     once through the link. A new file reaches `~/.local` only after it is committed and
+     `ldf-link --execute` runs: ldf-link links only tracked files.
+2. `git df add <abs path>` or `git ldf add <abs clone path>`. Give a new shared file its clone path:
+   its `$HOME` path does not exist yet. Give every local file its clone path: `git ldf` refuses a
+   `~/.local` path as outside the work tree. Commit with a descriptive
    message and the same paths after `--` (`git df commit -m "…" -- <abs paths>`).
    **In every repo these dotfiles touch (both tiers and each dev repo's checkout), NEVER
    `git add -A`, `git add .` or `git commit -a`: stage and commit named paths only.** A driver, a
@@ -75,7 +104,8 @@ flag or fix. State (`~/.local/state`) and cache (`~/.cache`) are never versioned
    itself is live. **NEVER report the change live before that check passes. NEVER tell Ari to run
    the switch**, unless § Switch's own run was refused. A commit that matches none is live at once.
 4. Shared: run **Review before push** (its first step skips it on the
-   personal laptop). Local: `git ldf push` now, when the tier has an `origin`. Start the
+   personal laptop). Local: `git ldf pull --rebase && git ldf push` now (**Pushing**), then
+   `ldf-link --execute` when the commit or the pull added or removed a file. Start the
    **Post-change sweep** alongside.
 5. Close with one message: what landed (the switch's own ldf `flake.lock` commit included), what
    the switch made live and the check that showed it, or how it failed,
@@ -88,8 +118,7 @@ flag or fix. State (`~/.local/state`) and cache (`~/.cache`) are never versioned
    (`dotfiles machine-name` prints `ozone`), end with it as soon as the commit lands.
 
 **Always pass absolute paths to `git df` and `git ldf`.** Relative pathspecs
-resolve against the cwd, and from inside `~/.local` a `share/...` path silently
-matches nothing.
+resolve against the cwd, so a `share/...` path silently matches nothing.
 
 ```zsh
 git df status
@@ -97,8 +126,9 @@ git df add ~/dotfiles/.config/bin/my-script && git df commit -m "Add my-script" 
 git df add ~/.config/zsh/plugins/fzf.zsh && git df commit -m "fzf: preview files with bat" -- ~/.config/zsh/plugins/fzf.zsh   # tracked: mapped
 
 git ldf status
-git ldf add ~/.local/share/zsh/plugins/foo.zsh && git ldf commit -m "Add foo plugin" -- ~/.local/share/zsh/plugins/foo.zsh
-git ldf push          # only when the tier has an origin
+git ldf add ~/local-dotfiles/local/ozone/share/zsh/plugins/foo.zsh && git ldf commit -m "Add foo plugin" -- ~/local-dotfiles/local/ozone/share/zsh/plugins/foo.zsh   # ozone; elsewhere local/<its machine-name>
+git ldf pull --rebase && git ldf push
+ldf-link --execute    # a new file: link it into ~/.local
 
 git -C ~/.config/run-log add bin/irun && git -C ~/.config/run-log commit -m "irun: …" -- bin/irun   # a dev repo
 ```
@@ -108,23 +138,27 @@ the shared tier, `dotfiles --local git <args…>` is `git ldf …`, and `dotfile
 prints the tier's git dir (`ARI_DOTFILES_DF_GIT_DIR`; `~/dotfiles/.git` on a clone). `dotfiles git`
 passes its arguments untouched, so it needs clone paths. Only `git df` maps `$HOME` paths.
 
-`~/.local/local-dotfiles.git/info/exclude` is the allowlist. Read it; do not
-restate it. It keeps tool data and caches out of the tier, not another session's files: it
-admits `share/claude-skills/`, where a skill-update driver's unapproved edits sit, so
-`git ldf add -A` is unsafe too.
+The clone has no allowlist: it holds only what was put in it, and tool data and caches stay in
+`~/.local`, outside it. Only an unmoved machine's bare repo has one,
+`~/.local/local-dotfiles.git/info/exclude` (edited with `dotfiles --local git --edit`). Neither
+keeps out another session's files: a skill-update driver's unapproved edits sit in
+`share/claude-skills/`, so `git ldf add -A` is unsafe too.
 
 **When `git ldf status` fails:**
 - `git: 'ldf' is not a git command` → `~/.config/git/config` lacks the alias, which
   `~/.config/dotfiles/nix/git.nix` writes there at a `dotfiles switch`. The fix is that switch,
   which Claude runs (Workflow step 3), never an alias added elsewhere.
-- `fatal: not a git repository` (or `.../local-dotfiles.git` does not exist) → no
-  local repo yet. Say the edit is untracked and point at **Bootstrapping a machine**.
+- `fatal: not a git repository` (neither `~/local-dotfiles/.git` nor
+  `~/.local/local-dotfiles.git` exists) → no local tier yet. Say the edit is untracked and point
+  at **Bootstrapping a machine**.
+- `fatal: … is outside repository` → a `~/.local` path; give its clone path.
 
 **When the ldf pre-commit hook rejects** (exit 1, one `[ERROR]` line), fix the
 cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
 - `bash 5 required; this is macOS /bin/bash without mapfile` → bash 5 comes from Nix
   (`/ari-dotfiles-nix`): run `dotfiles switch` (Workflow step 3), then retry. NEVER `brew install bash`.
-- `refusing to commit a secret file | path='...'` → `git ldf rm --cached <abs path>`; the file stays untracked.
+- `refusing to commit a secret file | path='...'` → `git ldf rm --cached <abs clone path>`, then
+  move the file out of the clone to its `~/.local` path (**Secrets**).
 - `staged content looks like a credential | path='...'` → move the literal to the
   plugin's `*.secret.zsh` sibling (recipe under **Secrets**), leave a pointer
   comment, re-stage.
@@ -140,8 +174,8 @@ cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
   repo (a mirror has no lock) it runs `nix flake update <input>` and commits the
   shared tier's `flake.lock` alone (`<name>: bump to <sha> (<subject>)`); then
   it pushes the shared repo, all as the personal account by token (no key
-  swap), and the local tier alongside to its own remote, when it has one, with
-  the ssh agent's key (its pre-push hook included). A repo already at its
+  swap), and the local tier alongside to `ldf`, with the ssh agent's key (its
+  pre-push hook included). A repo already at its
   `origin/main` is skipped silently (the `submodules done` line counts the dev
   repos checked, pushed and bumped). **A failed dev repo or mirror push, or a
   refused bump, skips the shared push (`skipped (a submodule failed)`); an export
@@ -152,9 +186,16 @@ cause. NEVER `--no-verify`. NEVER `git ldf add -f` a `.secret.` path.
   After committing, run **Review before push** and end with "Run `dotfiles push`
   when ready." only when it passes; on the personal laptop skip the review and end
   with that line as soon as the commit lands.
-- **Local: push after every ldf commit, on a machine whose local tier has an `origin`.** No
-  confirmation needed and no review (the repo is private); `dotfiles push` also picks up a local
-  commit left unpushed. Without an `origin` (the personal laptop) the commit is the last step.
+- **Local: `git ldf pull --rebase && git ldf push` after every ldf commit, on every machine, the
+  personal laptop included.** No confirmation needed and no review (`ldf` is private). Every moved
+  machine pushes to the one `ldf`, and `dotfiles pull` does not pull it, so pull first; then
+  `ldf-link --execute` when the pull brought files in or took them away. `dotfiles push` also
+  pushes a local commit left unpushed. NEVER `--force`.
+  - The rebase conflicts → `git ldf rebase --abort`, name the files, and ask Ari.
+  - co2's Forgejo unreachable → the commit stands; say "committed, not pushed", and the next
+    `git ldf push` or `dotfiles push` sends it.
+  - Only an unmoved bare repo may lack an `origin`: there `git ldf push` says so and exits 0, and
+    the commit is the last step.
 
 ### Review before push
 
@@ -229,7 +270,8 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
   `$XDG_DATA_HOME/bin` is policy, not local), git config, nvim, `~/.config/bin`.
 - **Company or machine-specific → `~/.local` (ldf).** Work env vars, cloud and
   remote-shell helpers, per-machine data for fzfdb selectors, `~/.local/bin`
-  wrappers. Never a framework, never a launchd job, never a script that stands
+  wrappers. The file lives in the clone, in `local/<machine>/`, or in a tag's directory when
+  every machine with that tag needs it. Never a framework, never a launchd job, never a script that stands
   alone: an ldf component plugs into a df framework at one of the **Cutpoints**.
   Something that should run on a schedule or on screen unlock is a job plugin
   under `~/.local/share/dotfiles/jobs/`.
@@ -257,8 +299,9 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
 - **Claude skills follow the same split.** The real directory lives in the tier
   that owns it, `~/dotfiles/.config/claude/skills/<name>/` (df, also at
   `~/.config/claude/skills/<name>/` through the directory link) or
-  `~/.local/share/claude-skills/<name>/` (ldf), and `~/.claude/skills/<name>` is a
-  symlink to it. Edit through either path; commit through the tier. Linking,
+  `~/.local/share/claude-skills/<name>/` (ldf, whose files are links into the clone), and
+  `~/.claude/skills/<name>` is a symlink to it. Edit through either path; commit through the
+  tier, an ldf skill's files by their clone paths. Linking,
   adopting, and drift are `/ari-dotfiles-skill-registry`'s job.
 - **Chrome Exoskeleton plugins follow the same split.** A plugin for a site you
   use only as an employee is ldf (`~/.local/share/chrome-exoskeleton/plugins/`);
@@ -281,13 +324,14 @@ dotfiles logs --repo shared                       # or --repo .config/chrome-exo
 ### Secrets
 
 **NEVER put a credential literal in a tracked file.** The `export` goes in
-`<plugin>.secret.zsh` beside the plugin that needs it; `*.secret.zsh` is
-excluded from ldf. A shell sources it only once the local flake declares it under its own
-`local-` key, like any local plugin (**Cutpoints**, zsh row), and Workflow step 3 has switched.
+`<plugin>.secret.zsh` beside the plugin that needs it in `~/.local`, a real file never put in the
+clone (an unmoved bare repo's allowlist excludes it); `*.secret.zsh` is excluded from ldf. A
+shell sources it only once the local flake declares it under its own `local-` key, like any
+local plugin (**Cutpoints**, zsh row), and Workflow step 3 has switched.
 
 ```zsh
 f=~/.local/share/zsh/plugins/foo.secret.zsh
-install -m 600 /dev/null "$f"
+[[ -e "$f" ]] || install -m 600 /dev/null "$f"   # never truncate an existing one
 echo "export FOO_TOKEN='...'" >> "$f"
 ```
 
@@ -301,14 +345,17 @@ shared `get secrets` helper exists yet; do not assume one.
 Run the `rg` line first. Show Ari its hits and the block, and run the block only after his `yes`.
 
 ```zsh
-rg -n 'plugins/work.zsh' ~/dotfiles/.config ~/.local/share   # edit every hit; re-run until empty
-git df rm --cached ~/dotfiles/.config/zsh/plugins/work.zsh
-mv ~/dotfiles/.config/zsh/plugins/work.zsh ~/.local/share/zsh/plugins/work.zsh
-git df commit -m "Move work.zsh to local tier" -- ~/dotfiles/.config/zsh/plugins/work.zsh
-git ldf add ~/.local/share/zsh/plugins/work.zsh && git ldf commit -m "Add work.zsh from shared tier" -- ~/.local/share/zsh/plugins/work.zsh
+rg -n 'plugins/work.zsh' ~/dotfiles/.config ~/local-dotfiles   # edit every hit; re-run until empty
+src=~/dotfiles/.config/zsh/plugins/work.zsh
+dst=~/local-dotfiles/local/$(dotfiles machine-name)/share/zsh/plugins/work.zsh   # or ~/local-dotfiles/<tag>/share/…
+[[ ! -e $dst ]] && mkdir -p ${dst:h} && git df rm --cached $src && mv $src $dst \
+  && git df commit -m "Move work.zsh to local tier" -- $src \
+  && git ldf add $dst && git ldf commit -m "Add work.zsh from shared tier" -- $dst
+git ldf pull --rebase && git ldf push
+ldf-link --execute
 ```
 
-Move the clone's file, never the `$HOME` link. The link to it dangles until Workflow step 3's switch removes it: run it after the block. A zsh
+Move the clone's file, never the `$HOME` link. The old shared link dangles until Workflow step 3's switch removes it: run it after the block. A zsh
 plugin moved into ldf loads only once the local flake declares it (**Cutpoints**, zsh row): add
 that line before the switch.
 
@@ -330,7 +377,7 @@ Exoskeleton is the model.
 | Claude skills, `/ari-dotfiles-skill-registry` (`~/.config/claude/skills/`) | `~/.local/share/claude-skills/<name>/` | symlinked into `~/.claude/skills` |
 | Nix flake (`~/.config/dotfiles/nix/`: exports the nix-darwin and home-manager modules, never switched alone) | `~/.local/share/dotfiles/nix/`, this machine's flake | inverted: the local flake takes the shared one as an input and is the one switched (`darwinConfigurations.ozone` on the personal laptop); `/ari-dotfiles-nix` |
 | `open-any` (`~/.config/zsh/plugins/open_any.zsh`) | `~/.local/bin/open-*` | discovered by name across both bin tiers |
-| Starship prompt (`~/.config/dotfiles/nix/starship.nix`) | the local flake's `programs.starship.settings` tables | merged by the module system at a `dotfiles switch`; a key set in both tiers fails the build |
+| Starship prompt (`~/.config/dotfiles/nix/starship.nix`) | the local flake's `programs.starship.settings` tables | merged by the module system at a `dotfiles switch`; which leaves conflict: `/ari-dotfiles-nix` § Modules |
 | tmux (`~/.config/dotfiles/nix/tmux.nix`, `nix/tmux/*.conf`) | the local flake's `programs.tmux.extraConfig`; a typhon working copy at `~/.local/share/tmux/local-plugins/tmux-typhon` | the module system appends the local lines at a `dotfiles switch`; the working copy loads instead of the pinned typhon |
 | tmuxinator (`~/.config/tmuxinator/*.yml`) | `~/.local/share/tmuxinator/*.yml` | `TMUXINATOR_CONFIG`, set by `~/.config/zsh/plugins/tmux.zsh` when the dir exists; searched before the shared dir |
 | Neovim (`~/.config/nvim/`) | `~/.local/share/nvim/site/plugin/*.lua` | nvim's default runtimepath holds `~/.local/share/nvim/site`, so its `plugin/` loads beside the store-placed config |
@@ -340,9 +387,9 @@ Exoskeleton is the model.
 | `PATH` (`prepend_to_path` in `ari.zsh`) | `~/.local/bin/`, `~/.local/share/bin/` | on `PATH` on every machine |
 
 **Adding a cutpoint**: build the framework in df with a local root under
-`~/.local/share/<framework>/`, admit that root in both copies of the ldf allowlist
-(`~/.local/local-dotfiles.git/info/exclude` and
-`~/.config/new-machine/local-dotfiles-exclude`), give the framework a `list`/`status` that
+`~/.local/share/<framework>/` (the clone needs nothing more; for a machine not moved yet, admit
+the root in both copies of its bare repo's allowlist, `~/.local/local-dotfiles.git/info/exclude`
+and `~/.config/new-machine/local-dotfiles-exclude`), give the framework a `list`/`status` that
 names each plugin's tier, wire its install into a step (`~/.config/dotfiles/steps/<name>.zsh`:
 a check and an apply), and add its row here. A plugin needing something outside its
 tier (a launchd job, a compiled helper) is the sign that the framework is missing a
@@ -425,7 +472,8 @@ the next `dotfiles push`, or the checkout is behind a pulled lock); `-` = not cl
   `dotfiles.git` and `.local` lines matter only to the bare-repo fallback, whose work tree is `$HOME`.
 - `~/dotfiles/.gitignore` — the shared repo's own ignore list. It also keeps out files that tools
   write under `~/.config`, such as `.config/gh/hosts.yml`.
-- `~/.local/local-dotfiles.git/info/exclude` — the local repo's allowlist.
+- `~/.local/local-dotfiles.git/info/exclude` — the allowlist of a machine not moved onto the
+  clone yet; the clone has none.
 
 ### Shared (df)
 - **Scripts**: `~/.config/bin/` on `$PATH`; the packaged ones are placed from the store (**Placement rules**)
@@ -445,6 +493,8 @@ the next `dotfiles push`, or the checkout is behind a pulled lock); `-` = not cl
   **Dev repos**, `/ari-dotfile--submodule` (layout, creating one),
   `/ari-dotfile--submodule-chrome-exoskeleton`, `/ari-dotfile--submodule-run-log`,
   `/ari-dotfile--submodule-plugged` and `/ari-dotfile--submodule-tmux-oneshot`
+- **ldf-link**: `~/.config/bin/ldf-link`, run at each activation by
+  `~/.config/dotfiles/nix/ldf.nix`; tests `~/.config/dotfiles/tests/test_ldf_link.sh`
 - **Jobs framework**: `~/.config/dotfiles/lib/jobs.zsh`; shared plugins in `~/.config/dotfiles/jobs/`
   (README = the plugin contract) — see **Cutpoints**
 - **Nix flake**: `~/.config/dotfiles/nix/` (`flake.nix`, `darwin.nix`, `home.nix`), the shared
@@ -458,6 +508,8 @@ the next `dotfiles push`, or the checkout is behind a pulled lock); `-` = not cl
   the next `dotfiles switch`
 
 ### Local (ldf)
+Each file below is a link into the clone `~/local-dotfiles`, to `local/<machine>/<path>` or
+`<tag>/<path>`; edit and commit it there. The clone's `machines` file gives each machine its tags.
 - **Zsh plugins**: `~/.local/share/zsh/plugins/`, sourced after the shared ones once the
   local flake declares each under a `local-` key (**Cutpoints**)
 - **Scripts**: `~/.local/bin/` and `~/.local/share/bin/`
@@ -484,7 +536,7 @@ edits and commits nothing:
       df: ~/.config/foo/bar.zsh → "foo: retry once on timeout" — the retry the last session left uncommitted
 
 The plan goes into Workflow step 5's closing message; its one `yes` commits every
-planned line, switches when a line needs it (Workflow step 3), pushes local when it has an `origin`, and runs **Review before push** on anything shared (skipped on the personal laptop).
+planned line, switches when a line needs it (Workflow step 3), pushes local, and runs **Review before push** on anything shared (skipped on the personal laptop).
 Both tiers clean → the two status lines, nothing to ask. A change the subagent
 cannot explain is listed but left out of the plan.
 
@@ -504,9 +556,10 @@ The `repo` group is the dotfiles themselves:
   the plain clone `~/dotfiles` when `~/dotfiles/.git` exists. Without it, the step clones the bare
   repo `~/dotfiles.git` and checks it out into `$HOME`. A pre-harness bare repo at `~/dotfiles` is
   renamed to `~/dotfiles.git` first, and having both is a manual conflict.
-- `local_dotfiles_repo`: the local bare repo with the allowlist from
-  `~/.config/new-machine/local-dotfiles-exclude` and its hooks. A remote is optional: without
-  one the step is `ok`, the local tier stays on this machine and `dotfiles push` skips it.
+- `local_dotfiles_repo`: with the clone `~/local-dotfiles`, it only wires its hooks
+  (`core.hooksPath` = `~/.config/git/local-dotfiles-hooks`), warns on unpushed commits, and
+  reports `ok clone`. On a machine not moved yet, it is the old bare repo with the allowlist from
+  `~/.config/new-machine/local-dotfiles-exclude` and its hooks, a remote optional.
 - `claude_skills`: every tier-held skill linked into `~/.claude/skills`
   (`/ari-dotfiles-skill-registry`'s `link --prune`).
 - `ssh_key`: the GitHub ssh key in the agent, its passphrase read from 1Password through an
@@ -521,16 +574,22 @@ The `repo` group is the dotfiles themselves:
 in the local flake), and a `dotfiles switch` installs them (`/ari-dotfiles-nix`). `tools` is the rest (`raycast_sync`, `chrome_exoskeleton`: `exo deps ci`, `exo build`,
 `plugged`, `karabiner`, …).
 
-To back the local tier up, give it a remote. On the personal laptop Ari chose not to, so never propose it there:
+No step clones `ldf`. A new machine joins it by hand. `git ldf remote get-url origin` on a moved
+machine gives the URL (co2 itself uses `forgejo@localhost:ari/ldf.git`). Wire the hooks before the
+first commit, so the secret check runs on it. Ask Ari for the machine's tags before writing its
+`machines` line.
 
 ```zsh
-git ldf remote add origin <this machine's private repo>
-git ldf status --short   # name each listed path that is the tier's own, never -A
-git ldf add <paths> && git ldf commit -m "local dotfiles: initial snapshot" -- <paths> && git ldf push -u origin main
+[[ -d ~/local-dotfiles/.git ]] || git clone <ldf url> ~/local-dotfiles
+dotfiles apply local_dotfiles_repo        # hooks; then it reports ok clone
+# add "<machine> <tags>" to ~/local-dotfiles/machines and the machine's files under local/<machine>/
+git ldf add ~/local-dotfiles/machines ~/local-dotfiles/local/<machine>/<paths> && git ldf commit -m "local/<machine>: join ldf" -- ~/local-dotfiles/machines ~/local-dotfiles/local/<machine>/<paths>
+git ldf pull --rebase && git ldf push
+ldf-link --execute
 ```
 
-Keep `local-dotfiles-exclude` in sync with `~/.local/local-dotfiles.git/info/exclude` when the
-allowlist changes.
+On a machine not moved yet, keep `local-dotfiles-exclude` in sync with
+`~/.local/local-dotfiles.git/info/exclude` when the allowlist changes.
 
 `dotfiles pull` runs `git df pull --rebase --autostash`: a fast-forward when nothing is local,
 otherwise local commits are replayed onto origin. A replay that conflicts is aborted, the tier is
