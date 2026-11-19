@@ -43,7 +43,7 @@ in
       bind-key C-e new-window -c ~/dotfiles/.config/dotfiles/nix \; send-keys "\$EDITOR tmux.nix" Enter
 
       ${lib.optionalString (config.dotfiles.machine.symbol != "") ''
-        # This machine's symbol (machine.nix), shown before the host in typhon.conf's status-right.
+        # This machine's symbol (machine.nix) for tmux formats: #{@machine-symbol}. The status line does not show it.
         set -g @machine-symbol ${lib.escapeShellArg config.dotfiles.machine.symbol}
       ''}
       ${builtins.concatStringsSep "\n" (map builtins.readFile [
