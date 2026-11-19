@@ -37,22 +37,74 @@ shared_worktree_reply() {
   REPLY="${HOME}"
 }
 
+#######################################
+# Set $REPLY to this machine's name in the local-dotfiles clone (its
+# local/<machine>/ directory), as ldf-link reads it: ARI_DOTFILES_MACHINE when
+# set; else the first word of the machine-name file; else the short hostname.
+# No subshell.
+#######################################
+ldf_machine_reply() {
+  if [[ -n "${ARI_DOTFILES_MACHINE:-}" ]]; then
+    REPLY="${ARI_DOTFILES_MACHINE}"
+    return 0
+  fi
+  local file="${ARI_DOTFILES_MACHINE_NAME_FILE:-${HOME}/.local/share/dotfiles/machine-name}"
+  local -a words
+  [[ -r "${file}" ]] && words=(${=$(<"${file}")})
+  REPLY="${words[1]:-${HOST%%.*}}"
+}
+
+#######################################
+# Set $reply to the local tier's (git dir, worktree), in the dotfiles CLI's
+# order (lib/env.zsh): ARI_DOTFILES_LDF_GIT_DIR when set, else the
+# ~/local-dotfiles clone's .git when it exists, else the bare repo
+# ~/.local/local-dotfiles.git; the worktree is ARI_DOTFILES_LDF_WORK_TREE when
+# set, else the git dir's parent when it is a clone's .git, else ~/.local. No
+# trailing slash. No subshell.
+#######################################
+local_git_reply() {
+  local git_dir="${HOME}/.local/local-dotfiles.git"
+  [[ -d "${HOME}/local-dotfiles/.git" ]] && git_dir="${HOME}/local-dotfiles/.git"
+  git_dir="${${ARI_DOTFILES_LDF_GIT_DIR:-${git_dir}}%/}"
+  local work_tree="${HOME}/.local"
+  [[ "${git_dir:t}" == .git ]] && work_tree="${git_dir:h}"
+  reply=("${git_dir}" "${${ARI_DOTFILES_LDF_WORK_TREE:-${work_tree}}%/}")
+}
+
 # Callers define SKILLS_DIR before sourcing logging; this only fills it for a bare source.
 : "${SKILLS_DIR:=${HOME}/.claude/skills}"
 readonly IGNORE_FILE="${SKILLS_DIR}/.gitignore"
 readonly TIERS=(df ldf)
+# A clone machine is one whose local tier is the local-dotfiles clone (its git
+# dir is named .git); the bare repo's worktree is ~/.local itself. On a clone
+# machine the clone keeps this machine's files under local/<machine>/, and
+# ldf-link assembles ~/.local from them: LDF_ASSEMBLED_ROOT/<name> is then a
+# real directory of per-file links into the clone, never a tier root.
+readonly LDF_ASSEMBLED_ROOT="${HOME}/.local/share/claude-skills"
+local_git_reply
+readonly LDF_GIT_DIR="${reply[1]}" LDF_WORKTREE="${reply[2]}"
+if [[ "${LDF_GIT_DIR:t}" == .git ]]; then
+  readonly LDF_CLONE=true
+  ldf_machine_reply
+  readonly LDF_MACHINE="${REPLY}"
+  readonly LDF_ROOT="${LDF_WORKTREE}/local/${LDF_MACHINE}/share/claude-skills"
+else
+  readonly LDF_CLONE=false LDF_MACHINE=""
+  readonly LDF_ROOT="${LDF_WORKTREE}/share/claude-skills"
+fi
 shared_worktree_reply
-# Each tier root sits under its worktree (callers take the root's path relative to
-# it): on the Nix port the shared root is the real directory in the clone, which
-# ~/.config/claude links to.
+# Each tier root is the real directory that holds its skills, under its
+# worktree (callers take the root's path relative to it): on the Nix port the
+# shared root is in the ~/dotfiles clone, which ~/.config/claude links to; on a
+# clone machine the local root is in the local-dotfiles clone.
 readonly -A TIER_ROOTS=(
   df  "${REPLY}/.config/claude/skills"
-  ldf "${HOME}/.local/share/claude-skills"
+  ldf "${LDF_ROOT}"
 )
 # Each tier's worktree: where its manifests live and submodule paths resolve.
 readonly -A TIER_WORKTREES=(
   df  "${REPLY}"
-  ldf "${HOME}/.local"
+  ldf "${LDF_WORKTREE}"
 )
 # Each tier's dev-repos manifest (git's ini form: `[repo "<path>"]` blocks with a
 # `path =`), the dotfiles CLI's DEV_REPOS; empty for a tier that has none.
@@ -200,8 +252,35 @@ root_source() {
 }
 
 #######################################
-# Run git against a tier's bare repo, via the df/ldf aliases the dotfiles skill
-# documents.
+# True (0) on a clone machine when the machines file lists LDF_MACHINE: the
+# name ldf-link assembles ~/.local for. Always true on a bare-repo machine.
+#######################################
+ldf_machine_known() {
+  [[ "${LDF_CLONE}" == true ]] || return 0
+  local name rest
+  [[ -r "${LDF_WORKTREE}/machines" ]] || return 1
+  while read -r name rest; do
+    [[ "${name}" == "${LDF_MACHINE}" ]] && return 0
+  done < "${LDF_WORKTREE}/machines"
+  return 1
+}
+
+#######################################
+# True (0) when the skill's farm link names ldf-link's per-file links on a clone
+# machine (LDF_ASSEMBLED_ROOT/<name>), not the clone's directory: an existing
+# file edited through it reaches the clone, a new file lands in ~/.local
+# untracked, so `link` retargets it.
+# Arguments:
+#   $1 - skill name
+#######################################
+links_via_ldf_link() {
+  local skill="${1}" link="${SKILLS_DIR}/${1}"
+  [[ "${LDF_CLONE}" == true && -L "${link}" && "${link:A}" == "${LDF_ASSEMBLED_ROOT:A}/${skill}" ]]
+}
+
+#######################################
+# Run git against a tier's repo, via the df/ldf aliases the dotfiles skill
+# documents (each picks a clone or a bare repo by the rule above).
 # Arguments:
 #   $1 - tier
 #   $@ - git arguments
@@ -301,9 +380,12 @@ tiers_holding_reply() {
 # Classify one skill. Prints `<state> <tier>` and leaves the same in $REPLY, so
 # a caller looping over every skill can read it without a subshell; tier is `-`
 # when none applies.
-#   linked    symlink into a tier root                     (healthy)
+#   linked    symlink into a tier root, or on a clone machine into ldf-link's
+#             per-file links (LDF_ASSEMBLED_ROOT) to a held skill
+#             (healthy; the latter: fix: link, which retargets it)
 #   missing   tier holds it, no symlink in SKILLS_DIR      (fix: link)
-#   dangling  symlink whose target is gone                 (fix: link --prune)
+#   dangling  symlink whose target is gone, or on a clone machine names
+#             per-file links no clone directory backs      (fix: link --prune)
 #   foreign   symlink pointing outside every tier root     (manual)
 #   shadowed  real dir in SKILLS_DIR AND a tier holds it   (manual)
 #   conflict  more than one tier holds it                  (manual)
@@ -355,6 +437,13 @@ skill_state_of() {
         fi
       done
     done
+    # On a clone machine, ldf-link's per-file links to a skill the clone holds
+    # are that skill (links_via_ldf_link marks the row); with none behind them
+    # they are a leftover of a skill gone from the clone, as good as gone.
+    if [[ "${LDF_CLONE}" == true && "${target}" == "${LDF_ASSEMBLED_ROOT:A}/${skill}" ]]; then
+      [[ "${holders[*]}" == ldf ]] && REPLY="linked ldf" || REPLY="dangling -"
+      return 0
+    fi
     REPLY="foreign -"
     return 0
   fi

@@ -1,7 +1,8 @@
 #!/usr/bin/env zsh
 # Automated tests for lib/registry.zsh's submodule roots, each in a throwaway HOME: a root the
 # shared tier's dev-repos manifest declares, the manifest and a .gitmodules together (each root
-# once), a .gitmodules alone (the bare-repo layout), and `status` keeping source=submodule:<path>.
+# once), a .gitmodules alone (the bare-repo layout), and `status` keeping source=submodule:<path>;
+# and the local tier's root and worktree in the local-dotfiles clone layout and the bare one.
 # Run: zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/tests/registry.test.zsh
 set -uo pipefail
 
@@ -177,13 +178,42 @@ contains "broken: the tier root is still listed" "${h}/dotfiles/.config/claude/s
 # 7. Each tier root sits under its tier worktree, in both layouts: callers (/ari-skill-update's
 # blobs lib) take the root's path relative to the worktree.
 for h in "${T}/manifest" "${T}/bare"; do
-  got="$(env -u ARI_DOTFILES_DF_WORK_TREE -u ARI_DOTFILES_DEV_REPOS HOME="${h}" zsh -c '
+  got="$(env -u ARI_DOTFILES_DF_WORK_TREE -u ARI_DOTFILES_DEV_REPOS -u ARI_DOTFILES_LDF_GIT_DIR -u ARI_DOTFILES_LDF_WORK_TREE \
+    HOME="${h}" zsh -c '
     source "${1}"; source "${2}"
     for t in "${TIERS[@]}"; do
       [[ "${TIER_ROOTS[$t]}" == "${TIER_WORKTREES[$t]}"/* ]] && print -r -- "${t} under" || print -r -- "${t} outside"
     done' zsh "${LIB_LOGGING}" "${REGISTRY_LIB}")"
   check "invariant (${h:t}): every tier root is under its worktree" "df under"$'\n'"ldf under" "${got}"
 done
+
+#######################################
+# Print the local tier's root and worktree as the registry computes them in the given HOME, the
+# dotfiles CLI's ldf overrides unset unless passed as NAME=VALUE arguments.
+# Arguments:
+#   $1 - fake HOME
+#   $@ - extra environment assignments
+#######################################
+ldf_in() {
+  local home="${1}"; shift
+  env -u ARI_DOTFILES_LDF_GIT_DIR -u ARI_DOTFILES_LDF_WORK_TREE -u ARI_DOTFILES_MACHINE -u ARI_DOTFILES_MACHINE_NAME_FILE \
+    HOME="${home}" "$@" zsh -c 'source "${1}"; source "${2}"; print -r -- "${TIER_ROOTS[ldf]} ${TIER_WORKTREES[ldf]}"' \
+    zsh "${LIB_LOGGING}" "${REGISTRY_LIB}"
+}
+
+# 8. The local tier follows lib/env.zsh: the ~/local-dotfiles clone when it has a .git (root under
+# local/<machine>/, the machine from the machine-name file), else the bare repo with ~/.local.
+h="${T}/ldf-clone"
+mkdir -p "${h}/local-dotfiles/.git" "${h}/.local/share/dotfiles"
+print -r -- "testbox" > "${h}/.local/share/dotfiles/machine-name"
+check "ldf clone: root under local/<machine>/, worktree the clone" \
+  "${h}/local-dotfiles/local/testbox/share/claude-skills ${h}/local-dotfiles" "$(ldf_in "${h}")"
+check "ldf clone: ARI_DOTFILES_MACHINE wins over the file" \
+  "${h}/local-dotfiles/local/other/share/claude-skills ${h}/local-dotfiles" "$(ldf_in "${h}" ARI_DOTFILES_MACHINE=other)"
+check "ldf clone: ARI_DOTFILES_LDF_GIT_DIR naming the bare repo restores ~/.local" \
+  "${h}/.local/share/claude-skills ${h}/.local" "$(ldf_in "${h}" ARI_DOTFILES_LDF_GIT_DIR="${h}/.local/local-dotfiles.git")"
+check "ldf bare: no clone, the bare repo's ~/.local" \
+  "${T}/bare/.local/share/claude-skills ${T}/bare/.local" "$(ldf_in "${T}/bare")"
 
 print -r -- "summary  pass=${pass} fail=${fail}"
 (( fail == 0 ))

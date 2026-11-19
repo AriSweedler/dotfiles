@@ -36,8 +36,10 @@ ${c_bold}Options:${c_rst}
   --all         Include healthy rows (linked, ignored); default shows actionable rows only
   -h, --help    Show this help
 
-${c_bold}Output:${c_rst} one line per skill on stdout: state=<state> tier=<tier> name=<name> [source=submodule:<path>]
+${c_bold}Output:${c_rst} one line per skill on stdout: state=<state> tier=<tier> name=<name> [source=submodule:<path>] [via=ldf-link]
   source=   present when a submodule's top-level skills/ holds the skill: commit it in that repo
+  via=      on a clone machine, the link names ldf-link's per-file links in ~/.local, not the clone's
+            directory (a new file would land untracked): shown without --all; link retargets it
   linked    symlink into a tier root                   healthy
   ignored   listed in .gitignore, or a directory without SKILL.md   leave it (reason= shown under --all)
   unlinked  real dir, no tier holds it                 adopt --skill NAME --tier df|ldf
@@ -84,6 +86,7 @@ format_row() {
     source="$(root_source "${tier}" "$(skill_holder_root "${tier}" "${skill}")")"
     [[ -n "${source}" ]] && row+=" source=${source}"
   fi
+  [[ "${state}" == "linked" ]] && links_via_ldf_link "${skill}" && row+=" via=ldf-link"
   echo "${row}"
 }
 
@@ -111,7 +114,7 @@ main() {
   for skill in "${skills[@]}"; do
     read -r state tier <<< "$(skill_state "${skill}")"
     counts[${state}]=$(( ${counts[${state}]:-0} + 1 ))
-    if [[ "${show_all}" != "true" ]] && is_quiet_state "${state}"; then
+    if [[ "${show_all}" != "true" ]] && is_quiet_state "${state}" && ! links_via_ldf_link "${skill}"; then
       continue
     fi
     echo "$(format_row "${state}" "${tier}" "${skill}")"

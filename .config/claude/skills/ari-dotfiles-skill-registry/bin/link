@@ -44,7 +44,9 @@ ${c_bold}Options:${c_rst}
   --dry-run   The default made explicit; wins over --execute and exports DRY_RUN=1
   -h, --help  Show this help
 
-Only skills in state ${c_bold}missing${c_rst} get a link. ${c_bold}shadowed${c_rst}, ${c_bold}foreign${c_rst}, and
+Only skills in state ${c_bold}missing${c_rst} get a link, and on a clone machine a ${c_bold}linked${c_rst} local skill
+whose link names ldf-link's per-file links (status: via=ldf-link) is retargeted to the clone's
+directory. ${c_bold}shadowed${c_rst}, ${c_bold}foreign${c_rst}, and
 ${c_bold}conflict${c_rst} rows are reported and left alone; fix those with bin/status in hand.
 
 ${c_bold}Environment:${c_rst}
@@ -66,6 +68,18 @@ link_skill() {
 }
 
 #######################################
+# Point one local skill's link at the clone's directory instead of ldf-link's
+# per-file links in ~/.local.
+# Arguments:
+#   $1 - skill name
+#######################################
+retarget_skill() {
+  local skill="${1}"
+  local target="$(skill_holder_root ldf "${skill}")/${skill}"
+  run_mut ln -sfn "${target}" "${SKILLS_DIR}/${skill}"
+}
+
+#######################################
 # Remove one dangling symlink.
 # Arguments:
 #   $1 - skill name
@@ -77,6 +91,7 @@ prune_skill() {
 }
 
 main() {
+  local -a args=("$@")
   # === PARSE ===
   local prune=false execute=false dry_run=false
   while (( $# > 0 )); do case "${1}" in
@@ -93,7 +108,7 @@ main() {
   # === LOGIC ===
   [[ -d "${SKILLS_DIR}" ]] || run_mut mkdir -p "${SKILLS_DIR}"
   local skill state tier
-  local linked=0 pruned=0 skipped=0
+  local linked=0 retargeted=0 pruned=0 skipped=0
   local -a all_skills=("${(@f)$(list_all_skills)}")
   all_skills=("${(@)all_skills:#}")
   for skill in "${all_skills[@]}"; do
@@ -104,6 +119,11 @@ main() {
       missing)
         link_skill "${skill}" "${tier}"
         linked=$(( linked + 1 ))
+        ;;
+      linked)
+        links_via_ldf_link "${skill}" || continue
+        retarget_skill "${skill}"
+        retargeted=$(( retargeted + 1 ))
         ;;
       dangling)
         if [[ "${prune}" != "true" ]]; then
@@ -121,14 +141,15 @@ main() {
     esac
   done
 
-  log::info "link done | linked='${linked}' pruned='${pruned}' skipped='${skipped}' dry_run='${DRY_RUN}'"
+  log::info "link done | linked='${linked}' retargeted='${retargeted}' pruned='${pruned}' skipped='${skipped}' dry_run='${DRY_RUN}'"
   cat <<EOF
 linked=${linked}
+retargeted=${retargeted}
 pruned=${pruned}
 skipped=${skipped}
 dry_run=${DRY_RUN}
 EOF
-  report_dry_run "${SCRIPT_PATH}" "$@"
+  report_dry_run "${SCRIPT_PATH}" "${args[@]}"
 }
 
 main "${@}"

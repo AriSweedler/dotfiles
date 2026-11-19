@@ -1,7 +1,8 @@
 #!/usr/bin/env zsh
 # Move a skill from $HOME/.claude/skills into a dotfiles tier, symlink it back, and
-# stage it in that tier's repo. Committing is the caller's job so the message can
-# say why. Run: zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/adopt --skill <name> --tier df|ldf
+# stage it in that tier's repo; on a machine moved onto the local-dotfiles clone, a
+# local-tier adoption then runs ldf-link so ~/.local gets the skill's links.
+# Committing is the caller's job so the message can say why. Run: zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/adopt --skill <name> --tier df|ldf
 
 set -euo pipefail
 
@@ -40,18 +41,21 @@ ${c_bold}Usage:${c_rst}
 
 ${c_bold}Options:${c_rst}
   --skill NAME   Skill directory under \$HOME/.claude/skills to adopt (repeatable)
-  --tier TIER    df (shared, ~/.config/claude/skills) or ldf (local, ~/.local/share/claude-skills)
+  --tier TIER    df (shared, ~/.config/claude/skills) or ldf (local: ~/local-dotfiles/local/<machine>/share/claude-skills
+                 when that clone exists, else ~/.local/share/claude-skills)
   --as NEW_NAME  Adopt under a new directory name; allowed with exactly one --skill.
                  The SKILL.md \`name:\` line and every caller still say the old name: fix them
-                 in the same commit (\`rg -n '<old>' \$HOME/.claude/skills\`).
+                 in the same commit (\`rg -L -n '<old>' \$HOME/.claude/skills\`).
   --execute      Act. Without it the run is a dry run: it logs what would change and touches nothing
   --dry-run      The default made explicit; wins over --execute and exports DRY_RUN=1
   -h, --help     Show this help
 
-Each skill must be in state ${c_bold}unlinked${c_rst} (or ${c_bold}ignored${c_rst} via .gitignore: naming it is the
+Every skill is checked before any moves. Each must be in state ${c_bold}unlinked${c_rst} (or ${c_bold}ignored${c_rst} via .gitignore: naming it is the
 override) and must contain a SKILL.md; a directory without one is not a skill and is refused. A skill
-already ${c_bold}linked${c_rst} to the requested tier is a no-op. Ends with key=value lines per skill and the
-commit the caller should make.
+already ${c_bold}linked${c_rst} to the requested tier is a no-op. On a clone machine (~/local-dotfiles/.git) a
+local adoption refuses a machine name the clone's machines file lacks, then runs ldf-link (its
+preview in a dry run), which updates every local-tier link on the machine. Ends with key=value lines
+per skill and the commit the caller should make.
 
 ${c_bold}Environment:${c_rst}
   DRY_RUN        Set and not 0 (a parent's dry run): a dry run, --execute or not; 0 alone never acts
@@ -59,16 +63,95 @@ EOF
 }
 
 #######################################
-# True (0) if the tier's repo would track a path under its root, i.e. the ldf
-# allowlist (info/exclude) has an entry for the skills root.
+# True (0) if the tier's repo would track a path under its root: no ignore rule
+# (on the bare ldf repo, its info/exclude allowlist) covers it.
 # Arguments:
 #   $1 - tier
 #   $2 - path that will exist after the move
 #######################################
 tier_tracks_path() {
   # Not `path`: in zsh that is the array tied to PATH, and a local one empties it.
-  local tier="${1}" probe_path="${2}"
-  ! tier_git "${tier}" check-ignore -q --no-index "${probe_path}"
+  local tier="${1}" probe_path="${2}" rc=0
+  tier_git "${tier}" check-ignore -q --no-index "${probe_path}" 2>/dev/null || rc=$?
+  (( rc == 1 ))
+}
+
+#######################################
+# True (0) if the tier's repo answers git; logs the failure otherwise, so a
+# missing alias or repo is refused before anything moves.
+# Arguments:
+#   $1 - tier
+#######################################
+tier_reachable() {
+  local tier="${1}" out
+  if ! out="$(tier_git "${tier}" rev-parse --git-dir 2>&1)"; then
+    log::err "tier repo unreachable | tier='${tier}' error='${out%%$'\n'*}' hint='git ${tier} must work (/ari-dotfiles)'"
+    return 1
+  fi
+}
+
+#######################################
+# Print the fix for a tier that ignores its skills root: the bare ldf repo's
+# allowlist entry, else the rule `git check-ignore -v` names
+# (<file>:<line>:<pattern>), which must stop covering the skills root.
+# Arguments:
+#   $1 - tier
+#   $2 - destination directory
+#######################################
+ignore_hint() {
+  local tier="${1}" dest_dir="${2}"
+  if [[ "${tier}" == ldf && "${LDF_CLONE}" != true ]]; then
+    echo "add !/share/claude-skills/ to the ldf allowlist (info/exclude)"
+    return 0
+  fi
+  local rule root_rel="${$(tier_root "${tier}")#${TIER_WORKTREES[${tier}]}/}"
+  rule="$(tier_git "${tier}" check-ignore -v --no-index "${dest_dir}/SKILL.md" 2>/dev/null)" || true
+  rule="${rule%%$'\t'*}"
+  echo "make /${root_rel}/ tracked: the rule ${rule:-git check-ignore -v names} ignores it"
+}
+
+#######################################
+# Print the ldf-link command: ~/.config/bin's, else the one on PATH, else nothing.
+#######################################
+ldf_link_bin() {
+  if [[ -x "${HOME}/.config/bin/ldf-link" ]]; then
+    echo "${HOME}/.config/bin/ldf-link"
+    return 0
+  fi
+  whence -p ldf-link || true
+}
+
+#######################################
+# On a clone machine, run ldf-link so ~/.local/share/claude-skills/<name> gets
+# each adopted skill's links; a dry run shows ldf-link's own preview. It is
+# told the clone and machine this run used, so both agree. A missing ldf-link,
+# or an adopted skill it did not link, only warns: each skill is already
+# adopted, linked to the clone's directory, and staged.
+# Arguments:
+#   $1 - tier
+#   $@ - adopted destination names
+#######################################
+assemble_local() {
+  local tier="${1}"; shift
+  [[ "${tier}" == ldf && "${LDF_CLONE}" == true ]] || return 0
+  local bin dest
+  bin="$(ldf_link_bin)"
+  if [[ -z "${bin}" ]]; then
+    log::warn "ldf-link not found; ~/.local lacks the skills' links | fix='ldf-link --execute'"
+    return 0
+  fi
+  local -a cmd=(env LDF_REPO="${LDF_WORKTREE}" LDF_TARGET="${HOME}/.local" ARI_DOTFILES_MACHINE="${LDF_MACHINE}" "${bin}")
+  # Its per-path lines go to stderr: stdout holds adopt's key=value rows.
+  if is_dry_run; then
+    log::info "ldf-link preview (it runs with --execute on --execute) | cmd=${(j: :)${(q-)cmd}}"
+    "${cmd[@]}" >&2 || true
+    return 0
+  fi
+  run_mut "${cmd[@]}" --execute >&2 || true
+  for dest in "$@"; do
+    [[ "${LDF_ASSEMBLED_ROOT}/${dest}/SKILL.md" -ef "${LDF_ROOT}/${dest}/SKILL.md" ]] && continue
+    log::warn "ldf-link did not link the skill into ~/.local | skill='${dest}' fix='ldf-link (a dry run) names what it refused; settle it per /ari-dotfiles, then ldf-link --execute'"
+  done
 }
 
 #######################################
@@ -93,6 +176,10 @@ check_adoptable() {
     log::err "not a skill | skill='${skill}' path='${SKILLS_DIR}/${skill}' expected='a directory containing SKILL.md'"
     return 1
   fi
+  if [[ "${tier}" == ldf ]] && ! ldf_machine_known; then
+    log::err "machine not in the clone's machines file | machine='${LDF_MACHINE}' machines='${LDF_WORKTREE}/machines' hint='set the name with dotfiles machine-name, or add the machine to the machines file'"
+    return 1
+  fi
   if [[ "${state}" != "unlinked" && "${state}" != "ignored" ]]; then
     log::err "not adoptable | skill='${skill}' state='${state}' tier='${cur_tier}' expected_state='unlinked'"
     return 1
@@ -106,7 +193,7 @@ check_adoptable() {
     return 1
   fi
   if ! tier_tracks_path "${tier}" "${dest_dir}/SKILL.md"; then
-    log::err "tier ignores the skills root | tier='${tier}' dest_dir='${dest_dir}' hint='add !/share/claude-skills/ to the ldf allowlist (info/exclude)'"
+    log::err "tier ignores the skills root | tier='${tier}' dest_dir='${dest_dir}' hint='$(ignore_hint "${tier}" "${dest_dir}")'"
     return 1
   fi
   return 0
@@ -133,6 +220,7 @@ adopt_skill() {
 }
 
 main() {
+  local -a args=("$@")
   # === PARSE ===
   local tier="" as="" execute=false dry_run=false
   local -a skills
@@ -164,25 +252,35 @@ main() {
   resolve_dry_run "${execute}" "${dry_run}"
 
   # === LOGIC ===
-  local skill dest rc adopted=0
-  local -a rows
+  tier_reachable "${tier}" || return 1
+  # Check every skill before moving any, so a refusal leaves the batch untouched.
+  local skill dest rc refused=0 adopted=0
+  local -a todo rows dests
   for skill in "${skills[@]}"; do
-    dest="${as:-${skill}}"
     rc=0
-    check_adoptable "${skill}" "${tier}" "${dest}" || rc=$?
-    (( rc == 2 )) && continue
-    (( rc != 0 )) && return 1
+    check_adoptable "${skill}" "${tier}" "${as:-${skill}}" || rc=$?
+    (( rc == 0 )) && todo+=("${skill}")
+    (( rc == 1 )) && refused=$(( refused + 1 ))
+  done
+  if (( refused > 0 )); then
+    log::err "nothing moved | refused='${refused}' skills='${(j:,:)skills}'"
+    return 1
+  fi
+  for skill in "${todo[@]}"; do
+    dest="${as:-${skill}}"
     adopt_skill "${skill}" "${tier}" "${dest}"
     rows+=("skill=${skill} tier=${tier} path=$(tier_root "${tier}")/${dest} link=${SKILLS_DIR}/${dest} dry_run=${DRY_RUN}")
+    dests+=("${dest}")
     adopted=$(( adopted + 1 ))
   done
+  (( adopted > 0 )) && assemble_local "${tier}" "${dests[@]}"
 
   log::info "adopt done | adopted='${adopted}' tier='${tier}' dry_run='${DRY_RUN}'"
   (( adopted > 0 )) && printf '%s\n' "${rows[@]}"
   if (( adopted > 0 )) && ! is_dry_run; then
     log::info "staged, not committed | next=\"git ${tier} commit -m 'claude: adopt the <name> skill into the ${tier} tier'\""
   fi
-  report_dry_run "${SCRIPT_PATH}" "$@"
+  report_dry_run "${SCRIPT_PATH}" "${args[@]}"
   return 0
 }
 

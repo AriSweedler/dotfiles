@@ -14,11 +14,14 @@ drift check against a remote, and no push here (pushing follows `/ari-dotfiles`)
 | Tier | Root | Holds |
 |---|---|---|
 | Shared (`git df`) | `~/.config/claude/skills/` (real dir `~/dotfiles/.config/claude/skills/` on a Nix machine) | Skills correct on every machine |
-| Local (`git ldf`) | `~/.local/share/claude-skills/` | Work- or machine-specific skills |
+| Local (`git ldf`) | `~/local-dotfiles/local/<machine>/share/claude-skills/` (clone machine); `~/.local/share/claude-skills/` (bare-repo machine) | Work- or machine-specific skills |
 | Either, via a dev repo | `<repo>/skills/` for every `path` in the shared tier's dev-repos manifest (`~/dotfiles/.config/dotfiles/dev-repos`), and in a tier worktree's `.gitmodules` where one remains (e.g. `~/.config/chrome-exoskeleton/skills/`) | Skills that travel with that repo; committed there, not with `git df`/`git ldf` |
 
-`~/.local/share/claude/` is Claude Code's own install dir, which is why the local
-root is a sibling, not a child, of it.
+- **Farm link**: `~/.claude/skills/<name>`.
+- **Clone machine**: the local tier is the `~/local-dotfiles` clone (`~/local-dotfiles/.git` exists); a *bare-repo machine* has `~/.local/local-dotfiles.git`, with `~/.local` as its worktree. The rule is the dotfiles CLI's (`lib/env.zsh`); `ARI_DOTFILES_LDF_GIT_DIR` and `ARI_DOTFILES_LDF_WORK_TREE` override it.
+- **`<machine>`**: as ldf-link reads it: `ARI_DOTFILES_MACHINE`, else the first word of `~/.local/share/dotfiles/machine-name`, else the short hostname. It must be listed in `~/local-dotfiles/machines`, or `adopt --tier ldf` refuses.
+- **On a clone machine `~/.local/share/claude-skills/<name>` is ldf-link's directory of per-file links, never a tier root.** A new file made through it lands in `~/.local`, untracked. `link` and `adopt` link the clone's directory; `status` marks a farm link into ldf-link's links `via=ldf-link`, and `link --execute` retargets it.
+- `~/.local/share/claude/` is Claude Code's own install dir: the bare-repo local root is its sibling, not its child.
 
 ## Rules
 
@@ -57,8 +60,9 @@ Nix machine). Act per state:
 | State | Meaning | Fix |
 |---|---|---|
 | `unlinked` | real dir, no tier holds it | `adopt` |
+| `linked … via=ldf-link` | clone machine: the farm link names ldf-link's per-file links, not the clone's directory | `link --execute` (retargets it) |
 | `missing` | tier holds it, no symlink | `link`, or on a Nix machine `dotfiles switch` (**Link on a machine**) |
-| `dangling` | symlink target gone | `link --prune` |
+| `dangling` | symlink target gone, or (clone machine) names ldf-link's links with no clone directory behind them | `link --prune` |
 | `shadowed` | real dir hides a tier copy | diff them, keep one, `link` |
 | `conflict` | two roots hold it (`tier=df,ldf`; `tier=df,df` is the tier root and a dev repo) | remove one copy through the git that holds it (tier or dev repo), `link` |
 | `foreign` | symlink outside every tier | inspect; `rm` the link or adopt its target |
@@ -78,10 +82,11 @@ Then commit through the tier with a message that says why it belongs there:
 git df commit -m "claude: adopt the <name> skill into the shared tier"
 ```
 
-Local tier: `--tier ldf`, `git ldf commit`. `adopt` refuses when the ldf allowlist
-does not cover `share/claude-skills/`; add `!/share/claude-skills/` to
-`~/.local/local-dotfiles.git/info/exclude` and to
-`~/.config/new-machine/local-dotfiles-exclude`.
+- **Local tier**: `--tier ldf`, then `git ldf commit`.
+- **Clone machine**: `adopt --tier ldf` then runs ldf-link, which updates every local-tier link on the machine; its dry run shows ldf-link's preview. Read that preview before `--execute`.
+- **`ldf-link not found` or `ldf-link did not link the skill`** (a warning; the skill is adopted, linked to the clone's directory, and staged): commit anyway, run `ldf-link` (a dry run) to see what it refused, settle that per `/ari-dotfiles`, then `ldf-link --execute`.
+- **`tier ignores the skills root`**: on a bare-repo machine, add `!/share/claude-skills/` to `~/.local/local-dotfiles.git/info/exclude` and to `~/.config/new-machine/local-dotfiles-exclude`; on a clone machine, change the rule the hint names so the skills root is tracked (git cannot re-include a path under an ignored directory).
+- **`machine not in the clone's machines file`**: set the name with `dotfiles machine-name`, or add the machine to `~/local-dotfiles/machines`.
 
 ### Link on a machine
 
@@ -90,7 +95,7 @@ zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link
 zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/bin/link --execute
 ```
 
-Preview, then act (dry-run convention above). Idempotent. Creates a symlink for every `missing` skill and touches nothing else;
+Preview, then act (dry-run convention above). Idempotent. Creates a symlink for every `missing` skill, and on a clone machine retargets every `via=ldf-link` one to the clone's directory; it touches nothing else.
 `--prune` also removes `dangling` links. `dotfiles init` runs it as the
 `claude_skills` step (`new-machine check --only claude_skills` reports; `apply` links),
 so on a new machine it happens with the rest of the bootstrap.
@@ -107,7 +112,8 @@ Who makes which link:
 ## File storage
 
 - `bin/status` — read-only classification
-- `bin/link` — (dry run unless `--execute`) create missing symlinks, prune dangling ones
-- `bin/adopt` — (dry run unless `--execute`) move + link + stage one or more skills into a tier
-- `lib/registry.zsh` — tier roots (plus every dev repo's `skills/`, from the dev-repos manifest and any `.gitmodules`) and `skill_state`, shared by the three scripts
-- `tests/registry.test.zsh` — dev-repo roots in throwaway HOMEs: `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/tests/registry.test.zsh`
+- `bin/link` — (dry run unless `--execute`) create missing symlinks, retarget `via=ldf-link` ones, prune dangling ones
+- `bin/adopt` — (dry run unless `--execute`) check every skill, then move + link + stage each into a tier (+ ldf-link on a clone machine)
+- `lib/registry.zsh` — tier roots and worktrees, dev-repo `skills/` roots (dev-repos manifest, any `.gitmodules`) and `skill_state`; sourced by the three scripts
+- `tests/registry.test.zsh` — dev-repo roots and the local tier's clone and bare layouts in throwaway HOMEs: `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/tests/registry.test.zsh`
+- `tests/adopt.test.zsh` — `adopt` in throwaway HOMEs, the clone layout included: `zsh $HOME/.claude/skills/ari-dotfiles-skill-registry/tests/adopt.test.zsh`
