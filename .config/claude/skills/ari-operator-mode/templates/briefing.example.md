@@ -179,6 +179,20 @@ Mid-mode, "Fix the widget" (the title verbatim) or "let's proceed with the stack
 
 Not this: "A no is a correction. Start beads-abc "Fix the widget": claim it, branch, PR; no merge?"; a question whose yes only starts what he already said. Not this either: a row 1 "(your instruction)" for work Claude runs; that row is only for a step that needs his identity, a permission Claude lacks, or a physical act.
 
+## A bead the advisor gate holds
+
+A later capture lists beads-def with `labels` `["widgets", "needs-advisor"]`. Its state bullet reads "1 ready; the top is beads-def "Polish the frob" (P2), needs an advisor's plan." He says "do beads-def". No advisor of this session holds it and his words name no model, so Claude claims it, captures, and ends on the model question in place of the start line:
+
+```
+Ready 2, in progress 2, human 1, blocked 2, stale 1; laptop abc1234 dirty 1; read 09:12Z; after claiming beads-def
+
+A no is a correction; a model is your answer, and `later` parks it. Claimed beads-def "Polish the frob" (P2); an advisor plans it before I work it: which model for the advisor?
+```
+
+His "opus" (or "go on opus") spawns that advisor the same turn, and the reply is the newest header and "Advisor (opus) is planning beads-def; I read again when it replies.", with no Capture until its notice. "do beads-def on opus" needs no question. His "yes" or "same as before" gets the model question again, alone. An `advisor-planned` bead takes the same question, its clause "an advisor accepts its proof before I close it"; one whose advisor this session holds takes no question.
+
+Not this: "Starting beads-def "Polish the frob": claim it, branch, PR; …" and a run that meets the gate partway. Not this either: a row for the model, or a Capture while the advisor plans; the question is the step of Claude's run that waits on his word, and the advisor writes the same database.
+
 ## Claude's run reports
 
 The run his words started; three progress lines, each the newest capture's header and one sentence with no question mark:

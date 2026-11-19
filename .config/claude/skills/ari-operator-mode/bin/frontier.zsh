@@ -121,9 +121,10 @@ ${c_bold}Output:${c_rst} key=value lines on stdout: dir= (the folder), json= (it
   human, blocked and stale keep only the scope's blocks of bd's text (the summary count rewritten), blockers
   counts only edges whose two beads are in scope, and deferred.count only the scope's beads. host_git and
   local_git hold {dirty, own, log}: own is the dirty entries --own-paths names. Each ready and in_progress row
-  carries holder: self (its assignee is claude:\$CLAUDE_CODE_SESSION_ID, this session's actor), none (unassigned)
-  or other (another session's claude:<uuid>, a bare claude, anyone else). A section that could not be
-  read holds {"error": "<why>"}; one the cut-off kept unread holds {"unread": true}. A crash after the reads
+  carries labels (bd's, [] when none; needs-advisor and advisor-planned mark the advisor gate) and holder:
+  self (its assignee is claude:\$CLAUDE_CODE_SESSION_ID, this session's actor), none (unassigned) or other
+  (another session's claude:<uuid>, a bare claude, anyone else). A section that could not be read holds
+  {"error": "<why>"}; one the cut-off kept unread holds {"unread": true}. A crash after the reads
   still writes the JSON, the unfinished sections as errors.
 
 ${c_bold}Cut-off reasons:${c_rst} not_opted_in (77), other_session (76), busy, holds_text, lock_unavailable or
@@ -672,8 +673,8 @@ json_part() { print -r -- "${1}" | awk 'f || /^[[:space:]]*[\[{]/ { f=1; print }
 # A bd JSON list trimmed to the fields a briefing uses and kept to the scope (a bead's own parent is a
 # hop even when the map lacks it); [] for empty output; an error object when the command failed or did
 # not print an array. Runs in a command substitution, so it sets no globals.
-# Each row carries holder: "self" when its assignee is this session's actor, "none" when unassigned, else
-# "other" (another session's claude:<uuid>, a bare claude, anyone else).
+# Each row carries labels ([] when bd lists none) and holder: "self" when its assignee is this session's
+# actor, "none" when unassigned, else "other" (another session's claude:<uuid>, a bare claude, anyone else).
 # Globals: scope_jq_args, SCOPE_JQ_DEF, SESSION_ACTOR
 # Arguments: $1 = raw output; $2 = rc; $3 = why the read failed, if it did
 #######################################
@@ -682,7 +683,7 @@ bead_list() {
   if (( rc != 0 )); then json_error "${why:-"command failed (rc ${rc}): $(last_line "${raw}")"}"; return 0; fi
   if [[ -z "${raw//[[:space:]]/}" ]]; then print -r -- '[]'; return 0; fi
   if trimmed="$(json_part "${raw}" | jq -ce --arg actor "${SESSION_ACTOR}" "${scope_jq_args[@]}" "${SCOPE_JQ_DEF}"'
-      if type == "array" then [.[] | {id, title, priority, type: (.issue_type // .type // null), parent: (.parent // null), assignee: (.assignee // null), updated_at: (.updated_at // null)}
+      if type == "array" then [.[] | {id, title, priority, type: (.issue_type // .type // null), parent: (.parent // null), labels: (.labels // []), assignee: (.assignee // null), updated_at: (.updated_at // null)}
           | . + {holder: (if .assignee == null then "none" elif $actor != "" and .assignee == $actor then "self" else "other" end)}]
         | if $scoped then map(select(. as $b | .id | inscope($e; $m + (if $b.parent then {($b.id): {parent: $b.parent}} else {} end)))) else . end
       else error("not an array") end' 2>/dev/null)"; then
@@ -807,12 +808,12 @@ read_section() {
   local name="${1}" bd_dir cmd='' rc=0
   bd_dir="$(host_path "${beads_dir}")"
   case "${name}" in
-    ready)       cmd="bd -C ${bd_dir} ready --exclude-label human --json" ;;
-    in_progress) cmd="bd -C ${bd_dir} list -s in_progress,hooked --json" ;;
+    ready)       cmd="bd -C ${bd_dir} ready -n 0 --exclude-label human --json" ;;
+    in_progress) cmd="bd -C ${bd_dir} list -n 0 -s in_progress,hooked --json" ;;
     human)       cmd="bd -C ${bd_dir} human list" ;;
     blocked)     cmd="bd -C ${bd_dir} blocked" ;;
     stale)       cmd="bd -C ${bd_dir} stale -d 14 -s in_progress" ;;
-    deferred)    cmd="bd -C ${bd_dir} list -s deferred --json" ;;
+    deferred)    cmd="bd -C ${bd_dir} list -n 0 -s deferred --json" ;;
     host_git)
       if [[ -z "${repo}" ]]; then section_json[$name]='{"skipped": "no --repo"}'; return 0; fi
       cmd="git -C $(host_path "${repo}") -c core.quotePath=false status --porcelain && git -C $(host_path "${repo}") log -3 --oneline" ;;

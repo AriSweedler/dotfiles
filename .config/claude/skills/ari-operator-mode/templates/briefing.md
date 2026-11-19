@@ -27,6 +27,7 @@ The replies that do not open with the header: the entry turn (the acknowledgemen
 - The entry turn: every part below, in order.
 - A later fresh read: every part but First principles.
 - After a run (his row, Claude's run, or Claude's record of his answer): the header, the outcome sentence in place of First principles and the state bullets, then the table, the trailing line and the question, when one fits.
+- His instruction for an advisor-gated bead: the briefing that turn carries without its question, then the reply `SKILL.md › Workflow › Proceed` step 2's advisor bullet names, never the start line.
 - His instruction, with the invocation or later: the briefing that turn carries (the entry turn's parts, or none mid-mode) without its question, then the start line "Starting <the instruction>: <its writes>; <its step that ships or destroys> waits on your yes." (with none, it ends at its writes), then the run's progress lines, then the after-a-run parts, whose question names the step that ships or destroys, else row 1's form or the no-row form.
 - A progress or completion-notice line: the newest header plus one sentence, no question.
 
@@ -38,8 +39,8 @@ Where the tracker is (`beads_dir` on `host_definition`, then `(machine <name>)` 
 
 One sentence per bullet, at most six; a section that is empty has no bullet; when more would fill, drop the `health` bullet, then the `blocked` and `deferred` bullet (the header and the trailing line carry its counts), never the `scope` bullet. An empty tracker (every `bd` section empty) is one bullet, "The tracker holds nothing ready, in progress, blocked, deferred or waiting on you.", and the header `**State right now**` is left out:
 
-- `ready`: the count (epics included) and the first bead that is not an epic (`type` `epic`), in Row triage's sort, as id, title and priority; the count alone when every one is an epic.
-- `in_progress`: each bead as id, title and holder, "held by this session" for `holder` `self`, "held by another session" for `other` (a bare `claude` or a `claude:<uuid>` that is not this session's) and the assignee itself when it is a person; one that `stale` lists says so.
+- `ready`: the count (epics included) and the first bead that is not an epic (`type` `epic`), in Row triage's sort, as id, title and priority, then its advisor mark (`SKILL.md › Reference › Terms` › advisor-gated: "needs an advisor's plan" or "an advisor accepts its proof"), then "N more need an advisor's plan" when other ready beads carry `needs-advisor`; the count alone when every one is an epic.
+- `in_progress`: each bead as id, title and holder, "held by this session" for `holder` `self`, "held by another session" for `other` (a bare `claude` or a `claude:<uuid>` that is not this session's) and the assignee itself when it is a person, then its advisor mark; one that `stale` lists says so.
 - `human`: the count (the header's, "mine" gates included) and each id with its title (the text after the id up to the first `: `), a gate whose act Claude's tools can perform marked "mine"; `deferred_ids` are not counted.
 - `blocked` and `deferred`: one bullet, counts only; the ids go in the trailing line.
 - `host_git` and `local_git`: one bullet. For the host: "clean" when `dirty` is empty; else the `own` paths by name, then the other `dirty` entries as "N uncommitted edits not listed as this session's", never by path. Then its three latest commits as hash and subject. Then this Mac's head and dirt the same way, only when its head differs from the host's or its `dirty` is non-empty.
@@ -77,9 +78,13 @@ A question only when something waits on him; then one sentence saying what a no 
 
 | When | The question |
 |---|---|
+| Claude claimed an advisor-gated bead, holds no advisor for it, and his words named no model (`SKILL.md › Workflow › Proceed` step 2); it comes before every other form | "A no is a correction; a model is your answer, and `later` parks it. Claimed beads-def "Polish the frob" (P2); an advisor plans it before I work it: which model for the advisor?"; for `advisor-planned`, "…; an advisor accepts its proof before I close it: which model for the advisor?" |
 | row 1 destroys or is irreversible | "A no is a correction. Discard the edit to `bin/lab` (row 1)?" (the thing named) |
 | a step of Claude's run destroys or ships | "A no is a correction. Merge PR #12 for beads-abc?" (the step named) |
 | Claude's run of his instruction failed | "A no is a correction. Retry <the failed step> for <the bead id or instruction>?" |
+| the advisor replied `ask: <question>` | "A no is a correction; other words are your answer. The advisor for beads-def asks: <its question>?" |
+| no Agent or `SendMessage` tool, for an advisor-gated bead | "A no leaves beads-def claimed and unworked. No advisor can run in this session: work beads-def without one, its `needs-advisor` label removed?"; for `advisor-planned`, which closes only on an advisor's acceptance, the same with "and close it on my own review" |
+| the advisor's `SendMessage` failed mid-loop | "A no is a correction. The advisor for beads-def is gone: a new advisor on a model you name, or close on my own review?" |
 | row 1 is an answer row | "A no is a correction; other words are your answer. Answer beads-h1 "Decide the indexers" (row 1) with my recommendation, stop at 1337x and TPB?"; with no recommendation, "A no is a correction; other words are your answer. Your answer to beads-h1 "Decide the indexers" (row 1)?" |
 | row 1 on this Mac (a link) | "A no is a correction. Click row 1's link for `<label>`?" |
 | row 1 typed | "A no is a correction. Row 1 is on `<label>`: Enter it?" |

@@ -21,12 +21,12 @@
   "away_ended": false,
   "typed": [
     "{ bd -C ~/\"beads\" list -n 0 -s open,in_progress,hooked,blocked,deferred --json; printf '__BDRC=%s\\n' $?; } | awk '/\"(id|parent|issue_type)\": *\"/ || /^__BDRC=/ { print } END { print \"__LINES=\" NR }'",
-    "bd -C ~/\"beads\" ready --exclude-label human --json",
-    "bd -C ~/\"beads\" list -s in_progress,hooked --json",
+    "bd -C ~/\"beads\" ready -n 0 --exclude-label human --json",
+    "bd -C ~/\"beads\" list -n 0 -s in_progress,hooked --json",
     "bd -C ~/\"beads\" human list",
     "bd -C ~/\"beads\" blocked",
     "bd -C ~/\"beads\" stale -d 14 -s in_progress",
-    "bd -C ~/\"beads\" list -s deferred --json",
+    "bd -C ~/\"beads\" list -n 0 -s deferred --json",
     "git -C ~/\"homelab\" -c core.quotePath=false status --porcelain && git -C ~/\"homelab\" log -3 --oneline"
   ],
   "waited_s": 0,
@@ -38,6 +38,7 @@
       "priority": 1,
       "type": "task",
       "parent": "beads-epic",
+      "labels": ["widgets"],
       "assignee": null,
       "holder": "none",
       "updated_at": "2026-10-30T01:00:00Z"
@@ -48,6 +49,7 @@
       "priority": 2,
       "type": "feature",
       "parent": "beads-epic",
+      "labels": ["widgets"],
       "assignee": null,
       "holder": "none",
       "updated_at": "2026-10-30T00:00:00Z"
@@ -58,6 +60,7 @@
       "priority": 2,
       "type": "epic",
       "parent": null,
+      "labels": [],
       "assignee": null,
       "holder": "none",
       "updated_at": "2026-10-29T00:00:00Z"
@@ -70,6 +73,7 @@
       "priority": 2,
       "type": "task",
       "parent": "beads-epic",
+      "labels": ["widgets"],
       "assignee": "claude:6a1f0c2e-3b4d-4e5f-8a9b-0c1d2e3f4a5b",
       "holder": "self",
       "updated_at": "2026-10-15T00:00:00Z"

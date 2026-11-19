@@ -14,7 +14,7 @@ Every reply in this mode is written for a reader who has read nothing, does not 
 - **The operator knows nothing.** Define every term at first use; name every thing by what it is: a bead by id and title, a file by path, a pane by its full label with his nickname. Never "earlier", "the one-liner", "step 2" or a session's name for something.
 - **The script reads, the model renders.** `bin/frontier.zsh` is the only source of facts; every bullet and row traces to one section of its JSON; delete a sentence that traces to none. Asked for something the JSON lacks, the reply is the form in `templates/briefing.md` › Not in this capture.
 - **This session's work only.** NEVER a row, a bullet that names it, or a write for another session's bead or an edit this session did not make, even when Ari names it (Reference › Yes and no): every capture carries this session's scope and own paths (Workflow › Resolve the inputs), and a `bd` write goes only to a bead the newest capture lists.
-- **Nine named facts may come from outside the JSON** (Reference › Outside facts); nothing else from the session enters a briefing.
+- **Ten named facts may come from outside the JSON** (Reference › Outside facts); nothing else from the session enters a briefing.
 - **NEVER run the health command unasked.** Not in the capture, not by hand: it is Claude's work, run once through `run.zsh` only as his instruction, and its output enters through the pane read of that run; it is a row only after the permission layer refuses that run (Reference › Row triage).
 - **Cut off is the whole message.** `cut_off` not null: the reply is what `bin/brief.zsh --cut-off` prints and nothing else but the spawn line of a `skill_fix=` update (Workflow › Capture); no second read, no `--local` or other pane as a substitute, no `local_git` or `health` even though they filled; his next message starts with a fresh Capture and authorizes no row. An announced absence is the away line, not his P0 (Reference › Announced absence). This renders `/ari-bead-driven-development`'s Cut off rule (Reference › Overrides).
 - **A run's end is a Capture.** Row 1 or Claude's run of his instruction landed, failed, or he reported on it: run Capture before writing one word about the outcome; the outcome sentence names what the new JSON shows plus the command's last printed line, quoted (Reference › Outside facts).
@@ -35,18 +35,19 @@ Every reply in this mode is written for a reader who has read nothing, does not 
 | Section | Host command | JSON | Renders in |
 |---|---|---|---|
 | `scope` (top level, read first) | `bd list -n 0 -s open,in_progress,hooked,blocked,deferred --json`, cut to its `id`, `parent` and `issue_type` lines, with bd's exit code: the bead map | `{epics, all, unknown, error}`, or null without `--scope` | First principles; `unknown` and `error` a state bullet |
-| `ready` | `bd ready --exclude-label human --json` | `[{id, title, priority, type, parent, assignee, holder, updated_at}]` | state bullet |
-| `in_progress` | `bd list -s in_progress,hooked --json` (a hooked bead counts as in progress; needs a `bd` whose `list` accepts `hooked`, as 1.3.4 does) | the same list; `holder` is `self` when `assignee` is `claude:` and this session's full UUID, `none` when unassigned, else `other` (another session's claim, a bare `claude`, a person): an `other` bead is never worked or written by this session | state bullet |
+| `ready` | `bd ready -n 0 --exclude-label human --json` | `[{id, title, priority, type, parent, labels, assignee, holder, updated_at}]`; `labels` `[]` when bd lists none | state bullet, with its advisor mark |
+| `in_progress` | `bd list -n 0 -s in_progress,hooked --json` (a hooked bead counts as in progress; needs a `bd` whose `list` accepts `hooked`, as 1.3.4 does) | the same list; `holder` is `self` when `assignee` is `claude:` and this session's full UUID, `none` when unassigned, else `other` (another session's claim, a bare `claude`, a person): an `other` bead is never worked or written by this session | state bullet |
 | `human` | `bd human list` | `{text, ids, deferred_ids}` | state bullet, his rows; `deferred_ids` nowhere |
 | `blocked` | `bd blocked` | `{text, ids, deferred_ids, blockers: {id: count}}` | trailing line; `blockers` ranks rows |
 | `stale` | `bd stale -d 14 -s in_progress` | `{text, ids, deferred_ids}` | the in-progress bullet, trailing line |
-| `deferred` | `bd list -s deferred --json` | `{count}` | trailing line |
+| `deferred` | `bd list -n 0 -s deferred --json` | `{count}` | trailing line |
 | `host_git` | `git -C <repo> -c core.quotePath=false status --porcelain && git -C <repo> log -3 --oneline` | `{dirty: [], own: [], log: [{hash, subject}]}`, or `{skipped}` without `--repo` | state bullet, his row for each `own` entry |
 | `local_git` | the same on this Mac | the same | the checkout bullet when it differs from the host's |
 | `health` | none; recorded, never run | `{command, ran: false}` | state bullet; nothing when `command` is null |
 
 - With `--scope`, every `bd` section keeps only those epics and their descendants (the parent chain through the bead map, or a hierarchical id such as `beads-xy9.6.1`); `human`, `blocked` and `stale` keep only those beads' blocks of bd's text, `blockers` counts an edge only when both its beads are in scope (the text calls the other end "a bead outside the scope"), and `deferred.count` counts only the scope's beads. Without `--scope`: exit 4 (Reference › Exit codes).
 - `own` is the `dirty` entries whose path `--own-paths` names: this session's uncommitted edits. An untracked directory (`?? notes/`) is `own` when an own path lies under it; its **destroys:** row removes only those own paths, by name, never the directory.
+- Every list read passes `-n 0`: bd's default limit (100 ready, 50 listed) cuts the whole workspace before the scope filter.
 - A section that could not be read holds `{"error": "<why>"}`; `precondition: true` when one cause, such as no `bd` on the host, failed them all.
 - A section a cut-off kept unread holds `{"unread": true}`.
 - A text section whose id count disagrees with bd's own summary count is an error, not a quiet miss.
@@ -66,6 +67,9 @@ The briefing's two-to-five-word forms of `/ari-bead-driven-development`'s terms,
 | human gate | a bead that waits on Ari |
 | destroys, ships | a step that loses work (a discard, a delete) or puts work where others get it (a merge, a deploy, a push to main); a `bd` write is neither; marked **destroys:** and **irreversible:** |
 | blocked | waiting on another bead |
+| advisor | a subagent, on a model Ari names, that plans a bead and accepts its proof (`/ari-bead-driven-development` › With an advisor) |
+| advisor-gated | a bead whose `labels` hold `needs-advisor` (rendered "needs an advisor's plan"; it wins when both are there) or `advisor-planned` ("an advisor accepts its proof") |
+| model | the bare alias of a model family Ari names for one advisor, in the message that starts its bead or the reply to the model question (`opus`, `fable`; "opus 4.1" is `opus`); NEVER one named for an earlier advisor, NEVER Claude's pick |
 | stale | in progress and untouched for fourteen days; `bd stale` rejects `hooked`, so a hooked bead is never listed stale |
 | scope | this session's epics and their beads; other sessions' beads are left out |
 | pane label | `machine=ozone|ID=%18|pane=3.1|nickname=homelab`: the host's `dotfiles machine-name` (`ozone`, reached through the host definition `laptop`; never a `--host-definition`), tmux's fixed pane id, the window.pane on the screen, the window's name; a pane on this Mac carries this Mac's own `dotfiles machine-name`, or no `machine=` part without the dotfiles harness |
@@ -118,6 +122,7 @@ The only facts a briefing may carry that are not in the capture's JSON:
 | a background agent | one this session launched for this pane whose completion notice has not arrived | the pane is another agent's (Reference › Shared pane) |
 | the run's last line | the last line row 1's command, Claude's run of his instruction, or Claude's `bd` write of his answer printed, quoted | the outcome sentence after that run's Capture |
 | Ari said | a fact he states that the tracker does not hold | one bullet "Ari said: …"; the capture's fact stays until the next capture |
+| an advisor | the agent id and model of an advisor this session spawned for a bead, and whether its reply has come | the advisor bullet of Workflow › Proceed step 2 |
 | the announced absence | his words through `bin/away.zsh set`; the work on this Mac through `--continuing` | the away line (Reference › Announced absence) |
 
 ### Cut-off reasons
@@ -186,11 +191,14 @@ The first row that matches wins.
 | "none", "not yet" to that question | "No bead is this session's yet; the briefing needs one." and the one question "Name an epic, or `stop operator mode`?" |
 | "back", "home", "I'm back", or pasted host output, while the away marker is set | the end of an absence: `away.zsh clear`, then Capture |
 | "still out", "not yet", or anything else, while the away marker is set | still away: the away line re-printed, no Capture (Reference › Announced absence) |
+| a model (Reference › Terms), alone or in words ("opus", "go on opus"), while the newest reply ended on the model question | that bead's advisor: Claude spawns it per Workflow › Proceed step 2 that turn |
+| "yes", "ok", "go", "your pick", "same as before" or anything naming no model, while the newest reply ended on the model question | the model question again, alone; nothing spawned, the claim kept; "later" instead unclaims it per `/ari-bead-driven-development` › With an advisor, then Capture |
+| his words while the newest reply ended on an advisor's question (its `ask:`, no advisor tool, a lost advisor) | his answer, carried out per With an advisor that turn (an `ask:` answer goes to the advisor by `SendMessage`) |
 | "yes", the row number or the row's name, when the one question names a **destroys:** or **irreversible:** row or step | the named yes; "ok", "go" or a yes inside a message that also corrects something re-renders and asks once more |
 | "yes", "y", "go", "ok", "do it" | a yes to what the one question names: row 1 (an answer row with a recommendation: the recommendation is his answer; with none: the no-recommendation form again, nothing recorded), or the step of Claude's run it names |
 | "do all of them", "rows 1-3" | a yes to row 1 only, said as a statement before the question |
 | "row N" (row 1 included), a row's bead id or title verbatim | a yes to that row, re-rendered as row 1 without a capture |
-| a bead's id or title verbatim, alone or after a verb ("do beads-abc"), for a bead that is ready, held by this session (`holder` `self`), or a human gate whose act Claude can perform, and not an epic | his instruction and its yes: Claude works it that turn (Workflow › Proceed); inside a question ("why is beads-abc ready?") it is a question, answered |
+| a bead's id or title verbatim, alone, after a verb ("do beads-abc") or followed by `on <model>`, for a bead that is ready, held by this session (`holder` `self`), or a human gate whose act Claude can perform, and not an epic | his instruction and its yes: Claude works it that turn (Workflow › Proceed; an advisor-gated bead, or one he names a model for, goes through its advisor); inside a question ("why is beads-abc ready?") it is a question, answered |
 | an epic's id | "beads-epic closes when its children close.", then the briefing's one question when it has one |
 | a bead id the capture does not list (outside the scope, or closed), alone or in an instruction or correction | "`<id>` is not among this capture's beads (scope `<scope>`); I write nothing to it; `add <its epic>` widens the scope.", then the briefing's one question when it has one |
 | "stop", "wait", "hold", while Claude's run is going | halt it at the next commit, then Capture; nothing is unclaimed without a yes that names it |
@@ -213,6 +221,7 @@ The first row that matches wins.
 |---|---|---|
 | `/ari-driving-remote` › Exit codes › 75, "never retry on your own" | `frontier.zsh` retries every 5 s within the capture budget when the pane runs an agent's command | the pane is busy with Claude's own work, not Ari's; waiting is the only move that is not his |
 | `/ari-bead-driven-development` › Cut off | the cut-off output is `brief.zsh --cut-off` and the whole reply | one renderer for the base rule |
+| `/ari-bead-driven-development` › With an advisor, its chat lines and questions | each chat line is a progress line (the newest header and one sentence, no question, no "say …" offer); its questions (the model, the advisor's `ask:`, no advisor tool, a lost advisor) take `templates/briefing.md` › At most one question's forms | one renderer, one question |
 
 ### Exit codes
 
@@ -301,6 +310,12 @@ On a yes, his instruction or his answer (Reference › Yes and no):
 
 1. A yes to row 1: an answer row is his answer (step 3); typed, his Enter is the yes and there is nothing to do until he reports; not typed because it destroys or ships, or because the run was refused (75, 70, 76, 77 or 255), type it once now when Brief step 3's pane conditions hold and report that run the same way; not typed because another agent uses the pane, it waits for a capture that finds the pane free (Reference › Shared pane). **A row 1 refused with kind `not_zsh` is never retyped into that pane**, on a yes or with `--no-run-log` (`/ari-driving-remote` › The gate): `run.zsh` sends a command over 100 characters, or one with a quoted argument over 40, as a heredoc that only zsh takes (`/ari-driving-remote` › The typed text), so the row is his to type there himself, or Claude types it once into a zsh pane he names. Never retype a row whose run printed `TYPED:`; a second refusal re-renders the row with "not typed: <why>" and the busy-pane form of the one question. A row on this Mac is never run by Claude, a yes included: its link is his to click.
 2. His instruction (its words are the yes), a bead he named, or a yes to the step the question named: for a bead, confirm that the newest JSON lists it as ready, held by this session (`holder` `self`), or a human gate whose act Claude can perform (never a fresh `bd show`, which ignores the scope); then Claude does it that turn through `/ari-bead-driven-development` (an instruction naming no bead is filed and claimed first, per its directive rule; Pick, Close) and `/ari-driving-remote`. The start line ends in a period and the run's first tool call follows it in the same turn; with the invocation, the start line follows the entry briefing in place of its question (`templates/briefing.md` › Which parts each reply carries).
+   - **An advisor-gated bead (Reference › Terms), or one he names a model for, NEVER gets the start line before its advisor is settled**; `/ari-bead-driven-development` › With an advisor owns the gate, and the reply is, in the first case that holds:
+     - its advisor is held (Reference › Outside facts › an advisor) and has not replied: the newest header and "Advisor (<model>) is <planning | reviewing> <id>; I read again when it replies.", with no Capture (With an advisor › Wait: no `bd` command while it works); its reply notice is the next Capture;
+     - its advisor is held and has replied: the run goes on with it, no question;
+     - no Agent or `SendMessage` tool: the no-advisor question;
+     - a model (Reference › Terms) in his words: spawn it that turn, then the advisor line above;
+     - else: claim it (one `run.zsh` call), Capture, the header with `--phase 'after claiming <id>'`, then the model question as the reply's one question, ahead of every other form (row 1 keeps its row and is asked next); a claim refused because another session holds the bead is "<id> is held by another session; I write nothing to it.", any other failure the Retry form. A later capture that lists an advisor-gated bead `holder` `self` with no advisor held asks the model question again.
    - His words cover every step that neither ships nor destroys: claim, branch, commit, opening a PR, and what he named ("request review, mark it ready"); a step that destroys or ships (Reference › Terms) stops the run and becomes the one question, naming it; a step only he can do becomes row 1 "(your instruction)". A step already done (the bead held by this session, the branch, an open PR for it) is skipped and said in one statement, never redone.
    - Claude's follow-up of the run (its CI, a review) is watched only by a background watcher launched that turn and named ("PR #12's CI runs; a watcher reports when it ends."), else dropped and said ("PR #12's CI is not watched."); the watcher's notice is the run's end.
    - While his typed row sits un-entered on that pane, the run does not type there (Rules › Only row 1 is typed); it waits for his Enter or clear.
@@ -347,6 +362,10 @@ Not: "PR opened for beads-abc." (from memory, no capture)
 This: Capture, then the header, then "beads-abc landed: `gh pr create` printed `…/pull/12`; the capture lists beads-abc in progress."
 Not: (his message: "Let's proceed with the stack") "… Start the stack: request review, mark ready, check CI; no merge?"
 This: "Starting the stack: request review, mark ready, check CI; the merge waits on your yes." and the run that turn; the question waits for the merge   ← his words were the yes
+Not: (he says "do beads-def"; its `labels` hold `needs-advisor`) "Starting beads-def "Polish the frob": claim it, branch, PR; …" and the run
+This: claim, Capture, the header, then the model question (`templates/briefing.md` › At most one question)   ← the advisor gate, met before the work, not inside it
+Not: (he said "do beads-abc on opus" an hour ago; now "do beads-def", labelled `needs-advisor`) an advisor spawned on opus
+This: the model question   ← a model is named per advisor, never carried over
 Not: "PR #12 is open. Should I watch its CI and tell you once it passes?"
 This: "PR #12 is open; its CI runs, and a watcher reports when it ends." with a background watcher launched that turn, else "PR #12's CI is not watched."   ← Claude's follow-up is done or dropped, never offered
 ```

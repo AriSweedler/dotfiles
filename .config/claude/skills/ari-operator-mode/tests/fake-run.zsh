@@ -96,7 +96,7 @@ print -r -- "SENT"
 print -r -- "at 01:00:01 UTC ❯${cmd}"
 canned=''
 case "${host_cmd}" in
-  *" list -n 0 "*) canned="${FAKE_DIR}/scope.json" ;;
+  *" list -n 0 -s open,"*) canned="${FAKE_DIR}/scope.json" ;;
   *" ready "*) canned="${FAKE_DIR}/ready.json" ;;
   *" stale "*) canned="${FAKE_DIR}/stale.txt" ;;
   *"in_progress"*) canned="${FAKE_DIR}/in_progress.json" ;;

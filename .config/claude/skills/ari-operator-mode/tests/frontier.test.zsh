@@ -49,11 +49,11 @@ typeset -g LAST_RC=0
 
 # canned tracker and checkout answers
 cat > "${T}/canned/ready.json" <<'J'
-[{"id":"beads-abc","title":"Fix the widget","priority":1,"issue_type":"task","parent":"beads-epic","assignee":null,"updated_at":"2026-10-30T01:00:00Z"},
+[{"id":"beads-abc","title":"Fix the widget","priority":1,"issue_type":"task","parent":"beads-epic","labels":["widgets","needs-advisor"],"assignee":null,"updated_at":"2026-10-30T01:00:00Z"},
  {"id":"beads-def","title":"Polish the frob","priority":2,"issue_type":"feature","parent":null,"assignee":null,"updated_at":"2026-10-30T00:00:00Z"}]
 J
 cat > "${T}/canned/in_progress.json" <<'J'
-[{"id":"beads-ip1","title":"Half done","priority":2,"issue_type":"task","assignee":"claude","updated_at":"2026-10-29T00:00:00Z"}]
+[{"id":"beads-ip1","title":"Half done","priority":2,"issue_type":"task","labels":["advisor-planned"],"assignee":"claude","updated_at":"2026-10-29T00:00:00Z"}]
 J
 print -r -- $'beads-h1  Which indexers?\n' > "${T}/canned/human.txt"
 print -r -- $'beads-bl1  Needs the PR\n  blocked by: beads-abc\nbeads-bl2  Needs the other PR\n  blocked by: beads-abc, beads-def\n' > "${T}/canned/blocked.txt"
@@ -77,6 +77,9 @@ check "full read: eight commands typed, the bead map first" "8 list -n 0" "$(q "
 check "full read: nine sections in order" "ready,in_progress,human,blocked,stale,deferred,host_git,local_git,health" "$(q "${full}" '[keys_unsorted[] | select(. as $k | ["captured_at","session","host_definition","pane","nickname","beads_dir","repo","local_repo","scope","pending","pending_seen","away","away_ended","typed","waited_s","cut_off"] | index($k) | not)] | join(",")')"
 check "ready: first id" beads-abc "$(q "${full}" '.ready[0].id')"
 check "ready: type from issue_type" task "$(q "${full}" '.ready[0].type')"
+check "ready: labels kept, the advisor gate among them" "widgets,needs-advisor" "$(q "${full}" '.ready[0].labels | join(",")')"
+check "ready: a bead bd lists no labels for carries []" "[]" "$(q "${full}" '.ready[1].labels | tojson')"
+check "in_progress: labels kept" advisor-planned "$(q "${full}" '.in_progress[0].labels | join(",")')"
 check "in_progress: holder" claude "$(q "${full}" '.in_progress[0].assignee')"
 check "in_progress: a bare claude claim is another session's" other "$(q "${full}" '.in_progress[0].holder')"
 check "ready: an unassigned bead has no holder" none "$(q "${full}" '.ready[0].holder')"
@@ -99,7 +102,8 @@ check "local_git: dirty file" "?? dirty.txt" "$(q "${full}" '.local_git.dirty[0]
 check "health: recorded, not run" "bin/doctor.sh false" "$(q "${full}" '"\(.health.command) \(.health.ran)"')"
 typed_log="$(<"${T}/canned/typed.log")"
 contains "reads use bd -C, never cd" 'bd -C ~/"beads" ready' "${typed_log}"
-contains "the in-flight read asks for hooked beads too" "list -s in_progress,hooked --json" "${typed_log}"
+contains "the in-flight read asks for hooked beads too" "list -n 0 -s in_progress,hooked --json" "${typed_log}"
+contains "the list reads lift bd's default limit, so the scope filter sees every bead" "ready -n 0 --exclude-label human --json" "${typed_log}"
 contains "the bead map covers hooked beads" "open,in_progress,hooked,blocked,deferred" "${typed_log}"
 lacks "reads never cd" "cd " "${typed_log}"
 contains "typed lines lead with a space for HIST_IGNORE_SPACE" $'\n M=$(' "${typed_log}"
@@ -138,19 +142,19 @@ cat > "${T}/fakebin/bd" <<'B'
 #!/usr/bin/env zsh
 [[ "${1}" == -C ]] && shift 2
 case "$*" in
-  "ready --exclude-label human --json") cat "${FAKE_DIR}/ready.json" ;;
-  "list -s in_progress,hooked --json") cat "${FAKE_DIR}/in_progress.json" ;;
+  "ready -n 0 --exclude-label human --json") cat "${FAKE_DIR}/ready.json" ;;
+  "list -n 0 -s in_progress,hooked --json") cat "${FAKE_DIR}/in_progress.json" ;;
   "human list") cat "${FAKE_DIR}/human.txt" ;;
   "blocked") cat "${FAKE_DIR}/blocked.txt" ;;
   "stale -d 14 -s in_progress") cat "${FAKE_DIR}/stale.txt" ;;
-  "list -s deferred --json") cat "${FAKE_DIR}/deferred.json" ;;
+  "list -n 0 -s deferred --json") cat "${FAKE_DIR}/deferred.json" ;;
   "list -n 0 -s open,in_progress,hooked,blocked,deferred --json") if [[ -r "${FAKE_DIR}/scope.json" ]]; then cat "${FAKE_DIR}/scope.json"; else print -r -- '[]'; fi ;;
   "exit7") exit 7 ;;
   *) print -u2 "fake bd: unknown $*"; exit 2 ;;
 esac
 B
 chmod +x "${T}/fakebin/bd"
-first_typed="$(awk '!f && / ready --exclude-label/ { print; f=1 }' "${T}/canned/typed.log")"
+first_typed="$(awk '!f && / ready -n 0 --exclude-label/ { print; f=1 }' "${T}/canned/typed.log")"
 real_stream="$(PATH="${T}/fakebin:${PATH}" HOME="${T}" zsh -c "${first_typed}" 2>&1)"
 nonce="${first_typed#*printf \'Q%sQ\' }"; nonce="${nonce%% *}"; marker="@${nonce}@"
 payload="$(print -r -- "${real_stream}" | awk -v m="${marker}" -v l=$(( ${#nonce} + 2 )) '$0 == m "BEGIN" { on=1; next } index($0, m "END ") == 1 { on=0 } on && index($0, m) == 1 { printf "%s", substr($0, l + 1) }')"
@@ -400,7 +404,7 @@ file="$(capture "FAKE_HOST_RC=git -C:128" -- "${common[@]}")"
 check "host rc: cut_off stays null" null "$(q "${file}" '.cut_off')"
 contains "host rc: git failure is an error, not an empty clean checkout" "git failed (rc 128)" "$(q "${file}" '.host_git.error')"
 contains "header: a failed host checkout says so, never this Mac's head in its place" "; laptop checkout failed; read " "$(zsh "${BRIEF}" --json "${file}" --header)"
-file="$(capture "FAKE_HOST_RC=list -s deferred:127" -- "${common[@]}")"
+file="$(capture "FAKE_HOST_RC=list -n 0 -s deferred:127" -- "${common[@]}")"
 contains "host rc: a failed deferred read is an error, not a count" "command failed (rc 127)" "$(q "${file}" '.deferred.error')"
 check "host rc: deferred has no count" null "$(q "${file}" '.deferred.count')"
 file="$(capture "FAKE_HOST_RC=ready:127" -- "${common[@]}")"
@@ -408,7 +412,7 @@ check "bd missing on the host (rc 127 on ready): the other bd reads are not type
 check "bd missing: every bd section carries the one precondition" true "$(q "${file}" '[.ready, .in_progress, .human, .blocked, .stale, .deferred] | all(.precondition == true)')"
 contains "bd missing: the error names the cause" "bd is not on the host" "$(q "${file}" '.human.error')"
 check "bd missing: host_git is still read" abc1234 "$(q "${file}" '.host_git.log[0].hash')"
-file="$(capture "FAKE_HOST_RC= list -n 0:127" -- "${common[@]}")"
+file="$(capture "FAKE_HOST_RC= list -n 0 -s open,:127" -- "${common[@]}")"
 check "bd missing on the bead map read: a capture, never a scope refusal" 0 "${LAST_RC}"
 check "bd missing on the bead map read: only the map and host_git are typed" 2 "$(q "${file}" '.typed | length')"
 check "bd missing on the bead map read: every bd section carries the one precondition" true "$(q "${file}" '[.ready, .in_progress, .human, .blocked, .stale, .deferred] | all(.precondition == true)')"
@@ -422,7 +426,7 @@ check "empty bd output lands as []" "[]" "$(q "${file}" '.ready | tojson')"
 check "empty bd output: the capture still landed" 0 "${LAST_RC}"
 file="$(capture "FAKE_EMPTY=deferred" -- "${common[@]}")"
 check "empty deferred is a count of 0" 0 "$(q "${file}" '.deferred.count')"
-file="$(capture "FAKE_TRUNCATE=list -s in_progress" -- "${common[@]}")"
+file="$(capture "FAKE_TRUNCATE=list -n 0 -s in_progress" -- "${common[@]}")"
 contains "an unfinished read says so, with the timeout" "read did not finish in 45s" "$(q "${file}" '.in_progress.error')"
 check "an unfinished read is not a cut-off" null "$(q "${file}" '.cut_off')"
 file="$(capture "FAKE_SHORT=ready" -- "${common[@]}")"
@@ -524,10 +528,10 @@ check "scope all: recorded" true "$(q "${file}" '.scope.all')"
 file="$(capture "FAKE_DIR=${S}" -- "${common[@]}" --scope beads-nope)"
 check "scope: an id the workspace does not hold is reported" '["beads-nope"]' "$(q "${file}" '.scope.unknown | tojson')"
 check "scope: an unknown id keeps nothing" 0 "$(q "${file}" '.ready | length')"
-file="$(capture "FAKE_DIR=${S}" "FAKE_TRUNCATE= list -n 0" -- "${common[@]}" --scope beads-xy9)"
+file="$(capture "FAKE_DIR=${S}" "FAKE_TRUNCATE= list -n 0 -s open," -- "${common[@]}" --scope beads-xy9)"
 contains "scope: a map that did not read is recorded" "read did not finish" "$(q "${file}" '.scope.error')"
 check "scope: without the map, hierarchical ids and each bead's own parent still place beads" "beads-xy9,beads-k2p beads-xy9.2 beads-xy9.6" "$(q "${file}" '"\([.ready[].id] | join(",")) \(.human.ids | join(",")) \(.stale.ids | join(","))"')"
-file="$(capture "FAKE_DIR=${S}" "FAKE_TRUNCATE= list -n 0" -- "${common[@]}")"
+file="$(capture "FAKE_DIR=${S}" "FAKE_TRUNCATE= list -n 0 -s open," -- "${common[@]}")"
 check "no --scope and a map that did not read: a capture, never a refusal" 0 "${LAST_RC}"
 check "no --scope and a map that did not read: every bd section is the precondition, none typed" "true 2" "$(q "${file}" '"\([.ready, .in_progress, .human, .blocked, .stale, .deferred] | all(.precondition == true)) \(.typed | length)"')"
 check "a --scope id must be a bead id" 1 "$(zsh "${FRONTIER}" "${common[@]}" --scope 'Beads X' >/dev/null 2>&1; print $?)"
