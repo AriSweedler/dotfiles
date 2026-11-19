@@ -100,3 +100,6 @@ slash.ensure(function()
 	end
 end)
 highlight_refs(buf)
+
+-- Open every fold: the treesitter foldexpr would otherwise show the prompt collapsed.
+vim.wo.foldlevel = 99
