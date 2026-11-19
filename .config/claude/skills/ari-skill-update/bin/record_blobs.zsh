@@ -69,25 +69,32 @@ entries_for() {
 
 #######################################
 # Print an --edited value relative to the skill directory, or nothing when it
-# lies outside it. A relative value is taken from the skill directory. Both
-# sides resolve symlinks and `..`, so the $HOME/.claude/skills path and the
-# tier's real path match alike.
+# lies outside it and outside the skill's directory in its repo. A relative
+# value is taken from the skill directory. Both sides resolve symlinks and `..`,
+# so the $HOME/.claude/skills path and the tier's real path match alike, and so
+# does a local-tier file's real path in the ~/local-dotfiles clone.
 # Arguments:
 #   $1 - skill directory
 #   $2 - the --edited value
+#   $@ - more directories that hold the skill's files: its $HOME/.claude/skills
+#        link, its directory in its repo (none for an adoption)
 #######################################
 skill_relative_path() {
   local skill_dir="${1}" file="${2}"
+  shift 2
   [[ "${file}" == /* ]] || file="${skill_dir}/${file}"
-  local real_dir="${skill_dir:A}" real_file="${file:A}"
-  # A symlink the skill holds is recorded under its own name, not its target's.
+  local real_file="${file:A}" dir
+  # A symlink the skill holds is recorded under its own name, not its target's;
+  # so is ldf-link's per-file link, whose name is the clone file's.
   [[ -L "${file}" ]] && real_file="${file:h:A}/${file:t}"
-  if [[ "${real_file}" != "${real_dir}/"?* ]]; then
-    log::debug "--edited path is outside the skill directory | file='${file}' real_dir='${real_dir}'"
+  for dir in "${skill_dir}" "${@}"; do
+    [[ -n "${dir}" ]] || continue
+    [[ "${real_file}" == "${dir:A}/"?* ]] || continue
+    log::debug "Resolved an --edited path | file='${file}' real_dir='${dir:A}'"
+    print -r -- "${real_file#${dir:A}/}"
     return
-  fi
-  log::debug "Resolved an --edited path | file='${file}' real_dir='${real_dir}'"
-  print -r -- "${real_file#${real_dir}/}"
+  done
+  log::debug "--edited path is outside the skill directory | file='${file}' real_dir='${skill_dir:A}' also='${(j:,:)@}'"
 }
 
 #######################################
@@ -294,10 +301,11 @@ ${c_bold}Options:${c_rst}
   --message MSG             Commit message for the Commit command (required)
   --adopt                   The skill is not in a tier yet (state unlinked or ignored, or new)
   --edited PATH             A file you edited: relative to the skill dir (the held directory unless --adopt),
-                            or absolute under it or under \$HOME/.claude/skills/<name>; repeat.
+                            or absolute under it, under \$HOME/.claude/skills/<name>, or under the skill's
+                            directory in its repo (a local-tier file's real path in ~/local-dotfiles); repeat.
                             A changed file not named is foreign (never under --adopt)
   --shared PATH             A shared file outside the skill dir under the tier's lib root (~/.config/claude/lib for df;
-                            the local tier has none): absolute, or relative to $HOME; repeat. Recorded with the skill's
+                            the local tier has none): absolute, or relative to \$HOME; repeat. Recorded with the skill's
                             blobs and committed in the same commit_blobs run; refused for a submodule skill
   --execute                 Write the blobs, the diff and the Commit command; without it the run is a dry run
   --dry-run                 The default made explicit; wins over --execute and exports DRY_RUN=1
@@ -310,7 +318,8 @@ ${c_bold}Output:${c_rst}
   file, takes no claim, and logs the exact rerun with --execute.
   Refuses (exit 1) when another live driver holds the skill's claim, when an --edited path is not
   a file in the skill dir, when --tier/--source do not hold the skill, when the repo has no
-  commit yet, or when a file changes while it records (moved_files= in the log).
+  commit yet, when a file changes while it records (moved_files= in the log), or for --adopt
+  --tier ldf while the registry's local skills root lies outside the ~/local-dotfiles clone.
 EOF
 }
 
@@ -387,24 +396,31 @@ main() {
     log::err "--adopt needs the skill as a real directory | skill_dir='${skill_dir}'"
     return 1
   fi
-  local link_dir="${skill_dir}"
+  if [[ "${adopt}" == "true" && "${tier}" == ldf ]] && ldf_root_outside_repo; then
+    log::err "An adoption into the local tier is not supported in the clone layout; nothing recorded | work_tree='${LDF_REPO_WORK_TREE}' skills_root='${TIER_ROOTS[ldf]}' hint='a straggler: list it as not proposed; the target: stop, first Open question; never another --tier'"
+    return 1
+  fi
+  local link_dir="${skill_dir}" repo_dir=""
   if [[ "${adopt}" == "false" ]]; then
     local holder held_source=""
     holder="$(skill_holder_root "${tier}" "${skill}")"
     [[ -n "${holder}" ]] && held_source="$(root_source "${tier}" "${holder}")"
-    # A held skill with no link yet is fine: its held directory is the skill. A link, when present, must point there.
-    if [[ -z "${holder}" || "${held_source}" != "${source}" ]] || [[ ( -e "${link_dir}" || -L "${link_dir}" ) && "${link_dir:A}" != "${holder:A}/${skill}" ]]; then
+    # A held skill with no link yet is fine: its held directory is the skill. A link, when present,
+    # must point there, or to ldf-link's directory of per-file links whose SKILL.md resolves there.
+    local linked_md="${link_dir}/SKILL.md"
+    if [[ -z "${holder}" || "${held_source}" != "${source}" ]] || [[ ( -e "${link_dir}" || -L "${link_dir}" ) && "${link_dir:A}" != "${holder:A}/${skill}" && "${linked_md:A:h}" != "${holder:A}/${skill}" ]]; then
       log::err "--tier and --source do not hold the skill | skill_dir='${link_dir:A}' holder='${holder}' held_source='${held_source}' tier='${tier}' source='${source}' hint='pass tier= and source= as init.zsh printed them; if they match, re-run the registry status and stop on any state but linked or missing'"
       return 1
     fi
     skill_dir="${holder}/${skill}"
     require_head "${tier}" "${source}" || return 1
+    repo_dir="$(repo_root "${tier}" "${source}")/$(repo_skill_rel "${tier}" "${source}" "${skill}")"
   fi
   local -a edited_rel=()
   for file in "${edited[@]}"; do
     # The $HOME/.claude/skills form names a link that a held skill may not have yet.
     [[ ! -e "${link_dir}" && ! -L "${link_dir}" && "${file}" == "${link_dir}/"?* ]] && file="${skill_dir}/${file#${link_dir}/}"
-    edited_rel+=("$(skill_relative_path "${skill_dir}" "${file}")")
+    edited_rel+=("$(skill_relative_path "${skill_dir}" "${file}" "${link_dir}" "${repo_dir}")")
   done
   for (( i = 1; i <= ${#edited}; i += 1 )); do
     if [[ -z "${edited_rel[i]}" || ( -d "${skill_dir}/${edited_rel[i]}" && ! -L "${skill_dir}/${edited_rel[i]}" ) ]]; then

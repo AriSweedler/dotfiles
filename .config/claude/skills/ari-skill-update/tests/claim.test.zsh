@@ -316,5 +316,77 @@ print -r -- one > "${DEV}/skills/toccupied/SKILL.md"
 print -r -- stray > "${FAKE}/.claude/skills/toccupied"
 expect "init refuses a missing skill whose link path holds a file" "1" "$(rc_of "${fenv[@]}" zsh "${BIN}/init.zsh" --skill toccupied)"
 
+# --- a local-tier skill in the clone layout ---
+# ~/local-dotfiles is a clone holding local/<machine>/; ~/.local holds per-file links
+# into it (ldf-link). init lists the links; record and commit resolve the skill's files
+# through them to the clone and commit there.
+LH="${TEST_ROOT}/lhome"
+LDF="${LH}/local-dotfiles" LREPO_SKILL="${LH}/local-dotfiles/local/tm/share/claude-skills/lskill"
+LHELD="${LH}/.local/share/claude-skills/lskill"
+mkdir -p "${LH}/.claude/skills" "${LREPO_SKILL}/bin" "${LDF}/local/tm/share/dotfiles" "${LHELD}/bin" "${LH}/.local/share/dotfiles"
+ln -s "${SKILLS_DIR}/ari-skill-shellscripts" "${LH}/.claude/skills/ari-skill-shellscripts"
+ln -s "${SKILLS_DIR}/ari-dotfiles-skill-registry" "${LH}/.claude/skills/ari-dotfiles-skill-registry"
+ln -s "${SCRIPT_DIR:h}" "${LH}/.claude/skills/ari-skill-update"
+print -r -- '[user]
+	name = t
+	email = t@example.com' > "${LH}/.gitconfig"
+lenv=(env -u DRY_RUN -u ARI_DOTFILES_LDF_GIT_DIR -u ARI_DOTFILES_LDF_WORK_TREE -u ARI_DOTFILES_MACHINE HOME="${LH}" SKILL_UPDATE_ROOT="${TEST_ROOT}")
+"${lenv[@]}" git init -q -b main "${LDF}"
+print -r -- 'tm mac' > "${LDF}/machines"
+print -r -- tm > "${LDF}/local/tm/share/dotfiles/machine-name"
+print -r -- one > "${LREPO_SKILL}/SKILL.md"
+print -r -- one > "${LREPO_SKILL}/bin/x.zsh"
+"${lenv[@]}" git -C "${LDF}" add .
+"${lenv[@]}" git -C "${LDF}" commit -q -m init
+ln -s "${LDF}/local/tm/share/dotfiles/machine-name" "${LH}/.local/share/dotfiles/machine-name"
+ln -s "${LREPO_SKILL}/SKILL.md" "${LHELD}/SKILL.md"
+ln -s "${LREPO_SKILL}/bin/x.zsh" "${LHELD}/bin/x.zsh"
+ln -s "${LHELD}" "${LH}/.claude/skills/lskill"
+lout="$("${lenv[@]}" zsh "${BIN}/init.zsh" --skill lskill 2>/dev/null || true)"
+lkey() { print -r -- "${lout}" | awk -F= -v k="${1}" '$1 == k { print substr($0, length(k) + 2) }'; }
+expect "ldf clone: init reads the linked skill as the local tier's" "linked ldf" "$(lkey state) $(lkey tier)"
+expect "ldf clone: FILES lists the per-file links" "2" "$(print -r -- "${lout}" | grep -c "^${LH}/.claude/skills/lskill/" || true)"
+expect "ldf clone: ldf_skill_rel, called directly, names the skill's clone directory" "local/tm/share/claude-skills/lskill" "$("${lenv[@]}" zsh -c 'source "${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"; source "${HOME}/.claude/skills/ari-dotfiles-skill-registry/lib/registry.zsh"; source "${HOME}/.claude/skills/ari-skill-update/lib/blobs.zsh"; ldf_skill_rel lskill' 2>/dev/null)"
+linv="$(lkey investigation_dir)"
+print -r -- two >> "${LHELD}/SKILL.md"
+print -r -- new > "${LREPO_SKILL}/bin/y.zsh"
+"${lenv[@]}" zsh "${BIN}/record_blobs.zsh" --skill lskill --tier ldf --message lmsg --investigation-dir "${linv}" --edited SKILL.md --edited "${LREPO_SKILL}/bin/y.zsh" --execute >"${TEST_ROOT}/lrec.out" 2>/dev/null || true
+expect "ldf clone: record finds the edit through its link and the new file in the clone" "2" "$(awk -F= '$1 == "files" { print $2 }' "${TEST_ROOT}/lrec.out")"
+expect "ldf clone: both --edited forms match" "" "$(awk -F= '$1 == "unmatched_edited" { print $2 }' "${TEST_ROOT}/lrec.out")"
+expect "ldf clone: the diff names the clone path" "1" "$(grep -c '^diff --git a/local/tm/share/claude-skills/lskill/SKILL.md' "${linv}/lskill.diff.patch" || true)"
+lcmd="$(awk '!/^```/' "${linv}/lskill.commit.md")"
+expect "ldf clone: commit lands the blobs in the clone" "committed" "$("${lenv[@]}" zsh -c "${lcmd}" 2>/dev/null | awk -F= '$1 == "result" { print $2 }')"
+expect "ldf clone: the clone is clean at the skill" "" "$("${lenv[@]}" git -C "${LDF}" status --short -- local/tm/share/claude-skills/lskill)"
+expect "ldf clone: HEAD holds the new file" "1" "$("${lenv[@]}" git -C "${LDF}" ls-tree HEAD local/tm/share/claude-skills/lskill/bin/y.zsh | wc -l | tr -d ' ')"
+mkdir -p "${LH}/.claude/skills/ladopt"
+print -r -- one > "${LH}/.claude/skills/ladopt/SKILL.md"
+# The registry decides where an adoption lands: its local root under ~/.local (outside the
+# clone) is refused, since its adopt would move the skill there; its root in the clone is not.
+ladopt_want="$("${lenv[@]}" zsh -c 'source "${HOME}/.claude/skills/ari-skill-shellscripts/lib/logging.zsh"; source "${HOME}/.claude/skills/ari-dotfiles-skill-registry/lib/registry.zsh"; source "${HOME}/.claude/skills/ari-skill-update/lib/blobs.zsh"; ldf_root_outside_repo && print 1 || print 0' 2>/dev/null)"
+expect "ldf clone: record refuses an adoption the registry would place outside the clone" "${ladopt_want}" "$(rc_of "${lenv[@]}" zsh "${BIN}/record_blobs.zsh" --skill ladopt --tier ldf --adopt --message m --investigation-dir "$(mk_driver ladopt a1)" --execute)"
+
+# --- a local-tier skill in the bare layout ---
+# ~/.local is the work tree of the bare ~/.local/local-dotfiles.git; the skill is a real directory there.
+BH="${TEST_ROOT}/bhome" BHELD="${TEST_ROOT}/bhome/.local/share/claude-skills/bskill"
+mkdir -p "${BH}/.claude/skills" "${BHELD}"
+ln -s "${SKILLS_DIR}/ari-skill-shellscripts" "${BH}/.claude/skills/ari-skill-shellscripts"
+ln -s "${SKILLS_DIR}/ari-dotfiles-skill-registry" "${BH}/.claude/skills/ari-dotfiles-skill-registry"
+ln -s "${SCRIPT_DIR:h}" "${BH}/.claude/skills/ari-skill-update"
+cp "${LH}/.gitconfig" "${BH}/.gitconfig"
+benv=(env -u DRY_RUN -u ARI_DOTFILES_LDF_GIT_DIR -u ARI_DOTFILES_LDF_WORK_TREE HOME="${BH}" SKILL_UPDATE_ROOT="${TEST_ROOT}")
+bgit=("${benv[@]}" git --git-dir="${BH}/.local/local-dotfiles.git" --work-tree="${BH}/.local")
+"${benv[@]}" git init -q --bare "${BH}/.local/local-dotfiles.git"
+print -r -- one > "${BHELD}/SKILL.md"
+"${bgit[@]}" -C "${BH}/.local" add share/claude-skills/bskill
+"${bgit[@]}" -C "${BH}/.local" commit -q -m init
+ln -s "${BHELD}" "${BH}/.claude/skills/bskill"
+binv="$(mk_driver bskill b1)"
+print -r -- two >> "${BHELD}/SKILL.md"
+"${benv[@]}" zsh "${BIN}/record_blobs.zsh" --skill bskill --tier ldf --message bmsg --investigation-dir "${binv}" --edited SKILL.md --execute >"${TEST_ROOT}/brec.out" 2>/dev/null || true
+expect "ldf bare: record finds the edit under ~/.local" "1" "$(awk -F= '$1 == "files" { print $2 }' "${TEST_ROOT}/brec.out")"
+bcmd="$(awk '!/^```/' "${binv}/bskill.commit.md")"
+expect "ldf bare: commit lands the blob" "committed" "$("${benv[@]}" zsh -c "${bcmd}" 2>/dev/null | awk -F= '$1 == "result" { print $2 }')"
+expect "ldf bare: ~/.local is clean at the skill" "" "$("${bgit[@]}" -C "${BH}/.local" status --short -- share/claude-skills/bskill)"
+
 print -- "summary  pass=${PASS} fail=${FAIL}"
 (( FAIL == 0 ))

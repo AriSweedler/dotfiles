@@ -325,7 +325,15 @@ EOF
 
   local files=""
   if [[ -d "${skill_dir}" ]]; then
-    files="$(find "${skill_dir}/" \( -name .git -o -name __pycache__ -o -name node_modules -o -name .DS_Store \) -prune -o -type f -print | sort)"
+    # Links to files too: on a clone machine ldf-link's directory holds only links into ~/local-dotfiles.
+    local -a found
+    found=("${(@f)$(find "${skill_dir}/" \( -name .git -o -name __pycache__ -o -name node_modules -o -name .DS_Store \) -prune -o \( -type f -o -type l \) -print | sort)}")
+    local -a readable=()
+    local f
+    for f in "${found[@]}"; do
+      [[ -f "${f}" ]] && readable+=("${f}")
+    done
+    files="${(F)readable}"
   fi
   local file_count=0
   [[ -n "${files}" ]] && file_count="$(echo "${files}" | wc -l | tr -d ' ')"

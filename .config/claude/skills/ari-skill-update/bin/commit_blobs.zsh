@@ -480,6 +480,10 @@ main() {
     log::err "Invalid tier | tier='${tier}' valid_tiers='${(j:, :)TIERS}'"
     return 1
   fi
+  if [[ "${adopt}" == "true" && "${tier}" == ldf ]] && ldf_root_outside_repo; then
+    log::err "An adoption into the local tier is not supported in the clone layout; nothing adopted or committed | work_tree='${LDF_REPO_WORK_TREE}' skills_root='${TIER_ROOTS[ldf]}'"
+    return 1
+  fi
   local line
   for line in "${lines[@]}"; do
     read -r mode blob file <<< "${line}"

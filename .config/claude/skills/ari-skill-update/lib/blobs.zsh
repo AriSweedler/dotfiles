@@ -19,11 +19,23 @@ readonly INVESTIGATION_ROOT="${SKILL_UPDATE_ROOT:-/tmp/skill-update}"
 # the skill's last commit and this window.
 readonly LIVE_WINDOW_SECONDS=$(( 24 * 3600 ))
 
+# The local tier's repo, resolved as the dotfiles CLI's lib/env.zsh resolves it. Git dir:
+# ARI_DOTFILES_LDF_GIT_DIR, else ~/local-dotfiles/.git when that clone exists, else
+# ~/.local/local-dotfiles.git. Work tree: ARI_DOTFILES_LDF_WORK_TREE, else the parent of a git dir
+# named .git, else ~/.local.
+() {
+  local git_dir="${HOME}/.local/local-dotfiles.git" work_tree="${HOME}/.local"
+  [[ -d "${HOME}/local-dotfiles/.git" ]] && git_dir="${HOME}/local-dotfiles/.git"
+  git_dir="${${ARI_DOTFILES_LDF_GIT_DIR:-${git_dir}}%/}"
+  [[ "${git_dir:t}" == .git ]] && work_tree="${git_dir:h}"
+  typeset -gr LDF_REPO_GIT_DIR="${git_dir}" LDF_REPO_WORK_TREE="${${ARI_DOTFILES_LDF_WORK_TREE:-${work_tree}}%/}"
+}
+
 #######################################
-# Run git in the repo that versions the skill: a submodule's own repo, else the
-# tier's bare repo through its df/ldf alias, from the worktree root so that
-# paths are worktree-relative.
-# Globals: TIER_WORKTREES
+# Run git in the repo that versions the skill, from repo_root so that paths are
+# worktree-relative: a submodule's own repo, the shared tier's through its df
+# alias, or the local tier's LDF_REPO_GIT_DIR and LDF_REPO_WORK_TREE.
+# Globals: LDF_REPO_GIT_DIR, LDF_REPO_WORK_TREE
 # Arguments:
 #   $1 - tier (df|ldf)
 #   $2 - source (empty, or submodule:<path relative to the tier worktree>)
@@ -33,15 +45,19 @@ repo_git() {
   local tier="${1}" source="${2}"
   shift 2
   if [[ "${source}" == submodule:* ]]; then
-    git -C "${TIER_WORKTREES[${tier}]}/${source#submodule:}" "${@}"
+    git -C "$(repo_root "${tier}" "${source}")" "${@}"
     return
   fi
-  git -C "${TIER_WORKTREES[${tier}]}" "${tier}" "${@}"
+  if [[ "${tier}" == ldf ]]; then
+    git --git-dir="${LDF_REPO_GIT_DIR}" --work-tree="${LDF_REPO_WORK_TREE}" -C "${LDF_REPO_WORK_TREE}" "${@}"
+    return
+  fi
+  git -C "$(repo_root "${tier}" "${source}")" "${tier}" "${@}"
 }
 
 #######################################
 # Print the worktree root repo_git runs from.
-# Globals: TIER_WORKTREES
+# Globals: TIER_WORKTREES, LDF_REPO_WORK_TREE
 # Arguments:
 #   $1 - tier
 #   $2 - source
@@ -52,7 +68,47 @@ repo_root() {
     print -r -- "${TIER_WORKTREES[${tier}]}/${source#submodule:}"
     return
   fi
+  if [[ "${tier}" == ldf ]]; then
+    print -r -- "${LDF_REPO_WORK_TREE}"
+    return
+  fi
   print -r -- "${TIER_WORKTREES[${tier}]}"
+}
+
+#######################################
+# True (0) when the registry's local skills root lies outside LDF_REPO_WORK_TREE:
+# a clone machine whose registry still names ~/.local/share/claude-skills, a
+# directory of ldf-link's per-file links into the clone, not a directory in it.
+# Globals: TIER_ROOTS, LDF_REPO_WORK_TREE
+# Arguments: None
+#######################################
+ldf_root_outside_repo() {
+  [[ "${TIER_ROOTS[ldf]:A}/" != "${LDF_REPO_WORK_TREE:A}/"* ]]
+}
+
+#######################################
+# Print a local-tier skill's directory relative to LDF_REPO_WORK_TREE: where its
+# SKILL.md resolves (:A), through ldf-link's link when the root holds links;
+# else, when the root lies in the work tree, the root's own path.
+# Globals: TIER_ROOTS, LDF_REPO_WORK_TREE
+# Arguments:
+#   $1 - skill name
+# Returns: 1 when the skill resolves to no directory in the work tree
+#######################################
+ldf_skill_rel() {
+  local skill="${1}"
+  local held="${TIER_ROOTS[ldf]}/${skill}" tree="${LDF_REPO_WORK_TREE:A}"
+  local skill_md="${held}/SKILL.md"
+  if [[ -e "${skill_md}" && "${skill_md:A:h}/" == "${tree}/"?* ]]; then
+    print -r -- "${${skill_md:A:h}#${tree}/}"
+    return
+  fi
+  if ! ldf_root_outside_repo; then
+    print -r -- "${${held:A}#${tree}/}"
+    return
+  fi
+  log::err "The local skill resolves to no directory in the local tier's repo | skill='${skill}' held='${held}' work_tree='${LDF_REPO_WORK_TREE}' hint='its SKILL.md must be a link into the clone (ldf-link)'"
+  return 1
 }
 
 #######################################
@@ -67,6 +123,10 @@ repo_skill_rel() {
   local tier="${1}" source="${2}" skill="${3}"
   if [[ "${source}" == submodule:* ]]; then
     print -r -- "skills/${skill}"
+    return
+  fi
+  if [[ "${tier}" == ldf ]]; then
+    ldf_skill_rel "${skill}"
     return
   fi
   print -r -- "${TIER_ROOTS[${tier}]#${TIER_WORKTREES[${tier}]}/}/${skill}"
