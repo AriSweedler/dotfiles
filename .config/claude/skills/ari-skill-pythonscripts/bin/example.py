@@ -2,16 +2,19 @@
 """Reference Python skill script. Run: zsh $HOME/.claude/skills/ari-skill-pythonscripts/bin/example.zsh --help
 
 Demonstrates every ari-skill-pythonscripts convention: shared logging (imported
-bare; the entrypoint set PYTHONPATH), argparse (free --help), prereq check,
-parse -> validate -> logic, stdout=data / stderr=logs, errors that name the
-offending value, --dry-run, bounded subprocess, UTF-8 file write, and the
---force overwrite guard.
+bare; the entrypoint set PYTHONPATH), argparse with a prog naming the entrypoint,
+prereq check, parse -> validate -> logic, stdout=data / stderr=logs, errors that
+name the offending value, the dry-run gate (--execute to act), bounded
+subprocess, UTF-8 file write, the idempotency guard, and the dry_run=/changes=
+stdout block.
 """
 import argparse
 import shutil
+import sys
 from pathlib import Path
 
-from skill_log import log_info, die
+from dry_run import change_count, dry_run_value, report_dry_run, resolve_dry_run, write_mut
+from skill_log import die, log_info
 from skill_subprocess import run_capture
 
 VALID_MODES = ("reg", "compare")
@@ -25,24 +28,36 @@ def check_prerequisites():
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Reference example skill script.")
+    script = Path(__file__)
+    prog = f"zsh $HOME/.claude/skills/{script.parent.parent.name}/bin/{script.stem}.zsh"
+    parser = argparse.ArgumentParser(prog=prog, description="Reference example skill script.")
     parser.add_argument("--mode", required=True, help=f"one of {', '.join(VALID_MODES)}")
     parser.add_argument("--target", action="append", default=[], help="repeatable target")
     parser.add_argument("--out", help="write the result to PATH instead of stdout")
-    parser.add_argument("--force", action="store_true", help="overwrite --out if it exists")
-    parser.add_argument("--dry-run", dest="dry_run", action="store_true", help="log actions, change nothing")
+    parser.add_argument("--execute", action="store_true", help="make the changes; without it, a dry run")
+    parser.add_argument("--dry-run", dest="dry_run", action="store_true", help="the default; overrides --execute")
     return parser.parse_args()
 
 
-def emit(result, args):
-    if not args.out:
+def read_if_present(path):
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeDecodeError) as exc:
+        die(f"cannot read existing output | path='{path}' error='{exc}'")
+
+
+def emit(result, out):
+    if not out:
         print(result)  # stdout is data
         return
-    out_path = Path(args.out)
-    if out_path.exists() and not args.force:
-        die(f"output exists | path='{out_path}' hint='pass --force to overwrite'")
-    out_path.write_text(result + "\n", encoding="utf-8")
-    log_info(f"wrote result | path='{out_path}'")
+    out_path = Path(out)
+    content = result + "\n"
+    if read_if_present(out_path) == content:
+        log_info(f"unchanged | path='{out_path}'")
+    else:
+        write_mut(out_path, content)
     print(str(out_path))
 
 
@@ -50,16 +65,16 @@ def main():
     args = parse_args()
     mode = args.mode.lower()
     if mode not in VALID_MODES:
-        die(f"invalid mode | mode='{mode}' valid='{', '.join(VALID_MODES)}'")
+        die(f"invalid mode | mode='{mode}' valid_modes='{', '.join(VALID_MODES)}'")
     check_prerequisites()
+    resolve_dry_run(args.execute, args.dry_run)
 
-    log_info(f"running | mode='{mode}' targets='{', '.join(args.target)}' dry_run='{args.dry_run}'")
+    log_info(f"running | mode='{mode}' targets='{', '.join(args.target)}'")
     head = run_capture(["git", "rev-parse", "--short", "HEAD"], timeout_s=10, what="resolve HEAD").stdout.strip()
-
-    if args.dry_run:
-        log_info(f"dry-run: would emit | head='{head}'")
-        return
-    emit(head, args)
+    emit(head, args.out)
+    report_dry_run(__file__, sys.argv[1:])
+    print(f"dry_run={dry_run_value()}")
+    print(f"changes={change_count()}")
 
 
 if __name__ == "__main__":
