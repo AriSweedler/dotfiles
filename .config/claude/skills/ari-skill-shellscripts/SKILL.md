@@ -133,7 +133,7 @@ A *mutation* changes something the script did not create in this run: a file at 
 ## File layout
 
 - `bin/` — all scripts (per-skill gatherers, utilities, sync/push tools)
-- `lib/` — shared libraries (logging, dry run, helpers, await) sourced by other scripts
+- `lib/` — shared libraries (logging, dry run, helpers, await, tail) sourced by other scripts
 - `tests/` — automated checks of the libraries; `lessons/` — ordered interactive walkthroughs for a person
 
 ## Logging
@@ -230,7 +230,7 @@ A dry run of it, on stderr:
 [INFO] Dry run; nothing changed | changes='3' rerun='zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/example --mode reg --target ari-poem-limerick --out-dir 'ex dir' --execute'
 ```
 
-When the user, not Claude, runs the `--execute` step, hand the `rerun` command to `/ari-driving-tmux`. Python scripts honour the same `DRY_RUN` contract (`/ari-skill-pythonscripts`). The dotfiles kernel's `is_dry_run`/`run_mut` (`~/.config/dotfiles/lib/run.zsh`) read another variable with the opposite default; this lib refuses to load over them.
+When the user, not Claude, runs the `--execute` step, hand the `rerun` command to `/ari-driving-tmux`. Python scripts honor the same `DRY_RUN` contract (`/ari-skill-pythonscripts`). The dotfiles kernel's `is_dry_run`/`run_mut` (`~/.config/dotfiles/lib/run.zsh`) read another variable with the opposite default; this lib refuses to load over them.
 
 ## Bounded subprocesses
 
@@ -299,6 +299,29 @@ When a probe can say where things stand, let the loop be declarative: the probe 
 
 Learn it by watching: `zsh $HOME/.claude/skills/ari-skill-shellscripts/bin/await-lessons` runs ten lessons in order (`--list` prints what each teaches; `--only N` one of them). The automated checks are `zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/await.test.zsh`.
 
+## Tailing a command's output
+
+A command that streams output worth watching (an apply, a build) runs under `lib/tail.zsh`: a spinner and a title over the output's last `TAIL_LINES` lines, redrawn as the output grows, so it stays visible without flooding the terminal. A command that blocks quietly is `await::run` (§ Waiting with a visible state).
+
+```zsh
+source "${SKILLS_DIR}/ari-skill-shellscripts/lib/tail.zsh"
+
+local rc=0 pid
+tail::run --title "building the image…" -- make image || rc=$?   # 0, or make's code
+
+long_apply > "${dir}/apply.log" 2>&1 & pid="${!}"                 # a window over a file another process writes
+tail::start "${dir}/apply.log" "applying…" || true
+wait "${pid}" || rc=$?
+tail::stop                                                        # clears the window; the outcome line is yours
+```
+
+- Interactive (stderr is a tty, or `TAIL_INTERACTIVE=1`): the window redraws in place; when the command ends it is cleared and `tail::run` prints `✓ <title>`, or `✗ <title> (rc=N)` followed by the last lines.
+- Plain (stderr is not a tty, or `TAIL_INTERACTIVE=0`): `tail::run` streams stdout and stderr, merged, to its own stdout as they come, so a script whose stdout is data calls it with `>&2`; `tail::start` and `tail::stop` draw nothing.
+
+**ALWAYS call `tail::run` and `tail::start` from a condition, as above (`|| rc=$?`, `|| true`).** The lib runs under the caller's `set -e`: a bare `tail::run` whose command fails ends the script inside it (no ✗ line, its temp log left behind), and the window of a bare `tail::start` dies, unseen, at the first tick that finds its file empty. Beneath a condition zsh ignores `set -e`, so a shell function run by `tail::run` ends each command that can fail with `|| return $?`.
+
+Knobs: `TAIL_LINES` (default 10), `TAIL_INTERACTIVE=1|0`, `TAIL_TICK_S` (redraw interval, default 0.25), `TAIL_SPIN_COLOR` (256-color index, default 37); `--log FILE` keeps the whole output. The header comment of `lib/tail.zsh` has the rest. The automated checks are `zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/tail.test.zsh`: with a terminal and `TMUX_PANE` the window draws in the pane the test runs in, which is read back; otherwise, or with `TAIL_TEST_HIDDEN=1`, it runs on a throwaway tmux server.
+
 ## Investigation folders
 
 Scripts that stage runtime state under `/tmp` MUST use the shared helper, not hand-roll the timestamped path. It creates `<root>/<skill>/<UTC-timestamp>/` and prints the path. A folder that already exists is never reused: the next call gets `<UTC-timestamp>-2`, then `-3`, e.g. `/tmp/skill-update/foo/20261106T194643Z`, `…Z-2`, `…Z-3`. Treat the leaf as opaque: never glob for it or add your own suffix loop. On failure it prints one `[ERROR]` line and returns 1, so check the call. Logging otherwise stays with the caller.
@@ -327,25 +350,42 @@ Four phases: **parse → massage → validate → logic.**
 
 ## Validation
 
+### Before committing
+
 **Before committing a change to this skill or to any skill's zsh scripts, you MUST syntax-check each changed script and run each test file.** Each exits 1 on a failure:
 
 ```zsh
 zsh -n <each changed script>
 zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/conventions.test.zsh --skill <each skill you changed>
 zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/await.test.zsh
+zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/tail.test.zsh
 zsh $HOME/.claude/skills/ari-skill-shellscripts/tests/investigation_folder.test.zsh
 ```
 
 `await.test.zsh` needs `perl` (its ctrl-c case gives a child its own process group) and `pgrep`; a FAIL naming perl is the host, not the change.
 
+### Tests that check for leftovers
+
+**A test that asserts nothing is left behind (a channel, a state file, a lock) runs under a private `TMPDIR`.** The shared one holds what other processes and killed runs left there, and the check would count it as this run's. Export the private one before the code under test runs:
+
+```zsh
+T="$(mktemp -d)" || exit 1; readonly T
+trap 'rm -rf -- "${T}"' EXIT
+export TMPDIR="${T}"
+```
+
+### Lint findings
+
 `conventions.test.zsh` proves the rules above in a throwaway zsh (`lib/dry_run.zsh` and `bin/example` among them), then lints zsh scripts; without `--skill` it lints every skill. One line per finding, `FAIL  <file>:<line>  <what and the fix>`, then `summary  pass=N fail=N warn=N`:
 
 - **FAIL** — a rule broken for certain; fails the run. Quotes inside an associative-array subscript. A bin/ script with a `--dry-run` arm or a `run_mut` call and no `--execute` arm (its default acts), or no `resolve_dry_run` call. A local `run_mut`/`is_dry_run`/`resolve_dry_run`/`write_mut`/`report_dry_run` definition. `DRY_RUN` compared with or set to `true`/`false`. A redirect or pipe on a `run_mut` line.
-- **WARN** — a heuristic match to read and fix: an `--apply`/`--yes`/`--confirm`/`--no-dry-run` arm; under pipefail, `grep` not last, or `head` / `grep -m` / `sed q` / `awk exit` on a pipeline.
+- **WARN** — a heuristic match to read and fix: an `--apply`/`--yes`/`--confirm`/`--no-dry-run` arm; a glob under `TMPDIR` in a `tests/` file that never sets its own; under pipefail, `grep` not last, or `head` / `grep -m` / `sed q` / `awk exit` on a pipeline.
 - A line ending in `# lint: ok` is skipped, FAIL or WARN, once a person has reviewed it.
 - The lint cannot see a script that mutates with no flags at all: the definition in § Mutations is the check there.
 
 A FAIL in a skill you did not change is listed in your report under that skill's name, never fixed unasked and never a reason to hold your own commit; `--skill` scopes the gate to what you changed.
+
+### When a convention fails in use
 
 **A convention here broken in use, or wrong, is a `/ari-skill-update ari-skill-shellscripts` in the same session, unasked:** a script exited 141 or died `parameter not set`, a run meant as a dry run acted, or a rule here misled. The update adds the rule and an `expect_rc` case or a lint fixture that fails without it.
 

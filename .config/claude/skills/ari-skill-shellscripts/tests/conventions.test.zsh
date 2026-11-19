@@ -42,6 +42,11 @@ readonly GATE_DEFINITION='^[[:space:]]*(function[[:space:]]+)?(run_mut|is_dry_ru
 readonly DRY_RUN_BOOL='(^|[^A-Za-z0-9_])DRY_RUN\}?"?[[:space:]]*(==?|!=)[[:space:]]*["'"'"']?(true|false)([^A-Za-z0-9_]|$)'
 # A redirect or a pipe on a run_mut line acts outside run_mut, so it writes even in a dry run.
 readonly MUT_REDIRECT='((^|[^0-9&<>])>>?[[:space:]]*[^&[:space:]]|\|[[:space:]]*run_mut[[:space:]])'
+# A glob under TMPDIR (`"${TMPDIR:-/tmp}"/await.*(N)`) in a test that never sets its own TMPDIR also
+# matches what other runs left in the shared one. Only a statement setting it counts, never a
+# `TMPDIR=… cmd` prefix inside a line.
+readonly SHARED_TMPDIR_GLOB='\$\{TMPDIR[^}]*\}"?/[^[:space:]]*[*?]'
+readonly SETS_TMPDIR='^[[:space:]]*((export|local|typeset|declare)([[:space:]]+-[[:alpha:]]+)*[[:space:]]+)?TMPDIR='
 readonly DRY_RUN_LIB_TAIL='ari-skill-shellscripts/lib/dry_run.zsh'
 readonly LINT_OK_MARK='# lint: ok'
 readonly FIXTURE_MARK='# expect '
@@ -253,17 +258,19 @@ report_mutation_gate() {
 # Lint one file. FAIL per quoted subscript; per local definition of a lib/dry_run.zsh function; per
 # DRY_RUN compared with or set to true/false; per redirect or pipe on a run_mut line. In a bin/ file
 # that mutates (a `--dry-run` arm or a `run_mut` call), FAIL once with no `--execute` arm or no
-# resolve_dry_run call. WARN per `--apply`/`--yes`/`--confirm`/`--no-dry-run` arm, and, in a file that
-# sets pipefail, per grep stage that is not last and per early-exiting consumer. Heredoc bodies,
-# single-quoted multi-line programs, comment lines and lines ending in `# lint: ok` are skipped.
+# resolve_dry_run call. WARN per `--apply`/`--yes`/`--confirm`/`--no-dry-run` arm; in a tests/ file that
+# never sets TMPDIR, per glob under it; and, in a file that sets pipefail, per grep stage that is not
+# last and per early-exiting consumer. Heredoc bodies, single-quoted multi-line programs, comment
+# lines and lines ending in `# lint: ok` are skipped.
 # Globals: the regex constants above, DRY_RUN_LIB_TAIL, LINT_OK_MARK
 # Arguments: $1 - path; $2 - how to print it
 #######################################
 lint_file() {
   local file="${1}" shown="${2}" line code masked heredoc_end="" quotes mutates_how="" shell_code
-  local -i n=0 has_pipefail=0 in_embedded=0 mutates_at=0 has_execute=0 has_resolve=0 is_gate_lib=0
+  local -i n=0 has_pipefail=0 in_embedded=0 mutates_at=0 has_execute=0 has_resolve=0 is_gate_lib=0 shares_tmpdir=0
   [[ "${file:A}" == *"/${DRY_RUN_LIB_TAIL}" ]] && is_gate_lib=1
   grep -q 'pipefail' "${file}" 2>/dev/null && has_pipefail=1
+  [[ "${shown}" == */tests/* ]] && ! grep -qE "${SETS_TMPDIR}" "${file}" 2>/dev/null && shares_tmpdir=1
   while IFS= read -r line || [[ -n "${line}" ]]; do
     (( n += 1 ))
     if [[ -n "${heredoc_end}" ]]; then   # a heredoc body (Python, JSON, help text) is not zsh
@@ -300,6 +307,9 @@ lint_file() {
     fi
     if [[ "${code}" =~ ${OTHER_ACT_ARM} ]]; then
       report WARN "${shown}:${n}" "an act flag other than --execute (rename it to --execute and update every documented invocation)"
+    fi
+    if (( shares_tmpdir )) && [[ "${shell_code}" =~ ${SHARED_TMPDIR_GLOB} ]]; then
+      report WARN "${shown}:${n}" "a test globs the shared TMPDIR, so what other runs left there matches too (give the test its own: mktemp -d, export TMPDIR, rm -rf it on EXIT)"
     fi
     [[ "${code}" =~ ${EXECUTE_ARM} ]] && has_execute=1
     [[ "${shell_code}" =~ ${RESOLVE_CALL} ]] && has_resolve=1
@@ -423,6 +433,20 @@ EOF
 #!/usr/bin/env zsh
 publish() { run_mut gh release create "${1}"; }
 EOF
+  mkdir -p "${root}/fixture/tests"
+  cat > "${root}/fixture/tests/shared_tmpdir.test.zsh" <<'EOF'
+#!/usr/bin/env zsh
+refused() { TMPDIR="${T}/nope" frob; }
+leftovers=("${TMPDIR:-/tmp}"/frob.*(N))                 # expect WARN
+print -l -- "${TMPDIR:-/tmp}"/frob.??????(N)            # expect WARN
+state="$(mktemp "${TMPDIR:-/tmp}/frob-test.XXXXXX")"
+EOF
+  cat > "${root}/fixture/tests/private_tmpdir.test.zsh" <<'EOF'
+#!/usr/bin/env zsh
+T="$(mktemp -d)" || exit 1; readonly T
+export TMPDIR="${T}"
+leftovers=("${TMPDIR}"/frob.*(N))
+EOF
   cat > "${bin}/cases.zsh" <<'EOF'
 #!/usr/bin/env zsh
 set -euo pipefail
@@ -437,6 +461,7 @@ print -- "${array[1]}" "$array[2]"
 [[ "${line}" =~ '[^"]+' ]] && echo regex
 awk 'BEGIN { m["x"] = 1 }' </dev/null
 jq '.x["k"]' <<<'{}'
+rm -rf -- "${TMPDIR:-/tmp}"/frob.*(N)
 # files_of["${id}"] in a comment is fine
 files_of["${id}"]="reviewed"   # lint: ok
 printf '%s\n' a | grep a | cat                          # expect WARN
@@ -465,10 +490,11 @@ run_cmd kubectl apply --dry-run=client -f x
 print -- "--dry-run) inside a string is not an arm"
 files_of["${id}"]="after the embedded blocks"           # expect FAIL
 EOF
-  local -A want
+  local -A want file_of
   local -i n
   local line fixture
-  for fixture in "${bin}"/*.zsh; do
+  for fixture in "${root}"/fixture/*/*.zsh; do
+    file_of[${fixture:t}]="${fixture}"
     n=0
     while IFS= read -r line; do
       (( n += 1 ))
@@ -490,7 +516,7 @@ EOF
     [[ "${got[$k]:-}" == "${want[$k]}" ]] || { ok=0; report FAIL "lint-self-test:${k}" "want ${want[$k]}, got ${got[$k]:-nothing}"; }
   done
   for k in "${(@k)got}"; do
-    [[ -n "${want[$k]:-}" ]] || { ok=0; report FAIL "lint-self-test:${k}" "unexpected ${got[$k]}: $(awk -v n="${k##*:}" 'NR == n' "${bin}/${k%%:*}")"; }
+    [[ -n "${want[$k]:-}" ]] || { ok=0; report FAIL "lint-self-test:${k}" "unexpected ${got[$k]}: $(awk -v n="${k##*:}" 'NR == n' "${file_of[${k%%:*}]}")"; }
   done
   (( ok )) && report PASS "lint-self-test" "${#want} marked lines reported as marked, every other line silent"
   rm -rf "${root}"; trap - EXIT
