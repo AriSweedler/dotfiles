@@ -56,8 +56,10 @@ nix_port::nix() {
   return 1
 }
 nix_port::submodules() { git config -f "${1}/.gitmodules" --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}' || true; }
-nix_port::ldf() { git --git-dir="${ARI_DOTFILES_LDF_GIT_DIR}" --work-tree="${HOME}/.local" "$@"; }
-nix_port::is_ldf_tracked() { nix_port::ldf ls-files --error-unmatch -- "${1}" >/dev/null 2>&1; }
+nix_port::ldf() { git --git-dir="${ARI_DOTFILES_LDF_GIT_DIR}" --work-tree="${ARI_DOTFILES_LDF_WORK_TREE}" "$@"; }
+# A path under ~/.local; on a machine moved onto the local-dotfiles clone it is a link into the
+# clone, whose real path is the tracked one (:A resolves it; a real file stays where it is).
+nix_port::is_ldf_tracked() { nix_port::ldf ls-files --error-unmatch -- "${1:A}" >/dev/null 2>&1; }
 
 check::nix_port() {
   if [[ "${OSTYPE}" != darwin* ]]; then

@@ -6,8 +6,30 @@ step::declare local_dotfiles_repo --group repo \
   --apply "creates the bare repo, installs the allowlist as info/exclude and wires the hooks"
 step::watches local_dotfiles_repo '.config/new-machine/local-dotfiles-exclude' '.config/dotfiles/cmd/git.zsh' '.config/git/local-dotfiles-hooks/**'
 
+# On a machine moved onto the one local-dotfiles repo, the tier is a clone at ~/local-dotfiles that
+# ldf-link assembles into ~/.local: it holds only what was put in it, so it has no allowlist.
+local_dotfiles_repo::is_clone() { [[ "${ARI_DOTFILES_LDF_WORK_TREE}" != "${HOME}/.local" ]]; }
+
 check::local_dotfiles_repo() {
   local git_dir="${ARI_DOTFILES_LDF_GIT_DIR}" exclude="${ARI_DOTFILES_LDF_GIT_DIR}/info/exclude"
+  if local_dotfiles_repo::is_clone; then
+    local hooks origin
+    hooks="$(tier::hooks_path "${git_dir}")"
+    if [[ "${hooks}" != "${ARI_DOTFILES_LDF_HOOKS}" ]]; then
+      verdict fail hooks_path -d "core.hooksPath='${hooks}' expected='${ARI_DOTFILES_LDF_HOOKS}'" -f "${CLI_NAME} apply local_dotfiles_repo"
+      return 0
+    fi
+    origin="$(git --git-dir="${git_dir}" remote get-url origin 2>/dev/null || true)"
+    local -i unpushed=0
+    git --git-dir="${git_dir}" rev-parse --verify -q origin/main >/dev/null 2>&1 \
+      && unpushed=$(git --git-dir="${git_dir}" rev-list --count origin/main..HEAD 2>/dev/null || print 0)
+    if (( unpushed > 0 )); then
+      verdict warn unpushed -d "$(plural "${unpushed}" 'unpushed commit' 'unpushed commits')" -f "git ldf push"
+      return 0
+    fi
+    verdict ok clone -d "the local-dotfiles clone, assembled by ldf-link | work_tree='${ARI_DOTFILES_LDF_WORK_TREE}' origin='${origin}'"
+    return 0
+  fi
   if [[ ! -d "${git_dir}" ]]; then
     verdict fail missing_bare_repo -d "no bare repo | git_dir='${git_dir}'" -f "${CLI_NAME} apply local_dotfiles_repo"
     return 0
@@ -67,6 +89,10 @@ check::local_dotfiles_repo() {
 # template over git's stock (comment-only) file; a machine whose rules differ keeps its copy.
 apply::local_dotfiles_repo() {
   local git_dir="${ARI_DOTFILES_LDF_GIT_DIR}" exclude="${ARI_DOTFILES_LDF_GIT_DIR}/info/exclude"
+  if local_dotfiles_repo::is_clone; then
+    tier::ensure_hooks_path "${git_dir}" "${ARI_DOTFILES_LDF_HOOKS}"
+    return
+  fi
   if [[ ! -d "${git_dir}" ]]; then
     run_mut git init --bare "${git_dir}" || return 1
   fi

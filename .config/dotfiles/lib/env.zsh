@@ -49,7 +49,13 @@ typeset -gx ARI_DOTFILES_LAUNCH_AGENTS_DIR="${ARI_DOTFILES_LAUNCH_AGENTS_DIR:-${
 typeset -gx ARI_DOTFILES_TERMINAL_PLIST="${ARI_DOTFILES_TERMINAL_PLIST:-${HOME}/Library/Preferences/com.apple.Terminal.plist}"
 typeset -gx ARI_DOTFILES_FONT_DIRS="${ARI_DOTFILES_FONT_DIRS:-${HOME}/Library/Fonts:/Library/Fonts}"   # colon-separated, searched recursively
 typeset -gx ARI_DOTFILES_NIX_STORE="${ARI_DOTFILES_NIX_STORE:-/nix/store}"   # what a flake installs resolves here: the neovim step fails an nvim outside it, `jobs install` defers to a plist whose agent is in it
-typeset -gx ARI_DOTFILES_NIX_FLAKE="${ARI_DOTFILES_NIX_FLAKE:-${XDG_DATA_HOME}/dotfiles/nix}"   # the local flake `dotfiles switch` locks and switches to
+# The local flake `dotfiles switch` locks and switches to. Once ldf-link assembles ~/.local its files
+# are links into the local-dotfiles clone, and a path: flake copies a link as a link, so the flake is
+# the real directory flake.nix resolves into (the same path while ~/.local still holds real files).
+typeset -g _ldf_nix="${XDG_DATA_HOME}/dotfiles/nix/flake.nix"
+[[ -e "${_ldf_nix}" ]] && _ldf_nix="${_ldf_nix:A:h}" || _ldf_nix="${_ldf_nix:h}"
+typeset -gx ARI_DOTFILES_NIX_FLAKE="${ARI_DOTFILES_NIX_FLAKE:-${_ldf_nix}}"
+unset _ldf_nix
 typeset -gx ARI_DOTFILES_NIX_HOST="${ARI_DOTFILES_NIX_HOST:-}"   # its darwinConfigurations entry; empty: the only one
 typeset -gx ARI_DOTFILES_REMOTES_DIR="${ARI_DOTFILES_REMOTES_DIR:-${XDG_DATA_HOME}/dotfiles/remotes}"   # the local tier's per-host recipes for `dotfiles switch --remote HOST`
 typeset -gx ARI_DOTFILES_XCODE_APP="${ARI_DOTFILES_XCODE_APP:-/Applications/Xcode.app}"
@@ -63,7 +69,16 @@ unset _df_git_dir
 [[ "${ARI_DOTFILES_DF_GIT_DIR:t}" == .git ]] && typeset -g _df_work_tree="${ARI_DOTFILES_DF_GIT_DIR:h}" || typeset -g _df_work_tree="${HOME}"
 typeset -gx ARI_DOTFILES_DF_WORK_TREE="${ARI_DOTFILES_DF_WORK_TREE:-${_df_work_tree}}"
 unset _df_work_tree
-typeset -gx ARI_DOTFILES_LDF_GIT_DIR="${ARI_DOTFILES_LDF_GIT_DIR:-${HOME}/.local/local-dotfiles.git}"
+# The local tier is the one local-dotfiles repo, a clone at ~/local-dotfiles (local/<machine> and the
+# tag directories, which ldf-link assembles into ~/.local), or else, on a machine not moved onto it
+# yet, the bare repo ~/.local/local-dotfiles.git with ~/.local as its work tree. As for the shared
+# tier, a git dir named .git is a clone's: its work tree is its parent.
+[[ -d "${HOME}/local-dotfiles/.git" ]] && typeset -g _ldf_git_dir="${HOME}/local-dotfiles/.git" || typeset -g _ldf_git_dir="${HOME}/.local/local-dotfiles.git"
+typeset -gx ARI_DOTFILES_LDF_GIT_DIR="${ARI_DOTFILES_LDF_GIT_DIR:-${_ldf_git_dir}}"
+unset _ldf_git_dir
+[[ "${ARI_DOTFILES_LDF_GIT_DIR:t}" == .git ]] && typeset -g _ldf_work_tree="${ARI_DOTFILES_LDF_GIT_DIR:h}" || typeset -g _ldf_work_tree="${HOME}/.local"
+typeset -gx ARI_DOTFILES_LDF_WORK_TREE="${ARI_DOTFILES_LDF_WORK_TREE:-${_ldf_work_tree}}"
+unset _ldf_work_tree
 typeset -gx ARI_DOTFILES_DF_HOOKS="${ARI_DOTFILES_DF_HOOKS:-${HOME}/.config/git/dotfiles-hooks}"
 typeset -gx ARI_DOTFILES_LDF_HOOKS="${ARI_DOTFILES_LDF_HOOKS:-${HOME}/.config/git/local-dotfiles-hooks}"
 typeset -gx ARI_DOTFILES_BREW_PREFIXES="${ARI_DOTFILES_BREW_PREFIXES-/opt/homebrew /usr/local}"
@@ -173,7 +188,7 @@ typeset -gx REPORT_PATH="${ARI_DOTFILES_DESKTOP_DIR}/new-machine-FAILED.md"
 
 # --- The two tiers, by repo name; a submodule needs no row: its git is its checkout, ~/<path> ---
 typeset -gA TIER_GIT_DIR=(shared "${ARI_DOTFILES_DF_GIT_DIR}" local "${ARI_DOTFILES_LDF_GIT_DIR}")
-typeset -gA TIER_WORK_TREE=(shared "${ARI_DOTFILES_DF_WORK_TREE}" local "${HOME}/.local")
+typeset -gA TIER_WORK_TREE=(shared "${ARI_DOTFILES_DF_WORK_TREE}" local "${ARI_DOTFILES_LDF_WORK_TREE}")
 typeset -gA TIER_HOOKS=(shared "${ARI_DOTFILES_DF_HOOKS}" local "${ARI_DOTFILES_LDF_HOOKS}")
 typeset -gA TIER_ALIAS=(shared df local ldf)   # the git alias a human types
 # The pre-harness layout kept the shared bare repo at ~/dotfiles; the dotfiles_repo step renames it.

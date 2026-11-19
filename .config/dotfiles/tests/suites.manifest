@@ -25,3 +25,4 @@
 .config/nvim/lua/ari/color/ize.lua  .config/nvim/lua/ari/color/color_spec.lua
 .config/nvim/lua/ari/operator/tf.lua  .config/nvim/lua/ari/operator/tf_spec.lua
 .config/dotfiles/nix/tmux/machine-focus.conf  .config/dotfiles/nix/tmux/machine-focus.test.zsh
+.config/bin/ldf-link  .config/dotfiles/tests/test_ldf_link.sh

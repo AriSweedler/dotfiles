@@ -104,10 +104,11 @@ let
     # The plain clone ~/dotfiles, or the bare repo ~/dotfiles.git before it (git/bin/git-dotfiles).
     dotfiles = "!\"$HOME/.config/git/bin/git-dotfiles\"";
     df = "dotfiles";
-    # Per-machine bare repo for ~/.local. Its remote is a private repo of this machine's own, so
-    # machines never share it. A machine may have none (the local tier then stays on it):
-    # `git ldf push` says so and exits 0 instead of failing.
-    local-dotfiles = "!f() { d=\"$HOME/.local/local-dotfiles.git/\"; if [ \"\${1:-}\" = push ] && [ -z \"$(git --git-dir=\"$d\" remote)\" ]; then echo \"git ldf: no remote; the local tier stays on this machine, nothing to push\" >&2; return 0; fi; git --git-dir=\"$d\" --work-tree=\"$HOME/.local\" \"$@\"; }; f";
+    # The local tier: the one local-dotfiles repo, a clone at ~/local-dotfiles holding local/<machine>
+    # and the tag directories (ldf-link assembles them into ~/.local), or, on a machine not moved
+    # onto it yet, its own bare repo with ~/.local as the work tree (lib/env.zsh says the same). A
+    # machine may have no remote (the tier then stays on it): `git ldf push` says so and exits 0.
+    local-dotfiles = "!f() { if [ -d \"$HOME/local-dotfiles/.git\" ]; then d=\"$HOME/local-dotfiles/.git\"; w=\"$HOME/local-dotfiles\"; else d=\"$HOME/.local/local-dotfiles.git/\"; w=\"$HOME/.local\"; fi; if [ \"\${1:-}\" = push ] && [ -z \"$(git --git-dir=\"$d\" remote)\" ]; then echo \"git ldf: no remote; the local tier stays on this machine, nothing to push\" >&2; return 0; fi; git --git-dir=\"$d\" --work-tree=\"$w\" \"$@\"; }; f";
     ldf = "local-dotfiles";
   };
 
