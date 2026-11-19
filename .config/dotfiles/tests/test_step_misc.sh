@@ -234,6 +234,42 @@ mv "${FIX}/flake.nix.bak" "${ARI_DOTFILES_NIX_FLAKE}/flake.nix"
 mkdir -p "${ARI_DOTFILES_NIX_CLONE}/.git" "${ARI_DOTFILES_NIX_SYSTEM}"
 
 
+# The apply's two file sweeps, each run alone with the step sourced in a throwaway HOME.
+NP="${FIX}/nix-port-sweeps"
+np_run() {   # <home> <function> [args…]: the step's function, run_mut acting, logs dropped
+  HOME="$1" zsh -c 'step::declare() { :; }; step::watches() { :; }; run_mut() { "$@"; }
+    log::info() { :; }; log::warn() { :; }; log::err() { :; }
+    source "$1"; shift; "$@"' _ "${ORIG_CONFIG_DIR}/dotfiles/steps/nix_port.zsh" "${@:2}"
+}
+# carry_untracked: karabiner.ts's untracked files reach the clone (bake runs there); the clone's own
+# file of the same name wins; Karabiner's state beside karabiner.ts stays put.
+mkdir -p "${NP}/home/.config/karabiner/karabiner.ts/node_modules/.bin" "${NP}/home/.config/karabiner/automatic_backups" \
+  "${NP}/clone/.config/karabiner/karabiner.ts"
+printf 'tsx\n' > "${NP}/home/.config/karabiner/karabiner.ts/node_modules/.bin/tsx"
+printf 'old\n' > "${NP}/home/.config/karabiner/karabiner.ts/package.json"
+printf 'new\n' > "${NP}/clone/.config/karabiner/karabiner.ts/package.json"
+printf '{}\n' > "${NP}/home/.config/karabiner/automatic_backups/k.json"
+np_run "${NP}/home" nix_port::carry_untracked "${NP}/clone"
+assert_file "carry: karabiner.ts's node_modules reach the clone" "${NP}/clone/.config/karabiner/karabiner.ts/node_modules/.bin/tsx"
+assert_eq "carry: the clone's own file wins" new "$(cat "${NP}/clone/.config/karabiner/karabiner.ts/package.json")"
+assert_no_file "carry: Karabiner's own state stays in HOME" "${NP}/clone/.config/karabiner/automatic_backups"
+# remove_dead_copies: at a module-placed path, the bare checkout's copy identical to the clone's goes;
+# a differing one, one the clone does not track, and one under a linked directory stay.
+mkdir -p "${NP}/clone/.config/tmux_oneshot" "${NP}/clone/.config/nvim" "${NP}/home/.config/tmux_oneshot" "${NP}/store/nvim"
+git -C "${NP}/clone" init -q
+printf 'a\n' > "${NP}/clone/.config/tmux_oneshot/a.json"; printf 'b\n' > "${NP}/clone/.config/tmux_oneshot/b.json"
+printf 'v\n' > "${NP}/clone/.config/nvim/init.lua"
+git -C "${NP}/clone" add .config
+printf 'a\n' > "${NP}/home/.config/tmux_oneshot/a.json"
+printf 'B\n' > "${NP}/home/.config/tmux_oneshot/b.json"
+printf 'u\n' > "${NP}/home/.config/tmux_oneshot/untracked.json"
+printf 'v\n' > "${NP}/store/nvim/init.lua"; ln -s "${NP}/store/nvim" "${NP}/home/.config/nvim"
+assert_eq "dead copies: one removed" 1 "$(np_run "${NP}/home" nix_port::remove_dead_copies "${NP}/clone")"
+assert_no_file "dead copies: the identical copy is gone" "${NP}/home/.config/tmux_oneshot/a.json"
+assert_file "dead copies: a differing copy stays" "${NP}/home/.config/tmux_oneshot/b.json"
+assert_file "dead copies: a file the clone does not track stays" "${NP}/home/.config/tmux_oneshot/untracked.json"
+assert_file "dead copies: a file under a linked directory stays" "${NP}/store/nvim/init.lua"
+
 # ── karabiner ─────────────────────────────────────────────────────────────────
 # karabiner.nix places karabiner.json and parses it at the switch; the step runs only the
 # healthcheck.

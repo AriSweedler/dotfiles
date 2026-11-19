@@ -48,3 +48,4 @@ ssh-keygen
 python3
 nix
 mkfifo
+rsync

@@ -10,7 +10,8 @@
 #   clone      ~/dotfiles cloned from the bare repo (unpushed commits come along; origin then points
 #              at the remote), submodules checked out, and what the bare checkout holds that the
 #              switch's links would hide carried in: uncommitted edits to tracked files, and the
-#              untracked and ignored files of the directories bridge.nix links whole.
+#              untracked and ignored files of the directories bridge.nix links whole and of
+#              karabiner.ts (its node_modules, for bake in the clone).
 #   flake      with none, one written from this machine's Homebrew state (every tap, leaf and cask,
 #              so the first switch's Homebrew cleanup removes nothing).
 #   local data each tmuxinator project and the Raycast snippets moved into the flake; an original
@@ -19,7 +20,8 @@
 #              aside (put back if the switch fails), then nix-darwin's first switch; after it the
 #              local flake is committed in the local tier. `dotfiles switch` from then on.
 #   bare repo  ~/dotfiles.git renamed ~/dotfiles.git.retired (HOME is no longer a work tree), and
-#              every <file>.before-nix backup of a file identical to the clone's copy removed.
+#              every <file>.before-nix backup of a file identical to the clone's copy removed, as is
+#              the bare checkout's copy of a file a module now places (tmux_oneshot, nvim, …).
 step::declare nix_port --group brew --needs brew \
   --desc "on the Nix port: Nix installed, the ~/dotfiles clone, a local flake, no local data left where the shared tier stopped reading, nix-darwin switched to it, the bare repo retired" \
   --apply "installs Nix, clones ~/dotfiles from the bare repo, writes the local flake, moves the local data into it, runs nix-darwin's first switch and retires ~/dotfiles.git; sudo prompts for the install and the switch"
@@ -33,6 +35,13 @@ typeset -g NIX_PORT_BARE="${ARI_DOTFILES_NIX_BARE}"
 typeset -g NIX_PORT_RETIRED="${ARI_DOTFILES_NIX_BARE}.retired"
 # bridge.nix's wholeDirs: linked as one directory, so a file the clone lacks is hidden by the link.
 typeset -ga NIX_PORT_WHOLE_DIRS=(.config/claude .config/chrome-exoskeleton .config/plugged)
+# What the clone needs of the bare checkout besides its tracked files: the whole dirs' untracked and
+# ignored files, and karabiner.ts's, since bake and the raycast link run in the clone (node_modules,
+# sources not yet committed). Karabiner's own state stays in ~/.config/karabiner.
+typeset -ga NIX_PORT_CARRY_DIRS=("${NIX_PORT_WHOLE_DIRS[@]}" .config/karabiner/karabiner.ts)
+# Paths bridge.nix skips because a module places them: a bare checkout's copy left there is dead, and
+# a reader of the directory sees it twice (tmux-oneshot warned once per duplicated entry).
+typeset -ga NIX_PORT_MODULE_PLACED=(.config/karabiner/karabiner.json .config/nvim .config/tmux_oneshot .config/tmuxinator)
 # The files nix-darwin manages and refuses to replace when they are not its own.
 typeset -ga NIX_PORT_ETC=(/etc/bashrc /etc/zshrc /etc/zshenv /etc/zprofile /etc/nix/nix.conf /etc/nix/nix.custom.conf)
 
@@ -154,10 +163,32 @@ nix_port::clone() {
     fi
     run_mut rm -f "${patch}"
   fi
-  for d in "${NIX_PORT_WHOLE_DIRS[@]}"; do
+  nix_port::carry_untracked "${clone}"
+}
+
+# The bare checkout's untracked and ignored files under each carry dir, copied into the clone where
+# the clone has no file of that name.
+nix_port::carry_untracked() {
+  local clone="${1}" d
+  for d in "${NIX_PORT_CARRY_DIRS[@]}"; do
     [[ -d "${HOME}/${d}" && ! -L "${HOME}/${d}" ]] || continue
     run_mut rsync -a --ignore-existing --exclude .git "${HOME}/${d}/" "${clone}/${d}/" || return 1
   done
+}
+
+# Prints how many dead copies it removed: a file the clone tracks under a module-placed path, still a
+# plain file in HOME with no link on its path, and identical to the clone's copy.
+nix_port::remove_dead_copies() {
+  local clone="${1}" p h
+  local -i n=0
+  for p in "${(@f)$(git -C "${clone}" ls-files -- "${NIX_PORT_MODULE_PLACED[@]}")}"; do
+    [[ -n "${p}" ]] || continue
+    h="${HOME}/${p}"
+    [[ -f "${h}" && ! -L "${h}" && "${h:h:A}" == "${HOME:A}/${p:h}" ]] || continue
+    cmp -s "${h}" "${clone}/${p}" || continue
+    run_mut rm -f "${h}" && n+=1
+  done
+  print -r -- "${n}"
 }
 
 nix_port::write_flake() {
@@ -324,6 +355,9 @@ nix_port::retire_bare() {
   done
   log::info "removed the .before-nix backups identical to the clone's | removed='${removed}' left='${#left}'"
   (( ${#left} )) && log::warn "these backups differ from the clone; compare each by hand | files='${(j:, :)left}'"
+  local dead
+  dead="$(nix_port::remove_dead_copies "${clone}")"
+  log::info "removed the bare checkout's copies at paths a module now places | removed='${dead}' paths='${(j:, :)NIX_PORT_MODULE_PLACED}'"
   return 0
 }
 
