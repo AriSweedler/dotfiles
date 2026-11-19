@@ -4,10 +4,12 @@
   "scripts": {
     "build": "tsx src/index.ts",
     "bindings": "tsx src/generate_bindings.ts --stdout",
-    "update": "npm update karabiner.ts"
+    "update": "npm update karabiner.ts",
+    "test": "tsx --test src/cmdson/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "^20",
+    "ajv": "^8.17.1",
     "karabiner.ts": "latest",
     "tsx": "^4",
     "typescript": "^5"

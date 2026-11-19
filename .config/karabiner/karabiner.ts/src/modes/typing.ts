@@ -1,5 +1,6 @@
 import { AriMode, deeplink, script, url } from "../utils/mode.ts"
-import { argBuilder, argBuilderRules } from "../utils/argbuilder.ts"
+import { argBuilderRules } from "../utils/argbuilder.ts"
+import { argBuilderFromCmdson, loadCmdson } from "../utils/cmdson.ts"
 import { monkeytypeTestUrl } from "../utils/monkeytype.ts"
 
 // Word-count tests are seeded with the next unread passage of the current
@@ -13,33 +14,11 @@ const meta = {
 
 const typingTest = (...args: string[]) => script("karabiner-typing-test", args)
 
-const WORD_OPTIONS = [
-  { key: "0", label: "5 words", value: "5" },
-  { key: "1", label: "50 words", value: "50" },
-  { key: "2", label: "100 words", value: "100" },
-  { key: "3", label: "300 words", value: "300" },
-]
+const typingDoc = loadCmdson(new URL("../cmdson/typing-test.cmdson.json", import.meta.url))
 
 // Firing current or previous with a length re-anchors the bookmark and
 // re-reads at that length.
-const typingBuilder = argBuilder(
-  "typing",
-  "typing test builder",
-  [
-    {
-      name: "action",
-      label: "action",
-      defaultKey: "n",
-      options: [
-        { key: "n", label: "next", value: "next" },
-        { key: "c", label: "current", value: "current" },
-        { key: "p", label: "previous", value: "previous" },
-      ],
-    },
-    { name: "words", label: "words", defaultKey: "1", options: WORD_OPTIONS },
-  ],
-  (selection) => typingTest(selection.action, "--words", selection.words),
-)
+const typingBuilder = argBuilderFromCmdson("typing", "typing test builder", typingDoc)
 
 // The 58008 funbox generates number groups to type.
 const MONKEYTYPE_NUMBERS_URL = monkeytypeTestUrl([
@@ -47,7 +26,10 @@ const MONKEYTYPE_NUMBERS_URL = monkeytypeTestUrl([
 ])
 
 const dict = {
-  ...Object.fromEntries(WORD_OPTIONS.map((o) => [o.key, typingTest("--words", o.value)])),
+  "0": typingTest("--words", "5"),
+  "1": typingTest("--words", "50"),
+  "2": typingTest("--words", "100"),
+  "3": typingTest("--words", "300"),
   "s": typingTest("status"),
   "#": url(MONKEYTYPE_NUMBERS_URL, "numbers"),
   "x": typingBuilder,
