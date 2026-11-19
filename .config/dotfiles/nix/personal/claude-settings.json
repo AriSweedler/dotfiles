@@ -1,8 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dotfiles switch:*)",
-      "Bash(gh pr merge:*)"
+      "Bash(dotfiles switch:*)"
     ]
   },
   "model": "opus",
@@ -12,7 +11,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.config/claude/bin/notification-fire.sh"
+            "command": "/Users/arisweedler/.config/claude/bin/notification-fire.sh"
           }
         ]
       }
@@ -23,7 +22,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.config/claude/bin/pretooluse-headless-chrome-guard.sh",
+            "command": "/Users/arisweedler/.config/claude/bin/pretooluse-headless-chrome-guard.sh",
             "if": "Bash(*--headless*)",
             "timeout": 5
           }
@@ -35,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.config/claude/bin/stop-fire.sh"
+            "command": "/Users/arisweedler/.config/claude/bin/stop-fire.sh"
           }
         ]
       }
@@ -45,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "zsh $HOME/.claude/skills/ari-bead-driven-development/bin/bead_autolink.zsh --workspace beads=$HOME/beads",
+            "command": "zsh /Users/arisweedler/.claude/skills/ari-bead-driven-development/bin/bead_autolink.zsh --workspace beads=/Users/arisweedler/beads",
             "timeout": 8
           }
         ]
@@ -57,17 +56,13 @@
       "effortLevel": "medium"
     }
   },
-  "enabledPlugins": {
-    "lua-lsp@claude-plugins-official": true
-  },
   "theme": "dark",
   "agentPushNotifEnabled": true,
   "autoMode": {
     "allow": [
       "$defaults",
       "Bash(bd:*) in /Users/arisweedler/homelab — routine issue-tracker use (8× in recent transcripts)",
-      "Bash(colima start:*) and Bash(colima status) in /Users/arisweedler/homelab — routine Docker VM lifecycle (3× in recent transcripts)",
-      "Bash(gh pr merge:*) on AriSweedler/* repos — merging the PRs Claude opened there is standing practice; Ari, 2026-11-17: 'you can merge yourself. stop asking me for permissions', 'you need to stop blocking prs from merging like that'"
+      "Bash(colima start:*) and Bash(colima status) in /Users/arisweedler/homelab — routine Docker VM lifecycle (3× in recent transcripts)"
     ],
     "soft_deny": [
       "$defaults",
