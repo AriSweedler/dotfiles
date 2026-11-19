@@ -2,7 +2,7 @@
 # the tmux/*.conf files in order; typhon, the status-line and key-table plugin, loads last from
 # the store. An edit takes effect at the next `dotfiles switch`, then <Prefix>C-s in a running
 # server. A local flake appends its own lines with programs.tmux.extraConfig.
-{ lib, pkgs, ... }:
+{ config, lib, pkgs, ... }:
 let
   typhon = pkgs.tmuxPlugins.mkTmuxPlugin {
     pluginName = "typhon";
@@ -42,6 +42,10 @@ in
       bind-key C-s source-file "$XDG_CONFIG_HOME/tmux/tmux.conf" \; display-message "Sourced tmux.conf"
       bind-key C-e new-window -c ~/dotfiles/.config/dotfiles/nix \; send-keys "\$EDITOR tmux.nix" Enter
 
+      ${lib.optionalString (config.dotfiles.machine.symbol != "") ''
+        # This machine's symbol (machine.nix), shown before the host in typhon.conf's status-right.
+        set -g @machine-symbol ${lib.escapeShellArg config.dotfiles.machine.symbol}
+      ''}
       ${builtins.concatStringsSep "\n" (map builtins.readFile [
         ./tmux/copy.conf
         ./tmux/f12.conf
