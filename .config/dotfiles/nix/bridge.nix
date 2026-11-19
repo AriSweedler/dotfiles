@@ -17,6 +17,10 @@ let
     ".config/plugged"
     ".config/run-log"
     ".config/tmux-oneshot"
+    # OpenCode resolves a plugin's entrypoints and refuses a symlinked one, so the
+    # plugins directory is linked whole and the .ts files inside stay real files.
+    # opencode.json and service.json stay outside it, in $HOME, untracked.
+    ".config/opencode/plugins"
   ];
   # Linked whole before, file by file now (karabiner.json became karabiner.nix's).
   formerWholeDirs = [ ".config/karabiner" ];
