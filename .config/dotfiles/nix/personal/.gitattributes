@@ -1,0 +1,3 @@
+# The model Claude Code runs is each machine's choice: /model writes it into this file, and the
+# clean filter (default.nix) drops the key before git reads it, so it is never a diff or a commit.
+claude-settings.json filter=claude-settings
