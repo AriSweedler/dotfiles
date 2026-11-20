@@ -4,7 +4,6 @@
       "Bash(dotfiles switch:*)"
     ]
   },
-  "model": "opus",
   "hooks": {
     "Notification": [
       {
