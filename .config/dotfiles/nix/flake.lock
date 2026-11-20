@@ -3,11 +3,11 @@
     "chrome-exoskeleton": {
       "flake": false,
       "locked": {
-        "lastModified": 1795066941,
-        "narHash": "sha256-97qNEp0LS8tZvNPbzCB+GzOcpAxtzEdM9bBX6pz9DoI=",
+        "lastModified": 1795084026,
+        "narHash": "sha256-WuXpelAQ3C3Yd4U/6X5Pau/cJlvXx2nqbE+zYBpKmtw=",
         "owner": "AriSweedler",
         "repo": "chrome-exoskeleton",
-        "rev": "3c319231406d3389c9b263ce1ea914a9b7e58a6e",
+        "rev": "4c5b51073fe9b605feae2886b3463e7eb8c8f280",
         "type": "github"
       },
       "original": {
