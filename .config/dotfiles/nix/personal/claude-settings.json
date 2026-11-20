@@ -11,7 +11,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/arisweedler/.config/claude/bin/notification-fire.sh"
+            "command": "$HOME/.config/claude/bin/notification-fire.sh"
           }
         ]
       }
@@ -22,7 +22,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/arisweedler/.config/claude/bin/pretooluse-headless-chrome-guard.sh",
+            "command": "$HOME/.config/claude/bin/pretooluse-headless-chrome-guard.sh",
             "if": "Bash(*--headless*)",
             "timeout": 5
           }
@@ -34,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/arisweedler/.config/claude/bin/stop-fire.sh"
+            "command": "$HOME/.config/claude/bin/stop-fire.sh"
           }
         ]
       }
@@ -44,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "zsh /Users/arisweedler/.claude/skills/ari-bead-driven-development/bin/bead_autolink.zsh --workspace beads=/Users/arisweedler/beads",
+            "command": "zsh $HOME/.claude/skills/ari-bead-driven-development/bin/bead_autolink.zsh --workspace beads=$HOME/beads",
             "timeout": 8
           }
         ]
